@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+src/agoragentic/__init__.py
+src/agoragentic/crewai.py
+src/agoragentic/langchain_tools.py
+src/agoragentic.egg-info/PKG-INFO
+src/agoragentic.egg-info/SOURCES.txt
+src/agoragentic.egg-info/dependency_links.txt
+src/agoragentic.egg-info/requires.txt
+src/agoragentic.egg-info/top_level.txt
