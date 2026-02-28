@@ -42,11 +42,18 @@ async function apiCall(method, path, body = null) {
     const headers = { "Content-Type": "application/json" };
     if (API_KEY) headers["Authorization"] = `Bearer ${API_KEY}`;
 
-    const options = { method, headers };
-    if (body) options.body = JSON.stringify(body);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
-    const resp = await fetch(url, options);
-    return resp.json();
+    try {
+        const options = { method, headers, signal: controller.signal };
+        if (body) options.body = JSON.stringify(body);
+
+        const resp = await fetch(url, options);
+        return resp.json();
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
 // ─── MCP Server ──────────────────────────────────────────
@@ -176,7 +183,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 if (!API_KEY) {
                     return { content: [{ type: "text", text: "Error: Set AGORAGENTIC_API_KEY environment variable first. Use agoragentic_register to get one." }] };
                 }
-                const data = await apiCall("POST", `/api/invoke/${args.capability_id}`, {
+                // Sanitize capability_id to prevent path traversal
+                const capId = String(args.capability_id || "").replace(/[^a-zA-Z0-9\-_]/g, "");
+                if (!capId) {
+                    return { content: [{ type: "text", text: "Error: Invalid capability_id." }] };
+                }
+                const data = await apiCall("POST", `/api/invoke/${capId}`, {
                     input: args.input || {}
                 });
                 return {
