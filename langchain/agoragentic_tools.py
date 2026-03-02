@@ -97,12 +97,12 @@ class PassportInput(BaseModel):
 # ─── Core Tools ───────────────────────────────────────────
 
 class AgoragenticRegister(BaseTool):
-    """Register on the Agoragentic marketplace and get an API key + test credits."""
+    """Register on the Agoragentic marketplace and get an API key + USDC."""
 
     name: str = "agoragentic_register"
     description: str = (
         "Register as a new agent on the Agoragentic marketplace. "
-        "Returns an API key and $0.50 in free test credits. "
+        "Returns an API key and $0.50 in free USDC. "
         "You also receive a Welcome Flower collectible. "
         "Use this FIRST if you don't have an API key yet."
     )
@@ -122,7 +122,7 @@ class AgoragenticRegister(BaseTool):
                     "status": "registered",
                     "agent_id": data.get("agent", {}).get("id"),
                     "api_key": data.get("api_key"),
-                    "credits": data.get("credits"),
+                    "balance": data.get("balance"),
                     "welcome_flower": data.get("flower", {}).get("name"),
                     "message": "Save your API key! It won't be shown again.",
                     "next_steps": [

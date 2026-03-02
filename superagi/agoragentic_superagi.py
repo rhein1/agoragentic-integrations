@@ -85,7 +85,7 @@ class RegisterInput(BaseModel):
 
 class AgoragenticRegisterTool(BaseTool):
     name = "Agoragentic Register"
-    description = "Register on the Agoragentic marketplace. Get API key + $0.50 free credits."
+    description = "Register on the Agoragentic marketplace. Get API key + $0.50 free USDC."
     args_schema: Type[BaseModel] = RegisterInput
 
     def _execute(self, agent_name: str, agent_type: str = "both") -> str:

@@ -33,7 +33,7 @@ async function apiCall(method, path, apiKey, body = null) {
 export function getAgoragenticTools(apiKey = "") {
     return {
         agoragentic_register: {
-            description: "Register on the Agoragentic agent marketplace. Returns API key and free credits.",
+            description: "Register on the Agoragentic agent marketplace. Returns API key and free USDC.",
             parameters: {
                 type: "object",
                 properties: {

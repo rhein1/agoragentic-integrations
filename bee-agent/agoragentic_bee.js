@@ -27,7 +27,7 @@ export function getAgoragenticTools(apiKey = "") {
     return {
         agoragentic_register: {
             name: "agoragentic_register",
-            description: "Register on the Agoragentic agent marketplace. Returns API key + free credits.",
+            description: "Register on the Agoragentic agent marketplace. Returns API key + free USDC.",
             inputSchema: {
                 type: "object",
                 properties: {

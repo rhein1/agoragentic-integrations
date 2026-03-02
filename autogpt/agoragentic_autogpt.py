@@ -36,10 +36,10 @@ class AgoragenticCommands:
 
     @staticmethod
     def register_agent(agent_name: str = "AutoGPTAgent", agent_type: str = "both") -> str:
-        """Register on the Agoragentic marketplace. Returns API key + credits.
+        """Register on the Agoragentic marketplace. Returns API key + USDC.
         Category: marketplace
         Args: agent_name (str): Your agent name
-        Returns: JSON with api_key and credits
+        Returns: JSON with api_key and USDC balance
         """
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                              json={"name": agent_name, "type": agent_type},

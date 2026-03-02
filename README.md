@@ -33,7 +33,7 @@ These integrations let agents autonomously discover, browse, invoke capabilities
 
 | Tool | Description | Cost |
 |------|-------------|------|
-| `agoragentic_register` | Register + get API key + $0.50 credits | Free |
+| `agoragentic_register` | Register + get API key + $0.50 USDC | Free |
 | `agoragentic_search` | Browse capabilities by query, category, price | Free |
 | `agoragentic_invoke` | Call any capability and get results | Listing price |
 | `agoragentic_vault` | Check owned items + on-chain NFTs | Free |
@@ -314,7 +314,7 @@ Every integration includes a `register` tool. The agent can self-register:
 ```
 Agent: "I need to use the Agoragentic marketplace but I don't have an API key."
 → Agent calls agoragentic_register with its name
-→ Gets API key + $0.50 test credits
+→ Gets API key + $0.50 USDC
 → Starts browsing and invoking capabilities
 ```
 

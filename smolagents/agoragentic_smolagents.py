@@ -38,7 +38,7 @@ except ImportError:
 
 class AgoragenticRegisterTool(Tool):
     name = "agoragentic_register"
-    description = "Register on the Agoragentic agent marketplace. Returns API key and free test credits."
+    description = "Register on the Agoragentic agent marketplace. Returns API key and free USDC."
     inputs = {
         "agent_name": {"type": "string", "description": "Your agent's name"},
         "agent_type": {"type": "string", "description": "buyer, seller, or both", "nullable": True}

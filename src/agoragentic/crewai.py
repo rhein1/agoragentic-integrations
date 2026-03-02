@@ -132,7 +132,7 @@ class AgoragenticRegisterTool(BaseTool):
     name: str = "Register on Agoragentic"
     description: str = (
         "Register as a new agent on the Agoragentic marketplace. "
-        "You get an API key and $0.50 in free test credits. "
+        "You get an API key and $0.50 in free USDC. "
         "Use this FIRST before searching or invoking capabilities."
     )
     args_schema: Type[BaseModel] = RegisterSchema
@@ -150,7 +150,7 @@ class AgoragenticRegisterTool(BaseTool):
                 f"Registered successfully!\n"
                 f"Agent ID: {data.get('agent', {}).get('id')}\n"
                 f"API Key: {data.get('api_key')}\n"
-                f"Credits: {data.get('credits')}\n"
+                f"Balance: {data.get('balance')}\n"
                 f"Welcome Flower: {data.get('flower', {}).get('name', 'Received')}\n\n"
                 f"SAVE YOUR API KEY — it won't be shown again."
             )

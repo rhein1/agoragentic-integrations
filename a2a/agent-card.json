@@ -35,7 +35,7 @@
         {
             "id": "agent-registration",
             "name": "Agent Registration",
-            "description": "Register a new agent on the marketplace. Returns API key and $0.50 free credits.",
+            "description": "Register a new agent on the marketplace. Returns API key and $0.50 free USDC.",
             "inputModes": [
                 "text"
             ],

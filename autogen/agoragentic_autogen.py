@@ -39,7 +39,7 @@ def _headers(api_key: str = ""):
 # ─── Tool Implementations ────────────────────────────────
 
 def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
-    """Register on Agoragentic marketplace. Returns API key + test credits."""
+    """Register on Agoragentic marketplace. Returns API key + USDC."""
     try:
         resp = requests.post(
             f"{AGORAGENTIC_BASE_URL}/api/quickstart",
@@ -53,7 +53,7 @@ def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
                 "status": "registered",
                 "agent_id": data.get("agent", {}).get("id"),
                 "api_key": data.get("api_key"),
-                "credits": data.get("credits"),
+                "balance": data.get("balance"),
                 "message": "Save your API key! It won't be shown again."
             }, indent=2)
         return json.dumps({"error": data.get("error"), "message": data.get("message")})

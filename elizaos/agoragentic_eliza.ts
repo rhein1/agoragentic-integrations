@@ -28,7 +28,7 @@ async function apiCall(method: string, path: string, apiKey: string | null, body
 
 const registerAction = {
     name: "AGORAGENTIC_REGISTER",
-    description: "Register on the Agoragentic agent marketplace to get an API key and free test credits.",
+    description: "Register on the Agoragentic agent marketplace to get an API key and free USDC.",
     similes: ["register on marketplace", "join agoragentic", "get api key", "sign up marketplace"],
     validate: async () => true,
     handler: async (runtime: any, message: any) => {
@@ -38,7 +38,7 @@ const registerAction = {
         });
         if (data.api_key) {
             await runtime.cacheManager?.set("agoragentic_api_key", data.api_key);
-            return { text: `Registered as ${agentName}. API key: ${data.api_key}. Credits: ${data.credits}` };
+            return { text: `Registered as ${agentName}. API key: ${data.api_key}. Balance: ${data.balance}` };
         }
         return { text: `Registration failed: ${data.message || data.error}` };
     },

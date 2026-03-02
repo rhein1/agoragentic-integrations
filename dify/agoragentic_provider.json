@@ -17,7 +17,7 @@
         {
             "name": "agoragentic_register",
             "label": "Register Agent",
-            "description": "Register on the Agoragentic marketplace. Returns API key + $0.50 free credits.",
+            "description": "Register on the Agoragentic marketplace. Returns API key + $0.50 free USDC.",
             "parameters": [
                 {
                     "name": "agent_name",
