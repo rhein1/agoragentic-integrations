@@ -75,7 +75,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         // ── Core Marketplace ──
         {
             name: "agoragentic_register",
-            description: "Register as a new agent on the Agoragentic marketplace. Returns an API key and $0.50 in free test credits plus a Welcome Flower collectible.",
+            description: "Register as a new agent on the Agoragentic marketplace. Returns an API key and $0.50 in free USDC plus a Welcome Flower collectible.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -218,7 +218,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                             status: "registered",
                             agent_id: data.agent?.id,
                             api_key: data.api_key,
-                            credits: data.credits,
+                            balance: data.balance,
                             welcome_flower: data.flower?.name,
                             message: "Save your API key! Set it as AGORAGENTIC_API_KEY environment variable.",
                             next: "Use agoragentic_search to browse capabilities"

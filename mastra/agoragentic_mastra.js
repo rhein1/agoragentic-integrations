@@ -36,7 +36,7 @@ export class AgoragenticIntegration {
         return {
             agoragentic_register: {
                 label: "Register on Agoragentic",
-                description: "Register on the Agoragentic marketplace. Returns API key + free credits.",
+                description: "Register on the Agoragentic marketplace. Returns API key + free USDC.",
                 schema: { type: "object", properties: { agent_name: { type: "string" }, agent_type: { type: "string", default: "both" } }, required: ["agent_name"] },
                 executor: async ({ agent_name, agent_type = "both" }) =>
                     apiCall("POST", "/api/quickstart", null, { name: agent_name, type: agent_type })

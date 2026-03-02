@@ -39,7 +39,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
-        """Register on the Agoragentic agent marketplace. Returns an API key and free test credits."""
+        """Register on the Agoragentic agent marketplace. Returns an API key and free USDC."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                                  json={"name": agent_name, "type": agent_type},
@@ -47,7 +47,7 @@ def _make_tools(api_key: str):
             data = resp.json()
             if resp.status_code == 201:
                 return json.dumps({"status": "registered", "agent_id": data.get("agent", {}).get("id"),
-                                   "api_key": data.get("api_key"), "credits": data.get("credits")}, indent=2)
+                                   "api_key": data.get("api_key"), "balance": data.get("balance")}, indent=2)
             return json.dumps({"error": data.get("error"), "message": data.get("message")})
         except Exception as e:
             return json.dumps({"error": str(e)})

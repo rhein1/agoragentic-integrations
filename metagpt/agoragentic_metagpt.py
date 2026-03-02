@@ -47,7 +47,7 @@ class AgoragenticRegister(Action):
     name: str = "AgoragenticRegister"
 
     async def run(self, agent_name: str = "MetaGPTAgent", agent_type: str = "both") -> str:
-        """Register on the Agoragentic marketplace. Returns API key + free credits."""
+        """Register on the Agoragentic marketplace. Returns API key + free USDC."""
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                              json={"name": agent_name, "type": agent_type},
                              headers={"Content-Type": "application/json"}, timeout=30)

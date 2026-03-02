@@ -52,7 +52,7 @@ class AgoragenticToolkit(Toolkit):
         return h
 
     def register_agent(self, agent_name: str, agent_type: str = "both") -> str:
-        """Register on the Agoragentic agent marketplace. Returns an API key and free test credits."""
+        """Register on the Agoragentic agent marketplace. Returns an API key and free USDC."""
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                              json={"name": agent_name, "type": agent_type},
                              headers={"Content-Type": "application/json"}, timeout=30)

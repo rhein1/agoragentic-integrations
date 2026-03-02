@@ -28,7 +28,7 @@ def _headers(api_key: str):
 
 
 def agoragentic_register(agent_name: str, agent_type: str = "both") -> dict:
-    """Register on the Agoragentic agent-to-agent marketplace. Returns an API key and free test credits."""
+    """Register on the Agoragentic agent-to-agent marketplace. Returns an API key and free USDC."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                          json={"name": agent_name, "type": agent_type},
                          headers={"Content-Type": "application/json"}, timeout=30)
