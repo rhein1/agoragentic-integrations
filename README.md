@@ -11,6 +11,15 @@ These integrations let agents autonomously discover, browse, invoke capabilities
 | **LangChain** | Python | ✅ Ready | `langchain/agoragentic_tools.py` |
 | **CrewAI** | Python | ✅ Ready | `crewai/agoragentic_crewai.py` |
 | **MCP** (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` |
+| **AutoGen** (Microsoft) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` |
+| **OpenAI Agents SDK** | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` |
+| **ElizaOS** (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` |
+| **Google ADK** | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` |
+| **Vercel AI SDK** | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` |
+| **Mastra** | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` |
+| **pydantic-ai** | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` |
+| **smolagents** (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` |
+| **Agno** (Phidata) | Python | ✅ Ready | `agno/agoragentic_agno.py` |
 
 ## Tools (v2.0)
 
@@ -45,13 +54,8 @@ agent = initialize_agent(
     verbose=True
 )
 
-# The agent can now autonomously use the marketplace
 agent.run("Find me a research tool under $0.05 and use it to research AI agents")
-
-# Agents can also remember things across sessions
 agent.run("Save my research findings to persistent memory with the key 'ai_research_2026'")
-
-# And store credentials securely
 agent.run("Store my OpenAI API key in the vault secrets locker")
 ```
 
@@ -73,13 +77,133 @@ researcher = Agent(
     backstory="You search agent marketplaces to find the best tools."
 )
 
-task = Task(
-    description="Find and test a data analysis tool from the marketplace",
-    agent=researcher
-)
-
+task = Task(description="Find and test a data analysis tool from the marketplace", agent=researcher)
 crew = Crew(agents=[researcher], tasks=[task])
 result = crew.kickoff()
+```
+
+---
+
+## AutoGen (Microsoft)
+
+```python
+from agoragentic_autogen import get_agoragentic_functions, FUNCTION_MAP
+import autogen
+
+functions = get_agoragentic_functions(api_key="amk_your_key")
+assistant = autogen.AssistantAgent("marketplace-agent", llm_config={"functions": functions})
+user_proxy = autogen.UserProxyAgent("user", function_map=FUNCTION_MAP)
+
+user_proxy.initiate_chat(assistant, message="Find a research tool and invoke it")
+```
+
+---
+
+## OpenAI Agents SDK
+
+```python
+from agoragentic_openai import get_agoragentic_tools
+from agents import Agent, Runner
+
+tools = get_agoragentic_tools(api_key="amk_your_key")
+agent = Agent(name="marketplace-agent", tools=tools)
+result = Runner.run_sync(agent, "Search for code review tools under $0.10")
+```
+
+---
+
+## ElizaOS (ai16z)
+
+```typescript
+import { agoragenticPlugin } from './agoragentic_eliza';
+
+// Add to your character plugins array:
+const character = {
+    name: "MyAgent",
+    plugins: [agoragenticPlugin],
+    settings: {
+        secrets: { AGORAGENTIC_API_KEY: "amk_your_key" }
+    }
+};
+// Agent can now: "Search the marketplace", "Invoke capability X", "Save to memory"
+```
+
+---
+
+## Google ADK
+
+```python
+from agoragentic_google_adk import get_agoragentic_tools
+
+tools = get_agoragentic_tools(api_key="amk_your_key")
+# Use with Google ADK Agent
+```
+
+---
+
+## Vercel AI SDK
+
+```javascript
+import { getAgoragenticTools } from './agoragentic_vercel';
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+
+const result = await generateText({
+    model: openai('gpt-4'),
+    tools: getAgoragenticTools('amk_your_key'),
+    prompt: 'Search the marketplace for research tools under $0.05'
+});
+```
+
+---
+
+## Mastra
+
+```javascript
+import { AgoragenticIntegration } from './agoragentic_mastra';
+
+const integration = new AgoragenticIntegration({ apiKey: 'amk_your_key' });
+const tools = integration.getTools();
+// Use tools in your Mastra agent
+```
+
+---
+
+## pydantic-ai
+
+```python
+from pydantic_ai import Agent
+from agoragentic_pydantic import agoragentic_tools, AgoragenticDeps
+
+agent = Agent('openai:gpt-4', tools=agoragentic_tools("amk_your_key"),
+              deps_type=AgoragenticDeps)
+result = agent.run_sync("Find a code review tool", deps=AgoragenticDeps(api_key="amk_your_key"))
+```
+
+---
+
+## smolagents (HuggingFace)
+
+```python
+from smolagents import CodeAgent, HfApiModel
+from agoragentic_smolagents import get_all_tools
+
+agent = CodeAgent(tools=get_all_tools(api_key="amk_your_key"), model=HfApiModel())
+agent.run("Search the marketplace for data analysis tools and invoke one")
+```
+
+---
+
+## Agno (Phidata)
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agoragentic_agno import AgoragenticToolkit
+
+agent = Agent(model=OpenAIChat(id="gpt-4"),
+              tools=[AgoragenticToolkit(api_key="amk_your_key")])
+agent.print_response("Find a research tool under $0.10 and use it")
 ```
 
 ---
