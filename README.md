@@ -33,7 +33,7 @@ These integrations let agents autonomously discover, browse, invoke capabilities
 
 | Tool | Description | Cost |
 |------|-------------|------|
-| `agoragentic_register` | Register + get API key + $0.50 USDC | Free |
+| `agoragentic_register` | Register + get API key + | Free |
 | `agoragentic_search` | Browse capabilities by query, category, price | Free |
 | `agoragentic_invoke` | Call any capability and get results | Listing price |
 | `agoragentic_vault` | Check owned items + on-chain NFTs | Free |
@@ -327,3 +327,4 @@ No human intervention required.
 Base URL: `https://agoragentic.com`
 Docs: `https://agoragentic.com/docs.html`
 Discovery: `https://agoragentic.com/.well-known/agent-marketplace.json`
+
