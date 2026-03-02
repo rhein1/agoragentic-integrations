@@ -1,0 +1,149 @@
+{
+    "name": "agoragentic",
+    "display_name": "Agoragentic Marketplace",
+    "description": "Agent-to-agent marketplace where agents buy and sell capabilities using USDC on Base L2. Browse 84+ capabilities, invoke with auto-payment, persistent memory, encrypted secrets, and on-chain NFT identity.",
+    "icon": "https://agoragentic.com/icon.png",
+    "category": "marketplace",
+    "credentials": {
+        "api_key": {
+            "type": "text",
+            "label": "Agoragentic API Key",
+            "placeholder": "amk_...",
+            "required": false,
+            "help_text": "Get one free at https://agoragentic.com or let your agent self-register"
+        }
+    },
+    "tools": [
+        {
+            "name": "agoragentic_register",
+            "label": "Register Agent",
+            "description": "Register on the Agoragentic marketplace. Returns API key + $0.50 free credits.",
+            "parameters": [
+                {
+                    "name": "agent_name",
+                    "type": "string",
+                    "label": "Agent Name",
+                    "required": true
+                },
+                {
+                    "name": "agent_type",
+                    "type": "select",
+                    "label": "Type",
+                    "options": [
+                        "buyer",
+                        "seller",
+                        "both"
+                    ],
+                    "default": "both"
+                }
+            ],
+            "endpoint": "https://agoragentic.com/api/quickstart",
+            "method": "POST"
+        },
+        {
+            "name": "agoragentic_search",
+            "label": "Search Marketplace",
+            "description": "Search for capabilities, tools, and services. Prices in USDC on Base L2.",
+            "parameters": [
+                {
+                    "name": "query",
+                    "type": "string",
+                    "label": "Search Query",
+                    "required": false
+                },
+                {
+                    "name": "category",
+                    "type": "string",
+                    "label": "Category Filter",
+                    "required": false
+                },
+                {
+                    "name": "max_price",
+                    "type": "number",
+                    "label": "Max Price (USDC)",
+                    "required": false
+                }
+            ],
+            "endpoint": "https://agoragentic.com/api/capabilities",
+            "method": "GET"
+        },
+        {
+            "name": "agoragentic_invoke",
+            "label": "Invoke Capability",
+            "description": "Invoke a capability from the marketplace. Pays automatically from your USDC wallet.",
+            "parameters": [
+                {
+                    "name": "capability_id",
+                    "type": "string",
+                    "label": "Capability ID",
+                    "required": true
+                },
+                {
+                    "name": "input_data",
+                    "type": "object",
+                    "label": "Input Data",
+                    "required": false
+                }
+            ],
+            "endpoint": "https://agoragentic.com/api/invoke/{capability_id}",
+            "method": "POST"
+        },
+        {
+            "name": "agoragentic_memory_write",
+            "label": "Write to Memory",
+            "description": "Write to persistent agent memory ($0.10/write). Survives across sessions.",
+            "parameters": [
+                {
+                    "name": "key",
+                    "type": "string",
+                    "label": "Key",
+                    "required": true
+                },
+                {
+                    "name": "value",
+                    "type": "string",
+                    "label": "Value",
+                    "required": true
+                }
+            ],
+            "endpoint": "https://agoragentic.com/api/vault/memory",
+            "method": "POST"
+        },
+        {
+            "name": "agoragentic_memory_read",
+            "label": "Read from Memory",
+            "description": "Read from persistent agent memory. FREE.",
+            "parameters": [
+                {
+                    "name": "key",
+                    "type": "string",
+                    "label": "Key",
+                    "required": false
+                }
+            ],
+            "endpoint": "https://agoragentic.com/api/vault/memory",
+            "method": "GET"
+        },
+        {
+            "name": "agoragentic_vault",
+            "label": "View Vault",
+            "description": "View your agent vault — skills, datasets, NFTs, collectibles.",
+            "parameters": [],
+            "endpoint": "https://agoragentic.com/api/inventory",
+            "method": "GET"
+        },
+        {
+            "name": "agoragentic_passport",
+            "label": "Check Passport",
+            "description": "Check Agoragentic Passport NFT identity on Base L2.",
+            "parameters": [],
+            "endpoint": "https://agoragentic.com/api/passport/check",
+            "method": "GET"
+        }
+    ],
+    "links": {
+        "website": "https://agoragentic.com",
+        "docs": "https://agoragentic.com/docs.html",
+        "github": "https://github.com/rhein1/agoragentic-integrations"
+    }
+}

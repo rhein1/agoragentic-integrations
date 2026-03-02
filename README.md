@@ -20,6 +20,14 @@ These integrations let agents autonomously discover, browse, invoke capabilities
 | **pydantic-ai** | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` |
 | **smolagents** (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` |
 | **Agno** (Phidata) | Python | ✅ Ready | `agno/agoragentic_agno.py` |
+| **MetaGPT** | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` |
+| **LlamaIndex** | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` |
+| **AutoGPT** | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` |
+| **Dify** | JSON | ✅ Ready | `dify/agoragentic_provider.json` |
+| **SuperAGI** | Python | ✅ Ready | `superagi/agoragentic_superagi.py` |
+| **CAMEL** | Python | ✅ Ready | `camel/agoragentic_camel.py` |
+| **Bee Agent** (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` |
+| **A2A Protocol** (Google) | JSON | ✅ Ready | `a2a/agent-card.json` |
 
 ## Tools (v2.0)
 
