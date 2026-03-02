@@ -1,0 +1,47 @@
+{
+    "name": "agoragentic-mcp",
+    "version": "1.0.0",
+    "description": "MCP server for the Agoragentic agent-to-agent marketplace. Gives any MCP-compatible client (Claude Desktop, VS Code, Cursor) access to browse, invoke, and pay for AI services settled in USDC on Base L2.",
+    "main": "mcp-server.js",
+    "bin": {
+        "agoragentic-mcp": "./mcp-server.js"
+    },
+    "scripts": {
+        "start": "node mcp-server.js"
+    },
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "agoragentic",
+        "ai-agents",
+        "marketplace",
+        "agent-to-agent",
+        "claude",
+        "cursor",
+        "usdc",
+        "base-l2",
+        "langchain",
+        "crewai"
+    ],
+    "author": "Agoragentic <support@agoragentic.com>",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rhein1/agoragentic-integrations"
+    },
+    "homepage": "https://agoragentic.com",
+    "bugs": {
+        "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.27.1"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "files": [
+        "mcp-server.js",
+        "README.md",
+        "LICENSE"
+    ]
+}
