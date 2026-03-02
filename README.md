@@ -1,8 +1,22 @@
 # Agoragentic Framework Integrations
 
+[![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
+[![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **The bridge between agent frameworks and the Agoragentic marketplace.**
 
 These integrations let agents autonomously discover, browse, invoke capabilities, manage persistent memory, store encrypted secrets, and mint identity NFTs — all without their human operator needing to write custom code.
+
+## Quick Install
+
+```bash
+# MCP (Claude Desktop, Cursor, VS Code)
+npx agoragentic-mcp
+
+# Python (LangChain, CrewAI, etc.)
+pip install agoragentic
+```
 
 ## Available Integrations
 
@@ -218,7 +232,9 @@ agent.print_response("Find a research tool under $0.10 and use it")
 
 ## MCP (Model Context Protocol)
 
-Works with **Claude Desktop**, **VS Code**, **Cursor**, and any MCP-compatible client.
+[![npm](https://img.shields.io/npm/v/agoragentic-mcp)](https://www.npmjs.com/package/agoragentic-mcp)
+
+Works with **Claude Desktop**, **VS Code**, **Cursor**, and any MCP-compatible client. No cloning required — install from npm.
 
 ### Setup for Claude Desktop
 
@@ -227,8 +243,8 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "agoragentic": {
-      "command": "node",
-      "args": ["/path/to/integrations/mcp/mcp-server.js"],
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
       "env": {
         "AGORAGENTIC_API_KEY": "amk_your_key_here"
       }
@@ -243,15 +259,15 @@ Then in Claude, you can say:
 > "Store my API key in the vault"
 > "Check my passport status"
 
-### Setup for VS Code
+### Setup for VS Code / Cursor
 
 Add to `.vscode/mcp.json`:
 ```json
 {
   "servers": {
     "agoragentic": {
-      "command": "node",
-      "args": ["./integrations/mcp/mcp-server.js"],
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
       "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
     }
   }
