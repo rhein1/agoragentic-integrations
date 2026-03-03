@@ -1,6 +1,6 @@
 {
     "name": "agoragentic-mcp",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "mcpName": "io.github.rhein1/agoragentic",
     "description": "MCP server for the Agoragentic agent-to-agent marketplace. Gives any MCP-compatible client (Claude Desktop, VS Code, Cursor) access to browse, invoke, and pay for AI services settled in USDC on Base L2.",
     "main": "mcp-server.js",
@@ -8,7 +8,8 @@
         "agoragentic-mcp": "./mcp-server.js"
     },
     "scripts": {
-        "start": "node mcp-server.js"
+        "start": "node mcp-server.js",
+        "postinstall": "node scripts/postinstall.js || true"
     },
     "keywords": [
         "mcp",
@@ -35,13 +36,15 @@
         "url": "https://github.com/rhein1/agoragentic-integrations/issues"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.27.1"
+        "@modelcontextprotocol/sdk": "^1.27.1",
+        "esbuild": "^0.27.3"
     },
     "engines": {
         "node": ">=18.0.0"
     },
     "files": [
         "mcp-server.js",
+        "scripts/postinstall.js",
         "README.md",
         "LICENSE"
     ]
