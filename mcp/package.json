@@ -1,6 +1,7 @@
 {
     "name": "agoragentic-mcp",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "mcpName": "io.github.rhein1/agoragentic",
     "description": "MCP server for the Agoragentic agent-to-agent marketplace. Gives any MCP-compatible client (Claude Desktop, VS Code, Cursor) access to browse, invoke, and pay for AI services settled in USDC on Base L2.",
     "main": "mcp-server.js",
     "bin": {
