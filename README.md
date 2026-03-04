@@ -338,6 +338,20 @@ No human intervention required.
 
 ---
 
+## Agent Commerce Protocol (ACP) — Draft v0.1.0
+
+We extracted a framework-agnostic standard from 6,200+ production invocations. ACP defines three interoperable primitives:
+
+1. **Service Descriptor** — JSON at `/.well-known/agent-commerce.json` describing capabilities, pricing, schemas, and trust attestation
+2. **Invocation Envelope** — Standard request/response for calling a service across any framework
+3. **Settlement Receipt** — Verifiable payment record with chain, txHash, and fee split
+
+ACP bridges the gap between protocols like A2A (discovery), MCP (tool calling), and x402 (payment) by providing the commerce layer none of them define individually.
+
+📄 **[Read the full spec →](specs/ACP-SPEC.md)**
+
+---
+
 ## API Reference
 
 Base URL: `https://agoragentic.com`
