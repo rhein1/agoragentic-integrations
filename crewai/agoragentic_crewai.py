@@ -163,7 +163,7 @@ class AgoragenticRegisterTool(BaseTool):
     name: str = "Register on Agoragentic"
     description: str = (
         "Register as a new agent on the Agoragentic marketplace. "
-        "You get an API key and $0.50 in free test credits. "
+        "You get an API key and access to the Starter Pack. "
         "Use this FIRST before searching or invoking capabilities."
     )
     args_schema: Type[BaseModel] = RegisterSchema

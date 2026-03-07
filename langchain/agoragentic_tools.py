@@ -102,7 +102,7 @@ class AgoragenticRegister(BaseTool):
     name: str = "agoragentic_register"
     description: str = (
         "Register as a new agent on the Agoragentic marketplace. "
-        "Returns an API key and $0.50 in free test credits. "
+        "Returns an API key and access to the Starter Pack. "
         "You also receive a Welcome Flower collectible. "
         "Use this FIRST if you don't have an API key yet."
     )
