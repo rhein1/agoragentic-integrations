@@ -1,54 +1,178 @@
-# Agoragentic Framework Integrations
+# Agoragentic Integrations
 
-**Capability router for autonomous agents.** Call `execute(task, input)` to discover and invoke the best provider automatically.
+**Agoragentic is a capability router for autonomous agents.**
+Agents call `execute(task, input, constraints)` and Agoragentic finds the best provider, handles fallback, and settles execution through one API.
 
-These integrations let agents route tasks to the best available provider with automatic fallback and USDC settlement — no manual provider selection needed.
+Instead of hardcoding provider IDs, API keys, retries, and billing logic for each service, agents can route by **intent**:
+
+```python
+from agoragentic import execute
+
+result = execute(
+    "summarize",
+    {"text": "Long document here"},
+    {"max_cost": 0.05}
+)
+```
+
+Agoragentic selects the best matching provider, executes the task, and returns the result with routing metadata.
+
+---
+
+## Why use Agoragentic?
+
+Use Agoragentic when your agent needs to:
+
+* **discover capabilities by task**, not provider ID
+* **route to the best provider automatically**
+* **fallback safely** if a provider fails
+* **see routing signals** like cost, latency, and verification tier
+* **settle paid execution** through one integration
+
+---
 
 ## Quick Start
 
-```bash
-# npm
-npm install agoragentic
+### Python
 
-# PyPI
+```bash
 pip install agoragentic
 ```
 
 ```python
-# One call — agent gets routed to the best provider
-result = execute("summarize this article", {"url": "https://example.com/article"})
+from agoragentic import execute, match, status
+
+# Route by task
+result = execute("summarize", {"text": "Long document here"}, {"max_cost": 0.05})
+print(result)
+
+# Preview candidate providers without executing
+providers = match("summarize", {"max_cost": 0.05})
+print(providers)
+
+# Check execution status
+job = status("your_invocation_id")
+print(job)
 ```
 
-## Core Tools
+### Node.js
 
-| Tool | Description | Cost |
-|------|-------------|------|
-| `agoragentic_execute` | Route a task to the best provider with fallback | Listing price |
-| `agoragentic_match` | Find matching providers for a task | Free |
-| `agoragentic_status` | Check invocation result or receipt | Free |
-| `agoragentic_register` | Register + get API key via Starter Pack | Free |
+```bash
+npm install agoragentic
+```
 
-## Advanced Tools
+```javascript
+import { execute, match, status } from "agoragentic";
 
-| Tool | Description | Cost |
-|------|-------------|------|
-| `agoragentic_search` | Browse capabilities by query, category, price | Free |
-| `agoragentic_invoke` | Call a specific capability by ID | Listing price |
-| `agoragentic_vault` | Check owned items + on-chain NFTs | Free |
-| `agoragentic_categories` | List all capability categories | Free |
-| `agoragentic_memory_write` | Write to persistent key-value memory | $0.10 |
-| `agoragentic_memory_read` | Read from persistent memory | Free |
-| `agoragentic_secret_store` | Store encrypted credential (AES-256) | $0.25 |
-| `agoragentic_secret_retrieve` | Retrieve decrypted credential | Free |
-| `agoragentic_passport` | Check/verify NFT identity passport | Free |
+const result = await execute("summarize", { text: "Long document here" }, { max_cost: 0.05 });
+console.log(result);
+
+const providers = await match("summarize", { max_cost: 0.05 });
+console.log(providers);
+
+const job = await status("your_invocation_id");
+console.log(job);
+```
+
+### MCP
+
+```bash
+npx agoragentic-mcp
+```
+
+Use Agoragentic in MCP-compatible clients (Claude, Cursor, VS Code) to execute capabilities by task, inspect provider matches, and check invocation status.
 
 ---
 
-## Available Integrations
+## Core SDK Methods
+
+| Method | Description | Cost |
+|--------|-------------|------|
+| `execute(task, input, constraints)` | Route a task to the best provider with fallback | Listing price |
+| `match(task, constraints)` | Preview matching providers before executing | Free |
+| `status(invocation_id)` | Check invocation result or receipt | Free |
+| `register(name)` | Register agent + get API key | Free |
+
+### Advanced Tools
+
+| Tool | Description | Cost |
+|------|-------------|------|
+| `search(query)` | Browse capabilities by query, category, price | Free |
+| `invoke(capability_id, input)` | Call a specific capability by ID (direct) | Listing price |
+| `categories()` | List all capability categories | Free |
+
+---
+
+## Core Router Flow
+
+### 1. Register your agent
+
+```http
+POST /api/agents/register
+```
+
+### 2. Execute by task
+
+```http
+POST /api/execute
+```
+
+```json
+{
+  "task": "summarize",
+  "input": { "text": "Long document here" },
+  "constraints": { "max_cost": 0.05 }
+}
+```
+
+### 3. Preview providers first (optional)
+
+```http
+GET /api/execute/match?task=summarize&max_cost=0.05
+```
+
+### 4. Check execution status
+
+```http
+GET /api/execute/status/{invocation_id}
+```
+
+---
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────────┐
+│   Your Agent    │────▶│  Integration     │────▶│   Agoragentic API    │
+│  (LangChain,   │     │  (SDK / MCP)     │     │                      │
+│   CrewAI, etc) │     │                  │     │  /api/execute        │
+│                 │◀────│  Handles auth,   │◀────│  /api/execute/match  │
+│  "Summarize    │     │  routing,        │     │  /api/execute/status │
+│   this         │     │  fallback        │     │                      │
+│   document"    │     │                  │     │  /api/capabilities   │
+│                 │     │                  │     │  /api/invoke/:id     │
+└─────────────────┘     └──────────────────┘     └──────────────────────┘
+```
+
+The agent describes a task → Agoragentic routes it to the best available provider with automatic fallback and USDC settlement.
+
+---
+
+## Best Supported Integration Paths
+
+Start here first:
+
+| Framework | Language | Status | Path |
+|-----------|----------|--------|------|
+| **Python SDK** | Python | ✅ Primary | `pip install agoragentic` |
+| **Node SDK** | Node.js | ✅ Primary | `npm install agoragentic` |
+| **MCP** (Claude, VS Code, Cursor) | Node.js | ✅ Primary | `npx agoragentic-mcp` |
+| **Direct REST API** | Any | ✅ Primary | `https://agoragentic.com/api/execute` |
+
+### Also Available
 
 | Framework | Language | Status | File |
 |-----------|----------|--------|------|
-| **MCP** (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` |
 | **LangChain** | Python | ✅ Ready | `langchain/agoragentic_tools.py` |
 | **CrewAI** | Python | ✅ Ready | `crewai/agoragentic_crewai.py` |
 | **OpenAI Agents SDK** | Python | ✅ Ready | `openai-agents/` |
@@ -71,11 +195,11 @@ result = execute("summarize this article", {"url": "https://example.com/article"
 
 ---
 
-## MCP (Model Context Protocol)
+## MCP Setup
 
 Works with **Claude Desktop**, **VS Code**, **Cursor**, and any MCP-compatible client.
 
-### Setup for Claude Desktop
+### Claude Desktop
 
 Add to `claude_desktop_config.json`:
 ```json
@@ -93,11 +217,11 @@ Add to `claude_desktop_config.json`:
 ```
 
 Then in Claude:
-> "Find a summarizer under $0.05 and summarize this article"
+> "Summarize this article under $0.05"
 > "Route this research task to the best provider"
-> "Save my project notes to persistent memory"
+> "Match providers for code review and show me the options"
 
-### Setup for VS Code
+### VS Code
 
 Add to `.vscode/mcp.json`:
 ```json
@@ -131,10 +255,7 @@ agent = initialize_agent(
 )
 
 # Route a task to the best available provider
-agent.run("Find a research tool under $0.05 and use it to research AI agents")
-
-# Persistent memory across sessions
-agent.run("Save my research findings to persistent memory with the key 'ai_research_2026'")
+agent.run("Summarize this article about autonomous agents under $0.05")
 ```
 
 ---
@@ -142,21 +263,21 @@ agent.run("Save my research findings to persistent memory with the key 'ai_resea
 ## CrewAI
 
 ```python
-from agoragentic_crewai import AgoragenticSearchTool, AgoragenticInvokeTool
+from agoragentic_crewai import AgoragenticExecuteTool, AgoragenticMatchTool
 from crewai import Agent, Task, Crew
 
 researcher = Agent(
     role="Capability Router",
-    goal="Find and invoke the best providers for each task",
+    goal="Route tasks to the best available providers",
     tools=[
-        AgoragenticSearchTool(api_key="amk_your_key"),
-        AgoragenticInvokeTool(api_key="amk_your_key")
+        AgoragenticExecuteTool(api_key="amk_your_key"),
+        AgoragenticMatchTool(api_key="amk_your_key")
     ],
     backstory="You route tasks to the best available capability providers."
 )
 
 task = Task(
-    description="Find and test a data analysis capability",
+    description="Summarize the latest research on AI agent architectures",
     agent=researcher
 )
 
@@ -166,42 +287,18 @@ result = crew.kickoff()
 
 ---
 
-## Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌──────────────────────┐
-│   Your Agent    │────▶│  Integration     │────▶│   Agoragentic API    │
-│  (LangChain,   │     │  (tools/MCP)     │     │                      │
-│   CrewAI, etc) │     │                  │     │  /api/quickstart     │
-│                 │◀────│                  │◀────│  /api/execute        │
-│  "Summarize    │     │  Handles auth,   │     │  /api/match          │
-│   this         │     │  routing,        │     │  /api/capabilities   │
-│   article"     │     │  fallback        │     │  /api/invoke/:id     │
-│                 │     │                  │     │  /api/vault/memory   │
-│  "Route this   │     │                  │     │  /api/vault/secrets  │
-│   to the best  │     │                  │     │  /api/passport/check │
-│   provider"    │     │                  │     │  /api/x402/info      │
-└─────────────────┘     └──────────────────┘     └──────────────────────┘
-```
-
-The agent describes a task → Agoragentic routes it to the best available provider with automatic fallback and USDC settlement.
-
----
-
-## Getting Started (No API Key Yet)
+## Register an Agent
 
 Every integration includes a `register` tool. The agent can self-register:
 
 ```
 Agent: "I need to use Agoragentic but I don't have an API key."
-→ Agent calls agoragentic_register with its name
+→ Agent calls register with its name
 → Gets API key and access to the Starter Pack
 → Starts routing tasks to capability providers
 ```
 
-No human intervention required. Invokes have a $0.10 USDC minimum.
-
-Starter-pack rewards are fee discounts, not free credits.
+No human intervention required. Starter-pack rewards are fee discounts, not free credits.
 
 ---
 
@@ -211,6 +308,21 @@ Starter-pack rewards are fee discounts, not free credits.
 - **Referral discounts**: Earn permanent fee reductions by referring agents
 - **Minimum invoke**: $0.10 USDC
 - **Settlement**: On-chain USDC on Base L2
+
+---
+
+## Advanced / Optional Features
+
+Agoragentic also supports additional platform features:
+
+* **Direct provider invoke** by capability ID (`/api/invoke/:id`)
+* **Persistent memory** — key-value store across sessions (`/api/vault/memory`)
+* **Encrypted secrets** — AES-256 credential storage (`/api/vault/secrets`)
+* **Identity passport** — NFT-based agent identity (`/api/passport/check`)
+* **Seller publishing** — list and stake capabilities
+* **Wallet and payout** — manage USDC balances
+
+These are optional. For most integrations, start with `register` → `execute` → `status`.
 
 ---
 
