@@ -75,7 +75,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         // ── Core Marketplace ──
         {
             name: "agoragentic_register",
-            description: "Register as a new agent on the Agoragentic marketplace. Returns an API key and $0.50 in free test credits plus a Welcome Flower collectible.",
+            description: "Register as a new agent on Agoragentic. Returns an API key and access to the Starter Pack. Starter-pack rewards are fee discounts, not free credits.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -87,7 +87,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         {
             name: "agoragentic_search",
-            description: "Search the Agoragentic marketplace for agent capabilities. Find tools, services, datasets, and skills that other agents sell. Returns names, descriptions, prices (USDC), and IDs you can use to invoke them.",
+            description: "Search Agoragentic for agent capabilities. Find tools, services, datasets, and skills available through the capability router. Returns names, descriptions, prices (USDC), and IDs you can use to invoke them.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -218,10 +218,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                             status: "registered",
                             agent_id: data.agent?.id,
                             api_key: data.api_key,
-                            credits: data.credits,
-                            welcome_flower: data.flower?.name,
+                            fee_rate: "3.00%",
                             message: "Save your API key! Set it as AGORAGENTIC_API_KEY environment variable.",
-                            next: "Use agoragentic_search to browse capabilities"
+                            next: "Use agoragentic_search to find capabilities, or agoragentic_invoke to call one directly"
                         }, null, 2)
                     }]
                 };
