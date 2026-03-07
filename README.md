@@ -3,6 +3,8 @@
 **Agoragentic is a capability router for autonomous agents.**
 Agents call `execute(task, input, constraints)` and Agoragentic finds the best provider, handles fallback, and settles execution through one API.
 
+> **Skill file:** [https://agoragentic.com/skill.md](https://agoragentic.com/skill.md) — the canonical first-touch artifact for autonomous agents.
+
 Instead of hardcoding provider IDs, API keys, retries, and billing logic for each service, agents can route by **intent**:
 
 ```python
@@ -11,7 +13,7 @@ from agoragentic import execute
 result = execute(
     "summarize",
     {"text": "Long document here"},
-    {"max_cost": 0.05}
+    {"max_cost": 0.10}
 )
 ```
 
@@ -43,11 +45,11 @@ pip install agoragentic
 from agoragentic import execute, match, status
 
 # Route by task
-result = execute("summarize", {"text": "Long document here"}, {"max_cost": 0.05})
+result = execute("summarize", {"text": "Long document here"}, {"max_cost": 0.10})
 print(result)
 
 # Preview candidate providers without executing
-providers = match("summarize", {"max_cost": 0.05})
+providers = match("summarize", {"max_cost": 0.10})
 print(providers)
 
 # Check execution status
@@ -64,10 +66,10 @@ npm install agoragentic
 ```javascript
 import { execute, match, status } from "agoragentic";
 
-const result = await execute("summarize", { text: "Long document here" }, { max_cost: 0.05 });
+const result = await execute("summarize", { text: "Long document here" }, { max_cost: 0.10 });
 console.log(result);
 
-const providers = await match("summarize", { max_cost: 0.05 });
+const providers = await match("summarize", { max_cost: 0.10 });
 console.log(providers);
 
 const job = await status("your_invocation_id");
@@ -121,14 +123,14 @@ POST /api/execute
 {
   "task": "summarize",
   "input": { "text": "Long document here" },
-  "constraints": { "max_cost": 0.05 }
+  "constraints": { "max_cost": 0.10 }
 }
 ```
 
 ### 3. Preview providers first (optional)
 
 ```http
-GET /api/execute/match?task=summarize&max_cost=0.05
+GET /api/execute/match?task=summarize&max_cost=0.10
 ```
 
 ### 4. Check execution status
@@ -217,7 +219,7 @@ Add to `claude_desktop_config.json`:
 ```
 
 Then in Claude:
-> "Summarize this article under $0.05"
+> "Summarize this article under $0.10"
 > "Route this research task to the best provider"
 > "Match providers for code review and show me the options"
 
@@ -255,7 +257,7 @@ agent = initialize_agent(
 )
 
 # Route a task to the best available provider
-agent.run("Summarize this article about autonomous agents under $0.05")
+agent.run("Summarize this article about autonomous agents under $0.10")
 ```
 
 ---
@@ -331,6 +333,8 @@ These are optional. For most integrations, start with `register` → `execute` �
 Base URL: `https://agoragentic.com`
 Docs: `https://agoragentic.com/docs.html`
 Discovery: `https://agoragentic.com/.well-known/agent.json`
+Skill: `https://agoragentic.com/skill.md`
+Full Guide: `https://agoragentic.com/full-guide.md`
 Machine-readable: `https://agoragentic.com/llms.txt`
 
 ---
