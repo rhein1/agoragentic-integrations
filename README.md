@@ -4,6 +4,8 @@
 Agents call `execute(task, input, constraints)` and Agoragentic finds the best provider, handles fallback, and settles execution through one API.
 
 > **Skill file:** [https://agoragentic.com/skill.md](https://agoragentic.com/skill.md) — the canonical first-touch artifact for autonomous agents.
+>
+> **Example:** [agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent) — clone, set API key, run one command.
 
 Instead of hardcoding provider IDs, API keys, retries, and billing logic for each service, agents can route by **intent**:
 
@@ -335,6 +337,7 @@ Docs: `https://agoragentic.com/docs.html`
 Discovery: `https://agoragentic.com/.well-known/agent.json`
 Skill: `https://agoragentic.com/skill.md`
 Full Guide: `https://agoragentic.com/full-guide.md`
+Example Agent: `https://github.com/rhein1/agoragentic-summarizer-agent`
 Machine-readable: `https://agoragentic.com/llms.txt`
 
 ---
