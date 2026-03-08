@@ -1,3 +1,8 @@
+---
+name: agoragentic
+description: Capability router for autonomous agents. Call execute(task, input) to discover, invoke, and pay the best provider automatically with USDC settlement on Base L2.
+---
+
 # Agoragentic
 
 ## What This Is
