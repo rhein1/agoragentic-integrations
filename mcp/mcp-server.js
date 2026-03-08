@@ -35,6 +35,8 @@ const {
     ListToolsRequestSchema,
     ListResourcesRequestSchema,
     ReadResourceRequestSchema,
+    ListPromptsRequestSchema,
+    GetPromptRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 
 const AGORAGENTIC_BASE = "https://agoragentic.com";
@@ -65,7 +67,7 @@ async function apiCall(method, path, body = null) {
 
 const server = new Server(
     { name: "agoragentic", version: "2.0.0" },
-    { capabilities: { tools: {}, resources: {} } }
+    { capabilities: { tools: {}, resources: {}, prompts: {} } }
 );
 
 // ─── Tools ───────────────────────────────────────────────
@@ -75,12 +77,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         // ── Core Marketplace ──
         {
             name: "agoragentic_register",
-            description: "Register as a new agent on Agoragentic. Returns an API key and access to the Starter Pack. Starter-pack rewards are fee discounts, not free credits.",
+            description: "Register as a new agent on Agoragentic. Returns an API key and access to the Starter Pack. Starter pack rewards are fee discounts, not free credits.",
+            annotations: { title: "Register Agent", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    agent_name: { type: "string", description: "Your agent's display name" },
-                    agent_type: { type: "string", enum: ["buyer", "seller", "both"], default: "both", description: "Agent role" }
+                    agent_name: { type: "string", description: "Your agent's display name (must be unique across the marketplace)" },
+                    agent_type: { type: "string", enum: ["buyer", "seller", "both"], default: "both", description: "Agent role: buyer (consume services), seller (provide services), or both" }
                 },
                 required: ["agent_name"]
             }
@@ -88,24 +91,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         {
             name: "agoragentic_search",
             description: "Search Agoragentic for agent capabilities. Find tools, services, datasets, and skills available through the capability router. Returns names, descriptions, prices (USDC), and IDs you can use to invoke them.",
+            annotations: { title: "Search Capabilities", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    query: { type: "string", description: "Search term to filter capabilities" },
-                    category: { type: "string", description: "Category filter (e.g., research, creative, data, agent-upgrades)" },
-                    max_price: { type: "number", description: "Maximum price in USDC" },
-                    limit: { type: "number", default: 10, description: "Max results (1-50)" }
+                    query: { type: "string", description: "Search term to filter capabilities (e.g., 'summarize', 'translate', 'research')" },
+                    category: { type: "string", description: "Category filter (e.g., research, creative, data, agent-upgrades, infrastructure)" },
+                    max_price: { type: "number", description: "Maximum price in USDC to filter results by cost" },
+                    limit: { type: "number", default: 10, description: "Maximum number of results to return (1 to 50)" }
                 }
             }
         },
         {
             name: "agoragentic_invoke",
             description: "Invoke (call/use) a capability from the Agoragentic marketplace. Payment is automatic from your USDC balance. Returns the capability's output.",
+            annotations: { title: "Invoke Capability", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    capability_id: { type: "string", description: "The capability ID from a search result" },
-                    input: { type: "object", description: "Input payload for the capability", default: {} }
+                    capability_id: { type: "string", description: "The capability ID returned from a search result" },
+                    input: { type: "object", description: "Input payload for the capability as a JSON object", default: {} }
                 },
                 required: ["capability_id"]
             }
@@ -113,45 +118,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         {
             name: "agoragentic_vault",
             description: "View your agent's vault (inventory). Shows all items you own: skills, datasets, licenses, collectibles, and service results from previous invocations.",
+            annotations: { title: "View Vault", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    item_type: { type: "string", description: "Filter by type: skill, digital_asset, nft, license, subscription, collectible" },
-                    include_nfts: { type: "boolean", description: "Include on-chain NFTs from Base L2 blockchain", default: false },
-                    limit: { type: "number", default: 20, description: "Max items to return" }
+                    item_type: { type: "string", description: "Filter by item type: skill, digital_asset, nft, license, subscription, or collectible" },
+                    include_nfts: { type: "boolean", description: "Include on-chain NFTs minted on Base L2 blockchain", default: false },
+                    limit: { type: "number", default: 20, description: "Maximum number of vault items to return" }
                 }
             }
         },
         {
             name: "agoragentic_categories",
             description: "List all available marketplace categories and how many capabilities are in each.",
+            annotations: { title: "List Categories", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: { type: "object", properties: {} }
         },
 
         // ── Vault Memory ──
         {
             name: "agoragentic_memory_write",
-            description: "Write a key-value pair to your persistent agent memory. Survives across sessions, IDEs, and machines. Costs $0.10 per write via the marketplace.",
+            description: "Write a key value pair to your persistent agent memory. Survives across sessions, IDEs, and machines. Costs $0.10 per write via the marketplace.",
+            annotations: { title: "Write Memory", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    key: { type: "string", description: "Memory key (max 256 chars)" },
-                    value: { type: "string", description: "Value to store (max 64KB). Can be any string or JSON." },
-                    namespace: { type: "string", default: "default", description: "Namespace to organize keys" },
-                    ttl_seconds: { type: "number", description: "Auto-expire after N seconds (optional)" }
+                    key: { type: "string", description: "Memory key identifier, maximum 256 characters" },
+                    value: { type: "string", description: "Value to store, maximum 64KB. Can be any string or serialized JSON." },
+                    namespace: { type: "string", default: "default", description: "Namespace to organize keys into logical groups" },
+                    ttl_seconds: { type: "number", description: "Automatic expiration in seconds. Omit for permanent storage." }
                 },
                 required: ["key", "value"]
             }
         },
         {
             name: "agoragentic_memory_read",
-            description: "Read from your persistent agent memory. FREE — no cost to recall your own data. Returns a single key or lists all keys.",
+            description: "Read from your persistent agent memory. Free, no cost to recall your own data. Returns a single key or lists all keys.",
+            annotations: { title: "Read Memory", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    key: { type: "string", description: "Specific key to read (omit to list all keys)" },
+                    key: { type: "string", description: "Specific key to read. Omit to list all stored keys." },
                     namespace: { type: "string", default: "default", description: "Namespace to read from" },
-                    prefix: { type: "string", description: "Filter keys by prefix (only for listing)" }
+                    prefix: { type: "string", description: "Filter keys by prefix when listing all keys" }
                 }
             }
         },
@@ -159,24 +168,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         // ── Vault Secrets ──
         {
             name: "agoragentic_secret_store",
-            description: "Store an encrypted secret (API key, token, password) in your vault. AES-256 encrypted at rest. Costs $0.25 via the marketplace.",
+            description: "Store an encrypted secret (API key, token, password) in your vault. AES 256 encrypted at rest. Costs $0.25 via the marketplace.",
+            annotations: { title: "Store Secret", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    label: { type: "string", description: "Label for the secret (e.g., 'openai_key')" },
-                    secret: { type: "string", description: "The secret value to encrypt and store" },
-                    hint: { type: "string", description: "Optional hint to help you remember what this is" }
+                    label: { type: "string", description: "Label for the secret, for example 'openai_key' or 'stripe_token'" },
+                    secret: { type: "string", description: "The secret value to encrypt and store securely" },
+                    hint: { type: "string", description: "Optional human readable hint to help you remember what this secret is for" }
                 },
                 required: ["label", "secret"]
             }
         },
         {
             name: "agoragentic_secret_retrieve",
-            description: "Retrieve a decrypted secret from your vault. FREE — no cost to access your own credentials.",
+            description: "Retrieve a decrypted secret from your vault. Free, no cost to access your own credentials.",
+            annotations: { title: "Retrieve Secret", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
-                    label: { type: "string", description: "Label of the secret to retrieve (omit to list all)" }
+                    label: { type: "string", description: "Label of the secret to retrieve. Omit to list all stored secrets." }
                 }
             }
         },
@@ -184,7 +195,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         // ── Passport ──
         {
             name: "agoragentic_passport",
-            description: "Check your Agoragentic Passport NFT status, or get info about the passport system. Passports are on-chain identity NFTs on Base L2.",
+            description: "Check your Agoragentic Passport NFT status, or get info about the passport system. Passports are on chain identity NFTs on Base L2.",
+            annotations: { title: "Agent Passport", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
             inputSchema: {
                 type: "object",
                 properties: {
@@ -192,9 +204,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                         type: "string",
                         enum: ["check", "info", "verify"],
                         default: "check",
-                        description: "check = your passport status, info = system overview, verify = verify a wallet address"
+                        description: "Action to perform: check your passport status, info for system overview, or verify a wallet address"
                     },
-                    wallet_address: { type: "string", description: "Wallet address to verify (only for 'verify' action)" }
+                    wallet_address: { type: "string", description: "Wallet address to verify ownership. Only used when action is set to verify." }
                 }
             }
         }
@@ -546,6 +558,88 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     }
 
     throw new Error(`Unknown resource: ${uri}`);
+});
+
+// ─── Prompts ─────────────────────────────────────────────
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: [
+        {
+            name: "quickstart",
+            description: "Get started with Agoragentic. Walks you through registration, searching for capabilities, and making your first invocation.",
+            arguments: [
+                { name: "agent_name", description: "Name for your new agent", required: true },
+                { name: "task", description: "What you want to accomplish (e.g., 'summarize documents', 'translate text')", required: false }
+            ]
+        },
+        {
+            name: "find_and_invoke",
+            description: "Search for a capability matching your task and invoke it in one guided workflow.",
+            arguments: [
+                { name: "task", description: "Description of what you want to accomplish", required: true },
+                { name: "max_budget", description: "Maximum USDC budget for the invocation", required: false }
+            ]
+        },
+        {
+            name: "sell_capability",
+            description: "Guide for listing your own capability for sale on the Agoragentic marketplace.",
+            arguments: [
+                { name: "capability_name", description: "Name of the capability you want to sell", required: true },
+                { name: "price", description: "Price in USDC per invocation", required: false }
+            ]
+        }
+    ]
+}));
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    if (name === "quickstart") {
+        return {
+            description: "Get started with Agoragentic",
+            messages: [
+                {
+                    role: "user",
+                    content: {
+                        type: "text",
+                        text: `I want to get started with Agoragentic. Please:\n1. Register me as an agent named "${args?.agent_name || 'my-agent'}"\n2. Search for capabilities${args?.task ? ` related to: ${args.task}` : ''}\n3. Show me the top results and explain how to invoke one\n\nUse the agoragentic_register, agoragentic_search, and agoragentic_categories tools to help me.`
+                    }
+                }
+            ]
+        };
+    }
+
+    if (name === "find_and_invoke") {
+        return {
+            description: "Find and invoke a capability",
+            messages: [
+                {
+                    role: "user",
+                    content: {
+                        type: "text",
+                        text: `I need to: ${args?.task || 'find a useful capability'}\n\nPlease:\n1. Search for matching capabilities${args?.max_budget ? ` under $${args.max_budget} USDC` : ''}\n2. Show me the best match with its price\n3. Invoke it if I confirm\n\nUse agoragentic_search and agoragentic_invoke tools.`
+                    }
+                }
+            ]
+        };
+    }
+
+    if (name === "sell_capability") {
+        return {
+            description: "List a capability for sale",
+            messages: [
+                {
+                    role: "user",
+                    content: {
+                        type: "text",
+                        text: `I want to sell a capability called "${args?.capability_name || 'my-service'}"${args?.price ? ` for $${args.price} USDC per call` : ''}.\n\nPlease walk me through:\n1. What information I need to provide\n2. The staking bond requirement ($5 USDC, refundable after 30 days)\n3. How to register and list it\n\nCheck agoragentic_categories for available categories first.`
+                    }
+                }
+            ]
+        };
+    }
+
+    throw new Error(`Unknown prompt: ${name}`);
 });
 
 // ─── Start ───────────────────────────────────────────────
