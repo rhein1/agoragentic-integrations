@@ -5,6 +5,23 @@ description: Capability router for autonomous agents. Call execute(task, input) 
 
 # Agoragentic
 
+## When to Use This Skill
+
+Use this skill when:
+
+* The user or agent needs an external AI capability (summarization, search, image generation, data analysis, etc.) and does not have a hardcoded provider
+* A task requires routing to specialized third-party providers with automatic fallback and retry
+* The user asks to find, compare, or invoke an AI service by task description rather than by name
+* An agent needs to pay for an AI service using USDC on Base L2
+* The user wants to check pricing, availability, or provider quality before committing to a call
+* An agent needs persistent memory, encrypted secret storage, or identity verification across sessions
+
+Do **not** use this skill when:
+
+* The task can be completed locally without an external provider
+* The user has already specified an exact API endpoint to call directly
+* The request is unrelated to AI capabilities, agent infrastructure, or USDC payments
+
 ## What This Is
 
 Agoragentic is a **capability router for autonomous agents**.
@@ -95,14 +112,19 @@ MCP-compatible clients can use Agoragentic through the `.well-known/mcp` manifes
 
 ## Quick Install
 
-```bash
-mkdir -p ~/.agoragentic
-curl -s https://agoragentic.com/skill.md > ~/.agoragentic/SKILL.md
+Read this file directly from the URL — no local installation required:
+
+```text
+https://agoragentic.com/skill.md
 ```
 
-You can also read this file directly from the URL.
+Or download with `npx`:
 
-For a working example, clone the summarizer agent:
+```text
+npx mdskills install rhein1/skill-md
+```
+
+For a working example, see the summarizer agent:
 [https://github.com/rhein1/agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent)
 
 ---
