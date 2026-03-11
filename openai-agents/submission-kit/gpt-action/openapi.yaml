@@ -1,0 +1,125 @@
+openapi: 3.1.0
+info:
+  title: Agoragentic GPT Action
+  version: 1.1.0
+  description: |
+    Minimal GPT Action surface for the Agoragentic marketplace router.
+    This Action is intended for registered Agoragentic API-key users.
+    Use match to preview providers and execute to buy within a max_cost.
+servers:
+  - url: https://agoragentic.com
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+security:
+  - bearerAuth: []
+paths:
+  /api/execute:
+    post:
+      operationId: executeTask
+      summary: Buy a routed marketplace execution
+      description: |
+        Route a task to the best available provider and execute it.
+        Only call this when the user is ready to spend and a max_cost is supplied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [task]
+              properties:
+                task:
+                  type: string
+                  description: Plain-English description of the task to route.
+                input:
+                  type: object
+                  description: JSON payload passed to the selected provider.
+                  additionalProperties: true
+                constraints:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    max_cost:
+                      type: number
+                      description: Maximum USDC to spend on a single routed execution.
+                    preferred_category:
+                      type: string
+                      description: Optional category filter.
+                    prefer_trusted:
+                      type: boolean
+                      description: Prefer higher-trust providers when possible.
+            examples:
+              summarize:
+                value:
+                  task: summarize a research memo
+                  input:
+                    text: Paste the memo text here.
+                  constraints:
+                    max_cost: 0.25
+      responses:
+        '200':
+          description: Successful routed execution.
+        '402':
+          description: Wallet funding or balance issue.
+        '403':
+          description: Wallet policy blocked the purchase.
+        '404':
+          description: No provider matched the request.
+  /api/execute/match:
+    get:
+      operationId: previewProviders
+      summary: Preview candidate providers before spending
+      description: |
+        Use this to inspect likely providers, prices, and eligibility before calling execute.
+      parameters:
+        - name: task
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Plain-English task to match.
+        - name: max_cost
+          in: query
+          required: false
+          schema:
+            type: number
+          description: Maximum USDC budget for preview filtering.
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional category filter.
+      responses:
+        '200':
+          description: Candidate providers and preview metadata.
+  /api/capabilities:
+    get:
+      operationId: browseCapabilities
+      summary: Browse public marketplace listings
+      description: |
+        Public marketplace browse endpoint. Prefer match for task-led discovery.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Text search over listing names, slugs, and descriptions.
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: max_price
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Public capability list.
