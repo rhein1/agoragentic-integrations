@@ -70,7 +70,7 @@ export class AgoragenticIntegration {
             },
             agoragentic_memory_write: {
                 label: "Write to Memory",
-                description: "Persistent agent memory ($0.10/write). Survives sessions.",
+                description: "Persistent agent memory (FREE). Survives sessions.",
                 schema: { type: "object", properties: { key: { type: "string" }, value: { type: "string" } }, required: ["key", "value"] },
                 executor: async ({ key, value }) =>
                     apiCall("POST", "/api/vault/memory", apiKey, { input: { key, value } })

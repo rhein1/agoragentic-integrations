@@ -1,13 +1,13 @@
 """
-Agoragentic × AutoGen — Execute-First Example
-===============================================
+Agoragentic × AutoGen (v0.4+ AgentChat) — Execute-First Example
+=================================================================
 
-Two-agent conversation where the assistant routes tasks through
-the Agoragentic capability router via execute(). The router finds
-the best provider and settles payment in USDC on Base L2.
+Route tasks through the Agoragentic capability router using AutoGen's
+current AgentChat surface. The router finds the best provider and
+settles payment in USDC on Base L2.
 
 Install:
-    pip install pyautogen requests
+    pip install "autogen-agentchat" "autogen-ext[openai]" requests
 
 Run:
     export AGORAGENTIC_API_KEY="amk_your_key"
@@ -18,10 +18,14 @@ No API key? Register free at https://agoragentic.com/api/quickstart
 Full docs: https://agoragentic.com/SKILL.md
 """
 
+import asyncio
 import json
 import os
+
 import requests
-import autogen
+from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.ui import Console
+from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 AGORAGENTIC_API = "https://agoragentic.com"
 API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")
@@ -34,13 +38,19 @@ def _headers():
     }
 
 
-# ─── Tool implementations ────────────────────────────────
+# ─── Tool functions (plain async functions for AgentChat) ──
 
-def agoragentic_execute(task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
+async def agoragentic_execute(task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
     """Route a task to the best provider on the Agoragentic marketplace.
 
-    The router scores, selects, and invokes the highest-ranked provider.
-    Payment is automatic from your USDC wallet on Base L2.
+    Describe what you need in plain English. The router finds, scores,
+    and invokes the highest-ranked provider automatically.
+    Payment is in USDC on Base L2 — fully automatic from your wallet.
+
+    Args:
+        task: What you need done (e.g., "summarize", "translate").
+        input_json: JSON string with the input payload for the provider.
+        max_cost: Maximum price in USDC you're willing to pay per call.
     """
     try:
         resp = requests.post(
@@ -67,8 +77,13 @@ def agoragentic_execute(task: str, input_json: str = "{}", max_cost: float = 1.0
         return json.dumps({"error": str(e)})
 
 
-def agoragentic_match(task: str, max_cost: float = 1.0) -> str:
-    """Preview which providers the router would select — dry run, no charge."""
+async def agoragentic_match(task: str, max_cost: float = 1.0) -> str:
+    """Preview which providers the router would select — dry run, no charge.
+
+    Args:
+        task: What you need done.
+        max_cost: Budget cap in USDC.
+    """
     try:
         resp = requests.get(
             f"{AGORAGENTIC_API}/api/execute/match",
@@ -86,78 +101,34 @@ def agoragentic_match(task: str, max_cost: float = 1.0) -> str:
         return json.dumps({"error": str(e)})
 
 
-# ─── AutoGen function schemas ────────────────────────────
+# ─── Agent setup (current AgentChat API) ─────────────────
 
-FUNCTIONS = [
-    {
-        "name": "agoragentic_execute",
-        "description": (
-            "Route a task to the best provider on the Agoragentic marketplace. "
-            "Describe what you need in plain English. The router finds, scores, "
-            "and invokes the best provider. Payment is automatic in USDC on Base L2."
+async def main():
+    model_client = OpenAIChatCompletionClient(model="gpt-4o-mini")
+
+    agent = AssistantAgent(
+        name="marketplace_agent",
+        model_client=model_client,
+        tools=[agoragentic_execute, agoragentic_match],
+        system_message=(
+            "You are an AI agent with access to the Agoragentic capability marketplace. "
+            "When asked to perform a task, use agoragentic_execute to route it to the best "
+            "available provider. Use agoragentic_match first if the user wants to preview "
+            "options before committing. Report the result clearly."
         ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {"type": "string", "description": "What you need done (e.g., 'summarize', 'translate')"},
-                "input_json": {"type": "string", "description": "JSON string with the input payload"},
-                "max_cost": {"type": "number", "description": "Max price in USDC", "default": 1.0},
-            },
-            "required": ["task"],
-        },
-    },
-    {
-        "name": "agoragentic_match",
-        "description": "Preview which providers the router would select for a task — dry run, no charge.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {"type": "string", "description": "What you need done"},
-                "max_cost": {"type": "number", "description": "Budget cap in USDC", "default": 1.0},
-            },
-            "required": ["task"],
-        },
-    },
-]
+        reflect_on_tool_use=True,
+    )
 
-FUNCTION_MAP = {
-    "agoragentic_execute": agoragentic_execute,
-    "agoragentic_match": agoragentic_match,
-}
+    await Console(
+        agent.run_stream(
+            task="Find the best provider to summarize text, then summarize this: "
+                 "'Agoragentic is an API-first marketplace where AI agents discover, "
+                 "invoke, and pay for services from other agents using USDC on Base L2.'"
+        )
+    )
 
+    await model_client.close()
 
-# ─── Agent setup ─────────────────────────────────────────
-
-llm_config = {
-    "config_list": [{"model": "gpt-4o-mini", "api_key": os.environ.get("OPENAI_API_KEY", "")}],
-    "functions": FUNCTIONS,
-}
-
-assistant = autogen.AssistantAgent(
-    name="marketplace_assistant",
-    system_message=(
-        "You are an AI assistant with access to the Agoragentic capability marketplace. "
-        "When asked to perform a task, use agoragentic_execute to route it to the best "
-        "available provider. Use agoragentic_match first if the user wants to preview "
-        "options before committing. Report the result clearly."
-    ),
-    llm_config=llm_config,
-)
-
-user_proxy = autogen.UserProxyAgent(
-    name="user",
-    human_input_mode="NEVER",
-    max_consecutive_auto_reply=3,
-    function_map=FUNCTION_MAP,
-)
-
-
-# ─── Run ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    user_proxy.initiate_chat(
-        assistant,
-        message="Find the best provider to summarize text, then summarize this: "
-                "'Agoragentic is an API-first marketplace where AI agents discover, "
-                "invoke, and pay for services from other agents using USDC on Base L2.'",
-    )
+    asyncio.run(main())
