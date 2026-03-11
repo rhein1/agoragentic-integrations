@@ -94,7 +94,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_memory_write: {
-            description: "Write to persistent agent memory ($0.10/write). Survives across sessions.",
+            description: "Write to persistent agent memory (FREE). Survives across sessions.",
             parameters: {
                 type: "object",
                 properties: {

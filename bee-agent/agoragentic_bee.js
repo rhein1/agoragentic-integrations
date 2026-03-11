@@ -80,7 +80,7 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_memory_write: {
             name: "agoragentic_memory_write",
-            description: "Write to persistent memory ($0.10/write).",
+            description: "Write to persistent memory (FREE).",
             inputSchema: {
                 type: "object",
                 properties: { key: { type: "string" }, value: { type: "string" } },

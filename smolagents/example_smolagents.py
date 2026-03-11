@@ -6,6 +6,9 @@ Use Hugging Face's smolagents CodeAgent to route tasks through
 the Agoragentic capability router. The router matches the best
 provider and settles payment in USDC on Base L2.
 
+These tool classes are Hub-compatible: they satisfy push_to_hub() rules
+(imports inside forward(), no custom __init__ args).
+
 Install:
     pip install smolagents requests
 
@@ -18,15 +21,12 @@ No API key? Register free at https://agoragentic.com/api/quickstart
 Full docs: https://agoragentic.com/SKILL.md
 """
 
-import json
-import os
-import requests
 from smolagents import Tool, CodeAgent, HfApiModel
-
-AGORAGENTIC_API = "https://agoragentic.com"
 
 
 # ─── Primary tool: execute() — the capability router ─────
+# Hub-compatible: imports inside forward(), no custom __init__ args.
+# Set api_key via class attribute or AGORAGENTIC_API_KEY env var.
 
 class AgoragenticExecuteTool(Tool):
     name = "agoragentic_execute"
@@ -43,14 +43,19 @@ class AgoragenticExecuteTool(Tool):
     }
     output_type = "string"
 
-    def __init__(self, api_key: str = "", **kwargs):
-        super().__init__(**kwargs)
-        self.api_key = api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
+    # Class attributes — set before instantiation or rely on env var
+    api_key = ""
+    base_url = "https://agoragentic.com"
 
     def forward(self, task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        import json
+        import os
+        import requests
+
+        key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
         resp = requests.post(
-            f"{AGORAGENTIC_API}/api/execute",
+            f"{self.base_url}/api/execute",
             json={
                 "task": task,
                 "input": json.loads(input_json) if input_json else {},
@@ -85,14 +90,18 @@ class AgoragenticMatchTool(Tool):
     }
     output_type = "string"
 
-    def __init__(self, api_key: str = "", **kwargs):
-        super().__init__(**kwargs)
-        self.api_key = api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
+    api_key = ""
+    base_url = "https://agoragentic.com"
 
     def forward(self, task: str, max_cost: float = 1.0) -> str:
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        import json
+        import os
+        import requests
+
+        key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
         resp = requests.get(
-            f"{AGORAGENTIC_API}/api/execute/match",
+            f"{self.base_url}/api/execute/match",
             params={"task": task, "max_cost": max_cost},
             headers=headers,
             timeout=15,
@@ -108,13 +117,14 @@ class AgoragenticMatchTool(Tool):
 # ─── Run ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    api_key = os.environ.get("AGORAGENTIC_API_KEY", "")
+    import os
+
+    # Set API key via class attribute (Hub-compatible pattern)
+    AgoragenticExecuteTool.api_key = os.environ.get("AGORAGENTIC_API_KEY", "")
+    AgoragenticMatchTool.api_key = os.environ.get("AGORAGENTIC_API_KEY", "")
 
     agent = CodeAgent(
-        tools=[
-            AgoragenticExecuteTool(api_key=api_key),
-            AgoragenticMatchTool(api_key=api_key),
-        ],
+        tools=[AgoragenticExecuteTool(), AgoragenticMatchTool()],
         model=HfApiModel(),
     )
 
