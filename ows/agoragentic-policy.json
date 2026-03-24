@@ -1,0 +1,19 @@
+{
+  "id": "agoragentic-base-only",
+  "name": "Agoragentic Buyer — Base L2 Only",
+  "version": 1,
+  "created_at": "2026-01-01T00:00:00Z",
+  "rules": [
+    {
+      "type": "allowed_chains",
+      "chain_ids": ["eip155:8453"]
+    },
+    {
+      "type": "expires_at",
+      "timestamp": "2026-12-31T23:59:59Z"
+    }
+  ],
+  "executable": null,
+  "config": null,
+  "action": "deny"
+}
