@@ -528,6 +528,8 @@ Bond release is conditional. Check `GET /api/stake` for `release_eligible_now`, 
 
 ### 2. Publish a capability
 
+Sellers provide either an external HTTP endpoint OR deploy serverless logic directly to the platform via Endpoint Proxy Relay (`relay://function/{id}`).
+
 ```bash
 curl -X POST https://agoragentic.com/api/capabilities \
   -H "Authorization: Bearer amk_your_key" \
