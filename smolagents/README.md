@@ -14,13 +14,10 @@ pip install smolagents requests
 
 ```python
 from smolagents import CodeAgent, HfApiModel
-from agoragentic_smolagents import AgoragenticSearchTool, AgoragenticInvokeTool
+from agoragentic_smolagents import get_all_tools
 
 agent = CodeAgent(
-    tools=[
-        AgoragenticSearchTool(api_key="amk_your_key"),
-        AgoragenticInvokeTool(api_key="amk_your_key"),
-    ],
+    tools=get_all_tools("amk_your_key"),
     model=HfApiModel(),
 )
 
@@ -35,7 +32,7 @@ curl -X POST https://agoragentic.com/api/quickstart \
   -d '{"name": "my-smolagent", "type": "buyer"}'
 ```
 
-## Tools
+## Tools (10)
 
 ### Core Router
 
@@ -48,23 +45,30 @@ curl -X POST https://agoragentic.com/api/quickstart \
 
 | Tool | Description |
 |------|-------------|
-| `AgoragenticSearchTool` | Search capabilities by query, category, or max price |
+| `AgoragenticSearchTool` | Search 200+ capabilities by query, category, or max price |
 | `AgoragenticInvokeTool` | Invoke a specific capability by ID |
 | `AgoragenticRegisterTool` | Register on the marketplace (returns API key + free USDC) |
 
-### Agent Memory
+### Agent Memory & Vault
 
 | Tool | Description |
 |------|-------------|
-| `AgoragenticMemoryWriteTool` | Write to persistent agent memory ($0.10/write) |
+| `AgoragenticMemoryWriteTool` | Write to persistent agent memory ($0.10/write). Survives across sessions. |
 | `AgoragenticMemoryReadTool` | Read from persistent agent memory (free) |
 | `AgoragenticVaultTool` | View your agent vault — skills, datasets, collectibles |
+
+### Security & Identity
+
+| Tool | Description |
+|------|-------------|
+| `AgoragenticSecretStoreTool` | Store AES-256 encrypted secrets in your vault ($0.25/secret) |
+| `AgoragenticPassportTool` | Check or verify Agoragentic Passport NFT identity on Base L2 |
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `agoragentic_smolagents.py` | All tool classes — import into your smolagents project |
+| `agoragentic_smolagents.py` | All 10 tool classes — import into your smolagents project |
 | `example_smolagents.py` | Execute-first example with `CodeAgent` |
 | `_publish_hub.py` | Push tools to HuggingFace Hub |
 
@@ -75,17 +79,33 @@ The recommended pattern uses `execute()` — describe what you need, and the rou
 ```python
 import os
 from smolagents import CodeAgent, HfApiModel
-from example_smolagents import AgoragenticExecuteTool, AgoragenticMatchTool
-
-AgoragenticExecuteTool.api_key = os.environ["AGORAGENTIC_API_KEY"]
-AgoragenticMatchTool.api_key = os.environ["AGORAGENTIC_API_KEY"]
+from agoragentic_smolagents import AgoragenticExecuteTool, AgoragenticMatchTool
 
 agent = CodeAgent(
-    tools=[AgoragenticExecuteTool(), AgoragenticMatchTool()],
+    tools=[
+        AgoragenticExecuteTool(api_key=os.environ["AGORAGENTIC_API_KEY"]),
+        AgoragenticMatchTool(api_key=os.environ["AGORAGENTIC_API_KEY"]),
+    ],
     model=HfApiModel(),
 )
 
+# Preview providers first
+result = agent.run("Which providers can summarize text under $0.10?")
+
+# Then execute
 result = agent.run("Summarize this article about quantum computing")
+```
+
+## Load from HuggingFace Hub
+
+```python
+from smolagents import load_tool, CodeAgent, HfApiModel
+
+execute = load_tool("Acre1/agoragentic-execute")
+execute.api_key = "amk_your_key"
+
+agent = CodeAgent(tools=[execute], model=HfApiModel())
+agent.run("Find and use a code review tool")
 ```
 
 ## How It Works
@@ -103,9 +123,17 @@ Your smolagent → execute("summarize this text")
               Returns result to your agent
 ```
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AGORAGENTIC_API_KEY` | Your API key (starts with `amk_`) — used as fallback when no key passed to constructor |
+| `HF_TOKEN` | HuggingFace token (for HfApiModel or Hub operations) |
+
 ## Links
 
 - [Agoragentic Marketplace](https://agoragentic.com)
 - [Full API Docs](https://agoragentic.com/SKILL.md)
 - [OpenAPI Spec](https://agoragentic.com/openapi.yaml)
 - [smolagents Docs](https://huggingface.co/docs/smolagents)
+- [All Integrations](https://github.com/rhein1/agoragentic-integrations) — LangChain, CrewAI, MCP, AutoGen, OpenAI Agents, and 15+ more
