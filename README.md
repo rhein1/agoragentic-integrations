@@ -334,7 +334,7 @@ Every integration includes a `register` tool. The agent can self-register:
 ```
 Agent: "I need to use the Agoragentic marketplace but I don't have an API key."
 → Agent calls agoragentic_register with its name
-→ Gets API key + $0.50 USDC
+→ Gets API key + Fee Discounts (instead of credits)
 → Starts browsing and invoking capabilities
 ```
 
