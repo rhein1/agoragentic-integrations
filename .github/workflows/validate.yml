@@ -1,0 +1,120 @@
+name: Validate Machine Surfaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - '*/README.md'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'llms.txt'
+      - 'llms-full.txt'
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate integrations.json against schema
+        run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020
+
+      - name: Validate integrations.json is valid JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('integrations.json','utf8')); console.log('✅ integrations.json is valid JSON')"
+
+      - name: Check all integration paths exist
+        run: |
+          node -e "
+            const idx = JSON.parse(require('fs').readFileSync('integrations.json','utf8'));
+            const fs = require('fs');
+            let failed = false;
+            for (const i of idx.integrations) {
+              if (!fs.existsSync(i.path)) {
+                console.error('❌ Missing: ' + i.path + ' (integration: ' + i.id + ')');
+                failed = true;
+              } else {
+                console.log('✅ ' + i.path);
+              }
+            }
+            if (failed) process.exit(1);
+            console.log('All ' + idx.integrations.length + ' integration paths verified.');
+          "
+
+      - name: Check per-framework READMEs exist
+        run: |
+          node -e "
+            const idx = JSON.parse(require('fs').readFileSync('integrations.json','utf8'));
+            const fs = require('fs');
+            let missing = [];
+            for (const i of idx.integrations) {
+              const dir = i.path.split('/')[0];
+              const readme = dir + '/README.md';
+              if (!fs.existsSync(readme)) {
+                missing.push(readme + ' (for ' + i.id + ')');
+              }
+            }
+            if (missing.length > 0) {
+              console.error('❌ Missing per-framework READMEs:');
+              missing.forEach(m => console.error('  - ' + m));
+              process.exit(1);
+            }
+            console.log('✅ All per-framework READMEs present');
+          "
+
+      - name: Check required root files exist
+        run: |
+          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
+            if [ ! -f "$f" ]; then
+              echo "❌ Missing required file: $f"
+              exit 1
+            fi
+            echo "✅ $f"
+          done
+
+      - name: Validate CITATION.cff
+        run: |
+          node -e "
+            const yaml = require('fs').readFileSync('CITATION.cff','utf8');
+            if (!yaml.includes('cff-version:')) { console.error('❌ CITATION.cff missing cff-version'); process.exit(1); }
+            if (!yaml.includes('title:')) { console.error('❌ CITATION.cff missing title'); process.exit(1); }
+            console.log('✅ CITATION.cff has required fields');
+          "
+
+      - name: Check tool IDs follow naming convention
+        run: |
+          node -e "
+            const idx = JSON.parse(require('fs').readFileSync('integrations.json','utf8'));
+            let bad = [];
+            for (const t of idx.tools) {
+              if (!t.id.startsWith('agoragentic_')) {
+                bad.push(t.id);
+              }
+            }
+            if (bad.length > 0) {
+              console.error('❌ Tool IDs must start with agoragentic_:', bad);
+              process.exit(1);
+            }
+            console.log('✅ All ' + idx.tools.length + ' tool IDs follow naming convention');
+          "
+
+      - name: Summary
+        run: |
+          echo "=== Machine Surface Validation Complete ==="
+          echo "integrations.json: validated against schema"
+          echo "Integration paths: all verified"
+          echo "Per-framework READMEs: all present"
+          echo "Root files: all present"
+          echo "CITATION.cff: valid"
+          echo "Tool naming: consistent"
