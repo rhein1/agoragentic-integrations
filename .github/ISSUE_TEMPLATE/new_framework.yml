@@ -1,0 +1,47 @@
+name: New Framework Adapter
+description: Request or propose a new framework integration
+labels: ["enhancement", "new-framework"]
+body:
+  - type: input
+    id: framework_name
+    attributes:
+      label: Framework name
+      placeholder: "e.g., Semantic Kernel, Haystack, Fixie"
+    validations:
+      required: true
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - Python
+        - JavaScript
+        - TypeScript
+        - Go
+        - Rust
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: framework_url
+    attributes:
+      label: Framework URL
+      placeholder: "https://github.com/..."
+    validations:
+      required: true
+  - type: textarea
+    id: justification
+    attributes:
+      label: Why should we support this framework?
+      placeholder: |
+        - How many users/stars does it have?
+        - What agent use cases does it serve?
+        - Would you contribute the adapter yourself?
+    validations:
+      required: true
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to submit a PR with the adapter

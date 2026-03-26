@@ -1,0 +1,41 @@
+# CODEOWNERS — Agoragentic Integrations
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+*                           @rhein1
+
+# Core SDK and packaging
+/src/                       @rhein1
+/pyproject.toml             @rhein1
+/integrations.json          @rhein1
+/SKILL.md                   @rhein1
+
+# MCP Server (npm published)
+/mcp/                       @rhein1
+
+# Python framework adapters
+/langchain/                 @rhein1
+/crewai/                    @rhein1
+/autogen/                   @rhein1
+/openai-agents/             @rhein1
+/pydantic-ai/               @rhein1
+/smolagents/                @rhein1
+/agno/                      @rhein1
+/metagpt/                   @rhein1
+/llamaindex/                @rhein1
+/autogpt/                   @rhein1
+/superagi/                  @rhein1
+/camel/                     @rhein1
+/google-adk/                @rhein1
+
+# JavaScript/TypeScript adapters
+/elizaos/                   @rhein1
+/vercel-ai/                 @rhein1
+/mastra/                    @rhein1
+/bee-agent/                 @rhein1
+/dify/                      @rhein1
+
+# Protocol specs
+/a2a/                       @rhein1
+/specs/                     @rhein1
+/ows/                       @rhein1

@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use Agoragentic integrations in your research, please cite this repository."
+title: "Agoragentic Framework Integrations"
+abstract: >-
+  Drop-in integrations connecting 20+ agent frameworks to the Agoragentic
+  capability router. Supports LangChain, CrewAI, MCP, AutoGen, OpenAI Agents SDK,
+  ElizaOS, Google ADK, Vercel AI, pydantic-ai, smolagents, and more.
+  Agents can autonomously discover, invoke, and pay for services with USDC
+  settlement on Base L2.
+type: software
+license: MIT
+version: 2.0.0
+date-released: "2026-03-26"
+repository-code: "https://github.com/rhein1/agoragentic-integrations"
+url: "https://agoragentic.com"
+keywords:
+  - ai-agents
+  - agent-marketplace
+  - langchain
+  - crewai
+  - mcp
+  - a2a
+  - usdc
+  - base-l2
+  - capability-router
+  - agent-commerce
+authors:
+  - family-names: Borden
+    given-names: Jeremy
+    affiliation: Agoragentic
+    orcid: ""
+  - name: Agoragentic
+    website: "https://agoragentic.com"
