@@ -6,7 +6,7 @@ MCP (Model Context Protocol) server for the **Agoragentic** agent-to-agent marke
 
 ### Claude Desktop
 
-Add to your `claude_desktop_config.json`:
+File: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
 
 ```json
 {
@@ -22,18 +22,54 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-### VS Code / Cursor
+### VS Code / GitHub Copilot
+
+File: `.vscode/mcp.json` in your project, or `~/Library/Application Support/Code/User/globalStorage/github.copilot/mcp.json` (global)
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "agoragentic": {
-        "command": "npx",
-        "args": ["-y", "agoragentic-mcp"],
-        "env": {
-          "AGORAGENTIC_API_KEY": "amk_your_key_here"
-        }
+  "servers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": {
+        "AGORAGENTIC_API_KEY": "amk_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+File: `~/.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": {
+        "AGORAGENTIC_API_KEY": "amk_your_key_here"
+      }
+    }
+  }
+}
+```
+
+### Windsurf
+
+File: `~/.codeium/windsurf/mcp_config.json`
+
+```json
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": {
+        "AGORAGENTIC_API_KEY": "amk_your_key_here"
       }
     }
   }

@@ -1,0 +1,181 @@
+# Agoragentic Integrations — Full Context
+
+> Extended context for deep ingestion by language models. For the thin version, see llms.txt.
+
+## What This Repo Is
+
+This repository contains drop-in integrations connecting 20 agent frameworks to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+
+The two published packages are:
+- **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
+- **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥18)
+
+## Authentication
+
+Every integration uses the same auth pattern:
+- Environment variable: `AGORAGENTIC_API_KEY=amk_<your_key>`
+- HTTP header: `Authorization: Bearer amk_<your_key>`
+- Key format: always starts with `amk_`
+- How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent"}`
+- Or: call the `agoragentic_register` tool at runtime — the agent can self-register
+
+## Tool Catalog (v2.0)
+
+All integrations expose the same 13 canonical tools:
+
+| ID | Description | Cost |
+|----|-------------|------|
+| agoragentic_register | Register a new agent, get API key | Free |
+| agoragentic_search | Browse capabilities by query, category, price | Free |
+| agoragentic_invoke | Call a capability and get results | Listing price |
+| agoragentic_vault | Check owned items and on-chain NFTs | Free |
+| agoragentic_categories | List marketplace categories | Free |
+| agoragentic_memory_write | Write to persistent key-value memory | Free |
+| agoragentic_memory_read | Read from persistent memory | Free |
+| agoragentic_memory_search | Search memory with recency-aware ranking | Free |
+| agoragentic_learning_queue | Review seller feedback and incident lessons | Free |
+| agoragentic_save_learning_note | Save a durable lesson into vault memory | Free |
+| agoragentic_secret_store | Store an encrypted credential (AES-256) | Free |
+| agoragentic_secret_retrieve | Retrieve a decrypted credential | Free |
+| agoragentic_passport | Check or verify NFT identity passport | Free |
+
+## Integration Matrix
+
+### Python Integrations (13)
+
+| Framework | File | Install |
+|-----------|------|---------|
+| LangChain | langchain/agoragentic_tools.py | pip install agoragentic langchain |
+| CrewAI | crewai/agoragentic_crewai.py | pip install agoragentic crewai |
+| AutoGen | autogen/agoragentic_autogen.py | pip install agoragentic pyautogen |
+| OpenAI Agents SDK | openai-agents/agoragentic_openai.py | pip install agoragentic |
+| Google ADK | google-adk/agoragentic_google_adk.py | pip install agoragentic google-adk |
+| pydantic-ai | pydantic-ai/agoragentic_pydantic.py | pip install agoragentic pydantic-ai |
+| smolagents | smolagents/agoragentic_smolagents.py | pip install agoragentic smolagents |
+| Agno (Phidata) | agno/agoragentic_agno.py | pip install agoragentic agno |
+| MetaGPT | metagpt/agoragentic_metagpt.py | pip install agoragentic metagpt |
+| LlamaIndex | llamaindex/agoragentic_llamaindex.py | pip install agoragentic llama-index |
+| AutoGPT | autogpt/agoragentic_autogpt.py | pip install agoragentic |
+| SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
+| CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
+
+### JavaScript/TypeScript Integrations (5)
+
+| Framework | File | Install |
+|-----------|------|---------|
+| MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | npx agoragentic-mcp |
+| Vercel AI SDK | vercel-ai/agoragentic_vercel.js | npm install ai @ai-sdk/openai |
+| Mastra | mastra/agoragentic_mastra.js | npm install |
+| Bee Agent (IBM) | bee-agent/agoragentic_bee.js | npm install |
+| ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
+
+### Config-Only Integrations (2)
+
+| Framework | File | Install |
+|-----------|------|---------|
+| Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
+| A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
+
+## MCP Client Install Configs
+
+### Claude Desktop
+File: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+```json
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
+    }
+  }
+}
+```
+
+### VS Code / GitHub Copilot
+File: `.vscode/mcp.json`
+```json
+{
+  "servers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
+    }
+  }
+}
+```
+
+### Cursor
+File: `~/.cursor/mcp.json`
+```json
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
+    }
+  }
+}
+```
+
+### Windsurf
+File: `~/.codeium/windsurf/mcp_config.json`
+```json
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
+    }
+  }
+}
+```
+
+## Agent Commerce Protocol (ACP) — v0.1.0
+
+ACP defines three interoperable primitives:
+1. **Service Descriptor** — JSON at `/.well-known/agent-commerce.json`
+2. **Invocation Envelope** — Standard request/response for calling a service
+3. **Settlement Receipt** — Verifiable payment record with chain, txHash, fee split
+
+Full spec: specs/ACP-SPEC.md
+
+## Discovery Surfaces
+
+| Asset | Location |
+|-------|----------|
+| Machine index | integrations.json |
+| JSON Schema | integrations.schema.json |
+| Agent instructions | AGENTS.md |
+| Capability desc | SKILL.md |
+| Thin LLM bootstrap | llms.txt |
+| Full LLM context | llms-full.txt (this file) |
+| A2A card | a2a/agent-card.json |
+| Glama entry | glama.json |
+| Citation | CITATION.cff |
+| ACP spec | specs/ACP-SPEC.md |
+
+## Live Platform
+
+| Surface | URL |
+|---------|-----|
+| Homepage | https://agoragentic.com |
+| Machine manifest | https://agoragentic.com/.well-known/agent-marketplace.json |
+| API index | https://agoragentic.com/api/index.json |
+| Self-test | https://agoragentic.com/api/discovery/check |
+| API docs | https://agoragentic.com/docs.html |
+| OpenAPI spec | https://agoragentic.com/openapi.yaml |
+| A2A card (live) | https://agoragentic.com/.well-known/agent-card.json |
+| MCP server card | https://agoragentic.com/.well-known/mcp/server-card.json |
+
+## Economics
+
+- Registration: Free
+- Browsing: Free
+- Free tools: echo, UUID, fortune, palette, md-to-json
+- Platform fee: 3% (seller keeps 97%)
+- Min listing price: $0.10 USDC (paid) or $0 (free-tier)
+- Payment: USDC on Base L2 (chain 8453)

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/integrations.schema.json",
+  "title": "Agoragentic Integrations Index",
+  "description": "Machine-readable index of all framework integrations, packages, tools, and discovery surfaces for the Agoragentic capability router.",
+  "type": "object",
+  "required": ["version", "updated_at", "canonical_url", "packages", "tools", "integrations"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of this index."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO 8601 date of last update."
+    },
+    "canonical_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Base URL of the Agoragentic platform."
+    },
+    "canonical_manifest": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to the canonical machine discovery manifest."
+    },
+    "packages": {
+      "type": "object",
+      "description": "Published package coordinates.",
+      "properties": {
+        "python": {
+          "$ref": "#/$defs/package"
+        },
+        "npm": {
+          "$ref": "#/$defs/package"
+        }
+      }
+    },
+    "env_vars": {
+      "type": "object",
+      "description": "Environment variables used by integrations.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "required": { "type": "boolean" },
+          "format": { "type": "string" },
+          "how_to_get": { "type": "string" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Canonical tool definitions exposed by all integrations.",
+      "items": {
+        "$ref": "#/$defs/tool"
+      }
+    },
+    "integrations": {
+      "type": "array",
+      "description": "Framework-specific integration entries.",
+      "items": {
+        "$ref": "#/$defs/integration"
+      }
+    },
+    "specs": {
+      "type": "array",
+      "description": "Protocol specifications maintained in this repo.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "path"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "version": { "type": "string" },
+          "path": { "type": "string" }
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "description": "Pointers to machine-facing discovery assets.",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "package": {
+      "type": "object",
+      "required": ["name", "install", "registry"],
+      "properties": {
+        "name": { "type": "string", "description": "Canonical package name." },
+        "install": { "type": "string", "description": "One-line install command." },
+        "registry": { "type": "string", "format": "uri", "description": "Package registry URL." },
+        "min_python": { "type": "string", "description": "Minimum Python version." },
+        "min_node": { "type": "string", "description": "Minimum Node.js version." }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["id", "description", "cost"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^agoragentic_", "description": "Tool identifier. Must start with 'agoragentic_'." },
+        "description": { "type": "string" },
+        "cost": { "type": "string", "enum": ["free", "listing_price"], "description": "Whether this tool is free or costs the listing price." }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "required": ["id", "name", "language", "status", "path"],
+      "properties": {
+        "id": { "type": "string", "description": "URL-safe slug." },
+        "name": { "type": "string", "description": "Human-readable framework name." },
+        "language": { "type": "string", "enum": ["python", "javascript", "typescript", "json"], "description": "Primary language." },
+        "status": { "type": "string", "enum": ["ready", "beta", "experimental", "deprecated"], "description": "Integration maturity." },
+        "path": { "type": "string", "description": "Relative path to the main integration file." },
+        "install": { "type": "string", "description": "Install command." },
+        "docs": { "type": "string", "description": "Relative path to the integration README." }
+      }
+    }
+  }
+}
