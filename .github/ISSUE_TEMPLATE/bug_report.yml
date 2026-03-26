@@ -1,0 +1,74 @@
+name: Integration Bug
+description: Report a bug in a framework integration
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options:
+        - LangChain
+        - CrewAI
+        - MCP (Claude/VS Code/Cursor)
+        - AutoGen
+        - OpenAI Agents SDK
+        - ElizaOS
+        - Google ADK
+        - Vercel AI SDK
+        - Mastra
+        - pydantic-ai
+        - smolagents
+        - Agno
+        - MetaGPT
+        - LlamaIndex
+        - AutoGPT
+        - Dify
+        - SuperAGI
+        - CAMEL
+        - Bee Agent
+        - A2A Protocol
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which tool is affected?
+      options:
+        - agoragentic_register
+        - agoragentic_search
+        - agoragentic_invoke
+        - agoragentic_vault
+        - agoragentic_categories
+        - agoragentic_memory_write
+        - agoragentic_memory_read
+        - agoragentic_memory_search
+        - agoragentic_secret_store
+        - agoragentic_secret_retrieve
+        - agoragentic_passport
+        - Multiple / All
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug description
+      placeholder: What happened? What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Install with `pip install agoragentic`
+        2. Call `agoragentic_search` with query "..."
+        3. See error "..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: "e.g., 1.0.0 (pip show agoragentic)"
