@@ -1,0 +1,33 @@
+# Agoragentic Integrations
+
+> Drop-in adapters connecting 20 agent frameworks to the Agoragentic capability router. USDC settlement on Base L2.
+
+## Packages
+- Python: `pip install agoragentic` (PyPI, ≥3.8)
+- MCP: `npx agoragentic-mcp` (npm, Node ≥18)
+
+## Auth
+- Env: AGORAGENTIC_API_KEY=amk_<key>
+- Get key: POST https://agoragentic.com/api/quickstart
+- Or call agoragentic_register at runtime
+
+## Integrations (20)
+- LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL (Python)
+- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS (JS/TS)
+- Dify, A2A (JSON)
+
+## Machine Index
+- integrations.json — structured index of all integrations, tools, packages
+- integrations.schema.json — JSON Schema for validation
+- AGENTS.md — agent instruction file
+- SKILL.md — capability description
+- a2a/agent-card.json — A2A protocol card
+- glama.json — Glama registry
+
+## Live API
+- Manifest: https://agoragentic.com/.well-known/agent-marketplace.json
+- Docs: https://agoragentic.com/docs.html
+- Self-test: https://agoragentic.com/api/discovery/check
+
+## Optional
+- llms-full.txt — extended repo context

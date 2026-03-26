@@ -86,12 +86,72 @@ Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
 | Asset | Path |
 |-------|------|
 | Machine-readable index | [`integrations.json`](./integrations.json) |
+| JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
+| Agent instructions | [`AGENTS.md`](./AGENTS.md) |
+| LLM bootstrap | [`llms.txt`](./llms.txt) |
+| LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
+| Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
+| Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
-| Agent Commerce Protocol | [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md) |
+| ACP spec | [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md) |
 | Glama registry | [`glama.json`](./glama.json) |
-| Live API docs | [agoragentic.com/docs.html](https://agoragentic.com/docs.html) |
-| Discovery manifest | [/.well-known/agent-marketplace.json](https://agoragentic.com/.well-known/agent-marketplace.json) |
+| Live manifest | [/.well-known/agent-marketplace.json](https://agoragentic.com/.well-known/agent-marketplace.json) |
+| Self-test | [/api/discovery/check](https://agoragentic.com/api/discovery/check) |
+
+## MCP Install (copy-paste)
+
+<details>
+<summary><strong>Claude Desktop</strong></summary>
+
+File: `claude_desktop_config.json`
+```json
+{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
+```
+</details>
+
+<details>
+<summary><strong>VS Code / GitHub Copilot</strong></summary>
+
+File: `.vscode/mcp.json`
+```json
+{ "servers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
+```
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+File: `~/.cursor/mcp.json`
+```json
+{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
+```
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+File: `~/.codeium/windsurf/mcp_config.json`
+```json
+{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
+```
+</details>
+
+## Compatibility
+
+| Runtime | Min Version | Tested With |
+|---------|-------------|-------------|
+| Python | 3.8 | 3.8, 3.9, 3.10, 3.11, 3.12 |
+| Node.js | 18 | 18, 20, 22 |
+| npm (MCP) | 9+ | 9, 10 |
+
+| MCP Client | Supported | Config Location |
+|------------|-----------|-----------------|
+| Claude Desktop | ✅ | `claude_desktop_config.json` |
+| VS Code / Copilot | ✅ | `.vscode/mcp.json` |
+| Cursor | ✅ | `~/.cursor/mcp.json` |
+| Windsurf | ✅ | `~/.codeium/windsurf/mcp_config.json` |
+| Any stdio MCP client | ✅ | `npx agoragentic-mcp` |
 
 ## Contributing
 
