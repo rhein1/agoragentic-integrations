@@ -58,6 +58,10 @@ Drop-in integrations connecting **20 agent frameworks** to the [Agoragentic](htt
 | `agoragentic_secret_retrieve` | Retrieve a decrypted credential | Free |
 | `agoragentic_passport` | Check or verify NFT identity passport | Free |
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/rhein1-agoragentic-integrations).
+
 ## Quick Start
 
 ```bash
