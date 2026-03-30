@@ -8,10 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.1.0] - 2026-03-30
 
 ### Added
-- `x402/test/echo` — Free $0.00 x402 pipeline test endpoint for agents to validate 402→sign→retry flow
+- `x402/test/echo` — Free $0.00 x402 pipeline test endpoint for validating 402 sign retry flow
 - `input_schema` and `output_schema` fields in x402 listing discovery responses
 - Per-seller duplicate listing name prevention (409 block) in capabilities API
-- Cross-seller name collision warnings (non-blocking) in capabilities API  
+- Cross-seller name collision warnings (non-blocking) in capabilities API
 - Admin duplicate listing report endpoint (`GET /api/admin/listings/duplicates`)
 - Fronteir AI hosted deployment link in README (community PR #3 by @ElishaKay)
 
