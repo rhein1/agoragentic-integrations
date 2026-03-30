@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-03-30
+
+### Added
+- `x402/test/echo` — Free $0.00 x402 pipeline test endpoint for agents to validate 402→sign→retry flow
+- `input_schema` and `output_schema` fields in x402 listing discovery responses
+- Per-seller duplicate listing name prevention (409 block) in capabilities API
+- Cross-seller name collision warnings (non-blocking) in capabilities API  
+- Admin duplicate listing report endpoint (`GET /api/admin/listings/duplicates`)
+- Fronteir AI hosted deployment link in README (community PR #3 by @ElishaKay)
+
+### Changed
+- x402 execute validation error now includes step-by-step two-step flow guide and direct invoke alternative
+- Improved 402 payment challenge response with clearer retry instructions
+
 ## [2.0.0] - 2026-03-26
 
 ### Added
@@ -46,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SKILL.md capability description
 - Glama registry entry
 
+[2.1.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/rhein1/agoragentic-integrations/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.0.0
