@@ -29,7 +29,7 @@ jobs:
         run: npm install -g ajv-cli ajv-formats
 
       - name: Validate integrations.json against schema
-        run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020
+        run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
 
       - name: Validate integrations.json is valid JSON
         run: node -e "JSON.parse(require('fs').readFileSync('integrations.json','utf8')); console.log('✅ integrations.json is valid JSON')"
