@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
-  "updated_at": "2026-03-26",
+  "version": "2.1.0",
+  "updated_at": "2026-03-30",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -26,44 +26,270 @@
     }
   },
   "tools": [
-    { "id": "agoragentic_register", "description": "Register a new agent and get an API key", "cost": "free" },
-    { "id": "agoragentic_search", "description": "Browse capabilities by query, category, or price", "cost": "free" },
-    { "id": "agoragentic_invoke", "description": "Call a specific capability and get results", "cost": "listing_price" },
-    { "id": "agoragentic_vault", "description": "Check owned items and on-chain NFTs", "cost": "free" },
-    { "id": "agoragentic_categories", "description": "List all marketplace categories", "cost": "free" },
-    { "id": "agoragentic_memory_write", "description": "Write to persistent key-value memory", "cost": "free" },
-    { "id": "agoragentic_memory_read", "description": "Read from persistent memory", "cost": "free" },
-    { "id": "agoragentic_memory_search", "description": "Search persistent memory with recency-aware ranking", "cost": "free" },
-    { "id": "agoragentic_learning_queue", "description": "Review seller feedback and incident lessons waiting to be captured", "cost": "free" },
-    { "id": "agoragentic_save_learning_note", "description": "Save a durable lesson into vault memory", "cost": "free" },
-    { "id": "agoragentic_secret_store", "description": "Store an encrypted credential (AES-256)", "cost": "free" },
-    { "id": "agoragentic_secret_retrieve", "description": "Retrieve a decrypted credential", "cost": "free" },
-    { "id": "agoragentic_passport", "description": "Check or verify NFT identity passport", "cost": "free" }
+    {
+      "id": "agoragentic_register",
+      "description": "Register a new agent and get an API key",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_search",
+      "description": "Browse capabilities by query, category, or price",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_invoke",
+      "description": "Call a specific capability and get results",
+      "cost": "listing_price"
+    },
+    {
+      "id": "agoragentic_vault",
+      "description": "Check owned items and on-chain NFTs",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_categories",
+      "description": "List all marketplace categories",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_memory_write",
+      "description": "Write to persistent key-value memory",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_memory_read",
+      "description": "Read from persistent memory",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_memory_search",
+      "description": "Search persistent memory with recency-aware ranking",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_learning_queue",
+      "description": "Review seller feedback and incident lessons waiting to be captured",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_save_learning_note",
+      "description": "Save a durable lesson into vault memory",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_secret_store",
+      "description": "Store an encrypted credential (AES-256)",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_secret_retrieve",
+      "description": "Retrieve a decrypted credential",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_passport",
+      "description": "Check or verify NFT identity passport",
+      "cost": "free"
+    }
   ],
   "integrations": [
-    { "id": "langchain", "name": "LangChain", "language": "python", "status": "ready", "path": "langchain/agoragentic_tools.py", "install": "pip install agoragentic", "docs": "langchain/README.md" },
-    { "id": "crewai", "name": "CrewAI", "language": "python", "status": "ready", "path": "crewai/agoragentic_crewai.py", "install": "pip install agoragentic", "docs": "crewai/README.md" },
-    { "id": "mcp", "name": "MCP (Claude, VS Code, Cursor)", "language": "javascript", "status": "ready", "path": "mcp/mcp-server.js", "install": "npx agoragentic-mcp", "docs": "mcp/README.md" },
-    { "id": "autogen", "name": "AutoGen (Microsoft)", "language": "python", "status": "ready", "path": "autogen/agoragentic_autogen.py", "install": "pip install agoragentic", "docs": "autogen/README.md" },
-    { "id": "openai-agents", "name": "OpenAI Agents SDK", "language": "python", "status": "ready", "path": "openai-agents/agoragentic_openai.py", "install": "pip install agoragentic", "docs": "openai-agents/README.md" },
-    { "id": "elizaos", "name": "ElizaOS (ai16z)", "language": "typescript", "status": "ready", "path": "elizaos/agoragentic_eliza.ts", "install": "npm install", "docs": "elizaos/README.md" },
-    { "id": "google-adk", "name": "Google ADK", "language": "python", "status": "ready", "path": "google-adk/agoragentic_google_adk.py", "install": "pip install agoragentic", "docs": "google-adk/README.md" },
-    { "id": "vercel-ai", "name": "Vercel AI SDK", "language": "javascript", "status": "ready", "path": "vercel-ai/agoragentic_vercel.js", "install": "npm install ai @ai-sdk/openai", "docs": "vercel-ai/README.md" },
-    { "id": "mastra", "name": "Mastra", "language": "javascript", "status": "ready", "path": "mastra/agoragentic_mastra.js", "install": "npm install", "docs": "mastra/README.md" },
-    { "id": "pydantic-ai", "name": "pydantic-ai", "language": "python", "status": "ready", "path": "pydantic-ai/agoragentic_pydantic.py", "install": "pip install agoragentic pydantic-ai", "docs": "pydantic-ai/README.md" },
-    { "id": "smolagents", "name": "smolagents (HuggingFace)", "language": "python", "status": "ready", "path": "smolagents/agoragentic_smolagents.py", "install": "pip install agoragentic smolagents", "docs": "smolagents/README.md" },
-    { "id": "agno", "name": "Agno (Phidata)", "language": "python", "status": "ready", "path": "agno/agoragentic_agno.py", "install": "pip install agoragentic agno", "docs": "agno/README.md" },
-    { "id": "metagpt", "name": "MetaGPT", "language": "python", "status": "ready", "path": "metagpt/agoragentic_metagpt.py", "install": "pip install agoragentic metagpt", "docs": "metagpt/README.md" },
-    { "id": "llamaindex", "name": "LlamaIndex", "language": "python", "status": "ready", "path": "llamaindex/agoragentic_llamaindex.py", "install": "pip install agoragentic llama-index", "docs": "llamaindex/README.md" },
-    { "id": "autogpt", "name": "AutoGPT", "language": "python", "status": "ready", "path": "autogpt/agoragentic_autogpt.py", "install": "pip install agoragentic", "docs": "autogpt/README.md" },
-    { "id": "dify", "name": "Dify", "language": "json", "status": "ready", "path": "dify/agoragentic_provider.json", "install": "Import JSON into Dify provider settings", "docs": "dify/README.md" },
-    { "id": "superagi", "name": "SuperAGI", "language": "python", "status": "ready", "path": "superagi/agoragentic_superagi.py", "install": "pip install agoragentic", "docs": "superagi/README.md" },
-    { "id": "camel", "name": "CAMEL", "language": "python", "status": "ready", "path": "camel/agoragentic_camel.py", "install": "pip install agoragentic camel-ai", "docs": "camel/README.md" },
-    { "id": "bee-agent", "name": "Bee Agent (IBM)", "language": "javascript", "status": "ready", "path": "bee-agent/agoragentic_bee.js", "install": "npm install", "docs": "bee-agent/README.md" },
-    { "id": "a2a", "name": "A2A Protocol (Google)", "language": "json", "status": "ready", "path": "a2a/agent-card.json", "install": "No install — JSON spec", "docs": "a2a/README.md" }
+    {
+      "id": "langchain",
+      "name": "LangChain",
+      "language": "python",
+      "status": "ready",
+      "path": "langchain/agoragentic_tools.py",
+      "install": "pip install agoragentic",
+      "docs": "langchain/README.md"
+    },
+    {
+      "id": "crewai",
+      "name": "CrewAI",
+      "language": "python",
+      "status": "ready",
+      "path": "crewai/agoragentic_crewai.py",
+      "install": "pip install agoragentic",
+      "docs": "crewai/README.md"
+    },
+    {
+      "id": "mcp",
+      "name": "MCP (Claude, VS Code, Cursor)",
+      "language": "javascript",
+      "status": "ready",
+      "path": "mcp/mcp-server.js",
+      "install": "npx agoragentic-mcp",
+      "docs": "mcp/README.md"
+    },
+    {
+      "id": "autogen",
+      "name": "AutoGen (Microsoft)",
+      "language": "python",
+      "status": "ready",
+      "path": "autogen/agoragentic_autogen.py",
+      "install": "pip install agoragentic",
+      "docs": "autogen/README.md"
+    },
+    {
+      "id": "openai-agents",
+      "name": "OpenAI Agents SDK",
+      "language": "python",
+      "status": "ready",
+      "path": "openai-agents/agoragentic_openai.py",
+      "install": "pip install agoragentic",
+      "docs": "openai-agents/README.md"
+    },
+    {
+      "id": "elizaos",
+      "name": "ElizaOS (ai16z)",
+      "language": "typescript",
+      "status": "ready",
+      "path": "elizaos/agoragentic_eliza.ts",
+      "install": "npm install",
+      "docs": "elizaos/README.md"
+    },
+    {
+      "id": "google-adk",
+      "name": "Google ADK",
+      "language": "python",
+      "status": "ready",
+      "path": "google-adk/agoragentic_google_adk.py",
+      "install": "pip install agoragentic",
+      "docs": "google-adk/README.md"
+    },
+    {
+      "id": "vercel-ai",
+      "name": "Vercel AI SDK",
+      "language": "javascript",
+      "status": "ready",
+      "path": "vercel-ai/agoragentic_vercel.js",
+      "install": "npm install ai @ai-sdk/openai",
+      "docs": "vercel-ai/README.md"
+    },
+    {
+      "id": "mastra",
+      "name": "Mastra",
+      "language": "javascript",
+      "status": "ready",
+      "path": "mastra/agoragentic_mastra.js",
+      "install": "npm install",
+      "docs": "mastra/README.md"
+    },
+    {
+      "id": "pydantic-ai",
+      "name": "pydantic-ai",
+      "language": "python",
+      "status": "ready",
+      "path": "pydantic-ai/agoragentic_pydantic.py",
+      "install": "pip install agoragentic pydantic-ai",
+      "docs": "pydantic-ai/README.md"
+    },
+    {
+      "id": "smolagents",
+      "name": "smolagents (HuggingFace)",
+      "language": "python",
+      "status": "ready",
+      "path": "smolagents/agoragentic_smolagents.py",
+      "install": "pip install agoragentic smolagents",
+      "docs": "smolagents/README.md"
+    },
+    {
+      "id": "agno",
+      "name": "Agno (Phidata)",
+      "language": "python",
+      "status": "ready",
+      "path": "agno/agoragentic_agno.py",
+      "install": "pip install agoragentic agno",
+      "docs": "agno/README.md"
+    },
+    {
+      "id": "metagpt",
+      "name": "MetaGPT",
+      "language": "python",
+      "status": "ready",
+      "path": "metagpt/agoragentic_metagpt.py",
+      "install": "pip install agoragentic metagpt",
+      "docs": "metagpt/README.md"
+    },
+    {
+      "id": "llamaindex",
+      "name": "LlamaIndex",
+      "language": "python",
+      "status": "ready",
+      "path": "llamaindex/agoragentic_llamaindex.py",
+      "install": "pip install agoragentic llama-index",
+      "docs": "llamaindex/README.md"
+    },
+    {
+      "id": "autogpt",
+      "name": "AutoGPT",
+      "language": "python",
+      "status": "ready",
+      "path": "autogpt/agoragentic_autogpt.py",
+      "install": "pip install agoragentic",
+      "docs": "autogpt/README.md"
+    },
+    {
+      "id": "dify",
+      "name": "Dify",
+      "language": "json",
+      "status": "ready",
+      "path": "dify/agoragentic_provider.json",
+      "install": "Import JSON into Dify provider settings",
+      "docs": "dify/README.md"
+    },
+    {
+      "id": "superagi",
+      "name": "SuperAGI",
+      "language": "python",
+      "status": "ready",
+      "path": "superagi/agoragentic_superagi.py",
+      "install": "pip install agoragentic",
+      "docs": "superagi/README.md"
+    },
+    {
+      "id": "camel",
+      "name": "CAMEL",
+      "language": "python",
+      "status": "ready",
+      "path": "camel/agoragentic_camel.py",
+      "install": "pip install agoragentic camel-ai",
+      "docs": "camel/README.md"
+    },
+    {
+      "id": "bee-agent",
+      "name": "Bee Agent (IBM)",
+      "language": "javascript",
+      "status": "ready",
+      "path": "bee-agent/agoragentic_bee.js",
+      "install": "npm install",
+      "docs": "bee-agent/README.md"
+    },
+    {
+      "id": "a2a",
+      "name": "A2A Protocol (Google)",
+      "language": "json",
+      "status": "ready",
+      "path": "a2a/agent-card.json",
+      "install": "No install — JSON spec",
+      "docs": "a2a/README.md"
+    },
+    {
+      "id": "oh-my-claudecode",
+      "name": "oh-my-claudecode (Multi-Agent)",
+      "language": "javascript",
+      "status": "ready",
+      "path": "oh-my-claudecode/README.md",
+      "install": "npx agoragentic-mcp",
+      "docs": "oh-my-claudecode/README.md"
+    }
   ],
   "specs": [
-    { "id": "acp", "name": "Agent Commerce Protocol", "version": "0.1.0", "path": "specs/ACP-SPEC.md" }
+    {
+      "id": "acp",
+      "name": "Agent Commerce Protocol",
+      "version": "0.1.0",
+      "path": "specs/ACP-SPEC.md"
+    }
   ],
   "discovery": {
     "skill_md": "SKILL.md",
