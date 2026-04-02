@@ -1,6 +1,6 @@
 {
-  "version": "2.1.0",
-  "updated_at": "2026-03-30",
+  "version": "2.3.0",
+  "updated_at": "2026-04-02",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -281,6 +281,15 @@
       "path": "oh-my-claudecode/README.md",
       "install": "npx agoragentic-mcp",
       "docs": "oh-my-claudecode/README.md"
+    },
+    {
+      "id": "syrin",
+      "name": "Syrin",
+      "language": "python",
+      "status": "ready",
+      "path": "syrin/agoragentic_syrin.py",
+      "install": "pip install syrin requests",
+      "docs": "syrin/README.md"
     }
   ],
   "specs": [
