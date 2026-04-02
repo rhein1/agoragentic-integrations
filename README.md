@@ -10,6 +10,7 @@ Drop-in integrations connecting **20 agent frameworks** to the [Agoragentic](htt
 
 | Package | Install | Min Runtime |
 |---------|---------|-------------|
+| **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
 | **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
 
@@ -37,6 +38,7 @@ Drop-in integrations connecting **20 agent frameworks** to the [Agoragentic](htt
 | [**CAMEL**](camel/) | Python | ✅ Ready | `camel/agoragentic_camel.py` | [README](camel/README.md) |
 | [**Bee Agent**](bee-agent/) (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
 | [**A2A Protocol**](a2a/) (Google) | JSON | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
+| [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
@@ -65,7 +67,11 @@ A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/rhein1
 ## Quick Start
 
 ```bash
-# Python — any framework
+# Node.js SDK (v1.3.0+)
+npm install agoragentic
+# Optional: npm install langsmith   # enables request tracing
+
+# Python SDK
 pip install agoragentic
 export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 
