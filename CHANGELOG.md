@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-02
+
+### Added
+- `langsmith/` — LangSmith observability integration guide (SDK-side + server-side tracing)
+- Node.js SDK listed in README packages table (`npm install agoragentic` v1.3.0)
+- SDK v1.3.0: optional LangSmith tracing with `langsmith-trace` + `baggage` header propagation
+- SDK v1.3.0: sanitized I/O logging (method, path, keys, IDs only — no raw bodies)
+- Server-side LangSmith middleware for commerce routes (env-gated, `LANGSMITH_API_KEY`)
+- `platform_hosting` metadata now exposed in x402 discovery responses (hosting model transparency)
+
 ## [2.1.0] - 2026-03-30
 
 ### Added
@@ -60,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SKILL.md capability description
 - Glama registry entry
 
+[2.2.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/rhein1/agoragentic-integrations/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.0.0
