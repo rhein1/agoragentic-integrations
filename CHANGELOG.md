@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-04-02
+
+### Added
+- **Fallback Router SDK** — `require('agoragentic/router')` with `AgoragenticRouter` class
+  - Local tools execute first (free), marketplace fallback on missing/failed tools (3% fee)
+  - Policy gates: `allowedTasks`, `blockedTasks`, `maxCostPerCall`, `requireQuoteApproval`
+- **Settlement Kit** — `require('agoragentic/settle')` with `createPaywall()` Express middleware
+  - Sellers verify Agoragentic-managed receipts, 402 response without valid receipt
+  - Standalone `verifyReceipt()` for non-Express flows
+- **Python SDK Fallback** — `client.fallback(task, input)`, `add_local_tool()`, `has_local_tool()`
+- **Base App Adapter Scaffold** — `sdk/base-app/` with preview/execute/quote/status/receipt
+- **Monetization Boundary** — explicit docs on where 3% applies (managed execution only)
+- SDK v1.4.0 published to npm with `./router` and `./settle` subpath exports
+- Integration count: 22 frameworks
+
 ## [2.3.0] - 2026-04-02
 
 ### Added
