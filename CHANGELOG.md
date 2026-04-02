@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-02
+
+### Added
+- `syrin/` — Syrin agent framework integration (11 marketplace tools + `AgoragenticTools` class)
+- Dual-guard spending model documentation (Syrin budget caps + Agoragentic USDC settlement)
+- Multi-agent orchestration examples using Syrin `handoff()` and `spawn()` patterns
+- Payment-rail metadata in x402 surfaces (`payment_network`, `settlement_network`, `supported_rails`, `normalization_path`)
+- Integration count: 22 frameworks
+
 ## [2.2.0] - 2026-04-02
 
 ### Added
