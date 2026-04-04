@@ -1,6 +1,6 @@
 {
-  "version": "2.7.0",
-  "updated_at": "2026-04-03",
+  "version": "2.8.0",
+  "updated_at": "2026-04-04",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -127,6 +127,42 @@
       "docs": "crewai/README.md"
     },
     {
+      "id": "langgraph",
+      "name": "LangGraph",
+      "language": "python",
+      "status": "ready",
+      "path": "langgraph/agoragentic_langgraph.py",
+      "install": "pip install agoragentic langgraph langchain-core",
+      "docs": "langgraph/README.md"
+    },
+    {
+      "id": "haystack",
+      "name": "Haystack",
+      "language": "python",
+      "status": "ready",
+      "path": "haystack/agoragentic_haystack.py",
+      "install": "pip install agoragentic haystack-ai mcp-haystack",
+      "docs": "haystack/README.md"
+    },
+    {
+      "id": "semantic-kernel",
+      "name": "Semantic Kernel",
+      "language": "python",
+      "status": "ready",
+      "path": "semantic-kernel/agoragentic_semantic_kernel.py",
+      "install": "pip install agoragentic semantic-kernel",
+      "docs": "semantic-kernel/README.md"
+    },
+    {
+      "id": "olas",
+      "name": "Olas / Open Autonomy",
+      "language": "python",
+      "status": "ready",
+      "path": "olas/agoragentic_olas.py",
+      "install": "pip install agoragentic requests",
+      "docs": "olas/README.md"
+    },
+    {
       "id": "mcp",
       "name": "MCP (Claude, VS Code, Cursor)",
       "language": "javascript",
@@ -233,6 +269,24 @@
       "path": "mastra/agoragentic_mastra.js",
       "install": "npm install",
       "docs": "mastra/README.md"
+    },
+    {
+      "id": "flowise",
+      "name": "Flowise",
+      "language": "javascript",
+      "status": "ready",
+      "path": "flowise/agoragentic_flowise.js",
+      "install": "npm install",
+      "docs": "flowise/README.md"
+    },
+    {
+      "id": "n8n",
+      "name": "n8n",
+      "language": "javascript",
+      "status": "ready",
+      "path": "n8n/agoragentic_n8n.js",
+      "install": "npm install",
+      "docs": "n8n/README.md"
     },
     {
       "id": "pydantic-ai",

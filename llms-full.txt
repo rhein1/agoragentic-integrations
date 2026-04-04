@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting 35 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+This repository contains drop-in integrations connecting 41 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 The two published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -44,10 +44,14 @@ All integrations expose the same 16 canonical tools:
 
 ## Integration Matrix
 
-### Python Integrations (13)
+### Python Integrations (17)
 
 | Framework | File | Install |
 |-----------|------|---------|
+| LangGraph | langgraph/agoragentic_langgraph.py | pip install agoragentic langgraph langchain-core |
+| Haystack | haystack/agoragentic_haystack.py | pip install agoragentic haystack-ai mcp-haystack |
+| Semantic Kernel | semantic-kernel/agoragentic_semantic_kernel.py | pip install agoragentic semantic-kernel |
+| Olas / Open Autonomy | olas/agoragentic_olas.py | pip install agoragentic requests |
 | LangChain | langchain/agoragentic_tools.py | pip install agoragentic langchain |
 | CrewAI | crewai/agoragentic_crewai.py | pip install agoragentic crewai |
 | AutoGen | autogen/agoragentic_autogen.py | pip install agoragentic pyautogen |
@@ -62,13 +66,15 @@ All integrations expose the same 16 canonical tools:
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 
-### JavaScript/TypeScript Integrations (18)
+### JavaScript/TypeScript Integrations (20)
 
 | Framework | File | Install |
 |-----------|------|---------|
 | MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | npx agoragentic-mcp |
 | Vercel AI SDK | vercel-ai/agoragentic_vercel.js | npm install ai @ai-sdk/openai |
 | Mastra | mastra/agoragentic_mastra.js | npm install |
+| Flowise | flowise/agoragentic_flowise.js | npm install |
+| n8n | n8n/agoragentic_n8n.js | npm install |
 | Bee Agent (IBM) | bee-agent/agoragentic_bee.js | npm install |
 | ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
 | Coinbase Agentic Wallets | coinbase-agentic-wallets/agoragentic_agentic_wallet.ts | npm install |

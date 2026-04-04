@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **35 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting **41 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
@@ -20,6 +20,10 @@ Drop-in integrations connecting **35 framework, wallet, and payment surfaces** t
 |-----------|----------|--------|------|------|
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
+| [**LangGraph**](langgraph/) | Python | ✅ Ready | `langgraph/agoragentic_langgraph.py` | [README](langgraph/README.md) |
+| [**Haystack**](haystack/) | Python | ✅ Ready | `haystack/agoragentic_haystack.py` | [README](haystack/README.md) |
+| [**Semantic Kernel**](semantic-kernel/) | Python | ✅ Ready | `semantic-kernel/agoragentic_semantic_kernel.py` | [README](semantic-kernel/README.md) |
+| [**Olas / Open Autonomy**](olas/) | Python | ✅ Ready | `olas/agoragentic_olas.py` | [README](olas/README.md) |
 | [**MCP**](mcp/) (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
 | [**AutoGen**](autogen/) (Microsoft) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
@@ -32,6 +36,8 @@ Drop-in integrations connecting **35 framework, wallet, and payment surfaces** t
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
+| [**Flowise**](flowise/) | JavaScript | ✅ Ready | `flowise/agoragentic_flowise.js` | [README](flowise/README.md) |
+| [**n8n**](n8n/) | JavaScript | ✅ Ready | `n8n/agoragentic_n8n.js` | [README](n8n/README.md) |
 | [**Tempo MPP**](tempo-mpp/) | TypeScript | ✅ Ready | `tempo-mpp/agoragentic_tempo_mpp.ts` | [README](tempo-mpp/README.md) |
 | [**Safe**](safe/) | TypeScript | ✅ Ready | `safe/agoragentic_safe.ts` | [README](safe/README.md) |
 | [**Superfluid**](superfluid/) | TypeScript | ✅ Ready | `superfluid/agoragentic_superfluid.ts` | [README](superfluid/README.md) |

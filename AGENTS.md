@@ -5,7 +5,7 @@
 
 ## What This Repository Is
 
-Drop-in integrations connecting **35 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+Drop-in integrations connecting **41 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 ## Machine-Readable Index
 
