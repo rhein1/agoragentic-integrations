@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **23 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting **27 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
@@ -28,6 +28,9 @@ Drop-in integrations connecting **23 agent frameworks** to the [Agoragentic](htt
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
+| [**Tempo MPP**](tempo-mpp/) | TypeScript | ✅ Ready | `tempo-mpp/agoragentic_tempo_mpp.ts` | [README](tempo-mpp/README.md) |
+| [**Safe**](safe/) | TypeScript | ✅ Ready | `safe/agoragentic_safe.ts` | [README](safe/README.md) |
+| [**Superfluid**](superfluid/) | TypeScript | ✅ Ready | `superfluid/agoragentic_superfluid.ts` | [README](superfluid/README.md) |
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents**](smolagents/) (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
 | [**Agno**](agno/) (Phidata) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
@@ -40,6 +43,7 @@ Drop-in integrations connecting **23 agent frameworks** to the [Agoragentic](htt
 | [**Bee Agent**](bee-agent/) (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
 | [**A2A Protocol**](a2a/) (Google) | JSON | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
 | [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
+| [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)

@@ -1,6 +1,6 @@
 {
-  "version": "2.3.0",
-  "updated_at": "2026-04-02",
+  "version": "2.5.0",
+  "updated_at": "2026-04-03",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -37,9 +37,24 @@
       "cost": "free"
     },
     {
+      "id": "agoragentic_match",
+      "description": "Preview routed providers before spending",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_execute",
+      "description": "Route a task to the best provider and return the marketplace receipt",
+      "cost": "listing_price"
+    },
+    {
       "id": "agoragentic_invoke",
       "description": "Call a specific capability and get results",
       "cost": "listing_price"
+    },
+    {
+      "id": "agoragentic_x402_test",
+      "description": "Verify anonymous x402 compatibility with the free echo tool",
+      "cost": "free"
     },
     {
       "id": "agoragentic_vault",
@@ -146,6 +161,15 @@
       "path": "elizaos/agoragentic_eliza.ts",
       "install": "npm install",
       "docs": "elizaos/README.md"
+    },
+    {
+      "id": "coinbase-agentic-wallets",
+      "name": "Coinbase Agentic Wallets",
+      "language": "typescript",
+      "status": "ready",
+      "path": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+      "install": "npm install",
+      "docs": "coinbase-agentic-wallets/README.md"
     },
     {
       "id": "google-adk",
@@ -274,6 +298,15 @@
       "docs": "a2a/README.md"
     },
     {
+      "id": "langsmith",
+      "name": "LangSmith",
+      "language": "javascript",
+      "status": "ready",
+      "path": "langsmith/README.md",
+      "install": "npm install agoragentic langsmith",
+      "docs": "langsmith/README.md"
+    },
+    {
       "id": "oh-my-claudecode",
       "name": "oh-my-claudecode (Multi-Agent)",
       "language": "javascript",
@@ -290,6 +323,33 @@
       "path": "syrin/agoragentic_syrin.py",
       "install": "pip install syrin requests",
       "docs": "syrin/README.md"
+    },
+    {
+      "id": "tempo-mpp",
+      "name": "Tempo MPP",
+      "language": "typescript",
+      "status": "ready",
+      "path": "tempo-mpp/agoragentic_tempo_mpp.ts",
+      "install": "npm install",
+      "docs": "tempo-mpp/README.md"
+    },
+    {
+      "id": "safe",
+      "name": "Safe",
+      "language": "typescript",
+      "status": "ready",
+      "path": "safe/agoragentic_safe.ts",
+      "install": "npm install",
+      "docs": "safe/README.md"
+    },
+    {
+      "id": "superfluid",
+      "name": "Superfluid",
+      "language": "typescript",
+      "status": "ready",
+      "path": "superfluid/agoragentic_superfluid.ts",
+      "install": "npm install",
+      "docs": "superfluid/README.md"
     }
   ],
   "specs": [
@@ -302,8 +362,11 @@
   ],
   "discovery": {
     "skill_md": "SKILL.md",
+    "llms": "llms.txt",
+    "llms_full": "llms-full.txt",
     "glama": "glama.json",
     "a2a_card": "a2a/agent-card.json",
+    "mcp_server": "mcp/server.json",
     "acp_spec": "specs/ACP-SPEC.md",
     "live_api": "https://agoragentic.com",
     "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json"

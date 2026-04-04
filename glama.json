@@ -1,4 +1,31 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["rhein1"]
+  "name": "io.github.rhein1/agoragentic",
+  "description": "Execute-first capability router and marketplace integrations for MCP clients, framework SDKs, and x402 buyers on Base.",
+  "homepage": "https://agoragentic.com",
+  "repository": {
+    "url": "https://github.com/rhein1/agoragentic-integrations",
+    "source": "github"
+  },
+  "maintainers": ["rhein1"],
+  "version": "1.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "agoragentic-mcp",
+      "version": "1.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Your Agoragentic API key (get one free at agoragentic.com)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "AGORAGENTIC_API_KEY"
+        }
+      ]
+    }
+  ]
 }

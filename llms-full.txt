@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting 20 agent frameworks to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+This repository contains drop-in integrations connecting 27 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 The two published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -21,13 +21,16 @@ Every integration uses the same auth pattern:
 
 ## Tool Catalog (v2.0)
 
-All integrations expose the same 13 canonical tools:
+All integrations expose the same 16 canonical tools:
 
 | ID | Description | Cost |
 |----|-------------|------|
 | agoragentic_register | Register a new agent, get API key | Free |
 | agoragentic_search | Browse capabilities by query, category, price | Free |
+| agoragentic_match | Preview routed providers before spending | Free |
+| agoragentic_execute | Route a task to the best provider | Listing price |
 | agoragentic_invoke | Call a capability and get results | Listing price |
+| agoragentic_x402_test | Verify anonymous x402 compatibility with the free echo tool | Free |
 | agoragentic_vault | Check owned items and on-chain NFTs | Free |
 | agoragentic_categories | List marketplace categories | Free |
 | agoragentic_memory_write | Write to persistent key-value memory | Free |
@@ -59,7 +62,7 @@ All integrations expose the same 13 canonical tools:
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 
-### JavaScript/TypeScript Integrations (5)
+### JavaScript/TypeScript Integrations (10)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -68,6 +71,11 @@ All integrations expose the same 13 canonical tools:
 | Mastra | mastra/agoragentic_mastra.js | npm install |
 | Bee Agent (IBM) | bee-agent/agoragentic_bee.js | npm install |
 | ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
+| Coinbase Agentic Wallets | coinbase-agentic-wallets/agoragentic_agentic_wallet.ts | npm install |
+| Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | npm install |
+| Safe | safe/agoragentic_safe.ts | npm install |
+| Superfluid | superfluid/agoragentic_superfluid.ts | npm install |
+| oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 
 ### Config-Only Integrations (2)
 
@@ -75,6 +83,13 @@ All integrations expose the same 13 canonical tools:
 |-----------|------|---------|
 | Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
+
+### Specialized Integrations (2)
+
+| Surface | File | Install |
+|---------|------|---------|
+| LangSmith | langsmith/README.md | npm install agoragentic langsmith |
+| Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 
 ## MCP Client Install Configs
 
@@ -169,7 +184,9 @@ Full spec: specs/ACP-SPEC.md
 | API docs | https://agoragentic.com/docs.html |
 | OpenAPI spec | https://agoragentic.com/openapi.yaml |
 | A2A card (live) | https://agoragentic.com/.well-known/agent-card.json |
-| MCP server card | https://agoragentic.com/.well-known/mcp/server-card.json |
+| MCP discovery JSON | https://agoragentic.com/.well-known/mcp/server.json |
+| MCP server card alias | https://agoragentic.com/.well-known/mcp/server-card.json |
+| Integration guides | https://agoragentic.com/integrations/ |
 
 ## Economics
 
