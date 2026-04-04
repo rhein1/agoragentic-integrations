@@ -1,5 +1,5 @@
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "updated_at": "2026-04-03",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -170,6 +170,42 @@
       "path": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
       "install": "npm install",
       "docs": "coinbase-agentic-wallets/README.md"
+    },
+    {
+      "id": "kibble",
+      "name": "Kibble",
+      "language": "typescript",
+      "status": "ready",
+      "path": "kibble/agoragentic_kibble.ts",
+      "install": "npm install kibble-pay",
+      "docs": "kibble/README.md"
+    },
+    {
+      "id": "lifi",
+      "name": "LI.FI",
+      "language": "typescript",
+      "status": "ready",
+      "path": "lifi/agoragentic_lifi.ts",
+      "install": "npm install @lifi/sdk",
+      "docs": "lifi/README.md"
+    },
+    {
+      "id": "dfns",
+      "name": "Dfns",
+      "language": "typescript",
+      "status": "ready",
+      "path": "dfns/agoragentic_dfns.ts",
+      "install": "npm install @dfns/sdk",
+      "docs": "dfns/README.md"
+    },
+    {
+      "id": "reown",
+      "name": "Reown / WalletConnect",
+      "language": "typescript",
+      "status": "ready",
+      "path": "reown/agoragentic_reown.ts",
+      "install": "npm install @reown/appkit",
+      "docs": "reown/README.md"
     },
     {
       "id": "google-adk",

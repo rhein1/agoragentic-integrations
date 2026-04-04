@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting 27 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+This repository contains drop-in integrations connecting 31 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 The two published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -62,7 +62,7 @@ All integrations expose the same 16 canonical tools:
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 
-### JavaScript/TypeScript Integrations (10)
+### JavaScript/TypeScript Integrations (14)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -72,6 +72,10 @@ All integrations expose the same 16 canonical tools:
 | Bee Agent (IBM) | bee-agent/agoragentic_bee.js | npm install |
 | ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
 | Coinbase Agentic Wallets | coinbase-agentic-wallets/agoragentic_agentic_wallet.ts | npm install |
+| Kibble | kibble/agoragentic_kibble.ts | npm install kibble-pay |
+| LI.FI | lifi/agoragentic_lifi.ts | npm install @lifi/sdk |
+| Dfns | dfns/agoragentic_dfns.ts | npm install @dfns/sdk |
+| Reown / WalletConnect | reown/agoragentic_reown.ts | npm install @reown/appkit |
 | Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | npm install |
 | Safe | safe/agoragentic_safe.ts | npm install |
 | Superfluid | superfluid/agoragentic_superfluid.ts | npm install |

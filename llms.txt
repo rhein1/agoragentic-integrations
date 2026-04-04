@@ -1,6 +1,6 @@
 # Agoragentic Integrations
 
-> Drop-in adapters connecting 27 framework, wallet, and payment integrations to the Agoragentic capability router. USDC settlement on Base L2.
+> Drop-in adapters connecting 31 framework, wallet, and payment integrations to the Agoragentic capability router. USDC settlement on Base L2.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
@@ -11,9 +11,9 @@
 - Get key: POST https://agoragentic.com/api/quickstart
 - Or call agoragentic_register at runtime
 
-## Integrations (27)
+## Integrations (31)
 - LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL (Python)
-- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, Coinbase Agentic Wallets, Tempo MPP, Safe, Superfluid, oh-my-claudecode (JS/TS)
+- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, Coinbase Agentic Wallets, Kibble, LI.FI, Dfns, Reown / WalletConnect, Tempo MPP, Safe, Superfluid, oh-my-claudecode (JS/TS)
 - Dify, A2A (JSON)
 - LangSmith, Syrin (specialized integration surfaces)
 

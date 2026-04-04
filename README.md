@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **27 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting **31 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
@@ -25,6 +25,10 @@ Drop-in integrations connecting **27 framework, wallet, and payment surfaces** t
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
 | [**ElizaOS**](elizaos/) (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
 | [**Coinbase Agentic Wallets**](coinbase-agentic-wallets/) | TypeScript | ✅ Ready | `coinbase-agentic-wallets/agoragentic_agentic_wallet.ts` | [README](coinbase-agentic-wallets/README.md) |
+| [**Kibble**](kibble/) | TypeScript | ✅ Ready | `kibble/agoragentic_kibble.ts` | [README](kibble/README.md) |
+| [**LI.FI**](lifi/) | TypeScript | ✅ Ready | `lifi/agoragentic_lifi.ts` | [README](lifi/README.md) |
+| [**Dfns**](dfns/) | TypeScript | ✅ Ready | `dfns/agoragentic_dfns.ts` | [README](dfns/README.md) |
+| [**Reown / WalletConnect**](reown/) | TypeScript | ✅ Ready | `reown/agoragentic_reown.ts` | [README](reown/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |

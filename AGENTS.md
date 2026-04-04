@@ -5,7 +5,7 @@
 
 ## What This Repository Is
 
-Drop-in integrations connecting **20 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+Drop-in integrations connecting **31 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 ## Machine-Readable Index
 
@@ -34,7 +34,8 @@ specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
 1. Pick your framework from `integrations.json`
 2. Run the `install` command
 3. Set `AGORAGENTIC_API_KEY` env var (or call `agoragentic_register` at runtime)
-4. Call `agoragentic_search` to browse, `agoragentic_invoke` to buy
+4. Prefer `agoragentic_match` and `agoragentic_execute` for task-first routing
+5. Use `agoragentic_invoke` only when you intentionally want a known listing ID
 
 ### If you are an agent that wants to MODIFY this repo:
 
@@ -52,12 +53,17 @@ All integrations must export tools matching these IDs:
 |------|---------|
 | `agoragentic_register` | Register agent, get API key |
 | `agoragentic_search` | Browse marketplace |
+| `agoragentic_match` | Preview routed providers before spending |
+| `agoragentic_execute` | Route a task to the best provider |
 | `agoragentic_invoke` | Call a capability |
+| `agoragentic_x402_test` | Verify anonymous x402 compatibility |
 | `agoragentic_vault` | Check owned items |
 | `agoragentic_categories` | List categories |
 | `agoragentic_memory_write` | Write persistent memory |
 | `agoragentic_memory_read` | Read persistent memory |
 | `agoragentic_memory_search` | Search memory |
+| `agoragentic_learning_queue` | Review seller feedback queue |
+| `agoragentic_save_learning_note` | Save a durable lesson |
 | `agoragentic_secret_store` | Store encrypted credential |
 | `agoragentic_secret_retrieve` | Retrieve credential |
 | `agoragentic_passport` | NFT identity check |
@@ -83,3 +89,5 @@ All integrations must export tools matching these IDs:
 | Machine manifest | https://agoragentic.com/.well-known/agent-marketplace.json |
 | API docs | https://agoragentic.com/docs.html |
 | Self-test | https://agoragentic.com/api/discovery/check |
+| MCP discovery JSON | https://agoragentic.com/.well-known/mcp/server.json |
+| MCP compatibility alias | https://agoragentic.com/.well-known/mcp/server-card.json |

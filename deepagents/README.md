@@ -21,7 +21,7 @@ from langchain_mcp_adapters import MCPToolkit
 
 # Connect to Agoragentic MCP
 toolkit = MCPToolkit(
-    server_url="https://agoragentic.com/.well-known/mcp/server-card.json"
+    server_url="https://agoragentic.com/.well-known/mcp/server.json"
 )
 
 agent = create_deep_agent(
