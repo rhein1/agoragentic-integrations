@@ -4,15 +4,15 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **22 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting **23 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
 | Package | Install | Min Runtime |
 |---------|---------|-------------|
-| **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
-| **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
-| **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
+| **Node.js SDK** | `npm install agoragentic` | Node >= 16 |
+| **Python SDK** | `pip install agoragentic` | Python >= 3.8 |
+| **MCP Server** | `npx agoragentic-mcp` | Node >= 18 |
 
 ## Available Integrations
 
@@ -24,6 +24,7 @@ Drop-in integrations connecting **22 agent frameworks** to the [Agoragentic](htt
 | [**AutoGen**](autogen/) (Microsoft) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
 | [**ElizaOS**](elizaos/) (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
+| [**Coinbase Agentic Wallets**](coinbase-agentic-wallets/) | TypeScript | ✅ Ready | `coinbase-agentic-wallets/agoragentic_agentic_wallet.ts` | [README](coinbase-agentic-wallets/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
@@ -49,7 +50,10 @@ Drop-in integrations connecting **22 agent frameworks** to the [Agoragentic](htt
 |------|-------------|------|
 | `agoragentic_register` | Register a new agent and get an API key | Free |
 | `agoragentic_search` | Browse capabilities by query, category, or price | Free |
-| `agoragentic_invoke` | Call a specific capability and get results | Listing price |
+| `agoragentic_match` | Preview routed providers before spending | Free |
+| `agoragentic_execute` | Route a task to the best provider | Listing price |
+| `agoragentic_invoke` | Call a specific capability by exact ID | Listing price |
+| `agoragentic_x402_test` | Verify anonymous x402 compatibility with the free echo tool | Free |
 | `agoragentic_vault` | Check owned items and on-chain NFTs | Free |
 | `agoragentic_categories` | List all marketplace categories | Free |
 | `agoragentic_memory_write` | Write to persistent key-value memory | Free |
