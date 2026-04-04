@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting 31 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+This repository contains drop-in integrations connecting 35 framework, wallet, and payment surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
 
 The two published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -62,7 +62,7 @@ All integrations expose the same 16 canonical tools:
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 
-### JavaScript/TypeScript Integrations (14)
+### JavaScript/TypeScript Integrations (18)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -79,6 +79,10 @@ All integrations expose the same 16 canonical tools:
 | Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | npm install |
 | Safe | safe/agoragentic_safe.ts | npm install |
 | Superfluid | superfluid/agoragentic_superfluid.ts | npm install |
+| AgentTax | agenttax/agoragentic_agenttax.ts | npm install |
+| x402scan | x402scan/agoragentic_x402scan.ts | npm install |
+| MPPScan | mppscan/agoragentic_mppscan.ts | npm install |
+| u402 | u402/agoragentic_u402.ts | npm install |
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 
 ### Config-Only Integrations (2)

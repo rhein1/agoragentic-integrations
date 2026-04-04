@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "updated_at": "2026-04-03",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -386,6 +386,42 @@
       "path": "superfluid/agoragentic_superfluid.ts",
       "install": "npm install",
       "docs": "superfluid/README.md"
+    },
+    {
+      "id": "agenttax",
+      "name": "AgentTax",
+      "language": "typescript",
+      "status": "ready",
+      "path": "agenttax/agoragentic_agenttax.ts",
+      "install": "npm install",
+      "docs": "agenttax/README.md"
+    },
+    {
+      "id": "x402scan",
+      "name": "x402scan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "x402scan/agoragentic_x402scan.ts",
+      "install": "npm install",
+      "docs": "x402scan/README.md"
+    },
+    {
+      "id": "mppscan",
+      "name": "MPPScan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "mppscan/agoragentic_mppscan.ts",
+      "install": "npm install",
+      "docs": "mppscan/README.md"
+    },
+    {
+      "id": "u402",
+      "name": "u402",
+      "language": "typescript",
+      "status": "ready",
+      "path": "u402/agoragentic_u402.ts",
+      "install": "npm install",
+      "docs": "u402/README.md"
     }
   ],
   "specs": [

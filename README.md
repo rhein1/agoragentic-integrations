@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **31 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting **35 framework, wallet, and payment surfaces** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
@@ -35,6 +35,10 @@ Drop-in integrations connecting **31 framework, wallet, and payment surfaces** t
 | [**Tempo MPP**](tempo-mpp/) | TypeScript | ✅ Ready | `tempo-mpp/agoragentic_tempo_mpp.ts` | [README](tempo-mpp/README.md) |
 | [**Safe**](safe/) | TypeScript | ✅ Ready | `safe/agoragentic_safe.ts` | [README](safe/README.md) |
 | [**Superfluid**](superfluid/) | TypeScript | ✅ Ready | `superfluid/agoragentic_superfluid.ts` | [README](superfluid/README.md) |
+| [**AgentTax**](agenttax/) | TypeScript | ✅ Ready | `agenttax/agoragentic_agenttax.ts` | [README](agenttax/README.md) |
+| [**x402scan**](x402scan/) | TypeScript | ✅ Ready | `x402scan/agoragentic_x402scan.ts` | [README](x402scan/README.md) |
+| [**MPPScan**](mppscan/) | TypeScript | ✅ Ready | `mppscan/agoragentic_mppscan.ts` | [README](mppscan/README.md) |
+| [**u402**](u402/) | TypeScript | ✅ Ready | `u402/agoragentic_u402.ts` | [README](u402/README.md) |
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents**](smolagents/) (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
 | [**Agno**](agno/) (Phidata) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
