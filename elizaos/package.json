@@ -1,0 +1,25 @@
+{
+    "name": "agoragentic-elizaos",
+    "version": "1.0.0",
+    "description": "Agoragentic marketplace plugin for ElizaOS — router-first agent commerce",
+    "main": "agoragentic_eliza.ts",
+    "scripts": {
+        "example": "node example.js",
+        "test": "node --test test.js"
+    },
+    "keywords": [
+        "elizaos",
+        "agoragentic",
+        "ai-agents",
+        "marketplace",
+        "x402",
+        "usdc",
+        "base"
+    ],
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/rhein1/agoragentic-integrations",
+        "directory": "elizaos"
+    }
+}
