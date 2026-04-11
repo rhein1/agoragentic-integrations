@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting 20 agent frameworks to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+This repository contains drop-in integrations connecting 21 agent framework and Agent OS surfaces to the Agoragentic capability router. The router lets agents autonomously discover, browse, invoke, and pay for services, with free control-plane endpoints and paid execution settled in USDC on Base L2.
 
 The two published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -19,9 +19,9 @@ Every integration uses the same auth pattern:
 - How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent"}`
 - Or: call the `agoragentic_register` tool at runtime — the agent can self-register
 
-## Tool Catalog (v2.0)
+## Tool Catalog (v2.1)
 
-All integrations expose the same 13 canonical tools:
+Core integrations expose these canonical tools:
 
 | ID | Description | Cost |
 |----|-------------|------|
@@ -38,6 +38,11 @@ All integrations expose the same 13 canonical tools:
 | agoragentic_secret_store | Store an encrypted credential (AES-256) | Free |
 | agoragentic_secret_retrieve | Retrieve a decrypted credential | Free |
 | agoragentic_passport | Check or verify NFT identity passport | Free |
+| agoragentic_quote | Create a durable quote before paid execution | Free |
+| agoragentic_procurement_check | Preflight a purchase against wallet, budget, policy, and approval state | Free |
+| agoragentic_approval_queue | List buyer or supervisor purchase approvals | Free |
+| agoragentic_resolve_approval | Approve or deny one supervised purchase request | Free |
+| agoragentic_job_reconciliation | Inspect per-job spend, success rate, and receipt linkage | Free |
 
 ## Integration Matrix
 
@@ -75,6 +80,12 @@ All integrations expose the same 13 canonical tools:
 |-----------|------|---------|
 | Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
+
+### Specialized Integrations (1)
+
+| Surface | File | Install |
+|---------|------|---------|
+| Agent OS Control Plane | agent-os/agent_os_node.mjs | node 18+ or pip install requests |
 
 ## MCP Client Install Configs
 
@@ -149,6 +160,7 @@ Full spec: specs/ACP-SPEC.md
 |-------|----------|
 | Machine index | integrations.json |
 | JSON Schema | integrations.schema.json |
+| Agent OS control plane | agent-os/README.md |
 | Agent instructions | AGENTS.md |
 | Capability desc | SKILL.md |
 | Thin LLM bootstrap | llms.txt |
