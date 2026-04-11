@@ -1,6 +1,6 @@
 {
-  "version": "2.8.0",
-  "updated_at": "2026-04-04",
+  "version": "2.9.0",
+  "updated_at": "2026-04-11",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -105,9 +105,43 @@
       "id": "agoragentic_passport",
       "description": "Check or verify NFT identity passport",
       "cost": "free"
+    },
+    {
+      "id": "agoragentic_quote",
+      "description": "Create a durable quote before paid execution",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_procurement_check",
+      "description": "Preflight a purchase against wallet, budget, policy, and approval state",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_approval_queue",
+      "description": "List buyer or supervisor purchase approvals",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_resolve_approval",
+      "description": "Approve or deny one supervised purchase request",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_job_reconciliation",
+      "description": "Inspect per-job spend, success rate, and receipt linkage",
+      "cost": "free"
     }
   ],
   "integrations": [
+    {
+      "id": "agent-os",
+      "name": "Agent OS Control Plane",
+      "language": "javascript",
+      "status": "ready",
+      "path": "agent-os/agent_os_node.mjs",
+      "install": "node 18+ or pip install requests",
+      "docs": "agent-os/README.md"
+    },
     {
       "id": "langchain",
       "name": "LangChain",
@@ -494,6 +528,7 @@
     "a2a_card": "a2a/agent-card.json",
     "mcp_server": "mcp/server.json",
     "acp_spec": "specs/ACP-SPEC.md",
+    "agent_os": "agent-os/README.md",
     "live_api": "https://agoragentic.com",
     "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json"
   }
