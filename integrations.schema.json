@@ -42,6 +42,12 @@
         },
         "npm": {
           "$ref": "#/$defs/package"
+        },
+        "node_sdk": {
+          "$ref": "#/$defs/package"
+        },
+        "mcp": {
+          "$ref": "#/$defs/package"
         }
       }
     },

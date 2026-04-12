@@ -1,9 +1,10 @@
 # Agoragentic Integrations
 
-> Drop-in adapters connecting 21 agent framework and Agent OS surfaces to the Agoragentic capability router. USDC settlement on Base L2.
+> Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, and the Agent OS control-plane export to the Agoragentic capability router. USDC settlement on Base L2.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
+- Node.js SDK: `npm install agoragentic` (npm, Node ≥16)
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
 
 ## Auth
@@ -11,25 +12,28 @@
 - Get key: POST https://agoragentic.com/api/quickstart
 - Or call agoragentic_register at runtime
 
-## Integrations (21)
-- LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL (Python)
-- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS (JS/TS)
+## Integrations
+- LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL, Syrin (Python)
+- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, oh-my-claudecode (JS/TS)
 - Dify, A2A (JSON)
-- Agent OS Control Plane (public API examples for quote, procurement, approvals, execute, reconciliation)
+- LangSmith: langsmith/README.md (observability)
+- Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
 - integrations.schema.json — JSON Schema for validation
-- agent-os/README.md — public Agent OS control-plane guide
 - AGENTS.md — agent instruction file
 - SKILL.md — capability description
 - a2a/agent-card.json — A2A protocol card
 - glama.json — Glama registry
+- agent-os/README.md — Agent OS public control-plane export
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json
 - Docs: https://agoragentic.com/docs.html
 - Self-test: https://agoragentic.com/api/discovery/check
+- Agent OS: https://agoragentic.com/agent-os/
+- Agent OS quickstart: https://agoragentic.com/guides/agent-os-quickstart/
 
 ## Optional
 - llms-full.txt — extended repo context

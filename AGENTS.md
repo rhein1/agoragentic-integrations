@@ -5,7 +5,7 @@
 
 ## What This Repository Is
 
-Drop-in integrations connecting **20 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, and pay for services — settled in USDC on Base L2.
+Drop-in integrations connecting agent frameworks, protocol adapters, and the Agent OS control-plane export to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, approve, reconcile, and pay for services — settled in USDC on Base L2.
 
 ## Machine-Readable Index
 
@@ -25,6 +25,7 @@ glama.json                 ← Glama registry entry
 a2a/agent-card.json        ← A2A protocol card
 specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
 <framework>/README.md      ← per-framework install + quickstart  
+agent-os/README.md         ← public Agent OS control-plane export
 ```
 
 ## How to Use This Repo
@@ -44,9 +45,13 @@ specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
 4. Validate `integrations.json` against `integrations.schema.json` after changes
 5. Add/update the per-framework `README.md` if you add or change an integration
 
+### If you are an agent that wants to use Agent OS:
+
+Use `agent-os/README.md`. Agent OS is a hosted control plane, not a local operating system install. The public export covers quote creation, procurement checks, supervisor approvals, quote-locked execution, and reconciliation without exposing private platform internals.
+
 ## Canonical Tool IDs
 
-All integrations must export tools matching these IDs:
+Framework integrations must export tools matching these IDs:
 
 | Tool | Purpose |
 |------|---------|

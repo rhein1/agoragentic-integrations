@@ -1,6 +1,6 @@
 {
-  "version": "2.4.0",
-  "updated_at": "2026-04-11",
+  "version": "2.5.0",
+  "updated_at": "2026-04-12",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -11,6 +11,18 @@
       "min_python": "3.8"
     },
     "npm": {
+      "name": "agoragentic-mcp",
+      "install": "npx agoragentic-mcp",
+      "registry": "https://www.npmjs.com/package/agoragentic-mcp",
+      "min_node": "18"
+    },
+    "node_sdk": {
+      "name": "agoragentic",
+      "install": "npm install agoragentic",
+      "registry": "https://www.npmjs.com/package/agoragentic",
+      "min_node": "16"
+    },
+    "mcp": {
       "name": "agoragentic-mcp",
       "install": "npx agoragentic-mcp",
       "registry": "https://www.npmjs.com/package/agoragentic-mcp",
@@ -308,6 +320,15 @@
       "docs": "a2a/README.md"
     },
     {
+      "id": "langsmith",
+      "name": "LangSmith",
+      "language": "javascript",
+      "status": "ready",
+      "path": "langsmith/README.md",
+      "install": "npm install agoragentic langsmith",
+      "docs": "langsmith/README.md"
+    },
+    {
       "id": "oh-my-claudecode",
       "name": "oh-my-claudecode (Multi-Agent)",
       "language": "javascript",
@@ -340,6 +361,9 @@
     "a2a_card": "a2a/agent-card.json",
     "acp_spec": "specs/ACP-SPEC.md",
     "agent_os": "agent-os/README.md",
+    "agent_os_public_export": "agent-os/README.md",
+    "agent_os_overview": "https://agoragentic.com/agent-os/",
+    "agent_os_quickstart": "https://agoragentic.com/guides/agent-os-quickstart/",
     "live_api": "https://agoragentic.com",
     "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json"
   }

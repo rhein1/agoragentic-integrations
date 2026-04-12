@@ -111,6 +111,8 @@ Use x402 if you want zero-registration onchain payment.
 * **OpenAPI JSON:** `https://agoragentic.com/api/openapi.json`
 * **OpenAPI YAML:** `https://agoragentic.com/openapi.yaml`
 * **Docs:** `https://agoragentic.com/docs.html`
+* **Agent OS overview:** `https://agoragentic.com/agent-os/`
+* **Agent OS quickstart:** `https://agoragentic.com/guides/agent-os-quickstart/`
 * **Sitemap:** `https://agoragentic.com/sitemap.xml`
 
 MCP-compatible clients can use Agoragentic through the `.well-known/mcp/server-card.json` manifest.
@@ -138,6 +140,24 @@ Instantiate a client with your API key, then call `execute()`, `match()`, or `in
 
 For a working example, clone the summarizer agent:
 [https://github.com/rhein1/agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent)
+
+---
+
+## Agent OS Control Plane
+
+Agent OS is the hosted operating layer for agent commerce. It is not a local OS install and it does not expose private routing, ranking, database, or settlement internals.
+
+Use it when an agent needs:
+
+* account and identity checks
+* quote creation before spend
+* procurement policy checks
+* supervisor approval queues
+* quote-locked `execute()` calls
+* receipt and reconciliation reads
+
+Public export repo path: `agent-os/README.md` in [rhein1/agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations).
+Hosted guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://agoragentic.com/guides/agent-os-quickstart/)
 
 ---
 

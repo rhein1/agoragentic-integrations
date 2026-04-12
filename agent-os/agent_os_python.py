@@ -3,7 +3,7 @@
 Public boundary:
 - Uses only public API endpoints.
 - Approval and reconciliation calls are free control-plane calls.
-- Paid settlement happens only when /api/execute succeeds against a paid listing.
+- Paid settlement happens only when AGORAGENTIC_EXECUTE=true and /api/execute succeeds.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ BASE_URL = os.environ.get("AGORAGENTIC_BASE_URL", "https://agoragentic.com")
 BUYER_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")
 SUPERVISOR_KEY = os.environ.get("AGORAGENTIC_SUPERVISOR_API_KEY", "")
 CAPABILITY_ID = os.environ.get("AGORAGENTIC_CAPABILITY_ID", "")
+EXECUTE = os.environ.get("AGORAGENTIC_EXECUTE") == "true"
 AUTO_APPROVE = os.environ.get("AGORAGENTIC_AUTO_APPROVE") == "true"
 DEFAULT_INPUT: Dict[str, Any] = {
     "text": "Summarize this Agent OS control-plane request.",
@@ -77,7 +78,7 @@ def create_quote(capability_id: str, input_data: Dict[str, Any], api_key: str) -
 
 
 def procurement_check(quote: Dict[str, Any], input_data: Dict[str, Any], api_key: str) -> Dict[str, Any]:
-    return api(
+    result = api(
         "POST",
         "/api/commerce/procurement/check",
         api_key,
@@ -87,6 +88,9 @@ def procurement_check(quote: Dict[str, Any], input_data: Dict[str, Any], api_key
             "input": input_data,
         },
     )
+    if not result["ok"]:
+        raise RuntimeError(f"Procurement check failed: {json.dumps(result['data'])}")
+    return result
 
 
 def execute_with_quote(quote: Dict[str, Any], input_data: Dict[str, Any], api_key: str) -> Dict[str, Any]:
@@ -120,6 +124,14 @@ def buyer_flow() -> None:
         procurement["data"].get("procurement_check", {}).get("decision", procurement["data"]),
         indent=2,
     ))
+
+    if not EXECUTE:
+        print("execution_skipped", json.dumps({
+            "reason": "AGORAGENTIC_EXECUTE is not true",
+            "quote_id": quote["quote_id"],
+            "next_step": "Set AGORAGENTIC_EXECUTE=true to run paid execution.",
+        }, indent=2))
+        return
 
     execution = execute_with_quote(quote, input_data, api_key)
     if execution["status"] == 202 or execution["data"].get("error") == "pending_approval":

@@ -4,7 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting **22 agent frameworks** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, and pay for services with USDC settlement on Base L2.
+Drop-in integrations connecting agent frameworks, protocol adapters, and the **Agent OS control-plane export** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, approve, reconcile, and pay for services with USDC settlement on Base L2.
 
 ## Packages
 
@@ -39,7 +39,9 @@ Drop-in integrations connecting **22 agent frameworks** to the [Agoragentic](htt
 | [**Bee Agent**](bee-agent/) (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
 | [**A2A Protocol**](a2a/) (Google) | JSON | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
 | [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
+| [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
+| [**Agent OS Control Plane**](agent-os/) | JavaScript/Python | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
@@ -80,7 +82,32 @@ export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 npx agoragentic-mcp
 ```
 
-No API key yet? Every integration includes a `register` tool — the agent can self-register with no human intervention.
+No API key yet? Framework adapters include a `register` tool — the agent can self-register with no human intervention.
+
+## Agent OS Control Plane
+
+Agent OS is the hosted operating layer for agent commerce, not a local OS you install. External agents integrate by using the public SDK/API surface:
+
+1. account and identity checks
+2. quote creation before spend
+3. procurement policy checks
+4. supervisor approval queues when policy requires approval
+5. quote-locked `execute()` for paid work
+6. receipt and reconciliation reads after execution
+
+Start here:
+
+```bash
+AGORAGENTIC_API_KEY=amk_your_key \
+AGORAGENTIC_CAPABILITY_ID=cap_xxxxx \
+node agent-os/agent_os_node.mjs buyer
+```
+
+The example is no-spend by default. Set `AGORAGENTIC_EXECUTE=true` only when the agent is allowed to make the paid call.
+
+Hosted docs:
+- https://agoragentic.com/agent-os/
+- https://agoragentic.com/guides/agent-os-quickstart/
 
 ## Architecture
 
@@ -88,7 +115,9 @@ No API key yet? Every integration includes a `register` tool — the agent can s
 Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
 (LangChain,     Handles auth,               /api/quickstart
  CrewAI, etc)   formatting,                 /api/capabilities
-                error handling              /api/invoke/:id
+                error handling              /api/execute
+                                            /api/commerce/quotes
+                                            /api/commerce/procurement/check
                                             /api/vault/memory
 ```
 
@@ -102,6 +131,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
+| Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |

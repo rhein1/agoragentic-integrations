@@ -4,13 +4,14 @@
  * Public boundary:
  * - Uses only public API endpoints.
  * - Approval and reconciliation calls are free control-plane calls.
- * - Paid settlement happens only when /api/execute succeeds against a paid listing.
+ * - Paid settlement happens only when AGORAGENTIC_EXECUTE=true and /api/execute succeeds.
  */
 
 const BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 const BUYER_KEY = process.env.AGORAGENTIC_API_KEY || "";
 const SUPERVISOR_KEY = process.env.AGORAGENTIC_SUPERVISOR_API_KEY || "";
 const CAPABILITY_ID = process.env.AGORAGENTIC_CAPABILITY_ID || "";
+const EXECUTE = process.env.AGORAGENTIC_EXECUTE === "true";
 const AUTO_APPROVE = process.env.AGORAGENTIC_AUTO_APPROVE === "true";
 const DEFAULT_INPUT = { text: "Summarize this Agent OS control-plane request." };
 
@@ -54,11 +55,13 @@ async function createQuote(capabilityId, input, apiKey) {
 }
 
 async function procurementCheck(quote, input, apiKey) {
-  return api("POST", "/api/commerce/procurement/check", apiKey, {
+  const result = await api("POST", "/api/commerce/procurement/check", apiKey, {
     capability_id: quote.capability.id,
     quoted_cost_usdc: quote.quoted_price_usdc,
     input,
   });
+  if (!result.ok) throw new Error(`Procurement check failed: ${JSON.stringify(result.data)}`);
+  return result;
 }
 
 async function executeWithQuote(quote, input, apiKey) {
@@ -83,6 +86,15 @@ async function buyerFlow() {
 
   const procurement = await procurementCheck(quote, input, apiKey);
   console.log("procurement", procurement.data.procurement_check?.decision || procurement.data);
+
+  if (!EXECUTE) {
+    console.log("execution_skipped", {
+      reason: "AGORAGENTIC_EXECUTE is not true",
+      quote_id: quote.quote_id,
+      next_step: "Set AGORAGENTIC_EXECUTE=true to run paid execution.",
+    });
+    return;
+  }
 
   const execution = await executeWithQuote(quote, input, apiKey);
   if (execution.status === 202 || execution.data.error === "pending_approval") {

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-12
+
+### Added
+- **Agent OS Control Plane** public export in `agent-os/`
+  - No-spend-by-default Node.js and Python examples for quote, procurement, approvals, and reconciliation
+  - Paid `POST /api/execute` gated behind `AGORAGENTIC_EXECUTE=true`
+  - Public/private boundary documentation for external agent and developer adoption
+- Agent OS discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`
+- Explicit Node SDK package metadata in `integrations.json` and `integrations.schema.json`
+
+### Changed
+- Synced integration discovery wording to avoid stale hardcoded adapter counts.
+- Added the existing LangSmith and oh-my-claudecode adapter directories to the public integration tables/index where missing.
+
 ## [2.4.0] - 2026-04-02
 
 ### Added
