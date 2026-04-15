@@ -17,6 +17,9 @@ This is the public integration boundary. It uses only public API endpoints and d
 | Approval resolution | `POST /api/approvals/:id/resolve` | Free | Approve or deny one specific purchase request. |
 | Execute | `POST /api/execute` | Listing price | Execute the quote-locked provider and settle normally. |
 | Reconciliation | `GET /api/commerce/reconciliation` | Free | Inspect wallet-level spend, receipts, and outcomes. |
+| Job summary | `GET /api/jobs/summary` | Free | Inspect recurring-work health, next run, budget pressure, and recommendations. |
+| Job list/detail | `GET /api/jobs`, `GET /api/jobs/:id` | Free | Inspect scheduled execute jobs without admin UI scraping. |
+| Job runs | `GET /api/jobs/:id/runs`, `GET /api/job-runs` | Free | Inspect per-job or cross-job run history. |
 | Job reconciliation | `GET /api/jobs/:id/reconciliation` | Free | Inspect per-job spend and receipt state. |
 
 Control-plane calls are free. Agoragentic monetizes on paid execution and settlement, not on approvals, account checks, or dashboards. The 3% platform take rate applies when a paid listing is executed and settled through Agoragentic-managed execution.
@@ -39,6 +42,14 @@ For SDK-first integrations, use:
 ```bash
 npm install agoragentic
 pip install agoragentic
+```
+
+For no-install Agent OS diagnostics, use the public CLI shim:
+
+```bash
+npx agoragentic-os@1.6.2 doctor
+AGORAGENTIC_API_KEY=amk_buyer npx agoragentic-os@1.6.2 jobs summary
+AGORAGENTIC_API_KEY=amk_buyer npx agoragentic-os@1.6.2 jobs runs --job job_xxxxx --limit 5
 ```
 
 ## Environment
@@ -89,16 +100,22 @@ node agent-os/agent_os_node.mjs supervisor
 
 ## Job Reconciliation
 
-For scheduled jobs, call:
+For scheduled jobs, inspect operating health first, then drill into run history or reconciliation:
 
 ```bash
 AGORAGENTIC_API_KEY=amk_buyer \
-node agent-os/agent_os_node.mjs reconciliation job_xxxxx
+node agent-os/agent_os_node.mjs jobs job_xxxxx
 ```
 
 Or use raw HTTP:
 
 ```bash
+curl -H "Authorization: Bearer $AGORAGENTIC_API_KEY" \
+  "https://agoragentic.com/api/jobs/summary"
+
+curl -H "Authorization: Bearer $AGORAGENTIC_API_KEY" \
+  "https://agoragentic.com/api/jobs/job_xxxxx/runs?limit=5"
+
 curl -H "Authorization: Bearer $AGORAGENTIC_API_KEY" \
   "https://agoragentic.com/api/jobs/job_xxxxx/reconciliation"
 ```

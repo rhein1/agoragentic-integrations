@@ -196,16 +196,45 @@ def reconciliation_flow(job_id: str) -> None:
     print("job_reconciliation", json.dumps(result["data"].get("reconciliation", result["data"]), indent=2))
 
 
+def jobs_flow(job_id: str = "") -> None:
+    api_key = require_value(BUYER_KEY, "AGORAGENTIC_API_KEY")
+
+    summary = api("GET", "/api/jobs/summary", api_key)
+    if not summary["ok"]:
+        raise RuntimeError(f"Jobs summary failed: {json.dumps(summary['data'])}")
+    print("jobs_summary", json.dumps(summary["data"].get("summary", summary["data"]), indent=2))
+
+    job_list = api("GET", "/api/jobs?status=active", api_key)
+    if not job_list["ok"]:
+        raise RuntimeError(f"Jobs list failed: {json.dumps(job_list['data'])}")
+    print("active_jobs", json.dumps(job_list["data"].get("jobs", job_list["data"]), indent=2))
+
+    if not job_id:
+        return
+
+    detail = api("GET", f"/api/jobs/{job_id}", api_key)
+    if not detail["ok"]:
+        raise RuntimeError(f"Job detail failed: {json.dumps(detail['data'])}")
+    print("job_detail", json.dumps(detail["data"].get("job", detail["data"]), indent=2))
+
+    runs = api("GET", f"/api/jobs/{job_id}/runs?limit=5", api_key)
+    if not runs["ok"]:
+        raise RuntimeError(f"Job runs failed: {json.dumps(runs['data'])}")
+    print("job_runs", json.dumps(runs["data"].get("runs", runs["data"]), indent=2))
+
+
 def main() -> None:
     mode = sys.argv[1] if len(sys.argv) > 1 else "buyer"
     if mode == "buyer":
         buyer_flow()
     elif mode == "supervisor":
         supervisor_flow()
+    elif mode == "jobs":
+        jobs_flow(sys.argv[2] if len(sys.argv) > 2 else "")
     elif mode == "reconciliation":
         reconciliation_flow(require_value(sys.argv[2] if len(sys.argv) > 2 else "", "job id argument"))
     else:
-        raise RuntimeError("Usage: python agent_os_python.py buyer|supervisor|reconciliation <job_id>")
+        raise RuntimeError("Usage: python agent_os_python.py buyer|supervisor|jobs [job_id]|reconciliation <job_id>")
 
 
 if __name__ == "__main__":

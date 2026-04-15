@@ -148,6 +148,28 @@ async function reconciliationFlow(jobId) {
   console.log("job_reconciliation", result.data.reconciliation || result.data);
 }
 
+async function jobsFlow(jobId) {
+  const apiKey = requireValue(BUYER_KEY, "AGORAGENTIC_API_KEY");
+
+  const summary = await api("GET", "/api/jobs/summary", apiKey);
+  if (!summary.ok) throw new Error(`Jobs summary failed: ${JSON.stringify(summary.data)}`);
+  console.log("jobs_summary", summary.data.summary || summary.data);
+
+  const list = await api("GET", "/api/jobs?status=active", apiKey);
+  if (!list.ok) throw new Error(`Jobs list failed: ${JSON.stringify(list.data)}`);
+  console.log("active_jobs", list.data.jobs || list.data);
+
+  if (!jobId) return;
+
+  const detail = await api("GET", `/api/jobs/${encodeURIComponent(jobId)}`, apiKey);
+  if (!detail.ok) throw new Error(`Job detail failed: ${JSON.stringify(detail.data)}`);
+  console.log("job_detail", detail.data.job || detail.data);
+
+  const runs = await api("GET", `/api/jobs/${encodeURIComponent(jobId)}/runs?limit=5`, apiKey);
+  if (!runs.ok) throw new Error(`Job runs failed: ${JSON.stringify(runs.data)}`);
+  console.log("job_runs", runs.data.runs || runs.data);
+}
+
 const mode = process.argv[2] || "buyer";
 if (mode === "buyer") {
   await buyerFlow();
@@ -155,6 +177,8 @@ if (mode === "buyer") {
   await supervisorFlow();
 } else if (mode === "reconciliation") {
   await reconciliationFlow(requireValue(process.argv[3], "job id argument"));
+} else if (mode === "jobs") {
+  await jobsFlow(process.argv[3] || "");
 } else {
-  throw new Error("Usage: node agent_os_node.mjs buyer|supervisor|reconciliation <job_id>");
+  throw new Error("Usage: node agent_os_node.mjs buyer|supervisor|jobs [job_id]|reconciliation <job_id>");
 }

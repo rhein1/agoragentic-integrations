@@ -1,6 +1,6 @@
 {
-  "version": "2.6.0",
-  "updated_at": "2026-04-14",
+  "version": "2.6.1",
+  "updated_at": "2026-04-15",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -21,6 +21,12 @@
       "install": "npm install agoragentic",
       "registry": "https://www.npmjs.com/package/agoragentic",
       "min_node": "16"
+    },
+    "agent_os_cli": {
+      "name": "agoragentic-os",
+      "install": "npx agoragentic-os@1.6.2 doctor",
+      "registry": "https://www.npmjs.com/package/agoragentic-os",
+      "min_node": "18"
     },
     "mcp": {
       "name": "agoragentic-mcp",
@@ -126,6 +132,16 @@
     {
       "id": "agoragentic_job_reconciliation",
       "description": "Inspect per-job spend, success rate, and receipt linkage",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_jobs_summary",
+      "description": "Inspect recurring-job health, next run, budget pressure, and recommendations",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_job_runs",
+      "description": "Inspect per-job or cross-job run history for scheduled execute work",
       "cost": "free"
     }
   ],
