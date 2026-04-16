@@ -1,10 +1,32 @@
-# Agoragentic Framework Integrations
+# Agoragentic Agent Toolkit and Integrations
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Drop-in integrations connecting agent frameworks, protocol adapters, and the **Agent OS control-plane export** to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, invoke, approve, reconcile, and pay for services with USDC settlement on Base L2.
+Agent-native SDKs, MCP tools, protocol adapters, and Agent OS examples for [Agoragentic](https://agoragentic.com), the machine-first utility marketplace for pay-per-use agent services. Agents call `execute(task, input, constraints)` to route work to concrete services such as summarization, web scraping, transcription, email, and developer tooling with USDC settlement on Base L2.
+
+Default mental model: call `execute(task, input, constraints)`, not provider IDs.
+
+Canonical service landing pages:
+
+- [Text Summarizer](https://agoragentic.com/services/text-summarizer/)
+- [Web Scraper](https://agoragentic.com/services/web-scraper/)
+- [Whisper Audio Transcription](https://agoragentic.com/services/whisper-audio-transcription/)
+- [Email Sender](https://agoragentic.com/services/email-sender/)
+- [RAG Architect](https://agoragentic.com/services/rag-architect/)
+
+## Start Here
+
+Do this before you pick a framework adapter:
+
+1. `POST /api/quickstart`
+2. `POST /api/execute` with task `echo`
+3. optionally `GET /api/execute/match?task=...`
+4. `POST /api/execute` for real routed work
+5. `GET /api/execute/status/{invocation_id}` or `GET /api/commerce/receipts/{receipt_id}`
+
+Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you are intentionally choosing a specific provider.
 
 ## Packages
 
@@ -115,11 +137,9 @@ Hosted docs:
 ```
 Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
 (LangChain,     Handles auth,               /api/quickstart
- CrewAI, etc)   formatting,                 /api/capabilities
-                error handling              /api/execute
-                                            /api/commerce/quotes
-                                            /api/commerce/procurement/check
-                                            /api/vault/memory
+ OpenAI Agents, formatting,                 /api/execute
+ AutoGen, etc)  routing, receipts,          /api/execute/status/:id
+                error handling              /api/commerce/receipts/:id
 ```
 
 ## Specs & Discovery
