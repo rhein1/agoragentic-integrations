@@ -37,9 +37,11 @@ const {
     ReadResourceRequestSchema,
     ListPromptsRequestSchema,
     GetPromptRequestSchema,
+    McpError,
 } = require("@modelcontextprotocol/sdk/types.js");
 
 const AGORAGENTIC_BASE = "https://agoragentic.com";
+const X402_EDGE_BASE = "https://x402.agoragentic.com";
 const API_KEY = process.env.AGORAGENTIC_API_KEY || "";
 
 // ─── HTTP helper ─────────────────────────────────────────
@@ -63,6 +65,143 @@ async function apiCall(method, path, body = null) {
     }
 }
 
+async function edgeRequest(method, path, body = null, extraHeaders = {}) {
+    const url = `${X402_EDGE_BASE}${path}`;
+    const headers = { ...extraHeaders };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    try {
+        const options = { method, headers, signal: controller.signal };
+        if (body !== null && body !== undefined) {
+            options.headers["Content-Type"] = "application/json";
+            options.body = JSON.stringify(body);
+        }
+
+        const resp = await fetch(url, options);
+        const raw = await resp.text();
+        return { response: resp, data: parseMaybeJson(raw) };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function parseMaybeJson(text) {
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return text;
+    }
+}
+
+function slugifyService(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+function findEdgeService(services, slug) {
+    const wanted = slugifyService(slug);
+    if (!wanted) return null;
+    return (services || []).find((service) => {
+        const aliases = [service?.slug, ...(service?.route_aliases || [])]
+            .map(slugifyService)
+            .filter(Boolean);
+        return aliases.includes(wanted);
+    }) || null;
+}
+
+function decodeBase64JsonHeader(value) {
+    if (!value || typeof value !== "string") return null;
+    try {
+        return JSON.parse(Buffer.from(value, "base64").toString("utf8"));
+    } catch {
+        return null;
+    }
+}
+
+function buildMcpPaymentRequiredData({ toolName, args, response, routing = null, trust = null }) {
+    const paymentRequiredHeader = response.headers.get("payment-required") || null;
+    const decodedRequirements = decodeBase64JsonHeader(paymentRequiredHeader);
+    const challenges = Array.isArray(decodedRequirements)
+        ? decodedRequirements.map((challenge, index) => ({
+            id: challenge?.extra?.quote_id || `challenge_${index + 1}`,
+            method: challenge?.scheme || "exact",
+            intent: "charge",
+            network: challenge?.network || null,
+            resource: challenge?.resource || null,
+            request: {
+                max_amount_required: challenge?.maxAmountRequired || null,
+                asset: challenge?.asset || null,
+                pay_to: challenge?.payTo || null,
+                description: challenge?.description || null,
+                extra: challenge?.extra || null,
+            },
+        }))
+        : [];
+
+    return {
+        protocol: "x402",
+        payment_required_header: paymentRequiredHeader,
+        authenticate_header: response.headers.get("www-authenticate") || null,
+        challenges,
+        routing,
+        trust,
+        retry_tool_call: {
+            name: toolName,
+            arguments: {
+                ...(args || {}),
+                payment_signature: "<PAYMENT-SIGNATURE>",
+            },
+            payment_argument: "payment_signature",
+            accepted_http_headers: ["PAYMENT-SIGNATURE", "Authorization: Payment"],
+        },
+    };
+}
+
+function buildMcpPaymentSuccessBody(response, body) {
+    return {
+        status_code: response.status,
+        payment_receipt: response.headers.get("payment-receipt") || null,
+        payment_response_header: response.headers.get("payment-response") || null,
+        body,
+    };
+}
+
+function summarizeEdgeService(service, options = {}) {
+    const includeSchemas = options.includeSchemas === true;
+    const includeTrust = options.includeTrust !== false;
+    return {
+        slug: service.slug,
+        name: service.name,
+        description: service.description,
+        category: service.category,
+        status: service.status,
+        price_usdc: service.price_usdc,
+        payable_url: service.payable_url,
+        route_aliases: service.route_aliases || [],
+        safe_to_retry: service.execution_contract?.safe_to_retry ?? service.trust?.safe_to_retry ?? null,
+        max_runtime_ms: service.execution_contract?.max_runtime_ms ?? service.trust?.max_runtime_ms ?? null,
+        payment_contract: service.payment_contract || null,
+        sample_input: service.sample_input || null,
+        trust: includeTrust ? (service.trust || null) : undefined,
+        input_schema: includeSchemas ? (service.input_schema || null) : undefined,
+        output_schema: includeSchemas ? (service.output_schema || null) : undefined,
+    };
+}
+
+async function loadEdgeServices() {
+    const { response, data } = await edgeRequest("GET", "/services/index.json");
+    if (!response.ok) {
+        throw new Error(`x402 edge service index failed with HTTP ${response.status}`);
+    }
+    return Array.isArray(data?.services) ? data.services : [];
+}
+
 // ─── MCP Server ──────────────────────────────────────────
 
 const server = new Server(
@@ -75,6 +214,61 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
         // ── Core Marketplace ──
+        {
+            name: "agoragentic_browse_services",
+            description: "Browse stable anonymous x402 services on x402.agoragentic.com. Use this as the accountless buyer catalog for bounded paid resources.",
+            annotations: { title: "Browse x402 Services", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    limit: { type: "number", default: 10, description: "Maximum number of services to return." },
+                    include_schemas: { type: "boolean", default: false, description: "Include full input/output schemas in the response." },
+                    include_trust: { type: "boolean", default: true, description: "Include trust and settlement metadata in the response." }
+                }
+            }
+        },
+        {
+            name: "agoragentic_quote_service",
+            description: "Quote one stable x402 service by slug. Returns price, retry behavior, trust metadata, sample input, and the exact payable URL without spending.",
+            annotations: { title: "Quote x402 Service", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    slug: { type: "string", description: "Stable x402 service slug, for example text-summarizer." },
+                    max_price_usdc: { type: "number", description: "Optional safety bound. The tool errors if the quoted service exceeds this price." },
+                    include_schemas: { type: "boolean", default: true, description: "Include full input/output schemas in the response." },
+                    include_trust: { type: "boolean", default: true, description: "Include trust and settlement metadata in the response." }
+                },
+                required: ["slug"]
+            }
+        },
+        {
+            name: "agoragentic_call_service",
+            description: "Call one stable x402 service by slug. The first unpaid attempt returns an x402 Payment Required payload. Retry the same tool call with payment_signature to complete the paid call.",
+            annotations: { title: "Call x402 Service", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    slug: { type: "string", description: "Stable x402 service slug, for example text-summarizer." },
+                    payload: { type: "object", description: "JSON payload sent to the stable edge route.", default: {} },
+                    payment_signature: { type: "string", description: "Optional PAYMENT-SIGNATURE value used on the paid retry." },
+                    max_price_usdc: { type: "number", description: "Optional safety bound. The tool errors if the quoted service exceeds this price." }
+                },
+                required: ["slug"]
+            }
+        },
+        {
+            name: "agoragentic_edge_receipt",
+            description: "Fetch one anonymous x402 edge receipt by receipt ID from x402.agoragentic.com.",
+            annotations: { title: "Get x402 Edge Receipt", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    receipt_id: { type: "string", description: "Stable edge receipt identifier, usually returned in the Payment-Receipt header." }
+                },
+                required: ["receipt_id"]
+            }
+        },
         {
             name: "agoragentic_register",
             description: "Register as a new agent on Agoragentic. Returns an API key and access to the Starter Pack. Starter pack rewards are fee discounts, not free credits.",
@@ -218,6 +412,174 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     try {
         switch (name) {
+            case "agoragentic_browse_services": {
+                const services = await loadEdgeServices();
+                const limit = Math.max(1, Math.min(Number(args.limit) || 10, 50));
+                const summaries = services
+                    .filter((service) => service && service.status === "available")
+                    .slice(0, limit)
+                    .map((service) => summarizeEdgeService(service, {
+                        includeSchemas: args.include_schemas === true,
+                        includeTrust: args.include_trust !== false,
+                    }));
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            mode: "anonymous_x402_edge",
+                            service_count: summaries.length,
+                            base_url: X402_EDGE_BASE,
+                            services: summaries,
+                        }, null, 2)
+                    }]
+                };
+            }
+
+            case "agoragentic_quote_service": {
+                const services = await loadEdgeServices();
+                const service = findEdgeService(services, args.slug);
+                if (!service) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                error: "unknown_service",
+                                slug: args.slug || null,
+                                message: "Stable x402 service slug not found on the edge."
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+
+                const quotedPrice = Number.parseFloat(service.price_usdc);
+                if (Number.isFinite(Number(args.max_price_usdc)) && Number.isFinite(quotedPrice) && quotedPrice > Number(args.max_price_usdc)) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                error: "price_exceeds_max",
+                                slug: service.slug,
+                                quoted_price_usdc: service.price_usdc,
+                                max_price_usdc: Number(args.max_price_usdc)
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            mode: "anonymous_x402_edge_quote",
+                            ...summarizeEdgeService(service, {
+                                includeSchemas: args.include_schemas !== false,
+                                includeTrust: args.include_trust !== false,
+                            })
+                        }, null, 2)
+                    }]
+                };
+            }
+
+            case "agoragentic_call_service": {
+                const services = await loadEdgeServices();
+                const service = findEdgeService(services, args.slug);
+                if (!service) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                error: "unknown_service",
+                                slug: args.slug || null,
+                                message: "Stable x402 service slug not found on the edge."
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+
+                const quotedPrice = Number.parseFloat(service.price_usdc);
+                if (Number.isFinite(Number(args.max_price_usdc)) && Number.isFinite(quotedPrice) && quotedPrice > Number(args.max_price_usdc)) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: JSON.stringify({
+                                error: "price_exceeds_max",
+                                slug: service.slug,
+                                quoted_price_usdc: service.price_usdc,
+                                max_price_usdc: Number(args.max_price_usdc)
+                            }, null, 2)
+                        }],
+                        isError: true
+                    };
+                }
+
+                const requestHeaders = {};
+                if (args.payment_signature) {
+                    requestHeaders["PAYMENT-SIGNATURE"] = String(args.payment_signature);
+                }
+
+                const { response, data } = await edgeRequest(
+                    "POST",
+                    `/v1/${encodeURIComponent(service.slug)}`,
+                    args.payload || {},
+                    requestHeaders
+                );
+
+                if (response.status === 402) {
+                    throw new McpError(-32042, "Payment Required", buildMcpPaymentRequiredData({
+                        toolName: "agoragentic_call_service",
+                        args: {
+                            slug: service.slug,
+                            payload: args.payload || {},
+                            max_price_usdc: args.max_price_usdc
+                        },
+                        response,
+                        routing: {
+                            provider_count: 1,
+                            selected_provider: service.slug,
+                            route: `/v1/${service.slug}`,
+                        },
+                        trust: service.trust || {
+                            status: service.status || "reachable",
+                            method: "x402_edge_service_index",
+                        }
+                    }));
+                }
+
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            slug: service.slug,
+                            service_name: service.name,
+                            payable_url: service.payable_url,
+                            ...buildMcpPaymentSuccessBody(response, data)
+                        }, null, 2)
+                    }],
+                    isError: response.status >= 400
+                };
+            }
+
+            case "agoragentic_edge_receipt": {
+                const { response, data } = await edgeRequest(
+                    "GET",
+                    `/v1/receipts/${encodeURIComponent(String(args.receipt_id || ""))}`
+                );
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify({
+                            status_code: response.status,
+                            receipt: data
+                        }, null, 2)
+                    }],
+                    isError: response.status >= 400
+                };
+            }
+
             case "agoragentic_register": {
                 const data = await apiCall("POST", "/api/quickstart", {
                     name: args.agent_name,

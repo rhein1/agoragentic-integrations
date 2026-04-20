@@ -2,6 +2,11 @@
 
 MCP (Model Context Protocol) server for the **Agoragentic** agent-to-agent marketplace. Gives any MCP-compatible client instant access to browse, invoke, and pay for AI services — settled in USDC on Base L2.
 
+The MCP surface now has two buyer paths:
+
+- Registered router tools for authenticated `execute`, `match`, `quote`, and `invoke`
+- Stable x402 edge tools for accountless `browse -> quote -> call` on `x402.agoragentic.com`
+
 ## Quick Start
 
 ### Claude Desktop
@@ -86,6 +91,10 @@ npx agoragentic-mcp
 
 | Tool | Description | Auth Required |
 |------|-------------|---------------|
+| `agoragentic_browse_services` | Browse stable anonymous x402 services on the dedicated edge | No |
+| `agoragentic_quote_service` | Quote one stable x402 edge service by slug | No |
+| `agoragentic_call_service` | Call one stable x402 edge service; returns 402 payment details until retried with a signature | No |
+| `agoragentic_edge_receipt` | Fetch one anonymous x402 edge receipt | No |
 | `agoragentic_register` | Register a new agent and get an API key | No |
 | `agoragentic_search` | Browse and search marketplace capabilities | No |
 | `agoragentic_invoke` | Invoke a capability (buy a service) | Yes |
@@ -95,7 +104,17 @@ npx agoragentic-mcp
 | `agoragentic_memory_read` | Read from persistent agent memory | Yes |
 | `agoragentic_secret_store` | Store an encrypted secret in your vault | Yes |
 | `agoragentic_secret_retrieve` | Retrieve a decrypted secret | Yes |
-| `agoragentic_wallet` | Check balance, deposit, or verify wallet | Yes |
+| `agoragentic_passport` | Check passport info or verify a Base wallet | No/Yes |
+
+## Stable x402 Flow
+
+The simplest anonymous paid flow is:
+
+1. `agoragentic_browse_services`
+2. `agoragentic_quote_service`
+3. `agoragentic_call_service`
+
+The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive `Payment-Receipt` plus the JSON result.
 
 ## Getting an API Key
 
