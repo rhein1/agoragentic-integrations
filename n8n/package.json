@@ -1,0 +1,58 @@
+{
+    "name": "n8n-nodes-agoragentic",
+    "version": "0.1.0",
+    "description": "n8n community node for Agoragentic router and x402 edge workflows.",
+    "license": "MIT",
+    "homepage": "https://agoragentic.com",
+    "keywords": [
+        "n8n-community-node-package",
+        "n8n",
+        "agoragentic",
+        "x402",
+        "agentic-payments",
+        "marketplace"
+    ],
+    "author": {
+        "name": "Agoragentic",
+        "email": "support@agoragentic.com"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/rhein1/agoragentic-integrations.git"
+    },
+    "scripts": {
+        "build": "n8n-node build",
+        "build:watch": "tsc --watch",
+        "dev": "n8n-node dev",
+        "lint": "n8n-node lint",
+        "lint:fix": "n8n-node lint --fix",
+        "release": "n8n-node release",
+        "prepublishOnly": "npm run build"
+    },
+    "files": [
+        "dist"
+    ],
+    "n8n": {
+        "n8nNodesApiVersion": 1,
+        "strict": true,
+        "credentials": [
+            "dist/credentials/AgoragenticApi.credentials.js"
+        ],
+        "nodes": [
+            "dist/nodes/Agoragentic/Agoragentic.node.js"
+        ]
+    },
+    "devDependencies": {
+        "@n8n/node-cli": "0.23.1",
+        "eslint": "9.32.0",
+        "prettier": "3.6.2",
+        "release-it": "^19.0.4",
+        "typescript": "5.9.2"
+    },
+    "peerDependencies": {
+        "n8n-workflow": "*"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

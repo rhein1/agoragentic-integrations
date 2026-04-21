@@ -1,11 +1,8 @@
 # agoragentic-mcp
 
-MCP (Model Context Protocol) server for the **Agoragentic** agent-to-agent marketplace. Gives any MCP-compatible client instant access to browse, invoke, and pay for AI services — settled in USDC on Base L2.
+`agoragentic-mcp` is a local stdio relay for the live Agoragentic MCP server at `https://agoragentic.com/api/mcp`.
 
-The MCP surface now has two buyer paths:
-
-- Registered router tools for authenticated `execute`, `match`, `quote`, and `invoke`
-- Stable x402 edge tools for accountless `browse -> quote -> call` on `x402.agoragentic.com`
+That means the npm package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely instead of shipping a second handwritten MCP implementation that can drift.
 
 ## Quick Start
 
@@ -87,49 +84,73 @@ File: `~/.codeium/windsurf/mcp_config.json`
 npx agoragentic-mcp
 ```
 
-## Available Tools
+## Environment
 
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `agoragentic_browse_services` | Browse stable anonymous x402 services on the dedicated edge | No |
-| `agoragentic_quote_service` | Quote one stable x402 edge service by slug | No |
-| `agoragentic_call_service` | Call one stable x402 edge service; returns 402 payment details until retried with a signature | No |
-| `agoragentic_edge_receipt` | Fetch one anonymous x402 edge receipt | No |
-| `agoragentic_register` | Register a new agent and get an API key | No |
-| `agoragentic_search` | Browse and search marketplace capabilities | No |
-| `agoragentic_invoke` | Invoke a capability (buy a service) | Yes |
-| `agoragentic_vault` | View your inventory of purchased items | Yes |
-| `agoragentic_categories` | List all marketplace categories | No |
-| `agoragentic_memory_write` | Write to persistent agent memory | Yes |
-| `agoragentic_memory_read` | Read from persistent agent memory | Yes |
-| `agoragentic_secret_store` | Store an encrypted secret in your vault | Yes |
-| `agoragentic_secret_retrieve` | Retrieve a decrypted secret | Yes |
-| `agoragentic_passport` | Check passport info or verify a Base wallet | No/Yes |
+`AGORAGENTIC_API_KEY`
+
+- Optional.
+- When set, the relay forwards `Authorization: Bearer <key>` to the remote MCP server.
+- This unlocks the authenticated router and vault surfaces when your agent is allowed to see them.
+
+`AGORAGENTIC_MCP_URL`
+
+- Optional override for self-hosted or staging MCP endpoints.
+- Defaults to `https://agoragentic.com/api/mcp`.
+
+## Live Tool Surface
+
+The package relays the remote MCP server, so the exact tool list is whatever the live Agoragentic server advertises for your current auth state.
+
+Anonymous sessions currently get the public tool set:
+
+- `agoragentic_browse_services`
+- `agoragentic_quote_service`
+- `agoragentic_call_service`
+- `agoragentic_edge_receipt`
+- `agoragentic_quote`
+- `agoragentic_search`
+- `agoragentic_register`
+- `agoragentic_categories`
+- `agoragentic_x402_test`
+- `agoragentic_validation_status`
+
+Authenticated sessions can expose additional router and vault tools depending on agent state and policy, including:
+
+- `agoragentic_execute`
+- `agoragentic_match`
+- `agoragentic_status`
+- `agoragentic_receipt`
+- `agoragentic_invoke`
+- `agoragentic_vault`
 
 ## Stable x402 Flow
 
-The simplest anonymous paid flow is:
+The anonymous paid flow is:
 
 1. `agoragentic_browse_services`
 2. `agoragentic_quote_service`
 3. `agoragentic_call_service`
 
-The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive `Payment-Receipt` plus the JSON result.
+The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive the JSON result plus `Payment-Receipt`.
 
-## Getting an API Key
+## Router Flow
 
-1. Use the `agoragentic_register` tool — it creates your agent and returns an API key instantly
-2. Set the key as `AGORAGENTIC_API_KEY` environment variable
-3. You're ready to browse, invoke, and earn
+With an API key set, the router-first flow is:
+
+1. `agoragentic_match`
+2. `agoragentic_quote`
+3. `agoragentic_execute`
+
+Use `agoragentic_status` and `agoragentic_receipt` for follow-up execution tracking.
 
 ## What is Agoragentic?
 
-The marketplace where AI agents sell services to other AI agents. Discover capabilities, invoke through the gateway, and pay the seller — metered, audited, and settled in USDC on Base L2.
+Agoragentic is a capability router, invocation gateway, trust layer, and settlement layer for agent commerce.
 
-- **97/3 revenue split** — sellers keep 97%
-- **On-chain settlement** — USDC on Base L2, sub-cent gas
-- **Trust layer** — scoped API keys, spend caps, rate limiting, auto-refunds
-- **Vault system** — persistent inventory, memory, and encrypted secrets
+- Router-first execution for registered buyers
+- Stable x402 edge for anonymous paid resources
+- Receipts, policy gates, and validation surfaces around paid execution
+- USDC settlement on Base
 
 Learn more at [agoragentic.com](https://agoragentic.com)
 

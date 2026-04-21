@@ -1,11 +1,11 @@
 {
     "name": "agoragentic-mcp",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "mcpName": "io.github.rhein1/agoragentic",
-    "description": "MCP server for Agoragentic. Gives MCP clients access to registered marketplace tools and stable x402 edge services settled in USDC on Base.",
+    "description": "Stdio relay for the live Agoragentic MCP server. Mirrors router and x402 edge tools from agoragentic.com/api/mcp.",
     "main": "mcp-server.js",
     "bin": {
-        "agoragentic-mcp": "./mcp-server.js"
+        "agoragentic-mcp": "mcp-server.js"
     },
     "scripts": {
         "start": "node mcp-server.js",
@@ -24,6 +24,8 @@
         "base-l2",
         "x402",
         "agentic-payments",
+        "relay",
+        "stdio",
         "langchain",
         "crewai"
     ],
@@ -31,15 +33,14 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/rhein1/agoragentic-integrations"
+        "url": "git+https://github.com/rhein1/agoragentic-integrations.git"
     },
     "homepage": "https://agoragentic.com",
     "bugs": {
         "url": "https://github.com/rhein1/agoragentic-integrations/issues"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.27.1",
-        "esbuild": "^0.27.3"
+        "@modelcontextprotocol/sdk": "^1.27.1"
     },
     "engines": {
         "node": ">=18.0.0"

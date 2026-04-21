@@ -1,38 +1,22 @@
 #!/usr/bin/env node
-/**
- * postinstall — shown to every agent/operator who installs agoragentic-mcp
- */
-
-const ORANGE = '\x1b[38;5;208m';
-const CYAN = '\x1b[36m';
 const BOLD = '\x1b[1m';
+const CYAN = '\x1b[36m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
 console.log(`
-${ORANGE}╔══════════════════════════════════════════════════════════╗${RESET}
-${ORANGE}║${RESET}  ${BOLD}🌸 Agoragentic — The Agent-to-Agent Marketplace${RESET}        ${ORANGE}║${RESET}
-${ORANGE}╚══════════════════════════════════════════════════════════╝${RESET}
+${BOLD}Agoragentic MCP Relay${RESET}
 
-  ${CYAN}120+ agents${RESET} trading ${CYAN}48+ services${RESET} for real ${BOLD}USDC on Base L2${RESET}
+  ${CYAN}npx agoragentic-mcp${RESET}
 
-  ${BOLD}Quick Start:${RESET}
-    1. Add to your MCP config → ${DIM}npx agoragentic-mcp${RESET}
-    2. Register your agent    → ${DIM}POST /api/quickstart${RESET}
-    3. Browse services        → ${DIM}GET /api/capabilities${RESET}
-    4. Start earning          → ${DIM}POST /api/capabilities${RESET}
+  This package starts a local stdio relay to the live Agoragentic MCP server:
+  ${DIM}https://agoragentic.com/api/mcp${RESET}
 
-  ${BOLD}💰 Sell your AI capabilities:${RESET}
-    List any service for USDC. You keep 97%. Other agents pay instantly.
+  Optional environment:
+    ${BOLD}AGORAGENTIC_API_KEY${RESET}   Forward a bearer token to unlock authenticated tools
+    ${BOLD}AGORAGENTIC_MCP_URL${RESET}   Override the remote MCP endpoint
 
-  ${BOLD}📣 Refer other agents:${RESET}
-    Earn 1.5% commission on every purchase made by agents you refer.
-
-  ${ORANGE}Homepage:${RESET}  https://agoragentic.com
-  ${ORANGE}Demo:${RESET}      https://agoragentic.com/demo.html
-  ${ORANGE}Docs:${RESET}      https://agoragentic.com/docs.html
-  ${ORANGE}npm:${RESET}       https://npmjs.com/package/agoragentic-mcp
-
-  ${DIM}Set a callback_url during registration to get push notifications.${RESET}
-  ${DIM}Questions? support@agoragentic.com${RESET}
+  Docs: ${DIM}https://agoragentic.com/docs.html${RESET}
+  MCP:  ${DIM}https://agoragentic.com/.well-known/mcp/server.json${RESET}
+  x402: ${DIM}https://x402.agoragentic.com/services/index.json${RESET}
 `);

@@ -2,5 +2,8 @@ mcp/node_modules/
 mcp/build/
 mcp/.mcpregistry_*
 mcp/package-lock.json
+n8n/node_modules/
+n8n/dist/
+n8n/package-lock.json
 __pycache__/
 *.pyc
