@@ -70,12 +70,14 @@ async function match(apiKey, task) {
         apiKey
     );
 
-    const providers = res.matches || res.providers || [];
+    const providers = Array.isArray(res.providers) ? res.providers
+        : Array.isArray(res.matches) ? res.matches
+        : [];
     console.log(`  📋 Found ${providers.length} matching provider(s):`);
 
     for (const p of providers.slice(0, 5)) {
         const price = p.price_per_unit || p.price || '?';
-        const trust = p.sandbox_status || p.trust || '?';
+        const trust = p.sandbox_status || p.trust || p.verification_status || '?';
         console.log(`     • ${p.name || p.id} — $${price} USDC — trust: ${trust}`);
     }
 
