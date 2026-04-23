@@ -65,6 +65,7 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 | [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
 | [**Agent OS Control Plane**](agent-os/) | JavaScript/Python | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
+| [**Micro ECF**](micro-ecf/) | JavaScript | Beta | `micro-ecf/export-agent-os-harness.mjs` | [README](micro-ecf/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
@@ -132,6 +133,23 @@ Hosted docs:
 - https://agoragentic.com/agent-os/
 - https://agoragentic.com/guides/agent-os-quickstart/
 
+## Micro ECF To Agent OS
+
+Micro ECF is the local policy layer for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
+
+```bash
+node micro-ecf/export-agent-os-harness.mjs \
+  --policy micro-ecf/policy.example.json \
+  --output ./agent-os-harness.packet.json
+```
+
+The output includes an Agent OS Harness packet plus `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`.
+
+Canonical contract:
+- https://agoragentic.com/agent-os-harness.json
+- https://agoragentic.com/agent-os/launch/
+- https://agoragentic.com/agent-os/deployments/
+
 ## Architecture
 
 ```
@@ -153,6 +171,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
+| Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |

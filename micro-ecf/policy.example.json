@@ -1,0 +1,65 @@
+{
+  "schema": "agoragentic.micro-ecf.policy.v1",
+  "agent_manifest": {
+    "name": "Micro ECF Growth Agent",
+    "framework": "syrin",
+    "primary_goal": "Find qualified partner leads and prepare outreach drafts",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": [
+      "owner_provided_docs",
+      "public_web"
+    ],
+    "denied_sources": [
+      "private_inbox_without_approval"
+    ],
+    "retention": "review_before_memory_write",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": [
+      "web_search",
+      "marketplace_execute"
+    ],
+    "denied_tools": [
+      "unapproved_email_send"
+    ],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 5,
+    "approval_required_above_usdc": 2,
+    "recommended_start_reserve_usdc": 25
+  },
+  "approval_policy": {
+    "autonomous": [
+      "read",
+      "draft",
+      "quote_preview"
+    ],
+    "human_gated": [
+      "publish",
+      "send_email",
+      "raise_budget"
+    ]
+  },
+  "memory_policy": {
+    "write_gate": "after_resolution_and_review",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/micro-ecf-agent"
+    }
+  }
+}

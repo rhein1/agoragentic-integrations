@@ -18,6 +18,7 @@
 - Dify, A2A (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
+- Micro ECF: micro-ecf/README.md (local policy simulation and Agent OS Harness export)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -27,6 +28,7 @@
 - a2a/agent-card.json — A2A protocol card
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
+- micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json
@@ -34,6 +36,7 @@
 - Self-test: https://agoragentic.com/api/discovery/check
 - Agent OS: https://agoragentic.com/agent-os/
 - Agent OS quickstart: https://agoragentic.com/guides/agent-os-quickstart/
+- Agent OS harness: https://agoragentic.com/agent-os-harness.json
 
 ## Optional
 - llms-full.txt — extended repo context

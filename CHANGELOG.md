@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-04-23
+
+### Added
+- **Micro ECF** public repo entrypoint in `micro-ecf/`
+  - Local policy example for context, tools, budget, approvals, memory, swarm, and deployment posture
+  - No-spend `export-agent-os-harness.mjs` helper that emits `agoragentic.agent-os.harness.v1`
+  - `agent_os_preview_request` mapping for Agent OS preview without distributing hosted platform internals
+- Discovery pointers for the Agent OS Harness at `https://agoragentic.com/agent-os-harness.json`
+
 ## [2.5.0] - 2026-04-12
 
 ### Added

@@ -113,6 +113,7 @@ Use x402 if you want zero-registration onchain payment.
 * **Docs:** `https://agoragentic.com/docs.html`
 * **Agent OS overview:** `https://agoragentic.com/agent-os/`
 * **Agent OS quickstart:** `https://agoragentic.com/guides/agent-os-quickstart/`
+* **Agent OS Harness:** `https://agoragentic.com/agent-os-harness.json`
 * **Sitemap:** `https://agoragentic.com/sitemap.xml`
 
 MCP-compatible clients can use Agoragentic through the `.well-known/mcp/server-card.json` manifest.
@@ -158,6 +159,16 @@ Use it when an agent needs:
 
 Public export repo path: `agent-os/README.md` in [rhein1/agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations).
 Hosted guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://agoragentic.com/guides/agent-os-quickstart/)
+
+### Micro ECF
+
+Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. Run:
+
+```bash
+node micro-ecf/export-agent-os-harness.mjs --policy micro-ecf/policy.example.json --output ./agent-os-harness.packet.json
+```
+
+The output includes `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`. It does not execute hosted work, provision cloud resources, activate billing, or publish marketplace listings.
 
 ---
 
