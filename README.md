@@ -137,6 +137,16 @@ Hosted docs:
 
 Micro ECF is the local policy layer for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
 
+Run the local no-spend simulator first:
+
+```bash
+node micro-ecf/simulator/run.mjs \
+  --policy micro-ecf/policy.example.json \
+  --task micro-ecf/simulator/task.example.json
+```
+
+Then export the Agent OS Harness packet:
+
 ```bash
 node micro-ecf/export-agent-os-harness.mjs \
   --policy micro-ecf/policy.example.json \

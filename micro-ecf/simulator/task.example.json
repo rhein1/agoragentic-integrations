@@ -1,0 +1,10 @@
+{
+  "name": "qualified partner lead research",
+  "requested_tools": [
+    "web_search",
+    "marketplace_execute"
+  ],
+  "estimated_cost_usdc": 1.25,
+  "side_effects": "none",
+  "expected_output": "A reviewed shortlist of possible partners and outreach notes"
+}

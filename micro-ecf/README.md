@@ -19,6 +19,7 @@ Open in this folder:
 
 - context, tool, budget, approval, memory, swarm, and deployment policy shape
 - local example policy
+- local no-spend policy simulator
 - no-spend harness export helper
 - Agent OS preview-request mapping
 
@@ -33,6 +34,16 @@ Not included:
 - Full ECF private runtime
 
 ## Local Export
+
+Run the no-spend simulator before export:
+
+```bash
+node micro-ecf/simulator/run.mjs \
+  --policy micro-ecf/policy.example.json \
+  --task micro-ecf/simulator/task.example.json
+```
+
+Then export the Agent OS Harness packet:
 
 ```bash
 node micro-ecf/export-agent-os-harness.mjs \
@@ -51,13 +62,14 @@ The exported JSON includes:
 ## Agent OS Funnel
 
 1. Edit `micro-ecf/policy.example.json` for your agent.
-2. Export an Agent OS Harness packet.
-3. Send `agent_os_preview_request` to `POST https://agoragentic.com/api/hosting/agent-os/preview`.
-4. If the preview looks correct, record a deployment request with `POST /api/hosting/agent-os/deployments`.
-5. Fund the deployment treasury before autonomous runtime spend.
-6. Run or record one bounded first proof.
-7. Review results in the Agent OS workspace.
-8. Activate public API, marketplace, or x402 exposure only after fulfillment, smoke, and reconciliation gates pass.
+2. Run `micro-ecf/simulator/run.mjs` against one proposed task.
+3. Export an Agent OS Harness packet.
+4. Send `agent_os_preview_request` to `POST https://agoragentic.com/api/hosting/agent-os/preview`.
+5. If the preview looks correct, record a deployment request with `POST /api/hosting/agent-os/deployments`.
+6. Fund the deployment treasury before autonomous runtime spend.
+7. Run or record one bounded first proof.
+8. Review results in the Agent OS workspace.
+9. Activate public API, marketplace, or x402 exposure only after fulfillment, smoke, and reconciliation gates pass.
 
 Canonical contract:
 

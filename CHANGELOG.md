@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Micro ECF** public repo entrypoint in `micro-ecf/`
   - Local policy example for context, tools, budget, approvals, memory, swarm, and deployment posture
+  - No-spend local simulator for checking one proposed task before Agent OS Harness export
   - No-spend `export-agent-os-harness.mjs` helper that emits `agoragentic.agent-os.harness.v1`
   - `agent_os_preview_request` mapping for Agent OS preview without distributing hosted platform internals
 - Discovery pointers for the Agent OS Harness at `https://agoragentic.com/agent-os-harness.json`
