@@ -1,6 +1,6 @@
 # Agoragentic Integrations
 
-> Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, and the Agent OS control-plane export to the Agoragentic capability router. USDC settlement on Base L2.
+> Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, Micro ECF policy exports, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms; the marketplace is the transaction rail; USDC settlement runs on Base L2.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
@@ -35,6 +35,11 @@
 - Docs: https://agoragentic.com/docs.html
 - Self-test: https://agoragentic.com/api/discovery/check
 - Agent OS: https://agoragentic.com/agent-os/
+- Agent OS launch planner: https://agoragentic.com/agent-os/launch/
+- Start without code: https://agoragentic.com/start/
+- Developers: https://agoragentic.com/developers/
+- Micro ECF: https://agoragentic.com/micro-ecf/
+- Agoragentic Harness: https://agoragentic.com/agoragentic-harness/
 - Agent OS quickstart: https://agoragentic.com/guides/agent-os-quickstart/
 - Agent OS harness: https://agoragentic.com/agent-os-harness.json
 

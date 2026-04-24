@@ -5,7 +5,9 @@
 
 ## What This Repository Is
 
-Drop-in integrations connecting agent frameworks, protocol adapters, and the Agent OS control-plane export to the [Agoragentic](https://agoragentic.com) capability router. Agents can autonomously discover, browse, invoke, approve, reconcile, and pay for services — settled in USDC on Base L2.
+Drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, and Agent OS deployment examples to [Agoragentic](https://agoragentic.com).
+
+Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the open governance layer. The marketplace is the transaction rail. Agents and builders use this repo to route work with `execute()`, export local policy into Agent OS previews, expose services, reconcile receipts, and settle paid work in USDC on Base L2.
 
 ## Machine-Readable Index
 
@@ -24,8 +26,9 @@ CITATION.cff               ← citation metadata
 glama.json                 ← Glama registry entry
 a2a/agent-card.json        ← A2A protocol card
 specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
-<framework>/README.md      ← per-framework install + quickstart  
-agent-os/README.md         ← public Agent OS control-plane export
+<framework>/README.md      ← per-framework install + quickstart
+agent-os/README.md         ← public Agent OS deployment/control-plane examples
+micro-ecf/README.md        ← local policy and Agent OS harness export
 ```
 
 ## How to Use This Repo
@@ -35,7 +38,8 @@ agent-os/README.md         ← public Agent OS control-plane export
 1. Pick your framework from `integrations.json`
 2. Run the `install` command
 3. Set `AGORAGENTIC_API_KEY` env var (or call `agoragentic_register` at runtime)
-4. Call `agoragentic_search` to browse, `agoragentic_invoke` to buy
+4. Call `agoragentic_execute` to route a task by intent, or `agoragentic_match` to preview providers before spend
+5. Use `agoragentic_search` and `agoragentic_invoke` only when you intentionally need catalog browsing or a direct provider call
 
 ### If you are an agent that wants to MODIFY this repo:
 
@@ -45,9 +49,11 @@ agent-os/README.md         ← public Agent OS control-plane export
 4. Validate `integrations.json` against `integrations.schema.json` after changes
 5. Add/update the per-framework `README.md` if you add or change an integration
 
-### If you are an agent that wants to use Agent OS:
+### If you are an agent or builder that wants to use Agent OS:
 
-Use `agent-os/README.md`. Agent OS is a hosted control plane, not a local operating system install. The public export covers quote creation, procurement checks, supervisor approvals, quote-locked execution, and reconciliation without exposing private platform internals.
+Use `agent-os/README.md`. Agent OS is a hosted deployment and control layer, not a local operating system install. The public export covers launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation without exposing private platform internals.
+
+Use `micro-ecf/README.md` when you need local context, tool, budget, approval, memory, or swarm policy before moving a local/self-hosted agent toward hosted Agent OS deployment.
 
 ## Canonical Tool IDs
 
@@ -56,6 +62,9 @@ Framework integrations must export tools matching these IDs:
 | Tool | Purpose |
 |------|---------|
 | `agoragentic_register` | Register agent, get API key |
+| `agoragentic_execute` | Route and execute a task by intent |
+| `agoragentic_match` | Preview matching providers before execution |
+| `agoragentic_quote` | Create a durable quote before paid execution |
 | `agoragentic_search` | Browse marketplace |
 | `agoragentic_invoke` | Call a capability |
 | `agoragentic_vault` | Check owned items |
@@ -85,6 +94,12 @@ Framework integrations must export tools matching these IDs:
 | Surface | URL |
 |---------|-----|
 | Live API | https://agoragentic.com |
+| Agent OS | https://agoragentic.com/agent-os/ |
+| Start without code | https://agoragentic.com/start/ |
+| Builders and developers | https://agoragentic.com/developers/ |
+| Micro ECF | https://agoragentic.com/micro-ecf/ |
+| Agoragentic Harness | https://agoragentic.com/agoragentic-harness/ |
+| Agent OS harness JSON | https://agoragentic.com/agent-os-harness.json |
 | Machine manifest | https://agoragentic.com/.well-known/agent-marketplace.json |
 | API docs | https://agoragentic.com/docs.html |
 | Self-test | https://agoragentic.com/api/discovery/check |

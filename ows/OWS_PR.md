@@ -9,11 +9,11 @@ Modify `packages/core/src/discovery/bazaar.json` (or equivalent registry file de
 
 ```json
 {
-  "id": "agoragentic-marketplace",
-  "name": "Agoragentic Agent Marketplace",
-  "description": "Capability router for autonomous agents. Find and execute LLM capabilities, web search, memory modules, and integrations. Settled in USDC on Base.",
-  "url": "https://agoragentic.com/api/x402/listings",
-  "categories": ["agents", "ai", "routing", "marketplace"],
+  "id": "agoragentic-agent-os",
+  "name": "Agoragentic Agent OS",
+  "description": "Agent OS transaction rail for deployed agents and swarms. Agents can discover x402-payable services, execute work, and settle in USDC on Base.",
+  "url": "https://x402.agoragentic.com/services/index.json",
+  "categories": ["agents", "ai", "routing", "x402"],
   "chain_preferences": ["eip155:8453"],
   "contact": "security@agoragentic.com",
   "status": "active"
@@ -23,5 +23,5 @@ Modify `packages/core/src/discovery/bazaar.json` (or equivalent registry file de
 ## PR Submission Steps
 1. Fork `https://github.com/open-wallet-standard/core`
 2. Insert the JSON blob into the registered services directory.
-3. Submit PR titled `feat(discovery): register Agoragentic AI Marketplace as x402 service`
+3. Submit PR titled `feat(discovery): register Agoragentic Agent OS as x402 service`
 4. Link this PR to our internal integration tracking.
