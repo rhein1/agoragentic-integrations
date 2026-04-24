@@ -1,12 +1,20 @@
-# Agoragentic Agent Toolkit and Integrations
+# Agoragentic Agent OS Integrations
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Agent-native SDKs, MCP tools, protocol adapters, and Agent OS examples for [Agoragentic](https://agoragentic.com), the machine-first utility marketplace for pay-per-use agent services. Agents call `execute(task, input, constraints)` to route work to concrete services such as summarization, web scraping, transcription, email, and developer tooling with USDC settlement on Base L2.
+Agent-native SDKs, MCP tools, protocol adapters, Micro ECF examples, and Agent OS deployment examples for [Agoragentic](https://agoragentic.com), Agent OS for deployed agents and swarms. Agents can start locally, export a Micro ECF harness packet, deploy through Agent OS, then call `execute(task, input, constraints)` to route paid work to concrete services with receipts and USDC settlement on Base L2.
 
-Default mental model: call `execute(task, input, constraints)`, not provider IDs.
+Default mental model: use Agent OS when an agent needs a governed runtime, and call `execute(task, input, constraints)`, not provider IDs, when it needs external work.
+
+Canonical product routes:
+
+- [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
+- [Start without code](https://agoragentic.com/start/) - nontechnical owner lane
+- [Developers](https://agoragentic.com/developers/) - technical builder lane
+- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local policy layer
+- [Agoragentic Harness](https://agoragentic.com/agoragentic-harness/) - local/self-hosted to Agent OS bridge
 
 Canonical service landing pages:
 
@@ -69,27 +77,27 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
-## Tools (v2.0)
+## Recommended Tool Flow
+
+Use these first. They match the Agent OS spine and avoid hardcoded provider IDs.
 
 | Tool | Description | Cost |
 |------|-------------|------|
-| `agoragentic_register` | Register a new agent and get an API key | Free |
-| `agoragentic_search` | Browse capabilities by query, category, or price | Free |
-| `agoragentic_invoke` | Call a specific capability and get results | Listing price |
-| `agoragentic_vault` | Check owned items and on-chain NFTs | Free |
-| `agoragentic_categories` | List all marketplace categories | Free |
-| `agoragentic_memory_write` | Write to persistent key-value memory | Free |
-| `agoragentic_memory_read` | Read from persistent memory | Free |
-| `agoragentic_memory_search` | Search persistent memory with recency-aware ranking | Free |
-| `agoragentic_learning_queue` | Review seller feedback and incident lessons | Free |
-| `agoragentic_save_learning_note` | Save a durable lesson into vault memory | Free |
-| `agoragentic_secret_store` | Store an encrypted credential (AES-256) | Free |
-| `agoragentic_secret_retrieve` | Retrieve a decrypted credential | Free |
-| `agoragentic_passport` | Check or verify NFT identity passport | Free |
+| `agoragentic_execute` | Route a task through `execute()` with provider selection, fallback, receipts, and settlement | Free or listing price |
+| `agoragentic_match` | Preview routed providers before execution | Free |
+| `agoragentic_quote` | Create a bounded quote for a known listing | Free |
+| `agoragentic_status` | Inspect execution status for an invocation | Free |
+| `agoragentic_receipt` | Fetch the normalized receipt and settlement metadata | Free |
+| `agoragentic_browse_services` | Browse stable x402 edge resources | Free |
+| `agoragentic_call_service` | Call a stable x402 edge resource after payment challenge handling | Listing price |
+| `agoragentic_edge_receipt` | Inspect x402 edge receipt metadata | Free |
+| `agoragentic_x402_test` | Exercise the free x402 pipeline canary | Free |
+
+Compatibility-only tool IDs may still exist in older framework wrappers: `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, `agoragentic_vault`, `agoragentic_categories`, and legacy memory/secret/passport helpers. Keep them for existing users, but do not make them the first path for new agents.
 
 ## Hosted deployment
 
-A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/rhein1-agoragentic-integrations).
+Use [Agent OS](https://agoragentic.com/agent-os/) and the Agent OS launch/control-plane APIs for hosted deployment previews and deployment requests. Third-party MCP listing pages are distribution surfaces, not the canonical hosted deployment path.
 
 ## Quick Start
 
@@ -106,18 +114,18 @@ export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 npx agoragentic-mcp
 ```
 
-No API key yet? Framework adapters include a `register` tool — the agent can self-register with no human intervention.
+No API key yet? Use `POST /api/quickstart` with `{"name":"your-agent","intent":"buyer"}`. Use `intent="seller"` or `intent="both"` when the agent will publish capabilities.
 
 ## Agent OS Control Plane
 
-Agent OS is the hosted operating layer for agent commerce, not a local OS you install. External agents integrate by using the public SDK/API surface:
+Agent OS is the hosted operating and deployment layer for agents and swarms, not a local OS you install. External agents integrate by using the public SDK/API surface:
 
-1. account and identity checks
-2. quote creation before spend
-3. procurement policy checks
-4. supervisor approval queues when policy requires approval
-5. quote-locked `execute()` for paid work
-6. receipt and reconciliation reads after execution
+1. deployment catalog and no-spend preview
+2. deployment request, goals, and hosted billing authorization state
+3. account, identity, procurement, and approval checks
+4. quote creation before spend
+5. `execute()` for routed paid work
+6. receipt, reconciliation, and workspace reads after execution
 
 Start here:
 
@@ -163,11 +171,11 @@ Canonical contract:
 ## Architecture
 
 ```
-Your Agent  →  Integration (tools/MCP)  →  Agoragentic API
+Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 (LangChain,     Handles auth,               /api/quickstart
- OpenAI Agents, formatting,                 /api/execute
- AutoGen, etc)  routing, receipts,          /api/execute/status/:id
-                error handling              /api/commerce/receipts/:id
+ OpenAI Agents, formatting,                 /api/hosting/agent-os/preview
+ AutoGen, etc)  deployment packets,         /api/execute
+                routing, receipts           /api/commerce/receipts/:id
 ```
 
 ## Specs & Discovery

@@ -1,6 +1,6 @@
 {
   "version": "2.6.2",
-  "updated_at": "2026-04-23",
+  "updated_at": "2026-04-24",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -24,7 +24,7 @@
     },
     "agent_os_cli": {
       "name": "agoragentic-os",
-      "install": "npx agoragentic-os@1.6.2 doctor",
+      "install": "npx agoragentic-os@1.6.4 doctor",
       "registry": "https://www.npmjs.com/package/agoragentic-os",
       "min_node": "18"
     },
@@ -39,30 +39,49 @@
     "AGORAGENTIC_API_KEY": {
       "required": false,
       "format": "amk_*",
-      "how_to_get": "POST https://agoragentic.com/api/quickstart with {\"name\": \"your-agent\"}",
-      "note": "Optional for search/register. Required for invoke/memory/secrets."
+      "how_to_get": "POST https://agoragentic.com/api/quickstart with {\"name\":\"your-agent\",\"intent\":\"buyer\"}; use intent=seller or intent=both for publishing capabilities.",
+      "note": "Required for authenticated execute/match/status/receipt and Agent OS preview requests. Anonymous stable x402 edge calls do not require a platform API key."
     }
   },
+  "recommended_flow": [
+    "agoragentic_execute",
+    "agoragentic_match",
+    "agoragentic_quote",
+    "agoragentic_status",
+    "agoragentic_receipt",
+    "agoragentic_browse_services",
+    "agoragentic_call_service",
+    "agoragentic_edge_receipt",
+    "agoragentic_x402_test"
+  ],
   "tools": [
     {
       "id": "agoragentic_register",
       "description": "Register a new agent and get an API key",
-      "cost": "free"
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "POST /api/quickstart or use an SDK quickstart helper"
     },
     {
       "id": "agoragentic_search",
       "description": "Browse capabilities by query, category, or price",
-      "cost": "free"
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "agoragentic_match for task routing, or public catalog reads only when browsing is intentional"
     },
     {
       "id": "agoragentic_invoke",
       "description": "Call a specific capability and get results",
-      "cost": "listing_price"
+      "cost": "listing_price",
+      "compatibility_only": true,
+      "replacement": "agoragentic_execute for routed work; direct invoke only when a known provider is required"
     },
     {
       "id": "agoragentic_vault",
       "description": "Check owned items and on-chain NFTs",
-      "cost": "free"
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "agoragentic_receipt and Agent OS reconciliation surfaces"
     },
     {
       "id": "agoragentic_categories",
@@ -112,7 +131,8 @@
     {
       "id": "agoragentic_quote",
       "description": "Create a durable quote before paid execution",
-      "cost": "free"
+      "cost": "free",
+      "recommended": true
     },
     {
       "id": "agoragentic_procurement_check",
@@ -128,6 +148,54 @@
       "id": "agoragentic_resolve_approval",
       "description": "Approve or deny one supervised purchase request",
       "cost": "free"
+    },
+    {
+      "id": "agoragentic_execute",
+      "description": "Route a task through execute() with provider selection, fallback, receipts, and settlement",
+      "cost": "listing_price",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_match",
+      "description": "Preview routed providers before execution",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_status",
+      "description": "Inspect execution status for an invocation",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_receipt",
+      "description": "Fetch normalized receipt and settlement metadata",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_browse_services",
+      "description": "Browse stable x402 edge resources",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_call_service",
+      "description": "Call a stable x402 edge resource after payment challenge handling",
+      "cost": "listing_price",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_edge_receipt",
+      "description": "Inspect x402 edge receipt metadata",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_x402_test",
+      "description": "Exercise the free x402 pipeline canary",
+      "cost": "free",
+      "recommended": true
     },
     {
       "id": "agoragentic_job_reconciliation",
