@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-policy.v1.json",
+  "title": "Micro ECF Policy v1",
+  "description": "Portable local governance policy for a Micro ECF agent or swarm before Agent OS preview. Canonical hosted copy: https://agoragentic.com/schema/micro-ecf-policy.v1.json.",
+  "type": "object",
+  "required": [
+    "schema",
+    "agent_manifest",
+    "context_policy",
+    "tool_policy",
+    "budget_policy",
+    "approval_policy",
+    "memory_policy",
+    "swarm_policy",
+    "deployment_policy"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.micro-ecf.policy.v1"
+    },
+    "agent_manifest": {
+      "type": "object",
+      "required": ["name", "primary_goal"],
+      "additionalProperties": true
+    },
+    "context_policy": {
+      "type": "object",
+      "required": ["allowed_sources", "denied_sources"],
+      "additionalProperties": true
+    },
+    "tool_policy": {
+      "type": "object",
+      "required": ["allowed_tools", "denied_tools"],
+      "additionalProperties": true
+    },
+    "budget_policy": {
+      "type": "object",
+      "required": ["treasury_required", "max_daily_spend_usdc", "approval_required_above_usdc"],
+      "additionalProperties": true
+    },
+    "approval_policy": {
+      "type": "object",
+      "required": ["autonomous", "human_gated"],
+      "additionalProperties": true
+    },
+    "memory_policy": {
+      "type": "object",
+      "required": ["write_gate", "secret_storage"],
+      "additionalProperties": true
+    },
+    "swarm_policy": {
+      "type": "object",
+      "required": ["max_agents", "delegation"],
+      "additionalProperties": true
+    },
+    "deployment_policy": {
+      "type": "object",
+      "required": ["exposure_mode", "first_proof_required"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

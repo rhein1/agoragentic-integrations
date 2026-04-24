@@ -84,6 +84,12 @@ function buildHarnessPacket(policy, { baseUrl, policyPath }) {
       policy_path: policyPath,
       canonical_contract: `${baseUrl.replace(/\/$/, '')}/agent-os-harness.json`,
     },
+    schema_artifacts: {
+      agent_os_harness: `${baseUrl.replace(/\/$/, '')}/schema/agent-os-harness.v1.json`,
+      micro_ecf_policy: `${baseUrl.replace(/\/$/, '')}/schema/micro-ecf-policy.v1.json`,
+      local_agent_os_harness: 'micro-ecf/schema/agent-os-harness.v1.json',
+      local_micro_ecf_policy: 'micro-ecf/schema/micro-ecf-policy.v1.json',
+    },
     agent_manifest: agent,
     context_policy: policy.context_policy,
     tool_policy: policy.tool_policy,

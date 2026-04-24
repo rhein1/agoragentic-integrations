@@ -1,0 +1,114 @@
+{
+  "schema": "agoragentic.agent-os.harness.v1",
+  "schema_artifacts": {
+    "agent_os_harness": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+    "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json"
+  },
+  "agent_manifest": {
+    "name": "Research Swarm",
+    "framework": "langgraph",
+    "primary_goal": "Coordinate a bounded research swarm and produce reviewed findings",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": ["owner_provided_docs", "public_web", "approved_research_databases"],
+    "denied_sources": ["unapproved_private_repositories", "raw_customer_data"],
+    "retention": "summary_only_after_review",
+    "redaction": "source_citations_required"
+  },
+  "tool_policy": {
+    "allowed_tools": ["web_search", "marketplace_execute", "citation_check", "report_draft"],
+    "denied_tools": ["unapproved_external_send", "unapproved_purchase"],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 20,
+    "approval_required_above_usdc": 5,
+    "recommended_start_reserve_usdc": 75
+  },
+  "approval_policy": {
+    "autonomous": ["read", "draft", "quote_preview", "summarize"],
+    "human_gated": ["publish", "external_send", "new_vendor", "raise_budget"]
+  },
+  "memory_policy": {
+    "write_gate": "after_report_review",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 5,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/research-swarm"
+    }
+  },
+  "public_boundary": {
+    "no_spend_export": true,
+    "hosted_billing": false,
+    "cloud_provisioning": false,
+    "marketplace_publication": false,
+    "hosted_runtime_secrets": false
+  },
+  "agent_os_export": {
+    "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
+    "preview_endpoint": "POST /api/hosting/agent-os/preview",
+    "deployment_endpoint": "POST /api/hosting/agent-os/deployments",
+    "treasury_endpoint": "GET /api/hosting/agent-os/deployments/{deployment_id}/treasury",
+    "workspace_surface": "/agent-os/workspaces/",
+    "marketplace_router": "POST /api/execute",
+    "x402_edge": "POST https://x402.agoragentic.com/v1/{slug}"
+  },
+  "agent_os_preview_request": {
+    "name": "Research Swarm",
+    "hosting_target": "self_hosted_http",
+    "template_id": "self_hosted_router_advocate",
+    "runtime_lane": "customer_managed_http_runtime",
+    "exposure_mode": "private_only",
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/research-swarm"
+    },
+    "goals": {
+      "primary_goal": "Coordinate a bounded research swarm and produce reviewed findings",
+      "budget": {
+        "max_daily_usdc": 20,
+        "approval_required_above_usdc": 5,
+        "recommended_start_reserve_usdc": 75
+      }
+    },
+    "safety_policy": {
+      "first_proof_required": true,
+      "context_policy": {
+        "allowed_sources": ["owner_provided_docs", "public_web", "approved_research_databases"],
+        "denied_sources": ["unapproved_private_repositories", "raw_customer_data"]
+      },
+      "tool_policy": {
+        "allowed_tools": ["web_search", "marketplace_execute", "citation_check", "report_draft"],
+        "denied_tools": ["unapproved_external_send", "unapproved_purchase"]
+      },
+      "approval_policy": {
+        "autonomous": ["read", "draft", "quote_preview", "summarize"],
+        "human_gated": ["publish", "external_send", "new_vendor", "raise_budget"]
+      },
+      "memory_policy": {
+        "write_gate": "after_report_review",
+        "secret_storage": "reference_only"
+      },
+      "swarm_policy": {
+        "max_agents": 5,
+        "delegation": "role_scoped"
+      }
+    },
+    "deployment_packet": {
+      "schema": "agoragentic.micro-ecf.export.v1",
+      "source": "public_micro_ecf",
+      "harness_schema": "agoragentic.agent-os.harness.v1"
+    }
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "schema": "agoragentic.agent-os.harness.v1",
+  "schema_artifacts": {
+    "agent_os_harness": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+    "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json"
+  },
+  "agent_manifest": {
+    "name": "Creator Research Agent",
+    "framework": "syrin",
+    "primary_goal": "Research creator topics and draft publication briefs",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": ["owner_provided_docs", "public_web", "approved_social_exports"],
+    "denied_sources": ["private_messages", "unapproved_customer_lists"],
+    "retention": "review_before_memory_write",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": ["web_search", "marketplace_execute", "content_outline"],
+    "denied_tools": ["unapproved_public_post", "unapproved_email_send"],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 10,
+    "approval_required_above_usdc": 3,
+    "recommended_start_reserve_usdc": 30
+  },
+  "approval_policy": {
+    "autonomous": ["read", "draft", "quote_preview"],
+    "human_gated": ["publish", "send_email", "raise_budget"]
+  },
+  "memory_policy": {
+    "write_gate": "after_resolution_and_review",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 2,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/creator-agent"
+    }
+  },
+  "public_boundary": {
+    "no_spend_export": true,
+    "hosted_billing": false,
+    "cloud_provisioning": false,
+    "marketplace_publication": false,
+    "hosted_runtime_secrets": false
+  },
+  "agent_os_export": {
+    "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
+    "preview_endpoint": "POST /api/hosting/agent-os/preview",
+    "deployment_endpoint": "POST /api/hosting/agent-os/deployments",
+    "treasury_endpoint": "GET /api/hosting/agent-os/deployments/{deployment_id}/treasury",
+    "workspace_surface": "/agent-os/workspaces/",
+    "marketplace_router": "POST /api/execute",
+    "x402_edge": "POST https://x402.agoragentic.com/v1/{slug}"
+  },
+  "agent_os_preview_request": {
+    "name": "Creator Research Agent",
+    "hosting_target": "self_hosted_http",
+    "template_id": "self_hosted_router_advocate",
+    "runtime_lane": "customer_managed_http_runtime",
+    "exposure_mode": "private_only",
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/creator-agent"
+    },
+    "goals": {
+      "primary_goal": "Research creator topics and draft publication briefs",
+      "budget": {
+        "max_daily_usdc": 10,
+        "approval_required_above_usdc": 3,
+        "recommended_start_reserve_usdc": 30
+      }
+    },
+    "safety_policy": {
+      "first_proof_required": true,
+      "context_policy": {
+        "allowed_sources": ["owner_provided_docs", "public_web", "approved_social_exports"],
+        "denied_sources": ["private_messages", "unapproved_customer_lists"]
+      },
+      "tool_policy": {
+        "allowed_tools": ["web_search", "marketplace_execute", "content_outline"],
+        "denied_tools": ["unapproved_public_post", "unapproved_email_send"]
+      },
+      "approval_policy": {
+        "autonomous": ["read", "draft", "quote_preview"],
+        "human_gated": ["publish", "send_email", "raise_budget"]
+      },
+      "memory_policy": {
+        "write_gate": "after_resolution_and_review",
+        "secret_storage": "reference_only"
+      },
+      "swarm_policy": {
+        "max_agents": 2,
+        "delegation": "role_scoped"
+      }
+    },
+    "deployment_packet": {
+      "schema": "agoragentic.micro-ecf.export.v1",
+      "source": "public_micro_ecf",
+      "harness_schema": "agoragentic.agent-os.harness.v1"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+  "title": "Agent OS Harness Packet v1",
+  "description": "Public packet format for moving a local Micro ECF policy bundle into Agent OS preview. Canonical hosted copy: https://agoragentic.com/schema/agent-os-harness.v1.json.",
+  "type": "object",
+  "required": [
+    "schema",
+    "agent_manifest",
+    "context_policy",
+    "tool_policy",
+    "budget_policy",
+    "approval_policy",
+    "memory_policy",
+    "swarm_policy",
+    "deployment_policy",
+    "agent_os_export",
+    "agent_os_preview_request"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.agent-os.harness.v1"
+    },
+    "agent_manifest": {
+      "type": "object",
+      "required": ["name", "primary_goal"],
+      "additionalProperties": true
+    },
+    "context_policy": {
+      "type": "object",
+      "required": ["allowed_sources", "denied_sources"],
+      "additionalProperties": true
+    },
+    "tool_policy": {
+      "type": "object",
+      "required": ["allowed_tools", "denied_tools"],
+      "additionalProperties": true
+    },
+    "budget_policy": {
+      "type": "object",
+      "required": ["treasury_required", "max_daily_spend_usdc", "approval_required_above_usdc"],
+      "additionalProperties": true
+    },
+    "approval_policy": {
+      "type": "object",
+      "required": ["autonomous", "human_gated"],
+      "additionalProperties": true
+    },
+    "memory_policy": {
+      "type": "object",
+      "required": ["write_gate", "secret_storage"],
+      "additionalProperties": true
+    },
+    "swarm_policy": {
+      "type": "object",
+      "required": ["max_agents", "delegation"],
+      "additionalProperties": true
+    },
+    "deployment_policy": {
+      "type": "object",
+      "required": ["exposure_mode", "first_proof_required"],
+      "additionalProperties": true
+    },
+    "agent_os_export": {
+      "type": "object",
+      "required": ["catalog_endpoint", "preview_endpoint", "deployment_endpoint", "treasury_endpoint", "workspace_surface"],
+      "properties": {
+        "preview_endpoint": { "const": "POST /api/hosting/agent-os/preview" },
+        "deployment_endpoint": { "const": "POST /api/hosting/agent-os/deployments" }
+      },
+      "additionalProperties": true
+    },
+    "agent_os_preview_request": {
+      "type": "object",
+      "required": ["name", "hosting_target", "template_id", "runtime_lane", "exposure_mode", "goals", "safety_policy", "deployment_packet"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

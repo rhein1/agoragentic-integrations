@@ -1,0 +1,114 @@
+{
+  "schema": "agoragentic.agent-os.harness.v1",
+  "schema_artifacts": {
+    "agent_os_harness": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+    "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json"
+  },
+  "agent_manifest": {
+    "name": "Seller Ops Agent",
+    "framework": "custom-http",
+    "primary_goal": "Operate one machine-buyable service and reconcile buyer receipts",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": ["service_docs", "public_status_page", "platform_receipts"],
+    "denied_sources": ["raw_customer_secrets", "unapproved_private_logs"],
+    "retention": "receipt_metadata_only",
+    "redaction": "customer_payload_hashes_only"
+  },
+  "tool_policy": {
+    "allowed_tools": ["marketplace_execute", "receipt_reconciliation", "health_check"],
+    "denied_tools": ["unapproved_payout_change", "unapproved_price_change"],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 15,
+    "approval_required_above_usdc": 5,
+    "recommended_start_reserve_usdc": 50
+  },
+  "approval_policy": {
+    "autonomous": ["read", "quote_preview", "health_check", "draft_listing_update"],
+    "human_gated": ["publish", "change_price", "change_payout", "raise_budget"]
+  },
+  "memory_policy": {
+    "write_gate": "receipt_or_operator_review",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "seller_ops_only"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "marketplace_seller",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/seller-ops-agent"
+    }
+  },
+  "public_boundary": {
+    "no_spend_export": true,
+    "hosted_billing": false,
+    "cloud_provisioning": false,
+    "marketplace_publication": false,
+    "hosted_runtime_secrets": false
+  },
+  "agent_os_export": {
+    "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
+    "preview_endpoint": "POST /api/hosting/agent-os/preview",
+    "deployment_endpoint": "POST /api/hosting/agent-os/deployments",
+    "treasury_endpoint": "GET /api/hosting/agent-os/deployments/{deployment_id}/treasury",
+    "workspace_surface": "/agent-os/workspaces/",
+    "marketplace_router": "POST /api/execute",
+    "x402_edge": "POST https://x402.agoragentic.com/v1/{slug}"
+  },
+  "agent_os_preview_request": {
+    "name": "Seller Ops Agent",
+    "hosting_target": "self_hosted_http",
+    "template_id": "self_hosted_router_advocate",
+    "runtime_lane": "customer_managed_http_runtime",
+    "exposure_mode": "marketplace_seller",
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/seller-ops-agent"
+    },
+    "goals": {
+      "primary_goal": "Operate one machine-buyable service and reconcile buyer receipts",
+      "budget": {
+        "max_daily_usdc": 15,
+        "approval_required_above_usdc": 5,
+        "recommended_start_reserve_usdc": 50
+      }
+    },
+    "safety_policy": {
+      "first_proof_required": true,
+      "context_policy": {
+        "allowed_sources": ["service_docs", "public_status_page", "platform_receipts"],
+        "denied_sources": ["raw_customer_secrets", "unapproved_private_logs"]
+      },
+      "tool_policy": {
+        "allowed_tools": ["marketplace_execute", "receipt_reconciliation", "health_check"],
+        "denied_tools": ["unapproved_payout_change", "unapproved_price_change"]
+      },
+      "approval_policy": {
+        "autonomous": ["read", "quote_preview", "health_check", "draft_listing_update"],
+        "human_gated": ["publish", "change_price", "change_payout", "raise_budget"]
+      },
+      "memory_policy": {
+        "write_gate": "receipt_or_operator_review",
+        "secret_storage": "reference_only"
+      },
+      "swarm_policy": {
+        "max_agents": 3,
+        "delegation": "seller_ops_only"
+      }
+    },
+    "deployment_packet": {
+      "schema": "agoragentic.micro-ecf.export.v1",
+      "source": "public_micro_ecf",
+      "harness_schema": "agoragentic.agent-os.harness.v1"
+    }
+  }
+}

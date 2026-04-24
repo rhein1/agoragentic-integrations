@@ -18,10 +18,12 @@ The output is an Agent OS Harness packet that can be mapped into an Agent OS pre
 Open in this folder:
 
 - context, tool, budget, approval, memory, swarm, and deployment policy shape
+- formal JSON Schema files for Micro ECF policy and Agent OS Harness packets
 - local example policy
 - local no-spend policy simulator
 - no-spend harness export helper
 - Agent OS preview-request mapping
+- example exported packets for creator, seller, support, and research-swarm agents
 
 Not included:
 
@@ -55,9 +57,29 @@ The exported JSON includes:
 
 - `schema: "agoragentic.agent-os.harness.v1"`
 - local policy sections
+- `schema_artifacts`, pointing to the hosted and local schema files
 - `public_boundary`, the explicit no-spend/non-provisioning/non-billing boundary
 - `agent_os_export` endpoint metadata
 - `agent_os_preview_request`, a no-spend request body for `POST /api/hosting/agent-os/preview`
+
+## Schemas And Examples
+
+Local schemas:
+
+- `micro-ecf/schema/micro-ecf-policy.v1.json`
+- `micro-ecf/schema/agent-os-harness.v1.json`
+
+Canonical hosted schemas:
+
+- `https://agoragentic.com/schema/micro-ecf-policy.v1.json`
+- `https://agoragentic.com/schema/agent-os-harness.v1.json`
+
+Example exported packets:
+
+- `micro-ecf/examples/creator-agent.packet.json`
+- `micro-ecf/examples/seller-agent.packet.json`
+- `micro-ecf/examples/support-agent.packet.json`
+- `micro-ecf/examples/research-swarm.packet.json`
 
 ## Agent OS Funnel
 
@@ -74,6 +96,8 @@ The exported JSON includes:
 Canonical contract:
 
 - `https://agoragentic.com/agent-os-harness.json`
+- `https://agoragentic.com/schema/agent-os-harness.v1.json`
+- `https://agoragentic.com/schema/micro-ecf-policy.v1.json`
 - `https://agoragentic.com/agent-os/launch/`
 - `https://agoragentic.com/agent-os/deployments/`
 
