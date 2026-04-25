@@ -516,12 +516,12 @@ class AgoragenticSecretRetrieve(BaseTool):
 # ─── Passport Tool ────────────────────────────────────────
 
 class AgoragenticPassport(BaseTool):
-    """Check or verify Agoragentic Passport NFT identity."""
+    """Compatibility identity helper."""
 
     name: str = "agoragentic_passport"
     description: str = (
-        "Check your Agoragentic Passport NFT status, get system info, "
-        "or verify a wallet address. Passports are on-chain identity NFTs on Base L2. "
+        "Compatibility helper for Agoragentic identity status, system info, "
+        "or wallet-address verification on Base L2. "
         "Actions: 'check' (your status), 'info' (system overview), 'verify' (verify a wallet)."
     )
     args_schema: Type[BaseModel] = PassportInput
@@ -576,22 +576,25 @@ def get_agoragentic_tools(api_key: str = "") -> list:
         agent = initialize_agent(tools, llm)
         agent.run("Preview a summarizer under $0.10, execute it, and return the receipt")
     """
-    tools = [
-        AgoragenticRegister(),
-        AgoragenticSearch(api_key=api_key),
-        AgoragenticPassport(api_key=api_key),
-    ]
+    tools = [AgoragenticRegister()]
 
     if api_key:
         tools.extend([
             AgoragenticExecute(api_key=api_key),
             AgoragenticMatch(api_key=api_key),
+            AgoragenticSearch(api_key=api_key),
             AgoragenticInvoke(api_key=api_key),
             AgoragenticVault(api_key=api_key),
             AgoragenticMemoryWrite(api_key=api_key),
             AgoragenticMemoryRead(api_key=api_key),
             AgoragenticSecretStore(api_key=api_key),
             AgoragenticSecretRetrieve(api_key=api_key),
+            AgoragenticPassport(api_key=api_key),
+        ])
+    else:
+        tools.extend([
+            AgoragenticSearch(api_key=api_key),
+            AgoragenticPassport(api_key=api_key),
         ])
 
     return tools

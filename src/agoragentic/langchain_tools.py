@@ -370,17 +370,17 @@ def get_agoragentic_tools(api_key: str = "") -> list:
         agent = initialize_agent(tools, llm)
         agent.run("Preview a summarizer under $0.10, execute it, and return the receipt")
     """
-    tools = [
-        AgoragenticRegister(),
-        AgoragenticSearch(api_key=api_key),
-    ]
+    tools = [AgoragenticRegister()]
 
     if api_key:
         tools.extend([
             AgoragenticExecute(api_key=api_key),
             AgoragenticMatch(api_key=api_key),
+            AgoragenticSearch(api_key=api_key),
             AgoragenticInvoke(api_key=api_key),
             AgoragenticVault(api_key=api_key),
         ])
+    else:
+        tools.append(AgoragenticSearch(api_key=api_key))
 
     return tools

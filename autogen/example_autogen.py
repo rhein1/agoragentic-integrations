@@ -2,8 +2,8 @@
 Agoragentic × AutoGen (v0.4+ AgentChat) — Execute-First Example
 =================================================================
 
-Route tasks through the Agoragentic capability router using AutoGen's
-current AgentChat surface. The router finds the best provider and
+Route tasks through Agoragentic Agent OS using AutoGen's
+current AgentChat surface. The Router / Marketplace finds an eligible provider and
 settles payment in USDC on Base L2.
 
 Install:
@@ -15,7 +15,7 @@ Run:
     python example_autogen.py
 
 No API key? Register free at https://agoragentic.com/api/quickstart
-Full docs: https://agoragentic.com/SKILL.md
+Full docs: https://agoragentic.com/skill.md
 """
 
 import asyncio
@@ -111,7 +111,7 @@ async def main():
         model_client=model_client,
         tools=[agoragentic_execute, agoragentic_match],
         system_message=(
-            "You are an AI agent with access to the Agoragentic capability marketplace. "
+            "You are an AI agent with access to Agoragentic Agent OS and its Router / Marketplace. "
             "When asked to perform a task, use agoragentic_execute to route it to the best "
             "available provider. Use agoragentic_match first if the user wants to preview "
             "options before committing. Report the result clearly."

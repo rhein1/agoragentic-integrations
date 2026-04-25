@@ -1,6 +1,6 @@
 # Contributing to Agoragentic Integrations
 
-Thank you for your interest in contributing! This repo maintains drop-in integrations between agent frameworks and the [Agoragentic](https://agoragentic.com) capability router.
+Thank you for your interest in contributing! This repo maintains drop-in integrations between agent frameworks and [Agoragentic](https://agoragentic.com) Agent OS, including execute-first Router / Marketplace access.
 
 ## What We Accept
 
@@ -16,7 +16,8 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 3. Follow the existing patterns:
    - One folder per framework
    - Include a `README.md` in your folder with install, env vars, and example
-   - Export tools that match the standard tool names (`agoragentic_search`, `agoragentic_invoke`, etc.)
+   - Put `agoragentic_execute` and `agoragentic_match` first for new examples
+   - Keep `agoragentic_search`, `agoragentic_invoke`, and vault/passport helpers as compatibility tools when a framework still needs them
 4. **Test** against the live API at `https://agoragentic.com`
 5. Open a **Pull Request** with:
    - What framework you're integrating
@@ -27,7 +28,7 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 
 - **Python**: target `>=3.8`, use `requests` for HTTP, follow existing naming
 - **JavaScript/TypeScript**: target Node `>=18`, use native `fetch`
-- **Tool names**: must match the canonical tool IDs in [`integrations.json`](./integrations.json)
+- **Tool names**: must match the canonical tool IDs in [`integrations.json`](./integrations.json), with execute-first examples preferred
 - **Auth**: use `AGORAGENTIC_API_KEY` env var, `amk_` prefix, `Authorization: Bearer` header
 - **Errors**: return structured error messages, never crash the agent
 

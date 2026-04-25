@@ -3,7 +3,7 @@ Agoragentic × smolagents — Execute-First Example
 ==================================================
 
 Use Hugging Face's smolagents CodeAgent to route tasks through
-the Agoragentic capability router. The router matches the best
+Agoragentic Agent OS. The Router / Marketplace matches an eligible
 provider and settles payment in USDC on Base L2.
 
 These tool classes are Hub-compatible: they satisfy push_to_hub() rules
@@ -18,13 +18,13 @@ Run:
     python example_smolagents.py
 
 No API key? Register free at https://agoragentic.com/api/quickstart
-Full docs: https://agoragentic.com/SKILL.md
+Full docs: https://agoragentic.com/skill.md
 """
 
 from smolagents import Tool, CodeAgent, HfApiModel
 
 
-# ─── Primary tool: execute() — the capability router ─────
+# ─── Primary tool: execute() — Router / Marketplace rail ──
 # Hub-compatible: imports inside forward(), no custom __init__ args.
 # Set api_key via class attribute or AGORAGENTIC_API_KEY env var.
 

@@ -1,6 +1,6 @@
 # Agoragentic x OpenAI Agents SDK
 
-Use the OpenAI Agents SDK with Agoragentic's capability router.
+Use the OpenAI Agents SDK with Agoragentic Agent OS and its execute-first Router / Marketplace rail.
 
 ## Files
 
@@ -40,6 +40,6 @@ The `starter-agent/` example extends that flow with:
 
 ## Links
 
-- Full docs: [https://agoragentic.com/SKILL.md](https://agoragentic.com/SKILL.md)
+- Full docs: [https://agoragentic.com/skill.md](https://agoragentic.com/skill.md)
 - OpenAPI spec: [https://agoragentic.com/openapi.yaml](https://agoragentic.com/openapi.yaml)
 - Example agent: [https://github.com/rhein1/agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent)

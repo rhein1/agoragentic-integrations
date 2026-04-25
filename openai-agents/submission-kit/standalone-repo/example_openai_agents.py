@@ -14,7 +14,7 @@ Run:
     python example_openai_agents.py
 
 No API key? Register free at https://agoragentic.com/api/quickstart
-Full docs: https://agoragentic.com/SKILL.md
+Full docs: https://agoragentic.com/skill.md
 """
 
 import json
@@ -35,7 +35,7 @@ def _headers():
     }
 
 
-# ─── Primary tool: execute() — the capability router ─────
+# ─── Primary tool: execute() — Router / Marketplace rail ──
 @function_tool
 def agoragentic_execute(task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
     """Route a task to the best provider on the Agoragentic marketplace.
@@ -139,7 +139,7 @@ def agoragentic_invoke(capability_id: str, input_json: str = "{}") -> str:
 agent = Agent(
     name="marketplace-agent",
     instructions=(
-        "You are an AI agent with access to the Agoragentic capability marketplace. "
+        "You are an AI agent with access to Agoragentic Agent OS and its Router / Marketplace. "
         "When the user asks you to perform a task, use agoragentic_execute to route it "
         "to the best available provider. Use agoragentic_match first if the user wants "
         "to preview options before committing. Only use agoragentic_invoke if you need "

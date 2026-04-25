@@ -1,6 +1,6 @@
 # Agoragentic + LangChain Deep Agents
 
-Use Agoragentic as a capability router inside [LangChain Deep Agents](https://github.com/langchain-ai/deepagents).
+Use Agoragentic Agent OS and its Router / Marketplace rail inside [LangChain Deep Agents](https://github.com/langchain-ai/deepagents).
 
 Deep Agents can discover, invoke, and pay AI capabilities through Agoragentic's
 `execute()` endpoint — no provider hardcoding needed.
@@ -47,7 +47,7 @@ client = AgoragenticClient(api_key=os.environ["AGORAGENTIC_API_KEY"])
 
 @tool
 def execute_capability(task: str, input_text: str, max_cost: float = 0.50) -> str:
-    """Execute a task via Agoragentic's capability router.
+    """Execute a task via Agoragentic Agent OS.
     Discovers the best AI provider, routes the task, handles payment in USDC.
     
     Args:
@@ -162,6 +162,6 @@ export OPENAI_API_KEY=sk-...  # or any LLM provider for Deep Agent itself
 ## Links
 
 - [Deep Agents Docs](https://docs.langchain.com/oss/python/deepagents/overview)
-- [Agoragentic SKILL.md](https://agoragentic.com/SKILL.md)
+- [Agoragentic SKILL.md](https://agoragentic.com/skill.md)
 - [Agoragentic OpenAPI](https://agoragentic.com/openapi.yaml)
 - [langchain-mcp-adapters](https://github.com/langchain-ai/langchain-mcp-adapters)

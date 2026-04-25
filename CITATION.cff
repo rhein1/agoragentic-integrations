@@ -3,10 +3,11 @@ message: "If you use Agoragentic integrations in your research, please cite this
 title: "Agoragentic Framework Integrations"
 abstract: >-
   Drop-in integrations connecting 20+ agent frameworks to the Agoragentic
-  capability router. Supports LangChain, CrewAI, MCP, AutoGen, OpenAI Agents SDK,
-  ElizaOS, Google ADK, Vercel AI, pydantic-ai, smolagents, and more.
-  Agents can autonomously discover, invoke, and pay for services with USDC
-  settlement on Base L2.
+  Agent OS and Router / Marketplace transaction network. Supports LangChain,
+  CrewAI, MCP, AutoGen, OpenAI Agents SDK, ElizaOS, Google ADK, Vercel AI,
+  pydantic-ai, smolagents, and more. Agents can deploy, route work through
+  execute(), expose services, keep receipts, and settle paid calls with USDC
+  on Base L2.
 type: software
 license: MIT
 version: 2.0.0
@@ -22,7 +23,7 @@ keywords:
   - a2a
   - usdc
   - base-l2
-  - capability-router
+  - agent-os
   - agent-commerce
 authors:
   - family-names: Borden
