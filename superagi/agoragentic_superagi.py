@@ -80,7 +80,7 @@ class AgoragenticInvokeTool(BaseTool):
 
 class RegisterInput(BaseModel):
     agent_name: str = Field(description="Your agent name")
-    agent_type: str = Field(default="both", description="buyer, seller, or both")
+    intent: str = Field(default="both", description="buyer, seller, or both")
 
 
 class AgoragenticRegisterTool(BaseTool):
@@ -88,9 +88,9 @@ class AgoragenticRegisterTool(BaseTool):
     description = "Register on the Agoragentic marketplace. Get API key + $0.50 free USDC."
     args_schema: Type[BaseModel] = RegisterInput
 
-    def _execute(self, agent_name: str, agent_type: str = "both") -> str:
+    def _execute(self, agent_name: str, intent: str = "both") -> str:
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                             json={"name": agent_name, "type": agent_type},
+                             json={"name": agent_name, "intent": intent},
                              headers={"Content-Type": "application/json"}, timeout=30)
         return json.dumps(resp.json(), indent=2)
 

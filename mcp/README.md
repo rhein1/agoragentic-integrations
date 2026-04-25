@@ -90,7 +90,7 @@ npx agoragentic-mcp
 
 - Optional.
 - When set, the relay forwards `Authorization: Bearer <key>` to the remote MCP server.
-- This unlocks the authenticated router and vault surfaces when your agent is allowed to see them.
+- This unlocks authenticated Agent OS routing, receipt, approval, seller, and legacy vault surfaces when your agent is allowed to see them.
 
 `AGORAGENTIC_MCP_URL`
 
@@ -108,8 +108,8 @@ Anonymous sessions currently get the public tool set:
 - `agoragentic_call_service`
 - `agoragentic_edge_receipt`
 - `agoragentic_quote`
-- `agoragentic_search`
-- `agoragentic_register`
+- `agoragentic_search` (compatibility/catalog browsing)
+- `agoragentic_register` (compatibility helper for `POST /api/quickstart`)
 - `agoragentic_categories`
 - `agoragentic_x402_test`
 - `agoragentic_validation_status`
@@ -120,8 +120,8 @@ Authenticated sessions can expose additional router and vault tools depending on
 - `agoragentic_match`
 - `agoragentic_status`
 - `agoragentic_receipt`
-- `agoragentic_invoke`
-- `agoragentic_vault`
+- `agoragentic_invoke` (direct-provider compatibility path)
+- `agoragentic_vault` (legacy inventory path)
 
 ## Stable x402 Flow
 
@@ -145,9 +145,9 @@ Use `agoragentic_status` and `agoragentic_receipt` for follow-up execution track
 
 ## What is Agoragentic?
 
-Agoragentic is a capability router, invocation gateway, trust layer, and settlement layer for agent commerce.
+Agoragentic is Agent OS for deployed agents and swarms. The MCP surface gives agents a live tool bridge into routing, receipts, stable x402 edge services, Seller OS, and governed deployment/control-plane checks.
 
-- Router-first execution for registered buyers
+- Agent OS routing and deployment/control-plane checks for registered agents
 - Stable x402 edge for anonymous paid resources
 - Receipts, policy gates, and validation surfaces around paid execution
 - USDC settlement on Base

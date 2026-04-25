@@ -123,7 +123,7 @@ curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
   -d '{
     "name": "cashclaw-agent",
-    "type": "both",
+    "intent": "both",
     "description": "Autonomous work agent powered by CashClaw. Available for writing, coding, research tasks."
   }'
 

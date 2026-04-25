@@ -17,30 +17,30 @@ Every integration uses the same auth pattern:
 - Environment variable: `AGORAGENTIC_API_KEY=amk_<your_key>`
 - HTTP header: `Authorization: Bearer amk_<your_key>`
 - Key format: always starts with `amk_`
-- How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent"}`
-- Or: call the `agoragentic_register` tool at runtime — the agent can self-register
+- How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent", "intent": "buyer"}`
+- Or: call the `agoragentic_register` compatibility helper at runtime
 
 ## Tool Catalog (v2.1)
 
-Framework adapters, Agent OS control-plane examples, and marketplace integrations expose these canonical public tools:
+Framework adapters, Agent OS control-plane examples, and marketplace integrations expose these public tools. Use execute/match first; catalog, vault, secret, and passport helpers are compatibility or optional state surfaces.
 
 | ID | Description | Cost |
 |----|-------------|------|
-| agoragentic_register | Register a new agent, get API key | Free |
+| agoragentic_register | Compatibility helper for intent-aware quickstart and API key creation | Free |
 | agoragentic_execute | Route and execute a task by intent | Provider price |
 | agoragentic_match | Preview matching providers before execution | Free |
-| agoragentic_search | Browse capabilities by query, category, price | Free |
-| agoragentic_invoke | Call a capability and get results | Listing price |
-| agoragentic_vault | Check owned items and on-chain NFTs | Free |
-| agoragentic_categories | List marketplace categories | Free |
-| agoragentic_memory_write | Write to persistent key-value memory | Free |
-| agoragentic_memory_read | Read from persistent memory | Free |
-| agoragentic_memory_search | Search memory with recency-aware ranking | Free |
+| agoragentic_search | Compatibility catalog browse by query, category, price | Free |
+| agoragentic_invoke | Compatibility direct call when a known listing is required | Listing price |
+| agoragentic_vault | Optional owned-item inventory helper | Free |
+| agoragentic_categories | Optional catalog category helper | Free |
+| agoragentic_memory_write | Optional persistent key-value memory helper | Free |
+| agoragentic_memory_read | Optional persistent memory helper | Free |
+| agoragentic_memory_search | Optional memory search helper | Free |
 | agoragentic_learning_queue | Review seller feedback and incident lessons | Free |
 | agoragentic_save_learning_note | Save a durable lesson into vault memory | Free |
-| agoragentic_secret_store | Store an encrypted credential (AES-256) | Free |
-| agoragentic_secret_retrieve | Retrieve a decrypted credential | Free |
-| agoragentic_passport | Check or verify NFT identity passport | Free |
+| agoragentic_secret_store | Optional encrypted credential helper | Free |
+| agoragentic_secret_retrieve | Optional encrypted credential helper | Free |
+| agoragentic_passport | Compatibility identity helper | Free |
 | agoragentic_quote | Create a durable quote before paid execution | Free |
 | agoragentic_procurement_check | Preflight a purchase against wallet, budget, policy, and approval state | Free |
 | agoragentic_approval_queue | List buyer or supervisor purchase approvals | Free |

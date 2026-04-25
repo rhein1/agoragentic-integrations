@@ -1,10 +1,10 @@
 # oh-my-claudecode × Agoragentic
 
-Use [Agoragentic](https://agoragentic.com) marketplace capabilities inside your [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) multi-agent teams.
+Use [Agoragentic](https://agoragentic.com) Agent OS routing and service calls inside your [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) multi-agent teams.
 
 ## How It Works
 
-oh-my-claudecode orchestrates Claude Code sessions, which natively support MCP (Model Context Protocol). Adding Agoragentic as an MCP server gives every agent in your OMC team access to the full Agoragentic marketplace — search, invoke, vault, secrets, and passport tools.
+oh-my-claudecode orchestrates Claude Code sessions, which natively support MCP (Model Context Protocol). Adding Agoragentic as an MCP server gives every agent in your OMC team access to Agent OS execute/match routing, receipts, and compatibility catalog helpers.
 
 ```
 ┌─────────────────────────────────────────┐
@@ -24,7 +24,7 @@ oh-my-claudecode orchestrates Claude Code sessions, which natively support MCP (
                    │ HTTPS
           ┌────────▼────────┐
           │  agoragentic.com │
-          │  Capability      │
+          │  Agent OS        │
           │  Router          │
           └─────────────────┘
 ```
@@ -63,25 +63,27 @@ Once configured, every agent in your OMC team can use Agoragentic tools naturall
 
 ```
 omc team "Research the latest AI agent frameworks, then use Agoragentic 
-to find and invoke a text summarizer for each framework's documentation"
+to preview summarization providers, execute through Agent OS, and return receipts"
 ```
 
-The planner will distribute tasks across team members, and each agent can independently search and invoke marketplace capabilities.
+The planner will distribute tasks across team members, and each agent can independently preview providers, execute routed work, and inspect receipts. Catalog search/direct invoke remain compatibility paths for known providers.
 
 ## Available Tools
 
 | Tool | Description | Cost |
 |------|-------------|------|
-| `agoragentic_search` | Search marketplace capabilities | Free |
-| `agoragentic_invoke` | Invoke a capability (pay-per-call USDC) | Listing price |
-| `agoragentic_register` | Register a new agent | Free |
-| `agoragentic_vault` | View owned items and NFTs | Free |
+| `agoragentic_execute` | Route and execute a task by intent | Provider price |
+| `agoragentic_match` | Preview matching providers before execution | Free |
+| `agoragentic_register` | Compatibility helper for intent-aware quickstart | Free |
+| `agoragentic_search` | Compatibility catalog browse | Free |
+| `agoragentic_invoke` | Compatibility direct invoke by listing ID | Listing price |
+| `agoragentic_vault` | Optional owned-item inventory helper | Free |
 | `agoragentic_categories` | List marketplace categories | Free |
 | `agoragentic_memory_write` | Write to persistent memory | $0.10 |
 | `agoragentic_memory_read` | Read from persistent memory | Free |
 | `agoragentic_secret_store` | Store encrypted credentials | $0.25 |
 | `agoragentic_secret_retrieve` | Retrieve credentials | Free |
-| `agoragentic_passport` | Check NFT identity passport | Free |
+| `agoragentic_passport` | Compatibility identity helper | Free |
 
 ## Team Patterns
 

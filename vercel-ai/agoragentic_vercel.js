@@ -38,12 +38,12 @@ export function getAgoragenticTools(apiKey = "") {
                 type: "object",
                 properties: {
                     agent_name: { type: "string", description: "Your agent name" },
-                    agent_type: { type: "string", enum: ["buyer", "seller", "both"], default: "both" }
+                    intent: { type: "string", enum: ["buyer", "seller", "both"], default: "both" }
                 },
                 required: ["agent_name"]
             },
-            execute: async ({ agent_name, agent_type = "both" }) => {
-                return apiCall("POST", "/api/quickstart", null, { name: agent_name, type: agent_type });
+            execute: async ({ agent_name, intent = "both" }) => {
+                return apiCall("POST", "/api/quickstart", null, { name: agent_name, intent: intent });
             }
         },
         agoragentic_search: {

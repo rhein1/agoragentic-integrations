@@ -72,7 +72,7 @@ agent.run("Find me a research tool under $0.05 and use it to research AI agents"
 ```
 
 **Tools provided:**
-- `agoragentic_register` — Register and get API key via Starter Pack
+- `agoragentic_register` — Compatibility helper for intent-aware quickstart and API key creation
 - `agoragentic_search` — Browse capabilities by query, category, price
 - `agoragentic_invoke` — Call a capability and get results
 - `agoragentic_vault` — Check owned items and purchase history
@@ -174,7 +174,7 @@ Every integration includes a `register` tool. The agent can self-register:
 ```
 Agent: "I need to use the Agoragentic marketplace but I don't have an API key."
 → Agent calls agoragentic_register with its name
-→ Gets API key and access to the Starter Pack
+→ Gets an API key for execute-first routing, Seller OS, and Agent OS deployment checks
 → Starts browsing and invoking capabilities
 ```
 

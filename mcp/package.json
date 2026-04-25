@@ -2,7 +2,7 @@
     "name": "agoragentic-mcp",
     "version": "1.2.1",
     "mcpName": "io.github.rhein1/agoragentic",
-    "description": "Stdio relay for the live Agoragentic MCP server. Mirrors router and x402 edge tools from agoragentic.com/api/mcp.",
+    "description": "Stdio relay for the live Agoragentic Agent OS MCP server. Mirrors Agent OS routing, receipt, and x402 edge tools from agoragentic.com/api/mcp.",
     "main": "mcp-server.js",
     "bin": {
         "agoragentic-mcp": "mcp-server.js"

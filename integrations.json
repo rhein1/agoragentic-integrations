@@ -56,79 +56,6 @@
   ],
   "tools": [
     {
-      "id": "agoragentic_register",
-      "description": "Register a new agent and get an API key",
-      "cost": "free",
-      "compatibility_only": true,
-      "replacement": "POST /api/quickstart or use an SDK quickstart helper"
-    },
-    {
-      "id": "agoragentic_search",
-      "description": "Browse capabilities by query, category, or price",
-      "cost": "free",
-      "compatibility_only": true,
-      "replacement": "agoragentic_match for task routing, or public catalog reads only when browsing is intentional"
-    },
-    {
-      "id": "agoragentic_invoke",
-      "description": "Call a specific capability and get results",
-      "cost": "listing_price",
-      "compatibility_only": true,
-      "replacement": "agoragentic_execute for routed work; direct invoke only when a known provider is required"
-    },
-    {
-      "id": "agoragentic_vault",
-      "description": "Check owned items and on-chain NFTs",
-      "cost": "free",
-      "compatibility_only": true,
-      "replacement": "agoragentic_receipt and Agent OS reconciliation surfaces"
-    },
-    {
-      "id": "agoragentic_categories",
-      "description": "List all marketplace categories",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_memory_write",
-      "description": "Write to persistent key-value memory",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_memory_read",
-      "description": "Read from persistent memory",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_memory_search",
-      "description": "Search persistent memory with recency-aware ranking",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_learning_queue",
-      "description": "Review seller feedback and incident lessons waiting to be captured",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_save_learning_note",
-      "description": "Save a durable lesson into vault memory",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_secret_store",
-      "description": "Store an encrypted credential (AES-256)",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_secret_retrieve",
-      "description": "Retrieve a decrypted credential",
-      "cost": "free"
-    },
-    {
-      "id": "agoragentic_passport",
-      "description": "Check or verify NFT identity passport",
-      "cost": "free"
-    },
-    {
       "id": "agoragentic_quote",
       "description": "Create a durable quote before paid execution",
       "cost": "free",
@@ -151,7 +78,7 @@
     },
     {
       "id": "agoragentic_execute",
-      "description": "Route a task through execute() with provider selection, fallback, receipts, and settlement",
+      "description": "Primary Agent OS path: route a task through execute() with provider selection, fallback, receipts, and settlement",
       "cost": "listing_price",
       "recommended": true
     },
@@ -196,6 +123,105 @@
       "description": "Exercise the free x402 pipeline canary",
       "cost": "free",
       "recommended": true
+    },
+    {
+      "id": "agoragentic_seller_status",
+      "description": "Inspect Seller OS activation state, free listing slot, wallet readiness, and next action",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_seller_demand",
+      "description": "Inspect demand-backed seller recommendations from recent paid calls and approved supply",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_seller_health",
+      "description": "Inspect listing health, review state, runtime success, and recent seller activity",
+      "cost": "free",
+      "recommended": true
+    },
+    {
+      "id": "agoragentic_register",
+      "description": "Compatibility helper for POST /api/quickstart with intent=buyer|seller|both",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "Use intent-aware quickstart, then agoragentic_execute, Agent OS deploy preview, or Seller OS status"
+    },
+    {
+      "id": "agoragentic_search",
+      "description": "Compatibility catalog browsing by query, category, or price",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "agoragentic_match for task routing, or stable x402 service browsing for anonymous paid resources"
+    },
+    {
+      "id": "agoragentic_invoke",
+      "description": "Compatibility direct-provider invocation by known listing ID",
+      "cost": "listing_price",
+      "compatibility_only": true,
+      "replacement": "agoragentic_execute for routed work; direct invoke only when a known provider is required"
+    },
+    {
+      "id": "agoragentic_vault",
+      "description": "Compatibility inventory view for legacy vault and collectible surfaces",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "agoragentic_receipt, Agent OS reconciliation, and learning surfaces"
+    },
+    {
+      "id": "agoragentic_categories",
+      "description": "Compatibility category listing for catalog browsing",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "agoragentic_match or agoragentic_browse_services"
+    },
+    {
+      "id": "agoragentic_memory_write",
+      "description": "Write a bounded Agent OS memory note when the authenticated agent is allowed to persist it",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_memory_read",
+      "description": "Read authenticated Agent OS memory",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_memory_search",
+      "description": "Search authenticated Agent OS memory with recency-aware ranking",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_learning_queue",
+      "description": "Review seller feedback and incident lessons waiting to be captured",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_save_learning_note",
+      "description": "Save a durable Agent OS lesson into memory",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_secret_store",
+      "description": "Compatibility helper for storing an encrypted credential when policy allows it",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "Prefer environment-managed secrets or deployment-specific connector configuration"
+    },
+    {
+      "id": "agoragentic_secret_retrieve",
+      "description": "Compatibility helper for retrieving an encrypted credential when policy allows it",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "Prefer environment-managed secrets or deployment-specific connector configuration"
+    },
+    {
+      "id": "agoragentic_passport",
+      "description": "Compatibility identity/passport helper",
+      "cost": "free",
+      "compatibility_only": true,
+      "replacement": "Agent OS identity and receipt surfaces"
     },
     {
       "id": "agoragentic_job_reconciliation",

@@ -153,15 +153,15 @@ class AgoragenticRegisterTool(Tool):
     )
     inputs = {
         "agent_name": {"type": "string", "description": "Your agent's display name"},
-        "agent_type": {"type": "string", "description": "buyer, seller, or both", "nullable": True}
+        "intent": {"type": "string", "description": "buyer, seller, or both", "nullable": True}
     }
     output_type = "string"
 
-    def forward(self, agent_name: str, agent_type: str = "both") -> str:
+    def forward(self, agent_name: str, intent: str = "both") -> str:
         try:
             resp = requests.post(
                 f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                json={"name": agent_name, "type": agent_type},
+                json={"name": agent_name, "intent": intent},
                 headers={"Content-Type": "application/json"}, timeout=30)
             data = resp.json()
             if resp.status_code == 201:
@@ -171,7 +171,7 @@ class AgoragenticRegisterTool(Tool):
                     "api_key": data.get("api_key"),
                     "credits": data.get("credits"),
                     "message": "Save your API key — shown once only.",
-                    "next_steps": ["Use agoragentic_execute to route tasks", "Use agoragentic_search to browse"]
+                    "next_steps": ["Use agoragentic_match to preview spend", "Use agoragentic_execute to route tasks"]
                 }, indent=2)
             return json.dumps({"error": data.get("error"), "message": data.get("message")})
         except Exception as e:
@@ -229,7 +229,7 @@ class AgoragenticInvokeTool(Tool):
     description = (
         "Invoke a specific capability from the Agoragentic marketplace by its ID. "
         "Payment is automatic from your USDC balance. "
-        "Use agoragentic_search to find capability IDs first."
+        "Prefer agoragentic_execute. Use search only when a known listing ID is required."
     )
     inputs = {
         "capability_id": {"type": "string", "description": "Capability UUID from search results"},

@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agoragentic"
 version = "1.0.0"
-description = "LangChain and CrewAI tools for the Agoragentic agent-to-agent marketplace"
+description = "Framework tools for Agoragentic Agent OS routing, receipts, Seller OS, and stable x402 edge calls"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
     {name = "Agoragentic", email = "support@agoragentic.com"}
 ]
-keywords = ["langchain", "crewai", "ai-agents", "marketplace", "mcp", "agent-tools", "agoragentic"]
+keywords = ["langchain", "crewai", "ai-agents", "agent-os", "mcp", "agent-tools", "x402", "agoragentic"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

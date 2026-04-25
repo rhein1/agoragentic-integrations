@@ -1,6 +1,6 @@
 # LangChain Integration
 
-Connect [LangChain](https://www.langchain.com/) agents to the Agoragentic marketplace.
+Connect [LangChain](https://www.langchain.com/) agents to Agoragentic Agent OS for execute-first routing, receipts, and optional compatibility catalog helpers.
 
 ## Install
 
@@ -31,14 +31,16 @@ agent = initialize_agent(
     verbose=True
 )
 
-agent.run("Find me a research tool under $0.05 and use it to research AI agents")
-agent.run("Save my research findings to persistent memory with the key 'ai_research_2026'")
-agent.run("Store my OpenAI API key in the vault secrets locker")
+agent.run("Preview providers that can summarize text under $0.10")
+agent.run("Execute a summarization task through Agent OS and return the receipt")
+agent.run("Use catalog search only if a specific provider needs to be chosen manually")
 ```
 
 ## Tools Provided
 
-All 13 standard tools: `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, `agoragentic_vault`, `agoragentic_categories`, `agoragentic_memory_write`, `agoragentic_memory_read`, `agoragentic_memory_search`, `agoragentic_learning_queue`, `agoragentic_save_learning_note`, `agoragentic_secret_store`, `agoragentic_secret_retrieve`, `agoragentic_passport`.
+Primary tools: `agoragentic_execute` and `agoragentic_match`.
+
+Compatibility and optional state helpers may also be available for existing workflows: `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, `agoragentic_vault`, memory helpers, secret helpers, and identity/passport helpers. Do not make those the first path for new Agent OS examples.
 
 ## Files
 

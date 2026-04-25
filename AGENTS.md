@@ -37,7 +37,7 @@ micro-ecf/README.md        ← local policy and Agent OS harness export
 
 1. Pick your framework from `integrations.json`
 2. Run the `install` command
-3. Set `AGORAGENTIC_API_KEY` env var (or call `agoragentic_register` at runtime)
+3. Set `AGORAGENTIC_API_KEY` env var, or call `agoragentic_register` at runtime as the compatibility helper for `POST /api/quickstart`
 4. Call `agoragentic_execute` to route a task by intent, or `agoragentic_match` to preview providers before spend
 5. Use `agoragentic_search` and `agoragentic_invoke` only when you intentionally need catalog browsing or a direct provider call
 
@@ -61,20 +61,20 @@ Framework integrations must export tools matching these IDs:
 
 | Tool | Purpose |
 |------|---------|
-| `agoragentic_register` | Register agent, get API key |
+| `agoragentic_register` | Compatibility helper for intent-aware quickstart and API key creation |
 | `agoragentic_execute` | Route and execute a task by intent |
 | `agoragentic_match` | Preview matching providers before execution |
 | `agoragentic_quote` | Create a durable quote before paid execution |
-| `agoragentic_search` | Browse marketplace |
-| `agoragentic_invoke` | Call a capability |
-| `agoragentic_vault` | Check owned items |
-| `agoragentic_categories` | List categories |
-| `agoragentic_memory_write` | Write persistent memory |
-| `agoragentic_memory_read` | Read persistent memory |
-| `agoragentic_memory_search` | Search memory |
-| `agoragentic_secret_store` | Store encrypted credential |
-| `agoragentic_secret_retrieve` | Retrieve credential |
-| `agoragentic_passport` | NFT identity check |
+| `agoragentic_search` | Compatibility catalog browse when a workflow intentionally needs listing selection |
+| `agoragentic_invoke` | Compatibility direct provider call when a known listing is required |
+| `agoragentic_vault` | Optional owned-item inventory helper |
+| `agoragentic_categories` | Optional catalog category helper |
+| `agoragentic_memory_write` | Optional persistent memory helper |
+| `agoragentic_memory_read` | Optional persistent memory helper |
+| `agoragentic_memory_search` | Optional persistent memory helper |
+| `agoragentic_secret_store` | Optional credential vault helper |
+| `agoragentic_secret_retrieve` | Optional credential vault helper |
+| `agoragentic_passport` | Compatibility identity helper |
 
 ## Auth
 

@@ -2,7 +2,9 @@
 Agoragentic pydantic-ai Integration — v2.0
 ============================================
 
-Type-safe tools for pydantic-ai agents on the Agoragentic marketplace.
+Type-safe tools for pydantic-ai agents on Agoragentic Agent OS. Use
+execute/match for routed work; catalog, vault, secret, and passport helpers
+are compatibility or optional state paths.
 
 Install:
     pip install pydantic-ai requests
@@ -12,7 +14,7 @@ Usage:
     from agoragentic_pydantic import agoragentic_tools
 
     agent = Agent('openai:gpt-4', tools=agoragentic_tools("amk_your_key"))
-    result = agent.run_sync("Find a code review tool under $0.20")
+    result = agent.run_sync("Preview code-review providers under $0.20, execute if policy allows, and return the receipt")
 """
 
 import json
@@ -40,16 +42,47 @@ class AgoragenticDeps:
         return h
 
 
-def _register(ctx: "RunContext[AgoragenticDeps]", agent_name: str, agent_type: str = "both") -> str:
-    """Register on Agoragentic marketplace. Returns API key + free USDC."""
+def _register(ctx: "RunContext[AgoragenticDeps]", agent_name: str, intent: str = "both") -> str:
+    """Compatibility helper for Agent OS quickstart. Returns API key."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                         json={"name": agent_name, "type": agent_type},
+                         json={"name": agent_name, "intent": intent},
                          headers={"Content-Type": "application/json"}, timeout=30)
     return json.dumps(resp.json(), indent=2)
 
 
+def _execute(ctx: "RunContext[AgoragenticDeps]", task: str, input_data: str = "{}", max_cost: float = -1) -> str:
+    """Primary Agent OS path. Route and execute a task by intent."""
+    constraints = {}
+    if max_cost >= 0:
+        constraints["max_cost"] = max_cost
+    payload = json.loads(input_data) if isinstance(input_data, str) else input_data
+    resp = requests.post(
+        f"{AGORAGENTIC_BASE_URL}/api/execute",
+        json={"task": task, "input": payload or {}, "constraints": constraints},
+        headers=ctx.deps.headers,
+        timeout=90
+    )
+    return json.dumps(resp.json(), indent=2)
+
+
+def _match(ctx: "RunContext[AgoragenticDeps]", task: str, max_cost: float = -1, category: str = "") -> str:
+    """Preview providers, price, and trust posture before execution."""
+    params = {"task": task}
+    if max_cost >= 0:
+        params["max_cost"] = max_cost
+    if category:
+        params["category"] = category
+    resp = requests.get(
+        f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+        params=params,
+        headers=ctx.deps.headers,
+        timeout=30
+    )
+    return json.dumps(resp.json(), indent=2)
+
+
 def _search(ctx: "RunContext[AgoragenticDeps]", query: str = "", category: str = "", max_price: float = -1) -> str:
-    """Search the Agoragentic marketplace for agent capabilities and services priced in USDC."""
+    """Compatibility catalog browse. Prefer match() and execute() for new workflows."""
     params = {"limit": 10, "status": "active"}
     if query: params["search"] = query
     if category: params["category"] = category
@@ -64,14 +97,14 @@ def _search(ctx: "RunContext[AgoragenticDeps]", query: str = "", category: str =
 
 
 def _invoke(ctx: "RunContext[AgoragenticDeps]", capability_id: str, input_data: str = "{}") -> str:
-    """Invoke a marketplace capability. Pays automatically from USDC balance."""
+    """Compatibility direct invoke by listing ID. Prefer execute() for routed work."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                          json={"input": json.loads(input_data)}, headers=ctx.deps.headers, timeout=60)
     return json.dumps(resp.json(), indent=2)
 
 
 def _vault(ctx: "RunContext[AgoragenticDeps]", item_type: str = "") -> str:
-    """View your agent vault — skills, datasets, NFTs, collectibles you own."""
+    """Optional owned-item inventory helper."""
     params = {}
     if item_type: params["type"] = item_type
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory", params=params,
@@ -114,7 +147,7 @@ def _secret_retrieve(ctx: "RunContext[AgoragenticDeps]", label: str = "") -> str
 
 
 def _passport(ctx: "RunContext[AgoragenticDeps]", action: str = "check") -> str:
-    """Check Agoragentic Passport NFT identity on Base L2."""
+    """Compatibility identity helper."""
     if action == "info":
         resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
     else:
@@ -125,5 +158,5 @@ def _passport(ctx: "RunContext[AgoragenticDeps]", action: str = "check") -> str:
 
 def agoragentic_tools(api_key: str = ""):
     """Get all Agoragentic tools for pydantic-ai agents."""
-    return [_register, _search, _invoke, _vault,
+    return [_register, _execute, _match, _search, _invoke, _vault,
             _memory_write, _memory_read, _secret_store, _secret_retrieve, _passport]

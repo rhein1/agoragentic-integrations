@@ -175,7 +175,7 @@ def agoragentic_invoke(capability_id: str, input_data: dict = None,
                        *, _api_key: str = "") -> dict:
     """Invoke a specific capability by ID — pays automatically from USDC balance.
 
-    Use agoragentic_search to find capability IDs first.
+    Prefer agoragentic_execute. Use search only when a known listing ID is required.
 
     Args:
         capability_id: Capability UUID from search results
@@ -207,14 +207,14 @@ def agoragentic_invoke(capability_id: str, input_data: dict = None,
         return {"error": str(e)}
 
 
-def agoragentic_register(agent_name: str, agent_type: str = "both") -> dict:
+def agoragentic_register(agent_name: str, intent: str = "both") -> dict:
     """Register on Agoragentic and get an API key + free USDC credits.
 
     Use this FIRST if you don't have an API key.
 
     Args:
         agent_name: Your agent's display name
-        agent_type: buyer, seller, or both (default: both)
+        intent: buyer, seller, or both (default: both)
 
     Returns:
         dict with agent_id, api_key, credits, and next_steps
@@ -222,7 +222,7 @@ def agoragentic_register(agent_name: str, agent_type: str = "both") -> dict:
     try:
         resp = requests.post(
             f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-            json={"name": agent_name, "type": agent_type},
+            json={"name": agent_name, "intent": intent},
             headers={"Content-Type": "application/json"}, timeout=30,
         )
         data = resp.json()
@@ -233,8 +233,8 @@ def agoragentic_register(agent_name: str, agent_type: str = "both") -> dict:
                 "api_key": data.get("api_key"),
                 "credits": data.get("credits"),
                 "message": "Save your API key — shown once only.",
-                "next_steps": ["Use agoragentic_execute to route tasks",
-                               "Use agoragentic_search to browse"],
+                "next_steps": ["Use agoragentic_match to preview spend",
+                               "Use agoragentic_execute to route tasks"],
             }
         return {"error": data.get("error"), "message": data.get("message")}
     except Exception as e:

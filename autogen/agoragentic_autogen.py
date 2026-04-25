@@ -2,9 +2,9 @@
 Agoragentic AutoGen Integration — v2.0
 =======================================
 
-Function tools for Microsoft AutoGen agents to discover, browse, invoke
-capabilities, manage persistent memory, store encrypted secrets,
-and check passport identity on the Agoragentic marketplace.
+Function tools for Microsoft AutoGen agents to use Agoragentic Agent OS:
+preview providers with match(), route work with execute(), inspect receipts,
+and keep catalog/vault/passport helpers as compatibility paths.
 
 Install:
     pip install pyautogen requests
@@ -38,12 +38,12 @@ def _headers(api_key: str = ""):
 
 # ─── Tool Implementations ────────────────────────────────
 
-def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
-    """Register on Agoragentic marketplace. Returns API key + USDC."""
+def agoragentic_register(agent_name: str, intent: str = "both") -> str:
+    """Register with Agent OS intent-aware quickstart. Returns API key."""
     try:
         resp = requests.post(
             f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-            json={"name": agent_name, "type": agent_type},
+            json={"name": agent_name, "intent": intent},
             headers={"Content-Type": "application/json"},
             timeout=30
         )
@@ -61,8 +61,54 @@ def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
         return json.dumps({"error": str(e)})
 
 
+def agoragentic_execute(task: str, input_data: str = "{}", max_cost: float = -1) -> str:
+    """Route and execute a task through Agent OS. Prefer this for paid work."""
+    try:
+        parsed_input = json.loads(input_data) if isinstance(input_data, str) else input_data
+        constraints = {}
+        if max_cost >= 0:
+            constraints["max_cost"] = max_cost
+        resp = requests.post(
+            f"{AGORAGENTIC_BASE_URL}/api/execute",
+            json={"task": task, "input": parsed_input or {}, "constraints": constraints},
+            headers=_headers(),
+            timeout=90
+        )
+        data = resp.json()
+        if resp.status_code in (200, 202):
+            return json.dumps({
+                "status": data.get("status"),
+                "invocation_id": data.get("invocation_id"),
+                "output": data.get("output") or data.get("result") or data.get("response"),
+                "cost_usdc": data.get("cost") or data.get("price_charged"),
+                "receipt": data.get("receipt") or data.get("receipt_id")
+            }, indent=2)
+        return json.dumps({"error": data.get("error"), "message": data.get("message"), "details": data})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def agoragentic_match(task: str, max_cost: float = -1, category: str = "") -> str:
+    """Preview matching providers before execution. Free dry run."""
+    try:
+        params = {"task": task}
+        if max_cost >= 0:
+            params["max_cost"] = max_cost
+        if category:
+            params["category"] = category
+        resp = requests.get(
+            f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+            params=params,
+            headers=_headers(),
+            timeout=30
+        )
+        return json.dumps(resp.json(), indent=2)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 def agoragentic_search(query: str = "", category: str = "", max_price: float = -1, limit: int = 10) -> str:
-    """Search the Agoragentic marketplace for capabilities, tools, and services."""
+    """Compatibility catalog browse. Prefer match() and execute() for new workflows."""
     try:
         params = {"limit": min(limit, 50), "status": "active"}
         if query:
@@ -83,7 +129,7 @@ def agoragentic_search(query: str = "", category: str = "", max_price: float = -
 
 
 def agoragentic_invoke(capability_id: str, input_data: str = "{}") -> str:
-    """Invoke a capability from the marketplace. Payment is automatic from USDC balance."""
+    """Compatibility direct invoke by listing ID. Prefer execute() unless a known provider is required."""
     try:
         resp = requests.post(
             f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
@@ -179,19 +225,31 @@ def get_agoragentic_functions(api_key: str = ""):
     _API_KEY = api_key
 
     return [
-        {"name": "agoragentic_register", "description": "Register on Agoragentic marketplace. Returns API key.",
+        {"name": "agoragentic_register", "description": "Compatibility helper for Agent OS quickstart. Returns API key.",
          "parameters": {"type": "object", "properties": {
              "agent_name": {"type": "string", "description": "Your agent name"},
-             "agent_type": {"type": "string", "enum": ["buyer", "seller", "both"], "default": "both"}
+             "intent": {"type": "string", "enum": ["buyer", "seller", "both"], "default": "both"}
          }, "required": ["agent_name"]}},
-        {"name": "agoragentic_search", "description": "Search marketplace for capabilities, tools, services.",
+        {"name": "agoragentic_execute", "description": "Primary Agent OS path: route and execute a task by intent.",
+         "parameters": {"type": "object", "properties": {
+             "task": {"type": "string", "description": "Task to route"},
+             "input_data": {"type": "string", "description": "JSON input payload"},
+             "max_cost": {"type": "number", "description": "Optional max USDC cost", "default": -1}
+         }, "required": ["task"]}},
+        {"name": "agoragentic_match", "description": "Preview providers, price, and trust posture before execution.",
+         "parameters": {"type": "object", "properties": {
+             "task": {"type": "string", "description": "Task to preview"},
+             "max_cost": {"type": "number", "description": "Optional max USDC cost", "default": -1},
+             "category": {"type": "string", "description": "Optional category filter"}
+         }, "required": ["task"]}},
+        {"name": "agoragentic_search", "description": "Compatibility catalog browse for capabilities, tools, services.",
          "parameters": {"type": "object", "properties": {
              "query": {"type": "string", "description": "Search term"},
              "category": {"type": "string", "description": "Category filter"},
              "max_price": {"type": "number", "description": "Max price in USDC"},
              "limit": {"type": "integer", "default": 10}
          }}},
-        {"name": "agoragentic_invoke", "description": "Invoke a capability. Auto-pays from USDC balance.",
+        {"name": "agoragentic_invoke", "description": "Compatibility direct invoke by listing ID. Auto-pays from USDC balance.",
          "parameters": {"type": "object", "properties": {
              "capability_id": {"type": "string", "description": "Capability ID from search"},
              "input_data": {"type": "string", "description": "JSON input payload"}
@@ -226,6 +284,8 @@ def get_agoragentic_functions(api_key: str = ""):
 # Function map for AutoGen UserProxyAgent
 FUNCTION_MAP = {
     "agoragentic_register": agoragentic_register,
+    "agoragentic_execute": agoragentic_execute,
+    "agoragentic_match": agoragentic_match,
     "agoragentic_search": agoragentic_search,
     "agoragentic_invoke": agoragentic_invoke,
     "agoragentic_vault": agoragentic_vault,

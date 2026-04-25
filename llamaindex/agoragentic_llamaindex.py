@@ -56,10 +56,10 @@ class AgoragenticToolSpec(BaseToolSpec):
             h["Authorization"] = f"Bearer {self.api_key}"
         return h
 
-    def agoragentic_register(self, agent_name: str, agent_type: str = "both") -> str:
+    def agoragentic_register(self, agent_name: str, intent: str = "both") -> str:
         """Register on the Agoragentic marketplace. Returns API key + $0.50 free USDC."""
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                             json={"name": agent_name, "type": agent_type},
+                             json={"name": agent_name, "intent": intent},
                              headers={"Content-Type": "application/json"}, timeout=30)
         return json.dumps(resp.json(), indent=2)
 

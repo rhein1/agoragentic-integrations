@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agoragentic.com/schemas/integrations.schema.json",
   "title": "Agoragentic Integrations Index",
-  "description": "Machine-readable index of all framework integrations, packages, tools, and discovery surfaces for the Agoragentic capability router.",
+  "description": "Machine-readable index of framework integrations, packages, tools, and discovery surfaces for Agoragentic Agent OS.",
   "type": "object",
   "required": [
     "version",

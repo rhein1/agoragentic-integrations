@@ -2,8 +2,10 @@
 Agoragentic LangChain Toolkit
 ==============================
 
-Drop-in tools for LangChain agents to discover, browse, and invoke
-capabilities on the Agoragentic agent-to-agent marketplace.
+Drop-in tools for LangChain agents to use Agoragentic Agent OS:
+route work through execute(), preview spend with match(), keep receipts,
+and use legacy catalog/vault helpers only when a workflow intentionally
+needs them.
 
 Install:
     pip install langchain requests
@@ -13,12 +15,12 @@ Usage:
 
     tools = get_agoragentic_tools(api_key="amk_your_key_here")
     agent = initialize_agent(tools, llm, agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION)
-    agent.run("Find me an AI research tool and invoke it")
+    agent.run("Preview the best summarizer under $0.10, then execute if it fits policy")
 
 Or register first:
     from agoragentic_tools import AgoragenticRegister
     tool = AgoragenticRegister()
-    result = tool.run({"agent_name": "MyAgent", "agent_type": "both"})
+    result = tool.run({"agent_name": "MyAgent", "intent": "buyer"})
     # Returns your API key — save it!
 """
 
@@ -42,7 +44,19 @@ AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 
 class RegisterInput(BaseModel):
     agent_name: str = Field(description="Your agent's display name")
-    agent_type: str = Field(default="both", description="Agent type: 'buyer', 'seller', or 'both'")
+    intent: str = Field(default="buyer", description="Onboarding intent: 'buyer', 'seller', or 'both'")
+
+
+class ExecuteInput(BaseModel):
+    task: str = Field(description="The task to route through Agent OS execute()")
+    input_data: dict = Field(default_factory=dict, description="Input payload for the task")
+    max_cost: Optional[float] = Field(default=None, description="Maximum USDC the agent may spend")
+
+
+class MatchInput(BaseModel):
+    task: str = Field(description="The task to preview before execution")
+    max_cost: Optional[float] = Field(default=None, description="Maximum USDC price filter")
+    category: Optional[str] = Field(default=None, description="Optional category filter")
 
 
 class SearchInput(BaseModel):
@@ -65,22 +79,21 @@ class VaultInput(BaseModel):
 # ─── Tools ────────────────────────────────────────────────
 
 class AgoragenticRegister(BaseTool):
-    """Register on the Agoragentic marketplace and get an API key + test credits."""
+    """Register with intent-aware Agent OS quickstart and get an API key."""
 
     name: str = "agoragentic_register"
     description: str = (
-        "Register as a new agent on the Agoragentic marketplace. "
-        "Returns an API key and access to the Starter Pack. "
-        "You also receive a Welcome Flower collectible. "
-        "Use this FIRST if you don't have an API key yet."
+        "Compatibility helper for POST /api/quickstart. "
+        "Use intent='buyer' for routed execution, intent='seller' for Seller OS, "
+        "or intent='both' for agents that will buy and sell."
     )
     args_schema: Type[BaseModel] = RegisterInput
 
-    def _run(self, agent_name: str, agent_type: str = "both") -> str:
+    def _run(self, agent_name: str, intent: str = "buyer") -> str:
         try:
             resp = requests.post(
                 f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                json={"name": agent_name, "type": agent_type},
+                json={"name": agent_name, "intent": intent},
                 headers={"Content-Type": "application/json"},
                 timeout=30
             )
@@ -90,13 +103,13 @@ class AgoragenticRegister(BaseTool):
                     "status": "registered",
                     "agent_id": data.get("agent", {}).get("id"),
                     "api_key": data.get("api_key"),
-                    "credits": data.get("credits"),
-                    "welcome_flower": data.get("flower", {}).get("name"),
+                    "intent": intent,
                     "message": "Save your API key! It won't be shown again.",
                     "next_steps": [
-                        "Use agoragentic_search to browse available capabilities",
-                        "Use agoragentic_invoke to call a capability",
-                        "Use agoragentic_vault to check your inventory"
+                        "Use agoragentic_match to preview providers before spend",
+                        "Use agoragentic_execute to route the task by intent",
+                        "Use status or receipt endpoints after execution",
+                        "Use Seller OS status before publishing services if intent is seller or both"
                     ]
                 }, indent=2)
             return json.dumps({"error": data.get("error"), "message": data.get("message")})
@@ -104,15 +117,84 @@ class AgoragenticRegister(BaseTool):
             return json.dumps({"error": str(e)})
 
 
+class AgoragenticExecute(BaseTool):
+    """Route a task through Agent OS execute()."""
+
+    name: str = "agoragentic_execute"
+    description: str = (
+        "Primary Agent OS tool. Route a task by intent through execute(), "
+        "with provider selection, fallback, receipts, and USDC settlement."
+    )
+    args_schema: Type[BaseModel] = ExecuteInput
+    api_key: str = ""
+
+    def _run(self, task: str, input_data: dict = None, max_cost: Optional[float] = None) -> str:
+        if not self.api_key:
+            return json.dumps({"error": "API key required. Use agoragentic_register with intent='buyer' first."})
+        try:
+            constraints = {}
+            if max_cost is not None:
+                constraints["max_cost"] = max_cost
+            resp = requests.post(
+                f"{AGORAGENTIC_BASE_URL}/api/execute",
+                json={"task": task, "input": input_data or {}, "constraints": constraints},
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                },
+                timeout=90
+            )
+            data = resp.json()
+            if resp.status_code in (200, 202):
+                return json.dumps({
+                    "status": data.get("status", "accepted" if resp.status_code == 202 else "success"),
+                    "invocation_id": data.get("invocation_id"),
+                    "output": data.get("output") or data.get("result") or data.get("response"),
+                    "cost_usdc": data.get("cost") or data.get("price_charged"),
+                    "receipt": data.get("receipt") or data.get("receipt_id"),
+                    "consequences": data.get("consequences"),
+                    "next": "Use receipt or status endpoints to inspect the run."
+                }, indent=2)
+            return json.dumps({"error": data.get("error"), "message": data.get("message"), "details": data})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+
+class AgoragenticMatch(BaseTool):
+    """Preview Agent OS routed providers before spending."""
+
+    name: str = "agoragentic_match"
+    description: str = "Preview providers, price, and trust posture before calling agoragentic_execute."
+    args_schema: Type[BaseModel] = MatchInput
+    api_key: str = ""
+
+    def _run(self, task: str, max_cost: Optional[float] = None, category: Optional[str] = None) -> str:
+        if not self.api_key:
+            return json.dumps({"error": "API key required. Use agoragentic_register with intent='buyer' first."})
+        try:
+            params = {"task": task}
+            if max_cost is not None:
+                params["max_cost"] = max_cost
+            if category:
+                params["preferred_category"] = category
+            resp = requests.get(
+                f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+                params=params,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=30
+            )
+            return json.dumps(resp.json(), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+
 class AgoragenticSearch(BaseTool):
-    """Search and browse capabilities on the Agoragentic marketplace."""
+    """Compatibility catalog browsing helper."""
 
     name: str = "agoragentic_search"
     description: str = (
-        "Search the Agoragentic marketplace for agent capabilities. "
-        "Find tools, services, datasets, and skills that other agents sell. "
-        "You can filter by category, price, and search terms. "
-        "Returns a list of available capabilities with prices in USDC."
+        "Compatibility helper for intentional catalog browsing. "
+        "Prefer agoragentic_match for task routing and agoragentic_execute for paid work."
     )
     args_schema: Type[BaseModel] = SearchInput
     api_key: str = ""
@@ -168,28 +250,27 @@ class AgoragenticSearch(BaseTool):
             return json.dumps({
                 "total_found": len(results),
                 "capabilities": results,
-                "tip": "Use agoragentic_invoke with the capability id to use any of these."
+                "tip": "Prefer agoragentic_execute for routed work. Use agoragentic_invoke only when you intentionally need a known listing ID."
             }, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
 
 class AgoragenticInvoke(BaseTool):
-    """Invoke a capability on the Agoragentic marketplace."""
+    """Compatibility direct-provider invoke helper."""
 
     name: str = "agoragentic_invoke"
     description: str = (
-        "Invoke (call/use) a specific capability from the Agoragentic marketplace. "
+        "Compatibility helper for direct invocation of a specific listing. "
         "Requires the capability_id from a previous search. "
-        "Payment is automatic from your USDC balance. "
-        "Returns the capability's output/result."
+        "Prefer agoragentic_execute unless a known provider is required."
     )
     args_schema: Type[BaseModel] = InvokeInput
     api_key: str = ""
 
     def _run(self, capability_id: str, input_data: dict = None) -> str:
         if not self.api_key:
-            return json.dumps({"error": "API key required. Use agoragentic_register first."})
+            return json.dumps({"error": "API key required. Use agoragentic_register with intent='buyer' first."})
         try:
             resp = requests.post(
                 f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
@@ -215,7 +296,7 @@ class AgoragenticInvoke(BaseTool):
             return json.dumps({
                 "error": data.get("error"),
                 "message": data.get("message"),
-                "tip": "Check your balance with agoragentic_vault if payment failed."
+                "tip": "Use agoragentic_match before spend and receipt/status endpoints after execution."
             })
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -278,7 +359,7 @@ def get_agoragentic_tools(api_key: str = "") -> list:
 
     Args:
         api_key: Your Agoragentic API key (starts with 'amk_').
-                 If empty, only register and search tools are available.
+                 If empty, only registration and compatibility search tools are available.
 
     Returns:
         List of LangChain BaseTool instances.
@@ -287,7 +368,7 @@ def get_agoragentic_tools(api_key: str = "") -> list:
         from agoragentic_tools import get_agoragentic_tools
         tools = get_agoragentic_tools("amk_your_key")
         agent = initialize_agent(tools, llm)
-        agent.run("Search for research tools under $0.05")
+        agent.run("Preview a summarizer under $0.10, execute it, and return the receipt")
     """
     tools = [
         AgoragenticRegister(),
@@ -296,6 +377,8 @@ def get_agoragentic_tools(api_key: str = "") -> list:
 
     if api_key:
         tools.extend([
+            AgoragenticExecute(api_key=api_key),
+            AgoragenticMatch(api_key=api_key),
             AgoragenticInvoke(api_key=api_key),
             AgoragenticVault(api_key=api_key),
         ])

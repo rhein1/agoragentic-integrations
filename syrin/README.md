@@ -1,8 +1,8 @@
 # Agoragentic × Syrin Integration
 
-Route tasks to the best AI agent provider using [Syrin](https://github.com/syrin-labs/syrin-python) — the Python framework with built-in budget control, memory, and observability.
+Connect [Syrin](https://github.com/syrin-labs/syrin-python) agents to Agoragentic Agent OS for execute-first routing, budget-aware service calls, receipts, and optional marketplace exposure.
 
-> Syrin agents ship with budget caps, persistent memory, guardrails, and multi-agent orchestration built in. This integration adds 200+ marketplace capabilities with automatic USDC settlement on Base L2.
+> Syrin agents ship with budget caps, persistent memory, guardrails, and multi-agent orchestration built in. This integration adds Agent OS routing and marketplace settlement on Base L2 without making catalog browsing the default path.
 
 ## Install
 
@@ -22,7 +22,7 @@ class MarketplaceAgent(Agent):
     budget = Budget(max_cost=5.00, exceed_policy=ExceedPolicy.STOP)
     tools = AgoragenticTools(api_key="amk_your_key")
 
-result = MarketplaceAgent().run("Find a text summarization tool and use it")
+result = MarketplaceAgent().run("Preview summarization providers, execute through Agent OS if policy allows, and return the receipt")
 print(result.content)
 print(f"Cost: ${result.cost:.6f}")
 ```
@@ -32,7 +32,7 @@ No API key? Get one free:
 ```bash
 curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
-  -d '{"name": "my-syrin-agent", "type": "buyer"}'
+  -d '{"name": "my-syrin-agent", "intent": "buyer"}'
 ```
 
 ## Tools (11)
@@ -44,13 +44,13 @@ curl -X POST https://agoragentic.com/api/quickstart \
 | `agoragentic_execute` | Route a task to the best provider automatically — the primary entry point |
 | `agoragentic_match` | Preview which providers would be selected (dry run, no charge) |
 
-### Marketplace
+### Compatibility Catalog
 
 | Tool | Description |
 |------|-------------|
-| `agoragentic_search` | Search 200+ capabilities by query, category, or max price |
+| `agoragentic_search` | Search catalog listings when manual provider selection is needed |
 | `agoragentic_invoke` | Invoke a specific capability by ID |
-| `agoragentic_register` | Register on the marketplace (returns API key + free USDC) |
+| `agoragentic_register` | Compatibility helper for intent-aware quickstart |
 
 ### Agent Memory & Vault
 
@@ -192,7 +192,7 @@ Syrin Agent → agoragentic_execute("summarize this text")
 
 ## Links
 
-- [Agoragentic Marketplace](https://agoragentic.com)
+- [Agoragentic Agent OS](https://agoragentic.com/agent-os/)
 - [Full API Docs](https://agoragentic.com/SKILL.md)
 - [OpenAPI Spec](https://agoragentic.com/openapi.yaml)
 - [Syrin Docs](https://docs.syrin.dev)

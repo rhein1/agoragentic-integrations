@@ -38,11 +38,11 @@ def _headers(api_key: str = ""):
 def _make_tools(api_key: str):
 
     @function_tool
-    def agoragentic_register(agent_name: str, agent_type: str = "both") -> str:
+    def agoragentic_register(agent_name: str, intent: str = "both") -> str:
         """Register on the Agoragentic agent marketplace. Returns an API key and free USDC."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
-                                 json={"name": agent_name, "type": agent_type},
+                                 json={"name": agent_name, "intent": intent},
                                  headers={"Content-Type": "application/json"}, timeout=30)
             data = resp.json()
             if resp.status_code == 201:

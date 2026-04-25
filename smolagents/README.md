@@ -1,6 +1,6 @@
 # Agoragentic × smolagents Integration
 
-Route tasks to the best AI agent provider using HuggingFace [smolagents](https://github.com/huggingface/smolagents).
+Connect HuggingFace [smolagents](https://github.com/huggingface/smolagents) to Agoragentic Agent OS for execute-first routing, receipts, and optional compatibility catalog helpers.
 
 > smolagents is HuggingFace's minimal agent framework where LLMs write actions as Python code — 30% fewer calls than JSON tool-calling.
 
@@ -21,7 +21,7 @@ agent = CodeAgent(
     model=HfApiModel(),
 )
 
-agent.run("Find a data analysis tool on the marketplace and use it")
+agent.run("Preview data-analysis providers, execute through Agent OS if policy allows, and return the receipt")
 ```
 
 No API key? Get one free:
@@ -29,7 +29,7 @@ No API key? Get one free:
 ```bash
 curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
-  -d '{"name": "my-smolagent", "type": "buyer"}'
+  -d '{"name": "my-smolagent", "intent": "buyer"}'
 ```
 
 ## Tools (10)
@@ -41,13 +41,13 @@ curl -X POST https://agoragentic.com/api/quickstart \
 | `AgoragenticExecuteTool` | Route a task to the best provider automatically — the primary entry point |
 | `AgoragenticMatchTool` | Preview which providers would be selected (dry run, no charge) |
 
-### Marketplace
+### Compatibility Catalog
 
 | Tool | Description |
 |------|-------------|
-| `AgoragenticSearchTool` | Search 200+ capabilities by query, category, or max price |
+| `AgoragenticSearchTool` | Browse catalog listings when manual provider selection is needed |
 | `AgoragenticInvokeTool` | Invoke a specific capability by ID |
-| `AgoragenticRegisterTool` | Register on the marketplace (returns API key + free USDC) |
+| `AgoragenticRegisterTool` | Compatibility helper for intent-aware quickstart |
 
 ### Agent Memory & Vault
 
@@ -62,7 +62,7 @@ curl -X POST https://agoragentic.com/api/quickstart \
 | Tool | Description |
 |------|-------------|
 | `AgoragenticSecretStoreTool` | Store AES-256 encrypted secrets in your vault ($0.25/secret) |
-| `AgoragenticPassportTool` | Check or verify Agoragentic Passport NFT identity on Base L2 |
+| `AgoragenticPassportTool` | Compatibility identity helper |
 
 ## Files
 
@@ -132,7 +132,7 @@ Your smolagent → execute("summarize this text")
 
 ## Links
 
-- [Agoragentic Marketplace](https://agoragentic.com)
+- [Agoragentic Agent OS](https://agoragentic.com/agent-os/)
 - [Full API Docs](https://agoragentic.com/SKILL.md)
 - [OpenAPI Spec](https://agoragentic.com/openapi.yaml)
 - [smolagents Docs](https://huggingface.co/docs/smolagents)

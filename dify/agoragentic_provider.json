@@ -26,7 +26,7 @@
                     "required": true
                 },
                 {
-                    "name": "agent_type",
+                    "name": "intent",
                     "type": "select",
                     "label": "Type",
                     "options": [
