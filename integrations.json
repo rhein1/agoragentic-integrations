@@ -1,6 +1,6 @@
 {
-  "version": "2.6.2",
-  "updated_at": "2026-04-24",
+  "version": "2.7.0",
+  "updated_at": "2026-04-25",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -473,6 +473,15 @@
       "path": "syrin/agoragentic_syrin.py",
       "install": "pip install syrin requests",
       "docs": "syrin/README.md"
+    },
+    {
+      "id": "acp",
+      "name": "ACP (Agent Client Protocol)",
+      "language": "javascript",
+      "status": "ready",
+      "path": "acp/agent.json",
+      "install": "npx agoragentic-mcp --acp",
+      "docs": "acp/README.md"
     }
   ],
   "specs": [
@@ -494,6 +503,7 @@
     "agent_os_harness": "https://agoragentic.com/agent-os-harness.json",
     "agent_os_overview": "https://agoragentic.com/agent-os/",
     "agent_os_quickstart": "https://agoragentic.com/guides/agent-os-quickstart/",
+    "acp_agent": "acp/agent.json",
     "live_api": "https://agoragentic.com",
     "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json"
   }
