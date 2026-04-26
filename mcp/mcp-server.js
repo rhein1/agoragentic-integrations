@@ -72,8 +72,9 @@ const server = new Server(
 
 // ─── Tools ───────────────────────────────────────────────
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
+// Extracted so both MCP and ACP modes can share the same definitions
+function getToolList() {
+    return [
         // ── Core Marketplace ──
         {
             name: "agoragentic_register",
@@ -210,11 +211,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 }
             }
         }
-    ]
-}));
+    ];
+}
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: getToolList() }));
+
+// Extracted so both MCP and ACP modes can share the same execution logic
+async function executeToolCall(name, args) {
 
     try {
         switch (name) {
@@ -478,6 +481,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     } catch (err) {
         return { content: [{ type: "text", text: `Error: ${err.message}` }] };
     }
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    return executeToolCall(name, args);
 });
 
 // ─── Resources ───────────────────────────────────────────
@@ -642,12 +650,137 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
     throw new Error(`Unknown prompt: ${name}`);
 });
 
+// ─── ACP Mode ────────────────────────────────────────────
+//
+// When started with --acp, the server speaks the Agent Client Protocol
+// (JSON-RPC 2.0 over stdio) instead of MCP. This enables integration
+// with ACP-compatible editors like Zed, JetBrains, VS Code via Copilot, etc.
+//
+// The ACP handshake adds: protocolVersion, agentCapabilities, agentInfo, authMethods
+// Tool definitions and execution are identical to MCP mode.
+
+const ACP_MODE = process.argv.includes("--acp");
+
+function createAcpServer() {
+    const readline = require("readline");
+
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+        terminal: false,
+    });
+
+    function send(obj) {
+        process.stdout.write(JSON.stringify(obj) + "\n");
+    }
+
+    function sendResult(id, result) {
+        send({ jsonrpc: "2.0", id, result });
+    }
+
+    function sendError(id, code, message, data) {
+        send({ jsonrpc: "2.0", id, error: { code, message, ...(data ? { data } : {}) } });
+    }
+
+    // ACP initialize response with auth methods
+    function handleInitialize(id, params) {
+        sendResult(id, {
+            protocolVersion: params?.protocolVersion || 1,
+            agentCapabilities: {
+                loadSession: false,
+                promptCapabilities: { image: false, audio: false },
+            },
+            agentInfo: {
+                name: "agoragentic",
+                version: "2.0.0",
+                description: "Agoragentic agent marketplace — 174+ AI capabilities, USDC payments on Base L2",
+            },
+            authMethods: API_KEY
+                ? []  // Already authenticated via env var
+                : [
+                    {
+                        type: "terminal",
+                        description: "Set AGORAGENTIC_API_KEY environment variable. Get a key via the agoragentic_register tool.",
+                    },
+                ],
+        });
+    }
+
+    rl.on("line", async (line) => {
+        let msg;
+        try {
+            msg = JSON.parse(line.trim());
+        } catch {
+            sendError(null, -32700, "Parse error");
+            return;
+        }
+
+        if (msg.jsonrpc !== "2.0") {
+            sendError(msg.id || null, -32600, "Invalid JSON-RPC version");
+            return;
+        }
+
+        try {
+            switch (msg.method) {
+                case "initialize":
+                    handleInitialize(msg.id, msg.params);
+                    break;
+
+                case "initialized":
+                    // ACP notification — no response needed
+                    break;
+
+                case "tools/list":
+                    sendResult(msg.id, {
+                        tools: getToolList().map(t => ({
+                            name: t.name,
+                            description: t.description,
+                            inputSchema: t.inputSchema,
+                            annotations: t.annotations,
+                        })),
+                    });
+                    break;
+
+                case "tools/call": {
+                    const { name, arguments: callArgs } = msg.params || {};
+                    const result = await executeToolCall(name, callArgs || {});
+                    sendResult(msg.id, result);
+                    break;
+                }
+
+                case "shutdown":
+                    sendResult(msg.id, { success: true });
+                    setTimeout(() => process.exit(0), 100);
+                    break;
+
+                default:
+                    sendError(msg.id, -32601, `Method not found: ${msg.method}`);
+            }
+        } catch (err) {
+            if (err.code === -32042) {
+                // x402 Payment Required — forward structured data
+                sendError(msg.id, -32042, err.message, err.data);
+            } else {
+                sendError(msg.id, -32603, err.message || "Internal error");
+            }
+        }
+    });
+
+    rl.on("close", () => process.exit(0));
+
+    console.error("Agoragentic ACP Agent v2.0 running on stdio (ACP mode)");
+}
+
 // ─── Start ───────────────────────────────────────────────
 
 async function main() {
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-    console.error("Agoragentic MCP Server v2.0 running on stdio");
+    if (ACP_MODE) {
+        createAcpServer();
+    } else {
+        const transport = new StdioServerTransport();
+        await server.connect(transport);
+        console.error("Agoragentic MCP Server v2.0 running on stdio");
+    }
 }
 
 main().catch(console.error);
