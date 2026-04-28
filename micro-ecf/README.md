@@ -61,11 +61,19 @@ Add to your Micro ECF policy:
 {
   "context_providers": [
     {
+      "provider_id": "ctx_gitnexus_local",
       "type": "code_graph",
       "provider": "gitnexus",
       "mode": "local_mcp",
+      "enabled": true,
+      "scope": "workspace",
       "capabilities": ["impact", "context", "query", "detect_changes", "generate_map"],
-      "required": false
+      "required": false,
+      "required_for_action_classes": ["code_change"],
+      "mcp": {
+        "server": "gitnexus",
+        "transport": "stdio"
+      }
     }
   ]
 }
@@ -73,13 +81,38 @@ Add to your Micro ECF policy:
 
 When a `code_change` action is proposed, the Consequences Engine will:
 
-1. Query the code_graph provider for `impact(symbol)` — upstream callers, affected files, confidence scores
+1. Query the code_graph provider for `impact(symbol)` — upstream callers, downstream dependencies, risk hotspots, confidence
 2. Query `detect_changes(diff)` — map changed lines to affected processes and risk
-3. Include the impact summary in the consequence assessment
-4. Apply graph-aware blast radius inference (workspace vs workspace_wide)
+3. Include the `graph_impact` in the consequence assessment with structured impact data
+4. Apply graph-aware blast radius inference (workspace vs workspace_wide) based on upstream callers and hotspot count
 5. Route to `allow`, `allow_with_limits`, `ask_owner`, `ask_arbiter`, or `block` based on structural impact
+6. After execution, compare predicted impact vs actual changed files (drift detection)
 
 Context providers are optional. If no provider is configured or reachable, the Consequences Engine falls back to its standard risk scoring.
+
+## Action Lifecycle: PreAction / PostAction
+
+Agent OS uses a structured lifecycle for every agent action:
+
+```
+PreAction:
+  Micro ECF gathers bounded context
+  Context provider (code_graph, tool_graph, etc.) provides structural impact
+  Consequences Engine evaluates risk (graph_impact contributes 21% weight)
+  Policy / arbiter / approval gate decides
+
+Action:
+  Agent executes code / tool / router / marketplace step
+
+PostAction:
+  Receipt / evidence captured
+  Context provider detects actual changed impact (if relevant)
+  Argent reconciles predicted vs actual outcome
+  Trust / learning update proposed
+```
+
+**Before the agent acts, Agent OS reviews context, policy, budget, impact, and consequences.
+After the agent acts, Agent OS reconciles the result against the approved intent.**
 
 ## Local Export
 

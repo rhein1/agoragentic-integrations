@@ -21,42 +21,67 @@
     },
     "agent_manifest": {
       "type": "object",
-      "required": ["name", "primary_goal"],
+      "required": [
+        "name",
+        "primary_goal"
+      ],
       "additionalProperties": true
     },
     "context_policy": {
       "type": "object",
-      "required": ["allowed_sources", "denied_sources"],
+      "required": [
+        "allowed_sources",
+        "denied_sources"
+      ],
       "additionalProperties": true
     },
     "tool_policy": {
       "type": "object",
-      "required": ["allowed_tools", "denied_tools"],
+      "required": [
+        "allowed_tools",
+        "denied_tools"
+      ],
       "additionalProperties": true
     },
     "budget_policy": {
       "type": "object",
-      "required": ["treasury_required", "max_daily_spend_usdc", "approval_required_above_usdc"],
+      "required": [
+        "treasury_required",
+        "max_daily_spend_usdc",
+        "approval_required_above_usdc"
+      ],
       "additionalProperties": true
     },
     "approval_policy": {
       "type": "object",
-      "required": ["autonomous", "human_gated"],
+      "required": [
+        "autonomous",
+        "human_gated"
+      ],
       "additionalProperties": true
     },
     "memory_policy": {
       "type": "object",
-      "required": ["write_gate", "secret_storage"],
+      "required": [
+        "write_gate",
+        "secret_storage"
+      ],
       "additionalProperties": true
     },
     "swarm_policy": {
       "type": "object",
-      "required": ["max_agents", "delegation"],
+      "required": [
+        "max_agents",
+        "delegation"
+      ],
       "additionalProperties": true
     },
     "deployment_policy": {
       "type": "object",
-      "required": ["exposure_mode", "first_proof_required"],
+      "required": [
+        "exposure_mode",
+        "first_proof_required"
+      ],
       "additionalProperties": true
     },
     "context_providers": {
@@ -64,11 +89,22 @@
       "description": "Optional context graph providers for pre-action impact analysis. Each entry declares a provider type (e.g. code_graph), provider name, communication mode, and capabilities.",
       "items": {
         "type": "object",
-        "required": ["type", "provider"],
+        "required": [
+          "type",
+          "provider"
+        ],
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["code_graph", "tool_graph", "policy_graph", "workflow_graph", "receipt_graph", "marketplace_graph", "enterprise_context_graph"]
+            "enum": [
+              "code_graph",
+              "tool_graph",
+              "policy_graph",
+              "workflow_graph",
+              "receipt_graph",
+              "marketplace_graph",
+              "enterprise_context_graph"
+            ]
           },
           "provider": {
             "type": "string",
@@ -76,12 +112,18 @@
           },
           "mode": {
             "type": "string",
-            "enum": ["local_mcp", "remote_mcp", "http_api"],
+            "enum": [
+              "local_mcp",
+              "remote_mcp",
+              "http_api"
+            ],
             "default": "local_mcp"
           },
           "capabilities": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Named capabilities the provider supports, e.g. ['impact', 'context', 'query', 'detect_changes', 'generate_map']"
           },
           "required": {
