@@ -58,6 +58,40 @@
       "type": "object",
       "required": ["exposure_mode", "first_proof_required"],
       "additionalProperties": true
+    },
+    "context_providers": {
+      "type": "array",
+      "description": "Optional context graph providers for pre-action impact analysis. Each entry declares a provider type (e.g. code_graph), provider name, communication mode, and capabilities.",
+      "items": {
+        "type": "object",
+        "required": ["type", "provider"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["code_graph", "tool_graph", "policy_graph", "workflow_graph", "receipt_graph", "marketplace_graph", "enterprise_context_graph"]
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider identifier, e.g. 'gitnexus' or 'custom_code_graph'"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["local_mcp", "remote_mcp", "http_api"],
+            "default": "local_mcp"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Named capabilities the provider supports, e.g. ['impact', 'context', 'query', 'detect_changes', 'generate_map']"
+          },
+          "required": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, the Consequences Engine will block actions of this type when the provider is unreachable."
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

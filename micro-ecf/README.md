@@ -35,6 +35,52 @@ Not included:
 - private connectors or broker authority
 - Full ECF private runtime
 
+## Context Providers
+
+Micro ECF can attach optional **context graph providers** for pre-action impact review. A context provider indexes a bounded workspace (codebase, tool surface, policy set, or workflow) into a structural graph and exposes query tools so the Consequences Engine can evaluate blast radius before an agent acts.
+
+Supported provider types:
+
+| Type | Description |
+|------|-------------|
+| `code_graph` | Codebase structural awareness — functions, imports, call chains, dependencies |
+| `tool_graph` | Tool and API dependency graph |
+| `policy_graph` | Governance and compliance policy relationships |
+| `workflow_graph` | Multi-step workflow and process dependencies |
+| `receipt_graph` | Transaction and receipt chain relationships |
+| `marketplace_graph` | Marketplace listing and seller dependency graph |
+| `enterprise_context_graph` | Enterprise-wide tenant-isolated context graph |
+
+### Using GitNexus as a local code graph provider
+
+[GitNexus](https://github.com/abhigyanpatwari/GitNexus) is an open-source MCP-native knowledge graph engine that indexes codebases into structural dependency graphs. When attached as a Micro ECF `code_graph` provider, Agent OS can query impact, context, and change detection before code-changing actions.
+
+Add to your Micro ECF policy:
+
+```json
+{
+  "context_providers": [
+    {
+      "type": "code_graph",
+      "provider": "gitnexus",
+      "mode": "local_mcp",
+      "capabilities": ["impact", "context", "query", "detect_changes", "generate_map"],
+      "required": false
+    }
+  ]
+}
+```
+
+When a `code_change` action is proposed, the Consequences Engine will:
+
+1. Query the code_graph provider for `impact(symbol)` — upstream callers, affected files, confidence scores
+2. Query `detect_changes(diff)` — map changed lines to affected processes and risk
+3. Include the impact summary in the consequence assessment
+4. Apply graph-aware blast radius inference (workspace vs workspace_wide)
+5. Route to `allow`, `allow_with_limits`, `ask_owner`, `ask_arbiter`, or `block` based on structural impact
+
+Context providers are optional. If no provider is configured or reachable, the Consequences Engine falls back to its standard risk scoring.
+
 ## Local Export
 
 Run the no-spend simulator before export:
