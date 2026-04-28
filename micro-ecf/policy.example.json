@@ -61,5 +61,14 @@
       "type": "repository",
       "ref": "https://github.com/example/micro-ecf-agent"
     }
-  }
+  },
+  "context_providers": [
+    {
+      "type": "code_graph",
+      "provider": "gitnexus",
+      "mode": "local_mcp",
+      "capabilities": ["impact", "context", "query", "detect_changes", "generate_map"],
+      "required": false
+    }
+  ]
 }
