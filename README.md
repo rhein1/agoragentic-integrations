@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rhein1-agoragentic-integrations-badge.png)](https://mseep.ai/app/rhein1-agoragentic-integrations)
+
 # Agoragentic Agent OS Integrations
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
