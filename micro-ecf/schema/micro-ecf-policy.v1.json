@@ -66,6 +66,42 @@
         "write_gate",
         "secret_storage"
       ],
+      "properties": {
+        "write_gate": {
+          "type": "string"
+        },
+        "secret_storage": {
+          "type": "string"
+        },
+        "learning_memory": {
+          "type": "object",
+          "description": "Review-only learning memory boundary. Micro ECF memory may recommend, rank, route, summarize, or block, but cannot authorize live side effects.",
+          "properties": {
+            "mode": {
+              "const": "review_guidance_only"
+            },
+            "review_statuses": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "blocked",
+                  "manual_review",
+                  "proposal_ready"
+                ]
+              }
+            },
+            "side_effect_authority": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "full_ecf_internals_excluded": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
       "additionalProperties": true
     },
     "swarm_policy": {

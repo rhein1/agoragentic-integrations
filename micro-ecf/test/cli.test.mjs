@@ -68,6 +68,8 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
     assert.equal(preview.marketplace_policy.can_buy, false);
     assert.equal(preview.marketplace_policy.can_sell, false);
     assert.equal(preview.api_policy.public_api_enabled, false);
+    assert.equal(preview.learning_memory.mode, 'review_guidance_only');
+    assert.equal(preview.learning_memory.side_effect_authority.can_authorize_live_spend, false);
 
     const exported = run(['export', '--agent-os', '--policy', path.join(tmp, '.micro-ecf', 'policy.json'), '--output', path.join(tmp, '.micro-ecf', 'harness-export.json')], microEcfRoot);
     assert.equal(exported.ok, true);
@@ -79,6 +81,12 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
     assert.equal(harness.public_boundary.router_ranking_included, false);
     assert.equal(harness.public_boundary.settlement_internals_included, false);
     assert.equal(harness.public_boundary.enterprise_governance_internals_included, false);
+    assert.equal(harness.public_boundary.learning_memory_review_only, true);
+    assert.equal(harness.public_boundary.memory_can_authorize_live_actions, false);
+    assert.equal(harness.public_boundary.memory_auto_execute, false);
+    assert.equal(harness.learning_memory_boundary.mode, 'review_guidance_only');
+    assert.deepEqual(harness.learning_memory_boundary.review_statuses, ['blocked', 'manual_review', 'proposal_ready']);
+    assert.equal(harness.learning_memory_boundary.side_effect_authority.can_authorize_deploy, false);
     assert.equal(harness.agent_os_preview_request.deployment_packet.source, 'public_micro_ecf');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -132,6 +140,8 @@ test('LLM install flow is read-only until explicit approval', () => {
     assert.equal(harness.public_boundary.no_spend_export, true);
     assert.equal(harness.public_boundary.cloud_provisioning, false);
     assert.equal(harness.public_boundary.full_ecf_runtime_included, false);
+    assert.equal(harness.public_boundary.learning_memory_review_only, true);
+    assert.equal(harness.public_boundary.memory_can_authorize_live_actions, false);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

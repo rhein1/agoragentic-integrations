@@ -61,6 +61,30 @@
       "required": ["exposure_mode", "first_proof_required"],
       "additionalProperties": true
     },
+    "public_boundary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "learning_memory_boundary": {
+      "type": "object",
+      "description": "Review-only learning memory boundary. Memory can rank, block, route, summarize, or recommend, but cannot authorize live spend, deploy, dispatch, code mutation, secret changes, marketplace publication, or approval bypass.",
+      "properties": {
+        "mode": { "const": "review_guidance_only" },
+        "review_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["blocked", "manual_review", "proposal_ready"]
+          }
+        },
+        "side_effect_authority": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "full_ecf_internals_excluded": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
     "agent_os_export": {
       "type": "object",
       "required": ["catalog_endpoint", "preview_endpoint", "deployment_endpoint", "treasury_endpoint", "workspace_surface"],

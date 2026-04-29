@@ -105,6 +105,31 @@ const DEFAULT_BLOCK_SUFFIXES = [
   '.pfx',
 ];
 
+const LEARNING_REVIEW_STATUSES = Object.freeze(['blocked', 'manual_review', 'proposal_ready']);
+
+export function buildLearningMemoryBoundary() {
+  return {
+    schema: 'agoragentic.micro-ecf.learning-memory-boundary.v1',
+    mode: 'review_guidance_only',
+    allowed_outputs: ['rank', 'block', 'route', 'summarize', 'recommend'],
+    review_statuses: Array.from(LEARNING_REVIEW_STATUSES),
+    forbidden_outputs: ['auto_execute', 'auto_approve', 'auto_dispatch'],
+    side_effect_authority: {
+      safe_autoapprove: false,
+      human_approval_required: true,
+      can_authorize_live_spend: false,
+      can_authorize_deploy: false,
+      can_dispatch: false,
+      can_mutate_code: false,
+      can_change_secrets: false,
+      can_bypass_human_approval: false,
+      can_bypass_ecf_approval: false,
+      can_publish_marketplace_listing: false,
+    },
+    full_ecf_internals_excluded: true,
+  };
+}
+
 export function createDefaultPolicy(projectName = 'local-agent') {
   return {
     schema: 'agoragentic.micro-ecf.policy.v1',
@@ -140,6 +165,7 @@ export function createDefaultPolicy(projectName = 'local-agent') {
     memory_policy: {
       write_gate: 'local_review_before_memory_write',
       secret_storage: 'reference_only',
+      learning_memory: buildLearningMemoryBoundary(),
     },
     swarm_policy: {
       max_agents: 3,
@@ -650,6 +676,8 @@ export function buildPolicySummary(policy) {
       no_spend: true,
       no_hosted_provisioning: true,
       no_marketplace_publication: true,
+      learning_memory_review_only: true,
+      memory_can_authorize_live_actions: false,
     },
     agent: {
       name: policy.agent_manifest.name,
@@ -676,6 +704,7 @@ export function buildPolicySummary(policy) {
     },
     approvals: policy.approval_policy,
     memory: policy.memory_policy,
+    learning_memory_boundary: buildLearningMemoryBoundary(),
     swarm: policy.swarm_policy,
   };
 }
@@ -749,6 +778,7 @@ export function buildDeploymentPreview(policy, artifactRefs = {}) {
       max_daily_spend_usdc: Number(budgetPolicy.max_daily_spend_usdc || 0),
       approval_required_above_usdc: Number(budgetPolicy.approval_required_above_usdc || 0),
     },
+    learning_memory: buildLearningMemoryBoundary(),
     artifacts: artifactRefs,
   };
 }
@@ -857,9 +887,13 @@ export function buildHarnessPacket(policy, {
       router_ranking_included: false,
       settlement_internals_included: false,
       enterprise_governance_internals_included: false,
+      learning_memory_review_only: true,
+      memory_can_authorize_live_actions: false,
+      memory_auto_execute: false,
       requires_agent_os_preview_before_deployment: true,
       requires_treasury_funding_before_autonomous_spend: true,
     },
+    learning_memory_boundary: buildLearningMemoryBoundary(),
     agent_os_export: {
       catalog_endpoint: 'GET /api/hosting/agent-os/catalog',
       preview_endpoint: 'POST /api/hosting/agent-os/preview',

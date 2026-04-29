@@ -27,7 +27,9 @@
         "full_ecf_runtime_included",
         "router_ranking_included",
         "settlement_internals_included",
-        "enterprise_governance_internals_included"
+        "enterprise_governance_internals_included",
+        "learning_memory_review_only",
+        "memory_can_authorize_live_actions"
       ],
       "properties": {
         "no_spend_export": { "const": true },
@@ -36,7 +38,30 @@
         "full_ecf_runtime_included": { "const": false },
         "router_ranking_included": { "const": false },
         "settlement_internals_included": { "const": false },
-        "enterprise_governance_internals_included": { "const": false }
+        "enterprise_governance_internals_included": { "const": false },
+        "learning_memory_review_only": { "const": true },
+        "memory_can_authorize_live_actions": { "const": false },
+        "memory_auto_execute": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "learning_memory_boundary": {
+      "type": "object",
+      "description": "Review-only learning memory boundary; cannot authorize live spend, deploy, dispatch, code mutation, secret changes, marketplace publication, or approval bypass.",
+      "properties": {
+        "mode": { "const": "review_guidance_only" },
+        "review_statuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["blocked", "manual_review", "proposal_ready"]
+          }
+        },
+        "side_effect_authority": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "full_ecf_internals_excluded": { "type": "boolean" }
       },
       "additionalProperties": true
     },

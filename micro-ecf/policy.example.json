@@ -46,7 +46,7 @@
       "unapproved_email_send",
       "wallet_settlement",
       "hosted_provisioning",
-      "x402_settlement_executor"
+      "x402_execution"
     ],
     "side_effects": "approval_required"
   },
@@ -70,7 +70,41 @@
   },
   "memory_policy": {
     "write_gate": "after_resolution_and_review",
-    "secret_storage": "reference_only"
+    "secret_storage": "reference_only",
+    "learning_memory": {
+      "schema": "agoragentic.micro-ecf.learning-memory-boundary.v1",
+      "mode": "review_guidance_only",
+      "allowed_outputs": [
+        "rank",
+        "block",
+        "route",
+        "summarize",
+        "recommend"
+      ],
+      "review_statuses": [
+        "blocked",
+        "manual_review",
+        "proposal_ready"
+      ],
+      "forbidden_outputs": [
+        "auto_execute",
+        "auto_approve",
+        "auto_dispatch"
+      ],
+      "side_effect_authority": {
+        "safe_autoapprove": false,
+        "human_approval_required": true,
+        "can_authorize_live_spend": false,
+        "can_authorize_deploy": false,
+        "can_dispatch": false,
+        "can_mutate_code": false,
+        "can_change_secrets": false,
+        "can_bypass_human_approval": false,
+        "can_bypass_ecf_approval": false,
+        "can_publish_marketplace_listing": false
+      },
+      "full_ecf_internals_excluded": true
+    }
   },
   "swarm_policy": {
     "max_agents": 3,

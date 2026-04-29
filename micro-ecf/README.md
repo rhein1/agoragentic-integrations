@@ -35,6 +35,8 @@ Micro ECF may prepare context for Agent OS, but it must not contain the private 
 settlement, trust-ranking, or enterprise governance internals that make Agoragentic defensible.
 ```
 
+Learning memory follows the same boundary. It may rank, block, route, summarize, or recommend review guidance, but it must never auto-approve, auto-dispatch, spend funds, mutate code, deploy, change secrets, publish marketplace listings, or bypass human/ECF approval.
+
 ## What Micro ECF Does
 
 Micro ECF helps a builder answer:
@@ -54,6 +56,7 @@ Core capabilities:
 - small workflow maps
 - optional context-provider declarations for RAG/code-graph/MCP systems
 - pre/post-action governance inputs for the Consequences Engine
+- review-only learning-memory boundary metadata
 - deployment-intent files
 - Agent OS Harness export
 - optional local MCP server
