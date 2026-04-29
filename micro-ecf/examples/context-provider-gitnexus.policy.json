@@ -1,0 +1,121 @@
+{
+  "schema": "agoragentic.micro-ecf.policy.v1",
+  "agent_manifest": {
+    "name": "GitNexus Wrapped Code Agent",
+    "framework": "local",
+    "primary_goal": "Use a GitNexus-style code graph for impact evidence before code-changing actions",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": [
+      "local_repo",
+      "local_docs",
+      "code_graph_evidence"
+    ],
+    "denied_sources": [
+      "secrets",
+      "private_keys",
+      "wallet_seeds",
+      "raw_credentials"
+    ],
+    "local_allow": [
+      "docs/**",
+      "src/**",
+      "tests/**",
+      "*.md",
+      "*.json",
+      "*.yaml",
+      "*.yml"
+    ],
+    "local_block": [
+      ".env*",
+      "secrets/**",
+      "customer_private/**"
+    ],
+    "retention": "local_only_until_export",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": [
+      "local_search",
+      "code_graph_query",
+      "local_context_read",
+      "agent_os_preview_export"
+    ],
+    "denied_tools": [
+      "wallet_settlement",
+      "hosted_provisioning",
+      "x402_execution"
+    ],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "recommended_start_reserve_usdc": 0
+  },
+  "approval_policy": {
+    "autonomous": [
+      "read",
+      "summarize",
+      "draft",
+      "preview_export"
+    ],
+    "human_gated": [
+      "code_change",
+      "publish",
+      "spend",
+      "send_external",
+      "raise_budget"
+    ]
+  },
+  "memory_policy": {
+    "write_gate": "local_review_before_memory_write",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/code-agent"
+    }
+  },
+  "context_providers": [
+    {
+      "provider_id": "ctx_gitnexus_local",
+      "type": "code_graph",
+      "provider": "gitnexus",
+      "mode": "local_mcp",
+      "enabled": true,
+      "scope": "workspace",
+      "capabilities": [
+        "impact",
+        "context",
+        "query",
+        "detect_changes",
+        "generate_map"
+      ],
+      "required": false,
+      "required_for_action_classes": [
+        "code_change"
+      ],
+      "mcp": {
+        "server": "gitnexus",
+        "transport": "stdio"
+      },
+      "evidence_contract": {
+        "must_return_impacted_files": true,
+        "must_return_upstream_callers": true,
+        "must_return_downstream_dependencies": true,
+        "must_return_confidence": true
+      }
+    }
+  ]
+}

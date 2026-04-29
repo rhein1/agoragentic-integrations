@@ -144,4 +144,35 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.equal(packageJson.engines.node, '>=18');
   assert.ok(packageJson.files.includes('assets/'));
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));
+  assert.ok(packageJson.files.includes('PROVIDER_WRAPPING.md'));
+});
+
+test('context provider docs and examples keep Micro ECF as a governance wrapper', () => {
+  const schema = readJson(path.join(microEcfRoot, 'schema', 'micro-ecf-policy.v1.json'));
+  const providerTypes = schema.properties.context_providers.items.properties.type.enum;
+  assert.ok(providerTypes.includes('retrieval_context'));
+  assert.ok(providerTypes.includes('code_graph'));
+
+  const guide = fs.readFileSync(path.join(microEcfRoot, 'PROVIDER_WRAPPING.md'), 'utf8');
+  assert.match(guide, /does not replace your RAG/i);
+  assert.match(guide, /raw_secret_content_allowed/);
+  assert.match(guide, /fail closed/i);
+
+  const examples = [
+    ['context-provider-rag.policy.json', 'retrieval_context', 'local_rag'],
+    ['context-provider-gitnexus.policy.json', 'code_graph', 'gitnexus'],
+    ['context-provider-database-mcp.policy.json', 'retrieval_context', 'database_mcp'],
+  ];
+
+  for (const [fileName, expectedType, expectedProvider] of examples) {
+    const examplePath = path.join(microEcfRoot, 'examples', fileName);
+    const policy = readJson(examplePath);
+    assert.equal(policy.schema, 'agoragentic.micro-ecf.policy.v1');
+    assert.equal(policy.context_providers[0].type, expectedType);
+    assert.equal(policy.context_providers[0].provider, expectedProvider);
+    assert.equal(JSON.stringify(policy).includes('PRIVATE_KEY='), false);
+
+    const validated = run(['validate-policy', '--policy', examplePath], microEcfRoot);
+    assert.equal(validated.ok, true);
+  }
 });

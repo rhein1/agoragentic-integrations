@@ -256,17 +256,48 @@ The MCP server reads and writes local `.micro-ecf` artifacts only. It does not c
 
 Micro ECF can attach optional context providers for pre-action impact review. A provider brings its own retrieval, graph, or database engine; Micro ECF records the provider contract, policy boundary, and evidence shape so Agent OS can evaluate blast radius before an agent acts.
 
+Full guide: [`PROVIDER_WRAPPING.md`](./PROVIDER_WRAPPING.md).
+
 Supported provider types:
 
 | Type | Description |
 |------|-------------|
 | `code_graph` | Codebase structural awareness: functions, imports, call chains, dependencies |
+| `retrieval_context` | RAG, document retrieval, database schema/context, or other context engines that return cited evidence |
 | `tool_graph` | Tool and API dependency graph |
 | `policy_graph` | Governance and compliance policy relationships |
 | `workflow_graph` | Multi-step workflow and process dependencies |
 | `receipt_graph` | Transaction and receipt chain relationships |
 | `marketplace_graph` | Marketplace listing and seller dependency graph |
 | `enterprise_context_graph` | Reserved for Full ECF / enterprise deployments, not local Micro ECF internals |
+
+### Existing RAG As `retrieval_context`
+
+If you already have RAG, keep it. Configure it as a provider:
+
+```json
+{
+  "context_providers": [
+    {
+      "provider_id": "ctx_local_rag_docs",
+      "type": "retrieval_context",
+      "provider": "local_rag",
+      "mode": "local_mcp",
+      "enabled": true,
+      "scope": "docs_and_repo",
+      "capabilities": ["query", "retrieve", "cite"],
+      "required": false,
+      "required_for_action_classes": ["read_only", "code_change"],
+      "mcp": {
+        "server": "local-rag",
+        "transport": "stdio"
+      }
+    }
+  ]
+}
+```
+
+Your RAG provider owns retrieval. Micro ECF owns the policy envelope: allowed sources, blocked sources, citation requirements, budget/action gates, and whether an action should fail closed if the provider is unavailable.
 
 ### GitNexus As Optional `code_graph`
 

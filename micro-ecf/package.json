@@ -17,6 +17,7 @@
     "README.md",
     "LLM_INSTALL.md",
     "POST_INSTALL.md",
+    "PROVIDER_WRAPPING.md",
     "LICENSE",
     "policy.example.json",
     "export-agent-os-harness.mjs"

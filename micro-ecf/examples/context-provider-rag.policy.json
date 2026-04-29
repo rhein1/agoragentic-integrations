@@ -1,0 +1,120 @@
+{
+  "schema": "agoragentic.micro-ecf.policy.v1",
+  "agent_manifest": {
+    "name": "Local RAG Wrapped Agent",
+    "framework": "local",
+    "primary_goal": "Use an existing local RAG provider under explicit Micro ECF source and action boundaries",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": [
+      "local_repo",
+      "local_docs",
+      "local_rag_citations"
+    ],
+    "denied_sources": [
+      "secrets",
+      "private_keys",
+      "wallet_seeds",
+      "raw_credentials",
+      "uncited_rag_answers"
+    ],
+    "local_allow": [
+      "docs/**",
+      "src/**",
+      "*.md",
+      "*.json",
+      "*.yaml",
+      "*.yml"
+    ],
+    "local_block": [
+      ".env*",
+      "secrets/**",
+      "customer_private/**"
+    ],
+    "retention": "local_only_until_export",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": [
+      "local_search",
+      "local_rag_query",
+      "local_context_read",
+      "agent_os_preview_export"
+    ],
+    "denied_tools": [
+      "hosted_rag_answer",
+      "wallet_settlement",
+      "hosted_provisioning",
+      "x402_execution"
+    ],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "recommended_start_reserve_usdc": 0
+  },
+  "approval_policy": {
+    "autonomous": [
+      "read",
+      "summarize",
+      "draft",
+      "preview_export"
+    ],
+    "human_gated": [
+      "publish",
+      "spend",
+      "send_external",
+      "raise_budget"
+    ]
+  },
+  "memory_policy": {
+    "write_gate": "local_review_before_memory_write",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/local-rag-agent"
+    }
+  },
+  "context_providers": [
+    {
+      "provider_id": "ctx_local_rag_docs",
+      "type": "retrieval_context",
+      "provider": "local_rag",
+      "mode": "local_mcp",
+      "enabled": true,
+      "scope": "docs_and_repo",
+      "capabilities": [
+        "query",
+        "retrieve",
+        "cite"
+      ],
+      "required": false,
+      "required_for_action_classes": [
+        "read_only",
+        "code_change"
+      ],
+      "mcp": {
+        "server": "local-rag",
+        "transport": "stdio"
+      },
+      "evidence_contract": {
+        "must_return_source_ids": true,
+        "must_return_citations": true,
+        "must_return_confidence": true,
+        "raw_secret_content_allowed": false
+      }
+    }
+  ]
+}
