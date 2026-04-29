@@ -1,12 +1,14 @@
 # Micro ECF
 
 <p align="center">
-  <img src="assets/micro-ecf-hero.png" alt="Micro ECF — local context layer for safer agents" width="100%" />
+  <img src="assets/micro-ecf-hero.png" alt="Micro ECF - local governance envelope for safer agents" width="100%" />
 </p>
 
-Micro ECF is a lightweight local context layer for builders who want safer agents.
+Micro ECF is a lightweight local governance envelope for agent context.
 
-It indexes small repos, docs, and local databases, builds citation-ready context packets, applies local policy boundaries, and exports Agent OS Harness files for deployment preview.
+It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs. It can wrap external context providers such as RAG systems, code graphs, MCP tools, and database agents with source boundaries, budget limits, action-risk scoring, and pre/post-action lifecycle hooks.
+
+Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. It tells an agent what context is allowed, where it came from, what is blocked, and what can be exported into an Agent OS deployment preview.
 
 Micro ECF runs locally and does not require Agoragentic Cloud. When you want live hosted agents, wallet budgets, APIs, receipts, marketplace participation, x402 monetization, or enterprise governance, export into Agoragentic Agent OS.
 
@@ -21,7 +23,7 @@ Micro ECF is not Full ECF.
 Use this product rule everywhere:
 
 ```text
-Micro ECF is the local context wedge.
+Micro ECF is the local governance envelope and context wedge.
 Agent OS is the deployment product.
 Full ECF is the enterprise runtime engine.
 ```
@@ -38,17 +40,20 @@ settlement, trust-ranking, or enterprise governance internals that make Agoragen
 Micro ECF helps a builder answer:
 
 ```text
-What can this agent safely know, cite, use, and export into an Agent OS deployment preview?
+Given the context my tools already have or can locally summarize, what is this agent
+allowed to know, cite, use, act on, and export into an Agent OS deployment preview?
 ```
 
 Core capabilities:
 
-- local repo/doc/db indexing
-- context packet generation
-- citation/source maps
+- bounded local source inventory and summarization
+- context packet generation from source summaries/provenance
+- citation/source maps for allowed local artifacts
 - policy summaries
 - tool/context allowlists
 - small workflow maps
+- optional context-provider declarations for RAG/code-graph/MCP systems
+- pre/post-action governance inputs for the Consequences Engine
 - deployment-intent files
 - Agent OS Harness export
 - optional local MCP server
@@ -77,10 +82,35 @@ AGENTS.md
 MICRO_ECF_LLM_BOOTSTRAP.md
 ```
 
+## What A Context Packet Is
+
+A Micro ECF context packet is a governance artifact, not a retrieved-answer bundle.
+
+It contains:
+
+- source IDs, paths, hashes, summaries, citation IDs, and provenance
+- allowed and blocked context classes
+- export boundaries such as `raw_content_exported=false`
+- references that Agent OS or an IDE assistant can use to inspect the real source files
+
+It does not contain:
+
+- embeddings
+- vector indexes
+- semantic search results
+- model-generated answers
+- raw secret or private-file contents
+- Full ECF private context graph internals
+
+Use direct source reads, your own RAG, GitNexus, or another MCP/context provider as the source of truth for deep retrieval. Use Micro ECF to govern what those systems may expose or act on.
+
 ## What Micro ECF Does Not Include
 
 Do not add these to Micro ECF:
 
+- semantic/vector retrieval engine
+- hosted RAG answer path
+- embedding store or model-backed reranker
 - Full ECF private context graph internals
 - tenant isolation runtime
 - enterprise connector architecture
@@ -96,7 +126,7 @@ Do not add these to Micro ECF:
 - customer-control evidence tooling
 - internal policy scoring for enterprise approvals
 
-Micro ECF can produce inputs for those systems. It should not implement them.
+Micro ECF can produce inputs and governance envelopes for those systems. It should not implement them.
 
 ## One-Command Setup
 
@@ -224,7 +254,7 @@ The MCP server reads and writes local `.micro-ecf` artifacts only. It does not c
 
 ## Context Providers
 
-Micro ECF can attach optional context graph providers for pre-action impact review. A provider indexes a bounded workspace into a structural graph and exposes query tools so Agent OS can evaluate blast radius before an agent acts.
+Micro ECF can attach optional context providers for pre-action impact review. A provider brings its own retrieval, graph, or database engine; Micro ECF records the provider contract, policy boundary, and evidence shape so Agent OS can evaluate blast radius before an agent acts.
 
 Supported provider types:
 
@@ -264,7 +294,7 @@ GitNexus can be used as an optional local `code_graph` provider. Treat it as a p
 }
 ```
 
-If no provider is configured or reachable, Agent OS falls back to standard policy/consequence review.
+If no provider is configured or reachable, Agent OS falls back to standard policy/consequence review. Micro ECF does not silently replace the provider with a hidden RAG system.
 
 ## How It Connects To Agent OS
 
@@ -273,8 +303,8 @@ Funnel:
 ```text
 1. Builder installs Micro ECF locally.
 2. Builder points it at repo/docs/db.
-3. Micro ECF builds local context and policy packets.
-4. Builder sees what the agent can safely know, cite, and use.
+3. Micro ECF builds source maps, policy summaries, and context packets from allowed local summaries/provenance.
+4. Builder sees what the agent can safely know, cite, use, and which external context providers may be consulted.
 5. Micro ECF exports Agent OS Harness files.
 6. Builder previews deployment on Agoragentic.
 7. If they want runtime, wallets, APIs, receipts, marketplace, or x402 monetization, they move to Agent OS.

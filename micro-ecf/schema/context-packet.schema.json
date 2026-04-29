@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://agoragentic.com/schema/micro-ecf-context-packet.v1.json",
   "title": "Micro ECF Context Packet v1",
-  "description": "Citation-ready local context packet. It contains source summaries and provenance, not raw source content.",
+  "description": "Citation-ready local context governance packet. It contains source summaries and provenance, not raw source content, semantic retrieval results, or generated answers.",
   "type": "object",
   "required": ["schema", "packet_id", "scope", "sources", "citations", "export_boundary"],
   "properties": {
