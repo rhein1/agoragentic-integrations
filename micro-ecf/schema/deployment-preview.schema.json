@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-deployment-preview.v1.json",
+  "title": "Micro ECF Deployment Preview v1",
+  "description": "Local no-spend deployment preview metadata before Agent OS import.",
+  "type": "object",
+  "required": ["schema", "agent_name", "target", "marketplace_policy", "api_policy", "budget_policy", "artifacts"],
+  "properties": {
+    "schema": { "const": "agoragentic.micro-ecf.deployment-preview.v1" },
+    "generated_at": { "type": "string" },
+    "agent_name": { "type": "string", "minLength": 1 },
+    "target": {
+      "type": "object",
+      "required": ["agent_os_preview_endpoint", "runtime_lane", "hosting_target", "exposure_mode"],
+      "additionalProperties": true
+    },
+    "marketplace_policy": {
+      "type": "object",
+      "required": ["can_buy", "can_sell", "x402_enabled"],
+      "properties": {
+        "can_buy": { "const": false },
+        "can_sell": { "const": false },
+        "x402_enabled": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "api_policy": {
+      "type": "object",
+      "required": ["public_api_enabled"],
+      "properties": {
+        "public_api_enabled": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "budget_policy": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

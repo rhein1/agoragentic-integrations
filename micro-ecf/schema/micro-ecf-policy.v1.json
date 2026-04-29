@@ -86,7 +86,7 @@
     },
     "context_providers": {
       "type": "array",
-      "description": "Optional context graph providers for pre-action impact analysis. Each entry declares a provider type (e.g. code_graph), provider name, communication mode, and capabilities.",
+      "description": "Optional context graph providers for pre-action impact analysis. Each provider attaches structural awareness to Micro ECF without making the provider required by default.",
       "items": {
         "type": "object",
         "required": [
@@ -94,6 +94,10 @@
           "provider"
         ],
         "properties": {
+          "provider_id": {
+            "type": "string",
+            "description": "Stable local identifier for this provider binding."
+          },
           "type": {
             "type": "string",
             "enum": [
@@ -119,6 +123,14 @@
             ],
             "default": "local_mcp"
           },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "scope": {
+            "type": "string",
+            "default": "workspace"
+          },
           "capabilities": {
             "type": "array",
             "items": {
@@ -130,6 +142,31 @@
             "type": "boolean",
             "default": false,
             "description": "If true, the Consequences Engine will block actions of this type when the provider is unreachable."
+          },
+          "required_for_action_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Action classes that should consult this provider before execution, e.g. code_change."
+          },
+          "mcp": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "sse",
+                  "http"
+                ],
+                "default": "stdio"
+              }
+            },
+            "additionalProperties": true
           }
         },
         "additionalProperties": true

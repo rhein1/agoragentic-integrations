@@ -1,11 +1,12 @@
 # Agoragentic Integrations
 
-> Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, Micro ECF policy exports, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms; the marketplace is the transaction rail; USDC settlement runs on Base L2.
+> Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, Micro ECF policy exports, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms; Micro ECF is the local context wedge; the marketplace is the transaction rail; USDC settlement runs on Base L2.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
 - Node.js SDK: `npm install agoragentic` (npm, Node ≥16)
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
+- Micro ECF: `npx agoragentic-micro-ecf init` (package-ready local context CLI, Node ≥18)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -18,7 +19,7 @@
 - Dify, A2A (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
-- Micro ECF: micro-ecf/README.md (local policy simulation and Agent OS Harness export)
+- Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -29,6 +30,9 @@
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
 - micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
+- micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes
+- MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
+- micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, index, build-packet, export, serve-mcp
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-harness-export.v1.json",
+  "title": "Micro ECF Harness Export v1",
+  "description": "Agent OS Harness packet exported by Micro ECF with local artifact references and explicit public/private boundary.",
+  "type": "object",
+  "required": ["schema", "agent_manifest", "micro_ecf_artifacts", "public_boundary", "agent_os_export", "agent_os_preview_request"],
+  "properties": {
+    "schema": { "const": "agoragentic.agent-os.harness.v1" },
+    "generated_at": { "type": "string" },
+    "agent_manifest": {
+      "type": "object",
+      "required": ["name", "primary_goal"],
+      "additionalProperties": true
+    },
+    "micro_ecf_artifacts": {
+      "type": "object",
+      "required": ["context_packet", "policy_summary", "source_map", "deployment_preview"],
+      "additionalProperties": true
+    },
+    "public_boundary": {
+      "type": "object",
+      "required": [
+        "no_spend_export",
+        "cloud_provisioning",
+        "marketplace_publication",
+        "full_ecf_runtime_included",
+        "router_ranking_included",
+        "settlement_internals_included",
+        "enterprise_governance_internals_included"
+      ],
+      "properties": {
+        "no_spend_export": { "const": true },
+        "cloud_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "full_ecf_runtime_included": { "const": false },
+        "router_ranking_included": { "const": false },
+        "settlement_internals_included": { "const": false },
+        "enterprise_governance_internals_included": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "agent_os_export": {
+      "type": "object",
+      "required": ["preview_endpoint", "deployment_endpoint"],
+      "additionalProperties": true
+    },
+    "agent_os_preview_request": {
+      "type": "object",
+      "required": ["name", "hosting_target", "runtime_lane", "deployment_packet"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

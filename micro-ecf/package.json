@@ -1,0 +1,37 @@
+{
+  "name": "agoragentic-micro-ecf",
+  "version": "0.1.0",
+  "description": "Local-first context and policy packets for safer agents before Agent OS deployment preview.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "micro-ecf": "./bin/micro-ecf.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schema/",
+    "examples/",
+    "simulator/",
+    "README.md",
+    "LLM_INSTALL.md",
+    "LICENSE",
+    "policy.example.json",
+    "export-agent-os-harness.mjs"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check bin/micro-ecf.mjs && node --check src/core.mjs && node --check src/mcp-server.mjs && node --check export-agent-os-harness.mjs"
+  },
+  "keywords": [
+    "agents",
+    "agent-os",
+    "context",
+    "governance",
+    "mcp",
+    "rag"
+  ]
+}

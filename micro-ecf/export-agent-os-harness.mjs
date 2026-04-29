@@ -1,28 +1,24 @@
 #!/usr/bin/env node
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  DEFAULT_BASE_URL,
+  DEFAULT_OUTPUT_DIR,
+  buildHarnessPacket,
+  readPolicy,
+  writeJson,
+} from './src/core.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_POLICY = path.join(__dirname, 'policy.example.json');
-const DEFAULT_BASE_URL = 'https://agoragentic.com';
-
-const REQUIRED_SECTIONS = [
-  'agent_manifest',
-  'context_policy',
-  'tool_policy',
-  'budget_policy',
-  'approval_policy',
-  'memory_policy',
-  'swarm_policy',
-  'deployment_policy',
-];
 
 function parseArgs(argv) {
   const args = {
     policy: DEFAULT_POLICY,
     output: null,
     baseUrl: DEFAULT_BASE_URL,
+    artifactRefs: {},
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -30,6 +26,10 @@ function parseArgs(argv) {
     if (arg === '--policy') args.policy = argv[++i];
     else if (arg === '--output') args.output = argv[++i];
     else if (arg === '--base-url') args.baseUrl = argv[++i];
+    else if (arg === '--context-packet') args.artifactRefs.context_packet = argv[++i];
+    else if (arg === '--policy-summary') args.artifactRefs.policy_summary = argv[++i];
+    else if (arg === '--source-map') args.artifactRefs.source_map = argv[++i];
+    else if (arg === '--deployment-preview') args.artifactRefs.deployment_preview = argv[++i];
     else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -46,111 +46,17 @@ function printHelp() {
   node micro-ecf/export-agent-os-harness.mjs --policy micro-ecf/policy.example.json --output ./agent-os-harness.packet.json
 
 Options:
-  --policy <path>    Micro ECF policy JSON. Defaults to micro-ecf/policy.example.json.
-  --output <path>    Write packet to a file. Defaults to stdout.
-  --base-url <url>   Agoragentic base URL. Defaults to https://agoragentic.com.
+  --policy <path>               Micro ECF policy JSON. Defaults to micro-ecf/policy.example.json.
+  --output <path>               Write packet to a file. Defaults to stdout.
+  --base-url <url>              Agoragentic base URL. Defaults to https://agoragentic.com.
+  --context-packet <path>       Optional local context-packet artifact ref.
+  --policy-summary <path>       Optional local policy-summary artifact ref.
+  --source-map <path>           Optional local source-map artifact ref.
+  --deployment-preview <path>   Optional local deployment-preview artifact ref.
+
+For the package-ready CLI, use:
+  micro-ecf export --agent-os
 `);
-}
-
-function readPolicy(policyPath) {
-  const resolved = path.resolve(policyPath);
-  const policy = JSON.parse(fs.readFileSync(resolved, 'utf8'));
-  validatePolicy(policy);
-  return { policy, resolved };
-}
-
-function validatePolicy(policy) {
-  for (const section of REQUIRED_SECTIONS) {
-    if (!policy[section] || typeof policy[section] !== 'object' || Array.isArray(policy[section])) {
-      throw new Error(`Missing required object section: ${section}`);
-    }
-  }
-  if (!policy.agent_manifest.name) throw new Error('agent_manifest.name is required');
-  if (!policy.agent_manifest.primary_goal) throw new Error('agent_manifest.primary_goal is required');
-}
-
-function buildHarnessPacket(policy, { baseUrl, policyPath }) {
-  const deploymentPolicy = policy.deployment_policy || {};
-  const budgetPolicy = policy.budget_policy || {};
-  const agent = policy.agent_manifest || {};
-  const source = deploymentPolicy.source || {};
-  const hostingTarget = deploymentPolicy.hosting_target || 'self_hosted_http';
-
-  const packet = {
-    schema: 'agoragentic.agent-os.harness.v1',
-    generated_at: new Date().toISOString(),
-    generated_from: {
-      source: 'micro-ecf/export-agent-os-harness.mjs',
-      policy_path: policyPath,
-      canonical_contract: `${baseUrl.replace(/\/$/, '')}/agent-os-harness.json`,
-    },
-    schema_artifacts: {
-      agent_os_harness: `${baseUrl.replace(/\/$/, '')}/schema/agent-os-harness.v1.json`,
-      micro_ecf_policy: `${baseUrl.replace(/\/$/, '')}/schema/micro-ecf-policy.v1.json`,
-      local_agent_os_harness: 'micro-ecf/schema/agent-os-harness.v1.json',
-      local_micro_ecf_policy: 'micro-ecf/schema/micro-ecf-policy.v1.json',
-    },
-    agent_manifest: agent,
-    context_policy: policy.context_policy,
-    tool_policy: policy.tool_policy,
-    budget_policy: budgetPolicy,
-    approval_policy: policy.approval_policy,
-    memory_policy: policy.memory_policy,
-    swarm_policy: policy.swarm_policy,
-    deployment_policy: deploymentPolicy,
-    public_boundary: {
-      no_spend_export: true,
-      hosted_billing: false,
-      cloud_provisioning: false,
-      marketplace_publication: false,
-      hosted_runtime_secrets: false,
-      requires_agent_os_preview_before_deployment: true,
-      requires_treasury_funding_before_autonomous_spend: true,
-    },
-    agent_os_export: {
-      catalog_endpoint: 'GET /api/hosting/agent-os/catalog',
-      preview_endpoint: 'POST /api/hosting/agent-os/preview',
-      deployment_endpoint: 'POST /api/hosting/agent-os/deployments',
-      treasury_endpoint: 'GET /api/hosting/agent-os/deployments/{deployment_id}/treasury',
-      workspace_surface: '/agent-os/workspaces/',
-      marketplace_router: 'POST /api/execute',
-      x402_edge: 'POST https://x402.agoragentic.com/v1/{slug}',
-    },
-    agent_os_preview_request: {
-      name: agent.name,
-      hosting_target: hostingTarget,
-      template_id: hostingTarget === 'platform_hosted_syrin' ? 'syrin_creator_demo' : 'self_hosted_router_advocate',
-      runtime_lane: hostingTarget === 'platform_hosted_syrin' ? 'shared_platform_runtime' : 'customer_managed_http_runtime',
-      exposure_mode: deploymentPolicy.exposure_mode || 'private_only',
-      source: {
-        type: source.type || 'repository',
-        ref: source.ref || '',
-      },
-      goals: {
-        primary_goal: agent.primary_goal,
-        budget: {
-          max_daily_usdc: budgetPolicy.max_daily_spend_usdc || 0,
-          approval_required_above_usdc: budgetPolicy.approval_required_above_usdc || 0,
-          recommended_start_reserve_usdc: budgetPolicy.recommended_start_reserve_usdc || 0,
-        },
-      },
-      safety_policy: {
-        first_proof_required: deploymentPolicy.first_proof_required !== false,
-        context_policy: policy.context_policy,
-        tool_policy: policy.tool_policy,
-        approval_policy: policy.approval_policy,
-        memory_policy: policy.memory_policy,
-        swarm_policy: policy.swarm_policy,
-      },
-      deployment_packet: {
-        schema: 'agoragentic.micro-ecf.export.v1',
-        source: 'public_micro_ecf',
-        harness_schema: 'agoragentic.agent-os.harness.v1',
-      },
-    },
-  };
-
-  return packet;
 }
 
 function main() {
@@ -159,16 +65,19 @@ function main() {
   const packet = buildHarnessPacket(policy, {
     baseUrl: args.baseUrl,
     policyPath: path.relative(process.cwd(), resolved).replace(/\\/g, '/'),
+    artifactRefs: {
+      context_packet: args.artifactRefs.context_packet || `${DEFAULT_OUTPUT_DIR}/context-packet.json`,
+      policy_summary: args.artifactRefs.policy_summary || `${DEFAULT_OUTPUT_DIR}/policy-summary.json`,
+      source_map: args.artifactRefs.source_map || `${DEFAULT_OUTPUT_DIR}/source-map.json`,
+      deployment_preview: args.artifactRefs.deployment_preview || `${DEFAULT_OUTPUT_DIR}/deployment-preview.json`,
+    },
   });
-  const json = `${JSON.stringify(packet, null, 2)}\n`;
 
   if (args.output) {
-    const outputPath = path.resolve(args.output);
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, json);
+    const outputPath = writeJson(args.output, packet);
     console.log(JSON.stringify({ ok: true, output: outputPath }, null, 2));
   } else {
-    process.stdout.write(json);
+    process.stdout.write(`${JSON.stringify(packet, null, 2)}\n`);
   }
 }
 

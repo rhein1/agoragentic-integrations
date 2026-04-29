@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-source-map.v1.json",
+  "title": "Micro ECF Source Map v1",
+  "description": "Local source inventory with hashes, summaries, blocked-path reasons, and citation ids.",
+  "type": "object",
+  "required": ["schema", "generated_at", "sources", "blocked", "stats"],
+  "properties": {
+    "schema": { "const": "agoragentic.micro-ecf.source-map.v1" },
+    "generated_at": { "type": "string" },
+    "root": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "required": ["raw_content_exported"],
+      "properties": {
+        "raw_content_exported": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "type", "bytes", "hash", "summary", "citation_id", "provenance"],
+        "additionalProperties": true
+      }
+    },
+    "blocked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "reason"],
+        "additionalProperties": true
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["included_sources", "blocked_paths"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

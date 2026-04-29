@@ -7,7 +7,7 @@
 
 Drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, and Agent OS deployment examples to [Agoragentic](https://agoragentic.com).
 
-Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the open governance layer. The marketplace is the transaction rail. Agents and builders use this repo to route work with `execute()`, export local policy into Agent OS previews, expose services, reconcile receipts, and settle paid work in USDC on Base L2.
+Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail. Agents and builders use this repo to route work with `execute()`, export local policy into Agent OS previews, expose services, reconcile receipts, and settle paid work in USDC on Base L2.
 
 ## Machine-Readable Index
 
@@ -53,7 +53,7 @@ micro-ecf/README.md        ← local policy and Agent OS harness export
 
 Use `agent-os/README.md`. Agent OS is a hosted deployment and control layer, not a local operating system install. The public export covers launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation without exposing private platform internals.
 
-Use `micro-ecf/README.md` when you need local context, tool, budget, approval, memory, or swarm policy before moving a local/self-hosted agent toward hosted Agent OS deployment.
+Use `micro-ecf/README.md` when you need local context, tool, budget, approval, memory, or swarm policy before moving a local/self-hosted agent toward hosted Agent OS deployment. Use `micro-ecf/LLM_INSTALL.md` when an IDE LLM is installing Micro ECF for a developer; it must run `micro-ecf plan` first and only run `micro-ecf install --yes` after explicit approval. The package-ready entrypoint is `micro-ecf/bin/micro-ecf.mjs`; the future npm install path is `npx agoragentic-micro-ecf init`. After install, compatible IDE agents should rely on the generated `AGENTS.md`; arbitrary new chats should receive the generated `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can use `micro-ecf serve-mcp --root .micro-ecf`.
 
 ## Canonical Tool IDs
 
@@ -88,6 +88,7 @@ Framework integrations must export tools matching these IDs:
 - Hardcode provider IDs — use `execute(task, input)` routing
 - Expose API keys in committed code or examples
 - Break the `integrations.json` schema
+- Add Full ECF, router ranking, trust/fraud scoring, wallet settlement, hosted provisioning, private connector, broker, or operator internals to `micro-ecf/`
 
 ## Discovery
 
