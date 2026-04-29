@@ -217,21 +217,23 @@ export function initProject({ targetDir = process.cwd(), force = false } = {}) {
 export function buildExplanation() {
   return {
     name: 'Micro ECF',
-    summary: 'Micro ECF is a lightweight local context layer for builders who want safer agents.',
+    summary: 'Micro ECF is a lightweight local governance envelope for agent context.',
     what_it_does: [
-      'Indexes small repos, docs, local files, and database exports locally.',
-      'Builds citation-ready context packets and source maps without exporting raw source content.',
+      'Builds bounded local source maps from repos, docs, local files, and database-summary exports.',
+      'Builds citation-ready context packets from source summaries and provenance without exporting raw source content.',
       'Applies local policy boundaries for allowed context, blocked sources, tools, budgets, approvals, memory, and swarms.',
+      'Can declare external context providers such as RAG, code graphs, database tools, or MCP servers so Agent OS can apply governance around them.',
       'Exports an Agent OS Harness file for no-spend deployment preview.',
     ],
     why_it_helps: [
       'Your IDE LLM gets a stable map of what it can safely know and cite.',
       'Secret-looking files, private keys, wallet seeds, credentials, node_modules, and .git internals are blocked by default.',
+      'Existing RAG, GitNexus, database, or MCP context systems can be wrapped with explicit policy/provenance boundaries instead of hidden prompt assumptions.',
       'Agent OS receives a structured preview packet instead of an informal prompt or screenshot.',
       'You keep local control until you explicitly choose to preview or deploy through Agent OS.',
     ],
     boundary: {
-      micro_ecf: 'local context wedge',
+      micro_ecf: 'local governance envelope and context wedge',
       agent_os: 'deployment product',
       full_ecf: 'private enterprise runtime engine',
       local_only: true,
@@ -239,6 +241,8 @@ export function buildExplanation() {
       no_spend: true,
       no_hosted_deploy: true,
       no_marketplace_publish: true,
+      no_semantic_rag_engine: true,
+      no_generated_answers: true,
       no_full_ecf_internals: true,
       no_router_ranking: true,
       no_wallet_or_x402_settlement: true,
@@ -284,6 +288,7 @@ export function buildInstallPlan({ targetDir = process.cwd(), outputDir = null, 
       'No hosted billing.',
       'No marketplace publication.',
       'No wallet or x402 settlement.',
+      'No semantic/vector retrieval engine or hosted RAG answer path.',
       'No provider ranking.',
       'No trust/fraud scoring internals.',
       'No Full ECF private runtime or enterprise governance internals.',
@@ -399,7 +404,9 @@ Use this file at the start of any new LLM conversation when the assistant does n
 
 ## What Micro ECF Is
 
-Micro ECF is a local-first context and policy layer for safer agents. It indexes allowed local repo/docs/database-summary sources, blocks secret-like paths by default, builds citation-ready context packets, and exports Agent OS Harness files for deployment preview.
+Micro ECF is a local-first governance envelope and context-policy layer for safer agents. It builds bounded source maps from allowed local repo/docs/database-summary sources, blocks secret-like paths by default, builds citation-ready context packets from summaries/provenance, and exports Agent OS Harness files for deployment preview.
+
+Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. If this project uses RAG, GitNexus, database tools, or MCP context providers, Micro ECF governs what those systems may expose or act on.
 
 Micro ECF is not Full ECF. It does not include private enterprise runtime internals, tenant isolation runtime, hosted provisioning, router ranking, wallet settlement, x402 settlement, trust/fraud internals, private connectors, or operator prompts.
 
@@ -407,7 +414,7 @@ Micro ECF is not Full ECF. It does not include private enterprise runtime intern
 
 1. Check whether .micro-ecf/ exists.
 2. If present, read .micro-ecf/policy-summary.json first to understand allowed tools, blocked sources, budget limits, approvals, memory, and swarm rules.
-3. Read .micro-ecf/context-packet.json for citation-ready context summaries and source IDs.
+3. Read .micro-ecf/context-packet.json for citation-ready source summaries, provenance, and source IDs.
 4. Read .micro-ecf/source-map.json before using broad search so source paths, blocked paths, hashes, and provenance are visible.
 5. Use direct repo/file reads as the source of truth when implementing code. Micro ECF guides what to inspect; it does not replace source verification.
 6. Tell the developer exactly whether you are using Micro ECF artifacts, direct repo reads, a configured Micro ECF MCP server, or none of them.
@@ -442,7 +449,7 @@ When asked "are you using Micro ECF?", answer in one of these forms:
 - MICRO_ECF_LLM_BOOTSTRAP.md: paste or attach this file into any new chat that does not auto-load repo guidance.
 - .micro-ecf/policy.json: editable local policy source.
 - .micro-ecf/policy-summary.json: readable policy summary for LLMs.
-- .micro-ecf/context-packet.json: citation-ready local context packet.
+- .micro-ecf/context-packet.json: citation-ready local source-summary/provenance packet.
 - .micro-ecf/source-map.json: source inventory, hashes, blocked paths, and provenance.
 - .micro-ecf/harness-export.json: no-spend Agent OS preview packet.
 

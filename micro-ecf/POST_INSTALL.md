@@ -2,6 +2,8 @@
 
 Micro ECF installs local repo artifacts. It does not create hidden global memory for every future LLM chat.
 
+Micro ECF is a local governance envelope and artifact builder. It is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime.
+
 Use this checklist after `micro-ecf install --dir . --yes`.
 
 ## 1. Verify Generated Files
@@ -110,10 +112,15 @@ Agent OS preview is the bridge toward hosted runtime, wallet budgets, APIs, rece
 
 ## 6. Keep The Boundary Clear
 
-Micro ECF is local-first and open-source. It can prepare context and policy packets.
+Micro ECF is local-first and open-source. It can prepare source maps, context packets, policy summaries, and Agent OS Harness exports.
+
+It can also describe external context providers such as RAG, code graphs, database tools, or MCP servers, but those providers bring their own retrieval engines. Micro ECF governs what they may expose or act on.
 
 Micro ECF does not include:
 
+- semantic/vector retrieval
+- hosted RAG answering
+- embeddings or model-backed reranking
 - Full ECF private runtime
 - tenant isolation runtime
 - enterprise connector internals

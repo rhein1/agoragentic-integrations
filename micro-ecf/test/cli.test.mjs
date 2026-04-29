@@ -94,7 +94,10 @@ test('LLM install flow is read-only until explicit approval', () => {
     const explanation = run(['explain'], microEcfRoot);
     assert.equal(explanation.boundary.local_only, true);
     assert.equal(explanation.boundary.no_spend, true);
+    assert.equal(explanation.boundary.no_semantic_rag_engine, true);
+    assert.equal(explanation.boundary.no_generated_answers, true);
     assert.equal(explanation.boundary.no_full_ecf_internals, true);
+    assert.match(explanation.what_it_does.join(' '), /external context providers/i);
 
     const plan = run(['plan', '--dir', tmp], microEcfRoot);
     assert.equal(plan.approval_required, true);
@@ -120,6 +123,8 @@ test('LLM install flow is read-only until explicit approval', () => {
     const bootstrap = fs.readFileSync(path.join(tmp, 'MICRO_ECF_LLM_BOOTSTRAP.md'), 'utf8');
     assert.match(bootstrap, /Expected Assistant Disclosure/);
     assert.match(bootstrap, /are you using Micro ECF/);
+    assert.match(bootstrap, /not a semantic RAG engine/i);
+    assert.match(bootstrap, /governs what those systems may expose or act on/i);
     assert.match(bootstrap, /does not automatically read repo-level instructions/i);
 
     const harness = readJson(path.join(tmp, '.micro-ecf', 'harness-export.json'));
