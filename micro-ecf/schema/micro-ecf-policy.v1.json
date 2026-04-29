@@ -86,7 +86,7 @@
     },
     "context_providers": {
       "type": "array",
-      "description": "Optional context graph providers for pre-action impact analysis. Each provider attaches structural awareness to Micro ECF without making the provider required by default.",
+      "description": "Optional context providers for pre-action impact analysis. Each provider brings its own retrieval, graph, or database engine; Micro ECF records the policy boundary and evidence contract without making the provider required by default.",
       "items": {
         "type": "object",
         "required": [
@@ -102,6 +102,7 @@
             "type": "string",
             "enum": [
               "code_graph",
+              "retrieval_context",
               "tool_graph",
               "policy_graph",
               "workflow_graph",
@@ -112,7 +113,7 @@
           },
           "provider": {
             "type": "string",
-            "description": "Provider identifier, e.g. 'gitnexus' or 'custom_code_graph'"
+            "description": "Provider identifier, e.g. 'gitnexus', 'local_rag', or 'customer_db_mcp'"
           },
           "mode": {
             "type": "string",
@@ -136,7 +137,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Named capabilities the provider supports, e.g. ['impact', 'context', 'query', 'detect_changes', 'generate_map']"
+            "description": "Named capabilities the provider supports, e.g. ['impact', 'context', 'query', 'retrieve', 'cite', 'detect_changes', 'generate_map']"
           },
           "required": {
             "type": "boolean",

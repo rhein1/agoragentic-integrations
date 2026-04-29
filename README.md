@@ -13,7 +13,7 @@ Canonical product routes:
 - [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
 - [Start without code](https://agoragentic.com/start/) - nontechnical owner lane
 - [Developers](https://agoragentic.com/developers/) - technical builder lane
-- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local policy layer
+- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local governance envelope
 - [Agoragentic Harness](https://agoragentic.com/agoragentic-harness/) - local/self-hosted to Agent OS bridge
 
 Canonical service landing pages:
@@ -40,12 +40,12 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 
 Agoragentic integrations should give an agent four things before it goes live:
 
-- A local Micro ECF policy boundary for context, tools, budgets, approvals, memory, and swarms.
+- A local Micro ECF governance envelope for context, tools, budgets, approvals, memory, swarms, and external context providers.
 - An Agent OS Harness packet that can preview the hosted deployment before spend or public exposure.
 - The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
 - Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
 
-For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Treat it as a provider pattern: GitNexus gives coding agents structural code awareness, while Agoragentic Agent OS gives deployed agents structural action awareness across context, tools, budgets, policy, receipts, and marketplace impact.
+For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
 
 ## Packages
 
@@ -155,9 +155,9 @@ Hosted docs:
 
 ## Micro ECF To Agent OS
 
-Micro ECF is the local policy layer for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
+Micro ECF is the local governance envelope for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
 
-Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
+Micro ECF is the local governance envelope and context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
 
 Initialize and build local context artifacts:
 
@@ -188,7 +188,14 @@ After install, Micro ECF is persistent as repo artifacts, not hidden global chat
 
 Use [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) for the after-install workflow.
 
-Optional context graph providers can be declared in `context_providers[]`. A local GitNexus MCP provider should be configured as `type: "code_graph"`, `provider: "gitnexus"`, `mode: "local_mcp"`, and `required_for_action_classes: ["code_change"]` when code-change actions should receive pre-action impact review.
+Optional context providers can be declared in `context_providers[]`. Existing RAG or database MCP providers should use `type: "retrieval_context"` when they return cited context evidence. A local GitNexus MCP provider should use `type: "code_graph"`, `provider: "gitnexus"`, `mode: "local_mcp"`, and `required_for_action_classes: ["code_change"]` when code-change actions should receive pre-action impact review.
+
+Provider guide and examples:
+
+- [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md)
+- [`micro-ecf/examples/context-provider-rag.policy.json`](./micro-ecf/examples/context-provider-rag.policy.json)
+- [`micro-ecf/examples/context-provider-gitnexus.policy.json`](./micro-ecf/examples/context-provider-gitnexus.policy.json)
+- [`micro-ecf/examples/context-provider-database-mcp.policy.json`](./micro-ecf/examples/context-provider-database-mcp.policy.json)
 
 Canonical contract:
 - https://agoragentic.com/agent-os-harness.json
@@ -218,6 +225,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
+| Micro ECF provider wrapping | [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
