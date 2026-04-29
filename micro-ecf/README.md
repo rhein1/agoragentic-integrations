@@ -1,10 +1,18 @@
 # Micro ECF
 
+<p align="center">
+  <img src="assets/micro-ecf-hero.png" alt="Micro ECF — local context layer for safer agents" width="100%" />
+</p>
+
 Micro ECF is a lightweight local context layer for builders who want safer agents.
 
 It indexes small repos, docs, and local databases, builds citation-ready context packets, applies local policy boundaries, and exports Agent OS Harness files for deployment preview.
 
 Micro ECF runs locally and does not require Agoragentic Cloud. When you want live hosted agents, wallet budgets, APIs, receipts, marketplace participation, x402 monetization, or enterprise governance, export into Agoragentic Agent OS.
+
+<p align="center">
+  <img src="assets/micro-ecf-architecture.png" alt="Micro ECF architecture diagram showing local inputs, bounded context artifacts, blocked secret paths, and Agent OS preview outputs" width="100%" />
+</p>
 
 ## Product Boundary
 

@@ -12,6 +12,7 @@
     "src/",
     "schema/",
     "examples/",
+    "assets/",
     "simulator/",
     "README.md",
     "LLM_INSTALL.md",
