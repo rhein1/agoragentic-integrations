@@ -2,7 +2,7 @@
 
 Micro ECF installs local repo artifacts. It does not create hidden global memory for every future LLM chat.
 
-Micro ECF is a local governance envelope and artifact builder. It is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime.
+Micro ECF is a local context wedge and artifact builder. It is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime.
 
 Use this checklist after `micro-ecf install --dir . --yes`.
 

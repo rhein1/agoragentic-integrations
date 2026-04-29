@@ -217,7 +217,7 @@ export function initProject({ targetDir = process.cwd(), force = false } = {}) {
 export function buildExplanation() {
   return {
     name: 'Micro ECF',
-    summary: 'Micro ECF is a lightweight local governance envelope for agent context.',
+    summary: 'Micro ECF is a lightweight local context layer for builders who want safer agents.',
     what_it_does: [
       'Builds bounded local source maps from repos, docs, local files, and database-summary exports.',
       'Builds citation-ready context packets from source summaries and provenance without exporting raw source content.',
@@ -233,7 +233,7 @@ export function buildExplanation() {
       'You keep local control until you explicitly choose to preview or deploy through Agent OS.',
     ],
     boundary: {
-      micro_ecf: 'local governance envelope and context wedge',
+      micro_ecf: 'local context wedge',
       agent_os: 'deployment product',
       full_ecf: 'private enterprise runtime engine',
       local_only: true,
@@ -375,7 +375,7 @@ function writeTextIfAllowed(filePath, value, force) {
 function buildAgentsMd(projectName) {
   return `# ${projectName} Agent Boundary
 
-This project uses Micro ECF as a local context and policy boundary before Agent OS preview.
+This project uses Micro ECF as a local context wedge and policy boundary before Agent OS preview.
 
 ## New Conversation Rule
 
@@ -404,7 +404,7 @@ Use this file at the start of any new LLM conversation when the assistant does n
 
 ## What Micro ECF Is
 
-Micro ECF is a local-first governance envelope and context-policy layer for safer agents. It builds bounded source maps from allowed local repo/docs/database-summary sources, blocks secret-like paths by default, builds citation-ready context packets from summaries/provenance, and exports Agent OS Harness files for deployment preview.
+Micro ECF is a local-first context wedge and policy layer for safer agents. It builds bounded source maps from allowed local repo/docs/database-summary sources, blocks secret-like paths by default, builds citation-ready context packets from summaries/provenance, and exports Agent OS Harness files for deployment preview.
 
 Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. If this project uses RAG, GitNexus, database tools, or MCP context providers, Micro ECF governs what those systems may expose or act on.
 
