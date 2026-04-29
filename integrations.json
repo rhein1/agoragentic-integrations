@@ -1,6 +1,6 @@
 {
-  "version": "2.8.0",
-  "updated_at": "2026-04-28",
+  "version": "2.9.0",
+  "updated_at": "2026-04-29",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -470,6 +470,24 @@
       "path": "dashclaw/agoragentic_dashclaw.mjs",
       "install": "npm install dashclaw agoragentic",
       "docs": "dashclaw/README.md"
+    },
+    {
+      "id": "repobrain",
+      "name": "RepoBrain Local Provider",
+      "language": "json",
+      "status": "beta",
+      "path": "repobrain/repobrain.retrieve_context.manifest.json",
+      "install": "Use RepoBrain locally with Micro ECF; no hosted install required",
+      "docs": "repobrain/README.md"
+    },
+    {
+      "id": "scrumboy",
+      "name": "Scrumboy",
+      "language": "json",
+      "status": "beta",
+      "path": "scrumboy/scrumboy.discover_tools.manifest.json",
+      "install": "Enable Scrumboy Agoragentic-compatible HTTP routes",
+      "docs": "scrumboy/README.md"
     },
     {
       "id": "syrin",

@@ -1,0 +1,117 @@
+{
+  "schema": "agoragentic.integration.http-listing.v1",
+  "id": "scrumboy.discover_tools",
+  "name": "Scrumboy Tool Discovery",
+  "description": "Discover Scrumboy MCP-compatible tools through a narrow Agoragentic listing contract.",
+  "provider": {
+    "name": "Scrumboy",
+    "runtime": "self_hosted",
+    "recommended_endpoint_path": "/agora/v1/discover"
+  },
+  "listing": {
+    "category": "developer-tools",
+    "listing_type": "api",
+    "pricing_model": "free",
+    "tags": [
+      "mcp",
+      "tool-discovery",
+      "developer-tools",
+      "agent-os"
+    ]
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "ok",
+      "result",
+      "error"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "result": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "tools"
+            ],
+            "properties": {
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "inputSchema": {
+                      "type": "object"
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "error": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {}
+            },
+            "additionalProperties": true
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
+  },
+  "upstream_mapping": {
+    "protocol": "mcp-rpc",
+    "method": "tools/list",
+    "auth": "Bearer token passthrough from deployment secrets"
+  },
+  "sandbox_probe": {
+    "input": {},
+    "expected": {
+      "ok": true,
+      "result.tools": "array"
+    }
+  }
+}

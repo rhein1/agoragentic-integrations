@@ -1,0 +1,105 @@
+{
+  "schema": "agoragentic.integration.http-listing.v1",
+  "id": "scrumboy.invoke_tool",
+  "name": "Scrumboy Tool Invocation",
+  "description": "Invoke one explicitly selected Scrumboy tool through a narrow Agoragentic listing contract.",
+  "provider": {
+    "name": "Scrumboy",
+    "runtime": "self_hosted",
+    "recommended_endpoint_path": "/agora/v1/invoke"
+  },
+  "listing": {
+    "category": "developer-tools",
+    "listing_type": "api",
+    "pricing_model": "per_call",
+    "tags": [
+      "mcp",
+      "tool-invocation",
+      "developer-tools",
+      "agent-os"
+    ]
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "tool",
+      "arguments"
+    ],
+    "properties": {
+      "tool": {
+        "type": "string",
+        "minLength": 1
+      },
+      "arguments": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "ok",
+      "result",
+      "error"
+    ],
+    "properties": {
+      "ok": {
+        "type": "boolean"
+      },
+      "result": {},
+      "error": {
+        "anyOf": [
+          {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "data": {}
+            },
+            "additionalProperties": true
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
+  },
+  "upstream_mapping": {
+    "protocol": "mcp-rpc",
+    "method": "tools/call",
+    "params": {
+      "name": "${input.tool}",
+      "arguments": "${input.arguments}"
+    },
+    "auth": "Bearer token passthrough from deployment secrets"
+  },
+  "sandbox_probe": {
+    "input": {
+      "tool": "system.getCapabilities",
+      "arguments": {}
+    },
+    "expected": {
+      "ok": true
+    }
+  },
+  "guardrails": [
+    "Do not allow arbitrary shell, filesystem, wallet, or network actions unless the selected Scrumboy tool explicitly implements and advertises them.",
+    "Use Agent OS approvals for high-risk tools, paid execution, secrets, wallet movement, publishing, or external outreach.",
+    "Record selected tool name and arguments in invocation receipts."
+  ]
+}

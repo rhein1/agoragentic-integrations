@@ -16,7 +16,7 @@
 ## Integrations
 - LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL, Syrin (Python)
 - MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, oh-my-claudecode, DashClaw (JS/TS)
-- Dify, A2A (JSON)
+- Dify, A2A, RepoBrain Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)

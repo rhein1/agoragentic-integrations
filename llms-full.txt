@@ -82,12 +82,14 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
 
-### Config-Only Integrations (2)
+### Config-Only Integrations (4)
 
 | Framework | File | Install |
 |-----------|------|---------|
 | Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
+| RepoBrain Local Provider | repobrain/repobrain.retrieve_context.manifest.json | Use RepoBrain locally with Micro ECF; no hosted install required |
+| Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
 
 ### Agent OS and Micro ECF (2)
 

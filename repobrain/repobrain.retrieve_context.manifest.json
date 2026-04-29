@@ -1,0 +1,125 @@
+{
+  "schema": "agoragentic.integration.local-provider.v1",
+  "id": "repobrain.retrieve_context",
+  "name": "RepoBrain Repository Context Retrieval",
+  "description": "Retrieve ranked repository or workspace context from a local RepoBrain runtime before an agent plans, reviews, or edits code.",
+  "provider": {
+    "name": "RepoBrain",
+    "runtime": "local",
+    "endpoint_url": null,
+    "requires_owner_hosting": true
+  },
+  "listing": {
+    "category": "developer-tools",
+    "listing_type": "service",
+    "pricing_model": "free",
+    "tags": [
+      "repository-context",
+      "retrieval",
+      "local-first",
+      "developer-tools",
+      "micro-ecf"
+    ]
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "query"
+    ],
+    "properties": {
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Natural-language search or planning query."
+      },
+      "repo_scope": {
+        "type": "string",
+        "description": "Optional local repository scope. Must resolve inside the owner-approved workspace."
+      },
+      "top_k": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25,
+        "default": 8
+      },
+      "include_snippets": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "results",
+      "metadata"
+    ],
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "path",
+            "score",
+            "source"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "source": {
+              "type": "string",
+              "const": "repobrain"
+            },
+            "snippet": {
+              "type": "string",
+              "maxLength": 600
+            }
+          }
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "required": [
+          "provider",
+          "mode"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "repobrain"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local_only"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sandbox_probe": {
+    "input": {
+      "query": "auth middleware routing",
+      "top_k": 3,
+      "include_snippets": true
+    },
+    "expected": {
+      "results": "array",
+      "metadata.provider": "repobrain"
+    }
+  },
+  "guardrails": [
+    "Do not upload full repository contents by default.",
+    "Do not return secrets, credentials, environment files, private keys, or raw token values.",
+    "Keep retrieved snippets bounded and traceable to local paths.",
+    "Use Micro ECF or Agent OS approval before using retrieval output to justify filesystem mutations."
+  ]
+}
