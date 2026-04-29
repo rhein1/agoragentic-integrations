@@ -186,6 +186,8 @@ The safe flow is consent-gated: `micro-ecf plan --dir .` first, then `micro-ecf 
 
 After install, Micro ECF is persistent as repo artifacts, not hidden global chat memory. Compatible IDE agents should read the generated `AGENTS.md`; any new LLM chat that does not auto-load repo instructions should receive `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can run `micro-ecf serve-mcp --root .micro-ecf`.
 
+Use [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) for the after-install workflow.
+
 Optional context graph providers can be declared in `context_providers[]`. A local GitNexus MCP provider should be configured as `type: "code_graph"`, `provider: "gitnexus"`, `mode: "local_mcp"`, and `required_for_action_classes: ["code_change"]` when code-change actions should receive pre-action impact review.
 
 Canonical contract:
@@ -215,6 +217,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
+| Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
