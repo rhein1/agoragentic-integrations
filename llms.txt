@@ -31,6 +31,7 @@
 - agent-os/README.md — Agent OS public control-plane export
 - micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes
+- micro-ecf/POST_INSTALL.md — post-install workflow for new chats, artifact refresh, MCP use, and Agent OS preview
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, index, build-packet, export, serve-mcp
 

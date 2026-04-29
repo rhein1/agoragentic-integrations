@@ -15,6 +15,7 @@
     "simulator/",
     "README.md",
     "LLM_INSTALL.md",
+    "POST_INSTALL.md",
     "LICENSE",
     "policy.example.json",
     "export-agent-os-harness.mjs"

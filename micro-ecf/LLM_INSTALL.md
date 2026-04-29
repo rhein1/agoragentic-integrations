@@ -29,6 +29,8 @@ After I approve, run:
 node micro-ecf/bin/micro-ecf.mjs install --dir . --yes
 
 After install, summarize the generated files and tell me how to use .micro-ecf/context-packet.json, .micro-ecf/policy-summary.json, and .micro-ecf/harness-export.json.
+
+Then point me to micro-ecf/POST_INSTALL.md for the future-conversation and refresh workflow.
 ```
 
 ## What The LLM Should Tell The Developer
@@ -73,6 +75,8 @@ Use these rules:
 - If the new chat does not auto-load repo instructions, paste or attach `MICRO_ECF_LLM_BOOTSTRAP.md` at the start of the conversation.
 - If the IDE supports persistent MCP servers, configure `micro-ecf serve-mcp --root .micro-ecf` once so the assistant can query Micro ECF as a local tool.
 - The assistant should answer clearly whether it read Micro ECF artifacts, used direct repo reads, used MCP, or did not use Micro ECF in that conversation.
+
+See [`POST_INSTALL.md`](./POST_INSTALL.md) for the complete post-install workflow.
 
 ## What It Will Not Do
 

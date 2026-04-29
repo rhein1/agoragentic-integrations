@@ -116,6 +116,8 @@ For future conversations, use one of three handoff paths:
 - Any other LLM chat should receive `MICRO_ECF_LLM_BOOTSTRAP.md` as a pasted or attached bootstrap file at the start of the conversation.
 - IDEs that support persistent MCP tools can run `micro-ecf serve-mcp --root .micro-ecf` and configure that server once.
 
+For the full after-install checklist, see [`POST_INSTALL.md`](./POST_INSTALL.md).
+
 From this repo:
 
 ```bash
