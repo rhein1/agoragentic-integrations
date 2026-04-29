@@ -1,12 +1,12 @@
 # Micro ECF
 
 <p align="center">
-  <img src="assets/micro-ecf-hero.png" alt="Micro ECF - local governance envelope for safer agents" width="100%" />
+  <img src="assets/micro-ecf-hero.png" alt="Micro ECF - local context wedge for safer agents" width="100%" />
 </p>
 
-Micro ECF is a lightweight local governance envelope for agent context.
+Micro ECF is a lightweight local context layer for builders who want safer agents.
 
-It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs. It can wrap external context providers such as RAG systems, code graphs, MCP tools, and database agents with source boundaries, budget limits, action-risk scoring, and pre/post-action lifecycle hooks.
+It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs, applies local policy boundaries, and exports Agent OS Harness files for deployment preview. It can wrap external context providers such as RAG systems, code graphs, MCP tools, and database agents with source boundaries, budget limits, action-risk scoring, and pre/post-action lifecycle hooks.
 
 Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. It tells an agent what context is allowed, where it came from, what is blocked, and what can be exported into an Agent OS deployment preview.
 
@@ -23,7 +23,7 @@ Micro ECF is not Full ECF.
 Use this product rule everywhere:
 
 ```text
-Micro ECF is the local governance envelope and context wedge.
+Micro ECF is the local context wedge.
 Agent OS is the deployment product.
 Full ECF is the enterprise runtime engine.
 ```
@@ -310,7 +310,9 @@ GitNexus can be used as an optional local `code_graph` provider. Treat it as a p
       "provider_id": "ctx_gitnexus_local",
       "type": "code_graph",
       "provider": "gitnexus",
+      "name": "GitNexus",
       "mode": "local_mcp",
+      "status": "available",
       "enabled": true,
       "scope": "workspace",
       "capabilities": ["impact", "context", "query", "detect_changes", "generate_map"],

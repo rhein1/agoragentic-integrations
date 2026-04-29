@@ -115,6 +115,10 @@
             "type": "string",
             "description": "Provider identifier, e.g. 'gitnexus', 'local_rag', or 'customer_db_mcp'"
           },
+          "name": {
+            "type": "string",
+            "description": "Human-readable display name for this provider binding."
+          },
           "mode": {
             "type": "string",
             "enum": [
@@ -123,6 +127,17 @@
               "http_api"
             ],
             "default": "local_mcp"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "degraded",
+              "unknown"
+            ],
+            "default": "unknown",
+            "description": "Last known availability state for this optional provider binding."
           },
           "enabled": {
             "type": "boolean",

@@ -89,7 +89,9 @@
     {
       "type": "code_graph",
       "provider": "gitnexus",
+      "name": "GitNexus",
       "mode": "local_mcp",
+      "status": "available",
       "capabilities": [
         "impact",
         "context",

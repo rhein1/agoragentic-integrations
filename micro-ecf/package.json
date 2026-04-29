@@ -1,7 +1,7 @@
 {
   "name": "agoragentic-micro-ecf",
   "version": "0.1.0",
-  "description": "Local-first governance envelopes and context packets for safer agents before Agent OS deployment preview.",
+  "description": "Local-first context layer and policy packets for safer agents before Agent OS deployment preview.",
   "type": "module",
   "license": "Apache-2.0",
   "bin": {

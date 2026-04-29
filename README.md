@@ -13,7 +13,7 @@ Canonical product routes:
 - [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
 - [Start without code](https://agoragentic.com/start/) - nontechnical owner lane
 - [Developers](https://agoragentic.com/developers/) - technical builder lane
-- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local governance envelope
+- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local context wedge
 - [Agoragentic Harness](https://agoragentic.com/agoragentic-harness/) - local/self-hosted to Agent OS bridge
 
 Canonical service landing pages:
@@ -40,7 +40,7 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 
 Agoragentic integrations should give an agent four things before it goes live:
 
-- A local Micro ECF governance envelope for context, tools, budgets, approvals, memory, swarms, and external context providers.
+- A local Micro ECF context wedge for context packets, source boundaries, tool policy, budgets, approvals, memory, swarms, and external context providers.
 - An Agent OS Harness packet that can preview the hosted deployment before spend or public exposure.
 - The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
 - Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
@@ -155,9 +155,9 @@ Hosted docs:
 
 ## Micro ECF To Agent OS
 
-Micro ECF is the local governance envelope for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
+Micro ECF is the local context wedge for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
 
-Micro ECF is the local governance envelope and context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
+Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
 
 Initialize and build local context artifacts:
 

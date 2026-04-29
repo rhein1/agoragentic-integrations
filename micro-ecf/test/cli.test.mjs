@@ -93,6 +93,7 @@ test('LLM install flow is read-only until explicit approval', () => {
 
     const explanation = run(['explain'], microEcfRoot);
     assert.equal(explanation.boundary.local_only, true);
+    assert.equal(explanation.boundary.micro_ecf, 'local context wedge');
     assert.equal(explanation.boundary.no_spend, true);
     assert.equal(explanation.boundary.no_semantic_rag_engine, true);
     assert.equal(explanation.boundary.no_generated_answers, true);
@@ -141,6 +142,7 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.equal(packageJson.name, 'agoragentic-micro-ecf');
   assert.equal(packageJson.bin['micro-ecf'], './bin/micro-ecf.mjs');
   assert.equal(packageJson.license, 'Apache-2.0');
+  assert.match(packageJson.description, /Local-first context layer/);
   assert.equal(packageJson.engines.node, '>=18');
   assert.ok(packageJson.files.includes('assets/'));
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));

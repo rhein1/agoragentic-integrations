@@ -35,7 +35,7 @@ Then point me to micro-ecf/POST_INSTALL.md for the future-conversation and refre
 
 ## What The LLM Should Tell The Developer
 
-Micro ECF is a lightweight local governance envelope for agent context. It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs, applies local policy boundaries, and exports an Agent OS Harness file for deployment preview.
+Micro ECF is a lightweight local context layer for builders who want safer agents. It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs, applies local policy boundaries, and exports an Agent OS Harness file for deployment preview.
 
 It helps because the LLM gets a stable, local map of what it can safely know, cite, and use. It also creates policy artifacts that make the boundary explicit before the agent touches tools, data, money, or hosted deployment.
 
