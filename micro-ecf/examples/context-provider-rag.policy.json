@@ -1,24 +1,23 @@
 {
   "schema": "agoragentic.micro-ecf.policy.v1",
   "agent_manifest": {
-    "name": "Micro ECF Growth Agent",
-    "framework": "syrin",
-    "primary_goal": "Find qualified partner leads and prepare outreach drafts",
+    "name": "Local RAG Wrapped Agent",
+    "framework": "local",
+    "primary_goal": "Use an existing local RAG provider under explicit Micro ECF source and action boundaries",
     "runtime_shape": "self_hosted_http"
   },
   "context_policy": {
     "allowed_sources": [
-      "owner_provided_docs",
-      "public_web",
       "local_repo",
-      "local_database_summaries"
+      "local_docs",
+      "local_rag_citations"
     ],
     "denied_sources": [
-      "private_inbox_without_approval",
       "secrets",
       "private_keys",
       "wallet_seeds",
-      "raw_credentials"
+      "raw_credentials",
+      "uncited_rag_answers"
     ],
     "local_allow": [
       "docs/**",
@@ -33,43 +32,46 @@
       "secrets/**",
       "customer_private/**"
     ],
-    "retention": "review_before_memory_write",
+    "retention": "local_only_until_export",
     "redaction": "secrets_reference_only"
   },
   "tool_policy": {
     "allowed_tools": [
-      "web_search",
-      "marketplace_execute",
+      "local_search",
+      "local_rag_query",
+      "local_context_read",
       "agent_os_preview_export"
     ],
     "denied_tools": [
-      "unapproved_email_send",
+      "hosted_rag_answer",
       "wallet_settlement",
       "hosted_provisioning",
-      "x402_settlement_executor"
+      "x402_execution"
     ],
     "side_effects": "approval_required"
   },
   "budget_policy": {
     "treasury_required": true,
-    "max_daily_spend_usdc": 5,
-    "approval_required_above_usdc": 2,
-    "recommended_start_reserve_usdc": 25
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "recommended_start_reserve_usdc": 0
   },
   "approval_policy": {
     "autonomous": [
       "read",
+      "summarize",
       "draft",
-      "quote_preview"
+      "preview_export"
     ],
     "human_gated": [
       "publish",
-      "send_email",
+      "spend",
+      "send_external",
       "raise_budget"
     ]
   },
   "memory_policy": {
-    "write_gate": "after_resolution_and_review",
+    "write_gate": "local_review_before_memory_write",
     "secret_storage": "reference_only"
   },
   "swarm_policy": {
@@ -82,24 +84,37 @@
     "first_proof_required": true,
     "source": {
       "type": "repository",
-      "ref": "https://github.com/example/micro-ecf-agent"
+      "ref": "https://github.com/example/local-rag-agent"
     }
   },
   "context_providers": [
     {
-      "type": "code_graph",
-      "provider": "gitnexus",
-      "name": "GitNexus",
+      "provider_id": "ctx_local_rag_docs",
+      "type": "retrieval_context",
+      "provider": "local_rag",
       "mode": "local_mcp",
-      "status": "available",
+      "enabled": true,
+      "scope": "docs_and_repo",
       "capabilities": [
-        "impact",
-        "context",
         "query",
-        "detect_changes",
-        "generate_map"
+        "retrieve",
+        "cite"
       ],
-      "required": false
+      "required": false,
+      "required_for_action_classes": [
+        "read_only",
+        "code_change"
+      ],
+      "mcp": {
+        "server": "local-rag",
+        "transport": "stdio"
+      },
+      "evidence_contract": {
+        "must_return_source_ids": true,
+        "must_return_citations": true,
+        "must_return_confidence": true,
+        "raw_secret_content_allowed": false
+      }
     }
   ]
 }

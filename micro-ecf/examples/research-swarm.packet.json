@@ -2,7 +2,11 @@
   "schema": "agoragentic.agent-os.harness.v1",
   "schema_artifacts": {
     "agent_os_harness": "https://agoragentic.com/schema/agent-os-harness.v1.json",
-    "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json"
+    "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json",
+    "local_context_packet": "micro-ecf/schema/context-packet.schema.json",
+    "local_policy_summary": "micro-ecf/schema/policy-summary.schema.json",
+    "local_source_map": "micro-ecf/schema/source-map.schema.json",
+    "local_deployment_preview": "micro-ecf/schema/deployment-preview.schema.json"
   },
   "agent_manifest": {
     "name": "Research Swarm",
@@ -11,14 +15,29 @@
     "runtime_shape": "self_hosted_http"
   },
   "context_policy": {
-    "allowed_sources": ["owner_provided_docs", "public_web", "approved_research_databases"],
-    "denied_sources": ["unapproved_private_repositories", "raw_customer_data"],
+    "allowed_sources": [
+      "owner_provided_docs",
+      "public_web",
+      "approved_research_databases"
+    ],
+    "denied_sources": [
+      "unapproved_private_repositories",
+      "raw_customer_data"
+    ],
     "retention": "summary_only_after_review",
     "redaction": "source_citations_required"
   },
   "tool_policy": {
-    "allowed_tools": ["web_search", "marketplace_execute", "citation_check", "report_draft"],
-    "denied_tools": ["unapproved_external_send", "unapproved_purchase"],
+    "allowed_tools": [
+      "web_search",
+      "marketplace_execute",
+      "citation_check",
+      "report_draft"
+    ],
+    "denied_tools": [
+      "unapproved_external_send",
+      "unapproved_purchase"
+    ],
     "side_effects": "approval_required"
   },
   "budget_policy": {
@@ -28,8 +47,18 @@
     "recommended_start_reserve_usdc": 75
   },
   "approval_policy": {
-    "autonomous": ["read", "draft", "quote_preview", "summarize"],
-    "human_gated": ["publish", "external_send", "new_vendor", "raise_budget"]
+    "autonomous": [
+      "read",
+      "draft",
+      "quote_preview",
+      "summarize"
+    ],
+    "human_gated": [
+      "publish",
+      "external_send",
+      "new_vendor",
+      "raise_budget"
+    ]
   },
   "memory_policy": {
     "write_gate": "after_report_review",
@@ -49,11 +78,18 @@
     }
   },
   "public_boundary": {
+    "micro_ecf_role": "local_context_wedge",
+    "agent_os_role": "deployment_product",
+    "full_ecf_role": "private_enterprise_runtime_engine",
     "no_spend_export": true,
     "hosted_billing": false,
     "cloud_provisioning": false,
     "marketplace_publication": false,
-    "hosted_runtime_secrets": false
+    "hosted_runtime_secrets": false,
+    "full_ecf_runtime_included": false,
+    "router_ranking_included": false,
+    "settlement_internals_included": false,
+    "enterprise_governance_internals_included": false
   },
   "agent_os_export": {
     "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
@@ -85,16 +121,41 @@
     "safety_policy": {
       "first_proof_required": true,
       "context_policy": {
-        "allowed_sources": ["owner_provided_docs", "public_web", "approved_research_databases"],
-        "denied_sources": ["unapproved_private_repositories", "raw_customer_data"]
+        "allowed_sources": [
+          "owner_provided_docs",
+          "public_web",
+          "approved_research_databases"
+        ],
+        "denied_sources": [
+          "unapproved_private_repositories",
+          "raw_customer_data"
+        ]
       },
       "tool_policy": {
-        "allowed_tools": ["web_search", "marketplace_execute", "citation_check", "report_draft"],
-        "denied_tools": ["unapproved_external_send", "unapproved_purchase"]
+        "allowed_tools": [
+          "web_search",
+          "marketplace_execute",
+          "citation_check",
+          "report_draft"
+        ],
+        "denied_tools": [
+          "unapproved_external_send",
+          "unapproved_purchase"
+        ]
       },
       "approval_policy": {
-        "autonomous": ["read", "draft", "quote_preview", "summarize"],
-        "human_gated": ["publish", "external_send", "new_vendor", "raise_budget"]
+        "autonomous": [
+          "read",
+          "draft",
+          "quote_preview",
+          "summarize"
+        ],
+        "human_gated": [
+          "publish",
+          "external_send",
+          "new_vendor",
+          "raise_budget"
+        ]
       },
       "memory_policy": {
         "write_gate": "after_report_review",
@@ -108,7 +169,19 @@
     "deployment_packet": {
       "schema": "agoragentic.micro-ecf.export.v1",
       "source": "public_micro_ecf",
-      "harness_schema": "agoragentic.agent-os.harness.v1"
+      "harness_schema": "agoragentic.agent-os.harness.v1",
+      "artifact_refs": {
+        "context_packet": ".micro-ecf/context-packet.json",
+        "policy_summary": ".micro-ecf/policy-summary.json",
+        "source_map": ".micro-ecf/source-map.json",
+        "deployment_preview": ".micro-ecf/deployment-preview.json"
+      }
     }
+  },
+  "micro_ecf_artifacts": {
+    "context_packet": ".micro-ecf/context-packet.json",
+    "policy_summary": ".micro-ecf/policy-summary.json",
+    "source_map": ".micro-ecf/source-map.json",
+    "deployment_preview": ".micro-ecf/deployment-preview.json"
   }
 }

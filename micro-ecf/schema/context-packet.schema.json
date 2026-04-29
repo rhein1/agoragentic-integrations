@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-context-packet.v1.json",
+  "title": "Micro ECF Context Packet v1",
+  "description": "Citation-ready local context governance packet. It contains source summaries and provenance, not raw source content, semantic retrieval results, or generated answers.",
+  "type": "object",
+  "required": ["schema", "packet_id", "scope", "sources", "citations", "export_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.micro-ecf.context-packet.v1" },
+    "packet_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string" },
+    "scope": { "type": "string" },
+    "agent": {
+      "type": "object",
+      "required": ["name", "primary_goal"],
+      "additionalProperties": true
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "type", "hash", "summary", "citation_id", "provenance"],
+        "additionalProperties": true
+      }
+    },
+    "allowed_context": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocked_context": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["citation_id", "source_id", "path", "hash", "provenance"],
+        "additionalProperties": true
+      }
+    },
+    "export_boundary": {
+      "type": "object",
+      "required": ["raw_content_exported", "local_first", "agent_os_preview_only"],
+      "properties": {
+        "raw_content_exported": { "const": false },
+        "local_first": { "const": true },
+        "agent_os_preview_only": { "const": true }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

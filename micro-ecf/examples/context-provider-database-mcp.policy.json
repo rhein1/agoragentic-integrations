@@ -1,0 +1,126 @@
+{
+  "schema": "agoragentic.micro-ecf.policy.v1",
+  "agent_manifest": {
+    "name": "Database MCP Wrapped Agent",
+    "framework": "local",
+    "primary_goal": "Use a local database context provider under schema-only and no-raw-row boundaries",
+    "runtime_shape": "self_hosted_http"
+  },
+  "context_policy": {
+    "allowed_sources": [
+      "local_repo",
+      "local_docs",
+      "database_schema_summaries"
+    ],
+    "denied_sources": [
+      "raw_customer_rows",
+      "secrets",
+      "private_keys",
+      "wallet_seeds",
+      "raw_credentials"
+    ],
+    "local_allow": [
+      "docs/**",
+      "src/**",
+      "schema/**",
+      "*.md",
+      "*.json",
+      "*.yaml",
+      "*.yml",
+      "*.sql"
+    ],
+    "local_block": [
+      ".env*",
+      "secrets/**",
+      "customer_private/**",
+      "dumps/**"
+    ],
+    "retention": "local_only_until_export",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": [
+      "local_search",
+      "database_schema_query",
+      "local_context_read",
+      "agent_os_preview_export"
+    ],
+    "denied_tools": [
+      "raw_row_query",
+      "database_write",
+      "wallet_settlement",
+      "hosted_provisioning",
+      "x402_execution"
+    ],
+    "side_effects": "approval_required"
+  },
+  "budget_policy": {
+    "treasury_required": true,
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "recommended_start_reserve_usdc": 0
+  },
+  "approval_policy": {
+    "autonomous": [
+      "read",
+      "summarize",
+      "draft",
+      "preview_export"
+    ],
+    "human_gated": [
+      "external_write",
+      "database_write",
+      "publish",
+      "spend",
+      "send_external",
+      "raise_budget"
+    ]
+  },
+  "memory_policy": {
+    "write_gate": "local_review_before_memory_write",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "role_scoped"
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": {
+      "type": "repository",
+      "ref": "https://github.com/example/database-agent"
+    }
+  },
+  "context_providers": [
+    {
+      "provider_id": "ctx_local_db_schema",
+      "type": "retrieval_context",
+      "provider": "database_mcp",
+      "mode": "local_mcp",
+      "enabled": true,
+      "scope": "schema_only",
+      "capabilities": [
+        "query",
+        "schema_summary",
+        "cite"
+      ],
+      "required": true,
+      "required_for_action_classes": [
+        "code_change",
+        "external_write"
+      ],
+      "mcp": {
+        "server": "database-context",
+        "transport": "stdio"
+      },
+      "evidence_contract": {
+        "schema_only": true,
+        "raw_rows_allowed": false,
+        "must_return_table_names": true,
+        "must_return_risk_notes": true
+      }
+    }
+  ]
+}

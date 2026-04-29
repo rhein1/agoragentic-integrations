@@ -21,43 +21,172 @@
     },
     "agent_manifest": {
       "type": "object",
-      "required": ["name", "primary_goal"],
+      "required": [
+        "name",
+        "primary_goal"
+      ],
       "additionalProperties": true
     },
     "context_policy": {
       "type": "object",
-      "required": ["allowed_sources", "denied_sources"],
+      "required": [
+        "allowed_sources",
+        "denied_sources"
+      ],
       "additionalProperties": true
     },
     "tool_policy": {
       "type": "object",
-      "required": ["allowed_tools", "denied_tools"],
+      "required": [
+        "allowed_tools",
+        "denied_tools"
+      ],
       "additionalProperties": true
     },
     "budget_policy": {
       "type": "object",
-      "required": ["treasury_required", "max_daily_spend_usdc", "approval_required_above_usdc"],
+      "required": [
+        "treasury_required",
+        "max_daily_spend_usdc",
+        "approval_required_above_usdc"
+      ],
       "additionalProperties": true
     },
     "approval_policy": {
       "type": "object",
-      "required": ["autonomous", "human_gated"],
+      "required": [
+        "autonomous",
+        "human_gated"
+      ],
       "additionalProperties": true
     },
     "memory_policy": {
       "type": "object",
-      "required": ["write_gate", "secret_storage"],
+      "required": [
+        "write_gate",
+        "secret_storage"
+      ],
       "additionalProperties": true
     },
     "swarm_policy": {
       "type": "object",
-      "required": ["max_agents", "delegation"],
+      "required": [
+        "max_agents",
+        "delegation"
+      ],
       "additionalProperties": true
     },
     "deployment_policy": {
       "type": "object",
-      "required": ["exposure_mode", "first_proof_required"],
+      "required": [
+        "exposure_mode",
+        "first_proof_required"
+      ],
       "additionalProperties": true
+    },
+    "context_providers": {
+      "type": "array",
+      "description": "Optional context providers for pre-action impact analysis. Each provider brings its own retrieval, graph, or database engine; Micro ECF records the policy boundary and evidence contract without making the provider required by default.",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "provider"
+        ],
+        "properties": {
+          "provider_id": {
+            "type": "string",
+            "description": "Stable local identifier for this provider binding."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "code_graph",
+              "retrieval_context",
+              "tool_graph",
+              "policy_graph",
+              "workflow_graph",
+              "receipt_graph",
+              "marketplace_graph",
+              "enterprise_context_graph"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "description": "Provider identifier, e.g. 'gitnexus', 'local_rag', or 'customer_db_mcp'"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable display name for this provider binding."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local_mcp",
+              "remote_mcp",
+              "http_api"
+            ],
+            "default": "local_mcp"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "degraded",
+              "unknown"
+            ],
+            "default": "unknown",
+            "description": "Last known availability state for this optional provider binding."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "scope": {
+            "type": "string",
+            "default": "workspace"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Named capabilities the provider supports, e.g. ['impact', 'context', 'query', 'retrieve', 'cite', 'detect_changes', 'generate_map']"
+          },
+          "required": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, the Consequences Engine will block actions of this type when the provider is unreachable."
+          },
+          "required_for_action_classes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Action classes that should consult this provider before execution, e.g. code_change."
+          },
+          "mcp": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "sse",
+                  "http"
+                ],
+                "default": "stdio"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
     }
   },
   "additionalProperties": true

@@ -1,0 +1,36 @@
+{
+  "id": "agoragentic-acp",
+  "name": "Agoragentic",
+  "version": "2.0.0",
+  "description": "Agent marketplace with 174+ AI capabilities. Browse, invoke, and pay for agent services settled in USDC on Base L2. Supports tool search, invocation, vault memory, encrypted secrets, and identity passports.",
+  "repository": "https://github.com/rhein1/agoragentic-integrations",
+  "homepage": "https://agoragentic.com",
+  "license": "MIT",
+  "distribution": {
+    "npx": {
+      "package": "agoragentic-mcp",
+      "args": ["--acp"]
+    }
+  },
+  "env": {
+    "AGORAGENTIC_API_KEY": {
+      "description": "API key for authenticated operations. Get one via the agoragentic_register tool. Anonymous browsing works without a key.",
+      "required": false
+    }
+  },
+  "categories": [
+    "marketplace",
+    "agent-to-agent",
+    "payments",
+    "tools"
+  ],
+  "keywords": [
+    "ai-agents",
+    "marketplace",
+    "usdc",
+    "base-l2",
+    "x402",
+    "agent-to-agent",
+    "tool-use"
+  ]
+}

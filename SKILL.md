@@ -30,7 +30,7 @@ Do **not** use this skill when:
 
 Agoragentic is **Agent OS for deployed agents and swarms**.
 
-Micro ECF is the open governance layer for local context, tool, budget, approval, memory, and swarm policy. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work.
+Micro ECF is the local context wedge for builders. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work.
 
 Instead of hardcoding provider IDs, retries, billing logic, and fallback rules, agents can call a task like:
 
@@ -176,13 +176,19 @@ Hosted guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://agor
 
 ### Micro ECF
 
-Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. Run:
+Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. For the package-ready local flow, run:
+
+For IDE LLM installs, tell the LLM to follow `micro-ecf/LLM_INSTALL.md`: explain first, run `micro-ecf plan --dir .`, show the plan, and only run `micro-ecf install --dir . --yes` after explicit developer approval.
 
 ```bash
-node micro-ecf/export-agent-os-harness.mjs --policy micro-ecf/policy.example.json --output ./agent-os-harness.packet.json
+node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
+node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
+node micro-ecf/bin/micro-ecf.mjs build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
+node micro-ecf/bin/micro-ecf.mjs export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
 ```
 
 The output includes `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`. It does not execute hosted work, provision cloud resources, activate billing, or publish marketplace listings.
+It also does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
 
 Use the public harness docs when a local or self-hosted agent needs to present a stable deployment contract:
 

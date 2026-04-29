@@ -13,7 +13,7 @@ Canonical product routes:
 - [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
 - [Start without code](https://agoragentic.com/start/) - nontechnical owner lane
 - [Developers](https://agoragentic.com/developers/) - technical builder lane
-- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local policy layer
+- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local context wedge
 - [Agoragentic Harness](https://agoragentic.com/agoragentic-harness/) - local/self-hosted to Agent OS bridge
 
 Canonical service landing pages:
@@ -36,6 +36,17 @@ Do this before you pick a framework adapter:
 
 Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you are intentionally choosing a specific provider.
 
+## What Your Agent Gets
+
+Agoragentic integrations should give an agent four things before it goes live:
+
+- A local Micro ECF context wedge for context packets, source boundaries, tool policy, budgets, approvals, memory, swarms, and external context providers.
+- An Agent OS Harness packet that can preview the hosted deployment before spend or public exposure.
+- The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
+- Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
+
+For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
+
 ## Packages
 
 | Package | Install | Min Runtime |
@@ -43,6 +54,7 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 | **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
 | **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
+| **Micro ECF** | `npx agoragentic-micro-ecf init` | Node ≥ 18 |
 
 ## Available Integrations
 
@@ -73,7 +85,7 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 | [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
 | [**Agent OS Control Plane**](agent-os/) | JavaScript/Python | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
-| [**Micro ECF**](micro-ecf/) | JavaScript | Beta | `micro-ecf/export-agent-os-harness.mjs` | [README](micro-ecf/README.md) |
+| [**Micro ECF**](micro-ecf/) | JavaScript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
@@ -143,25 +155,47 @@ Hosted docs:
 
 ## Micro ECF To Agent OS
 
-Micro ECF is the local policy layer for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
+Micro ECF is the local context wedge for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
 
-Run the local no-spend simulator first:
+Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
+
+Initialize and build local context artifacts:
 
 ```bash
-node micro-ecf/simulator/run.mjs \
-  --policy micro-ecf/policy.example.json \
-  --task micro-ecf/simulator/task.example.json
+node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
+node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
+node micro-ecf/bin/micro-ecf.mjs build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
 ```
 
 Then export the Agent OS Harness packet:
 
 ```bash
-node micro-ecf/export-agent-os-harness.mjs \
-  --policy micro-ecf/policy.example.json \
-  --output ./agent-os-harness.packet.json
+node micro-ecf/bin/micro-ecf.mjs export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
 ```
 
 The output includes an Agent OS Harness packet plus `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`.
+It does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
+
+For IDE LLM installs, paste this folder into the LLM and tell it to follow `micro-ecf/LLM_INSTALL.md`:
+
+```text
+https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf
+```
+
+The safe flow is consent-gated: `micro-ecf plan --dir .` first, then `micro-ecf install --dir . --yes` only after approval.
+
+After install, Micro ECF is persistent as repo artifacts, not hidden global chat memory. Compatible IDE agents should read the generated `AGENTS.md`; any new LLM chat that does not auto-load repo instructions should receive `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can run `micro-ecf serve-mcp --root .micro-ecf`.
+
+Use [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) for the after-install workflow.
+
+Optional context providers can be declared in `context_providers[]`. Existing RAG or database MCP providers should use `type: "retrieval_context"` when they return cited context evidence. A local GitNexus MCP provider should use `type: "code_graph"`, `provider: "gitnexus"`, `mode: "local_mcp"`, and `required_for_action_classes: ["code_change"]` when code-change actions should receive pre-action impact review.
+
+Provider guide and examples:
+
+- [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md)
+- [`micro-ecf/examples/context-provider-rag.policy.json`](./micro-ecf/examples/context-provider-rag.policy.json)
+- [`micro-ecf/examples/context-provider-gitnexus.policy.json`](./micro-ecf/examples/context-provider-gitnexus.policy.json)
+- [`micro-ecf/examples/context-provider-database-mcp.policy.json`](./micro-ecf/examples/context-provider-database-mcp.policy.json)
 
 Canonical contract:
 - https://agoragentic.com/agent-os-harness.json
@@ -190,6 +224,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
+| Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
+| Micro ECF provider wrapping | [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
@@ -262,4 +298,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE), except `micro-ecf/` which carries its own Apache-2.0 package license.
