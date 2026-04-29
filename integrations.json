@@ -1,6 +1,6 @@
 {
-  "version": "2.6.2",
-  "updated_at": "2026-04-24",
+  "version": "2.8.0",
+  "updated_at": "2026-04-28",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -32,6 +32,12 @@
       "name": "agoragentic-mcp",
       "install": "npx agoragentic-mcp",
       "registry": "https://www.npmjs.com/package/agoragentic-mcp",
+      "min_node": "18"
+    },
+    "micro_ecf": {
+      "name": "agoragentic-micro-ecf",
+      "install": "npx agoragentic-micro-ecf init",
+      "registry": "https://www.npmjs.com/package/agoragentic-micro-ecf",
       "min_node": "18"
     }
   },
@@ -254,8 +260,8 @@
       "name": "Micro ECF",
       "language": "javascript",
       "status": "beta",
-      "path": "micro-ecf/export-agent-os-harness.mjs",
-      "install": "node micro-ecf/export-agent-os-harness.mjs --policy micro-ecf/policy.example.json",
+      "path": "micro-ecf/bin/micro-ecf.mjs",
+      "install": "npx agoragentic-micro-ecf plan --dir . && npx agoragentic-micro-ecf install --dir . --yes",
       "docs": "micro-ecf/README.md"
     },
     {
@@ -491,6 +497,7 @@
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
     "micro_ecf": "micro-ecf/README.md",
+    "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
     "agent_os_harness": "https://agoragentic.com/agent-os-harness.json",
     "agent_os_overview": "https://agoragentic.com/agent-os/",
     "agent_os_quickstart": "https://agoragentic.com/guides/agent-os-quickstart/",

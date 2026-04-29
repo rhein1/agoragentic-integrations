@@ -1,61 +1,236 @@
 # Micro ECF
 
-Micro ECF is the open local governance layer for builders who want to prepare an agent for Agent OS without receiving Agoragentic hosted internals.
+Micro ECF is a lightweight local context layer for builders who want safer agents.
 
-It answers the pre-deployment questions:
+It indexes small repos, docs, and local databases, builds citation-ready context packets, applies local policy boundaries, and exports Agent OS Harness files for deployment preview.
 
-- what the agent can know
-- what tools it can call
-- what it can spend
-- what needs approval
-- what it can remember
-- what it can hand off to another agent
+Micro ECF runs locally and does not require Agoragentic Cloud. When you want live hosted agents, wallet budgets, APIs, receipts, marketplace participation, x402 monetization, or enterprise governance, export into Agoragentic Agent OS.
 
-The output is an Agent OS Harness packet that can be mapped into an Agent OS preview request.
+## Product Boundary
 
-## Boundary
+Micro ECF is not Full ECF.
 
-Open in this folder:
+Use this product rule everywhere:
 
-- context, tool, budget, approval, memory, swarm, and deployment policy shape
-- formal JSON Schema files for Micro ECF policy and Agent OS Harness packets
-- local example policy
-- local no-spend policy simulator
-- no-spend harness export helper
-- Agent OS preview-request mapping
-- example exported packets for creator, seller, support, and research-swarm agents
+```text
+Micro ECF is the local context wedge.
+Agent OS is the deployment product.
+Full ECF is the enterprise runtime engine.
+```
 
-Not included:
+Architecture rule:
 
-- hosted router ranking
-- trust, fraud, or reputation internals
-- settlement or payout orchestration
-- cloud provisioning adapters
-- reviewed executor internals
-- private connectors or broker authority
-- Full ECF private runtime
+```text
+Micro ECF may prepare context for Agent OS, but it must not contain the private runtime,
+settlement, trust-ranking, or enterprise governance internals that make Agoragentic defensible.
+```
+
+## What Micro ECF Does
+
+Micro ECF helps a builder answer:
+
+```text
+What can this agent safely know, cite, use, and export into an Agent OS deployment preview?
+```
+
+Core capabilities:
+
+- local repo/doc/db indexing
+- context packet generation
+- citation/source maps
+- policy summaries
+- tool/context allowlists
+- small workflow maps
+- deployment-intent files
+- Agent OS Harness export
+- optional local MCP server
+
+Good inputs:
+
+- markdown/docs
+- small repos
+- local files
+- SQLite files and schema/data summaries
+- small Postgres/MySQL exports
+- API docs
+- agent configs
+- test harnesses
+- local policy files
+
+Generated outputs:
+
+```text
+.micro-ecf/context-packet.json
+.micro-ecf/policy-summary.json
+.micro-ecf/source-map.json
+.micro-ecf/harness-export.json
+.micro-ecf/deployment-preview.json
+AGENTS.md
+MICRO_ECF_LLM_BOOTSTRAP.md
+```
+
+## What Micro ECF Does Not Include
+
+Do not add these to Micro ECF:
+
+- Full ECF private context graph internals
+- tenant isolation runtime
+- enterprise connector architecture
+- enterprise audit-log internals
+- marketplace ranking, trust, or fraud internals
+- router provider-selection internals
+- wallet settlement internals
+- x402 settlement executor internals
+- hosted provisioning code
+- private connectors
+- secrets broker
+- operator prompts
+- customer-control evidence tooling
+- internal policy scoring for enterprise approvals
+
+Micro ECF can produce inputs for those systems. It should not implement them.
+
+## One-Command Setup
+
+If you are using an IDE LLM, paste this GitHub folder link into the chat:
+
+```text
+https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf
+```
+
+Then ask it to follow [`LLM_INSTALL.md`](./LLM_INSTALL.md). The required flow is:
+
+```bash
+micro-ecf plan --dir .
+# show the plan and wait for explicit approval
+micro-ecf install --dir . --yes
+```
+
+`plan` is read-only. `install` without `--yes` refuses to write files and returns the approval plan.
+
+Important: installing Micro ECF creates persistent repo artifacts. It does not automatically inject hidden context into every future LLM conversation.
+
+For future conversations, use one of three handoff paths:
+
+- Compatible IDE agents should auto-read `AGENTS.md`, then inspect `.micro-ecf/policy-summary.json`, `.micro-ecf/context-packet.json`, and `.micro-ecf/source-map.json`.
+- Any other LLM chat should receive `MICRO_ECF_LLM_BOOTSTRAP.md` as a pasted or attached bootstrap file at the start of the conversation.
+- IDEs that support persistent MCP tools can run `micro-ecf serve-mcp --root .micro-ecf` and configure that server once.
+
+From this repo:
+
+```bash
+cd micro-ecf
+npm test
+node bin/micro-ecf.mjs plan --dir ../my-agent
+node bin/micro-ecf.mjs install --dir ../my-agent --yes
+```
+
+When published:
+
+```bash
+npx agoragentic-micro-ecf init
+```
+
+The binary is intentionally simple:
+
+```bash
+micro-ecf init
+micro-ecf plan
+micro-ecf install --yes
+micro-ecf index ./docs
+micro-ecf build-packet
+micro-ecf export --agent-os
+micro-ecf serve-mcp
+```
+
+## Local Workflow
+
+Initialize a local project:
+
+```bash
+node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
+```
+
+Index bounded local context:
+
+```bash
+node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
+```
+
+Build local artifacts:
+
+```bash
+node micro-ecf/bin/micro-ecf.mjs build-packet \
+  --policy ./my-agent/.micro-ecf/policy.json \
+  --source-map ./my-agent/.micro-ecf/source-map.json \
+  --output-dir ./my-agent/.micro-ecf
+```
+
+Export an Agent OS Harness packet:
+
+```bash
+node micro-ecf/bin/micro-ecf.mjs export --agent-os \
+  --policy ./my-agent/.micro-ecf/policy.json \
+  --output ./my-agent/.micro-ecf/harness-export.json
+```
+
+Then preview it in Agent OS:
+
+```bash
+npx agoragentic-os preview ./my-agent/.micro-ecf/harness-export.json
+```
+
+The export is no-spend and non-provisioning. It does not deploy, activate billing, publish a listing, settle x402, or call hosted providers.
+
+## Legacy Export Helper
+
+The original helper remains available:
+
+```bash
+node micro-ecf/export-agent-os-harness.mjs \
+  --policy micro-ecf/policy.example.json \
+  --output ./agent-os-harness.packet.json
+```
+
+Use the CLI for full local context artifacts. Use the helper when you only need a Harness packet from a policy file.
+
+## Local MCP Server
+
+Micro ECF can run as a local stdio MCP server:
+
+```bash
+micro-ecf serve-mcp --root .micro-ecf
+```
+
+Tools:
+
+- `micro_ecf.search_context`
+- `micro_ecf.get_source`
+- `micro_ecf.get_policy`
+- `micro_ecf.build_packet`
+- `micro_ecf.export_agent_os_harness`
+
+The MCP server reads and writes local `.micro-ecf` artifacts only. It does not call Agoragentic Cloud.
 
 ## Context Providers
 
-Micro ECF can attach optional **context graph providers** for pre-action impact review. A context provider indexes a bounded workspace (codebase, tool surface, policy set, or workflow) into a structural graph and exposes query tools so the Consequences Engine can evaluate blast radius before an agent acts.
+Micro ECF can attach optional context graph providers for pre-action impact review. A provider indexes a bounded workspace into a structural graph and exposes query tools so Agent OS can evaluate blast radius before an agent acts.
 
 Supported provider types:
 
 | Type | Description |
 |------|-------------|
-| `code_graph` | Codebase structural awareness — functions, imports, call chains, dependencies |
+| `code_graph` | Codebase structural awareness: functions, imports, call chains, dependencies |
 | `tool_graph` | Tool and API dependency graph |
 | `policy_graph` | Governance and compliance policy relationships |
 | `workflow_graph` | Multi-step workflow and process dependencies |
 | `receipt_graph` | Transaction and receipt chain relationships |
 | `marketplace_graph` | Marketplace listing and seller dependency graph |
-| `enterprise_context_graph` | Enterprise-wide tenant-isolated context graph |
+| `enterprise_context_graph` | Reserved for Full ECF / enterprise deployments, not local Micro ECF internals |
 
-### Using GitNexus as a local code graph provider
+### GitNexus As Optional `code_graph`
 
-[GitNexus](https://github.com/abhigyanpatwari/GitNexus) is an open-source MCP-native knowledge graph engine that indexes codebases into structural dependency graphs. When attached as a Micro ECF `code_graph` provider, Agent OS can query impact, context, and change detection before code-changing actions.
-
-Add to your Micro ECF policy:
+GitNexus can be used as an optional local `code_graph` provider. Treat it as a provider pattern, not a dependency or rebrand.
 
 ```json
 {
@@ -79,100 +254,24 @@ Add to your Micro ECF policy:
 }
 ```
 
-When a `code_change` action is proposed, the Consequences Engine will:
+If no provider is configured or reachable, Agent OS falls back to standard policy/consequence review.
 
-1. Query the code_graph provider for `impact(symbol)` — upstream callers, downstream dependencies, risk hotspots, confidence
-2. Query `detect_changes(diff)` — map changed lines to affected processes and risk
-3. Include the `graph_impact` in the consequence assessment with structured impact data
-4. Apply graph-aware blast radius inference (workspace vs workspace_wide) based on upstream callers and hotspot count
-5. Route to `allow`, `allow_with_limits`, `ask_owner`, `ask_arbiter`, or `block` based on structural impact
-6. After execution, compare predicted impact vs actual changed files (drift detection)
+## How It Connects To Agent OS
 
-Context providers are optional. If no provider is configured or reachable, the Consequences Engine falls back to its standard risk scoring.
+Funnel:
 
-## Action Lifecycle: PreAction / PostAction
-
-Agent OS uses a structured lifecycle for every agent action:
-
-```
-PreAction:
-  Micro ECF gathers bounded context
-  Context provider (code_graph, tool_graph, etc.) provides structural impact
-  Consequences Engine evaluates risk (graph_impact contributes 21% weight)
-  Policy / arbiter / approval gate decides
-
-Action:
-  Agent executes code / tool / router / marketplace step
-
-PostAction:
-  Receipt / evidence captured
-  Context provider detects actual changed impact (if relevant)
-  Argent reconciles predicted vs actual outcome
-  Trust / learning update proposed
+```text
+1. Builder installs Micro ECF locally.
+2. Builder points it at repo/docs/db.
+3. Micro ECF builds local context and policy packets.
+4. Builder sees what the agent can safely know, cite, and use.
+5. Micro ECF exports Agent OS Harness files.
+6. Builder previews deployment on Agoragentic.
+7. If they want runtime, wallets, APIs, receipts, marketplace, or x402 monetization, they move to Agent OS.
+8. If they need private enterprise context, tenant isolation, access control, audit logs, approved tools, and compliance evidence, they move to Agent OS Enterprise / Full ECF.
 ```
 
-**Before the agent acts, Agent OS reviews context, policy, budget, impact, and consequences.
-After the agent acts, Agent OS reconciles the result against the approved intent.**
-
-## Local Export
-
-Run the no-spend simulator before export:
-
-```bash
-node micro-ecf/simulator/run.mjs \
-  --policy micro-ecf/policy.example.json \
-  --task micro-ecf/simulator/task.example.json
-```
-
-Then export the Agent OS Harness packet:
-
-```bash
-node micro-ecf/export-agent-os-harness.mjs \
-  --policy micro-ecf/policy.example.json \
-  --output ./agent-os-harness.packet.json
-```
-
-The exported JSON includes:
-
-- `schema: "agoragentic.agent-os.harness.v1"`
-- local policy sections
-- `schema_artifacts`, pointing to the hosted and local schema files
-- `public_boundary`, the explicit no-spend/non-provisioning/non-billing boundary
-- `agent_os_export` endpoint metadata
-- `agent_os_preview_request`, a no-spend request body for `POST /api/hosting/agent-os/preview`
-
-## Schemas And Examples
-
-Local schemas:
-
-- `micro-ecf/schema/micro-ecf-policy.v1.json`
-- `micro-ecf/schema/agent-os-harness.v1.json`
-
-Canonical hosted schemas:
-
-- `https://agoragentic.com/schema/micro-ecf-policy.v1.json`
-- `https://agoragentic.com/schema/agent-os-harness.v1.json`
-
-Example exported packets:
-
-- `micro-ecf/examples/creator-agent.packet.json`
-- `micro-ecf/examples/seller-agent.packet.json`
-- `micro-ecf/examples/support-agent.packet.json`
-- `micro-ecf/examples/research-swarm.packet.json`
-
-## Agent OS Funnel
-
-1. Edit `micro-ecf/policy.example.json` for your agent.
-2. Run `micro-ecf/simulator/run.mjs` against one proposed task.
-3. Export an Agent OS Harness packet.
-4. Send `agent_os_preview_request` to `POST https://agoragentic.com/api/hosting/agent-os/preview`.
-5. If the preview looks correct, record a deployment request with `POST /api/hosting/agent-os/deployments`.
-6. Fund the deployment treasury before autonomous runtime spend.
-7. Run or record one bounded first proof.
-8. Review results in the Agent OS workspace.
-9. Activate public API, marketplace, or x402 exposure only after fulfillment, smoke, and reconciliation gates pass.
-
-Canonical contract:
+Canonical hosted contracts:
 
 - `https://agoragentic.com/agent-os-harness.json`
 - `https://agoragentic.com/schema/agent-os-harness.v1.json`
@@ -180,6 +279,18 @@ Canonical contract:
 - `https://agoragentic.com/agent-os/launch/`
 - `https://agoragentic.com/agent-os/deployments/`
 
-## No-Spend Rule
+## Schemas
 
-This folder does not execute hosted work, provision cloud resources, activate billing, or publish marketplace listings. It only creates a local policy packet and preview-request body.
+Local schemas:
+
+- `schema/micro-ecf-policy.v1.json`
+- `schema/agent-os-harness.v1.json`
+- `schema/context-packet.schema.json`
+- `schema/source-map.schema.json`
+- `schema/policy-summary.schema.json`
+- `schema/deployment-preview.schema.json`
+- `schema/harness-export.schema.json`
+
+## License
+
+Micro ECF is licensed under Apache-2.0. The wider integrations repository may contain other adapters under the repository-level license; this folder carries its own package license boundary.

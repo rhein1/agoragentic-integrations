@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/micro-ecf-policy-summary.v1.json",
+  "title": "Micro ECF Policy Summary v1",
+  "description": "Human and machine-readable summary of the local Micro ECF policy boundary.",
+  "type": "object",
+  "required": ["schema", "product_boundary", "agent", "allowed_context", "blocked_context", "allowed_tools", "denied_tools", "budget"],
+  "properties": {
+    "schema": { "const": "agoragentic.micro-ecf.policy-summary.v1" },
+    "generated_at": { "type": "string" },
+    "product_boundary": {
+      "type": "object",
+      "required": ["micro_ecf", "agent_os", "full_ecf", "local_only", "no_spend"],
+      "properties": {
+        "micro_ecf": { "const": "local_context_wedge" },
+        "agent_os": { "const": "deployment_product" },
+        "full_ecf": { "const": "private_enterprise_runtime_engine" },
+        "local_only": { "const": true },
+        "no_spend": { "const": true }
+      },
+      "additionalProperties": true
+    },
+    "agent": {
+      "type": "object",
+      "required": ["name", "primary_goal"],
+      "additionalProperties": true
+    },
+    "allowed_context": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocked_context": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "denied_tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["max_daily_spend_usdc", "approval_required_above_usdc", "treasury_required"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

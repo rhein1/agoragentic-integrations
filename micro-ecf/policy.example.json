@@ -9,10 +9,29 @@
   "context_policy": {
     "allowed_sources": [
       "owner_provided_docs",
-      "public_web"
+      "public_web",
+      "local_repo",
+      "local_database_summaries"
     ],
     "denied_sources": [
-      "private_inbox_without_approval"
+      "private_inbox_without_approval",
+      "secrets",
+      "private_keys",
+      "wallet_seeds",
+      "raw_credentials"
+    ],
+    "local_allow": [
+      "docs/**",
+      "src/**",
+      "*.md",
+      "*.json",
+      "*.yaml",
+      "*.yml"
+    ],
+    "local_block": [
+      ".env*",
+      "secrets/**",
+      "customer_private/**"
     ],
     "retention": "review_before_memory_write",
     "redaction": "secrets_reference_only"
@@ -20,10 +39,14 @@
   "tool_policy": {
     "allowed_tools": [
       "web_search",
-      "marketplace_execute"
+      "marketplace_execute",
+      "agent_os_preview_export"
     ],
     "denied_tools": [
-      "unapproved_email_send"
+      "unapproved_email_send",
+      "wallet_settlement",
+      "hosted_provisioning",
+      "x402_settlement_executor"
     ],
     "side_effects": "approval_required"
   },
