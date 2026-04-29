@@ -54,7 +54,7 @@ For code/workspace agents, GitNexus can be attached as an optional local `code_g
 | **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
 | **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
-| **Micro ECF** | `npx agoragentic-micro-ecf init` | Node ≥ 18 |
+| **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
 
 ## Available Integrations
 
@@ -159,22 +159,33 @@ Micro ECF is the local context wedge for preparing an agent before it gets hoste
 
 Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
 
-Initialize and build local context artifacts:
+Install and build local context artifacts:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
-node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
-node micro-ecf/bin/micro-ecf.mjs build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
+npx agoragentic-micro-ecf@latest explain
+npx agoragentic-micro-ecf@latest plan --dir ./my-agent
+npx agoragentic-micro-ecf@latest install --dir ./my-agent --yes
+npx agoragentic-micro-ecf@latest index ./my-agent/docs --output-dir ./my-agent/.micro-ecf
+npx agoragentic-micro-ecf@latest build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
 ```
 
 Then export the Agent OS Harness packet:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
+npx agoragentic-micro-ecf@latest export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
 ```
 
-The output includes an Agent OS Harness packet plus `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`.
-It does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
+Preview or record the handoff in hosted Agent OS:
+
+```bash
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy readiness --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy preview --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file ./my-agent/.micro-ecf/harness-export.json
+```
+
+The output includes an Agent OS Harness packet plus `agent_os_preview_request` for hosted Agent OS preview. `readiness` and `preview` are no-spend checks. `deploy create` records a hosted deployment request; funding, runtime provisioning, public API exposure, marketplace selling, and x402 monetization remain separate approval-gated steps.
+
+The Micro ECF export does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
 
 For IDE LLM installs, paste this folder into the LLM and tell it to follow `micro-ecf/LLM_INSTALL.md`:
 
@@ -224,6 +235,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
+| Micro ECF Syrin guide | [`micro-ecf/SYRIN_USER_GUIDE.md`](./micro-ecf/SYRIN_USER_GUIDE.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
 | Micro ECF provider wrapping | [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |

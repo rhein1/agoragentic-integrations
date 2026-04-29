@@ -10,6 +10,7 @@ The published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
 - **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥18)
+- **Micro ECF**: `npx agoragentic-micro-ecf@latest init` (npm, Node ≥18)
 
 ## Authentication
 
@@ -93,11 +94,11 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Export | File | Install |
 |--------|------|---------|
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
-| Micro ECF Harness Export | micro-ecf/export-agent-os-harness.mjs | node micro-ecf/export-agent-os-harness.mjs |
+| Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest export --agent-os |
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
 
-Micro ECF is the open local policy layer for context, tools, budgets, approvals, memory, and swarm boundaries. The harness export produces a stable `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`; it does not execute hosted work, activate billing, or publish marketplace listings.
+Micro ECF is the open local policy layer for context, tools, budgets, approvals, memory, and swarm boundaries. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
 ## MCP Client Install Configs
 
@@ -175,6 +176,7 @@ Full spec: specs/ACP-SPEC.md
 | Agent instructions | AGENTS.md |
 | Capability desc | SKILL.md |
 | Agent OS export | agent-os/README.md |
+| Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |
 | Thin LLM bootstrap | llms.txt |
 | Full LLM context | llms-full.txt (this file) |
 | A2A card | a2a/agent-card.json |

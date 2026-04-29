@@ -176,18 +176,23 @@ Hosted guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://agor
 
 ### Micro ECF
 
-Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. For the package-ready local flow, run:
+Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. For IDE LLM installs, tell the LLM to follow `micro-ecf/LLM_INSTALL.md`: explain first, run `npx agoragentic-micro-ecf@latest plan --dir .`, show the plan, and only run `npx agoragentic-micro-ecf@latest install --dir . --yes` after explicit developer approval.
 
-For IDE LLM installs, tell the LLM to follow `micro-ecf/LLM_INSTALL.md`: explain first, run `micro-ecf plan --dir .`, show the plan, and only run `micro-ecf install --dir . --yes` after explicit developer approval.
+For the Syrin user launch path and visual roadmap, use `micro-ecf/SYRIN_USER_GUIDE.md`.
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
-node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
-node micro-ecf/bin/micro-ecf.mjs build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
-node micro-ecf/bin/micro-ecf.mjs export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
+npx agoragentic-micro-ecf@latest explain
+npx agoragentic-micro-ecf@latest plan --dir ./my-agent
+npx agoragentic-micro-ecf@latest install --dir ./my-agent --yes
+npx agoragentic-micro-ecf@latest index ./my-agent/docs --output-dir ./my-agent/.micro-ecf
+npx agoragentic-micro-ecf@latest build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
+npx agoragentic-micro-ecf@latest export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy readiness --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy preview --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file ./my-agent/.micro-ecf/harness-export.json
 ```
 
-The output includes `agent_os_preview_request` for `POST /api/hosting/agent-os/preview`. It does not execute hosted work, provision cloud resources, activate billing, or publish marketplace listings.
+The output includes `agent_os_preview_request` for hosted Agent OS preview. `deploy readiness` and `deploy preview` are no-spend checks. `deploy create` records a hosted deployment request; runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
 It also does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
 
 Use the public harness docs when a local or self-hosted agent needs to present a stable deployment contract:

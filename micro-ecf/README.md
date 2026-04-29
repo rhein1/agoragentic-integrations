@@ -16,6 +16,18 @@ Micro ECF runs locally and does not require Agoragentic Cloud. When you want liv
   <img src="assets/micro-ecf-architecture.png" alt="Micro ECF architecture diagram showing local inputs, bounded context artifacts, blocked secret paths, and Agent OS preview outputs" width="100%" />
 </p>
 
+## Syrin User Roadmap
+
+Use the Syrin guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
+
+- [Syrin User Guide: Micro ECF To Agent OS](./SYRIN_USER_GUIDE.md)
+- [Roadmap overview image](./assets/roadmap/roadmap-overview.png)
+
+![Micro ECF to Agent OS roadmap](assets/roadmap/roadmap-overview.png)
+
+The PNGs are intentionally text-free. Use the stage labels and captions in
+[`SYRIN_USER_GUIDE.md`](./SYRIN_USER_GUIDE.md) for Discord, GitHub, or HTML overlays.
+
 ## Product Boundary
 
 Micro ECF is not Full ECF.
@@ -168,10 +180,12 @@ node bin/micro-ecf.mjs plan --dir ../my-agent
 node bin/micro-ecf.mjs install --dir ../my-agent --yes
 ```
 
-When published:
+From npm:
 
 ```bash
-npx agoragentic-micro-ecf init
+npx agoragentic-micro-ecf@latest explain
+npx agoragentic-micro-ecf@latest plan --dir .
+npx agoragentic-micro-ecf@latest install --dir . --yes
 ```
 
 The binary is intentionally simple:
@@ -191,19 +205,19 @@ micro-ecf serve-mcp
 Initialize a local project:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs init --dir ./my-agent
+npx agoragentic-micro-ecf@latest init --dir ./my-agent
 ```
 
 Index bounded local context:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs index ./my-agent --output-dir ./my-agent/.micro-ecf
+npx agoragentic-micro-ecf@latest index ./my-agent/docs --output-dir ./my-agent/.micro-ecf
 ```
 
 Build local artifacts:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs build-packet \
+npx agoragentic-micro-ecf@latest build-packet \
   --policy ./my-agent/.micro-ecf/policy.json \
   --source-map ./my-agent/.micro-ecf/source-map.json \
   --output-dir ./my-agent/.micro-ecf
@@ -212,18 +226,20 @@ node micro-ecf/bin/micro-ecf.mjs build-packet \
 Export an Agent OS Harness packet:
 
 ```bash
-node micro-ecf/bin/micro-ecf.mjs export --agent-os \
+npx agoragentic-micro-ecf@latest export --agent-os \
   --policy ./my-agent/.micro-ecf/policy.json \
   --output ./my-agent/.micro-ecf/harness-export.json
 ```
 
-Then preview it in Agent OS:
+Then hand it to hosted Agent OS:
 
 ```bash
-npx agoragentic-os preview ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy readiness --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy preview --file ./my-agent/.micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file ./my-agent/.micro-ecf/harness-export.json
 ```
 
-The export is no-spend and non-provisioning. It does not deploy, activate billing, publish a listing, settle x402, or call hosted providers.
+The export itself is no-spend and non-provisioning. `readiness` and `preview` are no-spend checks. `deploy create` records a hosted deployment request; funding, runtime provisioning, public API exposure, marketplace selling, and x402 monetization remain separate approval-gated steps.
 
 ## Legacy Export Helper
 

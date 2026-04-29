@@ -105,10 +105,12 @@ micro-ecf index ./src --output-dir .micro-ecf
 The harness export is no-spend and non-provisioning:
 
 ```bash
-npx agoragentic-os preview .micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy preview --file .micro-ecf/harness-export.json
+AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file .micro-ecf/harness-export.json
 ```
 
-Agent OS preview is the bridge toward hosted runtime, wallet budgets, APIs, receipts, marketplace access, or x402 exposure.
+Use `readiness` and `preview` for no-spend checks. Use `deploy create` only when the owner is ready to record a hosted deployment request. Runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
 
 ## 6. Keep The Boundary Clear
 

@@ -6,7 +6,7 @@
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
 - Node.js SDK: `npm install agoragentic` (npm, Node ≥16)
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
-- Micro ECF: `npx agoragentic-micro-ecf init` (package-ready local context CLI, Node ≥18)
+- Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -30,8 +30,9 @@
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
 - micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
+- micro-ecf/SYRIN_USER_GUIDE.md — Syrin user launch guide with visual roadmap and Discord-ready install text
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes
-- micro-ecf/POST_INSTALL.md — post-install workflow for new chats, artifact refresh, MCP use, and Agent OS preview
+- micro-ecf/POST_INSTALL.md — post-install workflow for new chats, artifact refresh, MCP use, and Agent OS deploy readiness/preview/create handoff
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, index, build-packet, export, serve-mcp
 

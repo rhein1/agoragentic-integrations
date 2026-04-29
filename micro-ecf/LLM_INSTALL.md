@@ -20,13 +20,13 @@ First, explain in plain English:
 
 Then run a read-only plan:
 
-node micro-ecf/bin/micro-ecf.mjs plan --dir .
+npx agoragentic-micro-ecf@latest plan --dir .
 
 Show me the plan. Do not run install with --yes until I explicitly approve.
 
 After I approve, run:
 
-node micro-ecf/bin/micro-ecf.mjs install --dir . --yes
+npx agoragentic-micro-ecf@latest install --dir . --yes
 
 After install, summarize the generated files and tell me how to use .micro-ecf/context-packet.json, .micro-ecf/policy-summary.json, and .micro-ecf/harness-export.json.
 
@@ -50,7 +50,7 @@ micro-ecf plan --dir .
 micro-ecf install --dir . --yes
 ```
 
-`plan` is read-only.
+When the package is not installed globally, use the `npx agoragentic-micro-ecf@latest ...` form. `plan` is read-only.
 
 `install` without `--yes` refuses to write files and returns the same approval plan.
 
