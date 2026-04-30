@@ -6,14 +6,19 @@ import {
   DEFAULT_BASE_URL,
   DEFAULT_OUTPUT_DIR,
   buildArtifacts,
+  buildEcfSpec,
   buildExplanation,
   buildInstallPlan,
+  diffEcfMd,
+  doctorProject,
   exportAgentOsHarness,
   indexSources,
   installProject,
   initProject,
+  lintEcfMd,
   readJson,
   readPolicy,
+  scanProject,
   searchSourceMap,
   writeJson,
 } from '../src/core.mjs';
@@ -45,6 +50,11 @@ Usage:
   micro-ecf explain
   micro-ecf plan [--dir .] [--output-dir .micro-ecf]
   micro-ecf install [--dir .] [--output-dir .micro-ecf] [--yes]
+  micro-ecf scan [--dir .] [--policy .micro-ecf/policy.json]
+  micro-ecf doctor [--dir .] [--output-dir .micro-ecf]
+  micro-ecf lint [ECF.md]
+  micro-ecf diff <before ECF.md> <after ECF.md>
+  micro-ecf spec [--json]
   micro-ecf index <path> [--policy .micro-ecf/policy.json] [--output-dir .micro-ecf]
   micro-ecf build-packet [--policy .micro-ecf/policy.json] [--source-map .micro-ecf/source-map.json] [--output-dir .micro-ecf]
   micro-ecf export --agent-os [--policy .micro-ecf/policy.json] [--output .micro-ecf/harness-export.json]
@@ -91,6 +101,22 @@ function commandInstall(flags) {
     maxFiles: flags['max-files'],
     maxFileBytes: flags['max-file-bytes'],
     baseUrl: flags['base-url'] || DEFAULT_BASE_URL,
+  });
+}
+
+function commandScan(flags) {
+  return scanProject({
+    targetDir: flags.dir || flags._[0] || process.cwd(),
+    policyPath: flags.policy || null,
+    maxFiles: flags['max-files'],
+    maxFileBytes: flags['max-file-bytes'],
+  });
+}
+
+function commandDoctor(flags) {
+  return doctorProject({
+    targetDir: flags.dir || process.cwd(),
+    outputDir: flags['output-dir'] || null,
   });
 }
 
@@ -167,6 +193,16 @@ async function main() {
   else if (command === 'explain') output(buildExplanation());
   else if (command === 'plan') output(commandPlan(flags));
   else if (command === 'install') output(commandInstall(flags));
+  else if (command === 'scan') output(commandScan(flags));
+  else if (command === 'doctor') output(commandDoctor(flags));
+  else if (command === 'lint') output(lintEcfMd(flags._[0] || 'ECF.md'));
+  else if (command === 'diff') {
+    if (!flags._[0] || !flags._[1]) throw new Error('diff requires two ECF.md file paths.');
+    output(diffEcfMd(flags._[0], flags._[1]));
+  } else if (command === 'spec') {
+    const spec = buildEcfSpec({ format: flags.json ? 'json' : 'markdown' });
+    output(spec, flags.json === true);
+  }
   else if (command === 'index') output(commandIndex(flags));
   else if (command === 'build-packet') output(commandBuildPacket(flags));
   else if (command === 'export') output(commandExport(flags));

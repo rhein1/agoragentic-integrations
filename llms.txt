@@ -33,8 +33,12 @@
 - micro-ecf/SYRIN_USER_GUIDE.md — Syrin user launch guide with visual roadmap and Discord-ready install text
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes
 - micro-ecf/POST_INSTALL.md — post-install workflow for new chats, artifact refresh, MCP use, and Agent OS deploy readiness/preview/create handoff
+- micro-ecf/FRAMEWORKS.md — using Micro ECF with OpenHands, CrewAI, LangGraph, Letta, browser-use, GPT Researcher, Syrin, and IDE agents
+- micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md — future evidence/eval layer backlog for Agent OS and Full ECF
+- ACP_REGISTRY.md — ACP Registry copy and submission boundary
+- ECF.md — generated per-project Micro ECF contract with machine-readable front matter and human-readable policy rationale
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
-- micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, index, build-packet, export, serve-mcp
+- micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

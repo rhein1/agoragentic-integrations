@@ -39,16 +39,30 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
     const init = run(['init', '--dir', tmp], microEcfRoot);
     assert.equal(init.ok, true);
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'policy.json')));
+    assert.ok(fs.existsSync(path.join(tmp, 'ECF.md')));
     assert.ok(fs.existsSync(path.join(tmp, 'AGENTS.md')));
     assert.ok(fs.existsSync(path.join(tmp, 'MICRO_ECF_LLM_BOOTSTRAP.md')));
 
+    const lint = run(['lint', path.join(tmp, 'ECF.md')], microEcfRoot);
+    assert.equal(lint.ok, true);
+    assert.equal(lint.tokens.project, path.basename(tmp));
+
+    const doctor = run(['doctor', '--dir', tmp], microEcfRoot);
+    assert.equal(doctor.ok, false);
+    assert.ok(doctor.checks.some((check) => check.name === 'source_map' && check.ok === false));
+
+    const scan = run(['scan', '--dir', tmp], microEcfRoot);
+    assert.equal(scan.ok, true);
+    assert.equal(scan.no_writes_performed, true);
+    assert.ok(scan.stats.sensitive_blocked_paths >= 1);
+
     const index = run(['index', tmp, '--output-dir', path.join(tmp, '.micro-ecf')], microEcfRoot);
     assert.equal(index.ok, true);
-    assert.equal(index.stats.included_sources, 4);
+    assert.equal(index.stats.included_sources, 5);
     assert.ok(index.stats.blocked_paths >= 1);
 
     const sourceMap = readJson(path.join(tmp, '.micro-ecf', 'source-map.json'));
-    assert.deepEqual(sourceMap.sources.map((source) => source.path).sort(), ['AGENTS.md', 'MICRO_ECF_LLM_BOOTSTRAP.md', 'docs/api.md', 'src/agent.js']);
+    assert.deepEqual(sourceMap.sources.map((source) => source.path).sort(), ['AGENTS.md', 'ECF.md', 'MICRO_ECF_LLM_BOOTSTRAP.md', 'docs/api.md', 'src/agent.js']);
     assert.ok(sourceMap.blocked.some((entry) => entry.path === '.env'));
     assert.equal(JSON.stringify(sourceMap).includes('do-not-export'), false);
     assert.equal(JSON.stringify(sourceMap).includes(tmp.replace(/\\/g, '/')), false);
@@ -62,7 +76,7 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
     const contextPacket = readJson(path.join(tmp, '.micro-ecf', 'context-packet.json'));
     assert.equal(contextPacket.schema, 'agoragentic.micro-ecf.context-packet.v1');
     assert.equal(contextPacket.export_boundary.raw_content_exported, false);
-    assert.equal(contextPacket.citations.length, 4);
+    assert.equal(contextPacket.citations.length, 5);
 
     const preview = readJson(path.join(tmp, '.micro-ecf', 'deployment-preview.json'));
     assert.equal(preview.marketplace_policy.can_buy, false);
@@ -73,6 +87,9 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
 
     const exported = run(['export', '--agent-os', '--policy', path.join(tmp, '.micro-ecf', 'policy.json'), '--output', path.join(tmp, '.micro-ecf', 'harness-export.json')], microEcfRoot);
     assert.equal(exported.ok, true);
+
+    const healthy = run(['doctor', '--dir', tmp], microEcfRoot);
+    assert.equal(healthy.ok, true);
 
     const harness = readJson(path.join(tmp, '.micro-ecf', 'harness-export.json'));
     assert.equal(harness.schema, 'agoragentic.agent-os.harness.v1');
@@ -112,6 +129,7 @@ test('LLM install flow is read-only until explicit approval', () => {
     assert.equal(plan.approval_required, true);
     assert.equal(plan.no_writes_performed, true);
     assert.ok(plan.files_that_may_be_created_or_updated.some((file) => file.endsWith('MICRO_ECF_LLM_BOOTSTRAP.md')));
+    assert.ok(plan.files_that_may_be_created_or_updated.some((file) => file.endsWith('ECF.md')));
     assert.ok(plan.files_that_may_be_created_or_updated.some((file) => file.endsWith('.micro-ecf/harness-export.json')));
     assert.equal(fs.existsSync(path.join(tmp, '.micro-ecf')), false);
 
@@ -124,12 +142,14 @@ test('LLM install flow is read-only until explicit approval', () => {
     assert.equal(installed.ok, true);
     assert.equal(installed.approved, true);
     assert.ok(fs.existsSync(path.join(tmp, 'AGENTS.md')));
+    assert.ok(fs.existsSync(path.join(tmp, 'ECF.md')));
     assert.ok(fs.existsSync(path.join(tmp, 'MICRO_ECF_LLM_BOOTSTRAP.md')));
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-packet.json')));
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'policy-summary.json')));
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'harness-export.json')));
 
     const bootstrap = fs.readFileSync(path.join(tmp, 'MICRO_ECF_LLM_BOOTSTRAP.md'), 'utf8');
+    assert.match(bootstrap, /ECF\.md/);
     assert.match(bootstrap, /Expected Assistant Disclosure/);
     assert.match(bootstrap, /are you using Micro ECF/);
     assert.match(bootstrap, /not a semantic RAG engine/i);
@@ -142,6 +162,10 @@ test('LLM install flow is read-only until explicit approval', () => {
     assert.equal(harness.public_boundary.full_ecf_runtime_included, false);
     assert.equal(harness.public_boundary.learning_memory_review_only, true);
     assert.equal(harness.public_boundary.memory_can_authorize_live_actions, false);
+
+    const spec = run(['spec', '--json'], microEcfRoot);
+    assert.equal(spec.name, 'ECF.md');
+    assert.ok(spec.required_front_matter.includes('allowed_sources'));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -157,6 +181,8 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.ok(packageJson.files.includes('assets/'));
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));
   assert.ok(packageJson.files.includes('PROVIDER_WRAPPING.md'));
+  assert.ok(packageJson.files.includes('FRAMEWORKS.md'));
+  assert.ok(packageJson.files.includes('AGENT_OS_EVIDENCE_EVAL_BACKLOG.md'));
 });
 
 test('context provider docs and examples keep Micro ECF as a governance wrapper', () => {

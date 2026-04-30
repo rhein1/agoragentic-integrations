@@ -218,11 +218,14 @@ export function initProject({ targetDir = process.cwd(), force = false } = {}) {
   fs.mkdirSync(outputDir, { recursive: true });
 
   const policyPath = path.join(outputDir, 'policy.json');
+  const ecfMdPath = path.join(root, 'ECF.md');
   const agentsPath = path.join(root, 'AGENTS.md');
   const bootstrapPath = path.join(root, 'MICRO_ECF_LLM_BOOTSTRAP.md');
   const projectName = path.basename(root) || 'local-agent';
+  const policy = createDefaultPolicy(projectName);
 
-  writeIfAllowed(policyPath, createDefaultPolicy(projectName), force);
+  writeIfAllowed(policyPath, policy, force);
+  writeTextIfAllowed(ecfMdPath, buildEcfMd(policy), force);
   writeTextIfAllowed(agentsPath, buildAgentsMd(projectName), force);
   writeTextIfAllowed(bootstrapPath, buildLlmBootstrapMd(projectName), force);
 
@@ -230,9 +233,11 @@ export function initProject({ targetDir = process.cwd(), force = false } = {}) {
     ok: true,
     output_dir: relativePortable(process.cwd(), outputDir),
     policy: relativePortable(process.cwd(), policyPath),
+    ecf_md: relativePortable(process.cwd(), ecfMdPath),
     agents_md: relativePortable(process.cwd(), agentsPath),
     llm_bootstrap: relativePortable(process.cwd(), bootstrapPath),
     next_steps: [
+      'micro-ecf doctor --dir .',
       `micro-ecf index ${portablePath(root)}`,
       'micro-ecf build-packet',
       'micro-ecf export --agent-os',
@@ -247,12 +252,14 @@ export function buildExplanation() {
     what_it_does: [
       'Builds bounded local source maps from repos, docs, local files, and database-summary exports.',
       'Builds citation-ready context packets from source summaries and provenance without exporting raw source content.',
+      'Creates ECF.md as a persistent agent-readable local policy contract.',
       'Applies local policy boundaries for allowed context, blocked sources, tools, budgets, approvals, memory, and swarms.',
       'Can declare external context providers such as RAG, code graphs, database tools, or MCP servers so Agent OS can apply governance around them.',
       'Exports an Agent OS Harness file for no-spend deployment preview.',
     ],
     why_it_helps: [
       'Your IDE LLM gets a stable map of what it can safely know and cite.',
+      'New chats get ECF.md plus generated bootstrap instructions instead of relying on hidden memory.',
       'Secret-looking files, private keys, wallet seeds, credentials, node_modules, and .git internals are blocked by default.',
       'Existing RAG, GitNexus, database, or MCP context systems can be wrapped with explicit policy/provenance boundaries instead of hidden prompt assumptions.',
       'Agent OS receives a structured preview packet instead of an informal prompt or screenshot.',
@@ -292,6 +299,7 @@ export function buildInstallPlan({ targetDir = process.cwd(), outputDir = null, 
     },
     proposed_local_actions: [
       'Create or reuse .micro-ecf/policy.json with local-only context/tool/budget/approval/memory/swarm boundaries.',
+      'Create or reuse ECF.md with a persistent agent-readable Micro ECF policy contract.',
       'Create or reuse AGENTS.md with Micro ECF local safety rules for IDE agents that auto-load repo instructions.',
       'Create or reuse MICRO_ECF_LLM_BOOTSTRAP.md as the drag/paste handoff for any new LLM chat that does not auto-load repo instructions.',
       'Index allowed local text/code/docs/database-summary files into .micro-ecf/source-map.json.',
@@ -300,6 +308,7 @@ export function buildInstallPlan({ targetDir = process.cwd(), outputDir = null, 
       'Export .micro-ecf/harness-export.json for Agent OS preview.',
     ],
     files_that_may_be_created_or_updated: [
+      rel(path.join(root, 'ECF.md')),
       rel(path.join(root, 'AGENTS.md')),
       rel(path.join(root, 'MICRO_ECF_LLM_BOOTSTRAP.md')),
       rel(path.join(resolvedOutput, 'policy.json')),
@@ -398,6 +407,69 @@ function writeTextIfAllowed(filePath, value, force) {
   fs.writeFileSync(filePath, value);
 }
 
+export function buildEcfMd(policy = createDefaultPolicy('local-agent')) {
+  validatePolicy(policy);
+  const projectName = policy.agent_manifest.name || 'local-agent';
+  const allowedSources = asList(policy.context_policy.allowed_sources);
+  const blockedSources = [
+    ...asList(policy.context_policy.denied_sources),
+    '.env',
+    'private_keys',
+    'wallet_seeds',
+    'raw_credentials',
+    'node_modules',
+    '.git internals',
+  ];
+  const providers = asList(policy.context_providers).map((provider) => ({
+    type: provider.type,
+    provider: provider.provider,
+    required: provider.required === true,
+  }));
+
+  return `---
+version: "0.1"
+project: "${escapeYaml(projectName)}"
+scope: "local_project"
+allowed_sources:
+${formatYamlList(allowedSources)}
+blocked_sources:
+${formatYamlList(blockedSources)}
+${providers.length
+  ? `context_providers:\n${providers.map((provider) => `  - type: "${escapeYaml(provider.type)}"\n    provider: "${escapeYaml(provider.provider)}"\n    required: ${provider.required ? 'true' : 'false'}`).join('\n')}`
+  : 'context_providers: []'}
+agent_os:
+  export_harness: true
+  deploy_preview: true
+  live_deploy_requires_owner_approval: true
+---
+
+# ${projectName} Micro ECF Contract
+
+## Overview
+
+This project uses Micro ECF as a local context wedge and policy boundary before Agent OS preview. Micro ECF prepares local context and policy artifacts; it does not deploy, spend, publish, provision, settle x402 payments, or expose Full ECF internals.
+
+## Context Boundaries
+
+Allowed source classes are declared in the front matter. Blocked source classes include secrets, private keys, wallet seeds, raw credentials, dependency folders, Git internals, and any local policy block patterns in \`.micro-ecf/policy.json\`.
+
+## Agent Workflow
+
+1. Run \`micro-ecf doctor --dir .\` before relying on existing artifacts.
+2. Run \`micro-ecf scan --dir .\` when you need a read-only view of included and blocked sources.
+3. Read \`.micro-ecf/policy-summary.json\`, \`.micro-ecf/context-packet.json\`, and \`.micro-ecf/source-map.json\` before broad exploration.
+4. Use direct source reads as source-of-truth verification before editing code.
+5. Use \`.micro-ecf/harness-export.json\` only for Agent OS readiness, preview, or deployment-request handoff.
+
+## Do Not
+
+- Do not read or export blocked source classes.
+- Do not claim Micro ECF is a semantic RAG engine, hosted answer pipeline, or Full ECF runtime.
+- Do not deploy, spend, publish, provision, or call hosted providers from Micro ECF.
+- Do not put router ranking, wallet settlement, x402 settlement, trust/fraud internals, operator prompts, or enterprise governance internals in local Micro ECF artifacts.
+`;
+}
+
 function buildAgentsMd(projectName) {
   return `# ${projectName} Agent Boundary
 
@@ -406,13 +478,14 @@ This project uses Micro ECF as a local context wedge and policy boundary before 
 ## New Conversation Rule
 
 At the start of any non-trivial IDE-agent conversation, check whether .micro-ecf artifacts exist.
-If they exist, read .micro-ecf/policy-summary.json, .micro-ecf/context-packet.json, and .micro-ecf/source-map.json before broad codebase exploration.
+If they exist, read ECF.md, .micro-ecf/policy-summary.json, .micro-ecf/context-packet.json, and .micro-ecf/source-map.json before broad codebase exploration.
 Tell the developer whether you are using Micro ECF artifacts, direct repo reads, or both.
 If this assistant cannot auto-load repo instructions, ask the developer to paste or attach MICRO_ECF_LLM_BOOTSTRAP.md.
 
 ## Local Rules
 
 - Do not read or export .env files, private keys, wallet seeds, raw credentials, or customer-private folders.
+- Use ECF.md as the persistent agent-readable policy contract.
 - Use .micro-ecf/context-packet.json for citation-ready local context summaries.
 - Use .micro-ecf/policy-summary.json for allowed tools, blocked sources, approvals, and budget limits.
 - Use .micro-ecf/harness-export.json only for Agent OS preview; it does not deploy, spend, publish, or provision anything.
@@ -439,11 +512,12 @@ Micro ECF is not Full ECF. It does not include private enterprise runtime intern
 ## New Chat Startup Checklist
 
 1. Check whether .micro-ecf/ exists.
-2. If present, read .micro-ecf/policy-summary.json first to understand allowed tools, blocked sources, budget limits, approvals, memory, and swarm rules.
-3. Read .micro-ecf/context-packet.json for citation-ready source summaries, provenance, and source IDs.
-4. Read .micro-ecf/source-map.json before using broad search so source paths, blocked paths, hashes, and provenance are visible.
-5. Use direct repo/file reads as the source of truth when implementing code. Micro ECF guides what to inspect; it does not replace source verification.
-6. Tell the developer exactly whether you are using Micro ECF artifacts, direct repo reads, a configured Micro ECF MCP server, or none of them.
+2. If present, read ECF.md as the persistent Micro ECF contract.
+3. Read .micro-ecf/policy-summary.json to understand allowed tools, blocked sources, budget limits, approvals, memory, and swarm rules.
+4. Read .micro-ecf/context-packet.json for citation-ready source summaries, provenance, and source IDs.
+5. Read .micro-ecf/source-map.json before using broad search so source paths, blocked paths, hashes, and provenance are visible.
+6. Use direct repo/file reads as the source of truth when implementing code. Micro ECF guides what to inspect; it does not replace source verification.
+7. Tell the developer exactly whether you are using Micro ECF artifacts, direct repo reads, a configured Micro ECF MCP server, or none of them.
 
 ## If Micro ECF Is Missing Or Stale
 
@@ -472,6 +546,7 @@ When asked "are you using Micro ECF?", answer in one of these forms:
 ## Useful Files
 
 - AGENTS.md: persistent repo instructions for IDE agents that auto-load repo guidance.
+- ECF.md: persistent Micro ECF policy contract for agents.
 - MICRO_ECF_LLM_BOOTSTRAP.md: paste or attach this file into any new chat that does not auto-load repo guidance.
 - .micro-ecf/policy.json: editable local policy source.
 - .micro-ecf/policy-summary.json: readable policy summary for LLMs.
@@ -707,6 +782,285 @@ export function buildPolicySummary(policy) {
     learning_memory_boundary: buildLearningMemoryBoundary(),
     swarm: policy.swarm_policy,
   };
+}
+
+export function scanProject({ targetDir = process.cwd(), policyPath = null, maxFiles, maxFileBytes } = {}) {
+  const root = path.resolve(targetDir);
+  const resolvedPolicy = policyPath
+    ? path.resolve(policyPath)
+    : path.join(root, DEFAULT_OUTPUT_DIR, 'policy.json');
+  const sourceMap = indexSources(root, {
+    policyPath: fs.existsSync(resolvedPolicy) ? resolvedPolicy : null,
+    maxFiles,
+    maxFileBytes,
+  });
+  const sensitiveBlocked = sourceMap.blocked.filter((entry) => String(entry.reason || '').includes('secret')
+    || String(entry.reason || '').includes('sensitive')
+    || String(entry.path || '').toLowerCase().includes('.env'));
+  const policy = fs.existsSync(resolvedPolicy) ? readPolicy(resolvedPolicy).policy : null;
+
+  return {
+    ok: true,
+    no_writes_performed: true,
+    root: relativePortable(process.cwd(), root),
+    policy: fs.existsSync(resolvedPolicy) ? relativePortable(process.cwd(), resolvedPolicy) : null,
+    stats: {
+      included_sources: sourceMap.stats.included_sources,
+      blocked_paths: sourceMap.stats.blocked_paths,
+      sensitive_blocked_paths: sensitiveBlocked.length,
+      context_providers: asList(policy?.context_providers).length,
+    },
+    included_preview: sourceMap.sources.slice(0, 20).map((source) => ({
+      path: source.path,
+      type: source.type,
+      hash: source.hash,
+    })),
+    blocked_preview: sourceMap.blocked.slice(0, 20),
+    boundary: {
+      local_only: true,
+      raw_content_exported: false,
+      no_spend: true,
+      no_deploy: true,
+      no_full_ecf_internals: true,
+    },
+  };
+}
+
+export function doctorProject({ targetDir = process.cwd(), outputDir = null } = {}) {
+  const root = path.resolve(targetDir);
+  const resolvedOutput = path.resolve(outputDir || path.join(root, DEFAULT_OUTPUT_DIR));
+  const checks = [];
+
+  const requireFile = (name, filePath) => {
+    const exists = fs.existsSync(filePath);
+    checks.push({
+      name,
+      ok: exists,
+      path: relativePortable(process.cwd(), filePath),
+      severity: exists ? 'ok' : 'error',
+    });
+    return exists;
+  };
+
+  const ecfPath = path.join(root, 'ECF.md');
+  const policyPath = path.join(resolvedOutput, 'policy.json');
+  requireFile('ecf_md', ecfPath);
+  requireFile('agents_md', path.join(root, 'AGENTS.md'));
+  requireFile('llm_bootstrap', path.join(root, 'MICRO_ECF_LLM_BOOTSTRAP.md'));
+  requireFile('policy', policyPath);
+  requireFile('source_map', path.join(resolvedOutput, 'source-map.json'));
+  requireFile('context_packet', path.join(resolvedOutput, 'context-packet.json'));
+  requireFile('policy_summary', path.join(resolvedOutput, 'policy-summary.json'));
+  requireFile('deployment_preview', path.join(resolvedOutput, 'deployment-preview.json'));
+  requireFile('harness_export', path.join(resolvedOutput, 'harness-export.json'));
+
+  if (fs.existsSync(policyPath)) {
+    try {
+      readPolicy(policyPath);
+      checks.push({ name: 'policy_valid', ok: true, severity: 'ok' });
+    } catch (err) {
+      checks.push({ name: 'policy_valid', ok: false, severity: 'error', message: err.message });
+    }
+  }
+
+  if (fs.existsSync(ecfPath)) {
+    const lint = lintEcfMd(ecfPath);
+    checks.push({
+      name: 'ecf_md_lint',
+      ok: lint.ok,
+      severity: lint.ok ? 'ok' : 'error',
+      findings: lint.findings,
+    });
+  }
+
+  const errors = checks.filter((check) => check.ok !== true && check.severity === 'error');
+  return {
+    ok: errors.length === 0,
+    root: relativePortable(process.cwd(), root),
+    output_dir: relativePortable(process.cwd(), resolvedOutput),
+    checks,
+    next_steps: errors.length === 0
+      ? ['micro-ecf scan --dir .', 'micro-ecf export --agent-os']
+      : ['micro-ecf plan --dir .', 'micro-ecf install --dir . --yes'],
+  };
+}
+
+export function lintEcfMd(filePath = 'ECF.md') {
+  const resolved = path.resolve(filePath);
+  const findings = [];
+  if (!fs.existsSync(resolved)) {
+    return {
+      ok: false,
+      file: relativePortable(process.cwd(), resolved),
+      findings: [{ severity: 'error', path: 'file', message: 'ECF.md does not exist.' }],
+      summary: { errors: 1, warnings: 0, info: 0 },
+    };
+  }
+
+  const text = fs.readFileSync(resolved, 'utf8');
+  const parsed = parseEcfMd(text);
+  if (!parsed.frontMatter) {
+    findings.push({ severity: 'error', path: 'front_matter', message: 'ECF.md must start with YAML front matter delimited by ---.' });
+  }
+
+  const requiredKeys = ['version', 'project', 'scope', 'allowed_sources', 'blocked_sources', 'agent_os'];
+  for (const key of requiredKeys) {
+    if (parsed.tokens[key] === undefined) {
+      findings.push({ severity: key === 'agent_os' ? 'warning' : 'error', path: key, message: `Missing required ECF.md token: ${key}.` });
+    }
+  }
+
+  for (const heading of ['## Overview', '## Context Boundaries', '## Agent Workflow', '## Do Not']) {
+    if (!text.includes(heading)) {
+      findings.push({ severity: 'warning', path: 'markdown', message: `Missing recommended section: ${heading}.` });
+    }
+  }
+
+  const summary = summarizeFindings(findings);
+  return {
+    ok: summary.errors === 0,
+    file: relativePortable(process.cwd(), resolved),
+    tokens: parsed.tokens,
+    findings,
+    summary,
+  };
+}
+
+export function diffEcfMd(beforePath, afterPath) {
+  const before = lintEcfMd(beforePath);
+  const after = lintEcfMd(afterPath);
+  const beforeTokens = before.tokens || {};
+  const afterTokens = after.tokens || {};
+  const keys = new Set([...Object.keys(beforeTokens), ...Object.keys(afterTokens)]);
+  const changes = [];
+  for (const key of keys) {
+    if (JSON.stringify(beforeTokens[key]) !== JSON.stringify(afterTokens[key])) {
+      changes.push({
+        token: key,
+        before: beforeTokens[key] ?? null,
+        after: afterTokens[key] ?? null,
+      });
+    }
+  }
+  return {
+    ok: before.ok && after.ok,
+    regression: after.summary.errors > before.summary.errors,
+    changes,
+    before: before.summary,
+    after: after.summary,
+  };
+}
+
+export function buildEcfSpec({ format = 'markdown' } = {}) {
+  const spec = {
+    name: 'ECF.md',
+    status: 'micro-ecf-v0.1',
+    purpose: 'Persistent agent-readable local context and governance contract for Micro ECF projects.',
+    required_front_matter: ['version', 'project', 'scope', 'allowed_sources', 'blocked_sources', 'agent_os'],
+    recommended_sections: ['Overview', 'Context Boundaries', 'Agent Workflow', 'Do Not'],
+    generated_artifacts: [
+      'ECF.md',
+      'AGENTS.md',
+      'MICRO_ECF_LLM_BOOTSTRAP.md',
+      '.micro-ecf/policy.json',
+      '.micro-ecf/source-map.json',
+      '.micro-ecf/context-packet.json',
+      '.micro-ecf/policy-summary.json',
+      '.micro-ecf/deployment-preview.json',
+      '.micro-ecf/harness-export.json',
+    ],
+    boundary: {
+      local_only: true,
+      no_spend: true,
+      no_deploy: true,
+      no_full_ecf_internals: true,
+    },
+  };
+
+  if (format === 'json') return spec;
+  return `# ECF.md Spec
+
+ECF.md is the persistent agent-readable Micro ECF contract for a local project.
+
+Required front matter:
+
+${spec.required_front_matter.map((key) => `- ${key}`).join('\n')}
+
+Recommended sections:
+
+${spec.recommended_sections.map((key) => `- ${key}`).join('\n')}
+
+Boundary:
+
+- local-only
+- no spend
+- no deployment or provisioning
+- no Full ECF, router ranking, settlement, trust/fraud, or enterprise governance internals
+`;
+}
+
+function parseEcfMd(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+  if (lines[0] !== '---') return { frontMatter: '', tokens: {} };
+  const endIndex = lines.indexOf('---', 1);
+  if (endIndex === -1) return { frontMatter: '', tokens: {} };
+
+  const frontMatterLines = lines.slice(1, endIndex);
+  const tokens = {};
+  let currentKey = null;
+  for (const rawLine of frontMatterLines) {
+    const line = rawLine.trimEnd();
+    if (!line.trim()) continue;
+    const topLevel = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (topLevel) {
+      currentKey = topLevel[1];
+      const rawValue = topLevel[2];
+      if (rawValue === '') {
+        tokens[currentKey] = [];
+      } else if (rawValue === '[]') {
+        tokens[currentKey] = [];
+      } else {
+        tokens[currentKey] = parseScalar(rawValue);
+      }
+      continue;
+    }
+    const listItem = line.match(/^\s+-\s*(.*)$/);
+    if (listItem && currentKey) {
+      if (!Array.isArray(tokens[currentKey])) tokens[currentKey] = [];
+      tokens[currentKey].push(parseScalar(listItem[1]));
+    }
+  }
+
+  return {
+    frontMatter: frontMatterLines.join('\n'),
+    tokens,
+  };
+}
+
+function parseScalar(value) {
+  const trimmed = String(value || '').trim();
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed.slice(1, -1);
+  return trimmed;
+}
+
+function summarizeFindings(findings) {
+  return {
+    errors: findings.filter((finding) => finding.severity === 'error').length,
+    warnings: findings.filter((finding) => finding.severity === 'warning').length,
+    info: findings.filter((finding) => finding.severity === 'info').length,
+  };
+}
+
+function formatYamlList(values) {
+  const list = asList(values);
+  if (!list.length) return '  []';
+  return list.map((value) => `  - "${escapeYaml(value)}"`).join('\n');
+}
+
+function escapeYaml(value) {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 export function buildContextPacket(policy, sourceMap) {
