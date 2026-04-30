@@ -11,6 +11,7 @@ Use this checklist after `micro-ecf install --dir . --yes`.
 Confirm these files exist:
 
 ```text
+ECF.md
 AGENTS.md
 MICRO_ECF_LLM_BOOTSTRAP.md
 .micro-ecf/policy.json
@@ -25,6 +26,13 @@ If they are missing, rerun a read-only plan first:
 
 ```bash
 micro-ecf plan --dir .
+```
+
+Verify the installed boundary:
+
+```bash
+micro-ecf doctor --dir .
+micro-ecf lint ECF.md
 ```
 
 Only reinstall after explicit approval:
@@ -42,6 +50,7 @@ Pick the handoff path your IDE or assistant supports.
 If the IDE auto-loads repo instruction files, `AGENTS.md` tells the assistant to read:
 
 ```text
+ECF.md
 .micro-ecf/policy-summary.json
 .micro-ecf/context-packet.json
 .micro-ecf/source-map.json
@@ -88,6 +97,7 @@ A good assistant should answer one of:
 When docs, source files, schemas, or local DB summaries change, refresh the artifacts:
 
 ```bash
+micro-ecf scan --dir .
 micro-ecf index . --output-dir .micro-ecf
 micro-ecf build-packet --policy .micro-ecf/policy.json --source-map .micro-ecf/source-map.json --output-dir .micro-ecf
 micro-ecf export --agent-os --policy .micro-ecf/policy.json --output .micro-ecf/harness-export.json

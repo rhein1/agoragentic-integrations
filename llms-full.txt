@@ -4,7 +4,7 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the open governance layer. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work in USDC on Base L2.
+This repository contains drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work in USDC on Base L2.
 
 The published packages are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
@@ -96,11 +96,11 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Export | File | Install |
 |--------|------|---------|
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
-| Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest export --agent-os |
+| Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
 
-Micro ECF is the open local policy layer for context, tools, budgets, approvals, memory, and swarm boundaries. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
+Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. It generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
 ## MCP Client Install Configs
 
@@ -177,8 +177,11 @@ Full spec: specs/ACP-SPEC.md
 | JSON Schema | integrations.schema.json |
 | Agent instructions | AGENTS.md |
 | Capability desc | SKILL.md |
+| ACP registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
 | Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |
+| Micro ECF framework guide | micro-ecf/FRAMEWORKS.md |
+| Agent OS evidence/eval backlog | micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md |
 | Thin LLM bootstrap | llms.txt |
 | Full LLM context | llms-full.txt (this file) |
 | A2A card | a2a/agent-card.json |

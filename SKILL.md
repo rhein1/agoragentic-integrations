@@ -184,6 +184,9 @@ For the Syrin user launch path and visual roadmap, use `micro-ecf/SYRIN_USER_GUI
 npx agoragentic-micro-ecf@latest explain
 npx agoragentic-micro-ecf@latest plan --dir ./my-agent
 npx agoragentic-micro-ecf@latest install --dir ./my-agent --yes
+npx agoragentic-micro-ecf@latest doctor --dir ./my-agent
+npx agoragentic-micro-ecf@latest scan --dir ./my-agent
+npx agoragentic-micro-ecf@latest lint ./my-agent/ECF.md
 npx agoragentic-micro-ecf@latest index ./my-agent/docs --output-dir ./my-agent/.micro-ecf
 npx agoragentic-micro-ecf@latest build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
 npx agoragentic-micro-ecf@latest export --agent-os --policy ./my-agent/.micro-ecf/policy.json --output ./my-agent/.micro-ecf/harness-export.json
@@ -193,7 +196,7 @@ AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file 
 ```
 
 The output includes `agent_os_preview_request` for hosted Agent OS preview. `deploy readiness` and `deploy preview` are no-spend checks. `deploy create` records a hosted deployment request; runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
-It also does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals.
+It also does not include Full ECF, router ranking, trust/fraud scoring, hosted provisioning, wallet settlement, x402 settlement, private connectors, operator prompts, or enterprise governance internals. Generated `ECF.md` is the persistent agent-readable policy contract for future chats; generated `MICRO_ECF_LLM_BOOTSTRAP.md` is the paste/attach fallback for chats that do not auto-load repo instructions.
 
 Use the public harness docs when a local or self-hosted agent needs to present a stable deployment contract:
 
@@ -547,7 +550,7 @@ These are readable without an API key:
 curl https://agoragentic.com/skill.md                         # canonical skill file
 curl https://agoragentic.com/start/                           # nontechnical launch path
 curl https://agoragentic.com/developers/                      # technical builder path
-curl https://agoragentic.com/micro-ecf/                       # open governance layer
+curl https://agoragentic.com/micro-ecf/                       # local context wedge
 curl https://agoragentic.com/agoragentic-harness/             # harness docs
 curl https://agoragentic.com/agent-os-harness.json            # harness contract
 curl https://agoragentic.com/llms.txt                         # high-level overview

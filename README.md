@@ -167,6 +167,9 @@ Install and build local context artifacts:
 npx agoragentic-micro-ecf@latest explain
 npx agoragentic-micro-ecf@latest plan --dir ./my-agent
 npx agoragentic-micro-ecf@latest install --dir ./my-agent --yes
+npx agoragentic-micro-ecf@latest doctor --dir ./my-agent
+npx agoragentic-micro-ecf@latest scan --dir ./my-agent
+npx agoragentic-micro-ecf@latest lint ./my-agent/ECF.md
 npx agoragentic-micro-ecf@latest index ./my-agent/docs --output-dir ./my-agent/.micro-ecf
 npx agoragentic-micro-ecf@latest build-packet --policy ./my-agent/.micro-ecf/policy.json --source-map ./my-agent/.micro-ecf/source-map.json --output-dir ./my-agent/.micro-ecf
 ```
@@ -199,6 +202,8 @@ The safe flow is consent-gated: `micro-ecf plan --dir .` first, then `micro-ecf 
 
 After install, Micro ECF is persistent as repo artifacts, not hidden global chat memory. Compatible IDE agents should read the generated `AGENTS.md`; any new LLM chat that does not auto-load repo instructions should receive `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can run `micro-ecf serve-mcp --root .micro-ecf`.
 
+`ECF.md` is the persistent agent-readable Micro ECF contract. It gives new chats a durable policy file before they inspect generated `.micro-ecf/*` artifacts.
+
 Use [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) for the after-install workflow.
 
 Optional context providers can be declared in `context_providers[]`. Existing RAG or database MCP providers should use `type: "retrieval_context"` when they return cited context evidence. A local GitNexus MCP provider should use `type: "code_graph"`, `provider: "gitnexus"`, `mode: "local_mcp"`, and `required_for_action_classes: ["code_change"]` when code-change actions should receive pre-action impact review.
@@ -206,6 +211,8 @@ Optional context providers can be declared in `context_providers[]`. Existing RA
 Provider guide and examples:
 
 - [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md)
+- [`micro-ecf/FRAMEWORKS.md`](./micro-ecf/FRAMEWORKS.md)
+- [`micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md`](./micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md)
 - [`micro-ecf/examples/context-provider-rag.policy.json`](./micro-ecf/examples/context-provider-rag.policy.json)
 - [`micro-ecf/examples/context-provider-gitnexus.policy.json`](./micro-ecf/examples/context-provider-gitnexus.policy.json)
 - [`micro-ecf/examples/context-provider-database-mcp.policy.json`](./micro-ecf/examples/context-provider-database-mcp.policy.json)
@@ -232,6 +239,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Machine-readable index | [`integrations.json`](./integrations.json) |
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
+| ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
@@ -240,6 +248,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Micro ECF Syrin guide | [`micro-ecf/SYRIN_USER_GUIDE.md`](./micro-ecf/SYRIN_USER_GUIDE.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
 | Micro ECF provider wrapping | [`micro-ecf/PROVIDER_WRAPPING.md`](./micro-ecf/PROVIDER_WRAPPING.md) |
+| Micro ECF framework guide | [`micro-ecf/FRAMEWORKS.md`](./micro-ecf/FRAMEWORKS.md) |
+| Agent OS evidence/eval backlog | [`micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md`](./micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md) |
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |

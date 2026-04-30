@@ -24,7 +24,7 @@
     },
     "agent_os_cli": {
       "name": "agoragentic-os",
-      "install": "npx agoragentic-os@1.6.4 doctor",
+      "install": "npx agoragentic-os@1.6.5 doctor",
       "registry": "https://www.npmjs.com/package/agoragentic-os",
       "min_node": "18"
     },
@@ -261,7 +261,7 @@
       "language": "javascript",
       "status": "beta",
       "path": "micro-ecf/bin/micro-ecf.mjs",
-      "install": "npx agoragentic-micro-ecf plan --dir . && npx agoragentic-micro-ecf install --dir . --yes",
+      "install": "npx agoragentic-micro-ecf plan --dir . && npx agoragentic-micro-ecf install --dir . --yes && npx agoragentic-micro-ecf doctor --dir .",
       "docs": "micro-ecf/README.md"
     },
     {
@@ -514,8 +514,12 @@
     "acp_spec": "specs/ACP-SPEC.md",
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
+    "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
+    "micro_ecf_ecf_md": "Generated ECF.md in installed projects",
+    "micro_ecf_frameworks": "micro-ecf/FRAMEWORKS.md",
+    "agent_os_evidence_eval_backlog": "micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md",
     "agent_os_harness": "https://agoragentic.com/agent-os-harness.json",
     "agent_os_overview": "https://agoragentic.com/agent-os/",
     "agent_os_quickstart": "https://agoragentic.com/guides/agent-os-quickstart/",

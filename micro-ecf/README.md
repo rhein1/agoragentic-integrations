@@ -88,6 +88,7 @@ Good inputs:
 Generated outputs:
 
 ```text
+ECF.md
 .micro-ecf/context-packet.json
 .micro-ecf/policy-summary.json
 .micro-ecf/source-map.json
@@ -118,6 +119,27 @@ It does not contain:
 - Full ECF private context graph internals
 
 Use direct source reads, your own RAG, GitNexus, or another MCP/context provider as the source of truth for deep retrieval. Use Micro ECF to govern what those systems may expose or act on.
+
+## ECF.md
+
+`ECF.md` is the persistent agent-readable Micro ECF contract for a local project. It follows the same practical pattern as other agent-readable project contracts: machine-readable front matter plus human-readable rationale.
+
+Use it when a new Codex, Cursor, Claude, Gemini, database, or IDE agent conversation needs to know:
+
+- what Micro ECF is doing in this repo
+- which sources are allowed
+- which sources are blocked
+- how to verify Micro ECF is installed
+- when to use `.micro-ecf/*` artifacts
+- when to export an Agent OS Harness packet
+
+Commands:
+
+```bash
+micro-ecf lint ECF.md
+micro-ecf diff ECF.md ECF-next.md
+micro-ecf spec
+```
 
 ## What Micro ECF Does Not Include
 
@@ -192,6 +214,9 @@ The binary is intentionally simple:
 
 ```bash
 micro-ecf init
+micro-ecf scan
+micro-ecf doctor
+micro-ecf lint ECF.md
 micro-ecf plan
 micro-ecf install --yes
 micro-ecf index ./docs
@@ -206,6 +231,13 @@ Initialize a local project:
 
 ```bash
 npx agoragentic-micro-ecf@latest init --dir ./my-agent
+```
+
+Verify the local install and inspect the context boundary without writing:
+
+```bash
+npx agoragentic-micro-ecf@latest doctor --dir ./my-agent
+npx agoragentic-micro-ecf@latest scan --dir ./my-agent
 ```
 
 Index bounded local context:
@@ -276,6 +308,10 @@ The MCP server reads and writes local `.micro-ecf` artifacts only. It does not c
 Micro ECF can attach optional context providers for pre-action impact review. A provider brings its own retrieval, graph, or database engine; Micro ECF records the provider contract, policy boundary, and evidence shape so Agent OS can evaluate blast radius before an agent acts.
 
 Full guide: [`PROVIDER_WRAPPING.md`](./PROVIDER_WRAPPING.md).
+
+Framework guide: [`FRAMEWORKS.md`](./FRAMEWORKS.md).
+
+Evidence/eval backlog: [`AGENT_OS_EVIDENCE_EVAL_BACKLOG.md`](./AGENT_OS_EVIDENCE_EVAL_BACKLOG.md).
 
 Supported provider types:
 

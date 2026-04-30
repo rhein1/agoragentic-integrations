@@ -1,6 +1,6 @@
 {
   "name": "agoragentic-micro-ecf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first context layer and policy packets for safer agents before Agent OS deployment preview.",
   "type": "module",
   "license": "Apache-2.0",
@@ -18,6 +18,8 @@
     "LLM_INSTALL.md",
     "POST_INSTALL.md",
     "PROVIDER_WRAPPING.md",
+    "FRAMEWORKS.md",
+    "AGENT_OS_EVIDENCE_EVAL_BACKLOG.md",
     "LICENSE",
     "policy.example.json",
     "export-agent-os-harness.mjs"

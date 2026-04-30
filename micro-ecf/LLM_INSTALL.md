@@ -39,6 +39,8 @@ Micro ECF is a lightweight local context layer for builders who want safer agent
 
 It helps because the LLM gets a stable, local map of what it can safely know, cite, and use. It also creates policy artifacts that make the boundary explicit before the agent touches tools, data, money, or hosted deployment.
 
+Micro ECF also creates `ECF.md`, a persistent agent-readable contract with machine-readable front matter and human-readable policy rationale. New chats should read `ECF.md` before relying on `.micro-ecf/*` artifacts.
+
 Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. If the developer already has RAG, GitNexus, database tools, or MCP context providers, Micro ECF wraps those providers with policy, provenance, budget, and action-risk boundaries.
 
 ## Consent Gate
@@ -57,6 +59,7 @@ When the package is not installed globally, use the `npx agoragentic-micro-ecf@l
 `install --yes` creates local artifacts only:
 
 ```text
+ECF.md
 AGENTS.md
 MICRO_ECF_LLM_BOOTSTRAP.md
 .micro-ecf/policy.json
@@ -74,7 +77,7 @@ Micro ECF is persistent in the repo, not automatically persistent inside every n
 Use these rules:
 
 - If the IDE assistant auto-loads repo instructions, `AGENTS.md` should tell it to read the Micro ECF artifacts at the start of non-trivial work.
-- If the new chat does not auto-load repo instructions, paste or attach `MICRO_ECF_LLM_BOOTSTRAP.md` at the start of the conversation.
+- If the new chat does not auto-load repo instructions, paste or attach `MICRO_ECF_LLM_BOOTSTRAP.md` at the start of the conversation and tell it to read `ECF.md`.
 - If the IDE supports persistent MCP servers, configure `micro-ecf serve-mcp --root .micro-ecf` once so the assistant can query Micro ECF as a local tool.
 - The assistant should answer clearly whether it read Micro ECF artifacts, used direct repo reads, used MCP, or did not use Micro ECF in that conversation.
 
@@ -109,4 +112,12 @@ Only after approval should it run:
 
 ```bash
 micro-ecf install --dir . --yes
+```
+
+After install, it should verify:
+
+```bash
+micro-ecf doctor --dir .
+micro-ecf scan --dir .
+micro-ecf lint ECF.md
 ```
