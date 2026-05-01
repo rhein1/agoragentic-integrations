@@ -182,6 +182,7 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));
   assert.ok(packageJson.files.includes('PROVIDER_WRAPPING.md'));
   assert.ok(packageJson.files.includes('FRAMEWORKS.md'));
+  assert.ok(packageJson.files.includes('ECF_CORE_UPGRADE.md'));
   assert.ok(packageJson.files.includes('AGENT_OS_EVIDENCE_EVAL_BACKLOG.md'));
 });
 
@@ -195,6 +196,11 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.match(guide, /does not replace your RAG/i);
   assert.match(guide, /raw_secret_content_allowed/);
   assert.match(guide, /fail closed/i);
+  const upgrade = fs.readFileSync(path.join(microEcfRoot, 'ECF_CORE_UPGRADE.md'), 'utf8');
+  assert.match(upgrade, /Micro ECF/);
+  assert.match(upgrade, /ECF Core/);
+  assert.match(upgrade, /Agent OS/);
+  assert.match(upgrade, /Full ECF private internals/);
 
   const examples = [
     ['context-provider-rag.policy.json', 'retrieval_context', 'local_rag'],

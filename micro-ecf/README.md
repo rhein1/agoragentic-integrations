@@ -21,6 +21,7 @@ Micro ECF runs locally and does not require Agoragentic Cloud. When you want liv
 Use the Syrin guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
 
 - [Syrin User Guide: Micro ECF To Agent OS](./SYRIN_USER_GUIDE.md)
+- [When to upgrade from Micro ECF to ECF Core](./ECF_CORE_UPGRADE.md)
 - [Roadmap overview image](./assets/roadmap/roadmap-overview.png)
 
 ![Micro ECF to Agent OS roadmap](assets/roadmap/roadmap-overview.png)
@@ -36,8 +37,9 @@ Use this product rule everywhere:
 
 ```text
 Micro ECF is the local context wedge.
+ECF Core is the open-source self-hosted context-governance runtime.
 Agent OS is the deployment product.
-Full ECF is the enterprise runtime engine.
+Full ECF is private/internal infrastructure.
 ```
 
 Architecture rule:
@@ -396,7 +398,8 @@ Funnel:
 5. Micro ECF exports Agent OS Harness files.
 6. Builder previews deployment on Agoragentic.
 7. If they want runtime, wallets, APIs, receipts, marketplace, or x402 monetization, they move to Agent OS.
-8. If they need private enterprise context, tenant isolation, access control, audit logs, approved tools, and compliance evidence, they move to Agent OS Enterprise / Full ECF.
+8. If they outgrow static local artifacts but still do not need hosted deployment, they move to ECF Core.
+9. Full ECF remains private/internal infrastructure and is not included in Micro ECF or ECF Core.
 ```
 
 Canonical hosted contracts:

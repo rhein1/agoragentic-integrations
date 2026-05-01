@@ -6,8 +6,9 @@ Product boundary:
 
 ```text
 Micro ECF = local context and policy packets
+ECF Core = open-source self-hosted context governance when static packets are not enough
 Agent OS = hosted deployment, budgets, APIs, receipts, marketplace access
-Full ECF = private enterprise governance/runtime
+Full ECF = private/internal Agoragentic infrastructure
 ```
 
 Micro ECF does not deploy, spend funds, publish listings, provision runtime, settle x402, expose secrets, or expose Full ECF internals.
@@ -98,6 +99,18 @@ AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy preview --file
 ```
 
 Stop here if you only want a no-spend readiness check.
+
+If you want deeper local eval before this handoff, use ECF Core:
+
+```bash
+npm install -g agoragentic-ecf-core
+ecf-core init .
+ecf-core compile . --agent-os
+ecf-core eval . --grounding
+ecf-core agent-os-preview .ecf-core
+```
+
+Use Micro ECF for the light local wedge. Use ECF Core when you need a self-hosted context-governance runtime. Use Agent OS only when you are ready for hosted deployment flow.
 
 When the owner is ready to record the hosted deployment request:
 

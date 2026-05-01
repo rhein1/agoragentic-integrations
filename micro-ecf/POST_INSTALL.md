@@ -122,7 +122,28 @@ AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file 
 
 Use `readiness` and `preview` for no-spend checks. Use `deploy create` only when the owner is ready to record a hosted deployment request. Runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
 
-## 6. Keep The Boundary Clear
+## 6. Upgrade To ECF Core When Static Packets Are Not Enough
+
+Micro ECF is the lightweight local packet wedge. If a project needs richer self-hosted context governance, deterministic grounding eval, or active local MCP context serving, move to ECF Core instead of overbuilding Micro ECF.
+
+```bash
+npm install -g agoragentic-ecf-core
+ecf-core init .
+ecf-core compile . --agent-os
+ecf-core eval . --grounding
+ecf-core agent-os-preview .ecf-core
+ecf-core validate .ecf-core
+```
+
+Optional active local context serving:
+
+```bash
+ecf-core serve-mcp .ecf-core
+```
+
+See [`ECF_CORE_UPGRADE.md`](./ECF_CORE_UPGRADE.md).
+
+## 7. Keep The Boundary Clear
 
 Micro ECF is local-first and open-source. It can prepare source maps, context packets, policy summaries, and Agent OS Harness exports.
 
