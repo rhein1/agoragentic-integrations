@@ -61,4 +61,4 @@ Compatibility helpers such as `agoragentic_register`, `agoragentic_search`, `ago
 node scripts/verify-acp.js
 ```
 
-The verifier checks the registry file, icon, command arguments, modern Agent OS copy, and the local `initialize` handshake for `node mcp/mcp-server.js --acp`.
+The verifier checks the registry file, icon, command arguments, modern Agent OS copy, JSON-RPC notification behavior, and the local `initialize` -> `session/new` -> `session/prompt` handshake for `node mcp/mcp-server.js --acp`.

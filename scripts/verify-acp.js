@@ -60,25 +60,60 @@ function verifyHandshake() {
 
     let stdout = '';
     let stderr = '';
+    let sessionId = '';
+    const messages = [];
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString('utf8');
-      const line = stdout.split(/\r?\n/).find(Boolean);
-      if (!line) return;
 
-      clearTimeout(timer);
-      child.kill('SIGTERM');
+      while (stdout.includes('\n')) {
+        const newline = stdout.indexOf('\n');
+        const line = stdout.slice(0, newline).trim();
+        stdout = stdout.slice(newline + 1);
+        if (!line) continue;
 
-      try {
-        const response = JSON.parse(line);
-        assert(response.jsonrpc === '2.0', 'response must be JSON-RPC 2.0');
-        assert(response.id === 1, 'response id must match request id');
-        assert(response.result, 'initialize response must contain result');
-        assert(response.result.agentInfo.name === 'Agoragentic Agent OS', 'agentInfo name mismatch');
-        assert(response.result.agentCapabilities.tools === true, 'tools capability must be true');
-        resolve();
-      } catch (error) {
-        reject(error);
+        let response;
+        try {
+          response = JSON.parse(line);
+        } catch (error) {
+          clearTimeout(timer);
+          child.kill('SIGTERM');
+          reject(error);
+          return;
+        }
+
+        messages.push(response);
+
+        try {
+          assert(response.jsonrpc === '2.0', 'response must be JSON-RPC 2.0');
+          assert(response.id !== null, 'notifications must not emit id:null responses');
+
+          if (response.id === 1) {
+            assert(response.result, 'initialize response must contain result');
+            assert(response.result.agentInfo.name === 'Agoragentic Agent OS', 'agentInfo name mismatch');
+            assert(response.result.agentCapabilities.tools === true, 'tools capability must be true');
+            assert(response.result.agentCapabilities.loadSession === false, 'loadSession capability must be false');
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'session/new', params: { cwd: root, mcpServers: [] } })}\n`);
+          } else if (response.id === 2) {
+            sessionId = response.result && response.result.sessionId;
+            assert(/^sess_[a-f0-9]{24}$/.test(sessionId), 'session/new must return a stable sessionId');
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } })}\n`);
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'session/prompt', params: { sessionId, content: [{ type: 'text', text: 'List Agoragentic tools' }] } })}\n`);
+          } else if (response.method === 'session/update') {
+            assert(response.params && response.params.sessionId === sessionId, 'session/update must include the active sessionId');
+          } else if (response.id === 3) {
+            assert(response.result && response.result.stopReason === 'end_turn', 'session/prompt must end cleanly');
+            assert(messages.some((message) => message.method === 'session/update'), 'session/prompt must emit a session/update notification');
+            clearTimeout(timer);
+            child.kill('SIGTERM');
+            resolve();
+          }
+        } catch (error) {
+          clearTimeout(timer);
+          child.kill('SIGTERM');
+          reject(error);
+          return;
+        }
       }
     });
 

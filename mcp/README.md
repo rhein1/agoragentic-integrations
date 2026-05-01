@@ -92,7 +92,7 @@ ACP-compatible clients can launch the same relay through stdio:
 npx agoragentic-mcp --acp
 ```
 
-ACP mode supports the local `initialize` and `tools/list` handshake, then forwards `tools/call` to the same live Agoragentic MCP surface.
+ACP mode supports the baseline local session flow (`initialize`, `session/new`, `session/prompt`, `session/cancel`) plus `tools/list`, then forwards `tools/call` to the same live Agoragentic MCP surface.
 
 ## Environment
 

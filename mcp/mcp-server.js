@@ -2,6 +2,7 @@
 'use strict';
 
 const readline = require('readline');
+const crypto = require('crypto');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
 const REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || 'https://agoragentic.com/api/mcp';
@@ -165,6 +166,10 @@ function buildAcpInitializeResult() {
             streaming: false,
             resources: false,
             prompts: false,
+            loadSession: false,
+            promptCapabilities: {
+                image: false,
+            },
         },
         authMethods: [
             {
@@ -199,6 +204,34 @@ function writeAcpMessage(message) {
     process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
+function buildAcpSessionId() {
+    return `sess_${crypto.randomBytes(12).toString('hex')}`;
+}
+
+function extractAcpPromptText(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content
+        .map((part) => {
+            if (!part || typeof part !== 'object') return '';
+            if (part.type === 'text' && typeof part.text === 'string') return part.text;
+            return '';
+        })
+        .filter(Boolean)
+        .join('\n');
+}
+
+function buildAcpPromptReply(promptText) {
+    const suffix = promptText ? ` Prompt received: ${promptText.slice(0, 240)}` : '';
+    return [
+        'Agoragentic ACP adapter is a tool bridge, not a code-editing chat agent.',
+        'Use tools/list, then tools/call with agoragentic_execute, agoragentic_match, agoragentic_quote, agoragentic_receipt, or stable x402 service tools.',
+        suffix,
+    ]
+        .filter(Boolean)
+        .join(' ');
+}
+
 async function runAcpAdapter() {
     const rl = readline.createInterface({
         input: process.stdin,
@@ -207,6 +240,7 @@ async function runAcpAdapter() {
     });
 
     let remoteSession = null;
+    const acpSessions = new Map();
 
     async function getRemoteSession() {
         if (!remoteSession) {
@@ -250,30 +284,84 @@ async function runAcpAdapter() {
             continue;
         }
 
-        const id = Object.prototype.hasOwnProperty.call(request, 'id') ? request.id : null;
+        const hasId = Object.prototype.hasOwnProperty.call(request, 'id');
+        const id = hasId ? request.id : null;
+
+        function writeResponse(message) {
+            if (hasId) writeAcpMessage(message);
+        }
 
         try {
             if (request.method === 'initialize') {
-                writeAcpMessage(buildAcpResponse(id, buildAcpInitializeResult()));
+                writeResponse(buildAcpResponse(id, buildAcpInitializeResult()));
+            } else if (request.method === 'session/new') {
+                const sessionId = buildAcpSessionId();
+                acpSessions.set(sessionId, {
+                    cwd: request.params?.cwd || process.cwd(),
+                    createdAt: new Date().toISOString(),
+                    cancelled: false,
+                });
+                writeResponse(buildAcpResponse(id, { sessionId }));
+            } else if (request.method === 'session/prompt') {
+                const sessionId = request.params?.sessionId;
+                if (!sessionId || !acpSessions.has(sessionId)) {
+                    writeResponse(buildAcpError(id, -32602, 'Unknown or missing ACP sessionId'));
+                    continue;
+                }
+
+                const session = acpSessions.get(sessionId);
+                session.cancelled = false;
+                const promptText = extractAcpPromptText(request.params?.content);
+                const reply = buildAcpPromptReply(promptText);
+
+                writeAcpMessage({
+                    jsonrpc: '2.0',
+                    method: 'session/update',
+                    params: {
+                        sessionId,
+                        update: {
+                            sessionUpdate: 'agent_message_chunk',
+                            content: {
+                                type: 'text',
+                                text: reply,
+                            },
+                        },
+                    },
+                });
+                writeResponse(buildAcpResponse(id, { stopReason: session.cancelled ? 'cancelled' : 'end_turn' }));
+            } else if (request.method === 'session/cancel') {
+                const sessionId = request.params?.sessionId;
+                if (sessionId && acpSessions.has(sessionId)) {
+                    acpSessions.get(sessionId).cancelled = true;
+                }
+                writeResponse(buildAcpResponse(id, { ok: true }));
             } else if (request.method === 'tools/list') {
-                writeAcpMessage(buildAcpResponse(id, { tools: ACP_TOOLS }));
+                writeResponse(buildAcpResponse(id, { tools: ACP_TOOLS }));
             } else if (request.method === 'tools/call') {
                 const { client } = await getRemoteSession();
                 const result = await client.callTool(request.params || {});
-                writeAcpMessage(buildAcpResponse(id, result));
+                writeResponse(buildAcpResponse(id, result));
             } else if (request.method === 'shutdown') {
                 await shutdownRemote();
-                writeAcpMessage(buildAcpResponse(id, { ok: true }));
+                writeResponse(buildAcpResponse(id, { ok: true }));
             } else {
-                writeAcpMessage(
+                writeResponse(
                     buildAcpError(id, -32601, 'Unsupported ACP method', {
-                        supported_methods: ['initialize', 'tools/list', 'tools/call', 'shutdown'],
+                        supported_methods: [
+                            'initialize',
+                            'session/new',
+                            'session/prompt',
+                            'session/cancel',
+                            'tools/list',
+                            'tools/call',
+                            'shutdown',
+                        ],
                     })
                 );
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            writeAcpMessage(buildAcpError(id, -32000, message));
+            writeResponse(buildAcpError(id, -32000, message));
         }
     }
 
