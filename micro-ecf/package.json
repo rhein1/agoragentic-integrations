@@ -19,6 +19,7 @@
     "POST_INSTALL.md",
     "PROVIDER_WRAPPING.md",
     "FRAMEWORKS.md",
+    "ECF_CORE_UPGRADE.md",
     "AGENT_OS_EVIDENCE_EVAL_BACKLOG.md",
     "LICENSE",
     "policy.example.json",
