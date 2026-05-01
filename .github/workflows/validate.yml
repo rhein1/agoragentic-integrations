@@ -6,6 +6,9 @@ on:
     paths:
       - 'integrations.json'
       - 'integrations.schema.json'
+      - 'acp/**'
+      - 'mcp/**'
+      - 'scripts/**'
       - '*/README.md'
       - 'README.md'
       - 'AGENTS.md'
@@ -108,6 +111,9 @@ jobs:
             }
             console.log('✅ All ' + idx.tools.length + ' tool IDs follow naming convention');
           "
+
+      - name: Verify ACP adapter
+        run: node scripts/verify-acp.js
 
       - name: Summary
         run: |

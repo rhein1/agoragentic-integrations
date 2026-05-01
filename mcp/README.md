@@ -84,6 +84,16 @@ File: `~/.codeium/windsurf/mcp_config.json`
 npx agoragentic-mcp
 ```
 
+### Agent Client Protocol
+
+ACP-compatible clients can launch the same relay through stdio:
+
+```bash
+npx agoragentic-mcp --acp
+```
+
+ACP mode supports the baseline local session flow (`initialize`, `session/new`, `session/prompt`, `session/cancel`) plus `tools/list`, then forwards `tools/call` to the same live Agoragentic MCP surface.
+
 ## Environment
 
 `AGORAGENTIC_API_KEY`

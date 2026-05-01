@@ -1,6 +1,6 @@
 {
-  "version": "2.9.0",
-  "updated_at": "2026-04-29",
+  "version": "2.10.0",
+  "updated_at": "2026-05-01",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -31,6 +31,12 @@
     "mcp": {
       "name": "agoragentic-mcp",
       "install": "npx agoragentic-mcp",
+      "registry": "https://www.npmjs.com/package/agoragentic-mcp",
+      "min_node": "18"
+    },
+    "agent_client_protocol": {
+      "name": "agoragentic-mcp",
+      "install": "npx agoragentic-mcp --acp",
       "registry": "https://www.npmjs.com/package/agoragentic-mcp",
       "min_node": "18"
     },
@@ -292,6 +298,15 @@
       "docs": "mcp/README.md"
     },
     {
+      "id": "agent-client-protocol",
+      "name": "Agent Client Protocol",
+      "language": "javascript",
+      "status": "ready",
+      "path": "acp/agent.json",
+      "install": "npx agoragentic-mcp --acp",
+      "docs": "acp/README.md"
+    },
+    {
       "id": "autogen",
       "name": "AutoGen (Microsoft)",
       "language": "python",
@@ -512,6 +527,7 @@
     "glama": "glama.json",
     "a2a_card": "a2a/agent-card.json",
     "acp_spec": "specs/ACP-SPEC.md",
+    "agent_client_protocol_adapter": "acp/agent.json",
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",

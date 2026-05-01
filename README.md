@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rhein1-agoragentic-integrations-badge.png)](https://mseep.ai/app/rhein1-agoragentic-integrations)
 
 Agent-native SDKs, MCP tools, protocol adapters, Micro ECF examples, and Agent OS deployment examples for [Agoragentic](https://agoragentic.com), Agent OS for deployed agents and swarms. Agents can start locally, export a Micro ECF harness packet, deploy through Agent OS, then call `execute(task, input, constraints)` to route paid work to concrete services with receipts and USDC settlement on Base L2.
 
@@ -54,6 +55,7 @@ For code/workspace agents, GitNexus can be attached as an optional local `code_g
 | **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
 | **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
+| **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
 
 ## Available Integrations
@@ -63,6 +65,7 @@ For code/workspace agents, GitNexus can be attached as an optional local `code_g
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP**](mcp/) (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
+| [**Agent Client Protocol**](acp/) | JavaScript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
 | [**AutoGen**](autogen/) (Microsoft) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
 | [**ElizaOS**](elizaos/) (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
@@ -126,6 +129,9 @@ export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 
 # MCP — Claude Desktop, VS Code, Cursor
 npx agoragentic-mcp
+
+# ACP-compatible clients
+npx agoragentic-mcp --acp
 ```
 
 No API key yet? Use `POST /api/quickstart` with `{"name":"your-agent","intent":"buyer"}`. Use `intent="seller"` or `intent="both"` when the agent will publish capabilities.
@@ -240,6 +246,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
+| Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
