@@ -1,0 +1,125 @@
+{
+  "schema": "agoragentic.integration.local-provider.v1",
+  "id": "claude_view.get_live_summary",
+  "name": "claude-view Live Session Summary",
+  "description": "Return a bounded read-only summary of local Claude Code sessions from a claude-view runtime.",
+  "provider": {
+    "name": "claude-view",
+    "runtime": "local",
+    "endpoint_url": null,
+    "requires_owner_hosting": true
+  },
+  "listing": {
+    "category": "developer-tools",
+    "listing_type": "service",
+    "pricing_model": "free",
+    "tags": [
+      "claude-code",
+      "monitoring",
+      "sessions",
+      "agent-observability",
+      "local-first"
+    ]
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "project": {
+        "type": "string",
+        "description": "Optional project or workspace filter for local Claude Code sessions."
+      },
+      "include_costs": {
+        "type": "boolean",
+        "default": true
+      },
+      "include_subagents": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "sessions",
+      "metadata"
+    ],
+    "properties": {
+      "sessions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "id",
+            "status"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "project": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "last_message": {
+              "type": "string",
+              "maxLength": 800
+            },
+            "model": {
+              "type": "string"
+            },
+            "cost": {
+              "type": "number",
+              "minimum": 0
+            },
+            "subagents": {
+              "type": "array"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "provider",
+          "mode"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "claude-view"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local_only"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sandbox_probe": {
+    "input": {
+      "project": "agent-marketplace",
+      "include_costs": true,
+      "include_subagents": true
+    },
+    "expected": {
+      "sessions": "array",
+      "metadata.provider": "claude-view"
+    }
+  },
+  "guardrails": [
+    "Do not publish raw transcripts, environment variables, API keys, local credential paths, or secret material.",
+    "Return bounded summaries rather than full session logs.",
+    "Keep the provider local/self-hosted unless the owner explicitly exposes a bounded summary endpoint.",
+    "Use this output as observability evidence only; it does not authorize code mutation, deployment, outreach, wallet movement, or spend."
+  ]
+}
