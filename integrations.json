@@ -1,6 +1,6 @@
 {
   "version": "2.11.0",
-  "updated_at": "2026-05-01",
+  "updated_at": "2026-05-02",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -511,6 +511,15 @@
       "path": "repobrain/repobrain.retrieve_context.manifest.json",
       "install": "Use RepoBrain locally with Micro ECF; no hosted install required",
       "docs": "repobrain/README.md"
+    },
+    {
+      "id": "claude-view",
+      "name": "claude-view Local Provider",
+      "language": "json",
+      "status": "beta",
+      "path": "claude-view/claude_view.get_live_summary.manifest.json",
+      "install": "Run claude-view locally; no hosted endpoint required",
+      "docs": "claude-view/README.md"
     },
     {
       "id": "scrumboy",

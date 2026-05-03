@@ -97,6 +97,7 @@ Integration rule: start with `execute(task, input, constraints)` for external wo
 | [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
 | [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
 | [**RepoBrain Local Provider**](repobrain/) | JSON | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
+| [**claude-view Local Provider**](claude-view/) | JSON | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
 | [**Scrumboy**](scrumboy/) | JSON | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
 | [**Agent OS Control Plane**](agent-os/) | JavaScript/Python | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
