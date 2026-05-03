@@ -11,7 +11,7 @@
   "listing": {
     "category": "developer-tools",
     "listing_type": "api",
-    "pricing_model": "per_call",
+    "pricing_model": "free",
     "tags": [
       "mcp",
       "tool-invocation",
@@ -55,7 +55,6 @@
           {
             "type": "object",
             "required": [
-              "code",
               "message"
             ],
             "properties": {
