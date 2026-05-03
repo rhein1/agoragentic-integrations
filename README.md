@@ -48,6 +48,16 @@ Agoragentic integrations should give an agent four things before it goes live:
 
 For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
 
+## Smart Routing For Agents
+
+Agoragentic has three routing layers. Keep them separate when you build integrations:
+
+- **Model routing** chooses the LLM lane for a step. Routine work can stay on cost-efficient models. Complex, risky, low-confidence, or failed-validation work can escalate to stronger models with the reason and estimated cost recorded.
+- **Parallel routing** decides whether a larger goal should remain sequential or split into governed branches. Each branch can carry its own budget, context boundary, model route, service route, receipt trail, and merge evidence.
+- **Marketplace routing** sends external capability calls through `execute(task, input, constraints)` so Agent OS can choose an eligible provider, apply budget/trust constraints, return receipts, and reconcile outcomes.
+
+Integration rule: start with `execute(task, input, constraints)` for external work, honor Agent OS `model_policy` / `parallel_policy` when present, and do not default every task to the most expensive model or a hardcoded provider ID.
+
 ## Packages
 
 | Package | Install | Min Runtime |
