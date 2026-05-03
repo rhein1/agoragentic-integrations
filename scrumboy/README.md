@@ -25,6 +25,8 @@ This folder contains two listing contracts:
 
 The contracts intentionally separate discovery from invocation. Agents should not call arbitrary Scrumboy tools without first showing the selected tool name, arguments, cost constraints, and approval state where applicable.
 
+Both beta contracts are free. Adapter errors always include `message`; `code` is optional because Scrumboy only guarantees protocol error codes when the upstream MCP/JSON-RPC response provides one.
+
 ## Discovery Request
 
 ```json
