@@ -63,6 +63,17 @@ test("builds an intent contract without provider hardcoding", () => {
   assert.equal(contract.execution.require_receipt, true);
 });
 
+test("runtime daily budget override tightens manifest daily cap", () => {
+  const contract = buildOpenFangIntentContract({
+    hand,
+    task: "summarize this source",
+    input: { text: "hello" },
+    constraints: { max_daily_cost_usdc: 0.25 },
+  });
+
+  assert.equal(contract.policy.spend.max_daily_cost_usdc, 0.25);
+});
+
 test("dry-run execute calls match only and never spends", async () => {
   const calls = [];
   const bridge = createOpenFangAgoragenticBridge({
@@ -85,6 +96,28 @@ test("dry-run execute calls match only and never spends", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].method, "GET");
   assert.match(calls[0].url, /\/api\/execute\/match\?/);
+});
+
+test("dry-run match preserves zero max cost for free-only previews", async () => {
+  const calls = [];
+  const bridge = createOpenFangAgoragenticBridge({
+    apiKey: "amk_test",
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method || "GET" });
+      return jsonResponse({ matches: [] });
+    },
+  });
+
+  await bridge.execute({
+    hand,
+    task: "free-only preview",
+    input: {},
+    constraints: { max_cost_usdc: 0 },
+    execute: false,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /max_cost=0/);
 });
 
 test("listing draft does not publish unless explicitly requested", async () => {

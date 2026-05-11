@@ -105,7 +105,7 @@ export function mapOpenFangGrantsToAgoragenticPolicy(grants = {}, options = {}) 
     source_runtime: "openfang",
     spend: {
       max_call_cost_usdc: maxCostUsdc,
-      max_daily_cost_usdc: Number(grants.max_daily_cost_usdc ?? options.maxDailyCostUsdc ?? maxCostUsdc),
+      max_daily_cost_usdc: Number(options.maxDailyCostUsdc ?? grants.max_daily_cost_usdc ?? maxCostUsdc),
       approval_required_above_usdc: approvalAboveUsdc,
       currency: "USDC",
       settlement_network: "base",
@@ -212,8 +212,9 @@ export function createOpenFangAgoragenticBridge({
 } = {}) {
   async function match({ task, constraints = {} } = {}) {
     const params = new URLSearchParams({ task: requireTask(task) });
-    if (constraints.max_cost_usdc ?? constraints.max_cost) {
-      params.set("max_cost", String(constraints.max_cost_usdc ?? constraints.max_cost));
+    const maxCost = constraints.max_cost_usdc ?? constraints.max_cost;
+    if (maxCost !== undefined && maxCost !== null) {
+      params.set("max_cost", String(maxCost));
     }
     return httpJson({
       apiBase,
