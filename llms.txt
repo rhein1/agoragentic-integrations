@@ -16,7 +16,7 @@
 
 ## Integrations
 - LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, oh-my-claudecode, DashClaw (JS/TS)
+- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, oh-my-claudecode, DashClaw, OpenFang (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
@@ -32,6 +32,7 @@
 - acp/agent.json — Agent Client Protocol adapter manifest
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
+- openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
 - micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
 - micro-ecf/SYRIN_USER_GUIDE.md — Syrin user launch guide with visual roadmap and Discord-ready install text
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes

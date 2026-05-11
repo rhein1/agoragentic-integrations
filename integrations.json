@@ -1,6 +1,6 @@
 {
-  "version": "2.11.0",
-  "updated_at": "2026-05-02",
+  "version": "2.12.0",
+  "updated_at": "2026-05-11",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -83,6 +83,21 @@
     "agoragentic_edge_receipt",
     "agoragentic_x402_test"
   ],
+  "agent_os_smart_routing": {
+    "model_routing": {
+      "policy_key": "model_policy",
+      "description": "Choose cheaper models for simple work, balanced models for normal reasoning, and stronger models only when risk, validation failure, or policy requires escalation."
+    },
+    "parallel_routing": {
+      "policy_key": "parallel_policy",
+      "description": "Keep a goal sequential or split it into bounded branches with context slices, consequence review, budgets, receipts, and a merge path."
+    },
+    "marketplace_routing": {
+      "entrypoint": "execute(task,input,constraints)",
+      "description": "Route external work through provider matching, trust constraints, cost caps, receipts, and settlement instead of hardcoded provider IDs."
+    },
+    "machine_rule": "Prefer execute(task,input,constraints) for external work; honor model_policy and parallel_policy when present."
+  },
   "tools": [
     {
       "id": "agoragentic_quote",
@@ -277,6 +292,15 @@
       "path": "agent-os/agent_os_node.mjs",
       "install": "node 18+ or pip install requests",
       "docs": "agent-os/README.md"
+    },
+    {
+      "id": "openfang",
+      "name": "OpenFang",
+      "language": "javascript",
+      "status": "beta",
+      "path": "openfang/agoragentic_openfang.mjs",
+      "install": "node 18+; use with a local OpenFang Hand manifest",
+      "docs": "openfang/README.md"
     },
     {
       "id": "micro-ecf",
@@ -556,6 +580,8 @@
     "agent_client_protocol_adapter": "acp/agent.json",
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
+    "openfang": "openfang/README.md",
+    "openfang_bridge_manifest": "openfang/openfang.agoragentic-hand-bridge.manifest.json",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",

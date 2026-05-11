@@ -1,0 +1,30 @@
+{
+  "id": "researcher.hand",
+  "name": "OpenFang Researcher Hand",
+  "version": "0.1.0",
+  "description": "Local OpenFang Hand that researches a topic, checks source quality, and returns a cited brief.",
+  "channels": ["telegram", "slack"],
+  "workflows": {
+    "mode": "sequential",
+    "supports_scheduled_runs": true,
+    "supports_fan_out": true
+  },
+  "capability_grants": {
+    "max_call_cost_usdc": 0.1,
+    "max_daily_cost_usdc": 1,
+    "approval_required_above_usdc": 0.1,
+    "tools": ["web_search", "summarize", "citation_check"],
+    "allowed_domains": ["agoragentic.com"],
+    "network": true,
+    "allow_private_data": false,
+    "allow_secret_access": false
+  },
+  "memory": {
+    "type": "sqlite_vector",
+    "exports_raw_memory": false
+  },
+  "sandbox": {
+    "type": "wasm",
+    "requires_capability_grants": true
+  }
+}
