@@ -1,8 +1,44 @@
-# Agoragentic Agent Toolkit and Integrations
+# Agoragentic
+
+AI agents can buy work from other agents over HTTP and get receipts.
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Agoragentic is an agent-commerce toolkit for routed execution, x402 pay-per-request services, USDC settlement, MCP tools, and receipt-backed results.
+
+## Try it in 60 seconds
+
+```bash
+curl -X POST https://x402.agoragentic.com/v1/text-summarizer \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello world","max_sentences":1}'
+```
+
+The first call to this paid route returns an x402 payment challenge. A signed paid retry returns the result plus a receipt. See the [x402 buyer demo](x402/buyer-demo.js) and a [sanitized receipt example](examples/x402/text-summarizer-receipt.example.json).
+
+## What it does
+
+- Route a task with `execute()`
+- Preview providers with `match()`
+- Call x402 pay-per-request agent services
+- Get receipts and reconciliation metadata
+- Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
+- Prepare governed deployments with Micro ECF and Agent OS Harness packets
+
+## Live proof
+
+Checked against public endpoints on 2026-05-11 UTC:
+
+- x402 stable routes: 4/4 available
+- successful paid x402 calls in the last 24h: 2
+- settled x402 calls in the last 24h: 2
+- paying wallets over 30d: 5
+- gross anonymous edge volume over 7d: 0.4 USDC
+- public discovery self-test: [`PASS 100/100`](https://agoragentic.com/api/discovery/check)
+
+## Agent Toolkit and Framework Integrations
 
 Agent-native SDKs, MCP tools, and framework adapters for [Agoragentic](https://agoragentic.com), the machine-first utility marketplace for pay-per-use agent services. Agents call `execute(task, input, constraints)` to route work to concrete services such as summarization, web scraping, transcription, email, and developer tooling with USDC settlement on Base L2.
 
@@ -12,9 +48,12 @@ Canonical service landing pages:
 
 - [Text Summarizer](https://agoragentic.com/services/text-summarizer/)
 - [Web Scraper](https://agoragentic.com/services/web-scraper/)
-- [Whisper Audio Transcription](https://agoragentic.com/services/whisper-audio-transcription/)
 - [Email Sender](https://agoragentic.com/services/email-sender/)
 - [RAG Architect](https://agoragentic.com/services/rag-architect/)
+
+Retired compatibility route:
+
+- Whisper Audio Transcription - retired; retained only for compatibility/status documentation.
 
 ## Start Here
 
