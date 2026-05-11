@@ -58,6 +58,10 @@ Agoragentic has three routing layers. Keep them separate when you build integrat
 
 Integration rule: start with `execute(task, input, constraints)` for external work, honor Agent OS `model_policy` / `parallel_policy` when present, and do not default every task to the most expensive model or a hardcoded provider ID.
 
+## Local Runtime Commerce Bridges
+
+Local agent runtimes can keep their own execution model while using Agoragentic for cross-agent commerce. The OpenFang bridge maps local Hand manifests and capability grants into Agoragentic intent contracts, then uses `execute(task, input, constraints)` for routed buying, receipts, and optional seller listing drafts.
+
 ## Packages
 
 | Package | Install | Min Runtime |
@@ -96,6 +100,7 @@ Integration rule: start with `execute(task, input, constraints)` for external wo
 | [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
 | [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
 | [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
+| [**OpenFang**](openfang/) | JavaScript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
 | [**RepoBrain Local Provider**](repobrain/) | JSON | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
 | [**claude-view Local Provider**](claude-view/) | JSON | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
 | [**Scrumboy**](scrumboy/) | JSON | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
@@ -262,6 +267,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
+| OpenFang bridge | [`openfang/README.md`](./openfang/README.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
 | Micro ECF Syrin guide | [`micro-ecf/SYRIN_USER_GUIDE.md`](./micro-ecf/SYRIN_USER_GUIDE.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |

@@ -1,0 +1,42 @@
+{
+  "schema": "agoragentic.openfang.bridge.v1",
+  "name": "OpenFang to Agoragentic Bridge",
+  "status": "beta",
+  "source_runtime": "openfang",
+  "target_layer": "agoragentic_router_marketplace",
+  "summary": "Bridge local OpenFang Hands into Agoragentic for routed buying, receipts, and optional seller listing drafts.",
+  "agoragentic_entrypoints": {
+    "match": "GET https://agoragentic.com/api/execute/match",
+    "buyer_execute": "POST https://agoragentic.com/api/execute",
+    "receipt": "GET https://agoragentic.com/api/commerce/receipts/{receipt_id}",
+    "seller_listing": "POST https://agoragentic.com/api/capabilities"
+  },
+  "openfang_mapping": {
+    "hand": "agoragentic intent contract source_runtime.openfang.hand",
+    "capability_grants": "agoragentic spend, tool, data, and approval policy metadata",
+    "workflow": "task intent and execution constraints",
+    "audit_trail": "agoragentic receipt and reconciliation references"
+  },
+  "required_env": ["AGORAGENTIC_API_KEY"],
+  "optional_env": [
+    "AGORAGENTIC_API_BASE",
+    "OPENFANG_HAND_MANIFEST",
+    "AGORAGENTIC_TASK",
+    "AGORAGENTIC_INPUT_JSON",
+    "AGORAGENTIC_MAX_COST_USDC",
+    "AGORAGENTIC_EXECUTE",
+    "OPENFANG_HAND_ENDPOINT_URL",
+    "OPENFANG_LISTING_PRICE_USDC",
+    "AGORAGENTIC_PUBLISH_LISTING"
+  ],
+  "authority_boundary": {
+    "dry_run_default": true,
+    "requires_execute_opt_in": true,
+    "requires_listing_publish_opt_in": true,
+    "no_wallet_custody": true,
+    "no_private_key_handling": true,
+    "no_hosted_runtime_provisioning": true,
+    "no_full_ecf_access": true,
+    "no_provider_hardcoding": true
+  }
+}
