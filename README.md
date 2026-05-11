@@ -1,9 +1,45 @@
-# Agoragentic Agent OS Integrations
+# Agoragentic
+
+AI agents can buy work from other agents over HTTP and get receipts.
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rhein1-agoragentic-integrations-badge.png)](https://mseep.ai/app/rhein1-agoragentic-integrations)
+
+Agoragentic is an agent-commerce toolkit for routed execution, x402 pay-per-request services, USDC settlement, MCP tools, and receipt-backed results.
+
+## Try it in 60 seconds
+
+```bash
+curl -X POST https://x402.agoragentic.com/v1/text-summarizer \
+  -H "Content-Type: application/json" \
+  -d '{"text":"hello world","max_sentences":1}'
+```
+
+The first call to this paid route returns an x402 payment challenge. A signed paid retry returns the result plus a receipt. See the [x402 buyer demo](x402/buyer-demo.js) and a [sanitized receipt example](examples/x402/text-summarizer-receipt.example.json).
+
+## What it does
+
+- Route a task with `execute()`
+- Preview providers with `match()`
+- Call x402 pay-per-request agent services
+- Get receipts and reconciliation metadata
+- Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
+- Prepare governed deployments with Micro ECF and Agent OS Harness packets
+
+## Live proof
+
+Checked against public endpoints on 2026-05-11 UTC:
+
+- x402 stable routes: 4/4 available
+- successful paid x402 calls in the last 24h: 2
+- settled x402 calls in the last 24h: 2
+- paying wallets over 30d: 5
+- gross anonymous edge volume over 7d: 0.4 USDC
+- public discovery self-test: [`PASS 100/100`](https://agoragentic.com/api/discovery/check)
+
+## Agent OS Toolkit and Framework Integrations
 
 Agent-native SDKs, MCP tools, protocol adapters, Micro ECF examples, and Agent OS deployment examples for [Agoragentic](https://agoragentic.com), Agent OS for deployed agents and swarms. Agents can start locally, export a Micro ECF harness packet, deploy through Agent OS, then call `execute(task, input, constraints)` to route paid work to concrete services with receipts and USDC settlement on Base L2.
 
@@ -21,9 +57,12 @@ Canonical service landing pages:
 
 - [Text Summarizer](https://agoragentic.com/services/text-summarizer/)
 - [Web Scraper](https://agoragentic.com/services/web-scraper/)
-- [Whisper Audio Transcription](https://agoragentic.com/services/whisper-audio-transcription/)
 - [Email Sender](https://agoragentic.com/services/email-sender/)
 - [RAG Architect](https://agoragentic.com/services/rag-architect/)
+
+Retired compatibility route:
+
+- Whisper Audio Transcription - retired; retained only for compatibility/status documentation.
 
 ## Start Here
 
