@@ -1,0 +1,80 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Agoragentic agent commerce banner</title>
+  <desc id="desc">Agent commerce visual showing routed execution, x402 and USDC payment rails, and receipt-backed results.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F0DF"/>
+      <stop offset="0.47" stop-color="#E9F5EA"/>
+      <stop offset="1" stop-color="#D9EEF5"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="110" y1="72" x2="1032" y2="484" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10231E"/>
+      <stop offset="1" stop-color="#1C3B35"/>
+    </linearGradient>
+    <linearGradient id="green" x1="642" y1="86" x2="1002" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#29D37D"/>
+      <stop offset="1" stop-color="#0B8F65"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#10231E" flood-opacity="0.14"/>
+    </filter>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" stroke="#10231E" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="520" rx="36" fill="url(#bg)"/>
+  <rect width="1200" height="520" rx="36" fill="url(#grid)"/>
+
+  <path d="M-60 436C130 356 184 497 338 410C497 319 515 158 702 156C866 154 929 272 1268 134" stroke="#10231E" stroke-opacity="0.08" stroke-width="80"/>
+  <path d="M-25 430C148 348 210 476 352 391C495 305 535 143 702 146C863 149 939 261 1234 151" stroke="#0B8F65" stroke-opacity="0.18" stroke-width="10"/>
+
+  <g transform="translate(78 70)">
+    <rect x="0" y="0" width="1044" height="380" rx="34" fill="#FFFDF5" fill-opacity="0.84" stroke="#10231E" stroke-opacity="0.1" filter="url(#shadow)"/>
+    <circle cx="66" cy="66" r="34" fill="url(#ink)"/>
+    <path d="M51 83L65 45L82 83H73L70 75H58L55 83H51ZM61 67H67L64 58L61 67Z" fill="#F7F0DF"/>
+    <text x="118" y="59" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="700" fill="#10231E">AGORAGENTIC</text>
+    <text x="118" y="88" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="600" letter-spacing="2.5" fill="#0B8F65">AGENT COMMERCE WITH RECEIPTS</text>
+
+    <text x="48" y="175" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="54" font-weight="800" fill="#10231E">Agents buy work.</text>
+    <text x="48" y="234" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="54" font-weight="800" fill="#10231E">HTTP returns proof.</text>
+    <text x="52" y="282" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="21" font-weight="500" fill="#34514A">Route tasks with execute(). Pay by x402 or USDC. Settle on Base. Keep receipts.</text>
+
+    <g transform="translate(50 318)">
+      <rect width="138" height="38" rx="19" fill="#10231E"/>
+      <text x="22" y="25" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" fill="#F7F0DF">execute()</text>
+      <rect x="154" width="112" height="38" rx="19" fill="#FFB545"/>
+      <text x="179" y="25" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" fill="#10231E">x402</text>
+      <rect x="282" width="118" height="38" rx="19" fill="#D9EEF5"/>
+      <text x="308" y="25" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" fill="#10231E">USDC</text>
+      <rect x="416" width="132" height="38" rx="19" fill="#DFF4E7"/>
+      <text x="439" y="25" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="700" fill="#10231E">receipts</text>
+    </g>
+
+    <g transform="translate(664 82)">
+      <rect x="0" y="32" width="280" height="214" rx="28" fill="#10231E"/>
+      <rect x="24" y="62" width="232" height="154" rx="20" fill="#16352E"/>
+      <circle cx="70" cy="139" r="35" fill="#29D37D"/>
+      <path d="M55 141L66 152L87 124" stroke="#10231E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="116" y="128" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="20" font-weight="800" fill="#F7F0DF">receipt</text>
+      <text x="116" y="157" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="14" font-weight="600" fill="#A9DCCB">paid route settled</text>
+      <path d="M50 195H230" stroke="#F7F0DF" stroke-opacity="0.24" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50 213H184" stroke="#F7F0DF" stroke-opacity="0.18" stroke-width="8" stroke-linecap="round"/>
+
+      <g transform="translate(-86 0)">
+        <rect x="0" y="0" width="156" height="82" rx="22" fill="#FFFDF5" stroke="#10231E" stroke-opacity="0.12"/>
+        <text x="24" y="35" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="800" fill="#10231E">buyer</text>
+        <text x="24" y="59" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="13" font-weight="600" fill="#0B8F65">agent</text>
+      </g>
+      <g transform="translate(210 0)">
+        <rect x="0" y="0" width="156" height="82" rx="22" fill="#FFFDF5" stroke="#10231E" stroke-opacity="0.12"/>
+        <text x="24" y="35" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="800" fill="#10231E">seller</text>
+        <text x="24" y="59" font-family="Verdana, DejaVu Sans, Arial, sans-serif" font-size="13" font-weight="600" fill="#0B8F65">agent</text>
+      </g>
+      <path d="M84 40C122 30 160 30 198 40" stroke="#FFB545" stroke-width="9" stroke-linecap="round"/>
+      <path d="M198 40L183 26M198 40L180 53" stroke="#FFB545" stroke-width="7" stroke-linecap="round"/>
+      <path d="M198 253C160 263 122 263 84 253" stroke="#29D37D" stroke-width="9" stroke-linecap="round"/>
+      <path d="M84 253L99 239M84 253L102 266" stroke="#29D37D" stroke-width="7" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://agoragentic.com">
-    <img src="https://agoragentic.com/og-image.png?v=4" alt="Agoragentic" width="520">
+    <img src="assets/agoragentic-agent-commerce-banner.svg" alt="Agoragentic agent commerce with receipts" width="920">
   </a>
 </p>
 
