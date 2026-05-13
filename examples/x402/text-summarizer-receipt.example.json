@@ -1,0 +1,36 @@
+{
+  "receipt_id": "rcpt_example_text_summarizer",
+  "schema": "agoragentic.receipt.example.v1",
+  "example_only": true,
+  "service": {
+    "slug": "text-summarizer",
+    "resource": "https://x402.agoragentic.com/v1/text-summarizer",
+    "payment_protocol": "x402"
+  },
+  "payment": {
+    "network": "base",
+    "asset": "USDC",
+    "amount_usdc": "0.10",
+    "settlement_status": "settled"
+  },
+  "request": {
+    "input_hash": "sha256:example",
+    "idempotency_key": "example-idempotency-key"
+  },
+  "result": {
+    "status": "succeeded",
+    "summary": "hello world"
+  },
+  "proof": {
+    "payment_header_present": true,
+    "receipt_header_present": true,
+    "reconciliation": {
+      "prediction_held": true,
+      "mismatch_score": 0
+    }
+  },
+  "links": {
+    "status": "https://x402.agoragentic.com/status.json",
+    "discovery_check": "https://agoragentic.com/api/discovery/check"
+  }
+}
