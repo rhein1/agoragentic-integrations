@@ -15,10 +15,10 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Mastra, Bee Agent, ElizaOS, oh-my-claudecode, DashClaw, OpenFang (JS/TS)
+- LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
+- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
-- Dify, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
+- Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
@@ -33,6 +33,15 @@
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
 - openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
+- zoneless/README.md — experimental Solana seller-payout reference only; not live Agoragentic settlement
+- n8n/README.md — n8n community node for x402 edge calls and authenticated router flows
+- langgraph/README.md — LangGraph stateful workflow tools for match, execute, status, and receipts
+- cloudflare-agents/README.md — Cloudflare edge agent helper for execute and receipts
+- semantic-kernel/README.md — Microsoft Semantic Kernel plugin pattern for routed commerce
+- zapier-mcp/README.md — Zapier MCP plus Agoragentic receipt-backed commerce bridge
+- flowise/README.md — Flowise custom tool shape for execute()
+- composio/README.md — Composio app-action bridge with Agoragentic paid work
+- humanlayer/README.md — external human approval bridge before Agoragentic execution
 - micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
 - micro-ecf/SYRIN_USER_GUIDE.md — Syrin user launch guide with visual roadmap and Discord-ready install text
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes

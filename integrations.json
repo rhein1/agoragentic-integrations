@@ -1,6 +1,6 @@
 {
-  "version": "2.12.0",
-  "updated_at": "2026-05-11",
+  "version": "2.14.0",
+  "updated_at": "2026-05-13",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -303,6 +303,15 @@
       "docs": "openfang/README.md"
     },
     {
+      "id": "zoneless",
+      "name": "Zoneless Payout Reference",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "zoneless/agoragentic_zoneless_payouts.ts",
+      "install": "Reference adapter only; do not enable as live seller settlement without Agoragentic payout policy",
+      "docs": "zoneless/README.md"
+    },
+    {
       "id": "micro-ecf",
       "name": "Micro ECF",
       "language": "javascript",
@@ -312,6 +321,15 @@
       "docs": "micro-ecf/README.md"
     },
     {
+      "id": "n8n",
+      "name": "n8n Community Node",
+      "language": "typescript",
+      "status": "beta",
+      "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
+      "install": "cd n8n && npm install && npm run build",
+      "docs": "n8n/README.md"
+    },
+    {
       "id": "langchain",
       "name": "LangChain",
       "language": "python",
@@ -319,6 +337,24 @@
       "path": "langchain/agoragentic_tools.py",
       "install": "pip install agoragentic",
       "docs": "langchain/README.md"
+    },
+    {
+      "id": "langgraph",
+      "name": "LangGraph",
+      "language": "python",
+      "status": "ready",
+      "path": "langgraph/agoragentic_langgraph.py",
+      "install": "pip install requests langgraph langchain-core",
+      "docs": "langgraph/README.md"
+    },
+    {
+      "id": "deepagents",
+      "name": "LangChain Deep Agents",
+      "language": "python",
+      "status": "beta",
+      "path": "deepagents/README.md",
+      "install": "pip install deepagents agoragentic",
+      "docs": "deepagents/README.md"
     },
     {
       "id": "crewai",
@@ -393,6 +429,15 @@
       "docs": "vercel-ai/README.md"
     },
     {
+      "id": "cloudflare-agents",
+      "name": "Cloudflare Agents",
+      "language": "typescript",
+      "status": "beta",
+      "path": "cloudflare-agents/agoragentic_cloudflare_agent.ts",
+      "install": "Copy cloudflare-agents/agoragentic_cloudflare_agent.ts into a Cloudflare Agent or Worker project",
+      "docs": "cloudflare-agents/README.md"
+    },
+    {
       "id": "mastra",
       "name": "Mastra",
       "language": "javascript",
@@ -456,6 +501,15 @@
       "docs": "autogpt/README.md"
     },
     {
+      "id": "semantic-kernel",
+      "name": "Microsoft Semantic Kernel",
+      "language": "python",
+      "status": "beta",
+      "path": "semantic-kernel/agoragentic_semantic_kernel.py",
+      "install": "pip install requests semantic-kernel",
+      "docs": "semantic-kernel/README.md"
+    },
+    {
       "id": "dify",
       "name": "Dify",
       "language": "json",
@@ -463,6 +517,42 @@
       "path": "dify/agoragentic_provider.json",
       "install": "Import JSON into Dify provider settings",
       "docs": "dify/README.md"
+    },
+    {
+      "id": "flowise",
+      "name": "Flowise",
+      "language": "json",
+      "status": "beta",
+      "path": "flowise/agoragentic-flowise-tool.json",
+      "install": "Import flowise/agoragentic-flowise-tool.json as a Flowise custom HTTP tool",
+      "docs": "flowise/README.md"
+    },
+    {
+      "id": "zapier-mcp",
+      "name": "Zapier MCP",
+      "language": "json",
+      "status": "beta",
+      "path": "zapier-mcp/agoragentic-zapier-mcp.example.json",
+      "install": "Configure Zapier MCP plus npx agoragentic-mcp in your MCP client",
+      "docs": "zapier-mcp/README.md"
+    },
+    {
+      "id": "composio",
+      "name": "Composio",
+      "language": "python",
+      "status": "beta",
+      "path": "composio/agoragentic_composio.py",
+      "install": "pip install requests composio",
+      "docs": "composio/README.md"
+    },
+    {
+      "id": "humanlayer",
+      "name": "HumanLayer",
+      "language": "python",
+      "status": "beta",
+      "path": "humanlayer/agoragentic_humanlayer.py",
+      "install": "pip install requests humanlayer",
+      "docs": "humanlayer/README.md"
     },
     {
       "id": "superagi",
@@ -582,6 +672,16 @@
     "agent_os_public_export": "agent-os/README.md",
     "openfang": "openfang/README.md",
     "openfang_bridge_manifest": "openfang/openfang.agoragentic-hand-bridge.manifest.json",
+    "zoneless": "zoneless/README.md",
+    "n8n": "n8n/README.md",
+    "langgraph": "langgraph/README.md",
+    "deepagents": "deepagents/README.md",
+    "cloudflare_agents": "cloudflare-agents/README.md",
+    "semantic_kernel": "semantic-kernel/README.md",
+    "zapier_mcp": "zapier-mcp/README.md",
+    "flowise": "flowise/README.md",
+    "composio": "composio/README.md",
+    "humanlayer": "humanlayer/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",

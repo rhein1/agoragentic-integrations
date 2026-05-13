@@ -50,11 +50,13 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 
 ## Integration Matrix
 
-### Python Integrations (14)
+### Python Integrations (19)
 
 | Framework | File | Install |
 |-----------|------|---------|
 | LangChain | langchain/agoragentic_tools.py | pip install agoragentic langchain |
+| LangGraph | langgraph/agoragentic_langgraph.py | pip install requests langgraph langchain-core |
+| LangChain Deep Agents | deepagents/README.md | pip install deepagents agoragentic |
 | CrewAI | crewai/agoragentic_crewai.py | pip install agoragentic crewai |
 | AutoGen | autogen/agoragentic_autogen.py | pip install agoragentic pyautogen |
 | OpenAI Agents SDK | openai-agents/agoragentic_openai.py | pip install agoragentic |
@@ -65,31 +67,40 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | MetaGPT | metagpt/agoragentic_metagpt.py | pip install agoragentic metagpt |
 | LlamaIndex | llamaindex/agoragentic_llamaindex.py | pip install agoragentic llama-index |
 | AutoGPT | autogpt/agoragentic_autogpt.py | pip install agoragentic |
+| Microsoft Semantic Kernel | semantic-kernel/agoragentic_semantic_kernel.py | pip install requests semantic-kernel |
+| Composio | composio/agoragentic_composio.py | pip install requests composio |
+| HumanLayer | humanlayer/agoragentic_humanlayer.py | pip install requests humanlayer |
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 
-### JavaScript/TypeScript Integrations (9)
+### JavaScript/TypeScript Integrations (12)
 
 | Framework | File | Install |
 |-----------|------|---------|
 | MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | npx agoragentic-mcp |
 | Vercel AI SDK | vercel-ai/agoragentic_vercel.js | npm install ai @ai-sdk/openai |
+| Cloudflare Agents | cloudflare-agents/agoragentic_cloudflare_agent.ts | copy into a Cloudflare Agent or Worker project |
 | Mastra | mastra/agoragentic_mastra.js | npm install |
 | Bee Agent (IBM) | bee-agent/agoragentic_bee.js | npm install |
 | ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
+| n8n Community Node | n8n/nodes/Agoragentic/Agoragentic.node.ts | cd n8n && npm install && npm run build |
 | LangSmith | langsmith/README.md | npm install agoragentic langsmith |
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
 | OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
+| Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
 
-### Config-Only Integrations (4)
+### Config-Only Integrations (7)
 
 | Framework | File | Install |
 |-----------|------|---------|
 | Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
+| Flowise | flowise/agoragentic-flowise-tool.json | Import as a Flowise custom HTTP tool |
+| Zapier MCP | zapier-mcp/agoragentic-zapier-mcp.example.json | Configure Zapier MCP and agoragentic-mcp in one client |
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
 | RepoBrain Local Provider | repobrain/repobrain.retrieve_context.manifest.json | Use RepoBrain locally with Micro ECF; no hosted install required |
+| claude-view Local Provider | claude-view/claude_view.get_live_summary.manifest.json | Run claude-view locally; no hosted endpoint required |
 | Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
 
 ### Agent OS and Micro ECF (2)
@@ -181,6 +192,16 @@ Full spec: specs/ACP-SPEC.md
 | ACP registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
 | OpenFang bridge | openfang/README.md |
+| Zoneless payout reference | zoneless/README.md |
+| n8n Community Node | n8n/README.md |
+| LangGraph | langgraph/README.md |
+| LangChain Deep Agents | deepagents/README.md |
+| Cloudflare Agents | cloudflare-agents/README.md |
+| Microsoft Semantic Kernel | semantic-kernel/README.md |
+| Zapier MCP | zapier-mcp/README.md |
+| Flowise | flowise/README.md |
+| Composio | composio/README.md |
+| HumanLayer | humanlayer/README.md |
 | Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |
 | Micro ECF framework guide | micro-ecf/FRAMEWORKS.md |
 | Agent OS evidence/eval backlog | micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md |

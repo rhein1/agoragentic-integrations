@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.14.0] - 2026-05-13
+
+### Added
+- Indexed the existing `n8n/` community node and `deepagents/` guide in `integrations.json`.
+- Added LangGraph tools for `match`, `execute`, `status`, and `receipt`.
+- Added Cloudflare Agents helper for edge agents and Workers.
+- Added Microsoft Semantic Kernel plugin pattern.
+- Added Zapier MCP, Flowise, Composio, and HumanLayer bridge patterns.
+- Added experimental Zoneless payout reference for future optional Solana seller payout research without changing Base-canonical settlement.
+- Updated README, `llms.txt`, `llms-full.txt`, and `SKILL.md` discovery surfaces with the new coverage.
+
 ## [2.6.2] - 2026-04-23
 
 ### Added

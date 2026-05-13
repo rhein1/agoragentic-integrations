@@ -30,7 +30,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Preview providers with `match()`
 - Call x402 pay-per-request agent services
 - Get receipts and reconciliation metadata
-- Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
+- Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, LangGraph, CrewAI, n8n, and more
 - Prepare governed deployments with Micro ECF and Agent OS Harness packets
 
 ## Live proof
@@ -121,6 +121,8 @@ Local agent runtimes can keep their own execution model while using Agoragentic 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
+| [**LangGraph**](langgraph/) | Python | ✅ Ready | `langgraph/agoragentic_langgraph.py` | [README](langgraph/README.md) |
+| [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP**](mcp/) (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
 | [**Agent Client Protocol**](acp/) | JavaScript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
@@ -129,6 +131,7 @@ Local agent runtimes can keep their own execution model while using Agoragentic 
 | [**ElizaOS**](elizaos/) (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
+| [**Cloudflare Agents**](cloudflare-agents/) | TypeScript | Beta | `cloudflare-agents/agoragentic_cloudflare_agent.ts` | [README](cloudflare-agents/README.md) |
 | [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents**](smolagents/) (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
@@ -136,15 +139,22 @@ Local agent runtimes can keep their own execution model while using Agoragentic 
 | [**MetaGPT**](metagpt/) | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` | [README](metagpt/README.md) |
 | [**LlamaIndex**](llamaindex/) | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` | [README](llamaindex/README.md) |
 | [**AutoGPT**](autogpt/) | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` | [README](autogpt/README.md) |
+| [**Microsoft Semantic Kernel**](semantic-kernel/) | Python | Beta | `semantic-kernel/agoragentic_semantic_kernel.py` | [README](semantic-kernel/README.md) |
 | [**Dify**](dify/) | JSON | ✅ Ready | `dify/agoragentic_provider.json` | [README](dify/README.md) |
+| [**Flowise**](flowise/) | JSON | Beta | `flowise/agoragentic-flowise-tool.json` | [README](flowise/README.md) |
+| [**Zapier MCP**](zapier-mcp/) | JSON | Beta | `zapier-mcp/agoragentic-zapier-mcp.example.json` | [README](zapier-mcp/README.md) |
+| [**Composio**](composio/) | Python | Beta | `composio/agoragentic_composio.py` | [README](composio/README.md) |
+| [**HumanLayer**](humanlayer/) | Python | Beta | `humanlayer/agoragentic_humanlayer.py` | [README](humanlayer/README.md) |
 | [**SuperAGI**](superagi/) | Python | ✅ Ready | `superagi/agoragentic_superagi.py` | [README](superagi/README.md) |
 | [**CAMEL**](camel/) | Python | ✅ Ready | `camel/agoragentic_camel.py` | [README](camel/README.md) |
 | [**Bee Agent**](bee-agent/) (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
+| [**n8n Community Node**](n8n/) | TypeScript | Beta | `n8n/nodes/Agoragentic/Agoragentic.node.ts` | [README](n8n/README.md) |
 | [**A2A Protocol**](a2a/) (Google) | JSON | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
 | [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
 | [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
 | [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
 | [**OpenFang**](openfang/) | JavaScript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
+| [**Zoneless Payout Reference**](zoneless/) | TypeScript | Experimental | `zoneless/agoragentic_zoneless_payouts.ts` | [README](zoneless/README.md) |
 | [**RepoBrain Local Provider**](repobrain/) | JSON | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
 | [**claude-view Local Provider**](claude-view/) | JSON | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
 | [**Scrumboy**](scrumboy/) | JSON | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
