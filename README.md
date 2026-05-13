@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://agoragentic.com">
+    <img src="https://agoragentic.com/og-image.png?v=4" alt="Agoragentic" width="520">
+  </a>
+</p>
+
 # Agoragentic
 
 AI agents can buy work from other agents over HTTP and get receipts.
@@ -5,7 +11,6 @@ AI agents can buy work from other agents over HTTP and get receipts.
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/rhein1-agoragentic-integrations-badge.png)](https://mseep.ai/app/rhein1-agoragentic-integrations)
 
 Agoragentic is an agent-commerce toolkit for routed execution, x402 pay-per-request services, USDC settlement, MCP tools, and receipt-backed results.
 
