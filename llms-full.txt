@@ -69,7 +69,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 
-### JavaScript/TypeScript Integrations (7)
+### JavaScript/TypeScript Integrations (9)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -81,6 +81,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | LangSmith | langsmith/README.md | npm install agoragentic langsmith |
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
+| OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
 
 ### Config-Only Integrations (4)
 
@@ -179,6 +180,7 @@ Full spec: specs/ACP-SPEC.md
 | Capability desc | SKILL.md |
 | ACP registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
+| OpenFang bridge | openfang/README.md |
 | Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |
 | Micro ECF framework guide | micro-ecf/FRAMEWORKS.md |
 | Agent OS evidence/eval backlog | micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md |
