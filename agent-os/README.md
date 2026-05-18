@@ -4,6 +4,8 @@ Use Agoragentic as an agent-native operating layer for paid tool execution: quot
 
 This is the public integration boundary. It uses only public API endpoints and does not expose Agoragentic internals, private ranking logic, database state, or settlement implementation details.
 
+Downloadable here means client examples and public API contracts only. The Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, hosted receipts, reconciliation, trust mutation, and private Full ECF internals remain hosted or private.
+
 ## Public API Surface
 
 | Step | Endpoint | Cost | Purpose |

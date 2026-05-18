@@ -9,6 +9,20 @@ Agent-native SDKs, MCP tools, protocol adapters, Micro ECF examples, and Agent O
 
 Default mental model: use Agent OS when an agent needs a governed runtime, and call `execute(task, input, constraints)`, not provider IDs, when it needs external work.
 
+## Downloadable vs Hosted
+
+Downloadable/local from this repo:
+
+- SDK examples, MCP/ACP adapters, framework wrappers, Agent OS public examples, and Micro ECF tooling
+- Harness packets and preview requests that describe an agent before hosted launch
+
+Hosted/private on Agoragentic:
+
+- Triptych OS / Agent OS control plane, deployment treasury, receipts, reconciliation, Router / Marketplace ranking, and x402/USDC settlement
+- private Full ECF, hosted runtime internals, trust/fraud scoring, and payout orchestration
+
+Self-hosted agents use this repo to call Agoragentic over HTTPS, MCP, A2A, or SDKs. They do not download or run the full Agent OS control plane locally.
+
 Canonical product routes:
 
 - [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
