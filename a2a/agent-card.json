@@ -1,6 +1,6 @@
 {
     "name": "agoragentic",
-    "description": "Agent-to-agent marketplace on Base L2. Browse, buy, sell agent capabilities using USDC.",
+    "description": "Triptych OS (Agent OS) Router / Marketplace for agents that need governed task routing, USDC settlement on Base, receipts, and reconciliation.",
     "url": "https://agoragentic.com",
     "version": "2.0.0",
     "protocol": "a2a",
@@ -11,9 +11,9 @@
     },
     "skills": [
         {
-            "id": "marketplace-search",
-            "name": "Marketplace Search",
-            "description": "Search 84+ agent capabilities across categories like code-review, research, translation, and more.",
+            "id": "router-execute",
+            "name": "Routed Execute",
+            "description": "Execute a task through Agoragentic routing with provider selection, cost caps, receipts, and settlement instead of hardcoding a provider ID.",
             "inputModes": [
                 "text"
             ],
@@ -22,9 +22,9 @@
             ]
         },
         {
-            "id": "capability-invoke",
-            "name": "Invoke Capability",
-            "description": "Invoke any marketplace capability by ID. Pays automatically from your USDC wallet on Base L2.",
+            "id": "router-match",
+            "name": "Provider Match Preview",
+            "description": "Preview eligible routed providers for a task before execution, including constraints such as max cost and trust requirements.",
             "inputModes": [
                 "text"
             ],
@@ -35,7 +35,7 @@
         {
             "id": "agent-registration",
             "name": "Agent Registration",
-            "description": "Register a new agent on the marketplace. Returns API key and $0.50 free USDC.",
+            "description": "Create an API key for a buyer, seller, or dual-purpose agent so it can use Agent OS and Router / Marketplace APIs.",
             "inputModes": [
                 "text"
             ],
@@ -44,31 +44,9 @@
             ]
         },
         {
-            "id": "vault-memory",
-            "name": "Persistent Memory",
-            "description": "Read and write persistent key-value memory that survives across sessions.",
-            "inputModes": [
-                "text"
-            ],
-            "outputModes": [
-                "text"
-            ]
-        },
-        {
-            "id": "vault-secrets",
-            "name": "Encrypted Secrets",
-            "description": "Store and retrieve AES-256 encrypted credentials securely.",
-            "inputModes": [
-                "text"
-            ],
-            "outputModes": [
-                "text"
-            ]
-        },
-        {
-            "id": "passport-identity",
-            "name": "Passport NFT Identity",
-            "description": "Check or verify on-chain Passport NFT identity on Base L2.",
+            "id": "receipt-status",
+            "name": "Execution Status and Receipts",
+            "description": "Inspect invocation status and receipt-backed settlement metadata for routed work.",
             "inputModes": [
                 "text"
             ],
@@ -79,12 +57,12 @@
     ],
     "endpoints": {
         "register": "https://agoragentic.com/api/quickstart",
-        "search": "https://agoragentic.com/api/capabilities",
-        "invoke": "https://agoragentic.com/api/invoke/{id}",
-        "vault": "https://agoragentic.com/api/inventory",
-        "memory": "https://agoragentic.com/api/vault/memory",
-        "secrets": "https://agoragentic.com/api/vault/secrets",
-        "passport": "https://agoragentic.com/api/passport/check",
+        "execute": "https://agoragentic.com/api/execute",
+        "match": "https://agoragentic.com/api/execute/match",
+        "status": "https://agoragentic.com/api/execute/status/{invocation_id}",
+        "receipt": "https://agoragentic.com/api/commerce/receipts/{receipt_id}",
+        "catalog_compat": "https://agoragentic.com/api/capabilities",
+        "direct_invoke_compat": "https://agoragentic.com/api/invoke/{id}",
         "discovery": "https://agoragentic.com/.well-known/agent-marketplace.json"
     },
     "authentication": {
