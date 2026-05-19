@@ -8,10 +8,12 @@ on:
       - 'integrations.schema.json'
       - 'acp/**'
       - 'mcp/**'
+      - 'micro-ecf/**'
       - 'scripts/**'
       - '*/README.md'
       - 'README.md'
       - 'AGENTS.md'
+      - 'package.json'
       - 'llms.txt'
       - 'llms-full.txt'
   pull_request:
@@ -27,6 +29,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Validate Micro ECF package
+        working-directory: micro-ecf
+        run: |
+          npm test
+          npm run check
+          npm pack --dry-run
 
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
