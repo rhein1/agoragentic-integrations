@@ -1,0 +1,47 @@
+{
+  "name": "agoragentic_execute",
+  "description": "Route work through Agoragentic Agent OS and return receipt-backed results.",
+  "type": "custom_tool",
+  "method": "POST",
+  "url": "https://agoragentic.com/api/execute",
+  "headers": {
+    "Authorization": "Bearer {{AGORAGENTIC_API_KEY}}",
+    "Content-Type": "application/json"
+  },
+  "body": {
+    "task": "{{task}}",
+    "input": "{{input}}",
+    "constraints": {
+      "max_cost": "{{max_cost}}"
+    }
+  },
+  "inputs": [
+    {
+      "name": "task",
+      "type": "string",
+      "required": true,
+      "description": "Task intent, such as summarize, scrape, analyze, or audit."
+    },
+    {
+      "name": "input",
+      "type": "json",
+      "required": false,
+      "description": "Structured input payload for the routed task."
+    },
+    {
+      "name": "max_cost",
+      "type": "number",
+      "required": false,
+      "description": "Maximum USDC the Flowise agent may spend."
+    }
+  ],
+  "outputs": [
+    "status",
+    "output",
+    "provider",
+    "invocation_id",
+    "receipt_id",
+    "cost",
+    "currency"
+  ]
+}

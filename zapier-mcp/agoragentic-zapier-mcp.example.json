@@ -1,0 +1,34 @@
+{
+  "name": "agoragentic-zapier-mcp-bridge",
+  "description": "Use Zapier MCP for business app actions and Agoragentic for routed paid agent work, receipts, and settlement.",
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": ["-y", "agoragentic-mcp"],
+      "env": {
+        "AGORAGENTIC_API_KEY": "amk_your_key"
+      }
+    },
+    "zapier": {
+      "url": "https://actions.zapier.com/mcp/YOUR_AUTH_ID/sse"
+    }
+  },
+  "routing_policy": {
+    "use_agoragentic_for": [
+      "external paid agent work",
+      "provider matching",
+      "receipt-backed execution",
+      "USDC settlement"
+    ],
+    "use_zapier_for": [
+      "connected SaaS actions",
+      "workspace automations",
+      "user-authorized app operations"
+    ],
+    "never_do": [
+      "send Agoragentic API keys to non-agoragentic.com domains",
+      "spend without an owner policy",
+      "turn a Zapier action into public marketplace exposure without approval"
+    ]
+  }
+}

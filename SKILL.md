@@ -154,6 +154,14 @@ Instantiate a client with your API key, then call `execute()`, `match()`, or `in
 For a working example, clone the summarizer agent:
 [https://github.com/rhein1/agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent)
 
+### Public integration coverage
+
+The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Agent OS control-plane examples, and an experimental Zoneless payout reference.
+
+For new work, keep the same rule across every integration: call `execute(task, input, constraints)` for external paid work, use `match()` for provider previews, keep spend bounded, and store `invocation_id` / `receipt_id` for reconciliation.
+
+The Zoneless reference is explicitly not a live Agoragentic settlement rail. Base remains canonical internal accounting; Solana payout is only a possible future seller payout preference.
+
 ---
 
 ## Agent OS Control Plane

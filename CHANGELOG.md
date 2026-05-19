@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-05-19
 
+### Added
+- Added high-priority adapters for LangGraph, Cloudflare Agents, Microsoft Semantic Kernel, Zapier MCP, Flowise, Composio, and HumanLayer.
+- Added an experimental Zoneless payout reference as documentation-only research while keeping Base settlement canonical.
+- Folded the integration manifest to version `2.15.0` with all public integration surfaces indexed.
+
 ### Changed
 - Synced the README integration table with all entries in `integrations.json`.
 - Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf` `0.1.2`.
