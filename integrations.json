@@ -1,5 +1,5 @@
 {
-  "version": "2.12.1",
+  "version": "2.12.2",
   "updated_at": "2026-05-19",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -288,6 +288,51 @@
       "docs": "openfang/README.md"
     },
     {
+      "id": "cashclaw",
+      "name": "CashClaw",
+      "language": "typescript",
+      "status": "beta",
+      "path": "cashclaw/README.md",
+      "install": "Add agoragentic_execute and agoragentic_match tools to a CashClaw tool registry",
+      "docs": "cashclaw/README.md"
+    },
+    {
+      "id": "deepagents",
+      "name": "LangChain Deep Agents",
+      "language": "python",
+      "status": "beta",
+      "path": "deepagents/README.md",
+      "install": "pip install deepagents agoragentic",
+      "docs": "deepagents/README.md"
+    },
+    {
+      "id": "n8n",
+      "name": "n8n Community Node",
+      "language": "typescript",
+      "status": "beta",
+      "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
+      "install": "cd n8n && npm install && npm run build",
+      "docs": "n8n/README.md"
+    },
+    {
+      "id": "open-wallet-standard",
+      "name": "Open Wallet Standard",
+      "language": "javascript",
+      "status": "beta",
+      "path": "ows/example-node.mjs",
+      "install": "npm install -g @open-wallet-standard/core",
+      "docs": "ows/README.md"
+    },
+    {
+      "id": "x402",
+      "name": "x402 Buyer Integration",
+      "language": "javascript",
+      "status": "ready",
+      "path": "x402/buyer-demo.js",
+      "install": "node x402/buyer-demo.js",
+      "docs": "x402/README.md"
+    },
+    {
       "id": "micro-ecf",
       "name": "Micro ECF",
       "language": "javascript",
@@ -547,6 +592,51 @@
       "path": "syrin/agoragentic_syrin.py",
       "install": "pip install syrin requests",
       "docs": "syrin/README.md"
+    },
+    {
+      "id": "paperclip",
+      "name": "Paperclip",
+      "language": "javascript",
+      "status": "beta",
+      "path": "paperclip/README.md",
+      "install": "npx paperclipai",
+      "docs": "paperclip/README.md"
+    },
+    {
+      "id": "pinchtab",
+      "name": "PinchTab",
+      "language": "json",
+      "status": "beta",
+      "path": "pinchtab/README.md",
+      "install": "Run PinchTab locally and expose it as an Agoragentic-listed browser automation capability",
+      "docs": "pinchtab/README.md"
+    },
+    {
+      "id": "orbination",
+      "name": "Orbination",
+      "language": "json",
+      "status": "beta",
+      "path": "orbination/README.md",
+      "install": "Run Orbination locally and expose it as an Agoragentic-listed desktop automation capability",
+      "docs": "orbination/README.md"
+    },
+    {
+      "id": "geo-seo",
+      "name": "GEO-SEO Claude",
+      "language": "json",
+      "status": "beta",
+      "path": "geo-seo/README.md",
+      "install": "Install geo-seo-claude and use Agoragentic listing instructions",
+      "docs": "geo-seo/README.md"
+    },
+    {
+      "id": "base-ecosystem",
+      "name": "Base Ecosystem Listing Notes",
+      "language": "json",
+      "status": "deprecated",
+      "path": "base-ecosystem/README.md",
+      "install": "Archived repository notes only; use the Base ecosystem submission form",
+      "docs": "base-ecosystem/README.md"
     }
   ],
   "specs": [
@@ -567,6 +657,16 @@
     "agent_os_public_export": "agent-os/README.md",
     "openfang": "openfang/README.md",
     "openfang_bridge_manifest": "openfang/openfang.agoragentic-hand-bridge.manifest.json",
+    "cashclaw": "cashclaw/README.md",
+    "deepagents": "deepagents/README.md",
+    "n8n": "n8n/README.md",
+    "open_wallet_standard": "ows/README.md",
+    "x402_buyer": "x402/README.md",
+    "paperclip": "paperclip/README.md",
+    "pinchtab": "pinchtab/README.md",
+    "orbination": "orbination/README.md",
+    "geo_seo": "geo-seo/README.md",
+    "base_ecosystem": "base-ecosystem/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
