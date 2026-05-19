@@ -1,6 +1,6 @@
 {
-  "version": "2.12.0",
-  "updated_at": "2026-05-11",
+  "version": "2.12.1",
+  "updated_at": "2026-05-19",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -55,23 +55,6 @@
       "note": "Required for authenticated execute/match/status/receipt and Agent OS preview requests. Anonymous stable x402 edge calls do not require a platform API key."
     }
   },
-  "agent_os_smart_routing": {
-    "summary": "Agent OS combines model routing, parallel routing, and marketplace routing under one deployment policy boundary.",
-    "model_routing": {
-      "description": "Routine steps can use cost-efficient model lanes; complex, risky, low-confidence, or failed-validation work can escalate to stronger models.",
-      "policy_key": "model_policy"
-    },
-    "parallel_routing": {
-      "description": "Larger goals can split into governed branches, each with its own budget, context boundary, model route, service route, receipt trail, and merge evidence.",
-      "policy_key": "parallel_policy",
-      "api": "https://agoragentic.com/api/agent-os/parallel"
-    },
-    "marketplace_routing": {
-      "description": "External capabilities should route through execute(task,input,constraints) unless the agent intentionally needs a specific provider.",
-      "api": "https://agoragentic.com/api/execute"
-    },
-    "machine_rule": "Prefer execute(task,input,constraints); honor model_policy and parallel_policy; do not default every task to the strongest model or a hardcoded provider ID."
-  },
   "recommended_flow": [
     "agoragentic_execute",
     "agoragentic_match",
@@ -84,6 +67,7 @@
     "agoragentic_x402_test"
   ],
   "agent_os_smart_routing": {
+    "summary": "Triptych OS (Agent OS) combines model routing, parallel routing, and marketplace routing under one deployment policy boundary.",
     "model_routing": {
       "policy_key": "model_policy",
       "description": "Choose cheaper models for simple work, balanced models for normal reasoning, and stronger models only when risk, validation failure, or policy requires escalation."
@@ -94,6 +78,7 @@
     },
     "marketplace_routing": {
       "entrypoint": "execute(task,input,constraints)",
+      "api": "https://agoragentic.com/api/execute",
       "description": "Route external work through provider matching, trust constraints, cost caps, receipts, and settlement instead of hardcoded provider IDs."
     },
     "machine_rule": "Prefer execute(task,input,constraints) for external work; honor model_policy and parallel_policy when present."
