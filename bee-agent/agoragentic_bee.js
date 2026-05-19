@@ -2,7 +2,7 @@
  * Agoragentic Bee Agent (IBM) Integration — v2.0
  * =================================================
  *
- * Tools for IBM Bee Agent Framework on the Agoragentic marketplace.
+ * Tools for IBM Bee Agent Framework on the Agoragentic Router / Marketplace.
  *
  * Install:
  *   npm install bee-agent-framework
@@ -25,9 +25,47 @@ async function apiCall(method, path, apiKey, body = null) {
 
 export function getAgoragenticTools(apiKey = "") {
     return {
+        agoragentic_execute: {
+            name: "agoragentic_execute",
+            description: "Route a task through Agoragentic execute() with provider selection, receipts, and settlement.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to route through Agoragentic" },
+                    input: { type: "object", description: "Task input payload" },
+                    constraints: { type: "object", description: "Optional budget, trust, or routing constraints" }
+                },
+                required: ["task"]
+            },
+            handler: async ({ task, input = {}, constraints = {} }) => {
+                const payload = { task };
+                if (Object.keys(input).length) payload.input = input;
+                if (Object.keys(constraints).length) payload.constraints = constraints;
+                return apiCall("POST", "/api/execute", apiKey, payload);
+            }
+        },
+        agoragentic_match: {
+            name: "agoragentic_match",
+            description: "Preview eligible routed providers before execution.",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to match" },
+                    max_cost: { type: "number", description: "Optional max cost in USDC" },
+                    min_trust: { type: "string", description: "Optional minimum trust requirement" }
+                },
+                required: ["task"]
+            },
+            handler: async ({ task, max_cost = -1, min_trust = "" }) => {
+                const params = new URLSearchParams({ task });
+                if (max_cost >= 0) params.set("max_cost", String(max_cost));
+                if (min_trust) params.set("min_trust", min_trust);
+                return apiCall("GET", `/api/execute/match?${params}`, apiKey);
+            }
+        },
         agoragentic_register: {
             name: "agoragentic_register",
-            description: "Register on the Agoragentic agent marketplace. Returns API key + free USDC.",
+            description: "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -42,7 +80,7 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_search: {
             name: "agoragentic_search",
-            description: "Search the Agoragentic marketplace for capabilities priced in USDC.",
+            description: "Compatibility catalog browsing. Prefer agoragentic_match for new routed work.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -59,7 +97,7 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_invoke: {
             name: "agoragentic_invoke",
-            description: "Invoke a marketplace capability. Auto-pays from USDC wallet.",
+            description: "Compatibility direct-provider invocation when a known capability ID is required.",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -74,13 +112,13 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_vault: {
             name: "agoragentic_vault",
-            description: "View agent vault — skills, datasets, NFTs.",
+            description: "Compatibility inventory view for legacy vault surfaces.",
             inputSchema: { type: "object", properties: {} },
             handler: async () => apiCall("GET", "/api/inventory", apiKey)
         },
         agoragentic_memory_write: {
             name: "agoragentic_memory_write",
-            description: "Write to persistent memory (FREE).",
+            description: "Write scoped Agent OS memory when policy allows it.",
             inputSchema: {
                 type: "object",
                 properties: { key: { type: "string" }, value: { type: "string" } },
@@ -92,7 +130,7 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_memory_read: {
             name: "agoragentic_memory_read",
-            description: "Read from persistent memory (FREE).",
+            description: "Read scoped Agent OS memory when policy allows it.",
             inputSchema: { type: "object", properties: { key: { type: "string" } } },
             handler: async ({ key = "" }) => {
                 const params = key ? `?key=${key}&namespace=default` : "?namespace=default";
@@ -101,7 +139,7 @@ export function getAgoragenticTools(apiKey = "") {
         },
         agoragentic_passport: {
             name: "agoragentic_passport",
-            description: "Check Passport NFT identity on Base L2.",
+            description: "Compatibility identity helper for legacy passport surfaces.",
             inputSchema: { type: "object", properties: {} },
             handler: async () => apiCall("GET", "/api/passport/check", apiKey)
         }

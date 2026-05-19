@@ -2,7 +2,7 @@
 Agoragentic CAMEL Integration — v2.0
 ======================================
 
-Tools for CAMEL-AI agent framework on the Agoragentic marketplace.
+Tools for CAMEL-AI agent framework on the Agoragentic Router / Marketplace.
 
 Install:
     pip install camel-ai requests
@@ -35,15 +35,41 @@ def _headers(api_key: str):
 
 
 def agoragentic_register(agent_name: str, intent: str = "both") -> str:
-    """Register on the Agoragentic marketplace. Returns API key + $0.50 free USDC."""
+    """Create an Agoragentic API key for a buyer, seller, or dual-purpose agent."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                          json={"name": agent_name, "intent": intent},
                          headers={"Content-Type": "application/json"}, timeout=30)
     return json.dumps(resp.json(), indent=2)
 
 
+def agoragentic_execute(task: str, input_data: str = "{}", constraints: str = "{}", api_key: str = "") -> str:
+    """Route a task through Agoragentic execute() with provider selection, receipts, and settlement."""
+    payload = {"task": task}
+    parsed_input = json.loads(input_data or "{}")
+    parsed_constraints = json.loads(constraints or "{}")
+    if parsed_input:
+        payload["input"] = parsed_input
+    if parsed_constraints:
+        payload["constraints"] = parsed_constraints
+    resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/execute",
+                         json=payload, headers=_headers(api_key), timeout=90)
+    return json.dumps(resp.json(), indent=2)
+
+
+def agoragentic_match(task: str, max_cost: float = -1, min_trust: str = "", api_key: str = "") -> str:
+    """Preview eligible routed providers before execution."""
+    params = {"task": task}
+    if max_cost >= 0:
+        params["max_cost"] = str(max_cost)
+    if min_trust:
+        params["min_trust"] = min_trust
+    resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+                        params=params, headers=_headers(api_key), timeout=30)
+    return json.dumps(resp.json(), indent=2)
+
+
 def agoragentic_search(query: str = "", category: str = "", api_key: str = "") -> str:
-    """Search the Agoragentic marketplace for capabilities priced in USDC on Base L2."""
+    """Compatibility catalog browsing. Prefer agoragentic_match for new routed work."""
     params = {"limit": 10, "status": "active"}
     if query: params["search"] = query
     if category: params["category"] = category
@@ -58,7 +84,7 @@ def agoragentic_search(query: str = "", category: str = "", api_key: str = "") -
 
 
 def agoragentic_invoke(capability_id: str, input_data: str = "{}", api_key: str = "") -> str:
-    """Invoke a marketplace capability. Auto-pays from USDC wallet."""
+    """Compatibility direct-provider invocation when a known capability ID is required."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                          json={"input": json.loads(input_data)},
                          headers=_headers(api_key), timeout=60)
@@ -66,14 +92,14 @@ def agoragentic_invoke(capability_id: str, input_data: str = "{}", api_key: str 
 
 
 def agoragentic_vault(api_key: str = "") -> str:
-    """View your agent vault — skills, datasets, NFTs, collectibles you own."""
+    """Compatibility inventory view for legacy vault surfaces."""
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory",
                         headers=_headers(api_key), timeout=15)
     return json.dumps(resp.json(), indent=2)
 
 
 def agoragentic_memory_write(key: str, value: str, api_key: str = "") -> str:
-    """Write to persistent agent memory ($0.10/write). Survives across sessions."""
+    """Write scoped Agent OS memory when policy allows it."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                          json={"input": {"key": key, "value": value}},
                          headers=_headers(api_key), timeout=30)
@@ -81,7 +107,7 @@ def agoragentic_memory_write(key: str, value: str, api_key: str = "") -> str:
 
 
 def agoragentic_memory_read(key: str = "", api_key: str = "") -> str:
-    """Read from persistent agent memory. FREE."""
+    """Read scoped Agent OS memory when policy allows it."""
     params = {"namespace": "default"}
     if key: params["key"] = key
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
@@ -90,7 +116,7 @@ def agoragentic_memory_read(key: str = "", api_key: str = "") -> str:
 
 
 def agoragentic_passport(api_key: str = "") -> str:
-    """Check Agoragentic Passport NFT identity on Base L2."""
+    """Compatibility identity helper for legacy passport surfaces."""
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/check",
                         headers=_headers(api_key), timeout=15)
     return json.dumps(resp.json(), indent=2)
@@ -100,6 +126,8 @@ def get_agoragentic_tools(api_key: str = ""):
     """Get all Agoragentic tools wrapped as CAMEL FunctionTools."""
     import functools
     fns = [
+        functools.partial(agoragentic_execute, api_key=api_key),
+        functools.partial(agoragentic_match, api_key=api_key),
         agoragentic_register,
         functools.partial(agoragentic_search, api_key=api_key),
         functools.partial(agoragentic_invoke, api_key=api_key),

@@ -2,7 +2,7 @@
  * Agoragentic ElizaOS Plugin — v2.0
  * ===================================
  *
- * Plugin for ElizaOS (ai16z) agents to interact with the Agoragentic marketplace.
+ * Plugin for ElizaOS (ai16z) agents to interact with the Agoragentic Router / Marketplace.
  * Crypto-native agents with existing USDC wallets are a perfect fit.
  *
  * Install:
@@ -28,13 +28,13 @@ async function apiCall(method: string, path: string, apiKey: string | null, body
 
 const registerAction = {
     name: "AGORAGENTIC_REGISTER",
-    description: "Register on the Agoragentic agent marketplace to get an API key and free USDC.",
+    description: "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent.",
     similes: ["register on marketplace", "join agoragentic", "get api key", "sign up marketplace"],
     validate: async () => true,
     handler: async (runtime: any, message: any) => {
         const agentName = runtime.character?.name || "ElizaAgent";
         const data = await apiCall("POST", "/api/quickstart", null, {
-            name: agentName, type: "both"
+            name: agentName, intent: "both"
         });
         if (data.api_key) {
             await runtime.cacheManager?.set("agoragentic_api_key", data.api_key);
@@ -48,9 +48,58 @@ const registerAction = {
     ]
 };
 
+const executeAction = {
+    name: "AGORAGENTIC_EXECUTE",
+    description: "Route a task through Agoragentic execute() with provider selection, receipts, and settlement.",
+    similes: ["execute task", "route task", "buy routed work", "run through agoragentic"],
+    validate: async (runtime: any) => {
+        const key = await runtime.cacheManager?.get("agoragentic_api_key") ||
+            runtime.getSetting?.("AGORAGENTIC_API_KEY");
+        return !!key;
+    },
+    handler: async (runtime: any, message: any) => {
+        const apiKey = await runtime.cacheManager?.get("agoragentic_api_key") ||
+            runtime.getSetting?.("AGORAGENTIC_API_KEY") || "";
+        const task = message.content?.task || message.content?.text || "";
+        if (!task) return { text: "Please provide a task to execute through Agoragentic." };
+        const data = await apiCall("POST", "/api/execute", apiKey, {
+            task,
+            input: message.content?.input || {},
+            constraints: message.content?.constraints || {}
+        });
+        return { text: JSON.stringify(data, null, 2).slice(0, 1200) };
+    },
+    examples: [
+        [{ user: "user", content: { text: "Execute this research task through Agoragentic" } },
+        { user: "agent", content: { text: "I'll route that task through Agoragentic execute()." } }]
+    ]
+};
+
+const matchAction = {
+    name: "AGORAGENTIC_MATCH",
+    description: "Preview eligible routed providers before execution.",
+    similes: ["match providers", "preview providers", "find routed providers", "provider match"],
+    validate: async () => true,
+    handler: async (runtime: any, message: any) => {
+        const apiKey = await runtime.cacheManager?.get("agoragentic_api_key") ||
+            runtime.getSetting?.("AGORAGENTIC_API_KEY") || "";
+        const task = message.content?.task || message.content?.text?.replace(/match|preview|providers/gi, "").trim() || "";
+        if (!task) return { text: "Please provide a task to match." };
+        const params = new URLSearchParams({ task });
+        if (message.content?.max_cost) params.set("max_cost", String(message.content.max_cost));
+        if (message.content?.min_trust) params.set("min_trust", message.content.min_trust);
+        const data = await apiCall("GET", `/api/execute/match?${params}`, apiKey);
+        return { text: JSON.stringify(data, null, 2).slice(0, 1200) };
+    },
+    examples: [
+        [{ user: "user", content: { text: "Match providers for a summarization task" } },
+        { user: "agent", content: { text: "I'll preview eligible routed providers." } }]
+    ]
+};
+
 const searchAction = {
     name: "AGORAGENTIC_SEARCH",
-    description: "Search the Agoragentic marketplace for agent capabilities, tools, and services.",
+    description: "Compatibility catalog browsing. Prefer AGORAGENTIC_MATCH for new routed work.",
     similes: ["search marketplace", "find tools", "browse capabilities", "look for services"],
     validate: async () => true,
     handler: async (runtime: any, message: any) => {
@@ -73,7 +122,7 @@ const searchAction = {
 
 const invokeAction = {
     name: "AGORAGENTIC_INVOKE",
-    description: "Invoke a capability from the Agoragentic marketplace. Pays from USDC balance.",
+    description: "Compatibility direct-provider invocation when a known capability ID is required.",
     similes: ["invoke capability", "use tool", "call service", "buy capability"],
     validate: async (runtime: any) => {
         const key = await runtime.cacheManager?.get("agoragentic_api_key") ||
@@ -99,7 +148,7 @@ const invokeAction = {
 
 const memoryWriteAction = {
     name: "AGORAGENTIC_MEMORY_WRITE",
-    description: "Write to persistent agent memory on Agoragentic ($0.10/write). Survives across sessions.",
+    description: "Write scoped Agent OS memory when policy allows it.",
     similes: ["save to memory", "remember this", "store data", "persist"],
     validate: async (runtime: any) => !!(await runtime.cacheManager?.get("agoragentic_api_key") || runtime.getSetting?.("AGORAGENTIC_API_KEY")),
     handler: async (runtime: any, message: any) => {
@@ -114,7 +163,7 @@ const memoryWriteAction = {
 
 const vaultAction = {
     name: "AGORAGENTIC_VAULT",
-    description: "View your agent vault — skills, datasets, NFTs, collectibles you own on Agoragentic.",
+    description: "Compatibility inventory view for legacy vault surfaces.",
     similes: ["check vault", "my inventory", "what do i own", "show vault"],
     validate: async (runtime: any) => !!(await runtime.cacheManager?.get("agoragentic_api_key") || runtime.getSetting?.("AGORAGENTIC_API_KEY")),
     handler: async (runtime: any, message: any) => {
@@ -128,8 +177,8 @@ const vaultAction = {
 
 const passportAction = {
     name: "AGORAGENTIC_PASSPORT",
-    description: "Check your Agoragentic Passport NFT identity on Base L2.",
-    similes: ["check passport", "my identity", "passport status", "nft identity"],
+    description: "Compatibility identity helper for legacy passport surfaces.",
+    similes: ["check passport", "my identity", "passport status"],
     validate: async () => true,
     handler: async (runtime: any) => {
         const apiKey = await runtime.cacheManager?.get("agoragentic_api_key") || runtime.getSetting?.("AGORAGENTIC_API_KEY") || "";
@@ -143,8 +192,8 @@ const passportAction = {
 
 export const agoragenticPlugin = {
     name: "agoragentic",
-    description: "Agoragentic agent marketplace — buy, sell, and trade agent capabilities using USDC on Base L2",
-    actions: [registerAction, searchAction, invokeAction, memoryWriteAction, vaultAction, passportAction],
+    description: "Agoragentic Router / Marketplace for governed agent task routing, receipts, and USDC settlement on Base L2",
+    actions: [executeAction, matchAction, registerAction, searchAction, invokeAction, memoryWriteAction, vaultAction, passportAction],
     evaluators: [],
     providers: [],
     services: []
