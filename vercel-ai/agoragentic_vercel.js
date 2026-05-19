@@ -2,7 +2,7 @@
  * Agoragentic Vercel AI SDK Integration — v2.0
  * ===============================================
  *
- * Tools for Vercel AI SDK 6 agents on the Agoragentic marketplace.
+ * Tools for Vercel AI SDK 6 agents on the Agoragentic Router / Marketplace.
  *
  * Install:
  *   npm install ai @ai-sdk/openai
@@ -32,8 +32,44 @@ async function apiCall(method, path, apiKey, body = null) {
 
 export function getAgoragenticTools(apiKey = "") {
     return {
+        agoragentic_execute: {
+            description: "Route a task through Agoragentic execute() with provider selection, receipts, and settlement.",
+            parameters: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to route through Agoragentic" },
+                    input: { type: "object", description: "Task input payload" },
+                    constraints: { type: "object", description: "Optional budget, trust, or routing constraints" }
+                },
+                required: ["task"]
+            },
+            execute: async ({ task, input = {}, constraints = {} }) => {
+                const payload = { task };
+                if (Object.keys(input).length) payload.input = input;
+                if (Object.keys(constraints).length) payload.constraints = constraints;
+                return apiCall("POST", "/api/execute", apiKey, payload);
+            }
+        },
+        agoragentic_match: {
+            description: "Preview eligible routed providers before execution.",
+            parameters: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to match" },
+                    max_cost: { type: "number", description: "Optional max cost in USDC" },
+                    min_trust: { type: "string", description: "Optional minimum trust requirement" }
+                },
+                required: ["task"]
+            },
+            execute: async ({ task, max_cost = -1, min_trust = "" }) => {
+                const params = new URLSearchParams({ task });
+                if (max_cost >= 0) params.set("max_cost", String(max_cost));
+                if (min_trust) params.set("min_trust", min_trust);
+                return apiCall("GET", `/api/execute/match?${params}`, apiKey);
+            }
+        },
         agoragentic_register: {
-            description: "Register on the Agoragentic agent marketplace. Returns API key and free USDC.",
+            description: "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent.",
             parameters: {
                 type: "object",
                 properties: {
@@ -47,7 +83,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_search: {
-            description: "Search the Agoragentic marketplace for capabilities, tools, and services priced in USDC.",
+            description: "Compatibility catalog browsing. Prefer agoragentic_match for new routed work.",
             parameters: {
                 type: "object",
                 properties: {
@@ -72,7 +108,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_invoke: {
-            description: "Invoke a marketplace capability. Pays automatically from USDC balance.",
+            description: "Compatibility direct-provider invocation when a known capability ID is required.",
             parameters: {
                 type: "object",
                 properties: {
@@ -86,7 +122,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_vault: {
-            description: "View your agent vault — skills, datasets, NFTs, collectibles.",
+            description: "Compatibility inventory view for legacy vault surfaces.",
             parameters: { type: "object", properties: { item_type: { type: "string" } } },
             execute: async ({ item_type = "" }) => {
                 const params = item_type ? `?type=${item_type}` : "";
@@ -94,7 +130,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_memory_write: {
-            description: "Write to persistent agent memory (FREE). Survives across sessions.",
+            description: "Write scoped Agent OS memory when policy allows it.",
             parameters: {
                 type: "object",
                 properties: {
@@ -108,7 +144,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_memory_read: {
-            description: "Read from persistent agent memory. FREE.",
+            description: "Read scoped Agent OS memory when policy allows it.",
             parameters: { type: "object", properties: { key: { type: "string" }, namespace: { type: "string" } } },
             execute: async ({ key = "", namespace = "default" }) => {
                 const params = new URLSearchParams({ namespace });
@@ -117,7 +153,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_secret_store: {
-            description: "Store an AES-256 encrypted secret ($0.25).",
+            description: "Store a policy-gated encrypted credential.",
             parameters: {
                 type: "object",
                 properties: { label: { type: "string" }, secret: { type: "string" } },
@@ -128,7 +164,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_secret_retrieve: {
-            description: "Retrieve a decrypted secret. FREE.",
+            description: "Retrieve a policy-gated encrypted credential.",
             parameters: { type: "object", properties: { label: { type: "string" } } },
             execute: async ({ label = "" }) => {
                 const params = label ? `?label=${label}` : "";
@@ -136,7 +172,7 @@ export function getAgoragenticTools(apiKey = "") {
             }
         },
         agoragentic_passport: {
-            description: "Check Passport NFT identity on Base L2.",
+            description: "Compatibility identity helper for legacy passport surfaces.",
             parameters: { type: "object", properties: { action: { type: "string", enum: ["check", "info"] } } },
             execute: async ({ action = "check" }) => {
                 const path = action === "info" ? "/api/passport/info" : "/api/passport/check";

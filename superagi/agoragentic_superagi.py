@@ -2,7 +2,7 @@
 Agoragentic SuperAGI Integration — v2.0
 =========================================
 
-Tool module for SuperAGI agents on the Agoragentic marketplace.
+Tool module for SuperAGI agents on the Agoragentic Router / Marketplace.
 
 Install:
     pip install requests
@@ -42,9 +42,57 @@ class SearchInput(BaseModel):
     api_key: str = Field(default="", description="Agoragentic API key (amk_...)")
 
 
+class ExecuteInput(BaseModel):
+    task: str = Field(description="Task to route through Agoragentic")
+    input_data: str = Field(default="{}", description="JSON input payload")
+    constraints: str = Field(default="{}", description="JSON budget, trust, or routing constraints")
+    api_key: str = Field(default="", description="Agoragentic API key")
+
+
+class AgoragenticExecuteTool(BaseTool):
+    name = "Agoragentic Execute"
+    description = "Route a task through Agoragentic execute() with provider selection, receipts, and settlement."
+    args_schema: Type[BaseModel] = ExecuteInput
+
+    def _execute(self, task: str, input_data: str = "{}", constraints: str = "{}", api_key: str = "") -> str:
+        payload = {"task": task}
+        parsed_input = json.loads(input_data or "{}")
+        parsed_constraints = json.loads(constraints or "{}")
+        if parsed_input:
+            payload["input"] = parsed_input
+        if parsed_constraints:
+            payload["constraints"] = parsed_constraints
+        resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/execute",
+                             json=payload, headers=_headers(api_key), timeout=90)
+        return json.dumps(resp.json(), indent=2)
+
+
+class MatchInput(BaseModel):
+    task: str = Field(description="Task to match")
+    max_cost: float = Field(default=-1, description="Optional max cost in USDC")
+    min_trust: str = Field(default="", description="Optional minimum trust requirement")
+    api_key: str = Field(default="", description="Agoragentic API key")
+
+
+class AgoragenticMatchTool(BaseTool):
+    name = "Agoragentic Match"
+    description = "Preview eligible routed providers before execution."
+    args_schema: Type[BaseModel] = MatchInput
+
+    def _execute(self, task: str, max_cost: float = -1, min_trust: str = "", api_key: str = "") -> str:
+        params = {"task": task}
+        if max_cost >= 0:
+            params["max_cost"] = str(max_cost)
+        if min_trust:
+            params["min_trust"] = min_trust
+        resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+                            params=params, headers=_headers(api_key), timeout=30)
+        return json.dumps(resp.json(), indent=2)
+
+
 class AgoragenticSearchTool(BaseTool):
     name = "Agoragentic Search"
-    description = "Search the Agoragentic agent marketplace for capabilities priced in USDC on Base L2."
+    description = "Compatibility catalog browsing. Prefer Agoragentic Match for new routed work."
     args_schema: Type[BaseModel] = SearchInput
 
     def _execute(self, query: str = "", category: str = "", api_key: str = "") -> str:
@@ -68,7 +116,7 @@ class InvokeInput(BaseModel):
 
 class AgoragenticInvokeTool(BaseTool):
     name = "Agoragentic Invoke"
-    description = "Invoke a capability from the Agoragentic marketplace. Pays from USDC balance."
+    description = "Compatibility direct-provider invocation when a known capability ID is required."
     args_schema: Type[BaseModel] = InvokeInput
 
     def _execute(self, capability_id: str, input_data: str = "{}", api_key: str = "") -> str:
@@ -85,7 +133,7 @@ class RegisterInput(BaseModel):
 
 class AgoragenticRegisterTool(BaseTool):
     name = "Agoragentic Register"
-    description = "Register on the Agoragentic marketplace. Get API key + $0.50 free USDC."
+    description = "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent."
     args_schema: Type[BaseModel] = RegisterInput
 
     def _execute(self, agent_name: str, intent: str = "both") -> str:
@@ -103,7 +151,7 @@ class MemoryInput(BaseModel):
 
 class AgoragenticMemoryTool(BaseTool):
     name = "Agoragentic Memory"
-    description = "Read/write persistent agent memory. Write: $0.10, Read: FREE."
+    description = "Read or write scoped Agent OS memory when policy allows it."
     args_schema: Type[BaseModel] = MemoryInput
 
     def _execute(self, key: str, value: str = "", api_key: str = "") -> str:

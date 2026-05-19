@@ -2,7 +2,7 @@
 Agoragentic OpenAI Agents SDK Integration — v2.0
 ==================================================
 
-Tools for the OpenAI Agents SDK to interact with the Agoragentic marketplace.
+Tools for the OpenAI Agents SDK to interact with the Agoragentic Router / Marketplace.
 
 Install:
     pip install openai-agents requests
@@ -39,7 +39,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_register(agent_name: str, intent: str = "both") -> str:
-        """Register on the Agoragentic agent marketplace. Returns an API key and free USDC."""
+        """Create an Agoragentic API key for a buyer, seller, or dual-purpose agent."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                                  json={"name": agent_name, "intent": intent},
@@ -53,8 +53,40 @@ def _make_tools(api_key: str):
             return json.dumps({"error": str(e)})
 
     @function_tool
+    def agoragentic_execute(task: str, input_data: str = "{}", constraints: str = "{}") -> str:
+        """Route a task through Agoragentic execute() with provider selection, receipts, and settlement."""
+        try:
+            payload = {"task": task}
+            parsed_input = json.loads(input_data or "{}")
+            parsed_constraints = json.loads(constraints or "{}")
+            if parsed_input:
+                payload["input"] = parsed_input
+            if parsed_constraints:
+                payload["constraints"] = parsed_constraints
+            resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/execute",
+                                 json=payload, headers=_headers(api_key), timeout=90)
+            return json.dumps(resp.json(), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @function_tool
+    def agoragentic_match(task: str, max_cost: float = -1, min_trust: str = "") -> str:
+        """Preview eligible routed providers before execution."""
+        try:
+            params = {"task": task}
+            if max_cost >= 0:
+                params["max_cost"] = str(max_cost)
+            if min_trust:
+                params["min_trust"] = min_trust
+            resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+                                params=params, headers=_headers(api_key), timeout=30)
+            return json.dumps(resp.json(), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @function_tool
     def agoragentic_search(query: str = "", category: str = "", max_price: float = -1) -> str:
-        """Search the Agoragentic marketplace for agent capabilities, tools, and services priced in USDC."""
+        """Compatibility catalog browsing. Prefer agoragentic_match for new routed work."""
         try:
             params = {"limit": 10, "status": "active"}
             if query: params["search"] = query
@@ -71,7 +103,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_invoke(capability_id: str, input_data: str = "{}") -> str:
-        """Invoke a marketplace capability. Pays automatically from your USDC wallet balance."""
+        """Compatibility direct-provider invocation when a known capability ID is required."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                                  json={"input": json.loads(input_data)}, headers=_headers(api_key), timeout=60)
@@ -85,7 +117,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_vault(item_type: str = "") -> str:
-        """View your agent vault inventory — skills, datasets, NFTs, collectibles you own."""
+        """Compatibility inventory view for legacy vault surfaces."""
         try:
             params = {}
             if item_type: params["type"] = item_type
@@ -96,7 +128,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_memory_write(key: str, value: str, namespace: str = "default") -> str:
-        """Write to persistent agent memory ($0.10/write). Data survives across sessions."""
+        """Write scoped Agent OS memory when policy allows it."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                                  json={"input": {"key": key, "value": value, "namespace": namespace}},
@@ -107,7 +139,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_memory_read(key: str = "", namespace: str = "default") -> str:
-        """Read from persistent agent memory. FREE. Omit key to list all."""
+        """Read scoped Agent OS memory when policy allows it."""
         try:
             params = {"namespace": namespace}
             if key: params["key"] = key
@@ -118,7 +150,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_secret_store(label: str, secret: str) -> str:
-        """Store an AES-256 encrypted secret in your vault ($0.25). 50 secrets max."""
+        """Store a policy-gated encrypted credential."""
         try:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/secrets",
                                  json={"input": {"label": label, "secret": secret}},
@@ -129,7 +161,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_secret_retrieve(label: str = "") -> str:
-        """Retrieve a decrypted secret from your vault. FREE."""
+        """Retrieve a policy-gated encrypted credential."""
         try:
             params = {}
             if label: params["label"] = label
@@ -140,7 +172,7 @@ def _make_tools(api_key: str):
 
     @function_tool
     def agoragentic_passport(action: str = "check") -> str:
-        """Check your Agoragentic Passport NFT identity status on Base L2."""
+        """Compatibility identity helper for legacy passport surfaces."""
         try:
             if action == "info":
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
@@ -150,7 +182,8 @@ def _make_tools(api_key: str):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    return [agoragentic_register, agoragentic_search, agoragentic_invoke,
+    return [agoragentic_execute, agoragentic_match, agoragentic_register,
+            agoragentic_search, agoragentic_invoke,
             agoragentic_vault, agoragentic_memory_write, agoragentic_memory_read,
             agoragentic_secret_store, agoragentic_secret_retrieve, agoragentic_passport]
 

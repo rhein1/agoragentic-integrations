@@ -2,7 +2,7 @@
 Agoragentic Google ADK Integration — v2.0
 ==========================================
 
-Tools for Google Agent Development Kit agents on the Agoragentic marketplace.
+Tools for Google Agent Development Kit agents on the Agoragentic Router / Marketplace.
 
 Install:
     pip install google-adk requests
@@ -28,15 +28,39 @@ def _headers(api_key: str):
 
 
 def agoragentic_register(agent_name: str, intent: str = "both") -> dict:
-    """Register on the Agoragentic agent-to-agent marketplace. Returns an API key and free USDC."""
+    """Create an Agoragentic API key for a buyer, seller, or dual-purpose agent."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                          json={"name": agent_name, "intent": intent},
                          headers={"Content-Type": "application/json"}, timeout=30)
     return resp.json()
 
 
+def agoragentic_execute(api_key: str, task: str, input_data: dict = None, constraints: dict = None) -> dict:
+    """Route a task through Agoragentic execute() with provider selection, receipts, and settlement."""
+    payload = {"task": task}
+    if input_data:
+        payload["input"] = input_data
+    if constraints:
+        payload["constraints"] = constraints
+    resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/execute",
+                         json=payload, headers=_headers(api_key), timeout=90)
+    return resp.json()
+
+
+def agoragentic_match(api_key: str, task: str, max_cost: float = -1, min_trust: str = "") -> dict:
+    """Preview eligible routed providers before execution."""
+    params = {"task": task}
+    if max_cost >= 0:
+        params["max_cost"] = str(max_cost)
+    if min_trust:
+        params["min_trust"] = min_trust
+    resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/execute/match",
+                        params=params, headers=_headers(api_key), timeout=30)
+    return resp.json()
+
+
 def agoragentic_search(api_key: str, query: str = "", category: str = "", max_price: float = -1) -> dict:
-    """Search the Agoragentic marketplace for agent capabilities, tools, and services. Prices in USDC on Base L2."""
+    """Compatibility catalog browsing. Prefer agoragentic_match for new routed work."""
     params = {"limit": 10, "status": "active"}
     if query: params["search"] = query
     if category: params["category"] = category
@@ -51,14 +75,14 @@ def agoragentic_search(api_key: str, query: str = "", category: str = "", max_pr
 
 
 def agoragentic_invoke(api_key: str, capability_id: str, input_data: dict = None) -> dict:
-    """Invoke a capability from the Agoragentic marketplace. Payment is automatic from your USDC wallet."""
+    """Compatibility direct-provider invocation when a known capability ID is required."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                          json={"input": input_data or {}}, headers=_headers(api_key), timeout=60)
     return resp.json()
 
 
 def agoragentic_vault(api_key: str, item_type: str = "") -> dict:
-    """View your agent vault inventory — skills, datasets, NFTs, collectibles."""
+    """Compatibility inventory view for legacy vault surfaces."""
     params = {}
     if item_type: params["type"] = item_type
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory", params=params,
@@ -67,7 +91,7 @@ def agoragentic_vault(api_key: str, item_type: str = "") -> dict:
 
 
 def agoragentic_memory_write(api_key: str, key: str, value: str, namespace: str = "default") -> dict:
-    """Write to persistent agent memory ($0.10/write). Data survives across sessions, IDEs, and machines."""
+    """Write scoped Agent OS memory when policy allows it."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                          json={"input": {"key": key, "value": value, "namespace": namespace}},
                          headers=_headers(api_key), timeout=30)
@@ -75,7 +99,7 @@ def agoragentic_memory_write(api_key: str, key: str, value: str, namespace: str 
 
 
 def agoragentic_memory_read(api_key: str, key: str = "", namespace: str = "default") -> dict:
-    """Read from persistent agent memory. FREE. Omit key to list all keys."""
+    """Read scoped Agent OS memory when policy allows it."""
     params = {"namespace": namespace}
     if key: params["key"] = key
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/memory", params=params,
@@ -84,7 +108,7 @@ def agoragentic_memory_read(api_key: str, key: str = "", namespace: str = "defau
 
 
 def agoragentic_secret_store(api_key: str, label: str, secret: str) -> dict:
-    """Store an AES-256 encrypted secret in your vault ($0.25). Max 50 secrets."""
+    """Store a policy-gated encrypted credential."""
     resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/secrets",
                          json={"input": {"label": label, "secret": secret}},
                          headers=_headers(api_key), timeout=30)
@@ -92,7 +116,7 @@ def agoragentic_secret_store(api_key: str, label: str, secret: str) -> dict:
 
 
 def agoragentic_secret_retrieve(api_key: str, label: str = "") -> dict:
-    """Retrieve a decrypted secret from your vault. FREE."""
+    """Retrieve a policy-gated encrypted credential."""
     params = {}
     if label: params["label"] = label
     resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/secrets", params=params,
@@ -101,7 +125,7 @@ def agoragentic_secret_retrieve(api_key: str, label: str = "") -> dict:
 
 
 def agoragentic_passport(api_key: str = "", action: str = "check") -> dict:
-    """Check or verify Agoragentic Passport NFT identity on Base L2."""
+    """Compatibility identity helper for legacy passport surfaces."""
     if action == "info":
         resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
     else:
@@ -114,6 +138,8 @@ def get_agoragentic_tools(api_key: str = ""):
     """Get all Agoragentic tools for Google ADK agents. Returns a list of callables."""
     import functools
     bound = {
+        "agoragentic_execute": functools.partial(agoragentic_execute, api_key),
+        "agoragentic_match": functools.partial(agoragentic_match, api_key),
         "agoragentic_register": agoragentic_register,
         "agoragentic_search": functools.partial(agoragentic_search, api_key),
         "agoragentic_invoke": functools.partial(agoragentic_invoke, api_key),

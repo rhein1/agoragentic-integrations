@@ -2,7 +2,7 @@
  * Agoragentic Mastra Integration — v2.0
  * ========================================
  *
- * Integration for Mastra framework agents on the Agoragentic marketplace.
+ * Integration for Mastra framework agents on the Agoragentic Router / Marketplace.
  *
  * Install:
  *   npm install @mastra/core
@@ -34,16 +34,38 @@ export class AgoragenticIntegration {
     getTools() {
         const apiKey = this.apiKey;
         return {
+            agoragentic_execute: {
+                label: "Execute Routed Task",
+                description: "Route a task through Agoragentic execute() with provider selection, receipts, and settlement.",
+                schema: { type: "object", properties: { task: { type: "string" }, input: { type: "object" }, constraints: { type: "object" } }, required: ["task"] },
+                executor: async ({ task, input = {}, constraints = {} }) => {
+                    const payload = { task };
+                    if (Object.keys(input).length) payload.input = input;
+                    if (Object.keys(constraints).length) payload.constraints = constraints;
+                    return apiCall("POST", "/api/execute", apiKey, payload);
+                }
+            },
+            agoragentic_match: {
+                label: "Preview Routed Providers",
+                description: "Preview eligible routed providers before execution.",
+                schema: { type: "object", properties: { task: { type: "string" }, max_cost: { type: "number" }, min_trust: { type: "string" } }, required: ["task"] },
+                executor: async ({ task, max_cost = -1, min_trust = "" }) => {
+                    const params = new URLSearchParams({ task });
+                    if (max_cost >= 0) params.set("max_cost", String(max_cost));
+                    if (min_trust) params.set("min_trust", min_trust);
+                    return apiCall("GET", `/api/execute/match?${params}`, apiKey);
+                }
+            },
             agoragentic_register: {
                 label: "Register on Agoragentic",
-                description: "Register on the Agoragentic marketplace. Returns API key + free USDC.",
+                description: "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent.",
                 schema: { type: "object", properties: { agent_name: { type: "string" }, intent: { type: "string", default: "both" } }, required: ["agent_name"] },
                 executor: async ({ agent_name, intent = "both" }) =>
                     apiCall("POST", "/api/quickstart", null, { name: agent_name, intent: intent })
             },
             agoragentic_search: {
                 label: "Search Marketplace",
-                description: "Search capabilities, tools, services. Prices in USDC on Base L2.",
+                description: "Compatibility catalog browsing. Prefer agoragentic_match for new routed work.",
                 schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string" }, max_price: { type: "number" } } },
                 executor: async ({ query = "", category = "" }) => {
                     const params = new URLSearchParams({ limit: "10", status: "active" });
@@ -54,14 +76,14 @@ export class AgoragenticIntegration {
             },
             agoragentic_invoke: {
                 label: "Invoke Capability",
-                description: "Invoke a marketplace capability. Auto-pays from USDC wallet.",
+                description: "Compatibility direct-provider invocation when a known capability ID is required.",
                 schema: { type: "object", properties: { capability_id: { type: "string" }, input_data: { type: "object" } }, required: ["capability_id"] },
                 executor: async ({ capability_id, input_data = {} }) =>
                     apiCall("POST", `/api/invoke/${capability_id}`, apiKey, { input: input_data })
             },
             agoragentic_vault: {
                 label: "View Vault",
-                description: "View agent vault — skills, datasets, NFTs, collectibles.",
+                description: "Compatibility inventory view for legacy vault surfaces.",
                 schema: { type: "object", properties: { item_type: { type: "string" } } },
                 executor: async ({ item_type = "" }) => {
                     const params = item_type ? `?type=${item_type}` : "";
@@ -70,14 +92,14 @@ export class AgoragenticIntegration {
             },
             agoragentic_memory_write: {
                 label: "Write to Memory",
-                description: "Persistent agent memory (FREE). Survives sessions.",
+                description: "Write scoped Agent OS memory when policy allows it.",
                 schema: { type: "object", properties: { key: { type: "string" }, value: { type: "string" } }, required: ["key", "value"] },
                 executor: async ({ key, value }) =>
                     apiCall("POST", "/api/vault/memory", apiKey, { input: { key, value } })
             },
             agoragentic_memory_read: {
                 label: "Read from Memory",
-                description: "Read persistent memory. FREE.",
+                description: "Read scoped Agent OS memory when policy allows it.",
                 schema: { type: "object", properties: { key: { type: "string" } } },
                 executor: async ({ key = "" }) => {
                     const params = key ? `?key=${key}` : "";
@@ -86,14 +108,14 @@ export class AgoragenticIntegration {
             },
             agoragentic_secret_store: {
                 label: "Store Secret",
-                description: "AES-256 encrypted secret storage ($0.25).",
+                description: "Store a policy-gated encrypted credential.",
                 schema: { type: "object", properties: { label: { type: "string" }, secret: { type: "string" } }, required: ["label", "secret"] },
                 executor: async ({ label, secret }) =>
                     apiCall("POST", "/api/vault/secrets", apiKey, { input: { label, secret } })
             },
             agoragentic_secret_retrieve: {
                 label: "Retrieve Secret",
-                description: "Decrypt and retrieve a secret. FREE.",
+                description: "Retrieve a policy-gated encrypted credential.",
                 schema: { type: "object", properties: { label: { type: "string" } } },
                 executor: async ({ label = "" }) => {
                     const params = label ? `?label=${label}` : "";
@@ -102,7 +124,7 @@ export class AgoragenticIntegration {
             },
             agoragentic_passport: {
                 label: "Check Passport",
-                description: "Passport NFT identity on Base L2.",
+                description: "Compatibility identity helper for legacy passport surfaces.",
                 schema: { type: "object", properties: { action: { type: "string" } } },
                 executor: async ({ action = "check" }) => {
                     const path = action === "info" ? "/api/passport/info" : "/api/passport/check";
