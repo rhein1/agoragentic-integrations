@@ -37,6 +37,9 @@ jobs:
       - name: Validate integrations.json is valid JSON
         run: node -e "JSON.parse(require('fs').readFileSync('integrations.json','utf8')); console.log('✅ integrations.json is valid JSON')"
 
+      - name: Verify integrations machine surfaces
+        run: node scripts/verify-integrations-json.js
+
       - name: Check all integration paths exist
         run: |
           node -e "
