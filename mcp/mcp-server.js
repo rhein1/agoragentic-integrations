@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
 const REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || 'https://agoragentic.com/api/mcp';
+const AGORAGENTIC_BASE = process.env.AGORAGENTIC_BASE_URL || 'https://agoragentic.com';
 const API_KEY = process.env.AGORAGENTIC_API_KEY || '';
 const ACP_MODE = process.argv.includes('--acp');
 
@@ -47,6 +48,206 @@ const ACP_TOOLS = [
         description: 'Exercise the free x402 pipeline canary.',
     },
 ];
+
+function buildJsonContent(data) {
+    return {
+        content: [
+            {
+                type: 'text',
+                text: typeof data === 'string' ? data : JSON.stringify(data, null, 2),
+            },
+        ],
+    };
+}
+
+async function apiCall(method, path, body) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': `agoragentic-mcp/${PACKAGE_VERSION}`,
+    };
+    if (API_KEY) {
+        headers.Authorization = `Bearer ${API_KEY}`;
+    }
+
+    const response = await fetch(`${AGORAGENTIC_BASE}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+    const text = await response.text();
+    let data;
+    try {
+        data = text ? JSON.parse(text) : {};
+    } catch {
+        data = { raw: text };
+    }
+
+    if (!response.ok) {
+        return {
+            ok: false,
+            status: response.status,
+            error: data.error || data.message || response.statusText,
+            details: data,
+        };
+    }
+
+    return data;
+}
+
+function requireApiKey() {
+    if (API_KEY) return null;
+    return buildJsonContent({
+        ok: false,
+        error: 'missing_api_key',
+        message: 'Set AGORAGENTIC_API_KEY for authenticated Router / Marketplace execution tools. Use agoragentic_register to create a key.',
+    });
+}
+
+function buildFallbackToolList() {
+    return [
+        {
+            name: 'agoragentic_register',
+            description: 'Register an agent with Agoragentic and receive an API key for routed execution.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string', description: 'Agent name' },
+                    agent_name: { type: 'string', description: 'Agent name, compatibility alias' },
+                    intent: { type: 'string', description: 'buyer, seller, or both', default: 'buyer' },
+                    description: { type: 'string', description: 'Short agent description' },
+                },
+            },
+        },
+        {
+            name: 'agoragentic_search',
+            description: 'Search public Agoragentic marketplace capabilities.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    query: { type: 'string', description: 'Search query' },
+                    category: { type: 'string', description: 'Optional category filter' },
+                    limit: { type: 'number', description: 'Maximum results to return', default: 10 },
+                },
+            },
+        },
+        {
+            name: 'agoragentic_match',
+            description: 'Preview Router / Marketplace provider matches for a task. No spend.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    task: { type: 'string', description: 'Task to route' },
+                    max_cost: { type: 'number', description: 'Maximum USDC price per call' },
+                    category: { type: 'string', description: 'Optional category filter' },
+                    prefer_trusted: { type: 'boolean', description: 'Prefer trusted providers', default: true },
+                },
+                required: ['task'],
+            },
+        },
+        {
+            name: 'agoragentic_execute',
+            description: 'Execute a task through the hosted Agoragentic Router / Marketplace. May spend according to listing price and account balance.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    task: { type: 'string', description: 'Task to execute' },
+                    input: { type: 'object', description: 'Provider input payload', default: {} },
+                    constraints: { type: 'object', description: 'Routing and budget constraints', default: {} },
+                    quote_id: { type: 'string', description: 'Optional quote ID' },
+                    intent_contract_id: { type: 'string', description: 'Optional Agent OS intent contract ID' },
+                },
+                required: ['task'],
+            },
+        },
+        {
+            name: 'agoragentic_execute_status',
+            description: 'Read status, output, cost, and receipt metadata for a routed execution.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    invocation_id: { type: 'string', description: 'Invocation ID from agoragentic_execute' },
+                },
+                required: ['invocation_id'],
+            },
+        },
+    ];
+}
+
+function mergeFallbackTools(remoteTools = []) {
+    const seen = new Set(remoteTools.map((tool) => tool.name));
+    const merged = [...remoteTools];
+    for (const tool of buildFallbackToolList()) {
+        if (!seen.has(tool.name)) {
+            merged.push(tool);
+        }
+    }
+    return merged;
+}
+
+const FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList().map((tool) => tool.name));
+
+async function executeFallbackTool(name, args = {}) {
+    if (name === 'agoragentic_register') {
+        const agentName = args.agent_name || args.name || 'mcp-agent';
+        const data = await apiCall('POST', '/api/quickstart', {
+            name: agentName,
+            intent: args.intent || 'buyer',
+            description: args.description || 'Registered through agoragentic-mcp fallback tools.',
+        });
+        return buildJsonContent(data);
+    }
+
+    if (name === 'agoragentic_search') {
+        const params = new URLSearchParams();
+        if (args.query) params.set('q', args.query);
+        if (args.category) params.set('category', args.category);
+        if (args.limit !== undefined) params.set('limit', String(args.limit));
+        const data = await apiCall('GET', `/api/capabilities?${params.toString()}`);
+        return buildJsonContent(data);
+    }
+
+    if (name === 'agoragentic_match') {
+        const missing = requireApiKey();
+        if (missing) return missing;
+        const params = new URLSearchParams();
+        params.set('task', args.task);
+        if (args.max_cost !== undefined) params.set('max_cost', String(args.max_cost));
+        if (args.category) params.set('category', args.category);
+        if (args.prefer_trusted !== undefined) params.set('prefer_trusted', args.prefer_trusted ? 'true' : 'false');
+        const data = await apiCall('GET', `/api/execute/match?${params.toString()}`);
+        return buildJsonContent(data);
+    }
+
+    if (name === 'agoragentic_execute') {
+        const missing = requireApiKey();
+        if (missing) return missing;
+        const payload = {
+            task: args.task,
+            input: args.input || {},
+            constraints: args.constraints || {},
+        };
+        if (args.quote_id) payload.quote_id = args.quote_id;
+        if (args.intent_contract_id) payload.intent_contract_id = args.intent_contract_id;
+        const data = await apiCall('POST', '/api/execute', payload);
+        return buildJsonContent(data);
+    }
+
+    if (name === 'agoragentic_execute_status') {
+        const missing = requireApiKey();
+        if (missing) return missing;
+        const invocationId = String(args.invocation_id || '').replace(/[^a-zA-Z0-9\-_]/g, '');
+        if (!invocationId) return buildJsonContent({ ok: false, error: 'invalid_invocation_id' });
+        const data = await apiCall('GET', `/api/execute/status/${invocationId}`);
+        return buildJsonContent(data);
+    }
+
+    return buildJsonContent({
+        ok: false,
+        error: 'unknown_tool',
+        tool: name,
+    });
+}
 
 function buildRemoteTransport() {
     const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
@@ -92,51 +293,108 @@ async function runMcpRelay() {
         GetPromptRequestSchema,
     } = require('@modelcontextprotocol/sdk/types.js');
 
-    const { client, transport } = await connectRemoteClient();
-
     const server = new Server(
         { name: 'agoragentic', version: PACKAGE_VERSION },
         { capabilities: { tools: {}, resources: {}, prompts: {} } }
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-        return client.listTools(request.params);
-    });
+    let remoteSession = null;
+    try {
+        remoteSession = await connectRemoteClient();
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[agoragentic-mcp] remote relay unavailable, using local fallback tools: ${message}`);
+    }
 
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
-        return client.callTool(request.params);
-    });
+    if (remoteSession) {
+        const { client } = remoteSession;
+        let remoteToolNames = null;
 
-    server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-        return client.listResources(request.params);
-    });
+        async function listRemoteTools(params = {}) {
+            const result = await client.listTools(params);
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+            return result;
+        }
 
-    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-        return client.readResource(request.params);
-    });
+        async function hasRemoteTool(name) {
+            if (!remoteToolNames) {
+                await listRemoteTools();
+            }
+            return remoteToolNames.has(name);
+        }
 
-    server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
-        return client.listPrompts(request.params);
-    });
+        server.setRequestHandler(ListToolsRequestSchema, async (request) => {
+            const result = await listRemoteTools(request.params);
+            return {
+                ...result,
+                tools: mergeFallbackTools(result.tools),
+            };
+        });
 
-    server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-        return client.getPrompt(request.params);
-    });
+        server.setRequestHandler(CallToolRequestSchema, async (request) => {
+            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await hasRemoteTool(request.params.name))) {
+                return executeFallbackTool(request.params.name, request.params.arguments || {});
+            }
+            return client.callTool(request.params);
+        });
+
+        server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
+            return client.listResources(request.params);
+        });
+
+        server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+            return client.readResource(request.params);
+        });
+
+        server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
+            return client.listPrompts(request.params);
+        });
+
+        server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+            return client.getPrompt(request.params);
+        });
+    } else {
+        server.setRequestHandler(ListToolsRequestSchema, async () => {
+            return { tools: buildFallbackToolList() };
+        });
+
+        server.setRequestHandler(CallToolRequestSchema, async (request) => {
+            return executeFallbackTool(request.params.name, request.params.arguments || {});
+        });
+
+        server.setRequestHandler(ListResourcesRequestSchema, async () => {
+            return { resources: [] };
+        });
+
+        server.setRequestHandler(ReadResourceRequestSchema, async () => {
+            throw new Error('Resources are unavailable while the remote Agoragentic MCP relay is unreachable.');
+        });
+
+        server.setRequestHandler(ListPromptsRequestSchema, async () => {
+            return { prompts: [] };
+        });
+
+        server.setRequestHandler(GetPromptRequestSchema, async () => {
+            throw new Error('Prompts are unavailable while the remote Agoragentic MCP relay is unreachable.');
+        });
+    }
 
     const stdio = new StdioServerTransport();
     await server.connect(stdio);
 
     const shutdown = async (signal) => {
         console.error(`[agoragentic-mcp] shutting down on ${signal}`);
-        try {
-            await transport.terminateSession();
-        } catch {
-            // Ignore session teardown failures during local shutdown.
-        }
-        try {
-            await transport.close();
-        } catch {
-            // Ignore transport close failures during local shutdown.
+        if (remoteSession) {
+            try {
+                await remoteSession.transport.terminateSession();
+            } catch {
+                // Ignore session teardown failures during local shutdown.
+            }
+            try {
+                await remoteSession.transport.close();
+            } catch {
+                // Ignore transport close failures during local shutdown.
+            }
         }
         process.exit(0);
     };
@@ -148,7 +406,11 @@ async function runMcpRelay() {
         void shutdown('SIGTERM');
     });
 
-    console.error(`[agoragentic-mcp] stdio relay ${PACKAGE_VERSION} connected to ${REMOTE_MCP_URL}`);
+    if (remoteSession) {
+        console.error(`[agoragentic-mcp] stdio relay ${PACKAGE_VERSION} connected to ${REMOTE_MCP_URL}`);
+    } else {
+        console.error(`[agoragentic-mcp] stdio fallback ${PACKAGE_VERSION} using ${AGORAGENTIC_BASE}`);
+    }
 }
 
 function buildAcpInitializeResult() {

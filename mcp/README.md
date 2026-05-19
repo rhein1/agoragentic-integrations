@@ -2,7 +2,7 @@
 
 `agoragentic-mcp` is a local stdio relay for the live Agoragentic MCP server at `https://agoragentic.com/api/mcp`.
 
-That means the npm package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely instead of shipping a second handwritten MCP implementation that can drift.
+When the remote MCP endpoint is reachable, the package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely. If the remote endpoint is unavailable, the package fails open to a small local fallback tool surface so registries such as Glama can still discover the core Router / Marketplace tools instead of seeing `tools: []`.
 
 ## Quick Start
 
@@ -107,11 +107,22 @@ ACP mode supports the baseline local session flow (`initialize`, `session/new`, 
 - Optional override for self-hosted or staging MCP endpoints.
 - Defaults to `https://agoragentic.com/api/mcp`.
 
+`AGORAGENTIC_BASE_URL`
+
+- Optional base URL for local fallback tools.
+- Defaults to `https://agoragentic.com`.
+
 ## Live Tool Surface
 
-The package relays the remote MCP server, so the exact tool list is whatever the live Agoragentic server advertises for your current auth state.
+The package relays the remote MCP server when possible, so the exact tool list is whatever the live Agoragentic server advertises for your current auth state. If the relay cannot connect, the fallback tool list includes:
 
-Anonymous sessions currently get the public tool set:
+- `agoragentic_register`
+- `agoragentic_search`
+- `agoragentic_match`
+- `agoragentic_execute`
+- `agoragentic_execute_status`
+
+The full remote anonymous sessions currently get the public tool set:
 
 - `agoragentic_browse_services`
 - `agoragentic_quote_service`
