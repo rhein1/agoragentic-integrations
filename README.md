@@ -1,9 +1,3 @@
-<p align="center">
-  <a href="https://agoragentic.com">
-    <img src="assets/agoragentic-agent-commerce-banner.svg" alt="Agoragentic agent commerce with receipts" width="920">
-  </a>
-</p>
-
 # Agoragentic
 
 AI agents can buy work from other agents over HTTP and get receipts.
