@@ -39,7 +39,7 @@ const {
     GetPromptRequestSchema,
 } = require("@modelcontextprotocol/sdk/types.js");
 
-const AGORAGENTIC_BASE = "https://agoragentic.com";
+const AGORAGENTIC_BASE = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 const API_KEY = process.env.AGORAGENTIC_API_KEY || "";
 
 // ─── HTTP helper ─────────────────────────────────────────
@@ -101,6 +101,54 @@ function getToolList() {
                     max_price: { type: "number", description: "Maximum price in USDC to filter results by cost" },
                     limit: { type: "number", default: 10, description: "Maximum number of results to return (1 to 50)" }
                 }
+            }
+        },
+        {
+            name: "agoragentic_match",
+            description: "Preview which providers Agoragentic would select for a task. Dry run only: no seller is invoked and no funds are spent.",
+            annotations: { title: "Preview Router Match", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to route, for example 'summarize this document' or 'scrape a webpage'" },
+                    max_cost: { type: "number", description: "Maximum USDC price per call to consider", default: 10 },
+                    category: { type: "string", description: "Optional category filter" },
+                    max_latency_ms: { type: "number", description: "Optional maximum latency target in milliseconds" },
+                    prefer_trusted: { type: "boolean", description: "Prefer trusted providers when ranking matches", default: true }
+                },
+                required: ["task"]
+            }
+        },
+        {
+            name: "agoragentic_execute",
+            description: "Execute a task through the Agoragentic Router / Marketplace. This is the preferred paid buyer path because Agoragentic selects the provider, enforces policy, and returns receipt metadata.",
+            annotations: { title: "Execute Routed Task", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    task: { type: "string", description: "Task to execute, for example 'summarize' or 'extract data from this URL'" },
+                    input: { type: "object", description: "Input payload for the selected provider", default: {} },
+                    constraints: {
+                        type: "object",
+                        description: "Routing constraints such as max_cost, category, max_latency_ms, prefer_trusted, or max_retries",
+                        default: {}
+                    },
+                    quote_id: { type: "string", description: "Optional quote ID from a previous quote/match flow" },
+                    intent_contract_id: { type: "string", description: "Optional Agent OS intent contract ID to link execution and receipts" }
+                },
+                required: ["task"]
+            }
+        },
+        {
+            name: "agoragentic_execute_status",
+            description: "Read the status, output, cost, and receipt metadata for a previous Router execution.",
+            annotations: { title: "Read Execute Status", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    invocation_id: { type: "string", description: "Invocation ID returned by agoragentic_execute" }
+                },
+                required: ["invocation_id"]
             }
         },
         {
@@ -267,6 +315,64 @@ async function executeToolCall(name, args) {
                     content: [{
                         type: "text",
                         text: JSON.stringify({ total: results.length, capabilities: results }, null, 2)
+                    }]
+                };
+            }
+
+            case "agoragentic_match": {
+                if (!API_KEY) {
+                    return { content: [{ type: "text", text: "Error: Set AGORAGENTIC_API_KEY environment variable first. Use agoragentic_register to get one." }] };
+                }
+                const params = new URLSearchParams();
+                params.set("task", args.task);
+                if (args.max_cost !== undefined) params.set("max_cost", String(args.max_cost));
+                if (args.category) params.set("category", args.category);
+                if (args.max_latency_ms !== undefined) params.set("max_latency_ms", String(args.max_latency_ms));
+                if (args.prefer_trusted !== undefined) params.set("prefer_trusted", args.prefer_trusted ? "true" : "false");
+
+                const data = await apiCall("GET", `/api/execute/match?${params}`);
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(data, null, 2)
+                    }]
+                };
+            }
+
+            case "agoragentic_execute": {
+                if (!API_KEY) {
+                    return { content: [{ type: "text", text: "Error: Set AGORAGENTIC_API_KEY environment variable first. Use agoragentic_register to get one." }] };
+                }
+                const payload = {
+                    task: args.task,
+                    input: args.input || {},
+                    constraints: args.constraints || {}
+                };
+                if (args.quote_id) payload.quote_id = args.quote_id;
+                if (args.intent_contract_id) payload.intent_contract_id = args.intent_contract_id;
+
+                const data = await apiCall("POST", "/api/execute", payload);
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(data, null, 2)
+                    }]
+                };
+            }
+
+            case "agoragentic_execute_status": {
+                if (!API_KEY) {
+                    return { content: [{ type: "text", text: "Error: Set AGORAGENTIC_API_KEY environment variable first." }] };
+                }
+                const invocationId = String(args.invocation_id || "").replace(/[^a-zA-Z0-9\-_]/g, "");
+                if (!invocationId) {
+                    return { content: [{ type: "text", text: "Error: Invalid invocation_id." }] };
+                }
+                const data = await apiCall("GET", `/api/execute/status/${invocationId}`);
+                return {
+                    content: [{
+                        type: "text",
+                        text: JSON.stringify(data, null, 2)
                     }]
                 };
             }

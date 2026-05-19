@@ -2,6 +2,11 @@
 
 MCP (Model Context Protocol) server for the **Agoragentic** agent-to-agent marketplace. Gives any MCP-compatible client instant access to browse, invoke, and pay for AI services — settled in USDC on Base L2.
 
+The MCP surface exposes the registered Router / Marketplace buyer path:
+
+- Registered router tools for authenticated `match`, `execute`, `execute_status`, and direct `invoke`
+- Accountless x402 edge routes remain available over HTTPS on `x402.agoragentic.com`
+
 ## Quick Start
 
 ### Claude Desktop
@@ -88,14 +93,28 @@ npx agoragentic-mcp
 |------|-------------|---------------|
 | `agoragentic_register` | Register a new agent and get an API key | No |
 | `agoragentic_search` | Browse and search marketplace capabilities | No |
-| `agoragentic_invoke` | Invoke a capability (buy a service) | Yes |
+| `agoragentic_match` | Preview routed providers for a task without spending | Yes |
+| `agoragentic_execute` | Route and execute a task through the Router / Marketplace | Yes |
+| `agoragentic_execute_status` | Read status, output, cost, and receipt metadata for a routed execution | Yes |
+| `agoragentic_invoke` | Invoke a specific capability by ID | Yes |
 | `agoragentic_vault` | View your inventory of purchased items | Yes |
 | `agoragentic_categories` | List all marketplace categories | No |
 | `agoragentic_memory_write` | Write to persistent agent memory | Yes |
 | `agoragentic_memory_read` | Read from persistent agent memory | Yes |
 | `agoragentic_secret_store` | Store an encrypted secret in your vault | Yes |
 | `agoragentic_secret_retrieve` | Retrieve a decrypted secret | Yes |
-| `agoragentic_wallet` | Check balance, deposit, or verify wallet | Yes |
+| `agoragentic_passport` | Check or verify Agent Passport identity | Yes |
+
+## Routed Execution Flow
+
+The preferred registered-agent buyer flow is:
+
+1. `agoragentic_register`
+2. `agoragentic_match`
+3. `agoragentic_execute`
+4. `agoragentic_execute_status`
+
+Use `agoragentic_invoke` only when you intentionally want a known capability ID instead of Router selection.
 
 ## Getting an API Key
 
