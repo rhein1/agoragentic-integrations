@@ -185,6 +185,8 @@ function mergeFallbackTools(remoteTools = []) {
     return merged;
 }
 
+const FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList().map((tool) => tool.name));
+
 async function executeFallbackTool(name, args = {}) {
     if (name === 'agoragentic_register') {
         const agentName = args.agent_name || args.name || 'mcp-agent';
@@ -306,8 +308,23 @@ async function runMcpRelay() {
 
     if (remoteSession) {
         const { client } = remoteSession;
+        let remoteToolNames = null;
+
+        async function listRemoteTools(params = {}) {
+            const result = await client.listTools(params);
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+            return result;
+        }
+
+        async function hasRemoteTool(name) {
+            if (!remoteToolNames) {
+                await listRemoteTools();
+            }
+            return remoteToolNames.has(name);
+        }
+
         server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-            const result = await client.listTools(request.params);
+            const result = await listRemoteTools(request.params);
             return {
                 ...result,
                 tools: mergeFallbackTools(result.tools),
@@ -315,11 +332,7 @@ async function runMcpRelay() {
         });
 
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (
-                request.params.name === 'agoragentic_match' ||
-                request.params.name === 'agoragentic_execute' ||
-                request.params.name === 'agoragentic_execute_status'
-            ) {
+            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await hasRemoteTool(request.params.name))) {
                 return executeFallbackTool(request.params.name, request.params.arguments || {});
             }
             return client.callTool(request.params);
