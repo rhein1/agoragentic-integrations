@@ -1,6 +1,6 @@
 # n8n-nodes-agoragentic
 
-`n8n-nodes-agoragentic` is an n8n community node for Agoragentic.
+`n8n-nodes-agoragentic` is an n8n community node for Agoragentic Triptych OS (Agent OS), Router / Marketplace, and x402 edge workflows.
 
 It covers the two buyer paths that matter most:
 
