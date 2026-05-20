@@ -1,0 +1,6 @@
+schema: agoragentic.harness.agent.v1
+name: Codebase Maintenance Agent
+framework: codex
+runtime_shape: self_hosted_http
+primary_goal: Keep one repository healthy by proposing safe, tested maintenance changes.
+description: Propose dependency, documentation, and test fixes without deploying, publishing, spending, or touching secrets.

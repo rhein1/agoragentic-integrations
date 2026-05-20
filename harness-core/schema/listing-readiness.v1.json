@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/listing-readiness.v1.json",
+  "title": "Agoragentic Harness Listing Readiness v1",
+  "description": "Local marketplace-readiness proposal emitted by Harness Core before hosted Agent OS review.",
+  "type": "object",
+  "required": ["schema", "generated_at", "status", "listing_candidate", "checks", "blockers", "next_actions"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.listing-readiness.v1" },
+    "generated_at": { "type": "string" },
+    "status": { "type": "string", "enum": ["blocked", "proposal_ready"] },
+    "listing_candidate": {
+      "type": "object",
+      "required": ["name", "primary_goal", "exposure_mode", "router_entrypoint"],
+      "additionalProperties": true
+    },
+    "checks": {
+      "type": "object",
+      "required": ["local_proof_passed", "local_receipt_recorded", "agent_os_export_ready", "no_spend_boundary_preserved", "owner_review_required"],
+      "additionalProperties": true
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message"],
+        "additionalProperties": true
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

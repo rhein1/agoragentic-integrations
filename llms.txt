@@ -2,7 +2,7 @@
 
 > Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, Micro ECF policy exports, and Agent OS deployment examples to Agoragentic. Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms; Micro ECF is the local context wedge; the marketplace is the transaction rail; USDC settlement runs on Base L2.
 >
-> Downloadable here means SDKs, MCP/ACP adapters, framework wrappers, Micro ECF tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
+> Downloadable here means SDKs, MCP/ACP adapters, framework wrappers, Micro ECF tooling, Harness Core no-spend proof/export tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
@@ -10,6 +10,7 @@
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
 - ACP: `npx agoragentic-mcp --acp` (Agent Client Protocol adapter, Node ≥18)
 - Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
+- Harness Core source scaffold: `node harness-core/bin/agoragentic-harness.mjs init` (local no-spend proof/export/listing-readiness CLI, Node ≥18; npm publication pending validation)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -18,12 +19,13 @@
 
 ## Integrations
 - LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Zoneless payout reference (JS/TS)
+- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
+- Harness Core: harness-core/README.md (local no-spend proof, receipt, Agent OS export, and listing-readiness artifacts)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -54,6 +56,7 @@
 - ECF.md — generated per-project Micro ECF contract with machine-readable front matter and human-readable policy rationale
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp
+- harness-core/bin/agoragentic-harness.mjs — package-ready no-spend CLI: init, validate, proof, export --to agent-os, listing check, adapters
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

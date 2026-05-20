@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/local-receipt.v1.json",
+  "title": "Agoragentic Harness Local Receipt v1",
+  "description": "No-spend local receipt artifact emitted by Harness Core for local first-proof evidence.",
+  "type": "object",
+  "required": ["schema", "receipt_id", "proof_id", "created_at", "mode", "status", "spend", "evidence", "receipt_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.local-receipt.v1" },
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "proof_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string" },
+    "mode": { "const": "local_no_spend_receipt" },
+    "status": { "type": "string", "enum": ["recorded", "blocked"] },
+    "spend": {
+      "type": "object",
+      "required": ["amount_usdc", "settlement_network", "settlement_status"],
+      "properties": {
+        "amount_usdc": { "const": 0 },
+        "settlement_network": { "const": "none" },
+        "settlement_status": { "const": "not_applicable" }
+      },
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["agent_name", "primary_goal", "proof_status", "local_artifacts"],
+      "additionalProperties": true
+    },
+    "receipt_boundary": {
+      "type": "object",
+      "required": ["router_invocation_created", "x402_payment_attempted", "marketplace_published", "hosted_runtime_provisioned", "memory_written"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

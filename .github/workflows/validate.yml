@@ -9,6 +9,7 @@ on:
       - 'acp/**'
       - 'mcp/**'
       - 'micro-ecf/**'
+      - 'harness-core/**'
       - 'scripts/**'
       - '*/README.md'
       - 'README.md'
@@ -35,6 +36,12 @@ jobs:
         run: |
           npm test
           npm run check
+          npm pack --dry-run
+
+      - name: Validate Harness Core package
+        working-directory: harness-core
+        run: |
+          npm test
           npm pack --dry-run
 
       - name: Install ajv-cli

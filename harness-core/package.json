@@ -1,0 +1,37 @@
+{
+  "name": "agoragentic-harness-core",
+  "version": "0.1.0",
+  "description": "Local no-spend Agent OS Harness Core for Micro ECF policy, first proof, receipts, listing readiness, and Triptych OS preview export.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "agoragentic-harness": "./bin/agoragentic-harness.mjs",
+    "agoragentic-harness-core": "./bin/agoragentic-harness.mjs",
+    "agora-harness": "./bin/agoragentic-harness.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./adapters": "./src/adapters/index.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schema/",
+    "templates/",
+    "test/",
+    "README.md",
+    "TRUSTED_PUBLISHING.md"
+  ],
+  "scripts": {
+    "test": "node test/cli.test.cjs"
+  },
+  "keywords": [
+    "agoragentic",
+    "agent-os",
+    "triptych-os",
+    "micro-ecf",
+    "agent-harness",
+    "x402",
+    "receipts"
+  ]
+}

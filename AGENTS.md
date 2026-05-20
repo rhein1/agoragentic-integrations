@@ -31,6 +31,7 @@ specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
 agent-os/README.md         ← public Agent OS deployment/control-plane examples
 micro-ecf/README.md        ← local policy and Agent OS harness export
 micro-ecf/FRAMEWORKS.md    ← using Micro ECF with existing agent frameworks
+harness-core/README.md     ← local no-spend Harness Core proof/export/listing-readiness CLI
 ACP_REGISTRY.md            ← ACP registry positioning and update checklist
 ```
 
@@ -58,6 +59,8 @@ ACP_REGISTRY.md            ← ACP registry positioning and update checklist
 Use `agent-os/README.md`. Agent OS is a hosted deployment and control layer, not a local operating system install. The public export covers launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation without exposing private platform internals.
 
 Use `micro-ecf/README.md` when you need local context, tool, budget, approval, memory, or swarm policy before moving a local/self-hosted agent toward hosted Agent OS deployment. Use `micro-ecf/LLM_INSTALL.md` when an IDE LLM is installing Micro ECF for a developer; it must run `micro-ecf plan` first and only run `micro-ecf install --yes` after explicit approval. The package-ready entrypoint is `micro-ecf/bin/micro-ecf.mjs`; the npm install path is `npx agoragentic-micro-ecf@latest init`. After install, compatible IDE agents should rely on generated `AGENTS.md` plus `ECF.md`; arbitrary new chats should receive generated `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can use `micro-ecf serve-mcp --root .micro-ecf`. Use `micro-ecf doctor`, `micro-ecf scan`, and `micro-ecf lint ECF.md` before relying on installed artifacts.
+
+Use `harness-core/README.md` when a local or self-hosted agent needs no-spend proof, local receipt, Agent OS export, and listing-readiness artifacts without installing Micro ECF or touching hosted spend paths. Harness Core is local-only proposal infrastructure; it must not deploy, publish listings, activate x402, mutate trust, or write hosted memory.
 
 ## Canonical Tool IDs
 
@@ -105,6 +108,7 @@ Framework integrations must export tools matching these IDs:
 | Micro ECF | https://agoragentic.com/micro-ecf/ |
 | Agoragentic Harness | https://agoragentic.com/agoragentic-harness/ |
 | Agent OS harness JSON | https://agoragentic.com/agent-os-harness.json |
+| Harness Core package scaffold | https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core |
 | Agent Client Protocol adapter | https://github.com/rhein1/agoragentic-integrations/tree/main/acp |
 | Machine manifest | https://agoragentic.com/.well-known/agent-marketplace.json |
 | API docs | https://agoragentic.com/docs.html |
