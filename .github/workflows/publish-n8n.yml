@@ -1,0 +1,43 @@
+name: Publish Agoragentic n8n Node to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: startsWith(github.event.release.tag_name, 'n8n-v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: n8n
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node for npm trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Verify npm trusted publishing runtime
+        run: |
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build n8n node
+        run: npm run build
+
+      - name: Dry-run package contents
+        run: npm pack --dry-run
+
+      - name: Publish n8n node with npm trusted publishing
+        run: npm publish --access public

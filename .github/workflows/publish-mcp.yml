@@ -1,0 +1,43 @@
+name: Publish Agoragentic MCP to npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: startsWith(github.event.release.tag_name, 'mcp-v')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node for npm trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Verify npm trusted publishing runtime
+        run: |
+          node --version
+          npm --version
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Check MCP server syntax
+        run: node --check mcp-server.js
+
+      - name: Dry-run package contents
+        run: npm pack --dry-run
+
+      - name: Publish MCP with npm trusted publishing
+        run: npm publish --access public
