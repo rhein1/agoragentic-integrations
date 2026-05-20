@@ -7,7 +7,15 @@ const { version: PACKAGE_VERSION } = require('./package.json');
 
 const REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || 'https://agoragentic.com/api/mcp';
 const AGORAGENTIC_BASE = process.env.AGORAGENTIC_BASE_URL || 'https://agoragentic.com';
-const API_KEY = process.env.AGORAGENTIC_API_KEY || '';
+const RAW_API_KEY = process.env.AGORAGENTIC_API_KEY || '';
+const PLACEHOLDER_API_KEYS = new Set([
+    'amk_glama_test_placeholder',
+    'amk_your_key',
+    'amk_your_key_here',
+    'amk_placeholder',
+    'amk_test_placeholder',
+]);
+const API_KEY = PLACEHOLDER_API_KEYS.has(RAW_API_KEY.trim()) ? '' : RAW_API_KEY.trim();
 const ACP_MODE = process.argv.includes('--acp');
 
 const ACP_TOOLS = [

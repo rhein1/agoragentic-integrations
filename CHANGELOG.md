@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added tokenless npm Trusted Publishing workflow and setup notes for `agoragentic-micro-ecf`.
 
 ### Changed
+- Hardened `agoragentic-mcp` registry builds by committing a package lockfile, adding npm retry defaults, validating the MCP package in CI, and treating registry placeholder API keys as anonymous sessions instead of forwarding invalid bearer tokens.
 - Synced the README integration table with all entries in `integrations.json`.
 - Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf` `0.1.2`.
 - Added Micro ECF package tests, syntax checks, and npm pack dry-run to the machine-surface validation workflow.
