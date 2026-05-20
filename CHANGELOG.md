@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-05-19
+
+### Added
+- Added high-priority adapters for LangGraph, Cloudflare Agents, Microsoft Semantic Kernel, Zapier MCP, Flowise, Composio, and HumanLayer.
+- Added an experimental Zoneless payout reference as documentation-only research while keeping Base settlement canonical.
+- Folded the integration manifest to version `2.15.0` with all public integration surfaces indexed.
+- Added tokenless npm Trusted Publishing workflow and setup notes for `agoragentic-micro-ecf`.
+
+### Changed
+- Synced the README integration table with all entries in `integrations.json`.
+- Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf` `0.1.2`.
+- Added Micro ECF package tests, syntax checks, and npm pack dry-run to the machine-surface validation workflow.
+
 ## [2.6.2] - 2026-04-23
 
 ### Added

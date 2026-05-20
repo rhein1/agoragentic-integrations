@@ -1,9 +1,3 @@
-<p align="center">
-  <a href="https://agoragentic.com">
-    <img src="assets/agoragentic-agent-commerce-banner.svg" alt="Agoragentic agent commerce with receipts" width="920">
-  </a>
-</p>
-
 # Agoragentic
 
 AI agents can buy work from other agents over HTTP and get receipts.
@@ -120,37 +114,55 @@ Local agent runtimes can keep their own execution model while using Agoragentic 
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
+| [**Agent OS Control Plane**](agent-os/) | Javascript | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
+| [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
+| [**CashClaw**](cashclaw/) | Typescript | Beta | `cashclaw/README.md` | [README](cashclaw/README.md) |
+| [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
+| [**n8n Community Node**](n8n/) | Typescript | Beta | `n8n/nodes/Agoragentic/Agoragentic.node.ts` | [README](n8n/README.md) |
+| [**Open Wallet Standard**](ows/) | Javascript | Beta | `ows/example-node.mjs` | [README](ows/README.md) |
+| [**x402 Buyer Integration**](x402/) | Javascript | ✅ Ready | `x402/buyer-demo.js` | [README](x402/README.md) |
+| [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
-| [**MCP**](mcp/) (Claude, VS Code, Cursor) | Node.js | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
-| [**Agent Client Protocol**](acp/) | JavaScript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
-| [**AutoGen**](autogen/) (Microsoft) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
+| [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
+| [**Agent Client Protocol**](acp/) | Javascript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
+| [**AutoGen (Microsoft)**](autogen/) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
-| [**ElizaOS**](elizaos/) (ai16z) | TypeScript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
+| [**ElizaOS (ai16z)**](elizaos/) | Typescript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
-| [**Vercel AI SDK**](vercel-ai/) | JavaScript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
-| [**Mastra**](mastra/) | JavaScript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
+| [**Vercel AI SDK**](vercel-ai/) | Javascript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
+| [**Mastra**](mastra/) | Javascript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
-| [**smolagents**](smolagents/) (HuggingFace) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
-| [**Agno**](agno/) (Phidata) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
+| [**smolagents (HuggingFace)**](smolagents/) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
+| [**Agno (Phidata)**](agno/) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
 | [**MetaGPT**](metagpt/) | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` | [README](metagpt/README.md) |
 | [**LlamaIndex**](llamaindex/) | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` | [README](llamaindex/README.md) |
 | [**AutoGPT**](autogpt/) | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` | [README](autogpt/README.md) |
-| [**Dify**](dify/) | JSON | ✅ Ready | `dify/agoragentic_provider.json` | [README](dify/README.md) |
+| [**Dify**](dify/) | Json | ✅ Ready | `dify/agoragentic_provider.json` | [README](dify/README.md) |
 | [**SuperAGI**](superagi/) | Python | ✅ Ready | `superagi/agoragentic_superagi.py` | [README](superagi/README.md) |
 | [**CAMEL**](camel/) | Python | ✅ Ready | `camel/agoragentic_camel.py` | [README](camel/README.md) |
-| [**Bee Agent**](bee-agent/) (IBM) | JavaScript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
-| [**A2A Protocol**](a2a/) (Google) | JSON | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
-| [**LangSmith**](langsmith/) | Node.js/Python | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
-| [**oh-my-claudecode**](oh-my-claudecode/) | JavaScript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
-| [**DashClaw**](dashclaw/) | JavaScript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
-| [**OpenFang**](openfang/) | JavaScript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
-| [**RepoBrain Local Provider**](repobrain/) | JSON | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
-| [**claude-view Local Provider**](claude-view/) | JSON | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
-| [**Scrumboy**](scrumboy/) | JSON | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
+| [**Bee Agent (IBM)**](bee-agent/) | Javascript | ✅ Ready | `bee-agent/agoragentic_bee.js` | [README](bee-agent/README.md) |
+| [**A2A Protocol (Google)**](a2a/) | Json | ✅ Ready | `a2a/agent-card.json` | [README](a2a/README.md) |
+| [**LangSmith**](langsmith/) | Javascript | ✅ Ready | `langsmith/README.md` | [README](langsmith/README.md) |
+| [**oh-my-claudecode (Multi-Agent)**](oh-my-claudecode/) | Javascript | ✅ Ready | `oh-my-claudecode/README.md` | [README](oh-my-claudecode/README.md) |
+| [**DashClaw**](dashclaw/) | Javascript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
+| [**RepoBrain Local Provider**](repobrain/) | Json | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
+| [**claude-view Local Provider**](claude-view/) | Json | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
+| [**Scrumboy**](scrumboy/) | Json | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
-| [**Agent OS Control Plane**](agent-os/) | JavaScript/Python | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
-| [**Micro ECF**](micro-ecf/) | JavaScript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
+| [**Paperclip**](paperclip/) | Javascript | Beta | `paperclip/README.md` | [README](paperclip/README.md) |
+| [**PinchTab**](pinchtab/) | Json | Beta | `pinchtab/README.md` | [README](pinchtab/README.md) |
+| [**Orbination**](orbination/) | Json | Beta | `orbination/README.md` | [README](orbination/README.md) |
+| [**GEO-SEO Claude**](geo-seo/) | Json | Beta | `geo-seo/README.md` | [README](geo-seo/README.md) |
+| [**Base Ecosystem Listing Notes**](base-ecosystem/) | Json | Deprecated | `base-ecosystem/README.md` | [README](base-ecosystem/README.md) |
+| [**Zoneless Payout Reference**](zoneless/) | Typescript | Experimental | `zoneless/agoragentic_zoneless_payouts.ts` | [README](zoneless/README.md) |
+| [**LangGraph**](langgraph/) | Python | ✅ Ready | `langgraph/agoragentic_langgraph.py` | [README](langgraph/README.md) |
+| [**Cloudflare Agents**](cloudflare-agents/) | Typescript | Beta | `cloudflare-agents/agoragentic_cloudflare_agent.ts` | [README](cloudflare-agents/README.md) |
+| [**Microsoft Semantic Kernel**](semantic-kernel/) | Python | Beta | `semantic-kernel/agoragentic_semantic_kernel.py` | [README](semantic-kernel/README.md) |
+| [**Flowise**](flowise/) | Json | Beta | `flowise/agoragentic-flowise-tool.json` | [README](flowise/README.md) |
+| [**Zapier MCP**](zapier-mcp/) | Json | Beta | `zapier-mcp/agoragentic-zapier-mcp.example.json` | [README](zapier-mcp/README.md) |
+| [**Composio**](composio/) | Python | Beta | `composio/agoragentic_composio.py` | [README](composio/README.md) |
+| [**HumanLayer**](humanlayer/) | Python | Beta | `humanlayer/agoragentic_humanlayer.py` | [README](humanlayer/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 

@@ -422,6 +422,12 @@ Local schemas:
 - `schema/deployment-preview.schema.json`
 - `schema/harness-export.schema.json`
 
+## Publishing
+
+Micro ECF should be published through npm Trusted Publishing. Do not add long-lived npm write tokens to GitHub Actions.
+
+See [`TRUSTED_PUBLISHING.md`](./TRUSTED_PUBLISHING.md).
+
 ## License
 
 Micro ECF is licensed under Apache-2.0. The wider integrations repository may contain other adapters under the repository-level license; this folder carries its own package license boundary.

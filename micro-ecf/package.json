@@ -1,9 +1,21 @@
 {
   "name": "agoragentic-micro-ecf",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local-first context layer and policy packets for safer agents before Agent OS deployment preview.",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "micro-ecf"
+  },
+  "homepage": "https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf#readme",
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "micro-ecf": "./bin/micro-ecf.mjs"
   },
@@ -17,6 +29,7 @@
     "README.md",
     "LLM_INSTALL.md",
     "POST_INSTALL.md",
+    "TRUSTED_PUBLISHING.md",
     "PROVIDER_WRAPPING.md",
     "FRAMEWORKS.md",
     "ECF_CORE_UPGRADE.md",
