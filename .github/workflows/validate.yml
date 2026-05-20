@@ -31,6 +31,13 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Validate MCP package
+        working-directory: mcp
+        run: |
+          npm ci --omit=dev
+          node --check mcp-server.js
+          npm pack --dry-run
+
       - name: Validate Micro ECF package
         working-directory: micro-ecf
         run: |
