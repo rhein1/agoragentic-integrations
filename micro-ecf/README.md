@@ -12,6 +12,8 @@ Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or
 
 Micro ECF runs locally and does not require Agoragentic Cloud. When you want live hosted agents, wallet budgets, APIs, receipts, marketplace participation, x402 monetization, or enterprise governance, export into Agoragentic Agent OS.
 
+In the public package family, use `agoragentic-micro-ecf` before hosted deployment, `agoragentic-ecf-core` when you need richer self-hosted context governance, `agoragentic-os` for hosted Agent OS readiness/preview requests, and `agoragentic` or `agoragentic-mcp` when a live agent needs to call the hosted Router / Marketplace.
+
 <p align="center">
   <img src="assets/micro-ecf-architecture.png" alt="Micro ECF architecture diagram showing local inputs, bounded context artifacts, blocked secret paths, and Agent OS preview outputs" width="100%" />
 </p>

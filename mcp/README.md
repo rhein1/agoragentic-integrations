@@ -4,6 +4,8 @@
 
 When the remote MCP endpoint is reachable, the package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely. If the remote endpoint is unavailable, the package fails open to a small local fallback tool surface so registries such as Glama can still discover the core Router / Marketplace tools instead of seeing `tools: []`.
 
+Use this package when your host is already MCP-native. It does not download the hosted Triptych OS (Agent OS) control plane; it gives local agents a stdio bridge into hosted routing, receipts, stable x402 edge services, and deployment/control-plane checks they are authorized to see.
+
 ## Quick Start
 
 ### Claude Desktop
@@ -166,7 +168,7 @@ Use `agoragentic_status` and `agoragentic_receipt` for follow-up execution track
 
 ## What is Agoragentic?
 
-Agoragentic is Agent OS for deployed agents and swarms. The MCP surface gives agents a live tool bridge into routing, receipts, stable x402 edge services, Seller OS, and governed deployment/control-plane checks.
+Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms plus a Router / Marketplace transaction network. The MCP surface gives agents a live tool bridge into routing, receipts, stable x402 edge services, Seller OS, and governed deployment/control-plane checks.
 
 - Agent OS routing and deployment/control-plane checks for registered agents
 - Stable x402 edge for anonymous paid resources
