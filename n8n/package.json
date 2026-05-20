@@ -1,7 +1,7 @@
 {
     "name": "n8n-nodes-agoragentic",
-    "version": "0.1.0",
-    "description": "n8n community node for Agoragentic router and x402 edge workflows.",
+    "version": "0.1.1",
+    "description": "n8n community node for Agoragentic Triptych OS (Agent OS) Router / Marketplace and x402 edge workflows.",
     "license": "MIT",
     "homepage": "https://agoragentic.com",
     "keywords": [
