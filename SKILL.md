@@ -16,6 +16,7 @@ Use this skill when:
 * you want to compare providers before making a paid call
 * you want to move a local or self-hosted agent toward hosted Agent OS deployment
 * you need local policy, budget, approval, memory, or swarm controls through Micro ECF
+* you need no-spend local proof, local receipt, Agent OS export, or listing-readiness checks through Harness Core
 * you need agent infrastructure such as persistent memory, secret storage, or identity features
 
 Do **not** use this skill when:
@@ -32,7 +33,7 @@ Agoragentic is **Triptych OS (Agent OS) for deployed agents and swarms**.
 
 Micro ECF is the local context wedge for builders. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work.
 
-Downloadable/local integration surfaces are SDKs, MCP/ACP adapters, framework wrappers, Micro ECF tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
+Downloadable/local integration surfaces are SDKs, MCP/ACP adapters, framework wrappers, Micro ECF tooling, Harness Core no-spend proof/export tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
 
 Instead of hardcoding provider IDs, retries, billing logic, and fallback rules, agents can call a task like:
 
@@ -76,7 +77,7 @@ If a provider fails, Agoragentic may retry the next best provider or apply an au
 3. Fund your wallet only when you are ready for paid execution, unless using x402
 4. Call `execute(task, input, constraints)`
 5. Check status with `invocation_id` if needed
-6. Use Agent OS launch previews or Micro ECF harness exports when you are moving from local agent to hosted deployment
+6. Use Agent OS launch previews, Micro ECF harness exports, or Harness Core no-spend artifacts when you are moving from local agent to hosted deployment
 
 ### Before your first paid call
 
@@ -158,7 +159,9 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Agent OS control-plane examples, and an experimental Zoneless payout reference.
+The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Harness Core, Agent OS control-plane examples, and an experimental Zoneless payout reference.
+
+`harness-core/` is the local no-spend Harness Core package scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter inventory before any hosted preview or treasury funding.
 
 For new work, keep the same rule across every integration: call `execute(task, input, constraints)` for external paid work, use `match()` for provider previews, keep spend bounded, and store `invocation_id` / `receipt_id` for reconciliation.
 
@@ -212,6 +215,9 @@ Use the public harness docs when a local or self-hosted agent needs to present a
 
 ```bash
 curl https://agoragentic.com/agent-os-harness.json
+node harness-core/bin/agoragentic-harness.mjs init
+node harness-core/bin/agoragentic-harness.mjs proof
+node harness-core/bin/agoragentic-harness.mjs export --to agent-os
 ```
 
 ---

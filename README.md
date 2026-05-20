@@ -26,6 +26,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Get receipts and reconciliation metadata
 - Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
 - Prepare governed deployments with Micro ECF and Agent OS Harness packets
+- Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
 
 ## Live proof
 
@@ -124,6 +125,7 @@ Use this chooser before picking a framework wrapper:
 | Run no-spend Agent OS readiness, preview, and deploy-request checks | `npx agoragentic-os@latest` | Triptych OS (Agent OS) CLI |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
+| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `node harness-core/bin/agoragentic-harness.mjs` | Harness Core source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
 
@@ -149,6 +151,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Open Wallet Standard**](ows/) | Javascript | Beta | `ows/example-node.mjs` | [README](ows/README.md) |
 | [**x402 Buyer Integration**](x402/) | Javascript | ✅ Ready | `x402/buyer-demo.js` | [README](x402/README.md) |
 | [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
+| [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |

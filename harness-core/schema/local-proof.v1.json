@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/local-proof.v1.json",
+  "title": "Agoragentic Harness Local Proof v1",
+  "description": "No-spend local proof artifact emitted by Harness Core before Agent OS preview.",
+  "type": "object",
+  "required": ["schema", "proof_id", "created_at", "mode", "status", "agent", "checks", "trap_scan_results", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.local-proof.v1" },
+    "proof_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string" },
+    "mode": { "const": "local_no_spend" },
+    "status": { "type": "string", "enum": ["passed", "blocked"] },
+    "agent": {
+      "type": "object",
+      "required": ["name", "framework", "primary_goal"],
+      "additionalProperties": true
+    },
+    "plan_preview": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "checks": {
+      "type": "object",
+      "required": ["validation_ok", "trap_scan_clear", "no_spend", "owner_approval_required_for_side_effects"],
+      "additionalProperties": true
+    },
+    "trap_scan_results": {
+      "type": "object",
+      "required": ["blocked", "matches", "instruction_injection_allowed"],
+      "additionalProperties": true
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["spend_usdc", "call_router_execute", "publish_marketplace_listing", "enable_x402", "provision_hosted_runtime", "mutate_trust", "write_memory"],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

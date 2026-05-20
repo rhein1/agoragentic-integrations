@@ -1,0 +1,50 @@
+schema: agoragentic.harness.policy.v1
+context_policy:
+  allowed_sources:
+    - api_docs
+    - owner_notes
+    - public_docs
+  denied_sources:
+    - production_credentials
+    - private_customer_data
+  retention: review_before_memory_write
+  redaction: redact_tokens_and_payload_samples
+tool_policy:
+  allowed_tools:
+    - read_docs
+    - validate_schema
+    - dry_run_request
+    - marketplace_execute_quote_preview
+  denied_tools:
+    - live_post_without_approval
+    - spend_funds
+    - publish_listing
+  side_effects: approval_required
+budget_policy:
+  treasury_required: true
+  max_daily_spend_usdc: 3
+  approval_required_above_usdc: 1
+  recommended_start_reserve_usdc: 15
+approval_policy:
+  autonomous:
+    - read
+    - schema_check
+    - draft
+    - quote_preview
+  human_gated:
+    - live_post
+    - publish
+    - spend
+memory_policy:
+  write_gate: after_resolution_and_review
+  secret_storage: reference_only
+swarm_policy:
+  max_agents: 2
+  delegation: role_scoped
+deployment_policy:
+  hosting_target: self_hosted_http
+  template_id: self_hosted_router_advocate
+  runtime_lane: customer_managed_http_runtime
+  exposure_mode: private_only
+  first_proof_required: true
+  paid_canary_required: true

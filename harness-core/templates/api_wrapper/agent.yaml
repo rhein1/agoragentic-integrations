@@ -1,0 +1,6 @@
+schema: agoragentic.harness.agent.v1
+name: API Wrapper Agent
+framework: mcp
+runtime_shape: self_hosted_http
+primary_goal: Wrap one external API as a governed agent service with owner-reviewed exposure.
+description: Build a policy-bounded API wrapper proposal before Agent OS preview.

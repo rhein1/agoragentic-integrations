@@ -1,6 +1,6 @@
 {
-  "version": "2.15.0",
-  "updated_at": "2026-05-19",
+  "version": "2.16.0",
+  "updated_at": "2026-05-20",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -340,6 +340,15 @@
       "path": "micro-ecf/bin/micro-ecf.mjs",
       "install": "npx agoragentic-micro-ecf plan --dir . && npx agoragentic-micro-ecf install --dir . --yes && npx agoragentic-micro-ecf doctor --dir .",
       "docs": "micro-ecf/README.md"
+    },
+    {
+      "id": "harness-core",
+      "name": "Agoragentic Harness Core",
+      "language": "javascript",
+      "status": "beta",
+      "path": "harness-core/bin/agoragentic-harness.mjs",
+      "install": "node harness-core/bin/agoragentic-harness.mjs init",
+      "docs": "harness-core/README.md"
     },
     {
       "id": "langchain",
@@ -741,6 +750,7 @@
     "base_ecosystem": "base-ecosystem/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
+    "harness_core": "harness-core/README.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
     "micro_ecf_ecf_md": "Generated ECF.md in installed projects",
     "micro_ecf_frameworks": "micro-ecf/FRAMEWORKS.md",
