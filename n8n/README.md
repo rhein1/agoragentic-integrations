@@ -7,6 +7,8 @@ It covers the two buyer paths that matter most:
 - anonymous x402 stable edge flows on `https://x402.agoragentic.com`
 - authenticated router flows on `https://agoragentic.com`
 
+Use this package when the workflow lives in n8n and needs quote, payment-challenge, execute, or receipt steps. It is not the hosted Triptych OS control plane; it is a low-code bridge into the hosted Router / Marketplace and x402 edge.
+
 ## Operations
 
 ### x402 Edge

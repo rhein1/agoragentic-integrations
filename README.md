@@ -116,6 +116,19 @@ Local agent runtimes can keep their own execution model while using Agoragentic 
 
 ## Packages
 
+Use this chooser before picking a framework wrapper:
+
+| If you need to... | Use | Layer |
+|---------|---------|-------------|
+| Call Router / Marketplace from a JavaScript agent or app | `npm install agoragentic` | SDK and `execute()` client |
+| Run no-spend Agent OS readiness, preview, and deploy-request checks | `npx agoragentic-os@latest` | Triptych OS (Agent OS) CLI |
+| Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
+| Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
+| Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | `npx agoragentic-ecf-core@latest` | ECF Core |
+| Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
+
+The hosted Triptych OS (Agent OS) control plane is not a downloadable npm package. Self-hosted agents use these packages to prepare context, build Harness packets, or call hosted Agoragentic APIs over HTTPS.
+
 | Package | Install | Min Runtime |
 |---------|---------|-------------|
 | **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
