@@ -30,6 +30,15 @@ import {
   writeMicroEcfMcpConfig,
   writeMicroEcfResidentStatus,
 } from '../src/resident.mjs';
+import {
+  beginWorklog,
+  buildHandoff,
+  buildWorklogStatus,
+  checkpointWorklog,
+  finishWorklog,
+  planDocsSync,
+  writeHandoff,
+} from '../src/work-memory.mjs';
 import { startStdioMcpServer } from '../src/mcp-server.mjs';
 
 function parseFlags(argv) {
@@ -63,6 +72,11 @@ Usage:
   micro-ecf status [--dir .] [--output-dir .micro-ecf] [--write]
   micro-ecf context-pack [task] [--dir .] [--output-dir .micro-ecf] [--write]
   micro-ecf mcp-config --target codex [--dir .] [--output-dir .micro-ecf] [--write] [--install-codex]
+  micro-ecf worklog begin --goal "..." [--dir .] [--output-dir .micro-ecf]
+  micro-ecf worklog checkpoint --summary "..." [--dir .] [--output-dir .micro-ecf]
+  micro-ecf worklog finish --summary "..." [--commit abc123] [--tests "npm test"] [--dir .]
+  micro-ecf docs-sync plan [--dir .] [--output-dir .micro-ecf]
+  micro-ecf handoff [--dir .] [--output-dir .micro-ecf] [--write]
   micro-ecf lint [ECF.md]
   micro-ecf diff <before ECF.md> <after ECF.md>
   micro-ecf spec [--json]
@@ -222,6 +236,42 @@ function commandMcpConfig(flags) {
     : buildMicroEcfMcpConfig(options);
 }
 
+function workMemoryOptions(flags) {
+  return {
+    targetDir: flags.dir || process.cwd(),
+    outputDir: flags['output-dir'] || null,
+    goal: flags.goal,
+    summary: flags.summary,
+    workId: flags.id || flags['work-id'],
+    decisions: flags.decisions,
+    files: flags.files,
+    validation: flags.validation,
+    tests: flags.tests,
+    unfinished: flags.unfinished,
+    nextPrompt: flags['next-prompt'],
+    commit: flags.commit,
+  };
+}
+
+function commandWorklog(flags) {
+  const [subcommand] = flags._;
+  if (subcommand === 'begin') return beginWorklog(workMemoryOptions(flags));
+  if (subcommand === 'checkpoint') return checkpointWorklog(workMemoryOptions(flags));
+  if (subcommand === 'finish') return finishWorklog(workMemoryOptions(flags));
+  if (!subcommand || subcommand === 'status') return buildWorklogStatus(workMemoryOptions(flags));
+  throw new Error(`Unknown worklog subcommand: ${subcommand}`);
+}
+
+function commandDocsSync(flags) {
+  const [subcommand] = flags._;
+  if (subcommand === 'plan') return planDocsSync(workMemoryOptions(flags));
+  throw new Error(`Unknown docs-sync subcommand: ${subcommand || '<missing>'}`);
+}
+
+function commandHandoff(flags) {
+  return flags.write ? writeHandoff(workMemoryOptions(flags)) : buildHandoff(workMemoryOptions(flags));
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h') {
@@ -240,6 +290,9 @@ async function main() {
   else if (command === 'status') output(commandStatus(flags));
   else if (command === 'context-pack') output(commandContextPack(flags));
   else if (command === 'mcp-config') output(commandMcpConfig(flags));
+  else if (command === 'worklog') output(commandWorklog(flags));
+  else if (command === 'docs-sync') output(commandDocsSync(flags));
+  else if (command === 'handoff') output(commandHandoff(flags));
   else if (command === 'lint') output(lintEcfMd(flags._[0] || 'ECF.md'));
   else if (command === 'diff') {
     if (!flags._[0] || !flags._[1]) throw new Error('diff requires two ECF.md file paths.');

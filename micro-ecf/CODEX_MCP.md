@@ -37,6 +37,9 @@ The generated server exposes:
 - `micro_ecf.get_policy`
 - `micro_ecf.build_packet`
 - `micro_ecf.export_agent_os_harness`
+- `micro_ecf.worklog_status`
+- `micro_ecf.handoff`
+- `micro_ecf.work_memory`
 
 ## Boundary
 

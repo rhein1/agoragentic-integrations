@@ -225,6 +225,9 @@ export function buildMicroEcfResidentStatus(options = {}) {
         'micro_ecf.build_packet',
         'micro_ecf.context_pack',
         'micro_ecf.status',
+        'micro_ecf.worklog_status',
+        'micro_ecf.handoff',
+        'micro_ecf.work_memory',
       ],
     },
     context_pack: {
@@ -286,6 +289,8 @@ export function buildMicroEcfContextPack(options = {}) {
         'MICRO_ECF_LLM_BOOTSTRAP.md',
         '.micro-ecf/context-packet.json',
         '.micro-ecf/policy-summary.json',
+        '.micro-ecf/worklog/latest-summary.md',
+        '.micro-ecf/next-session.md',
       ],
       disclosure: 'Micro ECF resident context is local-only and must be refreshed from local artifacts; it is not hidden global memory.',
       refresh_commands: [
@@ -293,6 +298,8 @@ export function buildMicroEcfContextPack(options = {}) {
         'micro-ecf build-packet --output-dir .micro-ecf',
         'micro-ecf status --dir . --write',
         'micro-ecf context-pack --dir . --write',
+        'micro-ecf docs-sync plan --dir .',
+        'micro-ecf handoff --write',
       ],
     },
     authority_boundary: authorityBoundary(),

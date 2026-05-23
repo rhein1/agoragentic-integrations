@@ -14,6 +14,11 @@ import {
   buildMicroEcfContextPack,
   buildMicroEcfResidentStatus,
 } from './resident.mjs';
+import {
+  buildHandoff,
+  buildWorklogStatus,
+  readWorklogArtifacts,
+} from './work-memory.mjs';
 
 const TOOLS = [
   {
@@ -81,6 +86,30 @@ const TOOLS = [
       properties: {
         task: { type: 'string' },
       },
+    },
+  },
+  {
+    name: 'micro_ecf.worklog_status',
+    description: 'Read local Micro ECF worklog current/history/checkpoint status. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'micro_ecf.handoff',
+    description: 'Read local Micro ECF next-session handoff summary. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'micro_ecf.work_memory',
+    description: 'Read local worklog, docs-sync plan, handoff, and latest summary artifacts. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
     },
   },
 ];
@@ -203,6 +232,27 @@ async function callTool(name, args, root) {
       targetDir: path.dirname(root),
       outputDir: root,
       task: args.task,
+    });
+  }
+
+  if (name === 'micro_ecf.worklog_status') {
+    return buildWorklogStatus({
+      targetDir: path.dirname(root),
+      outputDir: root,
+    });
+  }
+
+  if (name === 'micro_ecf.handoff') {
+    return buildHandoff({
+      targetDir: path.dirname(root),
+      outputDir: root,
+    });
+  }
+
+  if (name === 'micro_ecf.work_memory') {
+    return readWorklogArtifacts({
+      targetDir: path.dirname(root),
+      outputDir: root,
     });
   }
 
