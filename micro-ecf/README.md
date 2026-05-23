@@ -33,6 +33,8 @@ That gives the builder:
 
 Micro ECF does not replace source-code inspection. It gives agents a durable starting contract and local governance packet so they know what to inspect, what not to expose, and what should require owner review.
 
+The resident memory layer adds continuity for work that spans multiple chats or IDE restarts. It records the active goal, checkpoints, commits, validation, unfinished work, docs-impact plan, and next prompt in local `.micro-ecf/` files that a future agent can inspect. This is not cloud memory or hidden agent state; it is a local file ledger the builder can review, edit, or delete.
+
 ## Syrin User Roadmap
 
 Use the Syrin guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
@@ -116,7 +118,11 @@ ECF.md
 .micro-ecf/resident-status.json
 .micro-ecf/context-pack.json
 .micro-ecf/worklog/current.json
+.micro-ecf/worklog/history.jsonl
+.micro-ecf/worklog/checkpoints.jsonl
+.micro-ecf/worklog/latest-summary.md
 .micro-ecf/docs-sync-plan.json
+.micro-ecf/handoff.json
 .micro-ecf/handoff.md
 .micro-ecf/next-session.md
 AGENTS.md
@@ -274,6 +280,14 @@ micro-ecf handoff --write
 
 The worklog and handoff artifacts are local-only. `docs-sync plan` proposes documentation updates but does not edit docs. Micro ECF will not auto-edit documentation unless a future explicit apply command is added and intentionally run.
 
+For builders, the resident files answer five practical questions at the start of the next session:
+
+- What goal was active?
+- What changed and which files were involved?
+- Which validation ran?
+- Which docs probably need updates?
+- What exact next prompt should the next agent continue from?
+
 For a single local refresh before closing an IDE or Codex session, use:
 
 ```bash
@@ -281,6 +295,12 @@ micro-ecf resident refresh --dir .
 ```
 
 `resident refresh` writes only `.micro-ecf/` resident artifacts: `resident-status.json`, `context-pack.json`, `docs-sync-plan.json`, `handoff.md`, `handoff.json`, and `next-session.md`. It does not deploy, spend, mutate wallets, settle x402, publish marketplace listings, provision hosted runtime, or expose Full ECF private internals.
+
+If Codex or another IDE supports local MCP tools, `micro-ecf serve-mcp --root .micro-ecf` exposes read-only resident tools for future sessions:
+
+- `micro_ecf.worklog_status`
+- `micro_ecf.handoff`
+- `micro_ecf.work_memory`
 
 ## Local Workflow
 
