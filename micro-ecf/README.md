@@ -117,6 +117,7 @@ ECF.md
 .micro-ecf/context-pack.json
 .micro-ecf/worklog/current.json
 .micro-ecf/docs-sync-plan.json
+.micro-ecf/handoff.md
 .micro-ecf/next-session.md
 AGENTS.md
 MICRO_ECF_LLM_BOOTSTRAP.md
@@ -249,6 +250,8 @@ micro-ecf export --agent-os
 micro-ecf serve-mcp
 micro-ecf status --write
 micro-ecf context-pack --write
+micro-ecf resident status
+micro-ecf resident refresh
 micro-ecf mcp-config --target codex --write
 micro-ecf worklog begin --goal "..."
 micro-ecf worklog checkpoint --summary "..."
@@ -269,7 +272,15 @@ micro-ecf docs-sync plan --dir .
 micro-ecf handoff --write
 ```
 
-The worklog and handoff artifacts are local-only. `docs-sync plan` proposes documentation updates but does not edit docs.
+The worklog and handoff artifacts are local-only. `docs-sync plan` proposes documentation updates but does not edit docs. Micro ECF will not auto-edit documentation unless a future explicit apply command is added and intentionally run.
+
+For a single local refresh before closing an IDE or Codex session, use:
+
+```bash
+micro-ecf resident refresh --dir .
+```
+
+`resident refresh` writes only `.micro-ecf/` resident artifacts: `resident-status.json`, `context-pack.json`, `docs-sync-plan.json`, `handoff.md`, `handoff.json`, and `next-session.md`. It does not deploy, spend, mutate wallets, settle x402, publish marketplace listings, provision hosted runtime, or expose Full ECF private internals.
 
 ## Local Workflow
 

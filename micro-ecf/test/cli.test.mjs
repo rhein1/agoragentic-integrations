@@ -203,6 +203,37 @@ test('resident status and context pack expose local always-on handoff artifacts'
     assert.equal(pack.summary.source_counts.included_sources > 0, true);
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-pack.json')));
 
+    const residentStatus = run(['resident', 'status', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(residentStatus.schema, 'agoragentic.micro-ecf.resident-status.v1');
+    assert.equal(residentStatus.ok, true);
+    assert.equal(residentStatus.authority_boundary.local_only, true);
+    assert.equal(residentStatus.authority_boundary.no_deploy, true);
+    assert.equal(residentStatus.authority_boundary.no_spend, true);
+    assert.equal(residentStatus.authority_boundary.full_ecf_private_internals_included, false);
+
+    const refresh = run(['resident', 'refresh', '--dir', tmp, '--task', 'refresh resident continuity'], microEcfRoot);
+    assert.equal(refresh.schema, 'agoragentic.micro-ecf.resident-refresh.v1');
+    assert.equal(refresh.ok, true);
+    assert.equal(refresh.context_pack.task, 'refresh resident continuity');
+    assert.equal(refresh.authority_boundary.local_only, true);
+    assert.equal(refresh.authority_boundary.deploy_enabled, false);
+    assert.equal(refresh.authority_boundary.spend_enabled, false);
+    assert.equal(refresh.authority_boundary.wallet_mutation_enabled, false);
+    assert.equal(refresh.authority_boundary.x402_settlement_enabled, false);
+    assert.equal(refresh.authority_boundary.marketplace_publication_enabled, false);
+    assert.equal(refresh.authority_boundary.hosted_runtime_enabled, false);
+    assert.equal(refresh.authority_boundary.full_ecf_private_internals_included, false);
+    assert.ok(refresh.status.status_path.endsWith('.micro-ecf/resident-status.json'));
+    assert.ok(refresh.context_pack.context_pack_path.endsWith('.micro-ecf/context-pack.json'));
+    assert.ok(refresh.docs_sync_plan.plan_path.endsWith('.micro-ecf/docs-sync-plan.json'));
+    assert.ok(refresh.handoff.handoff_path.endsWith('.micro-ecf/handoff.md'));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'resident-status.json')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-pack.json')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'docs-sync-plan.json')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'handoff.md')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'handoff.json')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'next-session.md')));
+
     const codexHome = path.join(tmp, 'codex-home');
     const mcpConfig = run([
       'mcp-config',
@@ -441,6 +472,7 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   const guide = fs.readFileSync(path.join(microEcfRoot, 'PROVIDER_WRAPPING.md'), 'utf8');
   const postInstall = fs.readFileSync(path.join(microEcfRoot, 'POST_INSTALL.md'), 'utf8');
   const codexMcp = fs.readFileSync(path.join(microEcfRoot, 'CODEX_MCP.md'), 'utf8');
+  const readme = fs.readFileSync(path.join(microEcfRoot, 'README.md'), 'utf8');
   assert.match(guide, /does not replace your RAG/i);
   assert.match(guide, /raw_secret_content_allowed/);
   assert.match(guide, /fail closed/i);
@@ -453,9 +485,14 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.match(postInstall, /micro-ecf worklog begin/);
   assert.match(postInstall, /micro-ecf docs-sync plan/);
   assert.match(postInstall, /micro-ecf handoff --write/);
+  assert.match(postInstall, /micro-ecf resident refresh --dir \./);
+  assert.match(readme, /micro-ecf resident refresh/);
+  assert.match(readme, /does not deploy, spend, mutate wallets/);
   assert.match(codexMcp, /Resident MCP for Codex/);
   assert.match(codexMcp, /micro_ecf\.context_pack/);
   assert.match(codexMcp, /micro_ecf\.work_memory/);
+  assert.match(codexMcp, /resident refresh/);
+  assert.match(codexMcp, /auto-edit docs/);
 
   const examples = [
     ['context-provider-rag.policy.json', 'retrieval_context', 'local_rag'],
