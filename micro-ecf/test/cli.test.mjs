@@ -171,6 +171,82 @@ test('LLM install flow is read-only until explicit approval', () => {
   }
 });
 
+test('resident status and context pack expose local always-on handoff artifacts', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-resident-'));
+
+  try {
+    write(path.join(tmp, 'docs', 'api.md'), '# API\n\nThis local service exposes a supervised lead workflow.');
+
+    const installed = run(['install', '--dir', tmp, '--yes'], microEcfRoot);
+    assert.equal(installed.ok, true);
+
+    const status = run(['status', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(status.schema, 'agoragentic.micro-ecf.resident-status.v1');
+    assert.equal(status.ok, true);
+    assert.equal(status.resident_state, 'ready');
+    assert.equal(status.authority_boundary.local_only, true);
+    assert.equal(status.authority_boundary.no_spend, true);
+    assert.equal(status.authority_boundary.no_deploy, true);
+    assert.equal(status.authority_boundary.no_x402_settlement, true);
+    assert.equal(status.authority_boundary.full_ecf_private_internals_included, false);
+    assert.ok(status.mcp.tools.includes('micro_ecf.status'));
+    assert.ok(status.mcp.tools.includes('micro_ecf.context_pack'));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'resident-status.json')));
+
+    const pack = run(['context-pack', 'review current task', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(pack.schema, 'agoragentic.micro-ecf.context-pack.v1');
+    assert.equal(pack.ok, true);
+    assert.equal(pack.task, 'review current task');
+    assert.equal(pack.authority_boundary.no_wallet_mutation, true);
+    assert.equal(pack.authority_boundary.no_marketplace_publication, true);
+    assert.equal(pack.assistant_bootstrap.read_order.includes('AGENTS.md'), true);
+    assert.equal(pack.summary.source_counts.included_sources > 0, true);
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-pack.json')));
+
+    const mcpRequests = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.status',
+          arguments: {},
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.context_pack',
+          arguments: { task: 'mcp task' },
+        },
+      },
+    ].map((item) => JSON.stringify(item)).join('\n');
+    const mcpOutput = execFileSync(process.execPath, [
+      cli,
+      'serve-mcp',
+      '--root',
+      path.join(tmp, '.micro-ecf'),
+    ], {
+      input: `${mcpRequests}\n`,
+      encoding: 'utf8',
+    });
+    const responses = mcpOutput.trim().split('\n').map((line) => JSON.parse(line));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.status'));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.context_pack'));
+    const mcpStatus = JSON.parse(responses[2].result.content[0].text);
+    assert.equal(mcpStatus.resident_state, 'ready');
+    const mcpPack = JSON.parse(responses[3].result.content[0].text);
+    assert.equal(mcpPack.task, 'mcp task');
+    assert.equal(mcpPack.authority_boundary.no_cloud_call, true);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   const packageJson = readJson(path.join(microEcfRoot, 'package.json'));
   assert.equal(packageJson.name, 'agoragentic-micro-ecf');

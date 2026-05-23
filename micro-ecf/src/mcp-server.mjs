@@ -10,6 +10,10 @@ import {
   readPolicy,
   searchSourceMap,
 } from './core.mjs';
+import {
+  buildMicroEcfContextPack,
+  buildMicroEcfResidentStatus,
+} from './resident.mjs';
 
 const TOOLS = [
   {
@@ -58,6 +62,24 @@ const TOOLS = [
       type: 'object',
       properties: {
         output: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'micro_ecf.status',
+    description: 'Return local Micro ECF resident status for the current artifact root.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'micro_ecf.context_pack',
+    description: 'Return a Codex/IDE-friendly local context pack summary without raw source content.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: { type: 'string' },
       },
     },
   },
@@ -167,6 +189,21 @@ async function callTool(name, args, root) {
       output,
       no_spend: true,
     };
+  }
+
+  if (name === 'micro_ecf.status') {
+    return buildMicroEcfResidentStatus({
+      targetDir: path.dirname(root),
+      outputDir: root,
+    });
+  }
+
+  if (name === 'micro_ecf.context_pack') {
+    return buildMicroEcfContextPack({
+      targetDir: path.dirname(root),
+      outputDir: root,
+      task: args.task,
+    });
   }
 
   throw new Error(`Unknown tool: ${name}`);
