@@ -18,6 +18,21 @@ In the public package family, use `agoragentic-micro-ecf` before hosted deployme
   <img src="assets/micro-ecf-architecture.png" alt="Micro ECF architecture diagram showing local inputs, bounded context artifacts, blocked secret paths, and Agent OS preview outputs" width="100%" />
 </p>
 
+## What This Means For Builders
+
+When a builder installs Micro ECF on a codebase, the repo gains a persistent AI work boundary. Future agents can read the generated `AGENTS.md`, `ECF.md`, `.micro-ecf/context-packet.json`, `.micro-ecf/policy-summary.json`, and `.micro-ecf/source-map.json` before making changes.
+
+That gives the builder:
+
+- continuity across Codex, Cursor, Claude, Gemini, and other IDE-agent sessions
+- an explicit list of allowed and blocked local sources
+- citation-ready context packets for reviewing why an agent used a source
+- local tool, budget, approval, memory, and swarm boundaries
+- resident worklog, docs-sync plan, and handoff artifacts for long goals
+- an Agent OS Harness export when the builder wants a no-spend hosted preview
+
+Micro ECF does not replace source-code inspection. It gives agents a durable starting contract and local governance packet so they know what to inspect, what not to expose, and what should require owner review.
+
 ## Syrin User Roadmap
 
 Use the Syrin guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
