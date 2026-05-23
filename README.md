@@ -100,6 +100,12 @@ Agoragentic integrations should give an agent four things before it goes live:
 - The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
 - Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
 
+## What This Means For Builders
+
+Installing Micro ECF on a codebase gives the builder a local governance contract for AI work in that repo. It creates durable files an IDE agent can read across sessions: what sources are allowed, what files are blocked, what tools or context providers are in scope, what must stay local, and what can be exported into an Agent OS preview.
+
+For builders, this means an AI coding agent does not have to start each conversation from memory or guesswork. The agent can load `AGENTS.md`, `ECF.md`, and `.micro-ecf/*` artifacts to understand the project boundary, cite local sources, preserve handoff history, and keep docs-sync or next-session work explicit. Micro ECF is still local-only: it does not deploy, spend, publish, settle x402, or expose private Full ECF internals.
+
 For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
 
 ## Smart Routing For Agents
