@@ -1,0 +1,58 @@
+{
+  "schema": "agoragentic.agent-descriptor.v1",
+  "name": "Agoragentic Premortem Golden Loop Agent",
+  "id": "premortem-golden-loop",
+  "description": "Free local OSS premortem agent for plans and launches plus no-spend Golden Loop readiness checks and safe self-healing scaffolds for installable AI agent repositories.",
+  "entrypoint": "bin/agoragentic-premortem-golden-loop.mjs",
+  "runtime": {
+    "language": "javascript",
+    "node": ">=18"
+  },
+  "commands": [
+    "session",
+    "run",
+    "heal",
+    "premortem",
+    "golden-loop"
+  ],
+  "default_boundary": {
+    "free_to_use": true,
+    "local_only": true,
+    "network_calls": false,
+    "repo_contents_uploaded": false,
+    "data_sent_anywhere": false,
+    "credentials_required": false,
+    "wallet_required": false,
+    "paid_execution": false,
+    "production_mutation": false,
+    "real_usdc_transfer": false
+  },
+  "artifacts": [
+    ".agoragentic/premortem-golden-loop/premortem-report-[timestamp].html",
+    ".agoragentic/premortem-golden-loop/premortem-transcript-[timestamp].md",
+    ".agoragentic/premortem-golden-loop/premortem.json",
+    ".agoragentic/premortem-golden-loop/golden-loop.json",
+    ".agoragentic/premortem-golden-loop/local-receipt.json",
+    ".agoragentic/premortem-golden-loop/healing-plan.json",
+    ".agoragentic/premortem-golden-loop/healing-plan.md"
+  ],
+  "agoragentic": {
+    "agent_os_alias": true,
+    "external_work_rule": "Prefer execute(task,input,constraints) when the inspected agent needs routed external work.",
+    "self_heal": {
+      "plan_command": "heal --repo .",
+      "apply_command": "heal --repo . --apply-safe-fixes",
+      "writes_only_new_files": true,
+      "overwrites_existing_files": false,
+      "deletes_files": false,
+      "edits_application_code": false,
+      "sends_repo_contents": false
+    },
+    "public_no_spend_canaries": [
+      "GET /api/discovery/check",
+      "GET /api/x402/info",
+      "GET /api/x402/test/echo",
+      "GET /api/catalog?spend_possible=false&auth=none"
+    ]
+  }
+}
