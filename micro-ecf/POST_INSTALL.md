@@ -78,6 +78,20 @@ micro-ecf serve-mcp --root .micro-ecf
 
 Then configure that command as a persistent local MCP server in the IDE. This gives future chats a local Micro ECF tool surface instead of relying only on pasted instructions.
 
+For Codex, generate a workspace-specific resident MCP config:
+
+```bash
+micro-ecf mcp-config --target codex --dir . --write
+```
+
+To intentionally install it into `CODEX_HOME/config.toml` or `~/.codex/config.toml`, run:
+
+```bash
+micro-ecf mcp-config --target codex --dir . --write --install-codex
+```
+
+Restart Codex after installation. Codex loads MCP servers at startup. See [`CODEX_MCP.md`](./CODEX_MCP.md).
+
 ## 3. Ask For Source-Status Disclosure
 
 At the start of important work, ask:

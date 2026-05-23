@@ -27,6 +27,7 @@
     "assets/",
     "simulator/",
     "README.md",
+    "CODEX_MCP.md",
     "LLM_INSTALL.md",
     "POST_INSTALL.md",
     "TRUSTED_PUBLISHING.md",

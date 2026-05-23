@@ -24,8 +24,10 @@ import {
 } from '../src/core.mjs';
 import {
   buildMicroEcfContextPack,
+  buildMicroEcfMcpConfig,
   buildMicroEcfResidentStatus,
   writeMicroEcfContextPack,
+  writeMicroEcfMcpConfig,
   writeMicroEcfResidentStatus,
 } from '../src/resident.mjs';
 import { startStdioMcpServer } from '../src/mcp-server.mjs';
@@ -39,7 +41,7 @@ function parseFlags(argv) {
       continue;
     }
     const key = arg.slice(2);
-    if (key === 'force' || key === 'agent-os' || key === 'json' || key === 'yes' || key === 'write') {
+    if (key === 'force' || key === 'agent-os' || key === 'json' || key === 'yes' || key === 'write' || key === 'install-codex') {
       flags[key] = true;
     } else {
       flags[key] = argv[++i];
@@ -60,6 +62,7 @@ Usage:
   micro-ecf doctor [--dir .] [--output-dir .micro-ecf]
   micro-ecf status [--dir .] [--output-dir .micro-ecf] [--write]
   micro-ecf context-pack [task] [--dir .] [--output-dir .micro-ecf] [--write]
+  micro-ecf mcp-config --target codex [--dir .] [--output-dir .micro-ecf] [--write] [--install-codex]
   micro-ecf lint [ECF.md]
   micro-ecf diff <before ECF.md> <after ECF.md>
   micro-ecf spec [--json]
@@ -205,6 +208,20 @@ function commandContextPack(flags) {
   return flags.write ? writeMicroEcfContextPack(options) : buildMicroEcfContextPack(options);
 }
 
+function commandMcpConfig(flags) {
+  const options = {
+    targetDir: flags.dir || process.cwd(),
+    outputDir: flags['output-dir'] || null,
+    target: flags.target || 'codex',
+    codexHome: flags['codex-home'] || null,
+    serverName: flags['server-name'] || null,
+    installCodex: flags['install-codex'] === true,
+  };
+  return (flags.write || flags['install-codex'])
+    ? writeMicroEcfMcpConfig(options)
+    : buildMicroEcfMcpConfig(options);
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h') {
@@ -222,6 +239,7 @@ async function main() {
   else if (command === 'doctor') output(commandDoctor(flags));
   else if (command === 'status') output(commandStatus(flags));
   else if (command === 'context-pack') output(commandContextPack(flags));
+  else if (command === 'mcp-config') output(commandMcpConfig(flags));
   else if (command === 'lint') output(lintEcfMd(flags._[0] || 'ECF.md'));
   else if (command === 'diff') {
     if (!flags._[0] || !flags._[1]) throw new Error('diff requires two ECF.md file paths.');

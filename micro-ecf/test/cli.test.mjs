@@ -203,6 +203,45 @@ test('resident status and context pack expose local always-on handoff artifacts'
     assert.equal(pack.summary.source_counts.included_sources > 0, true);
     assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-pack.json')));
 
+    const codexHome = path.join(tmp, 'codex-home');
+    const mcpConfig = run([
+      'mcp-config',
+      '--target',
+      'codex',
+      '--dir',
+      tmp,
+      '--write',
+      '--codex-home',
+      codexHome,
+      '--server-name',
+      'test_micro_ecf',
+    ], microEcfRoot);
+    assert.equal(mcpConfig.schema, 'agoragentic.micro-ecf.mcp-config.v1');
+    assert.equal(mcpConfig.server_name, 'test_micro_ecf');
+    assert.match(mcpConfig.toml, /\[mcp_servers\.test_micro_ecf\]/);
+    assert.match(mcpConfig.toml, /serve-mcp/);
+    assert.equal(mcpConfig.codex_config_updated, false);
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'codex-mcp.toml')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'CODEX_MCP_INSTALL.md')));
+
+    const installedConfig = run([
+      'mcp-config',
+      '--target',
+      'codex',
+      '--dir',
+      tmp,
+      '--install-codex',
+      '--codex-home',
+      codexHome,
+      '--server-name',
+      'test_micro_ecf',
+    ], microEcfRoot);
+    assert.equal(installedConfig.codex_config_updated, true);
+    const codexConfig = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
+    assert.match(codexConfig, /BEGIN Micro ECF resident test_micro_ecf/);
+    assert.match(codexConfig, /\[mcp_servers\.test_micro_ecf\]/);
+    assert.match(codexConfig, /micro-ecf\.mjs/);
+
     const mcpRequests = [
       { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
       { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
@@ -256,6 +295,7 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.equal(packageJson.engines.node, '>=18');
   assert.ok(packageJson.files.includes('assets/'));
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));
+  assert.ok(packageJson.files.includes('CODEX_MCP.md'));
   assert.ok(packageJson.files.includes('PROVIDER_WRAPPING.md'));
   assert.ok(packageJson.files.includes('FRAMEWORKS.md'));
   assert.ok(packageJson.files.includes('ECF_CORE_UPGRADE.md'));
@@ -269,6 +309,8 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.ok(providerTypes.includes('code_graph'));
 
   const guide = fs.readFileSync(path.join(microEcfRoot, 'PROVIDER_WRAPPING.md'), 'utf8');
+  const postInstall = fs.readFileSync(path.join(microEcfRoot, 'POST_INSTALL.md'), 'utf8');
+  const codexMcp = fs.readFileSync(path.join(microEcfRoot, 'CODEX_MCP.md'), 'utf8');
   assert.match(guide, /does not replace your RAG/i);
   assert.match(guide, /raw_secret_content_allowed/);
   assert.match(guide, /fail closed/i);
@@ -277,6 +319,9 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.match(upgrade, /ECF Core/);
   assert.match(upgrade, /Agent OS/);
   assert.match(upgrade, /Full ECF private internals/);
+  assert.match(postInstall, /micro-ecf mcp-config --target codex/);
+  assert.match(codexMcp, /Resident MCP for Codex/);
+  assert.match(codexMcp, /micro_ecf\.context_pack/);
 
   const examples = [
     ['context-provider-rag.policy.json', 'retrieval_context', 'local_rag'],
