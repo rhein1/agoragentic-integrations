@@ -98,6 +98,11 @@ ECF.md
 .micro-ecf/source-map.json
 .micro-ecf/harness-export.json
 .micro-ecf/deployment-preview.json
+.micro-ecf/resident-status.json
+.micro-ecf/context-pack.json
+.micro-ecf/worklog/current.json
+.micro-ecf/docs-sync-plan.json
+.micro-ecf/next-session.md
 AGENTS.md
 MICRO_ECF_LLM_BOOTSTRAP.md
 ```
@@ -227,7 +232,29 @@ micro-ecf index ./docs
 micro-ecf build-packet
 micro-ecf export --agent-os
 micro-ecf serve-mcp
+micro-ecf status --write
+micro-ecf context-pack --write
+micro-ecf mcp-config --target codex --write
+micro-ecf worklog begin --goal "..."
+micro-ecf worklog checkpoint --summary "..."
+micro-ecf worklog finish --summary "..."
+micro-ecf docs-sync plan
+micro-ecf handoff --write
 ```
+
+## Resident Work Memory
+
+Use the resident worklog when a goal spans multiple IDE or Codex conversations:
+
+```bash
+micro-ecf worklog begin --goal "Implement local proof runner"
+micro-ecf worklog checkpoint --summary "CLI and receipt verifier are drafted" --validation "npm test"
+micro-ecf worklog finish --summary "Committed local proof runner" --commit abc123 --tests "npm test" --next-prompt "Harden receipt verification"
+micro-ecf docs-sync plan --dir .
+micro-ecf handoff --write
+```
+
+The worklog and handoff artifacts are local-only. `docs-sync plan` proposes documentation updates but does not edit docs.
 
 ## Local Workflow
 

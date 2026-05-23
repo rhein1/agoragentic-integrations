@@ -171,6 +171,251 @@ test('LLM install flow is read-only until explicit approval', () => {
   }
 });
 
+test('resident status and context pack expose local always-on handoff artifacts', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-resident-'));
+
+  try {
+    write(path.join(tmp, 'docs', 'api.md'), '# API\n\nThis local service exposes a supervised lead workflow.');
+
+    const installed = run(['install', '--dir', tmp, '--yes'], microEcfRoot);
+    assert.equal(installed.ok, true);
+
+    const status = run(['status', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(status.schema, 'agoragentic.micro-ecf.resident-status.v1');
+    assert.equal(status.ok, true);
+    assert.equal(status.resident_state, 'ready');
+    assert.equal(status.authority_boundary.local_only, true);
+    assert.equal(status.authority_boundary.no_spend, true);
+    assert.equal(status.authority_boundary.no_deploy, true);
+    assert.equal(status.authority_boundary.no_x402_settlement, true);
+    assert.equal(status.authority_boundary.full_ecf_private_internals_included, false);
+    assert.ok(status.mcp.tools.includes('micro_ecf.status'));
+    assert.ok(status.mcp.tools.includes('micro_ecf.context_pack'));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'resident-status.json')));
+
+    const pack = run(['context-pack', 'review current task', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(pack.schema, 'agoragentic.micro-ecf.context-pack.v1');
+    assert.equal(pack.ok, true);
+    assert.equal(pack.task, 'review current task');
+    assert.equal(pack.authority_boundary.no_wallet_mutation, true);
+    assert.equal(pack.authority_boundary.no_marketplace_publication, true);
+    assert.equal(pack.assistant_bootstrap.read_order.includes('AGENTS.md'), true);
+    assert.equal(pack.summary.source_counts.included_sources > 0, true);
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'context-pack.json')));
+
+    const codexHome = path.join(tmp, 'codex-home');
+    const mcpConfig = run([
+      'mcp-config',
+      '--target',
+      'codex',
+      '--dir',
+      tmp,
+      '--write',
+      '--codex-home',
+      codexHome,
+      '--server-name',
+      'test_micro_ecf',
+    ], microEcfRoot);
+    assert.equal(mcpConfig.schema, 'agoragentic.micro-ecf.mcp-config.v1');
+    assert.equal(mcpConfig.server_name, 'test_micro_ecf');
+    assert.match(mcpConfig.toml, /\[mcp_servers\.test_micro_ecf\]/);
+    assert.match(mcpConfig.toml, /serve-mcp/);
+    assert.equal(mcpConfig.codex_config_updated, false);
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'codex-mcp.toml')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'CODEX_MCP_INSTALL.md')));
+
+    const installedConfig = run([
+      'mcp-config',
+      '--target',
+      'codex',
+      '--dir',
+      tmp,
+      '--install-codex',
+      '--codex-home',
+      codexHome,
+      '--server-name',
+      'test_micro_ecf',
+    ], microEcfRoot);
+    assert.equal(installedConfig.codex_config_updated, true);
+    const codexConfig = fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
+    assert.match(codexConfig, /BEGIN Micro ECF resident test_micro_ecf/);
+    assert.match(codexConfig, /\[mcp_servers\.test_micro_ecf\]/);
+    assert.match(codexConfig, /micro-ecf\.mjs/);
+
+    const mcpRequests = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.status',
+          arguments: {},
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.context_pack',
+          arguments: { task: 'mcp task' },
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.worklog_status',
+          arguments: {},
+        },
+      },
+    ].map((item) => JSON.stringify(item)).join('\n');
+    const mcpOutput = execFileSync(process.execPath, [
+      cli,
+      'serve-mcp',
+      '--root',
+      path.join(tmp, '.micro-ecf'),
+    ], {
+      input: `${mcpRequests}\n`,
+      encoding: 'utf8',
+    });
+    const responses = mcpOutput.trim().split('\n').map((line) => JSON.parse(line));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.status'));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.context_pack'));
+    const mcpStatus = JSON.parse(responses[2].result.content[0].text);
+    assert.equal(mcpStatus.resident_state, 'ready');
+    const mcpPack = JSON.parse(responses[3].result.content[0].text);
+    assert.equal(mcpPack.task, 'mcp task');
+    assert.equal(mcpPack.authority_boundary.no_cloud_call, true);
+    const mcpWorklog = JSON.parse(responses[4].result.content[0].text);
+    assert.equal(mcpWorklog.schema, 'agoragentic.micro-ecf.worklog-status.v1');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('resident work memory records goals, docs-sync plans, and handoffs without editing docs', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-worklog-'));
+
+  try {
+    write(path.join(tmp, 'README.md'), '# Fixture\n');
+    write(path.join(tmp, 'docs', 'API_REFERENCE.md'), '# API\n');
+    const installed = run(['install', '--dir', tmp, '--yes'], microEcfRoot);
+    assert.equal(installed.ok, true);
+
+    const begin = run([
+      'worklog',
+      'begin',
+      '--dir',
+      tmp,
+      '--goal',
+      'Add local proof runner',
+      '--files',
+      'bin/micro-ecf.mjs,src/work-memory.mjs',
+    ], microEcfRoot);
+    assert.equal(begin.ok, true);
+    assert.equal(begin.current.status, 'active');
+    assert.equal(begin.current.goal, 'Add local proof runner');
+    assert.equal(begin.current.authority_boundary.docs_auto_edit_enabled, false);
+
+    const checkpoint = run([
+      'worklog',
+      'checkpoint',
+      '--dir',
+      tmp,
+      '--summary',
+      'CLI shape complete',
+      '--validation',
+      'npm test',
+    ], microEcfRoot);
+    assert.equal(checkpoint.ok, true);
+    assert.equal(checkpoint.checkpoint.summary, 'CLI shape complete');
+
+    const finished = run([
+      'worklog',
+      'finish',
+      '--dir',
+      tmp,
+      '--summary',
+      'Committed local proof runner',
+      '--commit',
+      'abc123',
+      '--tests',
+      'npm test',
+      '--unfinished',
+      'Harden receipt verifier',
+      '--next-prompt',
+      'feat(core): harden receipt verifier',
+    ], microEcfRoot);
+    assert.equal(finished.ok, true);
+    assert.equal(finished.finished.status, 'finished');
+    assert.deepEqual(finished.finished.commits, ['abc123']);
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'worklog', 'latest-summary.md')));
+
+    const plan = run(['docs-sync', 'plan', '--dir', tmp], microEcfRoot);
+    assert.equal(plan.schema, 'agoragentic.micro-ecf.docs-sync-plan.v1');
+    assert.equal(plan.docs_auto_edit_enabled, false);
+    assert.equal(plan.apply_supported, false);
+    assert.ok(plan.impact.candidates.some((candidate) => candidate.path === 'README.md' && candidate.exists));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'docs-sync-plan.json')));
+
+    const handoff = run(['handoff', '--dir', tmp, '--write'], microEcfRoot);
+    assert.equal(handoff.schema, 'agoragentic.micro-ecf.handoff.v1');
+    assert.equal(handoff.work.next_prompt, 'feat(core): harden receipt verifier');
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'handoff.md')));
+    assert.ok(fs.existsSync(path.join(tmp, '.micro-ecf', 'next-session.md')));
+    const handoffText = fs.readFileSync(path.join(tmp, '.micro-ecf', 'next-session.md'), 'utf8');
+    assert.match(handoffText, /Add local proof runner/);
+    assert.match(handoffText, /feat\(core\): harden receipt verifier/);
+    assert.match(handoffText, /does not deploy, spend, mutate wallets/);
+
+    const memoryRequests = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.work_memory',
+          arguments: {},
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'micro_ecf.handoff',
+          arguments: {},
+        },
+      },
+    ].map((item) => JSON.stringify(item)).join('\n');
+    const memoryOutput = execFileSync(process.execPath, [
+      cli,
+      'serve-mcp',
+      '--root',
+      path.join(tmp, '.micro-ecf'),
+    ], {
+      input: `${memoryRequests}\n`,
+      encoding: 'utf8',
+    });
+    const responses = memoryOutput.trim().split('\n').map((line) => JSON.parse(line));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.work_memory'));
+    assert.ok(responses[1].result.tools.some((tool) => tool.name === 'micro_ecf.handoff'));
+    const memory = JSON.parse(responses[2].result.content[0].text);
+    assert.equal(memory.status.current.goal, 'Add local proof runner');
+    assert.equal(memory.authority_boundary.docs_auto_edit_enabled, false);
+    const mcpHandoff = JSON.parse(responses[3].result.content[0].text);
+    assert.equal(mcpHandoff.work.status, 'finished');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   const packageJson = readJson(path.join(microEcfRoot, 'package.json'));
   assert.equal(packageJson.name, 'agoragentic-micro-ecf');
@@ -180,6 +425,7 @@ test('package metadata keeps Micro ECF local-first and Apache licensed', () => {
   assert.equal(packageJson.engines.node, '>=18');
   assert.ok(packageJson.files.includes('assets/'));
   assert.ok(packageJson.files.includes('POST_INSTALL.md'));
+  assert.ok(packageJson.files.includes('CODEX_MCP.md'));
   assert.ok(packageJson.files.includes('PROVIDER_WRAPPING.md'));
   assert.ok(packageJson.files.includes('FRAMEWORKS.md'));
   assert.ok(packageJson.files.includes('ECF_CORE_UPGRADE.md'));
@@ -193,6 +439,8 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.ok(providerTypes.includes('code_graph'));
 
   const guide = fs.readFileSync(path.join(microEcfRoot, 'PROVIDER_WRAPPING.md'), 'utf8');
+  const postInstall = fs.readFileSync(path.join(microEcfRoot, 'POST_INSTALL.md'), 'utf8');
+  const codexMcp = fs.readFileSync(path.join(microEcfRoot, 'CODEX_MCP.md'), 'utf8');
   assert.match(guide, /does not replace your RAG/i);
   assert.match(guide, /raw_secret_content_allowed/);
   assert.match(guide, /fail closed/i);
@@ -201,6 +449,13 @@ test('context provider docs and examples keep Micro ECF as a governance wrapper'
   assert.match(upgrade, /ECF Core/);
   assert.match(upgrade, /Agent OS/);
   assert.match(upgrade, /Full ECF private internals/);
+  assert.match(postInstall, /micro-ecf mcp-config --target codex/);
+  assert.match(postInstall, /micro-ecf worklog begin/);
+  assert.match(postInstall, /micro-ecf docs-sync plan/);
+  assert.match(postInstall, /micro-ecf handoff --write/);
+  assert.match(codexMcp, /Resident MCP for Codex/);
+  assert.match(codexMcp, /micro_ecf\.context_pack/);
+  assert.match(codexMcp, /micro_ecf\.work_memory/);
 
   const examples = [
     ['context-provider-rag.policy.json', 'retrieval_context', 'local_rag'],

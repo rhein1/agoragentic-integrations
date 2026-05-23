@@ -78,6 +78,20 @@ micro-ecf serve-mcp --root .micro-ecf
 
 Then configure that command as a persistent local MCP server in the IDE. This gives future chats a local Micro ECF tool surface instead of relying only on pasted instructions.
 
+For Codex, generate a workspace-specific resident MCP config:
+
+```bash
+micro-ecf mcp-config --target codex --dir . --write
+```
+
+To intentionally install it into `CODEX_HOME/config.toml` or `~/.codex/config.toml`, run:
+
+```bash
+micro-ecf mcp-config --target codex --dir . --write --install-codex
+```
+
+Restart Codex after installation. Codex loads MCP servers at startup. See [`CODEX_MCP.md`](./CODEX_MCP.md).
+
 ## 3. Ask For Source-Status Disclosure
 
 At the start of important work, ask:
@@ -110,7 +124,23 @@ micro-ecf index ./docs --output-dir .micro-ecf
 micro-ecf index ./src --output-dir .micro-ecf
 ```
 
-## 5. Preview In Agent OS Only When Ready
+## 5. Maintain Work Memory Across Sessions
+
+Use the local worklog when a goal spans multiple conversations:
+
+```bash
+micro-ecf worklog begin --goal "Add local proof runner"
+micro-ecf worklog checkpoint --summary "Schemas and CLI are done" --validation "npm test"
+micro-ecf worklog finish --summary "Committed local proof runner" --commit abc123 --tests "npm test" --next-prompt "Harden receipt verifier"
+micro-ecf docs-sync plan --dir .
+micro-ecf handoff --write
+```
+
+This writes local artifacts under `.micro-ecf/worklog/`, plus `.micro-ecf/docs-sync-plan.json`, `.micro-ecf/handoff.md`, and `.micro-ecf/next-session.md`.
+
+The docs-sync command only creates a plan. It does not edit `WRAPUP.md`, `DOCUMENTATION_INDEX.md`, API docs, or README files.
+
+## 6. Preview In Agent OS Only When Ready
 
 The harness export is no-spend and non-provisioning:
 
@@ -122,7 +152,7 @@ AGORAGENTIC_API_KEY=amk_your_key npx agoragentic-os@latest deploy create --file 
 
 Use `readiness` and `preview` for no-spend checks. Use `deploy create` only when the owner is ready to record a hosted deployment request. Runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
 
-## 6. Upgrade To ECF Core When Static Packets Are Not Enough
+## 7. Upgrade To ECF Core When Static Packets Are Not Enough
 
 Micro ECF is the lightweight local packet wedge. If a project needs richer self-hosted context governance, deterministic grounding eval, or active local MCP context serving, move to ECF Core instead of overbuilding Micro ECF.
 
@@ -143,7 +173,7 @@ ecf-core serve-mcp .ecf-core
 
 See [`ECF_CORE_UPGRADE.md`](./ECF_CORE_UPGRADE.md).
 
-## 7. Keep The Boundary Clear
+## 8. Keep The Boundary Clear
 
 Micro ECF is local-first and open-source. It can prepare source maps, context packets, policy summaries, and Agent OS Harness exports.
 
