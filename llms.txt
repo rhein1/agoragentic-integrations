@@ -11,6 +11,7 @@
 - ACP: `npx agoragentic-mcp --acp` (Agent Client Protocol adapter, Node ≥18)
 - Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
 - Harness Core source scaffold: `node harness-core/bin/agoragentic-harness.mjs init` (local no-spend proof/export/listing-readiness CLI, Node ≥18; npm publication pending validation)
+- Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -19,13 +20,14 @@
 
 ## Integrations
 - LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Zoneless payout reference (JS/TS)
+- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
 - Harness Core: harness-core/README.md (local no-spend proof, receipt, Agent OS export, and listing-readiness artifacts)
+- Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -57,6 +59,7 @@
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp
 - harness-core/bin/agoragentic-harness.mjs — package-ready no-spend CLI: init, validate, proof, export --to agent-os, listing check, adapters
+- premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs — free local no-spend CLI: session, premortem, golden-loop, run, heal, HTML reports, transcripts, JSON/Markdown receipts, and additive self-heal plans
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

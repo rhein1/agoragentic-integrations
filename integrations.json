@@ -1,6 +1,6 @@
 {
-  "version": "2.16.0",
-  "updated_at": "2026-05-20",
+  "version": "2.17.0",
+  "updated_at": "2026-05-23",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -44,6 +44,12 @@
       "name": "agoragentic-micro-ecf",
       "install": "npx agoragentic-micro-ecf init",
       "registry": "https://www.npmjs.com/package/agoragentic-micro-ecf",
+      "min_node": "18"
+    },
+    "premortem_golden_loop": {
+      "name": "agoragentic-premortem-golden-loop",
+      "install": "node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/premortem-golden-loop",
       "min_node": "18"
     }
   },
@@ -349,6 +355,15 @@
       "path": "harness-core/bin/agoragentic-harness.mjs",
       "install": "node harness-core/bin/agoragentic-harness.mjs init",
       "docs": "harness-core/README.md"
+    },
+    {
+      "id": "premortem-golden-loop",
+      "name": "Premortem Golden Loop Agent",
+      "language": "javascript",
+      "status": "beta",
+      "path": "premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs",
+      "install": "node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . && node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs heal --repo .",
+      "docs": "premortem-golden-loop/README.md"
     },
     {
       "id": "langchain",
@@ -751,6 +766,8 @@
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
     "harness_core": "harness-core/README.md",
+    "premortem_golden_loop": "premortem-golden-loop/README.md",
+    "premortem_prompt": "premortem-golden-loop/PROMPT.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
     "micro_ecf_ecf_md": "Generated ECF.md in installed projects",
     "micro_ecf_frameworks": "micro-ecf/FRAMEWORKS.md",

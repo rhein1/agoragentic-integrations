@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
 - Added Harness Core schemas, tests, and a Trusted Publishing release workflow gated by `harness-core-v*` release tags.
+- Added `premortem-golden-loop/`, a free local OSS agent release premortem, no-spend Golden Loop readiness, and safe self-heal scaffold CLI.
+- Added Premortem Golden Loop discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`.
 - Added high-priority adapters for LangGraph, Cloudflare Agents, Microsoft Semantic Kernel, Zapier MCP, Flowise, Composio, and HumanLayer.
 - Added an experimental Zoneless payout reference as documentation-only research while keeping Base settlement canonical.
 - Folded the integration manifest to version `2.15.0` with all public integration surfaces indexed.

@@ -1,0 +1,47 @@
+{
+  "name": "agoragentic-premortem-golden-loop",
+  "version": "0.1.0",
+  "description": "Free local OSS premortem, self-heal, and no-spend Golden Loop readiness CLI for plans, launches, and installable AI agent repositories.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "agoragentic-premortem-golden-loop": "./bin/agoragentic-premortem-golden-loop.mjs",
+    "agoragentic-premortem": "./bin/agoragentic-premortem-golden-loop.mjs",
+    "agoragentic-golden-loop": "./bin/agoragentic-premortem-golden-loop.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "agent.json",
+    "PROMPT.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check bin/agoragentic-premortem-golden-loop.mjs && node --check src/core.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agoragentic",
+    "agent-os",
+    "ai-agents",
+    "premortem",
+    "golden-loop",
+    "self-heal",
+    "x402",
+    "receipts",
+    "oss"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "premortem-golden-loop"
+  },
+  "homepage": "https://agoragentic.com",
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  }
+}

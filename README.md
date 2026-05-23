@@ -27,6 +27,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
 - Prepare governed deployments with Micro ECF and Agent OS Harness packets
 - Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
+- Run local release premortems, no-spend Golden Loop readiness checks, and additive self-heal plans before publishing an OSS agent
 
 ## Live proof
 
@@ -126,6 +127,7 @@ Use this chooser before picking a framework wrapper:
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
 | Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `node harness-core/bin/agoragentic-harness.mjs` | Harness Core source scaffold |
+| Run a local release premortem and safe self-heal plan before publishing an OSS agent | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
 
@@ -138,6 +140,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
 | **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
+| **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
 
 ## Available Integrations
 
@@ -152,6 +155,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**x402 Buyer Integration**](x402/) | Javascript | ✅ Ready | `x402/buyer-demo.js` | [README](x402/README.md) |
 | [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
 | [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
+| [**Premortem Golden Loop Agent**](premortem-golden-loop/) | Javascript | Beta | `premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | [README](premortem-golden-loop/README.md) |
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
@@ -195,6 +199,19 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**HumanLayer**](humanlayer/) | Python | Beta | `humanlayer/agoragentic_humanlayer.py` | [README](humanlayer/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
+
+## Premortem Golden Loop Agent
+
+Use this before committing to a plan, publishing an installable agent repo, or enabling hosted deployment or paid execution. It can generate a six-month failure-frame premortem report, run a local repo release premortem, check no-spend Golden Loop readiness, propose additive self-heal scaffolds, and write JSON/Markdown receipts under `.agoragentic/premortem-golden-loop/`.
+
+```bash
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs session --plan "Launch an OSS AI agent" --audience "AI agent builders" --success "builders run it and revise a launch plan"
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs heal --repo .
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs heal --repo . --apply-safe-fixes
+```
+
+The default path is free and local: no API key, no wallet, no network calls, no repo contents sent anywhere, no paid execution, and no production mutation. `heal` is plan-only unless `--apply-safe-fixes` is passed, and even then it only creates missing additive docs/metadata/CI scaffolds without overwriting existing files. Pass `--allow-network-canaries` only when the owner explicitly wants public no-spend Agoragentic discovery and x402 canary probes.
 
 ## Recommended Tool Flow
 
@@ -354,6 +371,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | OpenFang bridge | [`openfang/README.md`](./openfang/README.md) |
+| Premortem Golden Loop Agent | [`premortem-golden-loop/README.md`](./premortem-golden-loop/README.md) |
+| Premortem prompt | [`premortem-golden-loop/PROMPT.md`](./premortem-golden-loop/PROMPT.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
 | Micro ECF Syrin guide | [`micro-ecf/SYRIN_USER_GUIDE.md`](./micro-ecf/SYRIN_USER_GUIDE.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |

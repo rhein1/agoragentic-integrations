@@ -17,6 +17,7 @@ Use this skill when:
 * you want to move a local or self-hosted agent toward hosted Agent OS deployment
 * you need local policy, budget, approval, memory, or swarm controls through Micro ECF
 * you need no-spend local proof, local receipt, Agent OS export, or listing-readiness checks through Harness Core
+* you need a local release premortem, no-spend Golden Loop readiness receipt, or safe self-heal plan before publishing an OSS agent
 * you need agent infrastructure such as persistent memory, secret storage, or identity features
 
 Do **not** use this skill when:
@@ -159,7 +160,7 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Harness Core, Agent OS control-plane examples, and an experimental Zoneless payout reference.
+The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, and an experimental Zoneless payout reference.
 
 `harness-core/` is the local no-spend Harness Core package scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter inventory before any hosted preview or treasury funding.
 
@@ -219,6 +220,19 @@ node harness-core/bin/agoragentic-harness.mjs init
 node harness-core/bin/agoragentic-harness.mjs proof
 node harness-core/bin/agoragentic-harness.mjs export --to agent-os
 ```
+
+### Premortem Golden Loop Agent
+
+Use `premortem-golden-loop/` in this repo when a builder wants to release or install an OSS agent safely before enabling hosted deployment or paid execution.
+
+```bash
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs session --plan "Launch an OSS AI agent" --audience "AI agent builders" --success "builders run it and revise a launch plan"
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs heal --repo .
+node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs heal --repo . --apply-safe-fixes
+```
+
+The `session` command follows `premortem-golden-loop/PROMPT.md`: it gathers the minimum context, frames the plan as already failed six months from now, generates failure reasons, runs one investigator pass per failure reason, and writes an HTML report plus transcript. The default path is free and local: no API key, no wallet, no network calls, no repo contents sent anywhere, no paid execution, and no production mutation. The `heal` command is plan-only unless `--apply-safe-fixes` is passed; safe fixes only create missing additive docs, metadata, env examples, or CI scaffolds and never overwrite existing files, delete files, rotate secrets, deploy, publish, or call paid `execute()` routes. Pass `--allow-network-canaries` only when the owner wants public no-spend Agoragentic canaries.
 
 ---
 

@@ -6,12 +6,13 @@
 
 This repository contains drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, Harness Core no-spend proof/export tooling, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work in USDC on Base L2.
 
-The published packages are:
+The published packages and repo-local CLIs are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
 - **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥18)
 - **Micro ECF**: `npx agoragentic-micro-ecf@latest init` (npm, Node ≥18)
 - **Harness Core source scaffold**: `node harness-core/bin/agoragentic-harness.mjs init` (Node ≥18; npm publication pending validation)
+- **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 
 ## Authentication
 
@@ -75,7 +76,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 
-### JavaScript/TypeScript Integrations (12)
+### JavaScript/TypeScript Integrations (13)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -90,6 +91,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
 | OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
+| Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 | Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
 
 ### Config-Only Integrations (7)
@@ -104,19 +106,22 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | claude-view Local Provider | claude-view/claude_view.get_live_summary.manifest.json | Run claude-view locally; no hosted endpoint required |
 | Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
 
-### Agent OS, Micro ECF, and Harness Core (3)
+### Agent OS, Micro ECF, Harness Core, and Release Agents (4)
 
 | Export | File | Install |
 |--------|------|---------|
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
 | Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
 | Harness Core No-Spend Scaffold | harness-core/bin/agoragentic-harness.mjs | node harness-core/bin/agoragentic-harness.mjs init |
+| Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
 
 Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. It generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
 Harness Core is the local no-spend package scaffold for builders who need proof, local receipt, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It does not deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private runtime internals.
+
+The Premortem Golden Loop Agent is the local release safety agent for plans and installable repositories. It runs six-month failure-frame premortem sessions, repo release audits, no-spend Golden Loop readiness checks, and a conservative self-heal loop. `heal --repo .` writes only a plan; `heal --repo . --apply-safe-fixes` may create missing additive goals, workflows, safety-boundary docs, `agent.json`, `.env.example`, or a no-spend GitHub Actions workflow. It is free to use, requires no API key or wallet, makes no network calls by default, sends no repo contents anywhere, and does not overwrite files, delete files, rotate secrets, deploy, publish, or call paid `execute()`.
 
 ## MCP Client Install Configs
 
@@ -207,6 +212,8 @@ Full spec: specs/ACP-SPEC.md
 | Composio | composio/README.md |
 | HumanLayer | humanlayer/README.md |
 | Harness Core | harness-core/README.md |
+| Premortem Golden Loop Agent | premortem-golden-loop/README.md |
+| Premortem prompt | premortem-golden-loop/PROMPT.md |
 | Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |
 | Micro ECF framework guide | micro-ecf/FRAMEWORKS.md |
 | Agent OS evidence/eval backlog | micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md |
