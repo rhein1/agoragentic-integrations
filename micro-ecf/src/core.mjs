@@ -389,7 +389,7 @@ export function installProject({
       sources: sourceMap.sources.length,
       blocked: sourceMap.blocked.length,
     },
-    next_step: `npx agoragentic-os preview ${relativePortable(process.cwd(), harnessOutput)}`,
+    next_step: `npx agoragentic-os deploy preview --file ${relativePortable(process.cwd(), harnessOutput)}`,
   };
 }
 
