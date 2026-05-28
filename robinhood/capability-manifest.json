@@ -1,0 +1,73 @@
+{
+  "version": "2026-05-28",
+  "capabilities": [
+    {
+      "id": "finance.trading.robinhood_agentic_equities",
+      "name": "Robinhood Agentic Equities",
+      "connector": "robinhood_trading",
+      "transport": "mcp.streamable_http",
+      "mcp_server_name": "robinhood-trading",
+      "risk_level": "high",
+      "default_enabled": false,
+      "requires_user_oauth": true,
+      "requires_agentic_account": true,
+      "supported_v1_scope": ["long_equities"],
+      "required_policy_checks": [
+        "connector_enabled",
+        "tool_allowed",
+        "equities_only",
+        "long_only",
+        "symbol_policy",
+        "notional_limits",
+        "review_before_place",
+        "manual_approval_for_place_order"
+      ],
+      "receipt_events": [
+        "tool_intent",
+        "order_review",
+        "approval_request",
+        "approval_decision",
+        "order_submission",
+        "order_status"
+      ],
+      "disabled_roadmap": {
+        "options_trading": {
+          "status": "disabled_roadmap",
+          "requires_robinhood_mcp_schema_support": true,
+          "requires_options_risk_disclosure_gate": true,
+          "requires_user_eligibility_gate": true,
+          "requires_strategy_level_max_loss_model": true,
+          "requires_manual_approval_for_every_order": true,
+          "default_allowed_strategies": []
+        }
+      }
+    },
+    {
+      "id": "finance.spend.robinhood_agentic_card",
+      "name": "Robinhood Agentic Credit Card",
+      "connector": "robinhood_banking",
+      "transport": "mcp.streamable_http",
+      "mcp_server_name": "robinhood-banking",
+      "risk_level": "high",
+      "default_enabled": false,
+      "requires_user_oauth": true,
+      "requires_agentic_virtual_card": true,
+      "required_policy_checks": [
+        "connector_enabled",
+        "operation_allowed",
+        "checkout_context_present",
+        "merchant_domain_policy",
+        "purchase_limits",
+        "manual_approval_or_monthly_limit"
+      ],
+      "receipt_events": [
+        "purchase_intent",
+        "approval_request",
+        "approval_decision",
+        "virtual_card_fetch",
+        "purchase_outcome",
+        "card_transaction_status"
+      ]
+    }
+  ]
+}
