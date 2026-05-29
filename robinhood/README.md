@@ -74,6 +74,7 @@ Research should be separate from execution. Fincept and other finance-analysis p
 - `policy.example.json` - disabled-by-default policy example.
 - `capability-manifest.json` - Agent OS capability registration contract.
 - `probes/robinhood-mcp-probe-template.json` - safe probe output contract.
+- `probes/robinhood-mcp-probe-redacted.example.json` - public-safe auth-required probe example with no private account material.
 - `prompts/codex-robinhood-mcp-probe.md` - Codex prompt for safe MCP schema discovery.
 - `prompts/codex-robinhood-agent-os-e2e.md` - Codex prompt for the end-to-end implementation.
 

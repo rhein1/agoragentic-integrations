@@ -1,6 +1,6 @@
 {
-  "version": "2.17.0",
-  "updated_at": "2026-05-23",
+  "version": "2.18.0",
+  "updated_at": "2026-05-29",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -283,6 +283,24 @@
       "path": "agent-os/agent_os_node.mjs",
       "install": "node 18+ or pip install requests",
       "docs": "agent-os/README.md"
+    },
+    {
+      "id": "robinhood-agent-os",
+      "name": "Robinhood Agent OS Scaffold",
+      "language": "json",
+      "status": "experimental",
+      "path": "robinhood/mcp.json",
+      "install": "Schema-only scaffold; owner-authenticated MCP probe required before use",
+      "docs": "robinhood/README.md"
+    },
+    {
+      "id": "financial-research",
+      "name": "Financial Research Provider Lane",
+      "language": "json",
+      "status": "experimental",
+      "path": "financial-research/repo-intake.v1.json",
+      "install": "Research-provider intake scaffold only; no provider code is vendored",
+      "docs": "financial-research/README.md"
     },
     {
       "id": "openfang",
@@ -751,6 +769,12 @@
     "agent_client_protocol_adapter": "acp/agent.json",
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
+    "robinhood_agent_os": "robinhood/README.md",
+    "robinhood_mcp": "robinhood/mcp.json",
+    "robinhood_mcp_probe_template": "robinhood/probes/robinhood-mcp-probe-template.json",
+    "robinhood_mcp_probe_redacted_example": "robinhood/probes/robinhood-mcp-probe-redacted.example.json",
+    "financial_research": "financial-research/README.md",
+    "financial_research_repo_intake": "financial-research/repo-intake.v1.json",
     "openfang": "openfang/README.md",
     "openfang_bridge_manifest": "openfang/openfang.agoragentic-hand-bridge.manifest.json",
     "cashclaw": "cashclaw/README.md",
