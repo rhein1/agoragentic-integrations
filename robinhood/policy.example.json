@@ -24,7 +24,7 @@
         "long_only": true,
         "require_review_before_place": true,
         "manual_approval_required_for_place_order": true,
-        "manual_approval_required_for_cancel_order": false,
+        "manual_approval_required_for_cancel_order": true,
         "max_single_order_notional_usd": 100,
         "max_daily_order_notional_usd": 250,
         "max_open_orders": 3,
@@ -33,6 +33,7 @@
         "symbol_blocklist": [],
         "blocked_order_intents": [
           "margin",
+          "short",
           "short_selling",
           "options",
           "crypto",
@@ -49,18 +50,20 @@
       "risk_level": "high",
       "allowed_operations": [
         "read_agentic_virtual_card_policy",
+        "read_agentic_virtual_card_settings",
         "read_agentic_virtual_card_transaction_history",
         "fetch_agentic_virtual_card_details_for_checkout"
       ],
       "rules": {
         "require_checkout_context": true,
         "manual_approval_required_for_purchase": true,
+        "purchase_approval_mode": "manual_approval",
         "monthly_limit_required_if_auto_approval_enabled": true,
         "max_single_purchase_usd": 50,
         "max_monthly_purchase_usd": 200,
         "merchant_domain_allowlist": [],
         "merchant_domain_blocklist": [],
-        "persist_raw_card_details": false
+        "persist_payment_details": false
       }
     },
     "financial_research": {
