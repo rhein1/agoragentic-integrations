@@ -1,6 +1,6 @@
 {
   "schema": "robinhood_mcp_probe.v1",
-  "created_at": "2026-05-29T16:45:00Z",
+  "created_at": "2026-05-30T03:02:04Z",
   "probe_mode": "schema_only_no_action",
   "probe_status": "unauthenticated_probe_auth_required",
   "servers": [
@@ -16,18 +16,15 @@
         "safe_error_class": "authentication_required"
       },
       "tools_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "tools": []
       },
       "resources_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "resources": []
       },
       "prompts_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "prompts": []
       },
       "assumed_tool_family_mapping": {
@@ -41,8 +38,10 @@
       },
       "notes": [
         "No owner authorization was completed for this public example.",
+        "A schema-only initialize probe was rerun on 2026-05-30 and returned authentication required.",
+        "List-tools, list-resources, and list-prompts were not attempted after initialize returned HTTP 401.",
         "No tools were invoked.",
-        "Tool names must be confirmed from an owner-authorized schema-only probe before platform mapping."
+        "Tool names must be confirmed from an owner-authenticated schema-only probe before platform mapping."
       ]
     },
     {
@@ -57,18 +56,15 @@
         "safe_error_class": "authentication_required"
       },
       "tools_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "tools": []
       },
       "resources_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "resources": []
       },
       "prompts_list": {
-        "status": "not_available_without_owner_auth",
-        "http_status": 401,
+        "status": "not_run_after_initialize_auth_required",
         "prompts": []
       },
       "assumed_tool_family_mapping": {
@@ -78,6 +74,8 @@
       },
       "notes": [
         "No owner authorization was completed for this public example.",
+        "A schema-only initialize probe was rerun on 2026-05-30 and returned authentication required.",
+        "List-tools, list-resources, and list-prompts were not attempted after initialize returned HTTP 401.",
         "No tools were invoked.",
         "Virtual-card detail fetch remains forbidden in probes."
       ]
