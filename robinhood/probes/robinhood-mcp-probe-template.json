@@ -1,0 +1,68 @@
+{
+  "schema": "robinhood_mcp_probe.v1",
+  "created_at": "YYYY-MM-DDTHH:mm:ssZ",
+  "probe_mode": "schema_only_no_action",
+  "servers": [
+    {
+      "server_name": "robinhood-trading",
+      "url": "https://agent.robinhood.com/mcp/trading",
+      "transport": "streamable_http",
+      "auth_required": null,
+      "initialize": {
+        "status": "not_run",
+        "server_info_redacted": null
+      },
+      "tools_list": {
+        "status": "not_run",
+        "tools": []
+      },
+      "resources_list": {
+        "status": "not_run",
+        "resources": []
+      },
+      "prompts_list": {
+        "status": "not_run",
+        "prompts": []
+      },
+      "notes": []
+    },
+    {
+      "server_name": "robinhood-banking",
+      "url": "https://banking-agent.robinhood.com/mcp/banking",
+      "transport": "streamable_http",
+      "auth_required": null,
+      "initialize": {
+        "status": "not_run",
+        "server_info_redacted": null
+      },
+      "tools_list": {
+        "status": "not_run",
+        "tools": []
+      },
+      "resources_list": {
+        "status": "not_run",
+        "resources": []
+      },
+      "prompts_list": {
+        "status": "not_run",
+        "prompts": []
+      },
+      "notes": []
+    }
+  ],
+  "forbidden_probe_actions": [
+    "do_not_place_trades",
+    "do_not_cancel_orders",
+    "do_not_fetch_virtual_card_details",
+    "do_not_make_purchases",
+    "do_not_persist_private_auth_material",
+    "do_not_persist_private_account_values"
+  ],
+  "redaction_assertion": {
+    "no_private_auth_material": true,
+    "no_raw_card_data": true,
+    "no_private_account_numbers": true,
+    "no_private_balances_or_positions": true,
+    "no_live_action_results": true
+  }
+}

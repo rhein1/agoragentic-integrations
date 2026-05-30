@@ -1,0 +1,79 @@
+{
+  "schema": "financial_research_repo_intake.v1",
+  "updated_at": "2026-05-28",
+  "boundary": {
+    "research_outputs_only": true,
+    "candidate_actions_require_agent_os_policy": true,
+    "candidate_actions_executable_directly": false,
+    "partnership_claims_allowed": false,
+    "license_review_required_before_bundling": true
+  },
+  "providers": [
+    {
+      "provider_id": "fincept_terminal",
+      "name": "Fincept Terminal",
+      "repo": "https://github.com/Fincept-Corporation/FinceptTerminal",
+      "provider_type": "financial_research_terminal",
+      "execution_mode": "external_user_managed",
+      "license_review_required": true,
+      "bundle_code": false,
+      "partnership_claim": false,
+      "capability_candidates": [
+        "equity_research",
+        "portfolio_analytics",
+        "risk_metrics",
+        "data_connectors",
+        "visual_workflows",
+        "mcp_tooling_reference"
+      ],
+      "notes": [
+        "Strong research-provider candidate.",
+        "Do not vendor code or distribute derived binaries before license review."
+      ]
+    },
+    {
+      "provider_id": "fingpt",
+      "name": "FinGPT",
+      "repo": "https://github.com/AI4Finance-Foundation/FinGPT",
+      "provider_type": "finance_language_model_research",
+      "execution_mode": "external_or_hosted_future",
+      "license_review_required": true,
+      "bundle_code": false,
+      "partnership_claim": false,
+      "capability_candidates": ["finance_text_generation", "sentiment", "research_summaries"]
+    },
+    {
+      "provider_id": "finnlp",
+      "name": "FinNLP",
+      "repo": "https://github.com/AI4Finance-Foundation/FinNLP",
+      "provider_type": "financial_text_pipeline",
+      "execution_mode": "external_or_hosted_future",
+      "license_review_required": true,
+      "bundle_code": false,
+      "partnership_claim": false,
+      "capability_candidates": ["financial_text_processing", "dataset_tools", "news_features"]
+    },
+    {
+      "provider_id": "agentic_trading_research",
+      "name": "AgenticTrading",
+      "repo": "https://github.com/Open-Finance-Lab/AgenticTrading",
+      "provider_type": "financial_agent_research_pattern",
+      "execution_mode": "reference_only",
+      "license_review_required": true,
+      "bundle_code": false,
+      "partnership_claim": false,
+      "capability_candidates": ["agent_architecture_reference", "research_patterns"]
+    },
+    {
+      "provider_id": "finbert",
+      "name": "FinBERT",
+      "repo": "https://github.com/yya518/FinBERT",
+      "provider_type": "financial_sentiment_model",
+      "execution_mode": "external_or_hosted_future",
+      "license_review_required": true,
+      "bundle_code": false,
+      "partnership_claim": false,
+      "capability_candidates": ["financial_sentiment"]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "version": "2026-05-28",
+  "default_mode": "research_only",
+  "connectors": {
+    "robinhood_trading": {
+      "enabled": false,
+      "mcp_server_name": "robinhood-trading",
+      "endpoint": "https://agent.robinhood.com/mcp/trading",
+      "risk_level": "high",
+      "allowed_tools": [
+        "get_accounts",
+        "get_portfolio",
+        "get_equity_positions",
+        "get_equity_quotes",
+        "get_equity_orders",
+        "get_equity_tradability",
+        "review_equity_order",
+        "place_equity_order",
+        "cancel_equity_order",
+        "search"
+      ],
+      "rules": {
+        "asset_classes": ["equities"],
+        "long_only": true,
+        "require_review_before_place": true,
+        "manual_approval_required_for_place_order": true,
+        "manual_approval_required_for_cancel_order": true,
+        "max_single_order_notional_usd": 100,
+        "max_daily_order_notional_usd": 250,
+        "max_open_orders": 3,
+        "max_symbols_per_quote_request": 20,
+        "symbol_allowlist": [],
+        "symbol_blocklist": [],
+        "blocked_order_intents": [
+          "margin",
+          "short",
+          "short_selling",
+          "options",
+          "crypto",
+          "futures",
+          "event_contracts",
+          "unsupported_instrument"
+        ]
+      }
+    },
+    "robinhood_banking": {
+      "enabled": false,
+      "mcp_server_name": "robinhood-banking",
+      "endpoint": "https://banking-agent.robinhood.com/mcp/banking",
+      "risk_level": "high",
+      "allowed_operations": [
+        "read_agentic_virtual_card_policy",
+        "read_agentic_virtual_card_settings",
+        "read_agentic_virtual_card_transaction_history",
+        "fetch_agentic_virtual_card_details_for_checkout"
+      ],
+      "rules": {
+        "require_checkout_context": true,
+        "manual_approval_required_for_purchase": true,
+        "purchase_approval_mode": "manual_approval",
+        "monthly_limit_required_if_auto_approval_enabled": true,
+        "max_single_purchase_usd": 50,
+        "max_monthly_purchase_usd": 200,
+        "merchant_domain_allowlist": [],
+        "merchant_domain_blocklist": [],
+        "persist_payment_details": false
+      }
+    },
+    "financial_research": {
+      "enabled": true,
+      "risk_level": "medium",
+      "rules": {
+        "require_citations": true,
+        "require_non_advice_disclaimer": true,
+        "candidate_actions_cannot_execute_directly": true,
+        "max_job_budget_usdc": 5,
+        "provider_allowlist": [],
+        "provider_blocklist": []
+      }
+    }
+  },
+  "roadmap": {
+    "options_trading": {
+      "status": "disabled_roadmap",
+      "requires_robinhood_mcp_schema_support": true,
+      "requires_options_risk_disclosure_gate": true,
+      "requires_user_eligibility_gate": true,
+      "requires_strategy_level_max_loss_model": true,
+      "requires_manual_approval_for_every_order": true,
+      "default_allowed_strategies": []
+    }
+  }
+}

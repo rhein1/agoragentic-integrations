@@ -1,0 +1,118 @@
+{
+  "schema": "robinhood_mcp_probe.v1",
+  "created_at": "2026-05-30T04:07:14Z",
+  "probe_mode": "schema_only_no_action",
+  "probe_status": "unauthenticated_probe_auth_required",
+  "servers": [
+    {
+      "server_name": "robinhood-trading",
+      "url": "https://agent.robinhood.com/mcp/trading",
+      "transport": "streamable_http",
+      "auth_required": true,
+      "initialize": {
+        "status": "blocked_auth_required",
+        "http_status": 401,
+        "content_type": "text/plain; charset=utf-8",
+        "oauth_protected_resource_metadata_ref": "https://agent.robinhood.com/.well-known/oauth-protected-resource/mcp/trading",
+        "oauth_redirect_persisted": false,
+        "server_info_redacted": null,
+        "safe_error_class": "authentication_required"
+      },
+      "tools_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "tools": []
+      },
+      "resources_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "resources": []
+      },
+      "prompts_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "prompts": []
+      },
+      "assumed_tool_family_mapping": {
+        "account_and_portfolio_reads": "schema_pending_owner_auth",
+        "equity_positions": "schema_pending_owner_auth",
+        "equity_quotes": "schema_pending_owner_auth",
+        "equity_tradability": "schema_pending_owner_auth",
+        "equity_order_review": "schema_pending_owner_auth",
+        "equity_order_placement": "schema_pending_owner_auth",
+        "equity_order_cancellation": "schema_pending_owner_auth"
+      },
+      "notes": [
+        "No owner authorization was completed for this public example.",
+        "A schema-only initialize probe was rerun on 2026-05-30T04:07:14Z and returned authentication required.",
+        "The response included a public OAuth protected-resource metadata reference and no Location redirect.",
+        "List-tools, list-resources, and list-prompts were not attempted after initialize returned HTTP 401.",
+        "No tools were invoked.",
+        "Tool names must be confirmed from an owner-authenticated schema-only probe before platform mapping."
+      ]
+    },
+    {
+      "server_name": "robinhood-banking",
+      "url": "https://banking-agent.robinhood.com/mcp/banking",
+      "transport": "streamable_http",
+      "auth_required": true,
+      "initialize": {
+        "status": "blocked_auth_required",
+        "http_status": 401,
+        "content_type": "text/plain; charset=utf-8",
+        "oauth_protected_resource_metadata_ref": "https://banking-agent.robinhood.com/.well-known/oauth-protected-resource/mcp/banking",
+        "oauth_redirect_persisted": false,
+        "server_info_redacted": null,
+        "safe_error_class": "authentication_required"
+      },
+      "tools_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "tools": []
+      },
+      "resources_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "resources": []
+      },
+      "prompts_list": {
+        "status": "not_run_after_initialize_auth_required",
+        "prompts": []
+      },
+      "assumed_tool_family_mapping": {
+        "agentic_virtual_card_policy_or_settings": "schema_pending_owner_auth",
+        "virtual_card_transaction_history": "schema_pending_owner_auth",
+        "virtual_card_detail_fetch_for_checkout": "schema_pending_owner_auth"
+      },
+      "notes": [
+        "No owner authorization was completed for this public example.",
+        "A schema-only initialize probe was rerun on 2026-05-30T04:07:14Z and returned authentication required.",
+        "The response included a public OAuth protected-resource metadata reference and no Location redirect.",
+        "List-tools, list-resources, and list-prompts were not attempted after initialize returned HTTP 401.",
+        "No tools were invoked.",
+        "Virtual-card detail fetch remains forbidden in probes."
+      ]
+    }
+  ],
+  "forbidden_probe_actions": [
+    "do_not_place_trades",
+    "do_not_cancel_orders",
+    "do_not_fetch_virtual_card_details",
+    "do_not_make_purchases",
+    "do_not_persist_private_auth_material",
+    "do_not_persist_private_account_values",
+    "do_not_persist_private_balances_positions_or_order_ids"
+  ],
+  "redaction_assertion": {
+    "no_private_auth_material": true,
+    "no_raw_card_data": true,
+    "no_private_account_numbers": true,
+    "no_private_balances_or_positions": true,
+    "no_private_order_identifiers": true,
+    "no_live_action_results": true,
+    "no_credentials_collected": true,
+    "no_oauth_redirect_persisted": true
+  },
+  "live_action_assertion": {
+    "trades_placed": false,
+    "orders_cancelled": false,
+    "virtual_card_details_fetched": false,
+    "purchases_made": false
+  },
+  "next_safe_action": "Owner may run a local authenticated schema-only probe and replace tool mappings with redacted names and JSON schema shapes only."
+}
