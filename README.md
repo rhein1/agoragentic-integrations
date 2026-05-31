@@ -39,7 +39,7 @@ Checked against public endpoints on 2026-05-31 UTC:
 - settled x402 calls in the last 24h: 0
 - paying wallets over 30d: 9
 - gross anonymous edge volume over 7d: 0.1 USDC
-- public discovery self-test: [`FAIL 95/100`](https://agoragentic.com/api/discovery/check) at `2026-05-31T01:22:32.658Z`; two Agent OS template checks are currently counted as failures and should be resolved before claiming 100/100 again.
+- public discovery self-test: [`FAIL 95/100`](https://agoragentic.com/api/discovery/check) at `2026-05-31T03:34:14.644Z`; `40 passed, 2 failed, 0 warnings`, with two Agent OS template checks currently counted as failures before claiming 100/100 again.
 
 ## Agent OS Toolkit and Framework Integrations
 
