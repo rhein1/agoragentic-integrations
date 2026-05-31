@@ -26,6 +26,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Get receipts and reconciliation metadata
 - Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
 - Prepare governed deployments with Micro ECF and Agent OS Harness packets
+- Keep local resident work memory, docs-sync plans, and next-session handoffs under `.micro-ecf/`
 - Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
 - Run local release premortems, no-spend Golden Loop readiness checks, and additive self-heal plans before publishing an OSS agent
 
@@ -96,6 +97,7 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 Agoragentic integrations should give an agent four things before it goes live:
 
 - A local Micro ECF context wedge for context packets, source boundaries, tool policy, budgets, approvals, memory, swarms, and external context providers.
+- A resident continuity layer that records worklogs, checkpoints, docs-sync plans, and handoffs as local `.micro-ecf/` artifacts.
 - An Agent OS Harness packet that can preview the hosted deployment before spend or public exposure.
 - The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
 - Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
@@ -104,7 +106,11 @@ Agoragentic integrations should give an agent four things before it goes live:
 
 Installing Micro ECF on a codebase gives the builder a local governance contract for AI work in that repo. It creates durable files an IDE agent can read across sessions: what sources are allowed, what files are blocked, what tools or context providers are in scope, what must stay local, and what can be exported into an Agent OS preview.
 
-For builders, this means an AI coding agent does not have to start each conversation from memory or guesswork. The agent can load `AGENTS.md`, `ECF.md`, and `.micro-ecf/*` artifacts to understand the project boundary, cite local sources, preserve handoff history, and keep docs-sync or next-session work explicit. Micro ECF is still local-only: it does not deploy, spend, publish, settle x402, or expose private Full ECF internals.
+For builders, this means an AI coding agent does not have to start each conversation from memory or guesswork. The agent can load `AGENTS.md`, `ECF.md`, and `.micro-ecf/*` artifacts to understand the project boundary, cite local sources, preserve handoff history, and keep docs-sync or next-session work explicit.
+
+The resident layer is deliberately boring and inspectable. It writes files such as `.micro-ecf/worklog/current.json`, `.micro-ecf/worklog/checkpoints.jsonl`, `.micro-ecf/docs-sync-plan.json`, `.micro-ecf/handoff.md`, and `.micro-ecf/next-session.md`. IDEs with persistent local MCP can read those artifacts through `micro_ecf.worklog_status`, `micro_ecf.handoff`, and `micro_ecf.work_memory`. This is not hidden global memory, not cloud sync, and not a replacement for reading source files before editing.
+
+Micro ECF is still local-only: it does not deploy, spend, publish, settle x402, or expose private Full ECF internals.
 
 For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
 
@@ -336,6 +342,16 @@ The safe flow is consent-gated: `micro-ecf plan --dir .` first, then `micro-ecf 
 After install, Micro ECF is persistent as repo artifacts, not hidden global chat memory. Compatible IDE agents should read the generated `AGENTS.md`; any new LLM chat that does not auto-load repo instructions should receive `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can run `micro-ecf serve-mcp --root .micro-ecf`.
 
 `ECF.md` is the persistent agent-readable Micro ECF contract. It gives new chats a durable policy file before they inspect generated `.micro-ecf/*` artifacts.
+
+For goal/session continuity, use the resident work memory commands:
+
+```bash
+npx agoragentic-micro-ecf@latest worklog begin --goal "current goal"
+npx agoragentic-micro-ecf@latest worklog checkpoint --summary "what changed"
+npx agoragentic-micro-ecf@latest docs-sync plan --dir .
+npx agoragentic-micro-ecf@latest handoff --write
+npx agoragentic-micro-ecf@latest resident refresh --dir .
+```
 
 Use [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) for the after-install workflow.
 

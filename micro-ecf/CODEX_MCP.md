@@ -41,6 +41,14 @@ The generated server exposes:
 - `micro_ecf.handoff`
 - `micro_ecf.work_memory`
 
+Before restarting Codex or ending a long session, refresh local continuity artifacts:
+
+```bash
+micro-ecf resident refresh --dir .
+```
+
+This writes `resident-status.json`, `context-pack.json`, `docs-sync-plan.json`, `handoff.md`, `handoff.json`, and `next-session.md` under `.micro-ecf/`.
+
 ## Boundary
 
-The resident MCP server is local-only. It reads Micro ECF artifacts and does not deploy, spend, mutate wallets, settle x402, publish marketplace listings, rank providers, or expose Full ECF private internals.
+The resident MCP server and resident refresh command are local-only. They read or write Micro ECF artifacts and do not deploy, spend, mutate wallets, settle x402, publish marketplace listings, rank providers, provision hosted runtime, auto-edit docs, or expose Full ECF private internals.
