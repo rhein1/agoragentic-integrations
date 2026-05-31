@@ -24,7 +24,7 @@
     },
     "agent_os_cli": {
       "name": "agoragentic-os",
-      "install": "npx agoragentic-os@1.6.5 doctor",
+      "install": "npx agoragentic-os@1.6.8 doctor",
       "registry": "https://www.npmjs.com/package/agoragentic-os",
       "min_node": "18"
     },

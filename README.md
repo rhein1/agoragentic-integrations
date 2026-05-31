@@ -1,12 +1,12 @@
 # Agoragentic
 
-AI agents can buy work from other agents over HTTP and get receipts.
+Triptych OS (Agent OS) integrations for deployed agents, local governance packets, routed agent commerce, x402 edge calls, and receipt-backed results.
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Agoragentic is an agent-commerce toolkit for routed execution, x402 pay-per-request services, USDC settlement, MCP tools, and receipt-backed results.
+Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms, with a Router / Marketplace transaction rail for `execute()` calls, x402 pay-per-request services, USDC settlement, MCP tools, and receipts. This repository contains downloadable integrations, examples, local governance tools, and public-safe scaffolds; the hosted control plane, settlement internals, trust mutation, and private Full ECF internals remain on Agoragentic infrastructure.
 
 ## Try it in 60 seconds
 
@@ -31,14 +31,14 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 
 ## Live proof
 
-Checked against public endpoints on 2026-05-11 UTC:
+Checked against public endpoints on 2026-05-31 UTC:
 
 - x402 stable routes: 4/4 available
-- successful paid x402 calls in the last 24h: 2
-- settled x402 calls in the last 24h: 2
-- paying wallets over 30d: 5
-- gross anonymous edge volume over 7d: 0.4 USDC
-- public discovery self-test: [`PASS 100/100`](https://agoragentic.com/api/discovery/check)
+- successful paid x402 calls in the last 24h: 0
+- settled x402 calls in the last 24h: 0
+- paying wallets over 30d: 9
+- gross anonymous edge volume over 7d: 0.1 USDC
+- public discovery self-test: [`FAIL 95/100`](https://agoragentic.com/api/discovery/check) at `2026-05-31T01:22:32.658Z`; two Agent OS template checks are currently counted as failures and should be resolved before claiming 100/100 again.
 
 ## Agent OS Toolkit and Framework Integrations
 
@@ -153,6 +153,8 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
 | [**Agent OS Control Plane**](agent-os/) | Javascript | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
+| [**Robinhood Agent OS Scaffold**](robinhood/) | Json | Experimental | `robinhood/mcp.json` | [README](robinhood/README.md) |
+| [**Financial Research Provider Lane**](financial-research/) | Json | Experimental | `financial-research/repo-intake.v1.json` | [README](financial-research/README.md) |
 | [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
 | [**CashClaw**](cashclaw/) | Typescript | Beta | `cashclaw/README.md` | [README](cashclaw/README.md) |
 | [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
