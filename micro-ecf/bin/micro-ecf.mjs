@@ -71,6 +71,8 @@ Usage:
   micro-ecf doctor [--dir .] [--output-dir .micro-ecf]
   micro-ecf status [--dir .] [--output-dir .micro-ecf] [--write]
   micro-ecf context-pack [task] [--dir .] [--output-dir .micro-ecf] [--write]
+  micro-ecf resident status [--dir .] [--output-dir .micro-ecf] [--write]
+  micro-ecf resident refresh [--dir .] [--output-dir .micro-ecf] [--task "..."]
   micro-ecf mcp-config --target codex [--dir .] [--output-dir .micro-ecf] [--write] [--install-codex]
   micro-ecf worklog begin --goal "..." [--dir .] [--output-dir .micro-ecf]
   micro-ecf worklog checkpoint --summary "..." [--dir .] [--output-dir .micro-ecf]
@@ -272,6 +274,48 @@ function commandHandoff(flags) {
   return flags.write ? writeHandoff(workMemoryOptions(flags)) : buildHandoff(workMemoryOptions(flags));
 }
 
+function commandResident(flags) {
+  const [subcommand = 'status'] = flags._;
+  if (subcommand === 'status') return commandStatus(flags);
+  if (subcommand !== 'refresh') throw new Error(`Unknown resident subcommand: ${subcommand}`);
+  const writeFlags = {
+    ...flags,
+    write: true,
+    _: flags._.slice(1),
+  };
+  const status = writeMicroEcfResidentStatus({
+    targetDir: writeFlags.dir || process.cwd(),
+    outputDir: writeFlags['output-dir'] || null,
+  });
+  const contextPack = writeMicroEcfContextPack({
+    targetDir: writeFlags.dir || process.cwd(),
+    outputDir: writeFlags['output-dir'] || null,
+    task: writeFlags.task || writeFlags._.join(' ') || 'resident_refresh',
+  });
+  const docsSyncPlan = planDocsSync(workMemoryOptions(writeFlags));
+  const handoff = writeHandoff(workMemoryOptions(writeFlags));
+  return {
+    schema: 'agoragentic.micro-ecf.resident-refresh.v1',
+    ok: status.ok && contextPack.ok && docsSyncPlan.ok && handoff.ok,
+    generated_at: new Date().toISOString(),
+    status,
+    context_pack: contextPack,
+    docs_sync_plan: docsSyncPlan,
+    handoff,
+    authority_boundary: {
+      local_only: true,
+      docs_auto_edit_enabled: false,
+      deploy_enabled: false,
+      spend_enabled: false,
+      wallet_mutation_enabled: false,
+      x402_settlement_enabled: false,
+      marketplace_publication_enabled: false,
+      hosted_runtime_enabled: false,
+      full_ecf_private_internals_included: false,
+    },
+  };
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h') {
@@ -289,6 +333,7 @@ async function main() {
   else if (command === 'doctor') output(commandDoctor(flags));
   else if (command === 'status') output(commandStatus(flags));
   else if (command === 'context-pack') output(commandContextPack(flags));
+  else if (command === 'resident') output(commandResident(flags));
   else if (command === 'mcp-config') output(commandMcpConfig(flags));
   else if (command === 'worklog') output(commandWorklog(flags));
   else if (command === 'docs-sync') output(commandDocsSync(flags));

@@ -140,6 +140,14 @@ This writes local artifacts under `.micro-ecf/worklog/`, plus `.micro-ecf/docs-s
 
 The docs-sync command only creates a plan. It does not edit `WRAPUP.md`, `DOCUMENTATION_INDEX.md`, API docs, or README files.
 
+When you want the full local resident snapshot in one command, run:
+
+```bash
+micro-ecf resident refresh --dir .
+```
+
+This is equivalent to writing resident status, context pack, docs-sync plan, and handoff artifacts. It writes only local `.micro-ecf/` JSON/JSONL/Markdown files. It does not deploy, spend, mutate wallets, settle x402, publish marketplace listings, provision hosted runtime, or expose Full ECF private internals.
+
 ## 6. Preview In Agent OS Only When Ready
 
 The harness export is no-spend and non-provisioning:
