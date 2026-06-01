@@ -1,0 +1,143 @@
+{
+  "schema": "agoragentic.agent-os.harness.v1",
+  "agent_manifest": {
+    "name": "rust-self-hosted-summarizer",
+    "primary_goal": "Serve a local Rust agent over the Agoragentic Rust Framework HTTP/JSON contract.",
+    "framework": "agoragentic-rust",
+    "runtime_language": "rust",
+    "runtime_shape": "self_hosted_http",
+    "public_contracts": [
+      "GET /health",
+      "GET /tools",
+      "GET /openapi.json",
+      "GET /schema/agoragentic-rust-framework.json",
+      "POST /invoke",
+      "POST /a2a/invoke"
+    ]
+  },
+  "context_policy": {
+    "allowed_sources": [
+      "owner_docs",
+      "public_docs",
+      "runtime_tool_specs"
+    ],
+    "denied_sources": [
+      "private_ecf",
+      "wallet_private_data",
+      "raw_payment_payloads",
+      "raw_local_sqlite_memory"
+    ],
+    "redaction": "public_safe_summaries_only"
+  },
+  "tool_policy": {
+    "allowed_tools": [
+      "summarize",
+      "classify"
+    ],
+    "denied_tools": [
+      "wallet_spend",
+      "x402_settle",
+      "publish_marketplace_listing",
+      "mutate_router_trust",
+      "start_or_stop_local_process"
+    ],
+    "side_effects": "owner_review_required"
+  },
+  "budget_policy": {
+    "treasury_required": false,
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "notes": "Local Rust runtime preview is no-spend. Hosted Router calls still require normal Agoragentic account policy."
+  },
+  "approval_policy": {
+    "autonomous": [
+      "read_runtime_health",
+      "read_runtime_tools",
+      "draft_local_preview"
+    ],
+    "human_gated": [
+      "deploy_create",
+      "public_exposure",
+      "marketplace_publication",
+      "x402_activation",
+      "wallet_funding"
+    ]
+  },
+  "memory_policy": {
+    "write_gate": "local_only_owner_reviewed",
+    "secret_storage": "reference_only",
+    "agent_os_governed_memory_write_enabled": false,
+    "local_store": "sqlite"
+  },
+  "swarm_policy": {
+    "max_agents": 3,
+    "delegation": "local_graph_only",
+    "gateway_roundtrip_required_for_local_handoffs": false
+  },
+  "deployment_policy": {
+    "hosting_target": "self_hosted_http",
+    "template_id": "self_hosted_rust_framework",
+    "runtime_lane": "customer_managed_http_runtime",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "paid_canary_required": false
+  },
+  "public_boundary": {
+    "full_ecf_internals_excluded": true,
+    "raw_prompts_excluded": true,
+    "raw_tool_outputs_excluded": true,
+    "raw_receipts_excluded": true,
+    "wallet_private_data_excluded": true,
+    "local_sqlite_memory_contents_excluded": true
+  },
+  "rust_framework_runtime": {
+    "name": "agoragentic-rust",
+    "version": "0.1.0",
+    "language": "rust",
+    "transport": "http-json",
+    "harness_compatible": true,
+    "base_url": "http://127.0.0.1:8080",
+    "health_url": "http://127.0.0.1:8080/health",
+    "tools_url": "http://127.0.0.1:8080/tools",
+    "invoke_url": "http://127.0.0.1:8080/invoke",
+    "a2a_invoke_url": "http://127.0.0.1:8080/a2a/invoke",
+    "schema_url": "http://127.0.0.1:8080/schema/agoragentic-rust-framework.json",
+    "openapi_url": "http://127.0.0.1:8080/openapi.json"
+  },
+  "agent_os_export": {
+    "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
+    "preview_endpoint": "POST /api/hosting/agent-os/preview",
+    "deployment_endpoint": "POST /api/hosting/agent-os/deployments",
+    "treasury_endpoint": "GET /api/commerce/account",
+    "workspace_surface": "Agent OS owner workspace"
+  },
+  "agent_os_preview_request": {
+    "name": "rust-self-hosted-summarizer",
+    "hosting_target": "self_hosted_http",
+    "template_id": "self_hosted_rust_framework",
+    "runtime_lane": "customer_managed_http_runtime",
+    "exposure_mode": "private_only",
+    "goals": [
+      "Expose a local Rust agent through Harness-compatible HTTP/JSON.",
+      "Keep all spend, publication, x402, and public exposure gates disabled until owner review."
+    ],
+    "safety_policy": {
+      "owner_approval_required_for_spend": true,
+      "owner_approval_required_for_public_exposure": true,
+      "marketplace_publication_enabled": false,
+      "wallet_spend_enabled": false,
+      "x402_settlement_enabled": false,
+      "trust_mutation_enabled": false
+    },
+    "deployment_packet": {
+      "runtime_framework": "agoragentic-rust",
+      "runtime_language": "rust",
+      "transport": "http-json",
+      "endpoint_url": "http://127.0.0.1:8080/invoke",
+      "health_url": "http://127.0.0.1:8080/health",
+      "tools_url": "http://127.0.0.1:8080/tools",
+      "schema_url": "http://127.0.0.1:8080/schema/agoragentic-rust-framework.json",
+      "openapi_url": "http://127.0.0.1:8080/openapi.json"
+    }
+  }
+}

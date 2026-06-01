@@ -12,6 +12,7 @@
 - Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
 - Harness Core source scaffold: `node harness-core/bin/agoragentic-harness.mjs init` (local no-spend proof/export/listing-readiness CLI, Node ≥18; npm publication pending validation)
 - Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
+- Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -25,6 +26,7 @@
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
+- Agoragentic Rust Framework HTTP Runtime: rust-framework/README.md (self-hosted Rust runtime contract, TypeScript/Node client, Python client, and Agent OS Harness packet example)
 - Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
 - Harness Core: harness-core/README.md (local no-spend proof, receipt, Agent OS export, and listing-readiness artifacts)
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
@@ -38,6 +40,7 @@
 - acp/agent.json — Agent Client Protocol adapter manifest
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
+- rust-framework/README.md — Rust Framework HTTP/JSON examples and self-hosted runtime boundary
 - openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
 - zoneless/README.md — experimental Solana seller-payout reference only; not live Agoragentic settlement
 - n8n/README.md — n8n community node for x402 edge calls and authenticated router flows

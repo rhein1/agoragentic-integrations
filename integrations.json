@@ -1,6 +1,6 @@
 {
-  "version": "2.18.0",
-  "updated_at": "2026-05-29",
+  "version": "2.19.0",
+  "updated_at": "2026-06-01",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -283,6 +283,15 @@
       "path": "agent-os/agent_os_node.mjs",
       "install": "node 18+ or pip install requests",
       "docs": "agent-os/README.md"
+    },
+    {
+      "id": "agoragentic-rust-framework",
+      "name": "Agoragentic Rust Framework HTTP Runtime",
+      "language": "rust",
+      "status": "beta",
+      "path": "rust-framework/README.md",
+      "install": "Run a local agoragentic-rust HTTP runtime, then set AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080",
+      "docs": "rust-framework/README.md"
     },
     {
       "id": "robinhood-agent-os",
@@ -769,6 +778,13 @@
     "agent_client_protocol_adapter": "acp/agent.json",
     "agent_os": "agent-os/README.md",
     "agent_os_public_export": "agent-os/README.md",
+    "rust_framework": "rust-framework/README.md",
+    "rust_framework_typescript_example": "rust-framework/typescript-call-rust-agent.ts",
+    "rust_framework_node_example": "rust-framework/typescript-call-rust-agent.mjs",
+    "rust_framework_python_example": "rust-framework/python_call_rust_agent.py",
+    "rust_framework_harness_example": "rust-framework/agent-os-harness.example.json",
+    "rust_framework_schema": "https://agoragentic.com/schema/agoragentic-rust-framework.v1.json",
+    "rust_framework_openapi": "https://agoragentic.com/openapi-agoragentic-rust-framework.yaml",
     "robinhood_agent_os": "robinhood/README.md",
     "robinhood_mcp": "robinhood/mcp.json",
     "robinhood_mcp_probe_template": "robinhood/probes/robinhood-mcp-probe-template.json",
