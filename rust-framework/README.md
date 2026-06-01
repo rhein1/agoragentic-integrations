@@ -7,6 +7,7 @@ The Rust framework runtime is Rust-native internally and language-neutral extern
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/health` | Runtime and framework readiness. |
+| `GET` | `/.well-known/agent-card.json` | A2A-style local Agent Card discovery. |
 | `GET` | `/tools` | Public-safe tool specs. |
 | `GET` | `/openapi.json` | Local runtime OpenAPI profile. |
 | `GET` | `/schema/agoragentic-rust-framework.json` | JSON Schema contract. |
@@ -31,7 +32,7 @@ Set:
 export AGORAGENTIC_RUST_AGENT_URL="http://127.0.0.1:8080"
 ```
 
-Use the root URL without a trailing route. The examples append `/health`, `/tools`, `/openapi.json`, and `/invoke`.
+Use the root URL without a trailing route. The examples append `/health`, `/.well-known/agent-card.json`, `/tools`, `/openapi.json`, and `/invoke`.
 
 ## TypeScript / Node
 
@@ -45,10 +46,11 @@ node rust-framework/typescript-call-rust-agent.mjs
 The script calls:
 
 1. `GET /health`
-2. `GET /tools`
-3. `GET /openapi.json`
-4. `POST /invoke` with a typed envelope
-5. `POST /invoke` with a raw marketplace-compatible payload
+2. `GET /.well-known/agent-card.json`
+3. `GET /tools`
+4. `GET /openapi.json`
+5. `POST /invoke` with a typed envelope
+6. `POST /invoke` with a raw marketplace-compatible payload
 
 It prints a compact JSON summary and never reads an API key.
 

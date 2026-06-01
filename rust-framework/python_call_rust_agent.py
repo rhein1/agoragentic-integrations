@@ -36,6 +36,7 @@ def request_json(path: str, method: str = "GET", body: Optional[Dict[str, Any]] 
 
 def main() -> int:
     health = request_json("/health")
+    agent_card = request_json("/.well-known/agent-card.json")
     tools = request_json("/tools")
     openapi = request_json("/openapi.json")
 
@@ -67,6 +68,20 @@ def main() -> int:
             "harness_compatible": health.get("runtime", {}).get("harness_compatible") is True,
         },
         "tools_count": len(tools.get("tools", [])) if isinstance(tools.get("tools"), list) else 0,
+        "agent_card": {
+            "name": agent_card.get("name"),
+            "version": agent_card.get("version"),
+            "supported_interface_count": len(agent_card.get("supportedInterfaces", []))
+            if isinstance(agent_card.get("supportedInterfaces"), list)
+            else 0,
+            "skill_count": len(agent_card.get("skills", []))
+            if isinstance(agent_card.get("skills"), list)
+            else 0,
+            "local_only": (agent_card.get("extensions") or {})
+            .get("agoragentic:rust_framework", {})
+            .get("local_only")
+            is True,
+        },
         "openapi_paths": sorted((openapi.get("paths") or {}).keys()),
         "typed_invoke": {
             "status": typed_invoke.get("status"),

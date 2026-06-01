@@ -8,6 +8,7 @@
     "runtime_shape": "self_hosted_http",
     "public_contracts": [
       "GET /health",
+      "GET /.well-known/agent-card.json",
       "GET /tools",
       "GET /openapi.json",
       "GET /schema/agoragentic-rust-framework.json",
@@ -98,6 +99,7 @@
     "harness_compatible": true,
     "base_url": "http://127.0.0.1:8080",
     "health_url": "http://127.0.0.1:8080/health",
+    "agent_card_url": "http://127.0.0.1:8080/.well-known/agent-card.json",
     "tools_url": "http://127.0.0.1:8080/tools",
     "invoke_url": "http://127.0.0.1:8080/invoke",
     "a2a_invoke_url": "http://127.0.0.1:8080/a2a/invoke",
@@ -135,6 +137,7 @@
       "transport": "http-json",
       "endpoint_url": "http://127.0.0.1:8080/invoke",
       "health_url": "http://127.0.0.1:8080/health",
+      "agent_card_url": "http://127.0.0.1:8080/.well-known/agent-card.json",
       "tools_url": "http://127.0.0.1:8080/tools",
       "schema_url": "http://127.0.0.1:8080/schema/agoragentic-rust-framework.json",
       "openapi_url": "http://127.0.0.1:8080/openapi.json"

@@ -60,12 +60,46 @@ function startMockRustRuntime() {
       });
     }
 
+    if (req.method === 'GET' && req.url === '/.well-known/agent-card.json') {
+      return jsonResponse(res, 200, {
+        name: 'public-sync-rust-agent',
+        version: '0.1.0',
+        documentationUrl: 'https://agoragentic.com/openapi-agoragentic-rust-framework.yaml',
+        supportedInterfaces: [
+          { type: 'http-json', url: '/invoke' },
+          { type: 'a2a-json-rpc', url: '/a2a/invoke' },
+        ],
+        skills: [
+          {
+            id: 'summarize',
+            name: 'summarize',
+            description: 'Summarize public-safe text',
+            inputModes: ['application/json'],
+            outputModes: ['application/json'],
+          },
+        ],
+        extensions: {
+          'agoragentic:rust_framework': {
+            framework: 'agoragentic-rust',
+            local_only: true,
+            authority_boundary: {
+              wallet_spend_enabled: false,
+              x402_settlement_enabled: false,
+              marketplace_publication_enabled: false,
+              trust_state_mutation_enabled: false,
+            },
+          },
+        },
+      });
+    }
+
     if (req.method === 'GET' && req.url === '/openapi.json') {
       return jsonResponse(res, 200, {
         openapi: '3.1.0',
         info: { title: 'Agoragentic Rust Framework Runtime', version: '0.1.0' },
         paths: {
           '/health': {},
+          '/.well-known/agent-card.json': {},
           '/tools': {},
           '/openapi.json': {},
           '/invoke': {},
@@ -171,7 +205,14 @@ function assertExampleOutput(output, label) {
   assert.equal(output.runtime.framework, 'agoragentic-rust', `${label} framework`);
   assert.equal(output.runtime.transport, 'http-json', `${label} transport`);
   assert.equal(output.runtime.harness_compatible, true, `${label} harness flag`);
+  assert.equal(output.agent_card.name, 'public-sync-rust-agent', `${label} agent card name`);
+  assert.equal(output.agent_card.local_only, true, `${label} agent card local-only flag`);
+  assert.equal(output.agent_card.skill_count, 1, `${label} agent card skills`);
   assert.ok(output.openapi_paths.includes('/invoke'), `${label} openapi includes /invoke`);
+  assert.ok(
+    output.openapi_paths.includes('/.well-known/agent-card.json'),
+    `${label} openapi includes agent card`
+  );
   assert.ok(output.openapi_paths.includes('/openapi.json'), `${label} openapi includes /openapi.json`);
   assert.equal(output.typed_invoke.status, 'completed', `${label} typed invoke`);
   assert.equal(output.raw_invoke.status, 'completed', `${label} raw invoke`);
@@ -189,11 +230,13 @@ function assertExampleOutput(output, label) {
 async function main() {
   const readme = read('rust-framework/README.md');
   assertIncludes(readme, 'AGORAGENTIC_RUST_AGENT_URL', 'rust README');
+  assertIncludes(readme, '/.well-known/agent-card.json', 'rust README');
   assertIncludes(readme, 'POST /api/execute', 'rust README');
   assertIncludes(readme, 'PyO3, N-API, WASM', 'rust README');
   assertIncludes(readme, 'does not publish Rust crates', 'rust README');
 
   const typescriptExample = read('rust-framework/typescript-call-rust-agent.ts');
+  assertIncludes(typescriptExample, 'interface RustAgentCardResponse', 'TypeScript example');
   assertIncludes(typescriptExample, 'interface RustInvocationRequest', 'TypeScript example');
   assertIncludes(typescriptExample, "postJson<RustInvocationResponse>('/invoke'", 'TypeScript example');
   assertIncludes(typescriptExample, 'wallet_spend_enabled: false', 'TypeScript example');

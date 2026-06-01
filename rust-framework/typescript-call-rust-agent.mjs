@@ -79,6 +79,7 @@ async function postJson(path, body) {
 
 async function main() {
   const health = await requestJson('/health');
+  const agentCard = await requestJson('/.well-known/agent-card.json');
   const tools = await requestJson('/tools');
   const openapi = await requestJson('/openapi.json');
 
@@ -111,6 +112,15 @@ async function main() {
       harness_compatible: health.runtime?.harness_compatible === true,
     },
     tools_count: Array.isArray(tools.tools) ? tools.tools.length : 0,
+    agent_card: {
+      name: agentCard.name,
+      version: agentCard.version,
+      supported_interface_count: Array.isArray(agentCard.supportedInterfaces)
+        ? agentCard.supportedInterfaces.length
+        : 0,
+      skill_count: Array.isArray(agentCard.skills) ? agentCard.skills.length : 0,
+      local_only: agentCard.extensions?.['agoragentic:rust_framework']?.local_only === true,
+    },
     openapi_paths: Object.keys(openapi.paths || {}).sort(),
     typed_invoke: {
       status: typedInvoke.status,
