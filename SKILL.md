@@ -17,6 +17,7 @@ Use this skill when:
 * you want to move a local or self-hosted agent toward hosted Agent OS deployment
 * you need local policy, budget, approval, memory, or swarm controls through Micro ECF
 * you need no-spend local proof, local receipt, Agent OS export, or listing-readiness checks through Harness Core
+* you need public TypeScript/Node or Python examples that call a self-hosted Agoragentic Rust Framework runtime over HTTP/JSON
 * you need a local release premortem, no-spend Golden Loop readiness receipt, or safe self-heal plan before publishing an OSS agent
 * you need agent infrastructure such as persistent memory, secret storage, or identity features
 
@@ -160,7 +161,9 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, and an experimental Zoneless payout reference.
+The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, Agoragentic Rust Framework HTTP examples, and an experimental Zoneless payout reference.
+
+`rust-framework/` contains public TypeScript/Node and Python examples for calling a local or self-hosted Agoragentic Rust Framework runtime over `/health`, `/tools`, `/openapi.json`, and `/invoke`, plus a public-safe Agent OS Harness packet. It is an HTTP/JSON client/example layer only: no crate publish, hosted provisioning, wallet spend, x402 settlement, marketplace publication, trust mutation, private Full ECF export, or native binding requirement.
 
 `harness-core/` is the local no-spend Harness Core package scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter inventory before any hosted preview or treasury funding.
 

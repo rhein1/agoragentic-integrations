@@ -13,6 +13,7 @@ The published packages and repo-local CLIs are:
 - **Micro ECF**: `npx agoragentic-micro-ecf@latest init` (npm, Node ≥18)
 - **Harness Core source scaffold**: `node harness-core/bin/agoragentic-harness.mjs init` (Node ≥18; npm publication pending validation)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
+- **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 
 ## Authentication
 
@@ -93,6 +94,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 | Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
+| Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | run a local Rust framework HTTP runtime and set AGORAGENTIC_RUST_AGENT_URL |
 
 ### Config-Only Integrations (7)
 
@@ -111,6 +113,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Export | File | Install |
 |--------|------|---------|
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
+| Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | set AGORAGENTIC_RUST_AGENT_URL for self-hosted runtime calls |
 | Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
 | Harness Core No-Spend Scaffold | harness-core/bin/agoragentic-harness.mjs | node harness-core/bin/agoragentic-harness.mjs init |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |

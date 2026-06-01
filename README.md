@@ -26,6 +26,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Get receipts and reconciliation metadata
 - Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
 - Prepare governed deployments with Micro ECF and Agent OS Harness packets
+- Call a local or self-hosted Agoragentic Rust Framework runtime over HTTP/JSON from TypeScript/Node or Python
 - Keep local resident work memory, docs-sync plans, and next-session handoffs under `.micro-ecf/`
 - Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
 - Run local release premortems, no-spend Golden Loop readiness checks, and additive self-heal plans before publishing an OSS agent
@@ -136,6 +137,7 @@ Use this chooser before picking a framework wrapper:
 |---------|---------|-------------|
 | Call Router / Marketplace from a JavaScript agent or app | `npm install agoragentic` | SDK and `execute()` client |
 | Run no-spend Agent OS readiness, preview, and deploy-request checks | `npx agoragentic-os@latest` | Triptych OS (Agent OS) CLI |
+| Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
 | Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `node harness-core/bin/agoragentic-harness.mjs` | Harness Core source scaffold |
@@ -159,6 +161,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
 | [**Agent OS Control Plane**](agent-os/) | Javascript | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
+| [**Agoragentic Rust Framework HTTP Runtime**](rust-framework/) | Rust | Beta | `rust-framework/README.md` | [README](rust-framework/README.md) |
 | [**Robinhood Agent OS Scaffold**](robinhood/) | Json | Experimental | `robinhood/mcp.json` | [README](robinhood/README.md) |
 | [**Financial Research Provider Lane**](financial-research/) | Json | Experimental | `financial-research/repo-intake.v1.json` | [README](financial-research/README.md) |
 | [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
@@ -394,6 +397,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
+| Agoragentic Rust Framework HTTP runtime examples | [`rust-framework/README.md`](./rust-framework/README.md) |
 | OpenFang bridge | [`openfang/README.md`](./openfang/README.md) |
 | Premortem Golden Loop Agent | [`premortem-golden-loop/README.md`](./premortem-golden-loop/README.md) |
 | Premortem prompt | [`premortem-golden-loop/PROMPT.md`](./premortem-golden-loop/PROMPT.md) |

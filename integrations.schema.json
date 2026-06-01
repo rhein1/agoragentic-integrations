@@ -202,7 +202,8 @@
             "python",
             "javascript",
             "typescript",
-            "json"
+            "json",
+            "rust"
           ],
           "description": "Primary language."
         },
