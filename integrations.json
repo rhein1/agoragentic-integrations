@@ -1,6 +1,6 @@
 {
-  "version": "2.9.0",
-  "updated_at": "2026-04-11",
+  "version": "2.10.0",
+  "updated_at": "2026-04-25",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -14,6 +14,12 @@
       "name": "agoragentic-mcp",
       "install": "npx agoragentic-mcp",
       "registry": "https://www.npmjs.com/package/agoragentic-mcp",
+      "min_node": "18"
+    },
+    "n8n": {
+      "name": "n8n-nodes-agoragentic",
+      "install": "npm install n8n-nodes-agoragentic",
+      "registry": "https://www.npmjs.com/package/n8n-nodes-agoragentic",
       "min_node": "18"
     }
   },
@@ -54,6 +60,26 @@
     {
       "id": "agoragentic_x402_test",
       "description": "Verify anonymous x402 compatibility with the free echo tool",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_browse_services",
+      "description": "Browse stable anonymous x402 services on the dedicated edge",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_quote_service",
+      "description": "Quote one stable x402 edge service by slug",
+      "cost": "free"
+    },
+    {
+      "id": "agoragentic_call_service",
+      "description": "Call one stable x402 edge service through the 402 -> sign -> retry flow",
+      "cost": "listing_price"
+    },
+    {
+      "id": "agoragentic_edge_receipt",
+      "description": "Fetch one anonymous x402 edge receipt by receipt ID",
       "cost": "free"
     },
     {
@@ -319,7 +345,7 @@
       "language": "javascript",
       "status": "ready",
       "path": "n8n/agoragentic_n8n.js",
-      "install": "npm install",
+      "install": "npm install n8n-nodes-agoragentic",
       "docs": "n8n/README.md"
     },
     {
@@ -510,6 +536,42 @@
       "path": "u402/agoragentic_u402.ts",
       "install": "npm install",
       "docs": "u402/README.md"
+    },
+    {
+      "id": "acp",
+      "name": "ACP (Agent Client Protocol)",
+      "language": "javascript",
+      "status": "ready",
+      "path": "acp/agent.json",
+      "install": "npx agoragentic-mcp --acp",
+      "docs": "acp/README.md"
+    },
+    {
+      "id": "deepagents",
+      "name": "Deep Agents (LangChain)",
+      "language": "python",
+      "status": "ready",
+      "path": "deepagents/README.md",
+      "install": "pip install deepagents agoragentic",
+      "docs": "deepagents/README.md"
+    },
+    {
+      "id": "goose",
+      "name": "Goose (Block)",
+      "language": "python",
+      "status": "ready",
+      "path": "goose/agoragentic_goose.py",
+      "install": "pip install goose-ai requests",
+      "docs": "goose/README.md"
+    },
+    {
+      "id": "fast-agent",
+      "name": "fast-agent",
+      "language": "python",
+      "status": "ready",
+      "path": "fast-agent/README.md",
+      "install": "pip install fast-agent-mcp",
+      "docs": "fast-agent/README.md"
     }
   ],
   "specs": [
@@ -528,6 +590,8 @@
     "a2a_card": "a2a/agent-card.json",
     "mcp_server": "mcp/server.json",
     "acp_spec": "specs/ACP-SPEC.md",
+    "acp_registry": "acp/agent.json",
+    "acp_registry_url": "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json",
     "agent_os": "agent-os/README.md",
     "live_api": "https://agoragentic.com",
     "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json"

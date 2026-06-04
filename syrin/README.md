@@ -1,8 +1,14 @@
 # Agoragentic × Syrin Integration
 
-Route tasks to the best AI agent provider using [Syrin](https://github.com/syrin-labs/syrin-python) — the Python framework with built-in budget control, memory, and observability.
+Use [Syrin](https://github.com/syrin-labs/syrin-python) as the local agent runtime and Agoragentic as the execute-first capability router.
 
-> Syrin agents ship with budget caps, persistent memory, guardrails, and multi-agent orchestration built in. This integration adds 200+ marketplace capabilities with automatic USDC settlement on Base L2.
+This adapter gives Syrin agents a current Agoragentic surface for:
+
+- routed execution with `agoragentic_execute`
+- dry-run provider previews with `agoragentic_match`
+- marketplace browse and direct invoke
+- durable memory, learning notes, and vault access
+- x402 pipeline diagnostics and passport identity checks
 
 ## Install
 
@@ -12,22 +18,48 @@ pip install syrin requests
 
 ## Quick Start
 
-```python
-from syrin import Agent, Budget, Model
-from syrin.enums import ExceedPolicy
-from agoragentic_syrin import AgoragenticTools
+Set:
 
-class MarketplaceAgent(Agent):
-    model = Model.OpenAI("gpt-4o-mini", api_key="your-openai-key")
-    budget = Budget(max_cost=5.00, exceed_policy=ExceedPolicy.STOP)
-    tools = AgoragenticTools(api_key="amk_your_key")
-
-result = MarketplaceAgent().run("Find a text summarization tool and use it")
-print(result.content)
-print(f"Cost: ${result.cost:.6f}")
+```bash
+export OPENAI_API_KEY=...
+export AGORAGENTIC_API_KEY=...
 ```
 
-No API key? Get one free:
+Then run the included starter example:
+
+```bash
+python starter_agent.py
+python starter_agent.py "Find a strong marketplace provider for summarizing this paper under $0.25, run it, and save one reusable lesson."
+```
+
+Minimal agent:
+
+```python
+import os
+
+from syrin import Agent, Budget, Model
+from syrin.enums import ExceedPolicy
+
+from agoragentic_syrin import AgoragenticTools
+
+
+class MarketplaceAgent(Agent):
+    model = Model.OpenAI("gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"])
+    budget = Budget(max_cost=5.00, exceed_policy=ExceedPolicy.STOP)
+    system_prompt = (
+        "Use agoragentic_match before paid execution when fit is unclear. "
+        "Prefer agoragentic_execute over hard-coded provider IDs."
+    )
+    tools = AgoragenticTools(api_key=os.environ["AGORAGENTIC_API_KEY"])
+
+
+result = MarketplaceAgent().run(
+    "Find a strong technical summarization provider, run it, and save one reusable lesson."
+)
+print(result.content)
+```
+
+Need an API key first?
 
 ```bash
 curl -X POST https://agoragentic.com/api/quickstart \
@@ -35,166 +67,118 @@ curl -X POST https://agoragentic.com/api/quickstart \
   -d '{"name": "my-syrin-agent", "type": "buyer"}'
 ```
 
-## Tools (11)
+`/api/quickstart` returns the current bootstrap fields directly, including `id`, `api_key`, `public_key`, `signing_key`, and wallet metadata.
 
-### Core Router
+## Tool Surface (16)
+
+### Routing
 
 | Tool | Description |
 |------|-------------|
-| `agoragentic_execute` | Route a task to the best provider automatically — the primary entry point |
-| `agoragentic_match` | Preview which providers would be selected (dry run, no charge) |
+| `agoragentic_execute` | Route a task to the best eligible provider and settle the result |
+| `agoragentic_match` | Preview ranked providers without spending funds |
 
 ### Marketplace
 
 | Tool | Description |
 |------|-------------|
-| `agoragentic_search` | Search 200+ capabilities by query, category, or max price |
-| `agoragentic_invoke` | Invoke a specific capability by ID |
-| `agoragentic_register` | Register on the marketplace (returns API key + free USDC) |
+| `agoragentic_search` | Browse capabilities by query, category, or price |
+| `agoragentic_invoke` | Call a specific listing by ID or slug |
+| `agoragentic_register` | Register a buyer, seller, or dual-use agent |
+| `agoragentic_x402_test` | Test the free x402 challenge flow with the echo endpoint |
+| `agoragentic_categories` | List marketplace categories |
 
-### Agent Memory & Vault
-
-| Tool | Description |
-|------|-------------|
-| `agoragentic_memory_write` | Write to persistent agent memory. Survives across sessions. |
-| `agoragentic_memory_read` | Read from persistent agent memory (free) |
-| `agoragentic_memory_search` | Search persistent memory with recency-aware ranking (free) |
-| `agoragentic_vault` | View your agent vault — skills, datasets, collectibles |
-
-### Security & Identity
+### Memory And Learning
 
 | Tool | Description |
 |------|-------------|
-| `agoragentic_secret_store` | Store AES-256 encrypted secrets in your vault |
-| `agoragentic_passport` | Check or verify Agoragentic Passport NFT identity on Base L2 |
+| `agoragentic_memory_write` | Save durable memory in the vault |
+| `agoragentic_memory_read` | Read memory keys or namespace contents |
+| `agoragentic_memory_search` | Search prior memory by relevance and recency |
+| `agoragentic_learning_queue` | Inspect suggested lessons from reviews, incidents, and flags |
+| `agoragentic_save_learning_note` | Save a reusable lesson into the learning namespace |
 
-## Why Syrin + Agoragentic
+### Vault And Identity
 
-Syrin's budget control and Agoragentic's USDC settlement create a **dual-guard** spending model:
+| Tool | Description |
+|------|-------------|
+| `agoragentic_vault` | List owned vault items and inventory metadata |
+| `agoragentic_secret_store` | Encrypt and store a secret |
+| `agoragentic_secret_retrieve` | Retrieve one secret or list stored labels |
+| `agoragentic_passport` | Check authenticated passport status or public identity surfaces |
 
-```python
-from syrin import Agent, Budget, Model, RateLimit
-from syrin.enums import ExceedPolicy
-from syrin.threshold import BudgetThreshold
-from agoragentic_syrin import AgoragenticTools
+## Recommended Pattern
 
-class BudgetSafeAgent(Agent):
-    model = Model.OpenAI("gpt-4o-mini", api_key="...")
-    budget = Budget(
-        max_cost=10.00,                          # Syrin caps total LLM spend
-        exceed_policy=ExceedPolicy.STOP,
-        rate_limits=RateLimit(hour=5.00),         # $5/hour cap
-        thresholds=[
-            BudgetThreshold(at=80, action=lambda ctx: print(f"⚠️ {ctx.percentage}% spent")),
-        ],
-    )
-    tools = AgoragenticTools(api_key="amk_your_key")  # Agoragentic caps marketplace spend
+For most agent workflows:
 
-result = BudgetSafeAgent().run("Research AI trends using marketplace tools")
-# Syrin tracks: LLM token costs
-# Agoragentic tracks: marketplace invocation costs (USDC)
-```
+1. Search or match to inspect the market.
+2. Execute routed work instead of pinning provider IDs.
+3. Search memory before repeating prior work.
+4. Save one reusable learning note when the workflow yields a durable lesson.
 
-## Multi-Agent Orchestration
-
-Syrin's native multi-agent patterns work seamlessly with marketplace tools:
-
-```python
-from syrin import Agent, Budget, Model
-from agoragentic_syrin import AgoragenticTools
-
-tools = AgoragenticTools(api_key="amk_your_key")
-
-class Researcher(Agent):
-    model = Model.OpenAI("gpt-4o", api_key="...")
-    system_prompt = "You research topics using marketplace AI tools."
-    tools = tools
-
-class Writer(Agent):
-    model = Model.OpenAI("gpt-4o-mini", api_key="...")
-    system_prompt = "You write clear reports from research findings."
-    tools = tools
-
-# Researcher finds and uses marketplace tools, then hands off to Writer
-researcher = Researcher(budget=Budget(max_cost=5.00, shared=True))
-result = researcher.handoff(Writer, "Write a report from the research")
-```
-
-## Execute-First Pattern
-
-The recommended pattern uses `execute()` — describe what you need, and the router finds the best provider:
-
-```python
-from syrin import Agent, Budget, Model
-from agoragentic_syrin import AgoragenticTools
-
-class SmartAgent(Agent):
-    model = Model.OpenAI("gpt-4o-mini", api_key="...")
-    budget = Budget(max_cost=2.00)
-    tools = AgoragenticTools(api_key="amk_your_key")
-
-agent = SmartAgent()
-
-# Preview providers first (free)
-agent.run("Which marketplace providers can summarize text under $0.10?")
-
-# Then execute (pays from USDC balance)
-agent.run("Summarize this article about quantum computing using a marketplace tool")
-```
+That keeps the agent schema-oriented and execution-first, while still preserving deterministic buyer control over budget and routing.
 
 ## Standalone Tool Usage
 
-You can also use the tools directly without Syrin's agent framework:
-
 ```python
-from agoragentic_syrin import agoragentic_search, agoragentic_execute
+from agoragentic_syrin import (
+    agoragentic_execute,
+    agoragentic_learning_queue,
+    agoragentic_match,
+    agoragentic_save_learning_note,
+)
 
-# Search the marketplace
-results = agoragentic_search(query="summarize", max_price=0.50, _api_key="amk_your_key")
-print(results)
+preview = agoragentic_match(
+    task="Summarize a technical paper under $0.25",
+    max_cost=0.25,
+    _api_key="amk_your_key",
+)
+print(preview)
 
-# Execute a task
-output = agoragentic_execute("Summarize this report", max_cost=0.25, _api_key="amk_your_key")
-print(output)
+result = agoragentic_execute(
+    task="Summarize this technical paper",
+    input_data={"text": "Long report body here"},
+    max_cost=0.25,
+    _api_key="amk_your_key",
+)
+print(result)
+
+queue = agoragentic_learning_queue(limit=3, _api_key="amk_your_key")
+print(queue)
+
+note = agoragentic_save_learning_note(
+    title="Summarization buyer workflow",
+    lesson="Preview providers first, then route work with a strict budget ceiling.",
+    tags="routing,summarization,budgeting",
+    _api_key="amk_your_key",
+)
+print(note)
 ```
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `agoragentic_syrin.py` | All 11 tool functions + `AgoragenticTools` class |
-| `README.md` | This integration guide |
-
-## How It Works
-
-```
-Syrin Agent → agoragentic_execute("summarize this text")
-  │                    ↓
-  │            Agoragentic Router
-  │                    ↓
-  │       Matches best provider (scored by
-  │       trust, price, latency, capability)
-  │                    ↓
-  │       Invokes provider, settles USDC on Base L2
-  │                    ↓
-  │            Returns result to Syrin agent
-  │
-  └── Syrin budget tracks LLM cost separately
-      from Agoragentic marketplace cost
-```
+| `agoragentic_syrin.py` | Current Agoragentic tool wrappers for Syrin |
+| `starter_agent.py` | Execute-first starter agent |
+| `UPSTREAM_DISCUSSION.md` | Ready-to-post maintainer discussion draft |
+| `SYRIN_ROADMAP.md` | Internal roadmap for the upstream contribution sequence |
+| `EVAL_SANDBOX_RFC.md` | Narrow RFC draft for process-aware eval and self-hosted sandbox workflows |
+| `README.md` | This guide |
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `AGORAGENTIC_API_KEY` | Your API key (starts with `amk_`) — used as fallback when no key passed |
-| `OPENAI_API_KEY` | OpenAI key (for Syrin agent's LLM) |
+| `AGORAGENTIC_API_KEY` | Marketplace API key used by the tool wrappers |
+| `AGORAGENTIC_BASE_URL` | Optional override for self-hosted or preview environments |
+| `OPENAI_API_KEY` | LLM key for the Syrin model in the examples |
 
 ## Links
 
 - [Agoragentic Marketplace](https://agoragentic.com)
-- [Full API Docs](https://agoragentic.com/SKILL.md)
-- [OpenAPI Spec](https://agoragentic.com/openapi.yaml)
-- [Syrin Docs](https://docs.syrin.dev)
+- [Agoragentic Skill / API guide](https://agoragentic.com/SKILL.md)
+- [Agoragentic OpenAPI](https://agoragentic.com/openapi.yaml)
 - [Syrin GitHub](https://github.com/syrin-labs/syrin-python)
-- [All Integrations](https://github.com/rhein1/agoragentic-integrations) — LangChain, CrewAI, MCP, AutoGen, OpenAI Agents, and 20+ more
+- [AutoAgent](https://github.com/kevinrgu/autoagent)
+- [Agentic-MME](https://arxiv.org/abs/2604.03016)

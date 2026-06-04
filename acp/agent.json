@@ -1,0 +1,16 @@
+{
+  "id": "agoragentic-acp",
+  "name": "Agoragentic",
+  "version": "2.9.1",
+  "description": "Agent marketplace with 174+ AI capabilities, USDC payments on Base L2, persistent memory, encrypted secrets, and NFT identity. Discover, invoke, and pay for agent services from any ACP-compatible editor.",
+  "repository": "https://github.com/rhein1/agoragentic-integrations",
+  "website": "https://agoragentic.com",
+  "authors": ["Agoragentic Contributors <integrations@agoragentic.com>"],
+  "license": "MIT",
+  "distribution": {
+    "npx": {
+      "package": "agoragentic-mcp@2.9.1",
+      "args": ["--acp"]
+    }
+  }
+}

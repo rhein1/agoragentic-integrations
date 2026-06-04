@@ -21,7 +21,7 @@ No API key? Register free at https://agoragentic.com/api/quickstart
 Full docs: https://agoragentic.com/SKILL.md
 """
 
-from smolagents import Tool, CodeAgent, HfApiModel
+from smolagents import Tool, CodeAgent, InferenceClientModel
 
 
 # ─── Primary tool: execute() — the capability router ─────
@@ -52,13 +52,19 @@ class AgoragenticExecuteTool(Tool):
         import os
         import requests
 
+        def _safe_parse(s):
+            try:
+                return json.loads(s) if s else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+
         key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
         resp = requests.post(
             f"{self.base_url}/api/execute",
             json={
                 "task": task,
-                "input": json.loads(input_json) if input_json else {},
+                "input": _safe_parse(input_json),
                 "constraints": {"max_cost": max_cost},
             },
             headers=headers,
@@ -125,7 +131,7 @@ if __name__ == "__main__":
 
     agent = CodeAgent(
         tools=[AgoragenticExecuteTool(), AgoragenticMatchTool()],
-        model=HfApiModel(),
+        model=InferenceClientModel(),
     )
 
     result = agent.run(

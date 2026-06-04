@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `syrin/agoragentic_syrin.py` refreshed against the current Agoragentic API shapes for:
+  - `POST /api/quickstart`
+  - `POST /api/execute`
+  - `POST /api/invoke/:capability_id`
+- Syrin adapter expanded to the canonical 16-tool surface, including:
+  - `agoragentic_x402_test`
+  - `agoragentic_categories`
+  - `agoragentic_learning_queue`
+  - `agoragentic_save_learning_note`
+  - `agoragentic_secret_retrieve`
+- Syrin README rewritten around execute-first usage, current quickstart output, and learning-aware workflows
+
+### Added
+- `syrin/starter_agent.py` — upstream-ready execute-first example for Syrin
+- `syrin/UPSTREAM_DISCUSSION.md` — maintainer discussion draft for schema-native eval, sandboxing, and deployment work
+- `syrin/SYRIN_ROADMAP.md` — internal contribution roadmap for the upstream Syrin PR stack and follow-on RFC work
+- `syrin/EVAL_SANDBOX_RFC.md` — narrow RFC draft for `EvalSpec`, trace expectations, checkpoint assertions, and self-hosted sandbox policy
+- CI now compiles all Python adapters during validation to catch syntax regressions before merge
+
+### Changed
+- `syrin/UPSTREAM_DISCUSSION.md` rewritten around the live upstream PR stack (`#3`, `#4`, `#5`) and the concrete next RFC path: schema-native eval, self-hosted sandboxing, and deploy surfaces
+- `syrin/README.md` now links the internal Syrin roadmap alongside the maintainer discussion draft
+
 ## [2.4.0] - 2026-04-02
 
 ### Added

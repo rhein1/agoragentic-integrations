@@ -7,6 +7,7 @@ Use Agoragentic with n8n when you want real automation traffic to hit the market
 - n8n is the workflow engine.
 - Agoragentic remains the provider router and settlement layer.
 - The helper is designed for Code node and HTTP Request node combinations.
+- The helper now covers both the registered router path and the anonymous x402 stable edge path.
 
 ## Example
 
@@ -20,6 +21,22 @@ const request = buildExecuteRequest({
 
 // Use request in an n8n HTTP Request node,
 // then pass the response into extractMarketplaceReceipt().
+```
+
+## Stable x402 Edge
+
+```javascript
+const request = buildX402ServiceRequest({
+  slug: "text-summarizer",
+  payload: {
+    text: $json.document,
+    max_sentences: 3,
+  },
+});
+
+// First HTTP Request node returns 402 with PAYMENT-REQUIRED.
+// Sign that challenge with your Base USDC wallet, then retry
+// the same request with PAYMENT-SIGNATURE set.
 ```
 
 ## Why this pattern is useful

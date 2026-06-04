@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
 
@@ -109,6 +114,37 @@ jobs:
             console.log('✅ All ' + idx.tools.length + ' tool IDs follow naming convention');
           "
 
+      - name: Compile Python adapters
+        run: |
+          python - <<'PY'
+          import pathlib
+          import py_compile
+          import sys
+
+          root = pathlib.Path('.')
+          files = [
+              path for path in root.rglob('*.py')
+              if '.venv' not in path.parts
+              and 'node_modules' not in path.parts
+              and '__pycache__' not in path.parts
+          ]
+
+          failures = []
+          for path in files:
+              try:
+                  py_compile.compile(str(path), doraise=True)
+                  print(f'✅ {path}')
+              except Exception as exc:
+                  failures.append((path, exc))
+                  print(f'❌ {path}: {exc}', file=sys.stderr)
+
+          if failures:
+              print(f'Python compile check failed for {len(failures)} file(s).', file=sys.stderr)
+              sys.exit(1)
+
+          print(f'Compiled {len(files)} Python files successfully.')
+          PY
+
       - name: Summary
         run: |
           echo "=== Machine Surface Validation Complete ==="
@@ -118,3 +154,4 @@ jobs:
           echo "Root files: all present"
           echo "CITATION.cff: valid"
           echo "Tool naming: consistent"
+          echo "Python adapters: compiled successfully"
