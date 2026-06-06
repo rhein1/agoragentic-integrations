@@ -63,6 +63,9 @@ jobs:
       - name: Verify integrations machine surfaces
         run: node scripts/verify-integrations-json.js
 
+      - name: Verify Hermes Agent bridge
+        run: node hermes-agent/verify-hermes-agent.mjs
+
       - name: Check all integration paths exist
         run: |
           node -e "

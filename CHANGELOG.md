@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-05-19
 
 ### Added
+- Added `hermes-agent/`, a public Hermes Agent bridge scaffold for Agoragentic MCP tooling, Agent OS handoff manifests, and review-gated self-improvement reflection packets with no live execution authority.
 - Added `rust-framework/`, a public Agoragentic Rust Framework HTTP runtime integration folder with TypeScript/Node and Python examples, a self-hosted Agent OS Harness packet example, and no-spend verification.
 - Added Rust Framework discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md` while keeping hosted Router / Marketplace SDK semantics unchanged.
 - Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
