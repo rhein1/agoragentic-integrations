@@ -21,7 +21,7 @@
 
 ## Integrations
 - LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, Zoneless payout reference (JS/TS)
+- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Robinhood Agentic Trading Guard, Harness Core, Premortem Golden Loop, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy, Hermes Agent Bridge (JSON)
 - LangSmith: langsmith/README.md (observability)
@@ -41,6 +41,7 @@
 - glama.json — Glama registry
 - agent-os/README.md — Agent OS public control-plane export
 - rust-framework/README.md — Rust Framework HTTP/JSON examples and self-hosted runtime boundary
+- robinhood-agentic-trading-guard/README.md — read-only Robinhood Agentic Trading MCP policy, approval, and receipt guard
 - openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
 - hermes-agent/README.md — Hermes Agent MCP bridge and review-gated self-improvement packet boundary
 - zoneless/README.md — experimental Solana seller-payout reference only; not live Agoragentic settlement

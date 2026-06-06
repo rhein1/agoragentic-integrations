@@ -1,0 +1,33 @@
+{
+  "schema_version": "agoragentic.robinhood_agentic_trading_guard.receipt.v1",
+  "integration_id": "robinhood-agentic-trading-guard",
+  "receipt_id": "receipt_robinhood_guard_example_001",
+  "created_at": "2026-06-06T00:00:00Z",
+  "intent": {
+    "intent_id": "intent_example_block_options",
+    "summary": "Evaluate a proposed options order against the Robinhood Agentic Trading Guard policy.",
+    "requested_tool": "place_options_order",
+    "action_class": "proposed_order",
+    "asset_class": "options"
+  },
+  "policy_decision": {
+    "decision": "blocked",
+    "blocked_reason": "Options and high-risk trades are blocked by default.",
+    "approval_requirement": null
+  },
+  "evidence": {
+    "policy_file": "robinhood-agentic-trading-guard/policy.example.json",
+    "matched_rule": "blocked_asset_classes.options",
+    "no_live_order_confirmation": true,
+    "robinhood_mcp_called": false,
+    "unofficial_api_used": false,
+    "credentials_stored": false,
+    "private_account_data_stored": false,
+    "raw_portfolio_data_stored": false
+  },
+  "governance_boundary": {
+    "agoragentic_role": "policy_receipt_approval_layer",
+    "brokerage_execution_role": "outside_this_integration",
+    "live_mode_enabled": false
+  }
+}

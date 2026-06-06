@@ -1,0 +1,49 @@
+{
+  "schema_version": "agoragentic.robinhood_agentic_trading_guard.mcp_probe.v1",
+  "integration_id": "robinhood-agentic-trading-guard",
+  "created_at": "2026-06-06T00:00:00Z",
+  "probe_type": "metadata_only",
+  "status": "owner_authentication_required",
+  "mcp_servers": [
+    {
+      "id": "robinhood-trading",
+      "url": "https://agent.robinhood.com/mcp/trading",
+      "purpose": "Official Robinhood Agentic Trading MCP metadata",
+      "authenticated_schema_verified": false,
+      "public_probe_action": "record_endpoint_metadata_only"
+    },
+    {
+      "id": "robinhood-banking",
+      "url": "https://banking-agent.robinhood.com/mcp/banking",
+      "purpose": "Official Robinhood Banking MCP metadata",
+      "authenticated_schema_verified": false,
+      "public_probe_action": "record_endpoint_metadata_only"
+    }
+  ],
+  "actions_performed": [
+    "loaded_public_metadata",
+    "confirmed_no_credentials_in_probe",
+    "confirmed_no_live_order_attempt"
+  ],
+  "actions_not_performed": [
+    "authenticate_to_robinhood",
+    "fetch_account_data",
+    "fetch_portfolio_data",
+    "review_order",
+    "place_order",
+    "cancel_order",
+    "store_private_data"
+  ],
+  "evidence": {
+    "metadata_only": true,
+    "robinhood_mcp_called": false,
+    "unofficial_api_used": false,
+    "private_account_data_observed": false,
+    "live_order_attempted": false
+  },
+  "owner_gated_followup": [
+    "Provide redacted authenticated schema evidence from the official Robinhood MCP flow.",
+    "Confirm expected tool names before enabling any account-specific policy.",
+    "Keep live execution disabled unless a separate owner-approved executor is reviewed."
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "schema_version": "agoragentic.robinhood_agentic_trading_guard.policy.v1",
+  "integration_id": "robinhood-agentic-trading-guard",
+  "name": "Robinhood Agentic Trading Guard Policy",
+  "default_mode": "dry_run_proposal_only",
+  "status": "experimental",
+  "source_snapshot": {
+    "date": "2026-06-06",
+    "official_trading_mcp_url": "https://agent.robinhood.com/mcp/trading",
+    "official_banking_mcp_url": "https://banking-agent.robinhood.com/mcp/banking",
+    "notes": "URLs are metadata only in this public scaffold. Owner-provided evidence is required before claiming a verified live flow."
+  },
+  "mcp_metadata": {
+    "trading_server_id": "robinhood-trading",
+    "trading_endpoint_url": "https://agent.robinhood.com/mcp/trading",
+    "banking_server_id": "robinhood-banking",
+    "banking_endpoint_url": "https://banking-agent.robinhood.com/mcp/banking",
+    "metadata_only": true,
+    "owner_authenticated_schema_verified": false
+  },
+  "authority_boundary": {
+    "brokerage_execution_enabled": false,
+    "live_order_dispatch_enabled": false,
+    "credential_storage_enabled": false,
+    "private_account_data_storage_enabled": false,
+    "unofficial_api_usage_allowed": false,
+    "trading_bot_behavior_allowed": false
+  },
+  "decision_values": [
+    "allow_read_only",
+    "require_owner_review",
+    "blocked"
+  ],
+  "rules": {
+    "live_mode_enabled": false,
+    "owner_approval_required_for_live_mode": true,
+    "owner_approval_required_for_equity_orders": true,
+    "account_reads_require_owner_review": true,
+    "proposal_receipt_required": true,
+    "no_live_order_confirmation_required": true,
+    "allow_metadata_inspection": true
+  },
+  "allowed_metadata_tools": [
+    "inspect_mcp_config",
+    "list_guard_policy",
+    "validate_probe_metadata"
+  ],
+  "allowed_read_only_tools": [
+    "get_equity_quotes",
+    "get_equity_tradability",
+    "search_equities"
+  ],
+  "review_required_tools": [
+    "get_accounts",
+    "get_portfolio",
+    "get_equity_positions",
+    "get_equity_orders",
+    "review_equity_order",
+    "place_equity_order",
+    "cancel_equity_order"
+  ],
+  "blocked_asset_classes": [
+    "options",
+    "margin",
+    "short",
+    "crypto",
+    "futures",
+    "event_contracts",
+    "banking_card"
+  ],
+  "blocked_tools": [
+    "get_options_positions",
+    "get_options_quotes",
+    "get_options_orders",
+    "review_options_order",
+    "place_options_order",
+    "cancel_options_order",
+    "place_crypto_order",
+    "place_futures_order",
+    "place_event_contract_order",
+    "fetch_card_details",
+    "transfer_funds"
+  ],
+  "receipt": {
+    "include_intent": true,
+    "include_policy_decision": true,
+    "include_blocked_reason_or_approval_requirement": true,
+    "include_no_live_order_confirmation": true,
+    "include_unofficial_api_confirmation": true
+  }
+}

@@ -31,6 +31,7 @@ The first call to this paid route returns an x402 payment challenge. A signed pa
 - Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
 - Run local release premortems, no-spend Golden Loop readiness checks, and additive self-heal plans before publishing an OSS agent
 - Connect Hermes Agent as a bounded MCP/client bridge with review-gated self-improvement packets
+- Wrap official Robinhood Agentic Trading MCP proposals with read-only policy, approval, and receipt guardrails without brokerage execution
 
 ## Live proof
 
@@ -166,6 +167,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Agent OS Control Plane**](agent-os/) | Javascript | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
 | [**Agoragentic Rust Framework HTTP Runtime**](rust-framework/) | Rust | Beta | `rust-framework/README.md` | [README](rust-framework/README.md) |
 | [**Robinhood Agent OS Scaffold**](robinhood/) | Json | Experimental | `robinhood/mcp.json` | [README](robinhood/README.md) |
+| [**Robinhood Agentic Trading Guard**](robinhood-agentic-trading-guard/) | Javascript | Experimental | `robinhood-agentic-trading-guard/guard-policy-preview.mjs` | [README](robinhood-agentic-trading-guard/README.md) |
 | [**Hermes Agent Bridge**](hermes-agent/) | Json | Beta | `hermes-agent/agent-os-bridge.manifest.json` | [README](hermes-agent/README.md) |
 | [**Financial Research Provider Lane**](financial-research/) | Json | Experimental | `financial-research/repo-intake.v1.json` | [README](financial-research/README.md) |
 | [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
@@ -402,6 +404,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Capability description | [`SKILL.md`](./SKILL.md) |
 | Agent OS public export | [`agent-os/README.md`](./agent-os/README.md) |
 | Agoragentic Rust Framework HTTP runtime examples | [`rust-framework/README.md`](./rust-framework/README.md) |
+| Robinhood Agentic Trading Guard | [`robinhood-agentic-trading-guard/README.md`](./robinhood-agentic-trading-guard/README.md) |
 | Hermes Agent bridge | [`hermes-agent/README.md`](./hermes-agent/README.md) |
 | OpenFang bridge | [`openfang/README.md`](./openfang/README.md) |
 | Premortem Golden Loop Agent | [`premortem-golden-loop/README.md`](./premortem-golden-loop/README.md) |

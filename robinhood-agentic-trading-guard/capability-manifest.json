@@ -1,0 +1,79 @@
+{
+  "schema_version": "agoragentic.capability_manifest.v1",
+  "id": "robinhood-agentic-trading-guard",
+  "name": "Robinhood Agentic Trading Guard",
+  "description": "Policy, approval, and receipt guard for proposed Robinhood Agentic Trading MCP actions. Governance only; no brokerage execution.",
+  "status": "experimental",
+  "language": "javascript",
+  "default_mode": "dry_run_proposal_only",
+  "transport": {
+    "type": "local_policy_preview",
+    "network_required": false,
+    "brokerage_execution": false
+  },
+  "official_mcp_metadata": {
+    "trading_endpoint_url": "https://agent.robinhood.com/mcp/trading",
+    "banking_endpoint_url": "https://banking-agent.robinhood.com/mcp/banking",
+    "metadata_only": true,
+    "owner_verified": false
+  },
+  "authority_boundary": {
+    "places_orders": false,
+    "uses_unofficial_robinhood_api": false,
+    "stores_robinhood_credentials": false,
+    "stores_account_numbers": false,
+    "stores_balances_or_raw_portfolio_data": false,
+    "live_mode_enabled_by_default": false,
+    "options_enabled_by_default": false
+  },
+  "input_contract": {
+    "type": "proposal",
+    "required_fields": [
+      "intent_id",
+      "requested_tool",
+      "action_class"
+    ],
+    "forbidden_fields": [
+      "credentials",
+      "access_token",
+      "refresh_token",
+      "private_key",
+      "account_number",
+      "balance",
+      "raw_portfolio"
+    ]
+  },
+  "output_contract": {
+    "decision_values": [
+      "allow_read_only",
+      "require_owner_review",
+      "blocked"
+    ],
+    "receipt_fields": [
+      "intent",
+      "policy_decision",
+      "blocked_reason",
+      "approval_requirement",
+      "no_live_order_confirmation"
+    ]
+  },
+  "default_blocks": [
+    "options",
+    "margin",
+    "short",
+    "crypto",
+    "futures",
+    "event_contracts",
+    "banking_card",
+    "raw_private_account_data",
+    "live_order_dispatch"
+  ],
+  "verification": {
+    "command": "node robinhood-agentic-trading-guard/guard-policy-preview.mjs --assert",
+    "expected_samples": {
+      "read-only": "allow_read_only",
+      "equity-order": "require_owner_review",
+      "options-order": "blocked"
+    }
+  }
+}

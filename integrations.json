@@ -1,5 +1,5 @@
 {
-  "version": "2.20.0",
+  "version": "2.21.0",
   "updated_at": "2026-06-06",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -301,6 +301,15 @@
       "path": "robinhood/mcp.json",
       "install": "Schema-only scaffold; owner-authenticated MCP probe required before use",
       "docs": "robinhood/README.md"
+    },
+    {
+      "id": "robinhood-agentic-trading-guard",
+      "name": "Robinhood Agentic Trading Guard",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "robinhood-agentic-trading-guard/guard-policy-preview.mjs",
+      "install": "node robinhood-agentic-trading-guard/guard-policy-preview.mjs --assert",
+      "docs": "robinhood-agentic-trading-guard/README.md"
     },
     {
       "id": "hermes-agent",
@@ -798,6 +807,12 @@
     "robinhood_mcp": "robinhood/mcp.json",
     "robinhood_mcp_probe_template": "robinhood/probes/robinhood-mcp-probe-template.json",
     "robinhood_mcp_probe_redacted_example": "robinhood/probes/robinhood-mcp-probe-redacted.example.json",
+    "robinhood_agentic_trading_guard": "robinhood-agentic-trading-guard/README.md",
+    "robinhood_agentic_trading_guard_policy": "robinhood-agentic-trading-guard/policy.example.json",
+    "robinhood_agentic_trading_guard_manifest": "robinhood-agentic-trading-guard/capability-manifest.json",
+    "robinhood_agentic_trading_guard_probe": "robinhood-agentic-trading-guard/mcp-probe.example.json",
+    "robinhood_agentic_trading_guard_receipt": "robinhood-agentic-trading-guard/receipt.example.json",
+    "robinhood_agentic_trading_guard_verifier": "robinhood-agentic-trading-guard/guard-policy-preview.mjs",
     "hermes_agent": "hermes-agent/README.md",
     "hermes_agent_bridge_manifest": "hermes-agent/agent-os-bridge.manifest.json",
     "hermes_agent_mcp_config_example": "hermes-agent/mcp.agoragentic.example.json",

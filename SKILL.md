@@ -161,9 +161,11 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Hermes Agent, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, Agoragentic Rust Framework HTTP examples, and an experimental Zoneless payout reference.
+The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Hermes Agent, Robinhood Agentic Trading Guard, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, Agoragentic Rust Framework HTTP examples, and an experimental Zoneless payout reference.
 
 `hermes-agent/` documents the public Hermes Agent bridge pattern: expose Agoragentic MCP tools to a Hermes-compatible host, use Micro ECF and Agent OS Harness artifacts for governed handoff, and emit Hermes-style self-improvement as owner-reviewable reflection packets. It does not grant autonomous skill mutation, GitHub write, deploy, wallet, x402, trust, or marketplace publication authority.
+
+`robinhood-agentic-trading-guard/` documents a public-safe policy, approval, and receipt guard for proposed Robinhood Agentic Trading MCP actions. It is read-only, dry-run, and proposal-only by default; it does not place orders, store credentials or private account data, use unofficial Robinhood APIs, or claim live trading support. Options and high-risk trades are blocked by default.
 
 `rust-framework/` contains public TypeScript/Node and Python examples for calling a local or self-hosted Agoragentic Rust Framework runtime over `/health`, `/tools`, `/openapi.json`, and `/invoke`, plus a public-safe Agent OS Harness packet. It is an HTTP/JSON client/example layer only: no crate publish, hosted provisioning, wallet spend, x402 settlement, marketplace publication, trust mutation, private Full ECF export, or native binding requirement.
 

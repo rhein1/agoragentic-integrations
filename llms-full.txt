@@ -77,7 +77,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 
-### JavaScript/TypeScript Integrations (13)
+### JavaScript/TypeScript Integrations (15)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -92,6 +92,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
 | OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
+| Robinhood Agentic Trading Guard | robinhood-agentic-trading-guard/guard-policy-preview.mjs | node robinhood-agentic-trading-guard/guard-policy-preview.mjs --assert |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 | Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
 | Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | run a local Rust framework HTTP runtime and set AGORAGENTIC_RUST_AGENT_URL |
@@ -205,6 +206,7 @@ Full spec: specs/ACP-SPEC.md
 | ACP registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
 | OpenFang bridge | openfang/README.md |
+| Robinhood Agentic Trading Guard | robinhood-agentic-trading-guard/README.md |
 | Hermes Agent bridge | hermes-agent/README.md |
 | Zoneless payout reference | zoneless/README.md |
 | n8n Community Node | n8n/README.md |
