@@ -1,0 +1,64 @@
+{
+  "schema_version": "agoragentic.hermes-agent.self-improvement-policy.v1",
+  "integration_id": "hermes-agent",
+  "owner_review_required": true,
+  "default_lifecycle_state": "proposed",
+  "allowed_lifecycle_states": [
+    "proposed",
+    "active",
+    "stale",
+    "archived",
+    "pinned",
+    "rollbackable"
+  ],
+  "candidate_types": [
+    "outcome_memory_candidate",
+    "skill_candidate",
+    "procedure_candidate",
+    "rubric_delta",
+    "task_board_item"
+  ],
+  "required_fields": [
+    "safe_summary",
+    "source_refs",
+    "evidence_refs",
+    "proposed_lifecycle_state",
+    "owner_review_required",
+    "authority_boundary"
+  ],
+  "activation_rules": {
+    "dry_run_first": true,
+    "backup_required_before_rewrite": true,
+    "rollback_ref_required": true,
+    "owner_approval_required": true,
+    "activation_must_not_publish": true
+  },
+  "authority_boundary": {
+    "autonomous_skill_install_allowed": false,
+    "autonomous_skill_rewrite_allowed": false,
+    "github_write_allowed": false,
+    "deployment_allowed": false,
+    "provider_api_call_allowed": false,
+    "wallet_spend_allowed": false,
+    "x402_settlement_allowed": false,
+    "trust_mutation_allowed": false,
+    "marketplace_publication_allowed": false,
+    "seller_os_publication_allowed": false,
+    "private_ecf_exposure_allowed": false
+  },
+  "redaction_required": [
+    "raw prompts",
+    "raw tool outputs",
+    "raw logs",
+    "secrets",
+    "credentials",
+    "provider tokens",
+    "wallet-private fields",
+    "private ECF",
+    "private repo content",
+    "local paths",
+    "raw payment payloads",
+    "raw invocation payloads"
+  ],
+  "public_safe_summary": "Hermes-style self-improvement may produce reviewable memory, skill, procedure, rubric, and task-board candidates. Activation requires owner review and separate policy gates."
+}

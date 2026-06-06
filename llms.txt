@@ -23,7 +23,7 @@
 - LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
 - MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
-- Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy (JSON)
+- Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy, Hermes Agent Bridge (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Agoragentic Rust Framework HTTP Runtime: rust-framework/README.md (self-hosted Rust runtime contract, TypeScript/Node client, Python client, and Agent OS Harness packet example)
@@ -42,6 +42,7 @@
 - agent-os/README.md — Agent OS public control-plane export
 - rust-framework/README.md — Rust Framework HTTP/JSON examples and self-hosted runtime boundary
 - openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
+- hermes-agent/README.md — Hermes Agent MCP bridge and review-gated self-improvement packet boundary
 - zoneless/README.md — experimental Solana seller-payout reference only; not live Agoragentic settlement
 - n8n/README.md — n8n community node for x402 edge calls and authenticated router flows
 - langgraph/README.md — LangGraph stateful workflow tools for match, execute, status, and receipts

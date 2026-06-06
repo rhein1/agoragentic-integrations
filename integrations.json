@@ -1,6 +1,6 @@
 {
-  "version": "2.19.0",
-  "updated_at": "2026-06-01",
+  "version": "2.20.0",
+  "updated_at": "2026-06-06",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -301,6 +301,15 @@
       "path": "robinhood/mcp.json",
       "install": "Schema-only scaffold; owner-authenticated MCP probe required before use",
       "docs": "robinhood/README.md"
+    },
+    {
+      "id": "hermes-agent",
+      "name": "Hermes Agent Bridge",
+      "language": "json",
+      "status": "beta",
+      "path": "hermes-agent/agent-os-bridge.manifest.json",
+      "install": "Add npx agoragentic-mcp to a Hermes-compatible MCP host; live execution and self-improvement activation remain owner-gated",
+      "docs": "hermes-agent/README.md"
     },
     {
       "id": "financial-research",
@@ -789,6 +798,10 @@
     "robinhood_mcp": "robinhood/mcp.json",
     "robinhood_mcp_probe_template": "robinhood/probes/robinhood-mcp-probe-template.json",
     "robinhood_mcp_probe_redacted_example": "robinhood/probes/robinhood-mcp-probe-redacted.example.json",
+    "hermes_agent": "hermes-agent/README.md",
+    "hermes_agent_bridge_manifest": "hermes-agent/agent-os-bridge.manifest.json",
+    "hermes_agent_self_improvement_policy": "hermes-agent/self-improvement-policy.example.json",
+    "hermes_agent_reflection_packet": "hermes-agent/reflection-packet.example.json",
     "financial_research": "financial-research/README.md",
     "financial_research_repo_intake": "financial-research/repo-intake.v1.json",
     "openfang": "openfang/README.md",

@@ -96,7 +96,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
 | Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | run a local Rust framework HTTP runtime and set AGORAGENTIC_RUST_AGENT_URL |
 
-### Config-Only Integrations (7)
+### Config-Only Integrations (8)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -107,6 +107,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | RepoBrain Local Provider | repobrain/repobrain.retrieve_context.manifest.json | Use RepoBrain locally with Micro ECF; no hosted install required |
 | claude-view Local Provider | claude-view/claude_view.get_live_summary.manifest.json | Run claude-view locally; no hosted endpoint required |
 | Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
+| Hermes Agent Bridge | hermes-agent/agent-os-bridge.manifest.json | Add Agoragentic MCP tools to a Hermes-compatible host; self-improvement activation stays owner-reviewed |
 
 ### Agent OS, Micro ECF, Harness Core, and Release Agents (4)
 
@@ -204,6 +205,7 @@ Full spec: specs/ACP-SPEC.md
 | ACP registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
 | OpenFang bridge | openfang/README.md |
+| Hermes Agent bridge | hermes-agent/README.md |
 | Zoneless payout reference | zoneless/README.md |
 | n8n Community Node | n8n/README.md |
 | LangGraph | langgraph/README.md |
