@@ -116,65 +116,128 @@ function buildFallbackToolList() {
     return [
         {
             name: 'agoragentic_register',
-            description: 'Register an agent with Agoragentic and receive an API key for routed execution.',
+            description:
+                'Register a new agent with the Agoragentic marketplace and receive an API key. ' +
+                'Use this as the first step before calling agoragentic_execute, agoragentic_match, or agoragentic_execute_status. ' +
+                'This tool is idempotent: registering the same agent name returns the existing API key. ' +
+                'No AGORAGENTIC_API_KEY environment variable is required to call this tool. ' +
+                'Side effects: creates a persistent agent record on the Agoragentic server if one does not exist. ' +
+                'Returns JSON with fields: ok (boolean), api_key (string), agent_id (string), and wallet address. ' +
+                'On error, returns JSON with ok:false and an error message string.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    name: { type: 'string', description: 'Agent name' },
-                    agent_name: { type: 'string', description: 'Agent name, compatibility alias' },
-                    intent: { type: 'string', description: 'buyer, seller, or both', default: 'buyer' },
-                    description: { type: 'string', description: 'Short agent description' },
+                    name: { type: 'string', description: 'Human-readable agent name, e.g. "my-research-agent"' },
+                    agent_name: { type: 'string', description: 'Alias for the name field (backward compatibility). Prefer using name instead.' },
+                    intent: {
+                        type: 'string',
+                        enum: ['buyer', 'seller', 'both'],
+                        description: 'Agent marketplace role: "buyer" to consume services, "seller" to provide them, or "both"',
+                        default: 'buyer',
+                    },
+                    description: { type: 'string', description: 'One-line summary of what this agent does, e.g. "Summarizes web pages on demand"' },
                 },
             },
         },
         {
             name: 'agoragentic_search',
-            description: 'Search public Agoragentic marketplace capabilities.',
+            description:
+                'Search the public Agoragentic marketplace for available agent capabilities and services. ' +
+                'Use this to discover what services exist before calling agoragentic_execute or agoragentic_match. ' +
+                'This is a read-only operation with no side effects and no USDC spend. ' +
+                'No AGORAGENTIC_API_KEY is required. ' +
+                'Returns JSON with an array of matching capabilities, each containing id, name, description, category, and price_usdc. ' +
+                'Returns an empty array when no capabilities match the query.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    query: { type: 'string', description: 'Search query' },
-                    category: { type: 'string', description: 'Optional category filter' },
-                    limit: { type: 'number', description: 'Maximum results to return', default: 10 },
+                    query: { type: 'string', description: 'Free-text search query, e.g. "text summarization" or "web scraping"' },
+                    category: { type: 'string', description: 'Filter results by category slug, e.g. "ai-ml", "data", or "web". Omit to search all categories.' },
+                    limit: { type: 'number', description: 'Maximum number of results to return (1\u2013100)', default: 10 },
                 },
             },
         },
         {
             name: 'agoragentic_match',
-            description: 'Preview Router / Marketplace provider matches for a task. No spend.',
+            description:
+                'Preview which providers the Agoragentic Router would select for a given task, without executing or spending USDC. ' +
+                'Use this before agoragentic_execute to compare providers, check pricing, and verify availability. ' +
+                'This is a read-only, non-destructive operation with no side effects. ' +
+                'Requires the AGORAGENTIC_API_KEY environment variable to be set. Returns ok:false with error "missing_api_key" if the key is absent. ' +
+                'Returns JSON with matched providers including their trust scores, estimated cost in USDC, and routing rationale.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    task: { type: 'string', description: 'Task to route' },
-                    max_cost: { type: 'number', description: 'Maximum USDC price per call' },
-                    category: { type: 'string', description: 'Optional category filter' },
-                    prefer_trusted: { type: 'boolean', description: 'Prefer trusted providers', default: true },
+                    task: { type: 'string', description: 'Natural-language task description to match against providers, e.g. "summarize this article"' },
+                    max_cost: { type: 'number', description: 'Maximum acceptable USDC price per call. Providers above this price are excluded from results.' },
+                    category: { type: 'string', description: 'Optional category filter to narrow provider matches, e.g. "ai-ml"' },
+                    prefer_trusted: { type: 'boolean', description: 'When true, rank verified and trusted providers higher in results', default: true },
                 },
                 required: ['task'],
             },
         },
         {
             name: 'agoragentic_execute',
-            description: 'Execute a task through the hosted Agoragentic Router / Marketplace. May spend according to listing price and account balance.',
+            description:
+                'Execute a task through the Agoragentic Router / Marketplace. The Router selects a provider, invokes it, and returns the result with a receipt. ' +
+                'IMPORTANT: This tool MAY SPEND USDC from the authenticated agent wallet based on the matched provider listing price. ' +
+                'This tool is NOT idempotent \u2014 each call creates a new invocation and may incur a charge. ' +
+                'Prefer agoragentic_match first to preview providers and pricing without spending. ' +
+                'Use agoragentic_search to discover available capabilities before executing. ' +
+                'Do NOT call this tool for read-only discovery; use agoragentic_search or agoragentic_match instead. ' +
+                'Requires the AGORAGENTIC_API_KEY environment variable. Returns ok:false with error "missing_api_key" if the key is absent. ' +
+                'On success, returns JSON with: invocation_id (string), output (provider result object), cost_usdc (number), provider_id (string), and receipt metadata. ' +
+                'On failure, returns JSON with ok:false, a status code, and error details describing routing or provider errors.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    task: { type: 'string', description: 'Task to execute' },
-                    input: { type: 'object', description: 'Provider input payload', default: {} },
-                    constraints: { type: 'object', description: 'Routing and budget constraints', default: {} },
-                    quote_id: { type: 'string', description: 'Optional quote ID' },
-                    intent_contract_id: { type: 'string', description: 'Optional Agent OS intent contract ID' },
+                    task: {
+                        type: 'string',
+                        description: 'Natural-language task for the Router to match and execute, e.g. "summarize this article" or "scrape https://example.com"',
+                    },
+                    input: {
+                        type: 'object',
+                        description:
+                            'Structured input payload forwarded to the matched provider. Shape depends on the provider API. ' +
+                            'Example: {"text": "Hello world", "max_sentences": 3}',
+                        default: {},
+                    },
+                    constraints: {
+                        type: 'object',
+                        description:
+                            'Optional routing and budget constraints. Supported fields: max_cost (number, maximum USDC per call), ' +
+                            'provider_id (string, pin to a specific provider), category (string). ' +
+                            'Example: {"max_cost": 0.05, "category": "ai-ml"}',
+                        default: {},
+                    },
+                    quote_id: {
+                        type: 'string',
+                        description: 'ID from a prior agoragentic_quote call to lock in a pre-agreed price. Omit for standard dynamic pricing.',
+                    },
+                    intent_contract_id: {
+                        type: 'string',
+                        description: 'Agent OS intent contract ID for auditable intent-to-execution tracking. Omit if not using intent contracts.',
+                    },
                 },
                 required: ['task'],
             },
         },
         {
             name: 'agoragentic_execute_status',
-            description: 'Read status, output, cost, and receipt metadata for a routed execution.',
+            description:
+                'Check the status, output, cost, and receipt of a previous agoragentic_execute invocation. ' +
+                'Use this to poll for results of async executions or to retrieve receipt metadata after completion. ' +
+                'This is a read-only operation with no side effects and no USDC spend. ' +
+                'Requires the AGORAGENTIC_API_KEY environment variable. Returns ok:false with error "missing_api_key" if the key is absent. ' +
+                'Returns JSON with: status ("pending", "completed", or "failed"), output (provider result), cost_usdc, provider_id, receipt_id, and timestamps. ' +
+                'Returns ok:false with error "invalid_invocation_id" if the ID is empty or contains disallowed characters.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    invocation_id: { type: 'string', description: 'Invocation ID from agoragentic_execute' },
+                    invocation_id: {
+                        type: 'string',
+                        description: 'The invocation_id string returned by a prior agoragentic_execute call, e.g. "inv_abc123def456"',
+                    },
                 },
                 required: ['invocation_id'],
             },
