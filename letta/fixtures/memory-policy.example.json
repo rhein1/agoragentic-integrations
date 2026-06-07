@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agoragentic.com/schema/letta-memory-policy.json",
+  "version": "1.0",
+  "memory_blocks": {
+    "core": {
+      "sync_with_micro_ecf": true,
+      "max_bytes": 8192
+    },
+    "archival": {
+      "allow_rag_injection": true,
+      "max_items": 100
+    }
+  },
+  "spend_gating": {
+    "auto_approval_max_cost_usdc": 0.05,
+    "hitl_approval_required": true
+  }
+}

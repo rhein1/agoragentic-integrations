@@ -1,0 +1,63 @@
+[
+  {
+    "type": "quote_requested",
+    "timestamp": "2026-06-07T00:00:00.000Z",
+    "payload": {
+      "taskId": "task_4829",
+      "constraints": {
+        "max_cost_usdc": 0.50
+      }
+    }
+  },
+  {
+    "type": "quote_ready",
+    "timestamp": "2026-06-07T00:00:01.000Z",
+    "payload": {
+      "quoteId": "quote_77b31",
+      "costUsdc": 0.15,
+      "expiresAt": "2026-06-07T00:10:00.000Z",
+      "providerName": "Base translation provider"
+    }
+  },
+  {
+    "type": "approval_required",
+    "timestamp": "2026-06-07T00:00:02.000Z",
+    "payload": {
+      "approvalId": "appr_d92e1",
+      "costUsdc": 0.15,
+      "policyKey": "translate_spend_limit",
+      "promptMessage": "Confirm translation task spend: 0.15 USDC"
+    }
+  },
+  {
+    "type": "execute_started",
+    "timestamp": "2026-06-07T00:00:05.000Z",
+    "invocationId": "inv_8829f",
+    "payload": {
+      "task": "Translate 'Hello' to Spanish"
+    }
+  },
+  {
+    "type": "provider_matched",
+    "timestamp": "2026-06-07T00:00:06.000Z",
+    "invocationId": "inv_8829f",
+    "payload": {
+      "providerId": "prov_trans_es",
+      "providerName": "Fast Spanish Translator",
+      "trustLevel": "verified"
+    }
+  },
+  {
+    "type": "receipt_ready",
+    "timestamp": "2026-06-07T00:00:08.000Z",
+    "payload": {
+      "receiptId": "rec_339d2",
+      "executionTimeMs": 2500,
+      "costUsdc": 0.15,
+      "receiptUrl": "https://agoragentic.com/receipts/rec_339d2",
+      "artifact": {
+        "output": "Hola"
+      }
+    }
+  }
+]
