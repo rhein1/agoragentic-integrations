@@ -1,0 +1,65 @@
+{
+  "$schema": "https://agoragentic.com/schema/agoragentic-ag-ui.json",
+  "version": "1.0.0",
+  "name": "Agoragentic AG-UI Adaptor Config",
+  "mapping_rules": {
+    "quote_requested": {
+      "target_event": "quote/start",
+      "default_ui_hint": "toast",
+      "fields": {
+        "message": "Generating quote for task: {{payload.task}}",
+        "taskId": "{{payload.taskId}}"
+      }
+    },
+    "quote_ready": {
+      "target_event": "quote/result",
+      "default_ui_hint": "card",
+      "fields": {
+        "quoteId": "{{payload.quoteId}}",
+        "costUsdc": "{{payload.costUsdc}}",
+        "expiresAt": "{{payload.expiresAt}}"
+      }
+    },
+    "execute_started": {
+      "target_event": "tool/start",
+      "default_ui_hint": "inline",
+      "fields": {
+        "invocationId": "{{invocationId}}",
+        "task": "{{payload.task}}"
+      }
+    },
+    "provider_matched": {
+      "target_event": "state/patch",
+      "default_ui_hint": "inline",
+      "fields": {
+        "matchedProvider": {
+          "id": "{{payload.providerId}}",
+          "name": "{{payload.providerName}}"
+        }
+      }
+    },
+    "approval_required": {
+      "target_event": "human/approval",
+      "default_ui_hint": "modal",
+      "fields": {
+        "approvalId": "{{payload.approvalId}}",
+        "promptMessage": "{{payload.promptMessage}}"
+      }
+    },
+    "receipt_ready": {
+      "target_event": "result/artifact",
+      "default_ui_hint": "card",
+      "fields": {
+        "receiptId": "{{payload.receiptId}}",
+        "artifact": "{{payload.artifact}}"
+      }
+    },
+    "execute_failed": {
+      "target_event": "error",
+      "default_ui_hint": "error_boundary",
+      "fields": {
+        "message": "{{payload.publicMessage}}"
+      }
+    }
+  }
+}

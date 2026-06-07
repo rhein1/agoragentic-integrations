@@ -1,0 +1,57 @@
+{
+  "schema_version": "agoragentic.hermes-agent.reflection-packet.v1",
+  "integration_id": "hermes-agent",
+  "packet_id": "hermes_reflection_example_001",
+  "created_at": "2026-06-06T00:00:00Z",
+  "source_refs": [
+    {
+      "type": "receipt_ref",
+      "ref": "receipt_redacted_example"
+    },
+    {
+      "type": "run_summary_ref",
+      "ref": "run_summary_redacted_example"
+    }
+  ],
+  "safe_summary": "A local Hermes run found that future runs should ask for owner approval before converting repeated task patterns into reusable procedures.",
+  "candidate_type": "procedure_candidate",
+  "proposed_lifecycle_state": "proposed",
+  "owner_review_required": true,
+  "rubric_delta": {
+    "label": "Require review before durable procedure activation",
+    "reason": "Repeated outcomes can justify a candidate procedure, but activation must remain owner-reviewed."
+  },
+  "proposed_memory_candidate": {
+    "safe_title": "Procedure candidates require owner review",
+    "safe_summary": "When repeated run outcomes suggest a durable procedure, create a candidate packet and wait for explicit owner approval."
+  },
+  "receipt_refs": [
+    "receipt_redacted_example"
+  ],
+  "authority_boundary": {
+    "autonomous_skill_install_allowed": false,
+    "autonomous_skill_rewrite_allowed": false,
+    "github_write_allowed": false,
+    "deployment_allowed": false,
+    "provider_api_call_allowed": false,
+    "wallet_spend_allowed": false,
+    "x402_settlement_allowed": false,
+    "trust_mutation_allowed": false,
+    "marketplace_publication_allowed": false,
+    "seller_os_publication_allowed": false,
+    "private_ecf_exposure_allowed": false
+  },
+  "public_safe": {
+    "raw_prompt_exposed": false,
+    "raw_tool_output_exposed": false,
+    "raw_logs_exposed": false,
+    "secrets_exposed": false,
+    "credentials_exposed": false,
+    "private_ecf_exposed": false,
+    "local_paths_exposed": false,
+    "private_repo_content_exposed": false,
+    "wallet_private_fields_exposed": false,
+    "raw_payment_payload_exposed": false,
+    "raw_invocation_payload_exposed": false
+  }
+}
