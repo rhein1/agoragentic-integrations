@@ -1,5 +1,5 @@
 {
-  "version": "2.21.0",
+  "version": "2.22.0",
   "updated_at": "2026-06-07",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -841,6 +841,15 @@
       "path": "chatkit/agoragentic-chatkit-tool.example.ts",
       "install": "Copy chatkit/agoragentic-chatkit-tool.example.ts to your UI components",
       "docs": "chatkit/README.md"
+    },
+    {
+      "id": "turbovec",
+      "name": "turbovec Local Vector Index",
+      "language": "python",
+      "status": "beta",
+      "path": "turbovec/agoragentic_turbovec.py",
+      "install": "pip install turbovec numpy",
+      "docs": "turbovec/README.md"
     }
   ],
   "specs": [
@@ -929,6 +938,8 @@
     "openai_agents_ts": "openai-agents-ts/README.md",
     "openai_agents_ts_adapter": "openai-agents-ts/agoragentic_openai_agents.ts",
     "chatkit": "chatkit/README.md",
-    "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts"
+    "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts",
+    "turbovec": "turbovec/README.md",
+    "turbovec_adapter": "turbovec/agoragentic_turbovec.py"
   }
 }

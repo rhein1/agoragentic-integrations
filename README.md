@@ -226,6 +226,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Letta Context and Memory**](letta/) | Python | Beta | `letta/agoragentic_letta.py` | [README](letta/README.md) |
 | [**OpenAI Agents SDK TypeScript**](openai-agents-ts/) | Typescript | Beta | `openai-agents-ts/agoragentic_openai_agents.ts` | [README](openai-agents-ts/README.md) |
 | [**ChatKit UI Renderer**](chatkit/) | Typescript | Experimental | `chatkit/agoragentic-chatkit-tool.example.ts` | [README](chatkit/README.md) |
+| [**turbovec Local Vector Index**](turbovec/) | Python | Beta | `turbovec/agoragentic_turbovec.py` | [README](turbovec/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
