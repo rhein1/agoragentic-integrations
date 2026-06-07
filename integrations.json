@@ -1,6 +1,6 @@
 {
-  "version": "2.19.0",
-  "updated_at": "2026-06-01",
+  "version": "2.21.0",
+  "updated_at": "2026-06-07",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -288,7 +288,7 @@
       "id": "agoragentic-rust-framework",
       "name": "Agoragentic Rust Framework HTTP Runtime",
       "language": "rust",
-      "status": "beta",
+      "status": "ready",
       "path": "rust-framework/README.md",
       "install": "Run a local agoragentic-rust HTTP runtime, then set AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080",
       "docs": "rust-framework/README.md"
@@ -301,6 +301,15 @@
       "path": "robinhood/mcp.json",
       "install": "Schema-only scaffold; owner-authenticated MCP probe required before use",
       "docs": "robinhood/README.md"
+    },
+    {
+      "id": "hermes-agent",
+      "name": "Hermes Agent Bridge",
+      "language": "json",
+      "status": "beta",
+      "path": "hermes-agent/agent-os-bridge.manifest.json",
+      "install": "Add npx agoragentic-mcp to a Hermes-compatible MCP host; live execution and self-improvement activation remain owner-gated",
+      "docs": "hermes-agent/README.md"
     },
     {
       "id": "financial-research",
@@ -760,6 +769,78 @@
       "path": "humanlayer/agoragentic_humanlayer.py",
       "install": "pip install requests humanlayer",
       "docs": "humanlayer/README.md"
+    },
+    {
+      "id": "ag-ui",
+      "name": "AG-UI Protocol Bridge",
+      "language": "typescript",
+      "status": "beta",
+      "path": "ag-ui/agoragentic_ag_ui.ts",
+      "install": "Copy ag-ui/agoragentic_ag_ui.ts to your project",
+      "docs": "ag-ui/README.md"
+    },
+    {
+      "id": "bedrock-agentcore",
+      "name": "AWS Bedrock AgentCore Adapter",
+      "language": "python",
+      "status": "experimental",
+      "path": "bedrock-agentcore/agoragentic_agentcore.py",
+      "install": "Copy bedrock-agentcore/agoragentic_agentcore.py to your action group",
+      "docs": "bedrock-agentcore/README.md"
+    },
+    {
+      "id": "strands",
+      "name": "AWS Strands Hooks",
+      "language": "python",
+      "status": "beta",
+      "path": "strands/agoragentic_strands.py",
+      "install": "Copy strands/agoragentic_strands.py to your strands middleware",
+      "docs": "strands/README.md"
+    },
+    {
+      "id": "microsoft-agent-framework",
+      "name": "Microsoft Agent Framework",
+      "language": "python",
+      "status": "beta",
+      "path": "microsoft-agent-framework/agoragentic_agent_framework.py",
+      "install": "Copy microsoft-agent-framework/agoragentic_agent_framework.py to your project",
+      "docs": "microsoft-agent-framework/README.md"
+    },
+    {
+      "id": "claude-agent-sdk",
+      "name": "Claude Agent SDK Gating",
+      "language": "python",
+      "status": "beta",
+      "path": "claude-agent-sdk/agoragentic_claude_agent.py",
+      "install": "Copy claude-agent-sdk/agoragentic_claude_agent.py to your middleware",
+      "docs": "claude-agent-sdk/README.md"
+    },
+    {
+      "id": "letta",
+      "name": "Letta Context and Memory",
+      "language": "python",
+      "status": "beta",
+      "path": "letta/agoragentic_letta.py",
+      "install": "Copy letta/agoragentic_letta.py to your letta tools",
+      "docs": "letta/README.md"
+    },
+    {
+      "id": "openai-agents-ts",
+      "name": "OpenAI Agents SDK TypeScript",
+      "language": "typescript",
+      "status": "beta",
+      "path": "openai-agents-ts/agoragentic_openai_agents.ts",
+      "install": "Copy openai-agents-ts/agoragentic_openai_agents.ts to your project",
+      "docs": "openai-agents-ts/README.md"
+    },
+    {
+      "id": "chatkit",
+      "name": "ChatKit UI Renderer",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "chatkit/agoragentic-chatkit-tool.example.ts",
+      "install": "Copy chatkit/agoragentic-chatkit-tool.example.ts to your UI components",
+      "docs": "chatkit/README.md"
     }
   ],
   "specs": [
@@ -789,6 +870,12 @@
     "robinhood_mcp": "robinhood/mcp.json",
     "robinhood_mcp_probe_template": "robinhood/probes/robinhood-mcp-probe-template.json",
     "robinhood_mcp_probe_redacted_example": "robinhood/probes/robinhood-mcp-probe-redacted.example.json",
+    "hermes_agent": "hermes-agent/README.md",
+    "hermes_agent_bridge_manifest": "hermes-agent/agent-os-bridge.manifest.json",
+    "hermes_agent_mcp_config_example": "hermes-agent/mcp.agoragentic.example.json",
+    "hermes_agent_self_improvement_policy": "hermes-agent/self-improvement-policy.example.json",
+    "hermes_agent_reflection_packet": "hermes-agent/reflection-packet.example.json",
+    "hermes_agent_verifier": "hermes-agent/verify-hermes-agent.mjs",
     "financial_research": "financial-research/README.md",
     "financial_research_repo_intake": "financial-research/repo-intake.v1.json",
     "openfang": "openfang/README.md",
@@ -824,6 +911,24 @@
     "zapier_mcp": "zapier-mcp/README.md",
     "flowise": "flowise/README.md",
     "composio": "composio/README.md",
-    "humanlayer": "humanlayer/README.md"
+    "humanlayer": "humanlayer/README.md",
+    "ag_ui": "ag-ui/README.md",
+    "ag_ui_adapter": "ag-ui/agoragentic_ag_ui.ts",
+    "bedrock_agentcore": "bedrock-agentcore/README.md",
+    "bedrock_agentcore_adapter": "bedrock-agentcore/agoragentic_agentcore.py",
+    "strands": "strands/README.md",
+    "strands_adapter_py": "strands/agoragentic_strands.py",
+    "strands_adapter_ts": "strands/agoragentic_strands.ts",
+    "microsoft_agent_framework": "microsoft-agent-framework/README.md",
+    "microsoft_agent_framework_adapter": "microsoft-agent-framework/agoragentic_agent_framework.py",
+    "claude_agent_sdk": "claude-agent-sdk/README.md",
+    "claude_agent_sdk_adapter_py": "claude-agent-sdk/agoragentic_claude_agent.py",
+    "claude_agent_sdk_adapter_ts": "claude-agent-sdk/agoragentic_claude_agent.ts",
+    "letta": "letta/README.md",
+    "letta_adapter": "letta/agoragentic_letta.py",
+    "openai_agents_ts": "openai-agents-ts/README.md",
+    "openai_agents_ts_adapter": "openai-agents-ts/agoragentic_openai_agents.ts",
+    "chatkit": "chatkit/README.md",
+    "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts"
   }
 }

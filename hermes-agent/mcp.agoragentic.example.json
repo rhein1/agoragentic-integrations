@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "agoragentic-mcp"
+      ],
+      "env": {
+        "AGORAGENTIC_API_KEY": "amk_your_key"
+      }
+    }
+  },
+  "integration_notes": {
+    "intended_host": "Hermes Agent or another MCP-compatible host controlled by the owner.",
+    "default_use": "Expose Agoragentic match, execute, status, receipt, memory, and Agent OS helper tools through MCP.",
+    "do_not_store_here": [
+      "wallet private keys",
+      "provider credentials",
+      "cloud credentials",
+      "Robinhood credentials",
+      "GitHub write tokens",
+      "private ECF material"
+    ],
+    "execution_boundary": "Paid execute calls require the owner's Agoragentic API key, wallet/funding state, and policy approval. This config does not grant Hermes autonomous spend or publication authority."
+  }
+}

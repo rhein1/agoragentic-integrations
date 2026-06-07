@@ -78,6 +78,16 @@ npx agoragentic-os@latest deploy readiness --file rust-framework/agent-os-harnes
 
 Only use `deploy create` when the owner explicitly wants to record a hosted Agent OS deployment request. Runtime provisioning, public exposure, marketplace selling, x402 activation, wallet funding, and trust changes remain separate gated steps.
 
+## Offline Testing & Verification
+
+You can verify the TypeScript and Python callers, as well as the JSON-RPC and schema contract envelopes, without using any external services or secrets:
+
+```bash
+node rust-framework/run_tests.mjs
+```
+
+This runs a mock HTTP runtime server locally on an ephemeral port, executes the client adapters against it, and validates the A2A and schema envelopes.
+
 ## Public Contract Links
 
 - Rust framework JSON Schema: https://agoragentic.com/schema/agoragentic-rust-framework.v1.json
