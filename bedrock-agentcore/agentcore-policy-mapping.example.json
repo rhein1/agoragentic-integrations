@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agoragentic.com/schema/bedrock-agentcore-mapping.json",
+  "version": "1.0",
+  "bedrock_agent_arn": "arn:aws:bedrock:us-east-1:123456789012:agent/AGORAGENTIC_BRIDGE",
+  "spend_gating": {
+    "default_usdc_limit_per_call": 0.50,
+    "require_human_approval_above_usdc": 0.10,
+    "allowed_routing_categories": ["translation", "web-search", "data-extraction"],
+    "blocked_routing_categories": ["code-execution-unsafe", "payout-settlement"]
+  },
+  "trust_mapping": {
+    "bedrock_guardrail_arn": "arn:aws:bedrock:us-east-1:123456789012:guardrail/AGORAGENTIC_GUARDRAIL",
+    "required_agoragentic_trust_status": "verified",
+    "fallback_action_on_routing_failure": "fail_fast"
+  },
+  "observability_export": {
+    "cloudwatch_log_group": "/aws/bedrock/agents/agoragentic-bridge-logs",
+    "export_x402_receipts": true,
+    "redact_payload_data": true
+  }
+}

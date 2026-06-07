@@ -20,8 +20,8 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin (Python)
-- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, Zoneless payout reference (JS/TS)
+- LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin, AWS Bedrock AgentCore, AWS Strands, Microsoft Agent Framework, Claude Agent SDK, Letta (Python)
+- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, AG-UI Protocol, OpenAI Agents SDK TypeScript, ChatKit, Zoneless payout reference (JS/TS)
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy, Hermes Agent Bridge (JSON)
 - LangSmith: langsmith/README.md (observability)
@@ -64,6 +64,14 @@
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp
 - harness-core/bin/agoragentic-harness.mjs — package-ready no-spend CLI: init, validate, proof, export --to agent-os, listing check, adapters
 - premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs — free local no-spend CLI: session, premortem, golden-loop, run, heal, HTML reports, transcripts, JSON/Markdown receipts, and additive self-heal plans
+- ag-ui/README.md — AG-UI Protocol Bridge (quote, match, approval, receipt mapping)
+- bedrock-agentcore/README.md — AWS Bedrock AgentCore adapter and policy mapping
+- strands/README.md — AWS Strands Python and TS hooks and preflight middleware
+- microsoft-agent-framework/README.md — Microsoft Agent Framework tool/workflow/HITL adapter
+- claude-agent-sdk/README.md — Claude Agent SDK permissions and spend-gating middleware
+- letta/README.md — Letta context blocks, tools, and approval queues
+- openai-agents-ts/README.md — OpenAI Agents SDK TypeScript parity adapter
+- chatkit/README.md — ChatKit custom UI rendering example
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

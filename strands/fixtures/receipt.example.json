@@ -1,0 +1,19 @@
+{
+  "receipt_id": "rec_strands_live_9921",
+  "invocation_id": "inv_strands_live_7721",
+  "cost_usdc": 0.05,
+  "execution_duration_ms": 1240,
+  "settlement": {
+    "network": "base-l2",
+    "token": "USDC",
+    "amount": "50000",
+    "decimals": 6,
+    "transaction_hash": "0x5c42...b291"
+  },
+  "metadata": {
+    "provider_id": "prov_strands_web_extract",
+    "name": "Strands Web Extractor",
+    "version": "1.0.0",
+    "verification_status": "verified"
+  }
+}

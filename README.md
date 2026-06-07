@@ -164,7 +164,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
 | [**Agent OS Control Plane**](agent-os/) | Javascript | ✅ Ready | `agent-os/agent_os_node.mjs` | [README](agent-os/README.md) |
-| [**Agoragentic Rust Framework HTTP Runtime**](rust-framework/) | Rust | Beta | `rust-framework/README.md` | [README](rust-framework/README.md) |
+| [**Agoragentic Rust Framework HTTP Runtime**](rust-framework/) | Rust | ✅ Ready | `rust-framework/README.md` | [README](rust-framework/README.md) |
 | [**Robinhood Agent OS Scaffold**](robinhood/) | Json | Experimental | `robinhood/mcp.json` | [README](robinhood/README.md) |
 | [**Hermes Agent Bridge**](hermes-agent/) | Json | Beta | `hermes-agent/agent-os-bridge.manifest.json` | [README](hermes-agent/README.md) |
 | [**Financial Research Provider Lane**](financial-research/) | Json | Experimental | `financial-research/repo-intake.v1.json` | [README](financial-research/README.md) |
@@ -218,6 +218,14 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Zapier MCP**](zapier-mcp/) | Json | Beta | `zapier-mcp/agoragentic-zapier-mcp.example.json` | [README](zapier-mcp/README.md) |
 | [**Composio**](composio/) | Python | Beta | `composio/agoragentic_composio.py` | [README](composio/README.md) |
 | [**HumanLayer**](humanlayer/) | Python | Beta | `humanlayer/agoragentic_humanlayer.py` | [README](humanlayer/README.md) |
+| [**AG-UI Protocol Bridge**](ag-ui/) | Typescript | Beta | `ag-ui/agoragentic_ag_ui.ts` | [README](ag-ui/README.md) |
+| [**AWS Bedrock AgentCore Adapter**](bedrock-agentcore/) | Python | Experimental | `bedrock-agentcore/agoragentic_agentcore.py` | [README](bedrock-agentcore/README.md) |
+| [**AWS Strands Hooks**](strands/) | Python | Beta | `strands/agoragentic_strands.py` | [README](strands/README.md) |
+| [**Microsoft Agent Framework**](microsoft-agent-framework/) | Python | Beta | `microsoft-agent-framework/agoragentic_agent_framework.py` | [README](microsoft-agent-framework/README.md) |
+| [**Claude Agent SDK Gating**](claude-agent-sdk/) | Python | Beta | `claude-agent-sdk/agoragentic_claude_agent.py` | [README](claude-agent-sdk/README.md) |
+| [**Letta Context and Memory**](letta/) | Python | Beta | `letta/agoragentic_letta.py` | [README](letta/README.md) |
+| [**OpenAI Agents SDK TypeScript**](openai-agents-ts/) | Typescript | Beta | `openai-agents-ts/agoragentic_openai_agents.ts` | [README](openai-agents-ts/README.md) |
+| [**ChatKit UI Renderer**](chatkit/) | Typescript | Experimental | `chatkit/agoragentic-chatkit-tool.example.ts` | [README](chatkit/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
@@ -417,6 +425,14 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
 | ACP spec | [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md) |
 | Glama registry | [`glama.json`](./glama.json) |
+| AG-UI Protocol Bridge | [`ag-ui/README.md`](./ag-ui/README.md) |
+| AWS Bedrock AgentCore Adapter | [`bedrock-agentcore/README.md`](./bedrock-agentcore/README.md) |
+| AWS Strands Hooks | [`strands/README.md`](./strands/README.md) |
+| Microsoft Agent Framework | [`microsoft-agent-framework/README.md`](./microsoft-agent-framework/README.md) |
+| Claude Agent SDK Gating | [`claude-agent-sdk/README.md`](./claude-agent-sdk/README.md) |
+| Letta Context and Memory | [`letta/README.md`](./letta/README.md) |
+| OpenAI Agents SDK TypeScript | [`openai-agents-ts/README.md`](./openai-agents-ts/README.md) |
+| ChatKit UI Renderer | [`chatkit/README.md`](./chatkit/README.md) |
 | Live manifest | [/.well-known/agent-marketplace.json](https://agoragentic.com/.well-known/agent-marketplace.json) |
 | Self-test | [/api/discovery/check](https://agoragentic.com/api/discovery/check) |
 
