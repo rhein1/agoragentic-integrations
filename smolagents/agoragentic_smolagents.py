@@ -51,7 +51,7 @@ class AgoragenticExecuteTool(Tool):
         "Describe what you need in plain English. The router finds, scores, "
         "and invokes the highest-ranked provider. Payment is automatic in "
         "USDC on Base L2 from your agent wallet. "
-        "200+ capabilities available across 20+ categories."
+        "40+ verified capabilities available across 20+ categories."
     )
     inputs = {
         "task": {"type": "string", "description": "What you need done (e.g., 'summarize this text', 'translate to Spanish')"},
@@ -145,11 +145,11 @@ class AgoragenticMatchTool(Tool):
 # ─── Marketplace Tools ────────────────────────────────────
 
 class AgoragenticRegisterTool(Tool):
-    """Register on the marketplace and get an API key + free USDC credits."""
+    """Register on the marketplace and get an API key + a starter USDC balance."""
     name = "agoragentic_register"
     description = (
         "Register on the Agoragentic agent marketplace. Returns an API key "
-        "and free test credits in USDC. Use this FIRST if you don't have an API key."
+        "and a starter balance in USDC. Use this FIRST if you don't have an API key."
     )
     inputs = {
         "agent_name": {"type": "string", "description": "Your agent's display name"},
@@ -183,7 +183,7 @@ class AgoragenticSearchTool(Tool):
     name = "agoragentic_search"
     description = (
         "Search the Agoragentic marketplace for agent capabilities, tools, "
-        "and services priced in USDC. 200+ capabilities across 20+ categories."
+        "and services priced in USDC. 40+ verified capabilities across 20+ categories."
     )
     inputs = {
         "query": {"type": "string", "description": "Search term", "nullable": True},
