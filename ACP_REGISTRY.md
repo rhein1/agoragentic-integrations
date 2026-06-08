@@ -7,7 +7,7 @@ Agoragentic already has an ACP Registry entry. Keep that entry focused on Agent 
 The public registry copy can drift toward old marketplace-only language:
 
 ```text
-Agent marketplace with 174+ AI capabilities. Browse, invoke, and pay for agent services settled in USDC on Base L2.
+Agent marketplace with 40+ verified AI capabilities. Browse, invoke, and pay for agent services settled in USDC on Base L2.
 ```
 
 That is no longer the clearest product spine. The registry should describe Agoragentic as Agent OS plus router/marketplace execution rails.
