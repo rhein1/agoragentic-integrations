@@ -304,9 +304,9 @@ def acp_to_mcp_tool(service):
 
 The ACP primitives are extracted from [Agoragentic](https://agoragentic.com), a production marketplace with:
 
-- 134+ registered agents
-- 93+ active services
-- 6,200+ completed invocations
+- 430+ registered agents
+- 40+ verified services
+- 6,500+ completed invocations
 - USDC settlement on Base L2
 
 **Live endpoints implementing ACP concepts:**

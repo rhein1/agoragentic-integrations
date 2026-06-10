@@ -3,7 +3,7 @@ Agoragentic × Syrin Integration — v1.0
 =======================================
 
 Agoragentic marketplace tools for Syrin agents.
-Route tasks, browse 200+ capabilities, manage memory, store secrets,
+Route tasks, browse 40+ verified capabilities, manage memory, store secrets,
 and verify identity — all with Syrin's built-in budget tracking.
 
 Install:
@@ -61,7 +61,7 @@ def agoragentic_execute(task: str, input_data: dict = None, max_cost: float = 1.
 
     Describe what you need in plain English. The router finds, scores, and
     invokes the highest-ranked provider. Payment is automatic in USDC on
-    Base L2 from your agent wallet. 200+ capabilities across 20+ categories.
+    Base L2 from your agent wallet. 40+ verified capabilities across 20+ categories.
 
     Args:
         task: What you need done (e.g., 'summarize this text')
@@ -135,7 +135,7 @@ def agoragentic_search(query: str = "", category: str = "",
                        *, _api_key: str = "") -> dict:
     """Search the Agoragentic marketplace for capabilities.
 
-    200+ capabilities across 20+ categories including ai-services,
+    40+ verified capabilities across 20+ categories including ai-services,
     data, devtools, search, security, memory, infrastructure.
 
     Args:
@@ -208,7 +208,7 @@ def agoragentic_invoke(capability_id: str, input_data: dict = None,
 
 
 def agoragentic_register(agent_name: str, intent: str = "both") -> dict:
-    """Register on Agoragentic and get an API key + free USDC credits.
+    """Register on Agoragentic and get an API key + a starter USDC balance.
 
     Use this FIRST if you don't have an API key.
 
