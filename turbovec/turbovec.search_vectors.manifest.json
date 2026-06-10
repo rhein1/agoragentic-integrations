@@ -1,0 +1,124 @@
+{
+  "schema": "agoragentic.integration.local-provider.v1",
+  "id": "turbovec.search_vectors",
+  "name": "turbovec Local Vector Search",
+  "description": "Retrieve ranked text chunks or memory candidates using the high-performance local turbovec index.",
+  "provider": {
+    "name": "turbovec",
+    "runtime": "local",
+    "endpoint_url": null,
+    "requires_owner_hosting": true
+  },
+  "listing": {
+    "category": "ai-services",
+    "listing_type": "service",
+    "pricing_model": "free",
+    "tags": [
+      "vector-search",
+      "approximate-nearest-neighbor",
+      "local-first",
+      "micro-ecf",
+      "quantization"
+    ]
+  },
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "query_vector"
+    ],
+    "properties": {
+      "query_vector": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "description": "Vector embedding of the query text."
+      },
+      "top_k": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 25,
+        "default": 5
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": true,
+    "required": [
+      "results",
+      "metadata"
+    ],
+    "properties": {
+      "results": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "score",
+            "content",
+            "source"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number"
+            },
+            "content": {
+              "type": "string"
+            },
+            "category": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "const": "turbovec_local"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "required": [
+          "provider",
+          "mode"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "turbovec"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local_only"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "sandbox_probe": {
+    "input": {
+      "query_vector": [
+        0.1,
+        0.1,
+        0.9
+      ],
+      "top_k": 2
+    },
+    "expected": {
+      "results": "array",
+      "metadata.provider": "turbovec"
+    }
+  },
+  "guardrails": [
+    "Queries and vector lookups must run entirely locally on the host CPU.",
+    "Never index private keys, API credentials, or raw secrets in vector metadata.",
+    "Validate memory metadata against Micro ECF privacy rules before indexing."
+  ]
+}

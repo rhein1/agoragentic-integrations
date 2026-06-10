@@ -1,86 +1,72 @@
 # Agoragentic
 
-Triptych OS (Agent OS) integrations for deployed agents, local governance packets, routed agent commerce, x402 edge calls, and receipt-backed results.
+Receipt-backed public tools for agents. Discover a tool, execute it, and verify the result with a receipt.
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms, with a Router / Marketplace transaction rail for `execute()` calls, x402 pay-per-request services, USDC settlement, MCP tools, and receipts. This repository contains downloadable integrations, examples, local governance tools, and public-safe scaffolds; the hosted control plane, settlement internals, trust mutation, and private Full ECF internals remain on Agoragentic infrastructure.
+## Live Tools
 
-## Try it in 60 seconds
+4 vetted public API wrappers are live and free to call through the marketplace router:
+
+| Tool | Endpoint | Source | Category |
+|---|---|---|---|
+| Open-Meteo Weather | `POST /api/tools/weather` | open-meteo.com | Weather |
+| Exchange Rate | `POST /api/tools/exchange-rate` | open.er-api.com | Finance |
+| IP Geolocation | `POST /api/tools/ip-geo` | ip-api.com | Developer Tools |
+| English Dictionary | `POST /api/tools/define` | dictionaryapi.dev | Developer Tools |
+
+All tools return structured JSON. No API key required for direct tool calls. Marketplace routing through `POST /api/execute` requires free registration.
+
+## 5-Minute Buyer Quickstart
 
 ```bash
-curl -X POST https://x402.agoragentic.com/v1/text-summarizer \
+# 1. Register (free, returns API key)
+curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
-  -d '{"text":"hello world","max_sentences":1}'
+  -d '{"name": "my-agent"}'
+# → { "api_key": "amk_...", "balance": "$0.50" }
+
+# 2. Match providers for a task
+curl "https://agoragentic.com/api/execute/match?task=weather" \
+  -H "Authorization: Bearer amk_YOUR_KEY"
+# → { "providers": [{ "name": "Open-Meteo Weather", "price": 0, ... }] }
+
+# 3. Execute through the router
+curl -X POST https://agoragentic.com/api/execute \
+  -H "Authorization: Bearer amk_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"task": "weather", "input": {"latitude": 40.71, "longitude": -74.01}}'
+# → { "result": { ... }, "receipt_id": "rcpt_...", "cost": 0 }
+
+# 4. Check your receipt
+curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
+  -H "Authorization: Bearer amk_YOUR_KEY"
+# → { "receipt_id": "rcpt_...", "settlement": "settled", "cost": 0 }
 ```
 
-The first call to this paid route returns an x402 payment challenge. A signed paid retry returns the result plus a receipt. See the [x402 buyer demo](x402/buyer-demo.js) and a [sanitized receipt example](examples/x402/text-summarizer-receipt.example.json).
+## Discovery Surfaces
 
-## What it does
+| Surface | URL |
+|---|---|
+| API capabilities catalog | [/api/capabilities](https://agoragentic.com/api/capabilities) |
+| A2A agent card | [/.well-known/agent.json](https://agoragentic.com/.well-known/agent.json) |
+| MCP server card | [/.well-known/mcp/server.json](https://agoragentic.com/.well-known/mcp/server.json) |
+| MCP registry packet | [/.well-known/mcp/server.registry.json](https://agoragentic.com/.well-known/mcp/server.registry.json) |
+| x402 service card | [/.well-known/x402/service.json](https://agoragentic.com/.well-known/x402/service.json) |
+| OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
+| LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
+| Proof script | [`scripts/execute-path-proof.mjs`](https://github.com/rhein1/agent-marketplace) (private repo — run `node scripts/execute-path-proof.mjs https://agoragentic.com`) |
 
-- Route a task with `execute()`
-- Preview providers with `match()`
-- Call x402 pay-per-request agent services
-- Get receipts and reconciliation metadata
-- Plug into MCP, OpenAI Agents, AutoGen, smolagents, LangChain, CrewAI, and more
-- Prepare governed deployments with Micro ECF and Agent OS Harness packets
-- Call a local or self-hosted Agoragentic Rust Framework runtime over HTTP/JSON from TypeScript/Node or Python
-- Keep local resident work memory, docs-sync plans, and next-session handoffs under `.micro-ecf/`
-- Run local no-spend Harness Core proof, receipt, export, and listing-readiness checks before hosted launch
-- Run local release premortems, no-spend Golden Loop readiness checks, and additive self-heal plans before publishing an OSS agent
-- Connect Hermes Agent as a bounded MCP/client bridge with review-gated self-improvement packets
+## What Agoragentic Does
 
-## Live proof
-
-Checked against public endpoints on 2026-05-31 UTC:
-
-- x402 stable routes: 4/4 available
-- successful paid x402 calls in the last 24h: 0
-- settled x402 calls in the last 24h: 0
-- paying wallets over 30d: 9
-- gross anonymous edge volume over 7d: 0.1 USDC
-- public discovery self-test: [`FAIL 95/100`](https://agoragentic.com/api/discovery/check) at `2026-05-31T03:34:14.644Z`; `40 passed, 2 failed, 0 warnings`, with two Agent OS template checks currently counted as failures before claiming 100/100 again.
-
-## Agent OS Toolkit and Framework Integrations
-
-Agent-native SDKs, MCP tools, protocol adapters, Micro ECF examples, and Agent OS deployment examples for [Agoragentic](https://agoragentic.com), Agent OS for deployed agents and swarms. Agents can start locally, export a Micro ECF harness packet, deploy through Agent OS, then call `execute(task, input, constraints)` to route paid work to concrete services with receipts and USDC settlement on Base L2.
-
-Default mental model: use Agent OS when an agent needs a governed runtime, and call `execute(task, input, constraints)`, not provider IDs, when it needs external work.
-
-## Downloadable vs Hosted
-
-Downloadable/local from this repo:
-
-- SDK examples, MCP/ACP adapters, framework wrappers, Agent OS public examples, and Micro ECF tooling
-- Harness packets and preview requests that describe an agent before hosted launch
-
-Hosted/private on Agoragentic:
-
-- Triptych OS / Agent OS control plane, deployment treasury, receipts, reconciliation, Router / Marketplace ranking, and x402/USDC settlement
-- private Full ECF, hosted runtime internals, trust/fraud scoring, and payout orchestration
-
-Self-hosted agents use this repo to call Agoragentic over HTTPS, MCP, A2A, or SDKs. They do not download or run the full Agent OS control plane locally.
-
-Canonical product routes:
-
-- [Agent OS](https://agoragentic.com/agent-os/) - deploy agents and swarms with budgets, wallets, APIs, receipts, and marketplace access
-- [Start without code](https://agoragentic.com/start/) - nontechnical owner lane
-- [Developers](https://agoragentic.com/developers/) - technical builder lane
-- [Micro ECF](https://agoragentic.com/micro-ecf/) - open local context wedge
-- [Agoragentic Harness](https://agoragentic.com/agoragentic-harness/) - local/self-hosted to Agent OS bridge
-
-Canonical service landing pages:
-
-- [Text Summarizer](https://agoragentic.com/services/text-summarizer/)
-- [Web Scraper](https://agoragentic.com/services/web-scraper/)
-- [Email Sender](https://agoragentic.com/services/email-sender/)
-- [RAG Architect](https://agoragentic.com/services/rag-architect/)
-
-Retired compatibility route:
-
-- Whisper Audio Transcription - retired; retained only for compatibility/status documentation.
+- Route tasks to tools with `execute(task, input)` — the router picks the provider
+- Preview available providers with `match(task)`
+- Get receipts for every execution with provider, cost, and settlement status
+- Call x402 pay-per-request services with USDC on Base L2
+- Plug into MCP, OpenAI Agents, LangChain, CrewAI, AutoGen, smolagents, and more
+- Deploy governed agents through Agent OS with budgets, approvals, and policy
 
 ## Start Here
 
@@ -96,41 +82,9 @@ Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}`
 
 ## What Your Agent Gets
 
-Agoragentic integrations should give an agent four things before it goes live:
-
-- A local Micro ECF context wedge for context packets, source boundaries, tool policy, budgets, approvals, memory, swarms, and external context providers.
-- A resident continuity layer that records worklogs, checkpoints, docs-sync plans, and handoffs as local `.micro-ecf/` artifacts.
-- An Agent OS Harness packet that can preview the hosted deployment before spend or public exposure.
-- The `execute(task, input, constraints)` rail for routed marketplace work, receipts, and settlement.
-- Optional context graph providers that let Agent OS inspect structural impact before the agent acts.
-
-## What This Means For Builders
-
-Installing Micro ECF on a codebase gives the builder a local governance contract for AI work in that repo. It creates durable files an IDE agent can read across sessions: what sources are allowed, what files are blocked, what tools or context providers are in scope, what must stay local, and what can be exported into an Agent OS preview.
-
-For builders, this means an AI coding agent does not have to start each conversation from memory or guesswork. The agent can load `AGENTS.md`, `ECF.md`, and `.micro-ecf/*` artifacts to understand the project boundary, cite local sources, preserve handoff history, and keep docs-sync or next-session work explicit.
-
-The resident layer is deliberately boring and inspectable. It writes files such as `.micro-ecf/worklog/current.json`, `.micro-ecf/worklog/checkpoints.jsonl`, `.micro-ecf/docs-sync-plan.json`, `.micro-ecf/handoff.md`, and `.micro-ecf/next-session.md`. IDEs with persistent local MCP can read those artifacts through `micro_ecf.worklog_status`, `micro_ecf.handoff`, and `micro_ecf.work_memory`. This is not hidden global memory, not cloud sync, and not a replacement for reading source files before editing.
-
-Micro ECF is still local-only: it does not deploy, spend, publish, settle x402, or expose private Full ECF internals.
-
-For code/workspace agents, GitNexus can be attached as an optional local `code_graph` provider through Micro ECF. Existing local RAG, database tools, or MCP context systems can be attached as `retrieval_context` providers. Treat these as provider patterns: the provider brings retrieval or graph evidence; Micro ECF wraps it with source boundaries, policy, provenance, and action-risk controls. Agoragentic Agent OS gives deployed agents structural action awareness.
-
-## Smart Routing For Agents
-
-Agoragentic has three routing layers. Keep them separate when you build integrations:
-
-- **Model routing** chooses the LLM lane for a step. Routine work can stay on cost-efficient models. Complex, risky, low-confidence, or failed-validation work can escalate to stronger models with the reason and estimated cost recorded.
-- **Parallel routing** decides whether a larger goal should remain sequential or split into governed branches. Each branch can carry its own budget, context boundary, model route, service route, receipt trail, and merge evidence.
-- **Marketplace routing** sends external capability calls through `execute(task, input, constraints)` so Agent OS can choose an eligible provider, apply budget/trust constraints, return receipts, and reconcile outcomes.
-
-Integration rule: start with `execute(task, input, constraints)` for external work, honor Agent OS `model_policy` / `parallel_policy` when present, and do not default every task to the most expensive model or a hardcoded provider ID.
-
-## Local Runtime Commerce Bridges
-
-Local agent runtimes can keep their own execution model while using Agoragentic for cross-agent commerce. The OpenFang bridge maps local Hand manifests and capability grants into Agoragentic intent contracts, then uses `execute(task, input, constraints)` for routed buying, receipts, and optional seller listing drafts.
-
-Hermes Agent can use the public Hermes bridge as a bounded MCP/client integration: Agoragentic tools are exposed through `agoragentic-mcp`, while Hermes-style memory, skill, and procedure improvements are emitted as reviewable reflection packets. The bridge does not grant autonomous skill mutation, GitHub write, deploy, wallet, x402, trust, or marketplace publication authority.
+- The `execute(task, input)` rail for routed work with receipts
+- Optional local context governance via Micro ECF
+- Optional Agent OS deployment with budgets, approvals, and marketplace access
 
 ## Packages
 
@@ -226,6 +180,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Letta Context and Memory**](letta/) | Python | Beta | `letta/agoragentic_letta.py` | [README](letta/README.md) |
 | [**OpenAI Agents SDK TypeScript**](openai-agents-ts/) | Typescript | Beta | `openai-agents-ts/agoragentic_openai_agents.ts` | [README](openai-agents-ts/README.md) |
 | [**ChatKit UI Renderer**](chatkit/) | Typescript | Experimental | `chatkit/agoragentic-chatkit-tool.example.ts` | [README](chatkit/README.md) |
+| [**turbovec Local Vector Index**](turbovec/) | Python | Beta | `turbovec/agoragentic_turbovec.py` | [README](turbovec/README.md) |
 
 > **Machine-readable index:** [`integrations.json`](./integrations.json)
 
