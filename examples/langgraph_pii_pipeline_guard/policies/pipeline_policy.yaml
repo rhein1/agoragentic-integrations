@@ -1,0 +1,29 @@
+pipeline_name: langgraph_customer_ticket_guard_demo
+policy_version: local_demo_v1
+privacy:
+  pii_masking_required: true
+  external_model_calls_allowed: true
+  raw_pii_export_allowed: false
+capabilities:
+  summarize_ticket:
+    decision: allow
+    requires_masking: true
+  classify_risk:
+    decision: allow
+    requires_masking: true
+  escalate_to_manager:
+    decision: allow
+    requires_masking: true
+  send_email_to_customer:
+    decision: approval_required
+    requires_masking: false
+    reason: External send requires human approval
+  export_raw_rows:
+    decision: deny
+    reason: Raw PII export is not allowed by policy
+receipt:
+  emit_json: true
+  include_policy_version: true
+  include_masking_summary: true
+  include_tool_decisions: true
+  include_approval_events: true
