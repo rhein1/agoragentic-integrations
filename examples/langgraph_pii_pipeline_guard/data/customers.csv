@@ -1,0 +1,11 @@
+customer_id,name,email,phone,account_id,ticket_text,ticket_priority,requested_action
+CUST-001,Ava Morgan,ava.morgan@example.test,555-010-1001,ACCT-1001,"Ava Morgan cannot access account ACCT-1001 and asked for a status summary.",high,summarize_ticket
+CUST-002,Ben Carter,ben.carter@example.test,555-010-1002,ACCT-1002,"Ben Carter says invoice emails are going to ben.carter@example.test and wants risk classification.",medium,classify_risk
+CUST-003,Chloe Rivera,chloe.rivera@example.test,555-010-1003,ACCT-1003,"Chloe Rivera requested raw export of ACCT-1003 ticket rows.",high,export_raw_rows
+CUST-004,Diego Lee,diego.lee@example.test,555-010-1004,ACCT-1004,"Diego Lee wants a support email sent about cancellation risk.",high,send_email_to_customer
+CUST-005,Emma Patel,emma.patel@example.test,555-010-1005,ACCT-1005,"Emma Patel reported a billing dispute and needs manager escalation.",high,escalate_to_manager
+CUST-006,Farah Chen,farah.chen@example.test,555-010-1006,ACCT-1006,"Farah Chen asked for a concise operational summary for CUST-006.",low,summarize_ticket
+CUST-007,Grace Kim,grace.kim@example.test,555-010-1007,ACCT-1007,"Grace Kim has repeated login failures and account access complaints.",medium,classify_risk
+CUST-008,Hugo Silva,hugo.silva@example.test,555-010-1008,ACCT-1008,"Hugo Silva wants all raw rows exported to a spreadsheet.",high,export_raw_rows
+CUST-009,Iris Novak,iris.novak@example.test,555-010-1009,ACCT-1009,"Iris Novak requested an external customer follow up.",medium,send_email_to_customer
+CUST-010,Jamal Brooks,jamal.brooks@example.test,555-010-1010,ACCT-1010,"Jamal Brooks has an operational issue and asks for escalation.",medium,escalate_to_manager
