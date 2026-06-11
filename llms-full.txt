@@ -53,7 +53,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 
 ## Integration Matrix
 
-### Python Integrations (19)
+### Python Integrations (20)
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -76,6 +76,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | SuperAGI | superagi/agoragentic_superagi.py | pip install agoragentic |
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
+| turbovec Local Vector Index | turbovec/agoragentic_turbovec.py | pip install turbovec numpy |
 
 ### JavaScript/TypeScript Integrations (15)
 
@@ -226,6 +227,7 @@ Full spec: specs/ACP-SPEC.md
 | Agent OS evidence/eval backlog | micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md |
 | Thin LLM bootstrap | llms.txt |
 | Full LLM context | llms-full.txt (this file) |
+| turbovec | turbovec/README.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |

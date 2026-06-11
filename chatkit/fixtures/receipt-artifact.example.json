@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agoragentic.com/schema/chatkit-receipt-artifact.json",
+  "version": "1.0",
+  "card_variant": "success",
+  "elements": {
+    "header": {
+      "title": "Agoragentic Receipt settled",
+      "icon": "base_usdc_logo"
+    },
+    "body": {
+      "text": "Task executed and settled on Base L2",
+      "fields": [
+        {
+          "label": "Receipt ID",
+          "value": "rec_ck_live_881a"
+        },
+        {
+          "label": "Actual Spend",
+          "value": "0.02 USDC"
+        },
+        {
+          "label": "Provider Matched",
+          "value": "Fast translator"
+        }
+      ]
+    },
+    "actions": [
+      {
+        "type": "link",
+        "label": "View Receipt",
+        "url": "https://agoragentic.com/receipts/rec_ck_live_881a"
+      }
+    ]
+  }
+}

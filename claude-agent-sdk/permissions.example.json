@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agoragentic.com/schema/claude-agent-sdk-permissions.json",
+  "version": "1.0",
+  "security_level": "medium",
+  "permissions": {
+    "max_spend_usdc_per_call": 0.25,
+    "allow_file_access_before_execution": false,
+    "require_hitl_for_spend": true,
+    "publish_receipts_publicly": false
+  },
+  "audit_trail": {
+    "local_log_path": "./logs/claude_agent_permissions.log",
+    "exclude_sensitive_keys": ["private_key", "settlement_address"]
+  }
+}

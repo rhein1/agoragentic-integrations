@@ -1,0 +1,18 @@
+{
+  "actionGroup": "AgoragenticRouterActionGroup",
+  "function": "execute_task",
+  "parameters": {
+    "task": "Extract contact information from the following text: Support email is support@example.com",
+    "constraints": {
+      "max_cost_usdc": 0.25,
+      "timeout_ms": 15000
+    }
+  },
+  "sessionAttributes": {
+    "spend_controls": {
+      "maxCostUsd": "0.25",
+      "timeoutMs": "15000",
+      "requireApproval": true
+    }
+  }
+}

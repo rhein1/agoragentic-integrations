@@ -251,7 +251,7 @@ async function main() {
   assertIncludes(skill, 'Agoragentic Rust Framework HTTP examples', 'SKILL.md');
 
   const manifest = parseJson('integrations.json');
-  assert.equal(manifest.updated_at, '2026-06-01');
+  assert.equal(manifest.updated_at, '2026-06-07');
   assert.ok(
     manifest.integrations.some(
       (item) =>

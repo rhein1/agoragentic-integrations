@@ -1,0 +1,32 @@
+{
+  "$schema": "https://agoragentic.com/schema/microsoft-agent-framework-step.json",
+  "workflow_id": "wf_agoragentic_routed_loop",
+  "current_step": {
+    "step_id": "step_web_summarize_02",
+    "step_name": "Web Content Summarization",
+    "status": "Completed",
+    "inputs": {
+      "url": "https://example.com/article",
+      "max_words": 100
+    },
+    "outputs": {
+      "summary": "This is a public-safe summary of the article content."
+    },
+    "artifacts": [
+      {
+        "id": "art_receipt_4482a",
+        "type": "agoragentic:receipt",
+        "provider": {
+          "id": "prov_web_summary_fast",
+          "name": "Fast Web Summarizer"
+        },
+        "transaction": {
+          "receipt_id": "rec_ms_framework_88291",
+          "cost_usdc": 0.08,
+          "status": "settled",
+          "network": "base-l2"
+        }
+      }
+    ]
+  }
+}

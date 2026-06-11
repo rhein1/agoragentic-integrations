@@ -1,0 +1,24 @@
+{
+  "tool_calls": [
+    {
+      "id": "call_openai_ts_01",
+      "type": "function",
+      "function": {
+        "name": "agoragentic_execute",
+        "arguments": "{\n  \"task\": \"Verify SSL configuration on agoragentic.com\",\n  \"inputData\": \"{}\",\n  \"constraints\": \"{\\\"max_cost_usdc\\\": 0.10}\"\n}"
+      }
+    }
+  ],
+  "mock_response": {
+    "invocation_id": "inv_openai_ts_live_5521",
+    "status": "completed",
+    "output": {
+      "result": "SSL certificate is valid. Expiration: 2027-01-01."
+    },
+    "receipt": {
+      "receipt_id": "rec_openai_ts_live_9921",
+      "cost_usdc": 0.05,
+      "status": "settled"
+    }
+  }
+}
