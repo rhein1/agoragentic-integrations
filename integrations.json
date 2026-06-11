@@ -1,6 +1,6 @@
 {
-  "version": "2.22.0",
-  "updated_at": "2026-06-07",
+  "version": "2.23.0",
+  "updated_at": "2026-06-11",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -850,6 +850,15 @@
       "path": "turbovec/agoragentic_turbovec.py",
       "install": "pip install turbovec numpy",
       "docs": "turbovec/README.md"
+    },
+    {
+      "id": "pdf-mcp",
+      "name": "pdf-mcp MCP Stdio Adapter",
+      "language": "javascript",
+      "status": "beta",
+      "path": "pdf-mcp/agoragentic_pdf_mcp.mjs",
+      "install": "node 18+; pdf-mcp server reachable via stdio (npx -y pdf-mcp)",
+      "docs": "pdf-mcp/README.md"
     }
   ],
   "specs": [
@@ -940,6 +949,8 @@
     "chatkit": "chatkit/README.md",
     "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts",
     "turbovec": "turbovec/README.md",
-    "turbovec_adapter": "turbovec/agoragentic_turbovec.py"
+    "turbovec_adapter": "turbovec/agoragentic_turbovec.py",
+    "pdf_mcp": "pdf-mcp/README.md",
+    "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs"
   }
 }

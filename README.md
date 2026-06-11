@@ -123,6 +123,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Hermes Agent Bridge**](hermes-agent/) | Json | Beta | `hermes-agent/agent-os-bridge.manifest.json` | [README](hermes-agent/README.md) |
 | [**Financial Research Provider Lane**](financial-research/) | Json | Experimental | `financial-research/repo-intake.v1.json` | [README](financial-research/README.md) |
 | [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
+| [**pdf-mcp**](pdf-mcp/) | Javascript | Beta | `pdf-mcp/agoragentic_pdf_mcp.mjs` | [README](pdf-mcp/README.md) |
 | [**CashClaw**](cashclaw/) | Typescript | Beta | `cashclaw/README.md` | [README](cashclaw/README.md) |
 | [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
 | [**n8n Community Node**](n8n/) | Typescript | Beta | `n8n/nodes/Agoragentic/Agoragentic.node.ts` | [README](n8n/README.md) |
@@ -367,6 +368,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Agoragentic Rust Framework HTTP runtime examples | [`rust-framework/README.md`](./rust-framework/README.md) |
 | Hermes Agent bridge | [`hermes-agent/README.md`](./hermes-agent/README.md) |
 | OpenFang bridge | [`openfang/README.md`](./openfang/README.md) |
+| pdf-mcp adapter | [`pdf-mcp/README.md`](./pdf-mcp/README.md) |
 | Premortem Golden Loop Agent | [`premortem-golden-loop/README.md`](./premortem-golden-loop/README.md) |
 | Premortem prompt | [`premortem-golden-loop/PROMPT.md`](./premortem-golden-loop/PROMPT.md) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
