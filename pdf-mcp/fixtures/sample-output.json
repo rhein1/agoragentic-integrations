@@ -1,0 +1,20 @@
+{
+  "$comment": "Expected normalized output shape from executePdfMcp({ pdfPath: 'pdf-mcp/fixtures/sample.pdf' }) against the in-repo stub server. Dynamic fields (request_id, elapsed_ms, raw_result, command, args) vary per run and per environment.",
+  "ok": true,
+  "text": "Agoragentic PDF adapter smoke test.",
+  "pages": 1,
+  "metadata": { "title": "sample" },
+  "selected_tool": "pdf_extract_text",
+  "receipt": {
+    "ok": true,
+    "adapter": "pdf-mcp",
+    "transport": "mcp-stdio",
+    "command": "node",
+    "args": ["pdf-mcp/test-stub-server.mjs"],
+    "request_id": "req_<dynamic>",
+    "selected_tool": "pdf_extract_text",
+    "discovered_tools": ["pdf_extract_text", "image_resize"],
+    "input_path": "pdf-mcp/fixtures/sample.pdf",
+    "elapsed_ms": 0
+  }
+}
