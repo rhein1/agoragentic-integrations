@@ -105,6 +105,12 @@ const DEFAULT_BLOCK_SUFFIXES = [
   '.pfx',
 ];
 
+const GENERATED_ROOT_ARTIFACTS = new Set([
+  'ECF.md',
+  'AGENTS.md',
+  'MICRO_ECF_LLM_BOOTSTRAP.md',
+]);
+
 const LEARNING_REVIEW_STATUSES = Object.freeze(['blocked', 'manual_review', 'proposal_ready']);
 
 export function buildLearningMemoryBoundary() {
@@ -142,7 +148,27 @@ export function createDefaultPolicy(projectName = 'local-agent') {
     context_policy: {
       allowed_sources: ['local_repo', 'local_docs', 'local_database_summaries'],
       denied_sources: ['secrets', 'private_keys', 'wallet_seeds', 'raw_credentials'],
-      local_allow: ['docs/**', 'src/**', '*.md', '*.json', '*.yaml', '*.yml'],
+      local_allow: [
+        'docs/**',
+        'src/**',
+        'app/**',
+        'lib/**',
+        'server/**',
+        'scripts/**',
+        'test/**',
+        'tests/**',
+        '*.js',
+        '*.mjs',
+        '*.ts',
+        '*.tsx',
+        '*.py',
+        '*.go',
+        '*.rs',
+        '*.md',
+        '*.json',
+        '*.yaml',
+        '*.yml',
+      ],
       local_block: ['.env*', 'secrets/**', 'customer_private/**'],
       retention: 'local_only_until_export',
       redaction: 'secrets_reference_only',
@@ -572,9 +598,16 @@ export function indexSources(inputPath, options = {}) {
   const now = new Date().toISOString();
   const sources = [];
   const blocked = [];
+  const generated = [];
 
   walk(root, (filePath) => {
     const rel = relativePortable(root, filePath);
+    const generatedReason = getGeneratedArtifactReason(filePath, rel);
+    if (generatedReason) {
+      generated.push({ path: rel, reason: generatedReason });
+      return;
+    }
+
     const blockReason = getBlockReason(rel, policy);
     if (blockReason) {
       blocked.push({ path: rel, reason: blockReason });
@@ -632,9 +665,11 @@ export function indexSources(inputPath, options = {}) {
     },
     sources,
     blocked,
+    generated,
     stats: {
       included_sources: sources.length,
       blocked_paths: blocked.length,
+      generated_sources_excluded: generated.length,
     },
   };
 
@@ -685,6 +720,25 @@ function getBlockReason(relPath, policy) {
   return null;
 }
 
+function getGeneratedArtifactReason(filePath, relPath) {
+  const normalized = relPath.replace(/\\/g, '/');
+  const lower = normalized.toLowerCase();
+  const segments = lower.split('/');
+
+  if (segments.some((segment) => segment === '.ecf' || segment === '.ecf-core' || segment.startsWith('.ecf-'))) {
+    return 'generated_ecf_artifact';
+  }
+
+  if (!GENERATED_ROOT_ARTIFACTS.has(normalized)) return null;
+
+  const text = fs.readFileSync(filePath, 'utf8').slice(0, 8192);
+  if (normalized === 'MICRO_ECF_LLM_BOOTSTRAP.md') return 'generated_micro_ecf_bootstrap';
+  if (normalized === 'ECF.md' && /Micro ECF Contract|micro[-_\s]ecf/i.test(text)) return 'generated_micro_ecf_contract';
+  if (normalized === 'AGENTS.md' && /Micro ECF|\.micro-ecf/i.test(text)) return 'generated_micro_ecf_agent_instructions';
+
+  return null;
+}
+
 function matchesPattern(relPath, pattern) {
   const normalizedPattern = String(pattern || '').replace(/\\/g, '/');
   if (!normalizedPattern) return false;
@@ -714,6 +768,11 @@ function classifySource(filePath) {
 }
 
 function summarizeText(text, ext) {
+  if (['.md', '.mdx'].includes(ext)) {
+    const markdownSummary = summarizeMarkdownText(text);
+    if (markdownSummary) return markdownSummary;
+  }
+
   const clean = text
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -736,6 +795,37 @@ function summarizeText(text, ext) {
   }
 
   return clean || 'Text source with no non-empty preview lines.';
+}
+
+function summarizeMarkdownText(text) {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const headingIndex = lines.findIndex((line) => /^#{1,6}\s+/.test(line));
+  if (headingIndex < 0) return null;
+
+  const heading = cleanMarkdownLine(lines[headingIndex].replace(/^#{1,6}\s+/, ''));
+  const body = lines
+    .slice(headingIndex + 1)
+    .find((line) => !/^#{1,6}\s+/.test(line));
+  if (!heading && !body) return null;
+  if (!body) return truncateSummary(heading);
+  return truncateSummary(`${heading}: ${cleanMarkdownLine(body)}`);
+}
+
+function cleanMarkdownLine(line) {
+  return String(line || '')
+    .replace(/^>\s*/, '')
+    .replace(/^[-*+]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateSummary(value) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  return clean.length > 420 ? clean.slice(0, 420) : clean;
 }
 
 export function buildPolicySummary(policy) {
