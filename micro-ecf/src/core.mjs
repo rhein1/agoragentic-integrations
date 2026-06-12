@@ -768,6 +768,11 @@ function classifySource(filePath) {
 }
 
 function summarizeText(text, ext) {
+  if (['.md', '.mdx'].includes(ext)) {
+    const markdownSummary = summarizeMarkdownText(text);
+    if (markdownSummary) return markdownSummary;
+  }
+
   const clean = text
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -790,6 +795,37 @@ function summarizeText(text, ext) {
   }
 
   return clean || 'Text source with no non-empty preview lines.';
+}
+
+function summarizeMarkdownText(text) {
+  const lines = text
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const headingIndex = lines.findIndex((line) => /^#{1,6}\s+/.test(line));
+  if (headingIndex < 0) return null;
+
+  const heading = cleanMarkdownLine(lines[headingIndex].replace(/^#{1,6}\s+/, ''));
+  const body = lines
+    .slice(headingIndex + 1)
+    .find((line) => !/^#{1,6}\s+/.test(line));
+  if (!heading && !body) return null;
+  if (!body) return truncateSummary(heading);
+  return truncateSummary(`${heading}: ${cleanMarkdownLine(body)}`);
+}
+
+function cleanMarkdownLine(line) {
+  return String(line || '')
+    .replace(/^>\s*/, '')
+    .replace(/^[-*+]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateSummary(value) {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  return clean.length > 420 ? clean.slice(0, 420) : clean;
 }
 
 export function buildPolicySummary(policy) {

@@ -66,6 +66,7 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
 
     const sourceMap = readJson(path.join(tmp, '.micro-ecf', 'source-map.json'));
     assert.deepEqual(sourceMap.sources.map((source) => source.path).sort(), ['agent.js', 'docs/api.md', 'src/agent.js']);
+    assert.equal(sourceMap.sources.find((source) => source.path === 'docs/api.md').summary, 'API: This local service exposes a support workflow.');
     assert.ok(sourceMap.generated.some((entry) => entry.path === 'ECF.md'));
     assert.ok(sourceMap.generated.some((entry) => entry.path === 'AGENTS.md'));
     assert.ok(sourceMap.generated.some((entry) => entry.path === 'MICRO_ECF_LLM_BOOTSTRAP.md'));
