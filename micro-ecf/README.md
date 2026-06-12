@@ -1,18 +1,29 @@
 # Micro ECF
 
+Micro ECF is a lightweight local context layer for builders who want safer agents.
+
+It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs, then exports Agent OS Harness files for no-spend deployment preview.
+
+```bash
+npx agoragentic-micro-ecf@latest init --dir .
+npx agoragentic-micro-ecf@latest scan --dir .
+npx agoragentic-micro-ecf@latest build-packet --policy .micro-ecf/policy.json --source-map .micro-ecf/source-map.json --output-dir .micro-ecf
+npx agoragentic-micro-ecf@latest export --agent-os --policy .micro-ecf/policy.json --output .micro-ecf/harness-export.json
+```
+
+Expected output: `ECF.md`, `.micro-ecf/source-map.json`, `.micro-ecf/policy-summary.json`, `.micro-ecf/context-packet.json`, and `.micro-ecf/harness-export.json`.
+
+Proof demo: [`.env` stays blocked while allowed sources keep citations](examples/secret-block-proof.md).
+
+Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. It tells an agent what context is allowed, where it came from, what is blocked, and what can be exported into an Agent OS deployment preview.
+
+Micro ECF runs locally and does not require Agoragentic Cloud.
+
 <p align="center">
   <img src="assets/micro-ecf-hero.png" alt="Micro ECF - local context wedge for safer agents" width="100%" />
 </p>
 
-Micro ECF is a lightweight local context layer for builders who want safer agents.
-
-It builds local source maps, policy summaries, and citation-ready context packets from bounded repo/docs/database-summary inputs, applies local policy boundaries, and exports Agent OS Harness files for deployment preview. It can wrap external context providers such as RAG systems, code graphs, MCP tools, and database agents with source boundaries, budget limits, action-risk scoring, and pre/post-action lifecycle hooks.
-
-Micro ECF is not a semantic RAG engine, vector store, hosted answer pipeline, or Full ECF runtime. It tells an agent what context is allowed, where it came from, what is blocked, and what can be exported into an Agent OS deployment preview.
-
-Micro ECF runs locally and does not require Agoragentic Cloud. When you want live hosted agents, wallet budgets, APIs, receipts, marketplace participation, x402 monetization, or enterprise governance, export into Agoragentic Agent OS.
-
-In the public package family, use `agoragentic-micro-ecf` before hosted deployment, `agoragentic-ecf-core` when you need richer self-hosted context governance, `agoragentic-os` for hosted Agent OS readiness/preview requests, and `agoragentic` or `agoragentic-mcp` when a live agent needs to call the hosted Router / Marketplace.
+Use `agoragentic-micro-ecf` when you want lightweight local policy/source artifacts before hosted deployment. Use `agoragentic-ecf-core` when you need richer self-hosted context governance.
 
 <p align="center">
   <img src="assets/micro-ecf-architecture.png" alt="Micro ECF architecture diagram showing local inputs, bounded context artifacts, blocked secret paths, and Agent OS preview outputs" width="100%" />
@@ -35,18 +46,15 @@ Micro ECF does not replace source-code inspection. It gives agents a durable sta
 
 The resident memory layer adds continuity for work that spans multiple chats or IDE restarts. It records the active goal, checkpoints, commits, validation, unfinished work, docs-impact plan, and next prompt in local `.micro-ecf/` files that a future agent can inspect. This is not cloud memory or hidden agent state; it is a local file ledger the builder can review, edit, or delete.
 
-## Syrin User Roadmap
+## Agent OS Upgrade Path
 
-Use the Syrin guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
+Use this guide when you want the shortest path from local Micro ECF artifacts to hosted Agent OS readiness:
 
-- [Syrin User Guide: Micro ECF To Agent OS](./SYRIN_USER_GUIDE.md)
+- [Micro ECF To Agent OS Guide](./SYRIN_USER_GUIDE.md)
 - [When to upgrade from Micro ECF to ECF Core](./ECF_CORE_UPGRADE.md)
 - [Roadmap overview image](./assets/roadmap/roadmap-overview.png)
 
 ![Micro ECF to Agent OS roadmap](assets/roadmap/roadmap-overview.png)
-
-The PNGs are intentionally text-free. Use the stage labels and captions in
-[`SYRIN_USER_GUIDE.md`](./SYRIN_USER_GUIDE.md) for Discord, GitHub, or HTML overlays.
 
 ## Product Boundary
 
