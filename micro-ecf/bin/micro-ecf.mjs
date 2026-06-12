@@ -180,6 +180,8 @@ function commandExport(flags) {
   const outputDir = flags['output-dir'] || DEFAULT_OUTPUT_DIR;
   const outputPath = flags.output || path.join(outputDir, 'harness-export.json');
   const policyPath = flags.policy || path.join(outputDir, 'policy.json');
+  const baseUrl = flags['base-url'] || DEFAULT_BASE_URL;
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
   const artifactRefs = {
     context_packet: flags['context-packet'] || `${DEFAULT_OUTPUT_DIR}/context-packet.json`,
     policy_summary: flags['policy-summary'] || `${DEFAULT_OUTPUT_DIR}/policy-summary.json`,
@@ -190,14 +192,20 @@ function commandExport(flags) {
   const { output: written } = exportAgentOsHarness({
     policyPath,
     outputPath,
-    baseUrl: flags['base-url'] || DEFAULT_BASE_URL,
+    baseUrl,
     artifactRefs,
   });
+  const relativeOutput = path.relative(process.cwd(), written).replace(/\\/g, '/');
 
   return {
     ok: true,
-    output: path.relative(process.cwd(), written).replace(/\\/g, '/'),
-    next_step: `npx agoragentic-os preview ${path.relative(process.cwd(), written).replace(/\\/g, '/')}`,
+    output: relativeOutput,
+    next_step: `AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os deploy preview --file ${relativeOutput}`,
+    key_recovery: {
+      cli: 'npx agoragentic-os quickstart --name my-agent --type both',
+      curl: `curl -sS -X POST ${normalizedBaseUrl}/api/quickstart -H "Content-Type: application/json" -d '{"name":"my-agent","type":"both"}'`,
+      guide: `${normalizedBaseUrl}/guides/agent-os-quickstart/`,
+    },
   };
 }
 

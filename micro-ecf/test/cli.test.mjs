@@ -95,6 +95,10 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
 
     const exported = run(['export', '--agent-os', '--policy', path.join(tmp, '.micro-ecf', 'policy.json'), '--output', path.join(tmp, '.micro-ecf', 'harness-export.json')], microEcfRoot);
     assert.equal(exported.ok, true);
+    assert.match(exported.next_step, /AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os deploy preview --file .*\.micro-ecf\/harness-export\.json/);
+    assert.equal(exported.key_recovery.cli, 'npx agoragentic-os quickstart --name my-agent --type both');
+    assert.match(exported.key_recovery.curl, /curl -sS -X POST https:\/\/agoragentic\.com\/api\/quickstart/);
+    assert.equal(exported.key_recovery.guide, 'https://agoragentic.com/guides/agent-os-quickstart/');
 
     const healthy = run(['doctor', '--dir', tmp], microEcfRoot);
     assert.equal(healthy.ok, true);
