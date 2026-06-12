@@ -32,8 +32,10 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
 
   try {
     write(path.join(tmp, 'docs', 'api.md'), '# API\n\nThis local service exposes a support workflow.');
+    write(path.join(tmp, 'agent.js'), 'export const rootAgent = true;\n');
     write(path.join(tmp, 'src', 'agent.js'), 'export function handler(input) { return { ok: true, input }; }\n');
     write(path.join(tmp, '.env'), 'SECRET=do-not-export\n');
+    write(path.join(tmp, '.ecf-core', 'agent-os-import.json'), '{"generated":true}\n');
     write(path.join(tmp, 'node_modules', 'ignored', 'index.js'), 'module.exports = "ignored";\n');
 
     const init = run(['init', '--dir', tmp], microEcfRoot);
@@ -58,11 +60,17 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
 
     const index = run(['index', tmp, '--output-dir', path.join(tmp, '.micro-ecf')], microEcfRoot);
     assert.equal(index.ok, true);
-    assert.equal(index.stats.included_sources, 5);
+    assert.equal(index.stats.included_sources, 3);
+    assert.equal(index.stats.generated_sources_excluded >= 4, true);
     assert.ok(index.stats.blocked_paths >= 1);
 
     const sourceMap = readJson(path.join(tmp, '.micro-ecf', 'source-map.json'));
-    assert.deepEqual(sourceMap.sources.map((source) => source.path).sort(), ['AGENTS.md', 'ECF.md', 'MICRO_ECF_LLM_BOOTSTRAP.md', 'docs/api.md', 'src/agent.js']);
+    assert.deepEqual(sourceMap.sources.map((source) => source.path).sort(), ['agent.js', 'docs/api.md', 'src/agent.js']);
+    assert.equal(sourceMap.sources.find((source) => source.path === 'docs/api.md').summary, 'API: This local service exposes a support workflow.');
+    assert.ok(sourceMap.generated.some((entry) => entry.path === 'ECF.md'));
+    assert.ok(sourceMap.generated.some((entry) => entry.path === 'AGENTS.md'));
+    assert.ok(sourceMap.generated.some((entry) => entry.path === 'MICRO_ECF_LLM_BOOTSTRAP.md'));
+    assert.ok(sourceMap.generated.some((entry) => entry.path === '.ecf-core/agent-os-import.json'));
     assert.ok(sourceMap.blocked.some((entry) => entry.path === '.env'));
     assert.equal(JSON.stringify(sourceMap).includes('do-not-export'), false);
     assert.equal(JSON.stringify(sourceMap).includes(tmp.replace(/\\/g, '/')), false);
@@ -76,7 +84,7 @@ test('micro-ecf CLI initializes, indexes, builds, and exports bounded local arti
     const contextPacket = readJson(path.join(tmp, '.micro-ecf', 'context-packet.json'));
     assert.equal(contextPacket.schema, 'agoragentic.micro-ecf.context-packet.v1');
     assert.equal(contextPacket.export_boundary.raw_content_exported, false);
-    assert.equal(contextPacket.citations.length, 5);
+    assert.equal(contextPacket.citations.length, 3);
 
     const preview = readJson(path.join(tmp, '.micro-ecf', 'deployment-preview.json'));
     assert.equal(preview.marketplace_policy.can_buy, false);

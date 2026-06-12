@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://agoragentic.com/schema/micro-ecf-source-map.v1.json",
   "title": "Micro ECF Source Map v1",
-  "description": "Local source inventory with hashes, summaries, blocked-path reasons, and citation ids.",
+  "description": "Local source inventory with hashes, summaries, blocked-path reasons, generated-artifact exclusions, and citation ids.",
   "type": "object",
   "required": ["schema", "generated_at", "sources", "blocked", "stats"],
   "properties": {
@@ -30,6 +30,15 @@
     },
     "blocked": {
       "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "reason"],
+        "additionalProperties": true
+      }
+    },
+    "generated": {
+      "type": "array",
+      "description": "Self-generated Micro ECF / ECF artifact paths excluded from source counts.",
       "items": {
         "type": "object",
         "required": ["path", "reason"],
