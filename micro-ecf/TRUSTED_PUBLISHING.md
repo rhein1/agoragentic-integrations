@@ -29,7 +29,7 @@ After one successful trusted publish, set package publishing access to require t
 Release tag convention:
 
 ```text
-micro-ecf-v0.1.2
+micro-ecf-v0.1.3
 ```
 
 The workflow is tokenless. It grants only `id-token: write` and `contents: read`, uses GitHub-hosted runners, uses Node 24, disables release-build package-manager caching, runs tests/checks, performs an npm pack dry-run, and then calls `npm publish --access public`.
