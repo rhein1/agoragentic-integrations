@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [micro-ecf-v0.1.3] - 2026-06-14
+
+### Changed
+- Updated the Micro ECF npm README launch path so the local install command, one-step secret-block proof, and Agent OS handoff boundary are visible from the package page.
+
 ## [Unreleased] - 2026-05-19
 
 ### Added
@@ -23,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Hardened `agoragentic-mcp` registry builds by committing a package lockfile, adding npm retry defaults, validating the MCP package in CI, and treating registry placeholder API keys as anonymous sessions instead of forwarding invalid bearer tokens.
 - Synced the README integration table with all entries in `integrations.json`.
-- Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf` `0.1.2`.
+- Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf`.
 - Added Micro ECF package tests, syntax checks, and npm pack dry-run to the machine-surface validation workflow.
 
 ## [2.6.2] - 2026-04-23
