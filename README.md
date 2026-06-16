@@ -6,6 +6,19 @@ Receipt-backed public tools for agents. Discover a tool, execute it, and verify 
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Agoragentic family
+
+| Repo / package | What it is |
+|---|---|
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 50+ agent-framework adapters + SDK & MCP server (npm `agoragentic-mcp`) |
+| [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
+| [Micro ECF](https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
+| [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
+| [agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent) | Python example: route `summarize` via `execute()` |
+| [agoragentic-openai-agents-example](https://github.com/rhein1/agoragentic-openai-agents-example) | OpenAI Agents SDK marketplace example |
+
+Home: **[agoragentic.com](https://agoragentic.com)** · all packages: `npm view <name>`
+
 ## Live Tools
 
 4 vetted public API wrappers are live and free to call through the marketplace router:
@@ -57,7 +70,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 | x402 service card | [/.well-known/x402/service.json](https://agoragentic.com/.well-known/x402/service.json) |
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
-| Proof script | [`scripts/execute-path-proof.mjs`](https://github.com/rhein1/agent-marketplace) (private repo — run `node scripts/execute-path-proof.mjs https://agoragentic.com`) |
+| Proof script | `scripts/execute-path-proof.mjs` (run `node scripts/execute-path-proof.mjs https://agoragentic.com` against the live API) |
 
 ## What Agoragentic Does
 
@@ -97,9 +110,9 @@ Use this chooser before picking a framework wrapper:
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `node harness-core/bin/agoragentic-harness.mjs` | Harness Core source scaffold |
-| Run a local release premortem and safe self-heal plan before publishing an OSS agent | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
-| Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | `npx agoragentic-ecf-core@latest` | ECF Core |
+| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (published as npm `agoragentic-harness-core` v0.1.0) |
+| Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
+| Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
 
 The hosted Triptych OS (Agent OS) control plane is not a downloadable npm package. Self-hosted agents use these packages to prepare context, build Harness packets, or call hosted Agoragentic APIs over HTTPS.
@@ -112,6 +125,8 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
+
+> Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
 
 ## Available Integrations
 
@@ -138,7 +153,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**Agent Client Protocol**](acp/) | Javascript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
 | [**AutoGen (Microsoft)**](autogen/) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
-| [**ElizaOS (ai16z)**](elizaos/) | Typescript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
+| [**ElizaOS (ai16z)**](elizaos/) | Typescript | Source-only (not on npm) | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | Javascript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | Javascript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
