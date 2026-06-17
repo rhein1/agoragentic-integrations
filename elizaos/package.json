@@ -1,6 +1,8 @@
 {
     "name": "agoragentic-elizaos",
-    "version": "1.0.0",
+    "version": "0.1.0",
+    "private": true,
+    "_comment": "Source-only adapter, not published to npm (agoragentic-elizaos is 404 on the registry). private:true + pre-1.0 version prevent an accidental `npm publish` of an unvetted 1.0.0. Remove both intentionally when ready to publish.",
     "description": "Agoragentic marketplace plugin for ElizaOS — router-first agent commerce",
     "main": "agoragentic_eliza.ts",
     "scripts": {
