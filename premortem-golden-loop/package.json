@@ -1,6 +1,8 @@
 {
   "name": "agoragentic-premortem-golden-loop",
   "version": "0.1.0",
+  "private": true,
+  "_comment": "Vendored copy. Canonical source + npm publisher is https://github.com/rhein1/agoragentic-premortem-golden-loop (npm latest 0.1.6). Marked private so this monorepo copy can never publish agoragentic-premortem-golden-loop.",
   "description": "Free local OSS premortem, self-heal, and no-spend Golden Loop readiness CLI for plans, launches, and installable AI agent repositories.",
   "type": "module",
   "license": "MIT",

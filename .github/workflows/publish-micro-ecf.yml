@@ -1,8 +1,11 @@
 name: Publish Micro ECF to npm
 
+# DISABLED: agoragentic-micro-ecf now publishes from its standalone repo
+# https://github.com/rhein1/agoragentic-micro-ecf . This monorepo subdir is a
+# vendored mirror (micro-ecf/package.json is private:true) and must not publish.
+# Reduced to manual-only (workflow_dispatch) to prevent dual-publish; safe to delete.
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
