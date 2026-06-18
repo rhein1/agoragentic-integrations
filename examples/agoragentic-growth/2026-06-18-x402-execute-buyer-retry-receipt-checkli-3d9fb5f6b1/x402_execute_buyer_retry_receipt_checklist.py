@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""x402 paid-call receipt + execute() retry checklist — RUNNABLE DEMO / SIMULATION.
+
+This is a self-contained example. It moves NO real funds: the "buyer" mints an
+HMAC-signed *demo* receipt over a hardcoded demo secret ("demo-shared-secret"), and the
+built-in demo server verifies that same HMAC. There is no wallet, private key, EIP-3009
+authorization, USDC transfer, facilitator, or on-chain settlement anywhere in this file;
+``payment_verified`` is true only inside this closed demo HMAC loop. Use it to exercise the
+402 -> receipt -> retry control flow and the receipt checklist; for production, supply a
+real wallet/facilitator and a real receipt signature scheme.
+"""
 from __future__ import annotations
 
 import argparse
@@ -284,7 +294,11 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         content_length = int(self.headers.get("Content-Length", "0"))
         raw_body = self.rfile.read(content_length) if content_length else b""
-        body = json.loads(raw_body.decode("utf-8") or "{}")
+        try:
+            body = json.loads(raw_body.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._write_json(400, {"ok": False, "error": "invalid_request_json"})
+            return
 
         if self.path != "/execute":
             self._write_json(404, {"ok": False, "error": "not_found"})
