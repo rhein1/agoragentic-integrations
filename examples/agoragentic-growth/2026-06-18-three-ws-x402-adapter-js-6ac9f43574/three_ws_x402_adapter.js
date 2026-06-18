@@ -7,8 +7,8 @@
  * - performs execute() with 402 payment challenge recovery
  * - collects receipt/proof evidence into a checklist
  *
- * Run the self-test:
- *   node examples/three_ws_x402_adapter.js
+ * Run the self-test (from this file's directory):
+ *   node three_ws_x402_adapter.js
  */
 
 const DEFAULT_BASE_URL = 'https://three.ws';
@@ -86,6 +86,7 @@ class ThreeWsX402Adapter {
 
     const priorState = input.sessionId ? await this.executionStore.load(input.sessionId) : null;
     const state = priorState || createState(input);
+    const executeUrl = `${this.baseUrl}${this.executePath}`;
     const requestBody = {
       quote_id: state.quote_id,
       input: input.input || {},
@@ -98,26 +99,56 @@ class ThreeWsX402Adapter {
       await this.executionStore.save(state);
 
       try {
-        const firstResponse = await this.fetchImpl(`${this.baseUrl}${this.executePath}`, {
+        // Reuse an already-authorized payment on a retry. Re-issuing an UNPAID request
+        // here would draw a fresh 402 and authorize a SECOND payment for the SAME
+        // execution — a real double charge if the server is not idempotent. A new
+        // payment is authorized ONLY when the server explicitly returns 402 (below).
+        const reusingPayment = Boolean(state.payment_authorization);
+        if (reusingPayment) {
+          addEvent(state, 'retrying_paid_request', `resending the authorized paid execute on attempt ${state.attempt_count}`);
+          await this.executionStore.save(state);
+        }
+
+        const response = await this.fetchImpl(executeUrl, {
           method: 'POST',
-          headers: this.buildExecuteHeaders(state.idempotency_key),
+          headers: reusingPayment
+            ? this.buildPaidHeaders(state.payment_authorization, state.idempotency_key)
+            : this.buildExecuteHeaders(state.idempotency_key),
           body: JSON.stringify(requestBody),
         });
 
-        if (firstResponse.status !== 402) {
-          const payload = await safeJson(firstResponse);
-          mergeExecutionEvidence(state, payload, firstResponse);
-          addEvent(state, firstResponse.ok ? 'succeeded' : 'failed', `initial response ${firstResponse.status}`);
-          await this.executionStore.save(state);
+        if (response.status !== 402) {
+          const payload = await safeJson(response);
+          mergeExecutionEvidence(state, payload, response);
+          await this.reconcile(state);
 
-          if (!firstResponse.ok) {
-            throw new FinalExecutionError(`execute failed with HTTP ${firstResponse.status}`, state);
+          if (response.ok) {
+            addEvent(
+              state,
+              hasTerminalReceiptEvidence(state) ? 'reconciled' : 'succeeded',
+              `${reusingPayment ? 'paid' : 'initial'} response ${response.status}`
+            );
+            await this.executionStore.save(state);
+            return this.buildSuccessResult(state, payload);
           }
 
-          return this.buildSuccessResult(state, payload);
+          // Non-402 failure. Retry transient errors WITHOUT re-paying (we keep the same
+          // authorization + idempotency key); a fresh 402 on the next attempt is the only
+          // thing that triggers a new payment.
+          state.last_error = `execute failed with HTTP ${response.status}`;
+          const decision = this.shouldRetry({ response, state: cloneJson(state) });
+          if (!decision.retry || state.attempt_count >= this.maxAttempts) {
+            addEvent(state, 'failed', state.last_error);
+            await this.executionStore.save(state);
+            throw new FinalExecutionError(state.last_error, state);
+          }
+          addEvent(state, 'awaiting_reconciliation', decision.reason || `retry after HTTP ${response.status}`);
+          await this.executionStore.save(state);
+          continue;
         }
 
-        state.payment_required_header = getHeader(firstResponse.headers, 'payment-required');
+        // HTTP 402 — the server is (re-)requesting payment. Authorize one now.
+        state.payment_required_header = getHeader(response.headers, 'payment-required');
         if (!state.payment_required_header) {
           throw new Error('missing payment-required header on HTTP 402 response');
         }
@@ -126,7 +157,7 @@ class ThreeWsX402Adapter {
         await this.executionStore.save(state);
 
         const payment = await this.payChallenge(state.payment_required_header, {
-          url: `${this.baseUrl}${this.executePath}`,
+          url: executeUrl,
           method: 'POST',
           body: requestBody,
           sessionId: state.session_id,
@@ -138,11 +169,13 @@ class ThreeWsX402Adapter {
           throw new Error('payChallenge must return authorizationHeader and/or paymentSignature');
         }
 
+        // Persist the authorization so a subsequent retry RE-SENDS it rather than paying again.
+        state.payment_authorization = payment;
         state.wallet_receipt = payment.receipt || null;
         addEvent(state, 'retrying_paid_request', `retrying paid execute on attempt ${state.attempt_count}`);
         await this.executionStore.save(state);
 
-        const paidResponse = await this.fetchImpl(`${this.baseUrl}${this.executePath}`, {
+        const paidResponse = await this.fetchImpl(executeUrl, {
           method: 'POST',
           headers: this.buildPaidHeaders(payment, state.idempotency_key),
           body: JSON.stringify(requestBody),
@@ -379,6 +412,7 @@ function createState(input) {
     payment_receipt_header: null,
     payment_response_header: null,
     wallet_receipt: null,
+    payment_authorization: null,
     receipt_snapshot: null,
     proof_snapshot: null,
     result_snapshot: null,
@@ -435,8 +469,10 @@ function hasTerminalReceiptEvidence(state) {
 }
 
 function isTerminalStatus(status) {
+  // 'submitted' is intentionally NOT terminal: an on-chain tx that is broadcast but not
+  // yet confirmed is not settled, so it must not pass as terminal settlement evidence.
   return typeof status === 'string'
-    && ['settled', 'completed', 'verified', 'submitted', 'succeeded'].includes(status.toLowerCase());
+    && ['settled', 'completed', 'verified', 'succeeded'].includes(status.toLowerCase());
 }
 
 function defaultRetryDecision({ response, error }) {
