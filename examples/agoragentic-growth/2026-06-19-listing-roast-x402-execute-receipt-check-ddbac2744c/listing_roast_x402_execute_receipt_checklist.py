@@ -56,6 +56,7 @@ class ExecuteResult:
     idempotency_key: str
     payment_authorization: str
     challenge: JsonDict
+    request_body: JsonDict
     request_path: str
 
 
@@ -141,6 +142,7 @@ class ListingRoastX402Client:
                     idempotency_key=idempotency_key,
                     payment_authorization=payment_authorization,
                     challenge=challenge,
+                    request_body=request_body,
                     request_path=path,
                 )
 
@@ -155,11 +157,8 @@ class ListingRoastX402Client:
         checklist = ReceiptChecklist()
 
         receipt_id = self._first_nonempty(receipt.get("receipt_id"), receipt.get("id"))
-        invocation_id = self._first_nonempty(
-            receipt.get("invocation_id"),
-            invocation.get("id"),
-            result.body.get("invocation_id"),
-        )
+        receipt_invocation_id = self._first_nonempty(receipt.get("invocation_id"), receipt.get("invocation"))
+        response_invocation_id = self._first_nonempty(invocation.get("id"), result.body.get("invocation_id"))
         quote_id = self._first_nonempty(
             receipt.get("quote_id"),
             result.body.get("quote_id"),
@@ -175,17 +174,23 @@ class ListingRoastX402Client:
 
         checklist.add("http success", 200 <= result.status_code < 300, f"status_code={result.status_code}")
         checklist.add("receipt id present", bool(receipt_id), f"receipt_id={receipt_id!r}")
-        checklist.add("invocation id present", bool(invocation_id), f"invocation_id={invocation_id!r}")
+        checklist.add(
+            "receipt invocation matches response",
+            bool(receipt_invocation_id)
+            and bool(response_invocation_id)
+            and receipt_invocation_id == response_invocation_id,
+            f"receipt_invocation_id={receipt_invocation_id!r}, response_invocation_id={response_invocation_id!r}",
+        )
         checklist.add("quote id matches", quote_id == expected_quote_id, f"quote_id={quote_id!r}, expected={expected_quote_id!r}")
         checklist.add("idempotency echoed", echoed_idempotency == result.idempotency_key, f"echoed={echoed_idempotency!r}")
-        checklist.add("asset present", bool(asset), f"asset={asset!r}")
-        checklist.add("amount present", bool(amount), f"amount={amount!r}")
-        checklist.add("seller present", bool(seller), f"seller={seller!r}")
+        checklist.add("asset matches challenge", asset == result.challenge.get("asset"), f"asset={asset!r}, expected={result.challenge.get('asset')!r}")
+        checklist.add("amount matches challenge", amount == result.challenge.get("amount"), f"amount={amount!r}, expected={result.challenge.get('amount')!r}")
+        checklist.add("seller matches challenge", seller == result.challenge.get("seller"), f"seller={seller!r}, expected={result.challenge.get('seller')!r}")
         checklist.add("payment proof hash present", bool(payment_hash), f"payment_hash={payment_hash!r}")
         checklist.add(
             "paid retry happened",
-            result.attempts >= 3,
-            f"attempts={result.attempts} (attempt 1=402, attempt 2+=paid retry path)",
+            result.attempts >= 2,
+            f"attempts={result.attempts} (attempt 1=402, attempt 2=paid retry path)",
         )
         checklist.add(
             "payment authorization reused",
@@ -198,8 +203,8 @@ class ListingRoastX402Client:
             f"output_kind={output.get('kind')!r}",
         )
         checklist.add(
-            "receipt reached terminal service status",
-            status_text in {"settled", "completed", "paid", "succeeded"},
+            "receipt status is demo-safe and non-terminal",
+            status_text in {"demo-accepted", "accepted", "pending", "authorized-demo-only"},
             f"status={status_text!r}",
         )
         return checklist
@@ -222,10 +227,10 @@ class ListingRoastX402Client:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                return response.status, self._normalize_headers(response.headers), json.loads(raw or "{}")
+                return response.status, self._normalize_headers(response.headers), self._parse_json_body(raw)
         except HTTPError as exc:
             raw = exc.read().decode("utf-8")
-            return exc.code, self._normalize_headers(exc.headers), json.loads(raw or "{}")
+            return exc.code, self._normalize_headers(exc.headers), self._parse_json_body(raw)
         except URLError as exc:
             raise RuntimeError(f"network error: {exc}") from exc
 
@@ -234,10 +239,10 @@ class ListingRoastX402Client:
         raw = headers.get("x-payment-required") or headers.get("payment-required")
         if raw:
             try:
-                parsed = json.loads(raw)
+                parsed = self._parse_header_json(raw)
                 if isinstance(parsed, dict):
                     return dict(parsed)
-            except json.JSONDecodeError:
+            except Exception:
                 pass
 
         challenge = body.get("payment_required") or body.get("challenge")
@@ -274,6 +279,24 @@ class ListingRoastX402Client:
     @staticmethod
     def _normalize_headers(headers: Mapping[str, Any]) -> Dict[str, str]:
         return {str(key).lower(): str(value) for key, value in headers.items()}
+
+    @staticmethod
+    def _parse_json_body(raw: str) -> JsonDict:
+        try:
+            parsed = json.loads(raw or "{}")
+            return dict(parsed) if isinstance(parsed, dict) else {"value": parsed}
+        except json.JSONDecodeError:
+            return {"error": "non_json_response", "raw_body": raw[:200]}
+
+    @staticmethod
+    def _parse_header_json(raw: str) -> JsonDict:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = json.loads(base64.b64decode(raw.encode("utf-8")).decode("utf-8"))
+        if not isinstance(parsed, dict):
+            raise ValueError("header did not decode to an object")
+        return parsed
 
     @staticmethod
     def _first_nonempty(*values: Any) -> Any:
@@ -335,7 +358,9 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
             self._send_json(
                 402,
                 {"error": "payment required", "payment_required": challenge},
-                extra_headers={"X-Payment-Required": json.dumps(challenge)},
+                extra_headers={
+                    "PAYMENT-REQUIRED": base64.b64encode(json.dumps(challenge).encode("utf-8")).decode("ascii")
+                },
             )
             return
 
@@ -343,7 +368,7 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "missing idempotency key"})
             return
 
-        if not self._verify_payment(payment_token):
+        if not self._verify_payment(payment_token, payload):
             self._send_json(401, {"error": "invalid payment authorization"})
             return
 
@@ -365,7 +390,7 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
             "quote_id": self.server.quote_id,
             "invocation_id": invocation_id,
             "idempotency_key": idempotency_key,
-            "status": "settled",
+            "status": "demo-accepted",
             "amount": self.server.price_amount,
             "asset": self.server.price_asset,
             "seller": self.server.seller,
@@ -386,7 +411,7 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
 
-    def _verify_payment(self, token: str) -> bool:
+    def _verify_payment(self, token: str, request_body: JsonDict) -> bool:
         try:
             envelope = json.loads(base64.b64decode(token.encode("utf-8")).decode("utf-8"))
         except Exception:
@@ -399,7 +424,13 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
 
         canonical = json.dumps(challenge, sort_keys=True, separators=(",", ":")).encode("utf-8")
         expected = hmac.new(self.server.secret, canonical, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, signature)
+        if not hmac.compare_digest(expected, signature):
+            return False
+
+        expected_fingerprint = hashlib.sha256(
+            json.dumps(request_body, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return envelope.get("request_fingerprint") == expected_fingerprint
 
     def _build_roast(self, roast_input: JsonDict) -> JsonDict:
         listing_url = str(roast_input.get("listing_url", ""))
@@ -480,6 +511,61 @@ def _self_test() -> None:
     assert result.receipt["quote_id"] == "quote_listing_roast_demo"
     assert result.receipt["idempotency_key"] == result.idempotency_key
     assert result.body["output"]["kind"] == "listing_roast"
+
+    two_attempt_result = ExecuteResult(
+        status_code=result.status_code,
+        body=result.body,
+        receipt=result.receipt,
+        attempts=2,
+        idempotency_key=result.idempotency_key,
+        payment_authorization=result.payment_authorization,
+        challenge=result.challenge,
+        request_body=result.request_body,
+        request_path=result.request_path,
+    )
+    two_attempt_checklist = ListingRoastX402Client("http://example.invalid").build_receipt_checklist(
+        two_attempt_result,
+        expected_quote_id="quote_listing_roast_demo",
+    )
+    assert two_attempt_checklist.ok, two_attempt_checklist.as_text()
+
+    mismatched_receipt = dict(result.receipt)
+    mismatched_receipt["invocation_id"] = "inv_other"
+    mismatched_result = ExecuteResult(
+        status_code=result.status_code,
+        body=result.body,
+        receipt=mismatched_receipt,
+        attempts=result.attempts,
+        idempotency_key=result.idempotency_key,
+        payment_authorization=result.payment_authorization,
+        challenge=result.challenge,
+        request_body=result.request_body,
+        request_path=result.request_path,
+    )
+    mismatch_checklist = ListingRoastX402Client("http://example.invalid").build_receipt_checklist(
+        mismatched_result,
+        expected_quote_id="quote_listing_roast_demo",
+    )
+    assert not mismatch_checklist.ok, "mismatched receipt invocation should fail checklist"
+
+    wrong_terms_receipt = dict(result.receipt)
+    wrong_terms_receipt["amount"] = "0.01"
+    wrong_terms_result = ExecuteResult(
+        status_code=result.status_code,
+        body=result.body,
+        receipt=wrong_terms_receipt,
+        attempts=result.attempts,
+        idempotency_key=result.idempotency_key,
+        payment_authorization=result.payment_authorization,
+        challenge=result.challenge,
+        request_body=result.request_body,
+        request_path=result.request_path,
+    )
+    wrong_terms_checklist = ListingRoastX402Client("http://example.invalid").build_receipt_checklist(
+        wrong_terms_result,
+        expected_quote_id="quote_listing_roast_demo",
+    )
+    assert not wrong_terms_checklist.ok, "receipt payment terms should match the challenge"
 
 
 if __name__ == "__main__":
