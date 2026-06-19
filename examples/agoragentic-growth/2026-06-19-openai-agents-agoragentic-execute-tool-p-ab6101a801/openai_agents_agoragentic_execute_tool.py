@@ -68,40 +68,53 @@ class ReceiptLedger:
         self.calls_made = 0
         self.total_spend_usd = 0.0
         self.receipts: List[Receipt] = []
+        self._lock = threading.Lock()
 
     def assert_can_call(self) -> None:
-        if self.calls_made >= self.budget.max_calls:
-            raise BudgetExceededError(
-                f"call budget exceeded: {self.calls_made}/{self.budget.max_calls}"
-            )
-        if self.total_spend_usd > self.budget.max_spend_usd:
-            raise BudgetExceededError(
-                f"spend budget exceeded: ${self.total_spend_usd:.4f}/${self.budget.max_spend_usd:.4f}"
-            )
+        with self._lock:
+            if self.calls_made >= self.budget.max_calls:
+                raise BudgetExceededError(
+                    f"call budget exceeded: {self.calls_made}/{self.budget.max_calls}"
+                )
+            if self.total_spend_usd > self.budget.max_spend_usd:
+                raise BudgetExceededError(
+                    f"spend budget exceeded: ${self.total_spend_usd:.4f}/${self.budget.max_spend_usd:.4f}"
+                )
+
+    def assert_can_spend(self, amount_usd: float) -> None:
+        with self._lock:
+            projected_spend = self.total_spend_usd + float(amount_usd or 0.0)
+            if projected_spend > self.budget.max_spend_usd:
+                raise BudgetExceededError(
+                    f"authorizing payment would exceed spend budget: "
+                    f"${projected_spend:.4f}/${self.budget.max_spend_usd:.4f}"
+                )
 
     def record(self, receipt: Receipt) -> None:
-        projected_calls = self.calls_made + 1
-        projected_spend = self.total_spend_usd + float(receipt.amount_usd or 0.0)
-        if projected_calls > self.budget.max_calls:
-            raise BudgetExceededError(
-                f"recording receipt would exceed call budget: {projected_calls}/{self.budget.max_calls}"
-            )
-        if projected_spend > self.budget.max_spend_usd:
-            raise BudgetExceededError(
-                f"recording receipt would exceed spend budget: ${projected_spend:.4f}/${self.budget.max_spend_usd:.4f}"
-            )
-        self.calls_made = projected_calls
-        self.total_spend_usd = projected_spend
-        self.receipts.append(receipt)
+        with self._lock:
+            projected_calls = self.calls_made + 1
+            projected_spend = self.total_spend_usd + float(receipt.amount_usd or 0.0)
+            if projected_calls > self.budget.max_calls:
+                raise BudgetExceededError(
+                    f"recording receipt would exceed call budget: {projected_calls}/{self.budget.max_calls}"
+                )
+            if projected_spend > self.budget.max_spend_usd:
+                raise BudgetExceededError(
+                    f"recording receipt would exceed spend budget: ${projected_spend:.4f}/${self.budget.max_spend_usd:.4f}"
+                )
+            self.calls_made = projected_calls
+            self.total_spend_usd = projected_spend
+            self.receipts.append(receipt)
 
     def summary(self) -> Dict[str, Any]:
-        return {
-            "calls_made": self.calls_made,
-            "max_calls": self.budget.max_calls,
-            "total_spend_usd": round(self.total_spend_usd, 4),
-            "max_spend_usd": self.budget.max_spend_usd,
-            "receipt_count": len(self.receipts),
-        }
+        with self._lock:
+            return {
+                "calls_made": self.calls_made,
+                "max_calls": self.budget.max_calls,
+                "total_spend_usd": round(self.total_spend_usd, 4),
+                "max_spend_usd": self.budget.max_spend_usd,
+                "receipt_count": len(self.receipts),
+            }
 
 
 PayCallback = Callable[[Dict[str, Any]], str]
@@ -113,11 +126,13 @@ class AgoragenticExecuteClient:
         base_url: str,
         ledger: ReceiptLedger,
         pay: Optional[PayCallback] = None,
+        api_key: Optional[str] = None,
         timeout_seconds: float = 10.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.ledger = ledger
         self.pay = pay
+        self.api_key = api_key if api_key is not None else os.environ.get("AGORAGENTIC_API_KEY")
         self.timeout_seconds = timeout_seconds
 
     def execute(
@@ -132,9 +147,9 @@ class AgoragenticExecuteClient:
 
         idem = idempotency_key or _uuid()
         payload = {
-            "tool_name": tool_name,
-            "arguments": arguments,
-            "budget": {
+            "task": tool_name,
+            "input": arguments,
+            "constraints": {
                 "remaining_calls_before_request": self.ledger.budget.max_calls - self.ledger.calls_made,
                 "remaining_spend_usd_before_request": round(
                     self.ledger.budget.max_spend_usd - self.ledger.total_spend_usd, 4
@@ -148,7 +163,7 @@ class AgoragenticExecuteClient:
 
         for attempt in range(2):
             response = self._post_json(
-                "/execute",
+                "/api/execute",
                 payload,
                 idempotency_key=idem,
                 authorization_id=authorization_id,
@@ -164,6 +179,8 @@ class AgoragenticExecuteClient:
                     raise PaymentRequiredError(
                         f"tool {tool_name!r} requires payment; no pay callback was supplied"
                     )
+                challenged_amount = float(challenge.get("amount_usd", 0.0) or 0.0)
+                self.ledger.assert_can_spend(challenged_amount)
                 authorization_id = self.pay(challenge)
                 if not authorization_id or not isinstance(authorization_id, str):
                     raise PaymentRequiredError("pay callback did not return a valid authorization id")
@@ -209,6 +226,8 @@ class AgoragenticExecuteClient:
         }
         if authorization_id:
             headers["X-Payment-Authorization"] = authorization_id
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         req = Request(
             self.base_url + path,
@@ -231,20 +250,11 @@ class AgoragenticExecuteClient:
                 ) from err
 
 
-def make_execute_tool(
+def make_execute_runner(
     client: AgoragenticExecuteClient,
     tool_name: str,
     description: str,
-):
-    """
-    Returns an OpenAI Agents SDK function_tool when available.
-    Falls back to a plain Python callable with the same behavior.
-    """
-    try:
-        from agents import function_tool  # type: ignore
-    except Exception:
-        function_tool = None
-
+) -> Callable[[str], str]:
     def _runner(arguments_json: str) -> str:
         arguments = json.loads(arguments_json)
         result = client.execute(tool_name, arguments)
@@ -264,11 +274,34 @@ def make_execute_tool(
         + "\n\nPass a JSON object string for the tool arguments. "
         + "The wrapper enforces local budget limits and returns a receipt."
     )
+    return _runner
+
+
+def make_execute_tool(
+    client: AgoragenticExecuteClient,
+    tool_name: str,
+    description: str,
+):
+    """
+    Returns an OpenAI Agents SDK function_tool when available.
+    Falls back to a plain Python callable with the same behavior.
+    """
+    try:
+        from agents import function_tool  # type: ignore
+    except Exception:
+        function_tool = None
+
+    _runner = make_execute_runner(client, tool_name, description)
 
     if function_tool is None:
         return _runner
 
-    return function_tool(name_override=_runner.__name__, description_override=description)(_runner)
+    tool = function_tool(name_override=_runner.__name__, description_override=description)(_runner)
+    try:
+        setattr(tool, "_agoragentic_runner", _runner)
+    except Exception:
+        pass
+    return tool
 
 
 class _DemoExecuteHandler(BaseHTTPRequestHandler):
@@ -284,7 +317,7 @@ class _DemoExecuteHandler(BaseHTTPRequestHandler):
         return
 
     def do_POST(self) -> None:
-        if self.path != "/execute":
+        if self.path not in {"/api/execute", "/execute"}:
             self._send_json(404, {"status": 404, "error": "not found"})
             return
 
@@ -292,8 +325,8 @@ class _DemoExecuteHandler(BaseHTTPRequestHandler):
         data = self.rfile.read(length).decode("utf-8")
         payload = json.loads(data or "{}")
 
-        tool_name = payload.get("tool_name")
-        arguments = payload.get("arguments") or {}
+        tool_name = payload.get("task") or payload.get("tool_name")
+        arguments = payload.get("input") or payload.get("arguments") or {}
         idempotency_key = self.headers.get("Idempotency-Key", "")
         auth = self.headers.get("X-Payment-Authorization")
 
@@ -415,7 +448,7 @@ def _run_self_test() -> None:
         assert ledger.calls_made == 2
         assert abs(ledger.total_spend_usd - 0.02) < 1e-9
 
-        wrapper = make_execute_tool(
+        wrapper = make_execute_runner(
             client,
             "premium_weather",
             "Fetch a premium weather result through Agoragentic execute().",
@@ -425,6 +458,24 @@ def _run_self_test() -> None:
         assert wrapped_data["output"]["city"] == "Lisbon"
         assert wrapped_data["receipt"]["amount_usd"] == 0.02
         assert wrapped_data["budget"]["calls_made"] == 3
+
+        low_budget_pay_calls = 0
+
+        def should_not_pay(challenge: Dict[str, Any]) -> str:
+            nonlocal low_budget_pay_calls
+            low_budget_pay_calls += 1
+            return _demo_pay_callback(challenge)
+
+        low_budget_client = AgoragenticExecuteClient(
+            base_url=base_url,
+            ledger=ReceiptLedger(Budget(max_calls=3, max_spend_usd=0.01)),
+            pay=should_not_pay,
+        )
+        try:
+            low_budget_client.execute("premium_weather", {"city": "Paris"})
+            raise AssertionError("low budget client should reject the challenged payment before authorizing")
+        except BudgetExceededError:
+            assert low_budget_pay_calls == 0
 
         print("SELF-TEST OK")
         print(json.dumps({"base_url": base_url, "ledger": ledger.summary()}, indent=2, sort_keys=True))
