@@ -21,7 +21,7 @@ class HttpResponse:
     headers: Dict[str, str]
     body: bytes
 
-    def json(self) -> Dict[str, Any]:
+    def json(self) -> Any:
         if not self.body:
             return {}
         return json.loads(self.body.decode("utf-8"))
@@ -76,7 +76,7 @@ class PaidCallExecutor:
             raise ValueError("max_attempts must be >= 1")
 
         base_headers = dict(headers or {})
-        idempotency_key = base_headers.get("X-Idempotency-Key", str(uuid.uuid4()))
+        idempotency_key = _get_header(base_headers, "X-Idempotency-Key") or str(uuid.uuid4())
         base_headers["X-Idempotency-Key"] = idempotency_key
         base_headers.setdefault("Content-Type", "application/json")
         payment_authorization: Optional[PaymentAuthorization] = None
@@ -181,14 +181,20 @@ class PaidCallExecutor:
         header_value = _get_header(
             response.headers,
             "X-Payment-Required",
+            "X-Payment-Requirements",
             "PAYMENT-REQUIRED",
+            "PAYMENT-REQUIREMENTS",
             "payment-required",
+            "payment-requirements",
         )
         if header_value:
-            return _parse_header_json(header_value)
+            return _parse_payment_requirement_header(header_value)
         body = response.json()
-        if isinstance(body, dict) and isinstance(body.get("payment_required"), dict):
-            return body["payment_required"]
+        if isinstance(body, dict):
+            if "payment_required" in body:
+                return _normalize_payment_requirement(body["payment_required"])
+            if "payment_requirements" in body:
+                return _normalize_payment_requirement(body["payment_requirements"])
         raise PaymentRequiredError("HTTP 402 response did not include payment requirements.")
 
 
@@ -226,8 +232,8 @@ def build_receipt_checklist(
     )
     add(
         "json_content_type",
-        response.headers.get("Content-Type", "").startswith("application/json"),
-        f"content_type={response.headers.get('Content-Type', '')}",
+        (_get_header(response.headers, "Content-Type") or "").startswith("application/json"),
+        f"content_type={_get_header(response.headers, 'Content-Type') or ''}",
     )
     add(
         "receipt_present",
@@ -262,8 +268,8 @@ def build_receipt_checklist(
     )
     add(
         "tool_result_present",
-        isinstance(body.get("result"), dict),
-        f"result_type={type(body.get('result')).__name__}",
+        isinstance(body.get("result") if isinstance(body, dict) else None, dict),
+        f"result_type={type(body.get('result') if isinstance(body, dict) else None).__name__}",
     )
     return checks
 
@@ -424,14 +430,30 @@ def _get_header(headers: Mapping[str, str], *names: str) -> Optional[str]:
     return None
 
 
-def _parse_header_json(value: str) -> Dict[str, Any]:
+def _decode_header_json(value: str) -> Any:
     try:
-        parsed = json.loads(value)
+        return json.loads(value)
     except json.JSONDecodeError:
-        parsed = json.loads(base64.b64decode(value.encode("utf-8")).decode("utf-8"))
+        return json.loads(base64.b64decode(value.encode("utf-8")).decode("utf-8"))
+
+
+def _normalize_payment_requirement(parsed: Any) -> Dict[str, Any]:
+    if isinstance(parsed, list) and parsed:
+        parsed = parsed[0]
+    if not isinstance(parsed, dict):
+        raise ValueError("payment requirements did not decode to an object or non-empty object array")
+    return parsed
+
+
+def _parse_header_json(value: str) -> Dict[str, Any]:
+    parsed = _decode_header_json(value)
     if not isinstance(parsed, dict):
         raise ValueError("payment header did not decode to an object")
     return parsed
+
+
+def _parse_payment_requirement_header(value: str) -> Dict[str, Any]:
+    return _normalize_payment_requirement(_decode_header_json(value))
 
 
 def run_self_test() -> None:
@@ -449,6 +471,16 @@ def run_self_test() -> None:
         )
         if parsed_requirement.get("asset") != "USD":
             raise AssertionError("PAYMENT-REQUIRED header should be accepted and decoded.")
+
+        plural_requirement = PaidCallExecutor._extract_payment_requirement(
+            HttpResponse(
+                status=402,
+                headers={"X-Payment-Requirements": json.dumps([{"amount": "0.05", "asset": "USD"}])},
+                body=b"",
+            )
+        )
+        if plural_requirement.get("asset") != "USD":
+            raise AssertionError("X-Payment-Requirements array header should be accepted.")
 
         pay_calls = 0
 
@@ -513,7 +545,7 @@ def run_self_test() -> None:
         header_checks = build_receipt_checklist(
             response=HttpResponse(
                 status=200,
-                headers={"Content-Type": "application/json", "Payment-Receipt": receipt_header},
+                headers={"content-type": "application/json", "Payment-Receipt": receipt_header},
                 body=json.dumps({"result": body.get("result")}).encode("utf-8"),
             ),
             idempotency_key=result.idempotency_key,
@@ -521,6 +553,29 @@ def run_self_test() -> None:
         )
         if not all(check["ok"] for check in header_checks):
             raise AssertionError(f"Header receipt checklist failed: {json.dumps(header_checks, indent=2)}")
+
+        non_object_body_checks = build_receipt_checklist(
+            response=HttpResponse(
+                status=200,
+                headers={"content-type": "application/json", "Payment-Receipt": receipt_header},
+                body=json.dumps(["not", "an", "object"]).encode("utf-8"),
+            ),
+            idempotency_key=result.idempotency_key,
+            payment_authorization=result.payment_authorization,
+        )
+        if any(check["name"] == "tool_result_present" and check["ok"] for check in non_object_body_checks):
+            raise AssertionError("Non-object JSON bodies should not crash or pass tool_result_present.")
+
+        lower_header_result = executor.execute(
+            url=url,
+            method="POST",
+            payload=payload,
+            headers={"x-idempotency-key": "stable-lowercase-key"},
+            pay=deterministic_demo_pay,
+            max_attempts=4,
+        )
+        if lower_header_result.idempotency_key != "stable-lowercase-key":
+            raise AssertionError("Lowercase idempotency header should be reused.")
 
         output = {
             "demo": "ok",
