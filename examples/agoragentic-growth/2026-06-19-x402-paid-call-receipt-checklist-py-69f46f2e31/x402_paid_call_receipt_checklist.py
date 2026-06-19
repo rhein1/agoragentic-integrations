@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import threading
@@ -55,7 +56,9 @@ class PaidCallExecutor:
         backoff_seconds: float = 0.15,
     ) -> None:
         self.timeout_seconds = timeout_seconds
-        self.retryable_statuses = set(retryable_statuses or [429, 500, 502, 503, 504])
+        if retryable_statuses is None:
+            retryable_statuses = [429, 500, 502, 503, 504]
+        self.retryable_statuses = set(retryable_statuses)
         self.backoff_seconds = backoff_seconds
 
     def execute(
@@ -85,6 +88,7 @@ class PaidCallExecutor:
                 request_headers["Authorization"] = (
                     f"{payment_authorization.scheme} {payment_authorization.token}"
                 )
+                request_headers["PAYMENT-SIGNATURE"] = payment_authorization.token
                 request_headers["X-Payment-Authorization-Id"] = (
                     payment_authorization.authorization_id
                 )
@@ -101,6 +105,11 @@ class PaidCallExecutor:
                 if pay is None:
                     raise PaymentRequiredError(
                         "Server returned HTTP 402 but no pay callback was supplied."
+                    )
+                if attempt >= max_attempts:
+                    raise PaymentRequiredError(
+                        "Server returned HTTP 402 on the final attempt; refusing to authorize a payment "
+                        "that cannot be retried."
                     )
                 requirement = self._extract_payment_requirement(response)
                 payment_authorization = pay(
@@ -169,9 +178,14 @@ class PaidCallExecutor:
 
     @staticmethod
     def _extract_payment_requirement(response: HttpResponse) -> Dict[str, Any]:
-        header_value = response.headers.get("X-Payment-Required")
+        header_value = _get_header(
+            response.headers,
+            "X-Payment-Required",
+            "PAYMENT-REQUIRED",
+            "payment-required",
+        )
         if header_value:
-            return json.loads(header_value)
+            return _parse_header_json(header_value)
         body = response.json()
         if isinstance(body, dict) and isinstance(body.get("payment_required"), dict):
             return body["payment_required"]
@@ -191,7 +205,14 @@ def build_receipt_checklist(
 
     receipt = body.get("receipt") if isinstance(body, dict) else None
     if not isinstance(receipt, dict):
-        receipt = {}
+        receipt_header = _get_header(response.headers, "Payment-Receipt", "X-Payment-Receipt")
+        if receipt_header:
+            try:
+                receipt = _parse_header_json(receipt_header)
+            except Exception:
+                receipt = {}
+        else:
+            receipt = {}
 
     checks: List[Dict[str, Any]] = []
 
@@ -298,6 +319,7 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
             return
 
         authorization_header = self.headers.get("Authorization")
+        payment_signature = self.headers.get("PAYMENT-SIGNATURE")
         if not authorization_header:
             requirement = {
                 "version": 1,
@@ -320,6 +342,9 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
 
         if not authorization_header.startswith("X402 demo-token-"):
             self._write_json(401, {"error": "invalid_authorization"})
+            return
+        if payment_signature != authorization_header.split(" ", 1)[1]:
+            self._write_json(401, {"error": "missing_or_mismatched_payment_signature"})
             return
 
         auth_token = authorization_header.split(" ", 1)[1]
@@ -390,9 +415,65 @@ def start_demo_server() -> tuple[HTTPServer, str]:
     return server, url
 
 
+def _get_header(headers: Mapping[str, str], *names: str) -> Optional[str]:
+    normalized = {str(key).lower(): value for key, value in headers.items()}
+    for name in names:
+        value = normalized.get(name.lower())
+        if value:
+            return value
+    return None
+
+
+def _parse_header_json(value: str) -> Dict[str, Any]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        parsed = json.loads(base64.b64decode(value.encode("utf-8")).decode("utf-8"))
+    if not isinstance(parsed, dict):
+        raise ValueError("payment header did not decode to an object")
+    return parsed
+
+
 def run_self_test() -> None:
     server, url = start_demo_server()
     try:
+        no_retry_executor = PaidCallExecutor(retryable_statuses=[])
+        if no_retry_executor.retryable_statuses:
+            raise AssertionError("Explicit empty retryable_statuses should disable retryable-status retries.")
+
+        encoded_requirement = base64.b64encode(
+            json.dumps({"amount": "0.05", "asset": "USD"}).encode("utf-8")
+        ).decode("ascii")
+        parsed_requirement = PaidCallExecutor._extract_payment_requirement(
+            HttpResponse(status=402, headers={"PAYMENT-REQUIRED": encoded_requirement}, body=b"")
+        )
+        if parsed_requirement.get("asset") != "USD":
+            raise AssertionError("PAYMENT-REQUIRED header should be accepted and decoded.")
+
+        pay_calls = 0
+
+        def forbidden_pay(
+            requirement: Mapping[str, Any],
+            idempotency_key: str,
+            prior_authorization: Optional[PaymentAuthorization] = None,
+        ) -> PaymentAuthorization:
+            nonlocal pay_calls
+            pay_calls += 1
+            return deterministic_demo_pay(requirement, idempotency_key, prior_authorization)
+
+        try:
+            PaidCallExecutor().execute(
+                url=url,
+                method="POST",
+                payload={"jsonrpc": "2.0", "id": "final-attempt", "method": "tools/call"},
+                pay=forbidden_pay,
+                max_attempts=1,
+            )
+            raise AssertionError("Final-attempt 402 should not authorize payment.")
+        except PaymentRequiredError:
+            if pay_calls != 0:
+                raise AssertionError("Payment callback should not be called when no retry remains.")
+
         executor = PaidCallExecutor()
         payload = {
             "jsonrpc": "2.0",
@@ -427,6 +508,19 @@ def run_self_test() -> None:
 
         if not all(check["ok"] for check in result.checklist):
             raise AssertionError(f"Checklist failed: {json.dumps(result.checklist, indent=2)}")
+
+        receipt_header = base64.b64encode(json.dumps(receipt).encode("utf-8")).decode("ascii")
+        header_checks = build_receipt_checklist(
+            response=HttpResponse(
+                status=200,
+                headers={"Content-Type": "application/json", "Payment-Receipt": receipt_header},
+                body=json.dumps({"result": body.get("result")}).encode("utf-8"),
+            ),
+            idempotency_key=result.idempotency_key,
+            payment_authorization=result.payment_authorization,
+        )
+        if not all(check["ok"] for check in header_checks):
+            raise AssertionError(f"Header receipt checklist failed: {json.dumps(header_checks, indent=2)}")
 
         output = {
             "demo": "ok",
