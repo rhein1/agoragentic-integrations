@@ -56,6 +56,7 @@ class ExecuteResult:
     attempts: int
     idempotency_key: str
     payment_token: str
+    payment_challenge: JsonDict
 
 
 class X402ReceiptChecklistClient:
@@ -83,18 +84,25 @@ class X402ReceiptChecklistClient:
         }
 
         payment_token: Optional[str] = None
+        payment_challenge: JsonDict = {}
         last_error: Optional[BaseException] = None
 
         for attempt in range(1, self.max_attempts + 1):
             current_headers = dict(request_headers)
             if payment_token:
-                current_headers["X-PAYMENT"] = payment_token
+                current_headers["PAYMENT-SIGNATURE"] = payment_token
                 current_headers["X-RETRY-ATTEMPT"] = str(attempt)
 
-            status_code, headers, body = self._post_json("/api/execute", request_body, current_headers)
+            status_code, headers, body = self._post_json("/api/x402/execute", request_body, current_headers)
 
             if status_code == 402:
+                if payment_token:
+                    raise RuntimeError(
+                        "paid retry returned another 402; refusing to sign a second payment "
+                        "without a new buyer decision"
+                    )
                 challenge = self._extract_challenge(headers, body)
+                payment_challenge = challenge
                 payment_token = self.payment_signer(challenge)
                 continue
 
@@ -114,9 +122,14 @@ class X402ReceiptChecklistClient:
                     attempts=attempt,
                     idempotency_key=idempotency_key,
                     payment_token=payment_token or "",
+                    payment_challenge=payment_challenge,
                 )
 
-            detail = body.get("error") or body.get("message") or f"HTTP {status_code}"
+            detail = (
+                body.get("error") or body.get("message") or f"HTTP {status_code}"
+                if isinstance(body, dict)
+                else f"HTTP {status_code}"
+            )
             raise RuntimeError(f"execute failed after {attempt} attempt(s): {detail}")
 
         raise RuntimeError(f"execute exhausted retries: {last_error}")
@@ -124,7 +137,21 @@ class X402ReceiptChecklistClient:
     def build_receipt_checklist(self, result: ExecuteResult, expected_quote_id: str) -> ReceiptChecklistReport:
         receipt = result.receipt or {}
         body = result.body or {}
-        invocation = body.get("invocation") or {}
+        invocation = body.get("invocation") if isinstance(body, dict) else {}
+        if not isinstance(invocation, dict):
+            invocation = {}
+        quote = body.get("quote") if isinstance(body, dict) else {}
+        if not isinstance(quote, dict):
+            quote = {}
+        expected_amount = self._first_nonempty(
+            result.payment_challenge.get("amount"),
+            result.payment_challenge.get("maxAmountRequired"),
+        )
+        expected_asset = self._first_nonempty(
+            result.payment_challenge.get("asset"),
+            result.payment_challenge.get("currency"),
+            result.payment_challenge.get("token"),
+        )
         report = ReceiptChecklistReport()
 
         receipt_id = self._first_nonempty(receipt.get("receipt_id"), receipt.get("id"))
@@ -135,7 +162,7 @@ class X402ReceiptChecklistClient:
         )
         paid_amount = self._first_nonempty(receipt.get("amount"), receipt.get("amount_usdc"))
         paid_asset = self._first_nonempty(receipt.get("asset"), receipt.get("currency"), receipt.get("token"))
-        quote_id = self._first_nonempty(receipt.get("quote_id"), body.get("quote_id"), body.get("quote", {}).get("id"))
+        quote_id = self._first_nonempty(receipt.get("quote_id"), body.get("quote_id"), quote.get("id"))
         state = str(self._first_nonempty(receipt.get("status"), receipt.get("state"), "")).lower()
         seller = self._first_nonempty(receipt.get("seller"), receipt.get("receiver"), receipt.get("pay_to"))
         payment_hash = self._first_nonempty(receipt.get("payment_hash"), receipt.get("proof_hash"))
@@ -145,9 +172,21 @@ class X402ReceiptChecklistClient:
         report.add("receipt id", bool(receipt_id), f"receipt_id={receipt_id!r}")
         report.add("invocation id", bool(invocation_id), f"invocation_id={invocation_id!r}")
         report.add("quote id matches", quote_id == expected_quote_id, f"quote_id={quote_id!r}, expected={expected_quote_id!r}")
-        report.add("settled status", state in {"settled", "completed", "paid", "verified", "succeeded"}, f"status={state!r}")
-        report.add("paid asset present", bool(paid_asset), f"asset={paid_asset!r}")
-        report.add("paid amount present", bool(paid_amount), f"amount={paid_amount!r}")
+        report.add(
+            "receipt status acceptable",
+            state in {"demo-accepted", "accepted", "pending", "settled", "completed", "paid", "verified", "succeeded"},
+            f"status={state!r}",
+        )
+        report.add(
+            "paid asset matches challenge",
+            bool(paid_asset) and (expected_asset is None or str(paid_asset) == str(expected_asset)),
+            f"asset={paid_asset!r}, expected={expected_asset!r}",
+        )
+        report.add(
+            "paid amount matches challenge",
+            bool(paid_amount) and (expected_amount is None or str(paid_amount) == str(expected_amount)),
+            f"amount={paid_amount!r}, expected={expected_amount!r}",
+        )
         report.add("seller present", bool(seller), f"seller={seller!r}")
         report.add("payment proof hash present", bool(payment_hash), f"payment_hash={payment_hash!r}")
         report.add(
@@ -157,8 +196,8 @@ class X402ReceiptChecklistClient:
         )
         report.add(
             "buyer retried after payment",
-            result.attempts >= 3,
-            f"attempts={result.attempts} (1=challenge, 2+=paid retry path)",
+            result.attempts >= 2,
+            f"attempts={result.attempts} (1=challenge, 2=first paid retry)",
         )
         report.add(
             "payment token reused",
@@ -178,48 +217,66 @@ class X402ReceiptChecklistClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                return response.status, self._normalize_headers(response.headers), json.loads(raw or "{}")
+                parsed = json.loads(raw or "{}")
+                return response.status, self._normalize_headers(response.headers), parsed if isinstance(parsed, dict) else {}
         except HTTPError as exc:
             raw = exc.read().decode("utf-8")
-            return exc.code, self._normalize_headers(exc.headers), json.loads(raw or "{}")
+            parsed = json.loads(raw or "{}")
+            return exc.code, self._normalize_headers(exc.headers), parsed if isinstance(parsed, dict) else {}
         except URLError as exc:
             raise RuntimeError(f"network error: {exc}") from exc
 
     @staticmethod
     def _extract_challenge(headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
-        challenge_header = headers.get("x-payment-required") or headers.get("payment-required")
+        challenge_header = (
+            headers.get("x-payment-required")
+            or headers.get("x-payment-requirements")
+            or headers.get("payment-required")
+            or headers.get("payment-requirements")
+        )
         if challenge_header:
             try:
-                return json.loads(challenge_header)
-            except json.JSONDecodeError:
+                return _normalize_object_or_first(_decode_json_or_base64(challenge_header))
+            except Exception:
                 pass
         challenge_body = body.get("payment_required") or body.get("challenge") or body
-        if isinstance(challenge_body, dict):
-            return dict(challenge_body)
-        raise RuntimeError("402 response missing usable challenge")
+        try:
+            return _normalize_object_or_first(challenge_body)
+        except RuntimeError as exc:
+            raise RuntimeError("402 response missing usable challenge") from exc
 
     @staticmethod
-    def _extract_receipt(headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
+    def _receipt_from_identifier(receipt_id: Any) -> Optional[JsonDict]:
+        if isinstance(receipt_id, str) and receipt_id.strip():
+            return {"receipt_id": receipt_id.strip(), "status": "accepted"}
+        return None
+
+    @classmethod
+    def _receipt_from_header(cls, header_value: str) -> Optional[JsonDict]:
+        try:
+            parsed = _decode_json_or_base64(header_value)
+            if isinstance(parsed, dict):
+                return dict(parsed)
+        except Exception:
+            pass
+        return cls._receipt_from_identifier(header_value)
+
+    @classmethod
+    def _extract_receipt(cls, headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
         receipt = body.get("receipt")
         if isinstance(receipt, dict):
             return dict(receipt)
+        identifier_receipt = cls._receipt_from_identifier(body.get("receipt_id") or body.get("id"))
+        if identifier_receipt:
+            return identifier_receipt
 
         for key in ("x-payment-receipt", "payment-receipt"):
             header_value = headers.get(key)
             if not header_value:
                 continue
-            try:
-                decoded = base64.b64decode(header_value.encode("utf-8"), validate=True).decode("utf-8")
-                parsed = json.loads(decoded)
-                if isinstance(parsed, dict):
-                    return parsed
-            except Exception:
-                try:
-                    parsed = json.loads(header_value)
-                    if isinstance(parsed, dict):
-                        return parsed
-                except Exception:
-                    continue
+            header_receipt = cls._receipt_from_header(header_value)
+            if header_receipt:
+                return header_receipt
 
         raise RuntimeError("success response missing receipt")
 
@@ -238,6 +295,22 @@ class X402ReceiptChecklistClient:
         return None
 
 
+def _decode_json_or_base64(value: str) -> Any:
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        decoded = base64.b64decode(value.encode("utf-8"), validate=True).decode("utf-8")
+        return json.loads(decoded)
+
+
+def _normalize_object_or_first(value: Any) -> JsonDict:
+    if isinstance(value, list) and value:
+        value = value[0]
+    if isinstance(value, dict):
+        return dict(value)
+    raise RuntimeError("value did not decode to an object or non-empty object array")
+
+
 class DemoPaidCallServer(ThreadingHTTPServer):
     def __init__(self, server_address: Tuple[str, int], secret: bytes) -> None:
         super().__init__(server_address, DemoPaidCallHandler)
@@ -249,13 +322,15 @@ class DemoPaidCallServer(ThreadingHTTPServer):
         self.expected_amount = "0.25"
         self.asset = "USDC"
         self.seller = "demo-seller"
+        self.force_second_challenge = False
+        self.skip_transient_failure = False
 
 
 class DemoPaidCallHandler(BaseHTTPRequestHandler):
     server: DemoPaidCallServer
 
     def do_POST(self) -> None:
-        if self.path != "/api/execute":
+        if self.path != "/api/x402/execute":
             self._send_json(404, {"error": "not found"})
             return
 
@@ -263,7 +338,7 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
         payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
         quote_id = payload.get("quote_id")
         idempotency_key = self.headers.get("Idempotency-Key")
-        payment_token = self.headers.get("X-PAYMENT")
+        payment_token = self.headers.get("PAYMENT-SIGNATURE")
 
         if quote_id != self.server.quote_id:
             self._send_json(400, {"error": f"unknown quote_id {quote_id!r}"})
@@ -282,8 +357,16 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
             self._send_json(
                 402,
                 {"error": "payment required", "payment_required": challenge},
-                extra_headers={"X-Payment-Required": json.dumps(challenge)},
+                extra_headers={
+                    "X-Payment-Requirements": base64.b64encode(
+                        json.dumps([challenge]).encode("utf-8")
+                    ).decode("ascii")
+                },
             )
+            return
+
+        if self.server.force_second_challenge:
+            self._send_json(402, {"error": "payment required again"})
             return
 
         if not idempotency_key:
@@ -301,7 +384,7 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
             return
 
         self.server.paid_attempt_count += 1
-        if self.server.paid_attempt_count == 1:
+        if self.server.paid_attempt_count == 1 and not self.server.skip_transient_failure:
             self._send_json(503, {"error": "transient upstream timeout after payment authorization"})
             return
 
@@ -311,13 +394,12 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
             "quote_id": self.server.quote_id,
             "invocation_id": invocation_id,
             "idempotency_key": idempotency_key,
-            "status": "settled",
+            "status": "demo-accepted",
             "amount": self.server.expected_amount,
             "asset": self.server.asset,
             "seller": self.server.seller,
             "network": "base-sepolia",
             "payment_hash": hashlib.sha256(payment_token.encode("utf-8")).hexdigest(),
-            "settled_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         response = {
             "ok": True,
@@ -371,9 +453,15 @@ def make_demo_payment_signer(secret: bytes) -> PaymentSigner:
     return signer
 
 
-def run_demo() -> Tuple[ExecuteResult, ReceiptChecklistReport]:
+def run_demo(
+    *,
+    force_second_challenge: bool = False,
+    skip_transient_failure: bool = False,
+) -> Tuple[ExecuteResult, ReceiptChecklistReport]:
     secret = b"demo-shared-secret"
     server = DemoPaidCallServer(("127.0.0.1", 0), secret)
+    server.force_second_challenge = force_second_challenge
+    server.skip_transient_failure = skip_transient_failure
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -392,6 +480,40 @@ def run_demo() -> Tuple[ExecuteResult, ReceiptChecklistReport]:
         thread.join(timeout=1)
 
 
+def _assert_second_402_does_not_resign() -> None:
+    secret = b"demo-shared-secret"
+    server = DemoPaidCallServer(("127.0.0.1", 0), secret)
+    server.force_second_challenge = True
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    sign_count = 0
+
+    def counting_signer(challenge: JsonDict) -> str:
+        nonlocal sign_count
+        sign_count += 1
+        return make_demo_payment_signer(secret)(challenge)
+
+    try:
+        client = X402ReceiptChecklistClient(
+            base_url=f"http://127.0.0.1:{server.server_address[1]}",
+            payment_signer=counting_signer,
+            max_attempts=4,
+            sleep_seconds=0.01,
+        )
+        try:
+            client.execute(server.quote_id, {"task": "prove no double sign"})
+        except RuntimeError as exc:
+            if "refusing to sign a second payment" not in str(exc):
+                raise
+        else:
+            raise AssertionError("paid 402 retry should fail instead of signing twice")
+        assert sign_count == 1, f"expected one payment signature, got {sign_count}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
+
+
 def _self_test() -> None:
     result, checklist = run_demo()
     assert result.status_code == 200, result.status_code
@@ -399,6 +521,47 @@ def _self_test() -> None:
     assert checklist.ok, checklist.as_text()
     assert result.receipt["idempotency_key"] == result.idempotency_key
     assert result.receipt["quote_id"] == "quote_demo_x402"
+
+    two_attempt_result, two_attempt_checklist = run_demo(skip_transient_failure=True)
+    assert two_attempt_result.attempts == 2, two_attempt_result.attempts
+    assert two_attempt_checklist.ok, two_attempt_checklist.as_text()
+
+    client = X402ReceiptChecklistClient(
+        base_url="http://127.0.0.1:1",
+        payment_signer=lambda challenge: "unused",
+    )
+    header_only_receipt = client._extract_receipt({"payment-receipt": "receipt_opaque_123"}, {})
+    assert header_only_receipt["receipt_id"] == "receipt_opaque_123"
+
+    non_object_quote_result = ExecuteResult(
+        status_code=two_attempt_result.status_code,
+        body={**two_attempt_result.body, "quote": "not-an-object"},
+        receipt=two_attempt_result.receipt,
+        headers=two_attempt_result.headers,
+        attempts=two_attempt_result.attempts,
+        idempotency_key=two_attempt_result.idempotency_key,
+        payment_token=two_attempt_result.payment_token,
+        payment_challenge=two_attempt_result.payment_challenge,
+    )
+    assert client.build_receipt_checklist(non_object_quote_result, "quote_demo_x402").ok
+
+    mismatched_receipt = dict(two_attempt_result.receipt)
+    mismatched_receipt["amount"] = "999.00"
+    mismatched_result = ExecuteResult(
+        status_code=two_attempt_result.status_code,
+        body=two_attempt_result.body,
+        receipt=mismatched_receipt,
+        headers=two_attempt_result.headers,
+        attempts=two_attempt_result.attempts,
+        idempotency_key=two_attempt_result.idempotency_key,
+        payment_token=two_attempt_result.payment_token,
+        payment_challenge=two_attempt_result.payment_challenge,
+    )
+    amount_checks = client.build_receipt_checklist(mismatched_result, "quote_demo_x402")
+    assert not amount_checks.ok
+    assert any(item.name == "paid amount matches challenge" and not item.ok for item in amount_checks.items)
+
+    _assert_second_402_does_not_resign()
 
 
 if __name__ == "__main__":
