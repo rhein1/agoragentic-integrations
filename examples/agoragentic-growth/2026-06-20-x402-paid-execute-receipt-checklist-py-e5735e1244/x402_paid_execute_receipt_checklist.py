@@ -262,7 +262,12 @@ class X402PaidExecuteReceiptBuyer:
         fetch_proof: bool = True,
         transport_retries: Optional[int] = None,
     ) -> ExecuteReceipt:
-        resolved_quote = quote or self.preview(task, constraints)
+        if quote is not None:
+            resolved_quote = quote
+        elif quote_id is not None:
+            resolved_quote = {}
+        else:
+            resolved_quote = self.preview(task, constraints)
         resolved_quote_id = resolved_quote.get("quote_id") or quote_id
         if not resolved_quote_id:
             raise RuntimeError("preview did not return quote_id; cannot execute paid call")
@@ -363,6 +368,11 @@ class X402PaidExecuteReceiptBuyer:
 
             if response.status == 402:
                 challenge_count += 1
+                if payment_authorization is not None:
+                    raise RuntimeError(
+                        "paid retry returned another 402; refusing to create another payment "
+                        "authorization without a new buyer decision"
+                    )
                 raw_payment_required = get_header(response.headers, "PAYMENT-REQUIRED") or get_header(
                     response.headers, "payment-required"
                 )
@@ -708,6 +718,54 @@ def run_self_test() -> Dict[str, Any]:
         raise RuntimeError(f"self-test expected one pay callback call, saw {pay.pay_calls}")
     if signed_attempts != 2:
         raise RuntimeError(f"self-test expected authorization reuse across retry, saw {signed_attempts} signed attempts")
+
+    direct_quote_fetch = MockFetch()
+    direct_quote_pay = DemoPayCallback()
+    direct_quote_buyer = X402PaidExecuteReceiptBuyer(
+        base_url="https://example.invalid",
+        fetch_impl=direct_quote_fetch,
+        pay=direct_quote_pay,
+        transport_retries=2,
+    )
+    direct_quote_receipt = direct_quote_buyer.execute(
+        "x402 buyer retry receipt checklist demo",
+        {"prompt": "use existing quote"},
+        quote_id="quote_direct_123",
+    )
+    if direct_quote_fetch.seen["preview_calls"] != 0:
+        raise RuntimeError("execute(..., quote_id=...) should not call preview()")
+    if not direct_quote_receipt.ok:
+        raise RuntimeError("direct quote execution should complete in the self-test")
+
+    repeated_402_pay = DemoPayCallback()
+    encoded_challenge = direct_quote_fetch.encoded_challenge
+
+    def repeated_402_fetch(
+        method: str,
+        url: str,
+        headers: Mapping[str, str],
+        body: Optional[str],
+        timeout_seconds: float,
+    ) -> SimpleResponse:
+        del method, url, headers, body, timeout_seconds
+        return response_json(402, {"error": "payment_required_again"}, {"PAYMENT-REQUIRED": encoded_challenge})
+
+    repeated_402_buyer = X402PaidExecuteReceiptBuyer(
+        base_url="https://example.invalid",
+        fetch_impl=repeated_402_fetch,
+        pay=repeated_402_pay,
+        transport_retries=0,
+    )
+    try:
+        repeated_402_buyer.execute_quote("quote_repeat_402", {"prompt": "do not pay twice"})
+    except RuntimeError as exc:
+        if "refusing to create another payment authorization" not in str(exc):
+            raise
+    else:
+        raise RuntimeError("second 402 after authorization should fail")
+    if repeated_402_pay.pay_calls != 1:
+        raise RuntimeError(f"repeated 402 should call pay once, saw {repeated_402_pay.pay_calls}")
+
     return {
         "summary": "self-test passed",
         "preview_calls": fetch_impl.seen["preview_calls"],
@@ -716,6 +774,8 @@ def run_self_test() -> Dict[str, Any]:
         "pay_calls": pay.pay_calls,
         "idempotency_key": receipt.idempotency_key,
         "checklist": receipt.receipt_checklist,
+        "direct_quote_preview_calls": direct_quote_fetch.seen["preview_calls"],
+        "repeated_402_pay_calls": repeated_402_pay.pay_calls,
     }
 
 
@@ -755,17 +815,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.self_test:
             print(json.dumps(run_self_test(), indent=2))
             return 0
-        print(
-            json.dumps(
-                run_live_demo(
-                    task=args.task,
-                    simulate_pay=args.simulate_pay,
-                    max_cost=args.max_cost,
-                    fetch_proof=not args.no_proof,
-                ),
-                indent=2,
-            )
+        live_receipt = run_live_demo(
+            task=args.task,
+            simulate_pay=args.simulate_pay,
+            max_cost=args.max_cost,
+            fetch_proof=not args.no_proof,
         )
+        print(json.dumps(live_receipt, indent=2))
+        if not live_receipt.get("ok") or not all(
+            item.get("pass") for item in live_receipt.get("receipt_checklist", [])
+        ):
+            return 1
         return 0
     except Exception as exc:
         print(str(exc), file=sys.stderr)
