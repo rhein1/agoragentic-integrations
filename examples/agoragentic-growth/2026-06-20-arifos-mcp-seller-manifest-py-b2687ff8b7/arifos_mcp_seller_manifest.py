@@ -50,6 +50,9 @@ class UsageReceiptError(RuntimeError):
     pass
 
 
+RECEIPT_SCHEMA = "agoragentic.usage-receipt.v1"
+
+
 class LocalArifosExecutor:
     def __init__(self, seller_id: str = "arifos.local", version: str = "0.1.0") -> None:
         self.seller_id = seller_id
@@ -57,6 +60,7 @@ class LocalArifosExecutor:
         self._tools: Dict[str, ToolSpec] = {}
         self._receipts_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
         self._results_by_key: Dict[Tuple[str, str], Any] = {}
+        self._input_digests_by_key: Dict[Tuple[str, str], str] = {}
         self._register_builtin_tools()
 
     def _register_builtin_tools(self) -> None:
@@ -97,13 +101,14 @@ class LocalArifosExecutor:
     def register_tool(self, spec: ToolSpec) -> None:
         self._tools[spec.name] = spec
 
-    def manifest(self, base_url: str = "http://localhost:8787") -> Dict[str, Any]:
+    def manifest(self) -> Dict[str, Any]:
         tools = []
         for spec in self._tools.values():
             tools.append(
                 {
                     "name": spec.name,
                     "description": spec.description,
+                    "inputSchema": spec.input_schema,
                     "input_schema": spec.input_schema,
                     "pricing": {
                         "model": "usage_receipt",
@@ -114,7 +119,7 @@ class LocalArifosExecutor:
                     },
                     "usage_receipts": {
                         "enabled": True,
-                        "format": "agoragentic.usage-receipt/v1",
+                        "format": RECEIPT_SCHEMA,
                         "fields": [
                             "receipt_id",
                             "idempotency_key",
@@ -151,8 +156,11 @@ class LocalArifosExecutor:
                 "protocol": "mcp",
                 "transport": {
                     "mode": "local-wrapper",
-                    "execute_endpoint": f"{base_url.rstrip('/')}/execute",
-                    "note": "This sample runs locally in-process and emits receipts for each call.",
+                    "entrypoint": f"{os.path.basename(sys.argv[0])} execute <tool> --args '<json>'",
+                    "note": (
+                        "This sample runs locally in-process and emits receipts for each call. "
+                        "It does not serve an HTTP endpoint; advertise one only after wiring a real server."
+                    ),
                 },
                 "tools": tools,
             },
@@ -173,25 +181,53 @@ class LocalArifosExecutor:
             raise UsageReceiptError(f"unknown tool: {tool_name}")
 
         key = (tool_name, idempotency_key or make_idempotency_key(stable_json(args)))
+        started = time.time()
+        started_at = utc_now()
+        input_digest = sha256_text(stable_json(args))
+
         if key in self._receipts_by_key:
+            if self._input_digests_by_key.get(key) != input_digest:
+                raise UsageReceiptError("idempotency key reused with different input")
             return {
                 "result": self._results_by_key[key],
                 "usage_receipt": self._receipts_by_key[key],
                 "reused_idempotent_result": True,
             }
 
-        started = time.time()
-        started_at = utc_now()
-        input_digest = sha256_text(stable_json(args))
-
         spec = self._tools[tool_name]
-        self._validate_args(spec.input_schema, args)
-        result = spec.handler(args)
+        try:
+            self._validate_args(spec.input_schema, args)
+        except UsageReceiptError as exc:
+            result = {"error": str(exc)}
+            receipt = self._build_receipt(
+                key=key,
+                tool_name=tool_name,
+                started=started,
+                started_at=started_at,
+                input_digest=input_digest,
+                result=result,
+                usage={
+                    "calls": 0,
+                    "input_tokens_est": estimate_tokens(args),
+                    "output_tokens_est": estimate_tokens(result),
+                },
+                outcome="rejected",
+                error={
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                },
+            )
+            self._receipts_by_key[key] = receipt
+            self._results_by_key[key] = result
+            self._input_digests_by_key[key] = input_digest
+            return {
+                "error": str(exc),
+                "result": result,
+                "usage_receipt": receipt,
+                "reused_idempotent_result": False,
+            }
 
-        finished = time.time()
-        finished_at = utc_now()
-        duration_ms = int(round((finished - started) * 1000))
-        output_digest = sha256_text(stable_json(result))
+        result = spec.handler(args)
 
         usage = {
             "calls": 1,
@@ -199,19 +235,53 @@ class LocalArifosExecutor:
             "output_tokens_est": estimate_tokens(result),
         }
 
+        receipt = self._build_receipt(
+            key=key,
+            tool_name=tool_name,
+            started=started,
+            started_at=started_at,
+            input_digest=input_digest,
+            result=result,
+            usage=usage,
+            outcome="ok",
+        )
+
+        self._receipts_by_key[key] = receipt
+        self._results_by_key[key] = result
+        self._input_digests_by_key[key] = input_digest
+        return {
+            "result": result,
+            "usage_receipt": receipt,
+            "reused_idempotent_result": False,
+        }
+
+    def _build_receipt(
+        self,
+        key: Tuple[str, str],
+        tool_name: str,
+        started: float,
+        started_at: str,
+        input_digest: str,
+        result: Any,
+        usage: Dict[str, Any],
+        outcome: str,
+        error: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        finished = time.time()
+        finished_at = utc_now()
         receipt = {
-            "schema": "agoragentic.usage-receipt/v1",
-            "receipt_id": f"ur_{sha256_text(f'{key[1]}:{tool_name}:{finished_ns() }')[:24]}",
+            "schema": RECEIPT_SCHEMA,
+            "receipt_id": f"ur_{sha256_text(f'{key[1]}:{tool_name}:{finished_ns()}')[:24]}",
             "seller_id": self.seller_id,
             "tool": tool_name,
             "idempotency_key": key[1],
             "started_at": started_at,
             "finished_at": finished_at,
-            "duration_ms": duration_ms,
+            "duration_ms": int(round((finished - started) * 1000)),
             "input_sha256": input_digest,
-            "output_sha256": output_digest,
+            "output_sha256": sha256_text(stable_json(result)),
             "usage": usage,
-            "outcome": "ok",
+            "outcome": outcome,
             "payment": {
                 "required": False,
                 "authorized": False,
@@ -223,14 +293,9 @@ class LocalArifosExecutor:
                 "platform": platform.platform(),
             },
         }
-
-        self._receipts_by_key[key] = receipt
-        self._results_by_key[key] = result
-        return {
-            "result": result,
-            "usage_receipt": receipt,
-            "reused_idempotent_result": False,
-        }
+        if error is not None:
+            receipt["error"] = error
+        return receipt
 
     def _normalize_text(self, args: Dict[str, Any]) -> Dict[str, Any]:
         text = " ".join(args["text"].split())
@@ -349,6 +414,10 @@ def run_selftest() -> None:
     manifest = executor.manifest()
     assert manifest["capability"]["protocol"] == "mcp"
     assert manifest["capability"]["tools"], "expected at least one tool"
+    assert "execute_endpoint" not in manifest["capability"]["transport"]
+    assert manifest["capability"]["tools"][0]["inputSchema"]["type"] == "object"
+    assert manifest["capability"]["tools"][0]["input_schema"]["type"] == "object"
+    assert manifest["capability"]["tools"][0]["usage_receipts"]["format"] == RECEIPT_SCHEMA
 
     first = executor.execute(
         "arifos.normalize_text",
@@ -363,8 +432,29 @@ def run_selftest() -> None:
 
     assert first["result"]["text"] == "hello receipts"
     assert first["usage_receipt"]["payment"]["settled"] is False
+    assert first["usage_receipt"]["schema"] == RECEIPT_SCHEMA
     assert second["reused_idempotent_result"] is True
     assert first["usage_receipt"]["receipt_id"] == second["usage_receipt"]["receipt_id"]
+
+    try:
+        executor.execute(
+            "arifos.normalize_text",
+            {"text": "different"},
+            idempotency_key="demo-key-1",
+        )
+        raise AssertionError("expected idempotency mismatch to be rejected")
+    except UsageReceiptError as exc:
+        assert "different input" in str(exc)
+
+    rejected = executor.execute(
+        "arifos.normalize_text",
+        {"lowercase": True},
+        idempotency_key="demo-key-invalid",
+    )
+    assert rejected["usage_receipt"]["outcome"] == "rejected"
+    assert rejected["usage_receipt"]["schema"] == RECEIPT_SCHEMA
+    assert rejected["usage_receipt"]["usage"]["calls"] == 0
+    assert rejected["usage_receipt"]["error"]["type"] == "UsageReceiptError"
 
     print("selftest: ok")
     print(json.dumps(first, indent=2, sort_keys=True))
@@ -394,6 +484,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(str(exc), file=sys.stderr)
             return 2
         print(json.dumps(result, indent=2, sort_keys=True))
+        if "error" in result:
+            return 2
         return 0
 
     if args.command == "selftest":
