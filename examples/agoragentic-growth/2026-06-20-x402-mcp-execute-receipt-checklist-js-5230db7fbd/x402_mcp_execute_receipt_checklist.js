@@ -56,7 +56,7 @@ class X402McpExecuteReceiptChecklist {
       task: request.task || `${request.server}/${request.tool}`,
       mcp_server: request.server,
       tool_name: request.tool,
-      max_price_usdc: request.maxPriceUsdc,
+      max_cost: request.maxPriceUsdc,
       buyer: request.buyer,
     };
 
@@ -79,6 +79,9 @@ class X402McpExecuteReceiptChecklist {
 
     const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
     const state = existing || createState(input);
+    if (isTerminalState(state)) {
+      return this.buildResult(state, state.result_snapshot || {});
+    }
     const body = {
       quote_id: state.quote_id,
       input: {
@@ -95,9 +98,12 @@ class X402McpExecuteReceiptChecklist {
       await this.receiptStore.save(state);
 
       try {
+        const executeHeaders = state.payment_authorization
+          ? this.buildPaidHeaders(state.payment_authorization, state.idempotency_key)
+          : this.buildExecuteHeaders(state.idempotency_key);
         const initial = await this.fetchImpl(`${this.baseUrl}/api/x402/execute`, {
           method: 'POST',
-          headers: this.buildExecuteHeaders(state.idempotency_key),
+          headers: executeHeaders,
           body: JSON.stringify(body),
         });
 
@@ -105,7 +111,18 @@ class X402McpExecuteReceiptChecklist {
           const directPayload = await safeJson(initial);
           mergeResponseEvidence(state, directPayload, initial);
           appendTimeline(state, initial.ok ? 'succeeded' : 'failed', `initial response ${initial.status}`);
+          await this.tryReconcile(state);
           await this.receiptStore.save(state);
+
+          if (hasTerminalEvidence(state)) {
+            return this.buildResult(state, directPayload);
+          }
+
+          if (!initial.ok && this.shouldRetry({ response: initial, state: cloneJson(state) }).retry && state.attempt_count < this.maxAttempts) {
+            appendTimeline(state, 'awaiting_reconciliation', `retryable initial response ${initial.status}; retrying`);
+            await this.receiptStore.save(state);
+            continue;
+          }
 
           if (!initial.ok) {
             throw new FinalFlowError(`initial request failed with HTTP ${initial.status}`, state);
@@ -156,6 +173,12 @@ class X402McpExecuteReceiptChecklist {
         const payload = await safeJson(settled);
         mergeResponseEvidence(state, payload, settled);
         await this.tryReconcile(state);
+
+        if (hasTerminalEvidence(state)) {
+          appendTimeline(state, 'reconciled', `terminal reconciliation observed after paid response ${settled.status}`);
+          await this.receiptStore.save(state);
+          return this.buildResult(state, payload);
+        }
 
         if (settled.ok) {
           appendTimeline(state, state.receipt_snapshot || state.proof_snapshot ? 'reconciled' : 'succeeded', `paid response ${settled.status}`);
@@ -387,7 +410,11 @@ function mergeResponseEvidence(state, payload, response) {
   state.last_http_status = response.status;
   state.result_snapshot = payload;
   state.invocation_id = payload.invocation_id || payload.invocation?.id || state.invocation_id;
-  state.payment_receipt_header = getHeader(response.headers, 'payment-receipt') || state.payment_receipt_header;
+  state.payment_receipt_header = (
+    getHeader(response.headers, 'payment-receipt')
+    || getHeader(response.headers, 'x-payment-receipt')
+    || state.payment_receipt_header
+  );
   state.payment_response_header = getHeader(response.headers, 'payment-response') || state.payment_response_header;
   state.receipt_id = extractReceiptId(state.payment_receipt_header, payload) || state.receipt_id;
 }
@@ -467,6 +494,15 @@ function isTerminalReceiptStatus(status) {
 
 function isTerminalProofStatus(status) {
   return typeof status === 'string' && ['verified', 'settled', 'completed'].includes(status.toLowerCase());
+}
+
+function hasTerminalEvidence(state) {
+  return isTerminalReceiptStatus(readReceiptStatus(state.receipt_snapshot))
+    || isTerminalProofStatus(readProofStatus(state.proof_snapshot));
+}
+
+function isTerminalState(state) {
+  return state && ['succeeded', 'reconciled'].includes(state.phase);
 }
 
 function defaultRetryDecision({ response, error }) {
@@ -568,7 +604,7 @@ async function demo() {
           502,
           { error: 'temporary upstream failure', invocation_id: 'inv_demo_456', receipt_id: 'rcpt_demo_789' },
           {
-            'payment-receipt': JSON.stringify({ receipt_id: 'rcpt_demo_789' }),
+            'X-Payment-Receipt': JSON.stringify({ receipt_id: 'rcpt_demo_789' }),
             'payment-response': JSON.stringify({ status: 'accepted' }),
           }
         );
@@ -583,7 +619,7 @@ async function demo() {
           output: { result: 'tool output' },
         },
         {
-          'payment-receipt': JSON.stringify({ receipt_id: 'rcpt_demo_789' }),
+          'X-Payment-Receipt': JSON.stringify({ receipt_id: 'rcpt_demo_789' }),
           'payment-response': JSON.stringify({ status: 'accepted' }),
         }
       );
@@ -636,6 +672,10 @@ async function demo() {
   if (quote.quote_id !== 'quote_demo_123') {
     throw new Error(`unexpected preview quote: ${JSON.stringify(quote)}`);
   }
+  const previewUrl = callLog.find((entry) => entry.url.includes('/api/x402/execute/match'))?.url || '';
+  if (!previewUrl.includes('max_cost=0.0025') || previewUrl.includes('max_price_usdc')) {
+    throw new Error(`preview did not use max_cost query parameter: ${previewUrl}`);
+  }
 
   const result = await client.executeToolCall({
     server: 'docs-server',
@@ -656,12 +696,32 @@ async function demo() {
     throw new Error(`expected 1 payChallenge call, saw ${payCalls}`);
   }
   const paidRequests = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute') && entry.headers.Authorization && entry.headers.Authorization.startsWith('Bearer paid:'));
-  if (paidRequests.length !== 2) {
-    throw new Error(`expected 2 paid execute attempts, saw ${paidRequests.length}`);
+  if (paidRequests.length !== 1) {
+    throw new Error(`expected 1 paid execute attempt before terminal reconciliation, saw ${paidRequests.length}`);
   }
   const distinctAuthValues = new Set(paidRequests.map((entry) => entry.headers.Authorization));
   if (distinctAuthValues.size !== 1) {
     throw new Error('expected payment authorization to be reused across retries');
+  }
+  if (!result.proof || !result.receipt) {
+    throw new Error('expected terminal proof and receipt from reconciliation');
+  }
+
+  const executeCallsBeforeReplay = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute')).length;
+  const replayed = await client.executeToolCall({
+    server: 'docs-server',
+    tool: 'search_docs',
+    arguments: { query: 'x402 receipt checklist' },
+    quoteId: quote.quote_id,
+    sessionId: 'session_demo_001',
+    idempotencyKey: 'demo-idempotency-key',
+  });
+  const executeCallsAfterReplay = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute')).length;
+  if (executeCallsAfterReplay !== executeCallsBeforeReplay) {
+    throw new Error('terminal saved session replay should not issue another execute request');
+  }
+  if (!replayed.checklist.ok) {
+    throw new Error('terminal saved session replay should return the stored checklist');
   }
 
   console.log(JSON.stringify({
