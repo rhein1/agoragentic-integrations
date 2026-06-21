@@ -89,6 +89,8 @@ class LocalExecuteWrapper:
                     raise RuntimeError("server returned a second 402 after payment authorization was already issued")
                 if pay is None:
                     raise RuntimeError("HTTP 402 received but no pay callback was supplied")
+                if attempt >= self.max_attempts:
+                    raise RuntimeError("HTTP 402 received on final attempt; refusing to authorize an unsent payment")
                 challenge = self._extract_payment_challenge(response_headers, response_body)
                 authorization = pay(challenge)
                 continue
@@ -125,12 +127,24 @@ class LocalExecuteWrapper:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                return response.status, self._normalize_headers(response.headers), json.loads(raw or "{}")
+                return response.status, self._normalize_headers(response.headers), self._parse_json_body(raw)
         except HTTPError as exc:
             raw = exc.read().decode("utf-8")
-            return exc.code, self._normalize_headers(exc.headers), json.loads(raw or "{}")
+            return exc.code, self._normalize_headers(exc.headers), self._parse_json_body(raw)
         except URLError as exc:
             raise RuntimeError(f"network error: {exc}") from exc
+
+    @staticmethod
+    def _parse_json_body(raw: str) -> JsonDict:
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                return parsed
+            return {"raw_body": parsed}
+        except json.JSONDecodeError:
+            return {"raw_body": raw}
 
     @staticmethod
     def _normalize_headers(headers: Mapping[str, Any]) -> Dict[str, str]:
@@ -140,22 +154,42 @@ class LocalExecuteWrapper:
     def _extract_payment_challenge(headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
         header_value = headers.get("x-payment-required") or headers.get("payment-required")
         if header_value:
-            try:
-                parsed = json.loads(header_value)
-                if isinstance(parsed, dict):
-                    return parsed
-            except json.JSONDecodeError:
-                pass
+            parsed = LocalExecuteWrapper._parse_json_or_base64(header_value)
+            if isinstance(parsed, dict) and LocalExecuteWrapper._is_usable_payment_challenge(parsed):
+                return parsed
         payload = body.get("payment_required") or body.get("challenge") or body
-        if isinstance(payload, dict):
+        if isinstance(payload, dict) and LocalExecuteWrapper._is_usable_payment_challenge(payload):
             return dict(payload)
         raise RuntimeError("402 response missing usable payment challenge")
+
+    @staticmethod
+    def _parse_json_or_base64(value: str) -> Any:
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            try:
+                decoded = base64.b64decode(value.encode("utf-8"), validate=True).decode("utf-8")
+                return json.loads(decoded)
+            except Exception:
+                return None
+
+    @staticmethod
+    def _is_usable_payment_challenge(challenge: Mapping[str, Any]) -> bool:
+        required = ("amount", "asset", "pay_to", "resource", "nonce")
+        return all(challenge.get(key) for key in required)
 
     @staticmethod
     def _extract_receipt(headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
         receipt = body.get("receipt")
         if isinstance(receipt, dict):
             return dict(receipt)
+
+        receipt_id = body.get("receipt_id") or body.get("id")
+        if isinstance(receipt_id, str) and receipt_id:
+            return {
+                "receipt_id": receipt_id,
+                "source": "top-level-receipt-id",
+            }
 
         for key in ("x-payment-receipt", "payment-receipt"):
             raw = headers.get(key)
@@ -189,7 +223,7 @@ class DemoExecuteServer(ThreadingHTTPServer):
         self.tool_name = "weather.lookup"
         self.price = "0.01"
         self.asset = "USDC"
-        self.receipt_status = "settled"
+        self.receipt_status = "demo-accepted"
         self.seller = "demo-mcp-seller"
 
 
@@ -377,13 +411,54 @@ def _self_test() -> None:
         assert server.paid_retry_count == 2, f"expected two paid attempts, got {server.paid_retry_count}"
         assert result.attempts == 3, f"expected 3 attempts total, got {result.attempts}"
         assert result.receipt["idempotency_key"] == result.idempotency_key
-        assert result.receipt["status"] == "settled"
+        assert result.receipt["status"] == "demo-accepted"
         assert result.payment_authorization == server.last_payment_token
         assert result.receipt["receipt_id"].startswith("rcpt_")
+
+        assert LocalExecuteWrapper._parse_json_body("temporary outage") == {"raw_body": "temporary outage"}
+        challenge = {
+            "amount": "0.01",
+            "asset": "USDC",
+            "pay_to": "demo-mcp-seller",
+            "resource": server.tool_name,
+            "nonce": "idem_123",
+        }
+        encoded_challenge = base64.b64encode(json.dumps(challenge).encode("utf-8")).decode("utf-8")
+        assert LocalExecuteWrapper._extract_payment_challenge({"payment-required": encoded_challenge}, {}) == challenge
+        try:
+            LocalExecuteWrapper._extract_payment_challenge({}, {"error": "missing challenge"})
+            raise AssertionError("expected unusable payment challenge to fail closed")
+        except RuntimeError as exc:
+            assert "missing usable payment challenge" in str(exc)
+        assert LocalExecuteWrapper._extract_receipt({}, {"receipt_id": "rcpt_minimal"})["receipt_id"] == "rcpt_minimal"
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=1.0)
+
+    final_attempt_server = DemoExecuteServer(("127.0.0.1", 0), secret=secret)
+    final_attempt_thread = threading.Thread(target=final_attempt_server.serve_forever, daemon=True)
+    final_attempt_thread.start()
+    try:
+        final_attempt_wrapper = LocalExecuteWrapper(
+            f"http://127.0.0.1:{final_attempt_server.server_address[1]}",
+            max_attempts=1,
+        )
+        pay_counter = [0]
+        try:
+            final_attempt_wrapper.execute(
+                tool_name=final_attempt_server.tool_name,
+                tool_input={"location": "berlin"},
+                pay=demo_pay_callback_factory(secret, pay_counter),
+            )
+            raise AssertionError("expected final-attempt 402 to fail before payment authorization")
+        except RuntimeError as exc:
+            assert "final attempt" in str(exc)
+        assert pay_counter[0] == 0
+    finally:
+        final_attempt_server.shutdown()
+        final_attempt_server.server_close()
+        final_attempt_thread.join(timeout=1.0)
 
 
 def main() -> None:
