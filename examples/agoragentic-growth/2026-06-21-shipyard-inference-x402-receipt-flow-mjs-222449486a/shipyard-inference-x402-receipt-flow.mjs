@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import http from 'node:http';
+import { pathToFileURL } from 'node:url';
 
 const DEMO_PAYMENT_SECRET = 'demo-x402-secret-do-not-use-on-chain';
 
@@ -40,11 +41,15 @@ function paymentChallengeFingerprint(challenge) {
   return sha256(
     stableJson({
       challenge_id: challenge.challenge_id,
+      protocol: challenge.protocol,
+      network: challenge.network,
+      settlement: challenge.settlement,
       pay_to: challenge.pay_to,
       amount_micro_usdc: challenge.amount_micro_usdc,
       asset: challenge.asset,
       tool: challenge.tool,
       idempotency_key: challenge.idempotency_key,
+      request_hash: challenge.request_hash,
     }),
   );
 }
@@ -137,14 +142,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
 
       const input = await readJsonBody(req);
       const tool = input.tool || 'shipyard-inference';
-      const cached = executionCache.get(idempotencyKey);
-      if (cached) {
-        sendJson(res, 200, {
-          ...cached,
-          replayed_from_idempotency_cache: true,
-        });
-        return;
-      }
+      const requestHash = sha256(stableJson(input));
 
       const challenge = {
         protocol: 'x402',
@@ -156,6 +154,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
         pay_to: 'demo://shipyard-inference-seller',
         settlement: 'authorization-on-402-retry',
         idempotency_key: idempotencyKey,
+        request_hash: requestHash,
         note: 'demo payment challenge; no funds move',
       };
 
@@ -188,11 +187,48 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
         authorizationEnvelope.authorization !== expected.authorization ||
         authorizationEnvelope.fingerprint !== expected.fingerprint
       ) {
-        sendJson(res, 402, { error: 'invalid_payment_authorization', challenge });
+        sendJson(
+          res,
+          402,
+          { error: 'invalid_payment_authorization', challenge },
+          { 'payment-required': encodePaymentRequiredHeader(challenge) },
+        );
         return;
       }
 
       const authFingerprint = sha256(presentedAuthorization);
+      const cached = executionCache.get(idempotencyKey);
+      if (cached) {
+        if (cached.receipt?.audit?.request_hash !== requestHash) {
+          sendJson(res, 409, {
+            error: 'idempotency_key_reused_with_different_payload',
+            expected_request_hash: cached.receipt?.audit?.request_hash,
+            actual_request_hash: requestHash,
+          });
+          return;
+        }
+        if (cached.receipt?.payment?.authorization_fingerprint !== authFingerprint) {
+          sendJson(res, 403, {
+            error: 'cached_execution_requires_original_payment_authorization',
+          });
+          return;
+        }
+        sendJson(res, 200, {
+          ...cached,
+          replayed_from_idempotency_cache: true,
+        });
+        return;
+      }
+
+      const previousAuthorization = observedAuthorizations.get(idempotencyKey);
+      if (previousAuthorization && previousAuthorization !== authFingerprint) {
+        sendJson(res, 409, {
+          error: 'payment_authorization_changed_for_idempotency_key',
+          expected_fingerprint: previousAuthorization,
+          actual_fingerprint: authFingerprint,
+        });
+        return;
+      }
       observedAuthorizations.set(idempotencyKey, authFingerprint);
       const paidAttempts = (paidAttemptCount.get(idempotencyKey) || 0) + 1;
       paidAttemptCount.set(idempotencyKey, paidAttempts);
@@ -227,7 +263,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
             mode: 'demo',
             challenge_id: challenge.challenge_id,
             authorization_fingerprint: authFingerprint,
-            authorization_reused_on_retry: paidAttempts > 1,
+            authorization_reused_on_retry: paidAttempts > 1 && previousAuthorization === authFingerprint,
             settled: false,
             note: 'authorization accepted by demo server; no real funds moved',
           },
@@ -236,7 +272,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
             execution_policy: 'charge_only_on_402_then_retry_with_same_authorization',
           },
           audit: {
-            request_hash: sha256(stableJson(input)),
+            request_hash: requestHash,
             response_hash: sha256(stableJson(output)),
             elapsed_ms: Date.now() - startedAt,
             created_at: nowIso(),
@@ -297,6 +333,33 @@ class X402PaidToolClient {
     this.retryDelayMs = retryDelayMs;
   }
 
+  _parseResponseBody(rawBody) {
+    if (!rawBody) return {};
+    try {
+      return JSON.parse(rawBody);
+    } catch (error) {
+      return {
+        raw_body: rawBody,
+        parse_error: error.message,
+      };
+    }
+  }
+
+  _challengeFromResponse(response, parsedBody) {
+    const headerChallenge = decodePaymentRequiredHeader(response.headers.get('payment-required'))[0];
+    const bodyChallenge = parsedBody && typeof parsedBody === 'object' ? parsedBody.challenge : null;
+
+    if (headerChallenge && bodyChallenge) {
+      const headerFingerprint = paymentChallengeFingerprint(headerChallenge);
+      const bodyFingerprint = paymentChallengeFingerprint(bodyChallenge);
+      if (headerFingerprint !== bodyFingerprint) {
+        throw new Error('402 body challenge does not match payment-required header challenge');
+      }
+    }
+
+    return headerChallenge || bodyChallenge || null;
+  }
+
   async executeShipyardInference({
     prompt,
     model = 'shipyard-inference-demo',
@@ -325,17 +388,33 @@ class X402PaidToolClient {
         headers['x-payment-authorization'] = cachedAuthorizationHeader;
       }
 
-      const response = await this.fetchImpl(
-        `${this.baseUrl}/v1/paid-tools/shipyard-inference`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(requestBody),
-        },
-      );
+      let response;
+      try {
+        response = await this.fetchImpl(
+          `${this.baseUrl}/v1/paid-tools/shipyard-inference`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody),
+          },
+        );
+      } catch (error) {
+        httpAttempts.push({
+          attempt,
+          status: null,
+          elapsed_ms: Date.now() - requestStartedAt,
+          reused_authorization: Boolean(cachedAuthorizationHeader),
+          transport_error: error instanceof Error ? error.message : String(error),
+        });
+        if (attempt === this.maxAttempts) {
+          throw error;
+        }
+        await sleep(this.retryDelayMs * attempt);
+        continue;
+      }
 
       const rawBody = await response.text();
-      const parsedBody = rawBody ? JSON.parse(rawBody) : {};
+      const parsedBody = this._parseResponseBody(rawBody);
       httpAttempts.push({
         attempt,
         status: response.status,
@@ -344,9 +423,11 @@ class X402PaidToolClient {
       });
 
       if (response.status === 402) {
-        const challenge =
-          parsedBody.challenge ||
-          decodePaymentRequiredHeader(response.headers.get('payment-required'))[0];
+        if (cachedAuthorizationHeader) {
+          throw new Error('server rejected the existing payment authorization with a second 402');
+        }
+
+        const challenge = this._challengeFromResponse(response, parsedBody);
 
         if (!challenge) {
           throw new Error('402 response did not include a usable x402 challenge');
@@ -494,7 +575,7 @@ export {
   paymentChallengeFingerprint,
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   selfTestAndDemo().catch((error) => {
     console.error(error.stack || String(error));
     process.exitCode = 1;
