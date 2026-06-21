@@ -3,8 +3,8 @@
  * demo — generates documentation only; moves no real funds.
  *
  * Run:
- *   node x402/render-commerce-funnel-blockers-guide.mjs > x402/X402_COMMERCE_FUNNEL_BLOCKERS.md
- *   node x402/render-commerce-funnel-blockers-guide.mjs --self-test
+ *   node examples/agoragentic-growth/2026-06-21-render-commerce-funnel-blockers-guide-mj-c7de26169f/render-commerce-funnel-blockers-guide.mjs > x402/X402_COMMERCE_FUNNEL_BLOCKERS.md
+ *   node examples/agoragentic-growth/2026-06-21-render-commerce-funnel-blockers-guide-mj-c7de26169f/render-commerce-funnel-blockers-guide.mjs --self-test
  */
 
 import assert from 'node:assert/strict';
@@ -28,8 +28,10 @@ function jsRetryFlowSnippet() {
     '  })));',
     '}',
     '',
-    'async function executeWith402Retry({ baseUrl, quoteId, input, payChallenge }) {',
-    '  const idempotencyKey = crypto.randomUUID();',
+    'async function executeWith402Retry({ baseUrl, quoteId, input, payChallenge, idempotencyKey }) {',
+    '  if (!idempotencyKey) {',
+    '    throw new Error("caller must create and persist idempotencyKey before the first attempt");',
+    '  }',
     '  const body = { quote_id: quoteId, input };',
     '  const headers = {',
     '    "content-type": "application/json",',
@@ -54,7 +56,9 @@ function jsRetryFlowSnippet() {
     '  let authorization = paidChallenges.get(cacheKey);',
     '  if (!authorization) {',
     '    authorization = await payChallenge(requirements, { idempotencyKey, body });',
-    '    if (!authorization) throw new Error("payChallenge returned no authorization");',
+    '    if (!authorization?.paymentSignature || typeof authorization.paymentSignature !== "string") {',
+    '      throw new Error("payChallenge must return a paymentSignature string before retrying");',
+    '    }',
     '    paidChallenges.set(cacheKey, authorization);',
     '  }',
     '',
@@ -62,7 +66,7 @@ function jsRetryFlowSnippet() {
     '    method: "POST",',
     '    headers: {',
     '      ...headers,',
-    '      "payment-signature": authorization.paymentSignature,',
+    '      "PAYMENT-SIGNATURE": authorization.paymentSignature,',
     '    },',
     '    body: JSON.stringify(body),',
     '  });',
@@ -259,7 +263,7 @@ function buildGuide() {
     '',
     '## Generation note',
     '',
-    'This file can be regenerated with `node x402/render-commerce-funnel-blockers-guide.mjs`.'
+    'This file can be regenerated with `node examples/agoragentic-growth/2026-06-21-render-commerce-funnel-blockers-guide-mj-c7de26169f/render-commerce-funnel-blockers-guide.mjs`.'
   );
 }
 
@@ -271,7 +275,9 @@ function runSelfTest() {
     'Idempotency-Key',
     'Receipt reconciliation checklist:',
     'Never claim a payment is settled, verified, or terminal unless the API field you checked says that explicitly.',
-    'node x402/render-commerce-funnel-blockers-guide.mjs',
+    'caller must create and persist idempotencyKey before the first attempt',
+    'payChallenge must return a paymentSignature string before retrying',
+    'node examples/agoragentic-growth/2026-06-21-render-commerce-funnel-blockers-guide-mj-c7de26169f/render-commerce-funnel-blockers-guide.mjs',
   ];
 
   for (const snippet of requiredSnippets) {
