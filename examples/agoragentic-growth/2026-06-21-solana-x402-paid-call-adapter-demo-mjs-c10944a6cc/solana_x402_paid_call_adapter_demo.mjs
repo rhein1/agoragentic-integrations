@@ -56,7 +56,16 @@ async function parseResponseBody(response) {
   const contentType = response.headers.get('content-type') || '';
   const text = await response.text();
   if (!text) return null;
-  if (contentType.includes('application/json')) return JSON.parse(text);
+  if (contentType.includes('application/json')) {
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return {
+        rawBody: text,
+        parseError: error.message,
+      };
+    }
+  }
   return text;
 }
 
@@ -159,6 +168,10 @@ export class X402PayKitAdapter {
   }) {
     const headers = finalResponse ? normalizeHeaders(finalResponse.headers) : {};
     const body = typeof finalBody === 'object' && finalBody !== null ? finalBody : {};
+    const authorizedAttempts = attempts.filter((item) => item.sentAuthorization);
+    const authorizationFingerprints = new Set(authorizedAttempts.map((item) => item.authorizationFingerprint));
+    const challengeIdEcho = headers['x402-challenge-id'];
+    const challengeIdMatches = !initialChallenge || challengeIdEcho === initialChallenge.challengeId;
     const checks = [
       createCheck(
         'initial 402 challenge observed',
@@ -179,12 +192,11 @@ export class X402PayKitAdapter {
       ),
       createCheck(
         'authorization reused after transient failure instead of repaying',
-        attempts.filter((item) => item.sentAuthorization).length >= 2 &&
-          new Set(attempts.filter((item) => item.sentAuthorization).map((item) => item.authorizationFingerprint)).size === 1,
-        attempts
-          .filter((item) => item.sentAuthorization)
+        authorizedAttempts.length <= 1 || authorizationFingerprints.size === 1,
+        authorizedAttempts
           .map((item) => `${item.kind}:${item.status ?? 'network'}:${item.authorizationFingerprint}`)
-          .join(' | ') || 'authorization not reused'
+          .join(' | ') || 'no post-payment retry required',
+        authorizedAttempts.length <= 1 ? 'No transient post-payment retry occurred; reuse was not required.' : null
       ),
       createCheck(
         'final response is success',
@@ -192,9 +204,9 @@ export class X402PayKitAdapter {
         finalResponse ? `status=${finalResponse.status}` : 'no final response'
       ),
       createCheck(
-        'server echoed receipt identifiers',
-        Boolean(headers['x402-receipt-id'] && headers['x402-challenge-id']),
-        `x402-receipt-id=${headers['x402-receipt-id'] || 'missing'}, x402-challenge-id=${headers['x402-challenge-id'] || 'missing'}`,
+        'server echoed receipt identifiers for the paid challenge',
+        Boolean(headers['x402-receipt-id'] && challengeIdEcho && challengeIdMatches),
+        `x402-receipt-id=${headers['x402-receipt-id'] || 'missing'}, x402-challenge-id=${challengeIdEcho || 'missing'}, expected=${initialChallenge?.challengeId || 'none'}`,
         'This only checks HTTP evidence returned by the server; it does not imply on-chain settlement.'
       ),
       createCheck(
@@ -235,6 +247,7 @@ export class X402PayKitAdapter {
 
       if (authorization) {
         requestHeaders.set('authorization', `${authorization.scheme} ${authorization.token}`);
+        requestHeaders.set('PAYMENT-SIGNATURE', authorization.token);
       }
 
       const serializedBody = serializeBody(body, requestHeaders);
@@ -261,6 +274,19 @@ export class X402PayKitAdapter {
         });
 
         if (response.status === 402) {
+          if (authorization) {
+            const error = new Error('server returned 402 after payment authorization was already sent');
+            error.result = {
+              ok: false,
+              status: response.status,
+              data: responseBody,
+              headers: normalizeHeaders(response.headers),
+              authorization,
+              idempotencyKey,
+              attempts,
+            };
+            throw error;
+          }
           const challenge = normalizeChallenge(response, responseBody);
           if (!initialChallenge) initialChallenge = challenge;
           authorization = await this.authorizePayment({
@@ -315,6 +341,9 @@ export class X402PayKitAdapter {
           receiptChecklist,
         };
       } catch (error) {
+        if (error.result) {
+          throw error;
+        }
         const retryable = isRetryableNetworkError(error);
         attempts.push({
           attempt: attemptNumber,
@@ -376,7 +405,8 @@ export async function startDemoServer({ secret = DEMO_SECRET } = {}) {
       };
 
       const authHeader = String(req.headers.authorization || '');
-      const token = authHeader.startsWith('X402 ') ? authHeader.slice(5) : '';
+      const signatureHeader = String(req.headers['payment-signature'] || '');
+      const token = signatureHeader || (authHeader.startsWith('X402 ') ? authHeader.slice(5) : '');
 
       if (!token) {
         res.writeHead(402, {
@@ -504,8 +534,97 @@ export async function demo() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  demo().catch((error) => {
+async function runEdgeCaseAssertions() {
+  const challenge = {
+    challengeId: 'challenge-single-success',
+    amount: '2500',
+    asset: 'lamports',
+    payTo: 'demo://merchant/solana-foundation/pay-kit',
+    memo: 'single-success',
+  };
+
+  let call = 0;
+  const singleSuccessAdapter = new X402PayKitAdapter({
+    fetchImpl: async (url, request) => {
+      call += 1;
+      assert.equal(request.headers.get('x-idempotency-key'), 'idem-single-success');
+      if (call === 1) {
+        return new Response(JSON.stringify({ error: 'payment_required', ...challenge }), {
+          status: 402,
+          headers: { 'content-type': 'application/json', 'x402-challenge-id': challenge.challengeId },
+        });
+      }
+      assert.equal(request.headers.get('PAYMENT-SIGNATURE'), 'single-success-token');
+      return new Response(JSON.stringify({ ok: true, idempotencyKey: 'idem-single-success' }), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'x402-receipt-id': 'receipt-single-success',
+          'x402-challenge-id': challenge.challengeId,
+          'x-idempotency-key': 'idem-single-success',
+        },
+      });
+    },
+  });
+  const singleSuccess = await singleSuccessAdapter.execute({
+    url: 'https://example.invalid/paid-call',
+    idempotencyKey: 'idem-single-success',
+    body: { sku: 'demo' },
+    pay: async () => ({ scheme: 'X402', token: 'single-success-token' }),
+  });
+  assert.equal(singleSuccess.receiptChecklist.passed, true);
+  assert.equal(singleSuccess.attempts.filter((entry) => entry.sentAuthorization).length, 1);
+
+  let repeated402Calls = 0;
+  const repeated402Adapter = new X402PayKitAdapter({
+    fetchImpl: async () => {
+      repeated402Calls += 1;
+      return new Response(JSON.stringify({ error: 'payment_required', ...challenge }), {
+        status: 402,
+        headers: { 'content-type': 'application/json', 'x402-challenge-id': challenge.challengeId },
+      });
+    },
+  });
+  await assert.rejects(
+    repeated402Adapter.execute({
+      url: 'https://example.invalid/paid-call',
+      idempotencyKey: 'idem-repeat-402',
+      body: { sku: 'demo' },
+      pay: async () => ({ scheme: 'X402', token: 'repeat-token' }),
+    }),
+    /after payment authorization/
+  );
+  assert.equal(repeated402Calls, 2);
+
+  let malformedRetryCalls = 0;
+  const malformedRetryAdapter = new X402PayKitAdapter({
+    fetchImpl: async () => {
+      malformedRetryCalls += 1;
+      if (malformedRetryCalls === 1) {
+        return new Response('{not-json', {
+          status: 503,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true, idempotencyKey: 'idem-malformed-retry' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json', 'x-idempotency-key': 'idem-malformed-retry' },
+      });
+    },
+  });
+  const malformedRetryResult = await malformedRetryAdapter.execute({
+    url: 'https://example.invalid/paid-call',
+    idempotencyKey: 'idem-malformed-retry',
+    body: { sku: 'demo' },
+  });
+  assert.equal(malformedRetryResult.status, 200);
+  assert.equal(malformedRetryCalls, 2);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  runEdgeCaseAssertions()
+    .then(() => demo())
+    .catch((error) => {
     console.error(error.stack || error.message);
     process.exitCode = 1;
   });
