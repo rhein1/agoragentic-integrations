@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* demo — moves no real funds */
 
+import { pathToFileURL } from 'node:url';
+
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_SERVER = 'onyx-mcp';
 const DEFAULT_MAX_ATTEMPTS = 4;
@@ -218,6 +220,10 @@ export class OnyxMcpExecuteBuyerAdapter {
 
     const receiptStatus = readReceiptStatus(state.receipt_snapshot);
     const proofStatus = readProofStatus(state.proof_snapshot);
+    const demoEvidence = isDemoEvidenceStatus(receiptStatus)
+      || isDemoEvidenceStatus(proofStatus)
+      || state.wallet_receipt?.simulated === true;
+    const terminalEvidence = isTerminalReceiptStatus(receiptStatus) || isTerminalProofStatus(proofStatus);
 
     const checks = [
       makeCheck('session_id', Boolean(state.session_id), state.session_id),
@@ -236,8 +242,9 @@ export class OnyxMcpExecuteBuyerAdapter {
       makeCheck('payment_response_header', Boolean(state.payment_response_header), state.payment_response_header),
       makeCheck('receipt_id', Boolean(state.receipt_id), state.receipt_id),
       makeCheck('invocation_id', Boolean(state.invocation_id), state.invocation_id),
-      makeCheck('terminal_receipt_or_proof', isTerminalReceiptStatus(receiptStatus) || isTerminalProofStatus(proofStatus), { receiptStatus, proofStatus }),
+      makeCheck('terminal_receipt_or_demo_evidence', terminalEvidence || demoEvidence, { receiptStatus, proofStatus, demoEvidence }),
       makeCheck('no_submitted_claimed_as_settled', receiptStatus !== 'submitted' && proofStatus !== 'submitted', { receiptStatus, proofStatus }),
+      makeCheck('simulated_receipt_not_settled', !(state.wallet_receipt?.simulated === true && receiptStatus === 'settled'), { receiptStatus, simulated: state.wallet_receipt?.simulated === true }),
     ];
 
     return {
@@ -609,6 +616,10 @@ function isTerminalProofStatus(status) {
   return typeof status === 'string' && ['verified', 'settled', 'completed'].includes(status);
 }
 
+function isDemoEvidenceStatus(status) {
+  return typeof status === 'string' && ['demo-accepted', 'demo-observed', 'simulated'].includes(status);
+}
+
 function defaultRetryDecision({ response, error }) {
   if (response && isRetryableStatus(response.status)) {
     return { retry: true, reason: `retryable HTTP ${response.status}` };
@@ -761,16 +772,22 @@ async function demo() {
       receiptPolls += 1;
       return jsonResponse(200, {
         id: 'rcpt_demo_789',
-        status: receiptPolls >= 2 ? 'settled' : 'pending',
+        status: receiptPolls >= 2 ? 'demo-accepted' : 'pending',
         amount: '2500',
         asset: 'USDC',
+        simulated: true,
+        settlement_note: 'demo evidence only; no real funds moved',
       });
     }
 
     if (url.includes('/api/x402/invocations/inv_demo_456/proof')) {
       return jsonResponse(200, {
         invocation_id: 'inv_demo_456',
-        on_chain: { status: receiptPolls >= 2 ? 'verified' : 'pending' },
+        on_chain: {
+          status: receiptPolls >= 2 ? 'demo-observed' : 'pending',
+          simulated: true,
+          note: 'demo evidence only; no on-chain verification performed',
+        },
       });
     }
 
@@ -848,7 +865,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(error?.stack || String(error));
     process.exitCode = 1;
