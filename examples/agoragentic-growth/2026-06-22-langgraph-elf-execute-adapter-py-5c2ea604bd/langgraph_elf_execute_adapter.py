@@ -242,6 +242,8 @@ class AgoragenticExecuteBuyerAdapter:
                 new_state = dict(state)
                 new_state[output_key] = adapter_result
                 return new_state
+            if not _has_explicit_max_cost(constraints):
+                raise ValueError("constraints.max_cost is required before non-dry-run paid execute()")
             execution = self.execute(task, input_data=input_data, constraints=constraints)
             adapter_result["executed"] = True
             adapter_result["execution"] = execution
@@ -265,6 +267,7 @@ def build_agoragentic_langgraph_tools(api_key: Optional[str] = None, *, base_url
 
     @tool
     def agoragentic_match(task: str, max_cost: Optional[float] = None, category: Optional[str] = None) -> Dict[str, Any]:
+        """Preview Agoragentic providers for a task before paid execution."""
         return adapter.match(task=task, max_cost=max_cost, category=category)
 
     @tool
@@ -273,14 +276,17 @@ def build_agoragentic_langgraph_tools(api_key: Optional[str] = None, *, base_url
         input_data: Optional[Dict[str, Any]] = None,
         constraints: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        """Execute a task through Agoragentic with caller-supplied budget constraints."""
         return adapter.execute(task=task, input_data=input_data or {}, constraints=constraints or {})
 
     @tool
     def agoragentic_status(invocation_id: str) -> Dict[str, Any]:
+        """Fetch execution status for a prior Agoragentic invocation."""
         return adapter.status(invocation_id)
 
     @tool
     def agoragentic_receipt(receipt_id: str) -> Dict[str, Any]:
+        """Fetch a normalized Agoragentic receipt for reconciliation."""
         return adapter.receipt(receipt_id)
 
     return [agoragentic_match, agoragentic_execute, agoragentic_status, agoragentic_receipt]
@@ -354,7 +360,7 @@ def build_elf_seller_listing_manifest(
         "output_schema": {
             "type": "object",
             "additionalProperties": True,
-            "required": ["ok", "invocation_id", "status", "result"],
+            "required": ["ok", "invocation_id", "status"],
             "properties": {
                 "ok": {"type": "boolean"},
                 "invocation_id": {"type": "string"},
@@ -422,9 +428,10 @@ def run_minimal_langgraph_demo(adapter: AgoragenticExecuteBuyerAdapter) -> Dict[
         graph.add_node("route_execute", node)
         graph.add_edge(START, "route_execute")
         graph.add_edge("route_execute", END)
-        return graph.compile().invoke(initial_state)
+        compiled_graph = graph.compile()
     except Exception:
         return node(initial_state)
+    return compiled_graph.invoke(initial_state)
 
 
 def _extract_error_message(payload: Any) -> str:
@@ -468,6 +475,16 @@ def _as_optional_tags(value: Any) -> Optional[List[str]]:
         tags = [str(tag).strip() for tag in value if str(tag).strip()]
         return tags or None
     return None
+
+
+def _has_explicit_max_cost(constraints: Mapping[str, Any]) -> bool:
+    if "max_cost" not in constraints:
+        return False
+    try:
+        max_cost = float(constraints["max_cost"])
+    except (TypeError, ValueError):
+        return False
+    return max_cost >= 0
 
 
 def _demo_stub_adapter() -> AgoragenticExecuteBuyerAdapter:
