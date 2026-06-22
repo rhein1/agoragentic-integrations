@@ -157,11 +157,19 @@ function buildToolArguments(tool, { task, input = {}, constraints = {} }) {
   const properties = tool?.inputSchema?.properties && typeof tool.inputSchema.properties === 'object'
     ? tool.inputSchema.properties
     : {};
+  const hasDeclaredProperties = Object.keys(properties).length > 0;
+  const allowsAdditionalProperties = tool?.inputSchema?.additionalProperties !== false;
   const args = {};
   const setIfSchemaHas = (preferredKeys, fallbackKey, value) => {
     if (value === undefined) return;
-    const key = preferredKeys.find((candidate) => Object.prototype.hasOwnProperty.call(properties, candidate)) || fallbackKey;
-    args[key] = value;
+    const schemaKey = preferredKeys.find((candidate) => Object.prototype.hasOwnProperty.call(properties, candidate));
+    if (schemaKey) {
+      args[schemaKey] = value;
+      return;
+    }
+    if (!hasDeclaredProperties || allowsAdditionalProperties) {
+      args[fallbackKey] = value;
+    }
   };
 
   setIfSchemaHas(['task', 'prompt', 'query', 'instruction'], 'task', task);
@@ -328,6 +336,35 @@ export class UsageLogger {
   }
 }
 
+function parseArgsEnv(value = '') {
+  return String(value || '')
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function createDefaultClient(options = {}) {
+  const command = options.command || process.env.M3_MEMORY_MCP_COMMAND;
+  const args = Array.isArray(options.args)
+    ? [...options.args]
+    : parseArgsEnv(process.env.M3_MEMORY_MCP_ARGS);
+  if (!command) {
+    throw new Error(
+      'M3MemoryExecuteAdapter requires an explicit client or command. ' +
+      'Pass { client }, pass { command, args }, or set M3_MEMORY_MCP_COMMAND; ' +
+      'the built-in mock server is only used by demo/selftest paths.'
+    );
+  }
+  return new LineJsonRpcClient({
+    command,
+    args,
+    cwd: options.cwd,
+    env: options.env,
+    timeoutMs: options.timeoutMs,
+    protocolVersion: options.protocolVersion,
+  });
+}
+
 function failureResult({
   providerId,
   providerName,
@@ -380,14 +417,7 @@ export class M3MemoryExecuteAdapter {
     this.providerId = options.providerId || DEFAULT_PROVIDER_ID;
     this.providerName = options.providerName || DEFAULT_PROVIDER_NAME;
     this.toolName = options.toolName || '';
-    this.client = options.client || new LineJsonRpcClient({
-      command: options.command || process.execPath,
-      args: options.args || [fileURLToPath(import.meta.url), '--mock-server'],
-      cwd: options.cwd,
-      env: options.env,
-      timeoutMs: options.timeoutMs,
-      protocolVersion: options.protocolVersion,
-    });
+    this.client = options.client || createDefaultClient(options);
     this.logger = options.logger || new UsageLogger(options.usageLogPath || DEFAULT_USAGE_LOG_PATH);
   }
 
@@ -410,7 +440,6 @@ export class M3MemoryExecuteAdapter {
   async execute(task, input = {}, constraints = {}) {
     const normalizedTask = requireTask(task);
     const startedAt = nowIso();
-    const finishedPlaceholder = nowIso();
     const invocationId = stableId('inv', [normalizedTask, input, constraints, randomUUID()]);
     const requestId = stableId('req', [invocationId, startedAt]);
     let discoveredTools = [];
@@ -432,7 +461,7 @@ export class M3MemoryExecuteAdapter {
             ? `requested tool "${preferredName}" was not exposed by the local m3-memory runtime`
             : 'no compatible execute tool exposed by the local m3-memory runtime',
           startedAt,
-          finishedAt: finishedPlaceholder,
+          finishedAt: nowIso(),
           selectedTool: null,
           discoveredTools,
           requestId,
@@ -556,24 +585,32 @@ export class M3MemoryExecuteAdapter {
   }
 
   #logUsage(result, input, constraints, toolArguments = {}, rawResult = null) {
-    this.logger.write({
-      schema: 'agoragentic.m3-memory-usage-log.v1',
-      at: nowIso(),
-      invocation_id: result.invocation_id,
-      provider_id: result.provider_id,
-      provider_name: result.provider_name,
-      tool_name: result.tool_name,
-      status: result.status,
-      task: result.task,
-      input_keys: input && typeof input === 'object' && !Array.isArray(input) ? Object.keys(input).sort() : [],
-      constraint_keys: constraints && typeof constraints === 'object' && !Array.isArray(constraints) ? Object.keys(constraints).sort() : [],
-      tool_argument_keys: toolArguments && typeof toolArguments === 'object' ? Object.keys(toolArguments).sort() : [],
-      output_summary: result.output?.summary || null,
-      error: result.error,
-      receipt_id: result.receipt?.receipt_id || null,
-      duration_ms: result.receipt?.duration_ms || null,
-      raw_result_excerpt: rawResult ? JSON.stringify(rawResult).slice(0, 600) : null,
-    });
+    try {
+      this.logger.write({
+        schema: 'agoragentic.m3-memory-usage-log.v1',
+        at: nowIso(),
+        invocation_id: result.invocation_id,
+        provider_id: result.provider_id,
+        provider_name: result.provider_name,
+        tool_name: result.tool_name,
+        status: result.status,
+        task: result.task,
+        input_keys: input && typeof input === 'object' && !Array.isArray(input) ? Object.keys(input).sort() : [],
+        constraint_keys: constraints && typeof constraints === 'object' && !Array.isArray(constraints) ? Object.keys(constraints).sort() : [],
+        tool_argument_keys: toolArguments && typeof toolArguments === 'object' ? Object.keys(toolArguments).sort() : [],
+        output_summary: result.output?.summary || null,
+        error: result.error,
+        receipt_id: result.receipt?.receipt_id || null,
+        duration_ms: result.receipt?.duration_ms || null,
+        raw_result_excerpt: rawResult ? JSON.stringify(rawResult).slice(0, 600) : null,
+      });
+      return true;
+    } catch (error) {
+      if (result?.receipt) {
+        result.receipt.usage_log_error = error instanceof Error ? error.message : String(error);
+      }
+      return false;
+    }
   }
 }
 
@@ -719,6 +756,37 @@ async function runSelfTest() {
     const failure = await adapter.execute('fail this task', { memory_id: 'demo-2' });
     assert.equal(failure.status, 'failed');
     assert.match(failure.error, /mock failure requested/);
+
+    const strictTool = {
+      name: 'm3_memory.execute',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          memory_id: { type: 'string' },
+          content: { type: 'string' },
+        },
+      },
+    };
+    assert.deepEqual(
+      buildToolArguments(strictTool, {
+        task: 'store memory note',
+        input: { memory_id: 'strict-1', content: 'strict schema content' },
+        constraints: { max_steps: 1 },
+      }),
+      { memory_id: 'strict-1', content: 'strict schema content' }
+    );
+
+    const loggingFailureAdapter = createM3MemoryExecuteAdapter({
+      command: process.execPath,
+      args: [fileURLToPath(import.meta.url), '--mock-server'],
+      logger: { filePath: usageLogPath, write() { throw new Error('log sink unavailable'); } },
+      timeoutMs: 5_000,
+    });
+    const completedWithoutLog = await loggingFailureAdapter.execute('store memory note');
+    assert.equal(completedWithoutLog.status, 'completed');
+    assert.match(completedWithoutLog.receipt.usage_log_error, /log sink unavailable/);
+    await loggingFailureAdapter.close();
 
     const logEntries = lastLines(usageLogPath, 2);
     assert.equal(logEntries.length, 2);
