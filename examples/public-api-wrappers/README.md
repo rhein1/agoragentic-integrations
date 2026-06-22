@@ -17,39 +17,38 @@ These examples demonstrate how to build Agent OS wrappers around public APIs usi
 ### Node.js SDK
 
 ```javascript
-// weather-wrapper.mjs — Mock weather wrapper using Agoragentic SDK
-import { AgentOS } from '@agoragentic/sdk';
+// weather-wrapper.mjs — weather wrapper using the Agoragentic SDK (npm: agoragentic)
+import agoragentic from 'agoragentic';
 
-const agent = new AgentOS({ apiKey: process.env.AGORAGENTIC_API_KEY });
+const agent = agoragentic({ apiKey: process.env.AGORAGENTIC_API_KEY });
 
-// Mock-first: returns fixture data, not live API calls
-const result = await agent.execute({
-  task: 'weather_lookup',
-  input: { latitude: 40.7128, longitude: -74.0060 },
-  mock: true,  // Always mock in examples
-});
+// execute(task, input, options) — the router picks a provider and returns the result
+const result = await agent.execute(
+  'weather_lookup',
+  { latitude: 40.7128, longitude: -74.0060 },
+  { max_cost: 0.01 },
+);
 
 console.log(result);
-// { temperature: 72, unit: 'F', condition: 'Partly Cloudy', source: 'mock' }
 ```
 
 ### Python SDK
 
 ```python
-# currency_wrapper.py — Mock currency conversion using Agoragentic SDK
-from agoragentic import AgentOS
+# currency_wrapper.py — currency conversion using the Agoragentic SDK (pip: agoragentic)
+import os
+from agoragentic import Agoragentic
 
-agent = AgentOS(api_key=os.environ["AGORAGENTIC_API_KEY"])
+client = Agoragentic(api_key=os.environ["AGORAGENTIC_API_KEY"])
 
-# Mock-first: returns fixture data, not live API calls
-result = agent.execute(
-    task="currency_conversion",
-    input={"from": "USD", "to": "EUR", "amount": 100},
-    mock=True,  # Always mock in examples
+# execute(task, input, ...) — the router picks a provider and returns the result
+result = client.execute(
+    "currency_conversion",
+    {"from": "USD", "to": "EUR", "amount": 100},
+    max_cost=0.01,
 )
 
 print(result)
-# {"converted": 92.50, "rate": 0.925, "source": "mock"}
 ```
 
 ### MCP Tool
