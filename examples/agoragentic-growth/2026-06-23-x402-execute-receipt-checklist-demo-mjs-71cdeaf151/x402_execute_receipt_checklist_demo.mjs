@@ -1,6 +1,7 @@
 // demo — moves no real funds
 
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 function makeIdempotencyKey(prefix = "x402-demo") {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -8,6 +9,28 @@ function makeIdempotencyKey(prefix = "x402-demo") {
 
 function sha256(text) {
   return crypto.createHash("sha256").update(String(text)).digest("hex");
+}
+
+function parseJsonOrBase64Json(value) {
+  if (!value) return null;
+  const text = String(value);
+  try {
+    return JSON.parse(text);
+  } catch {
+    try {
+      return JSON.parse(Buffer.from(text, "base64").toString("utf8"));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function firstHeader(headers, names) {
+  for (const name of names) {
+    const value = headers?.get?.(name);
+    if (value) return value;
+  }
+  return null;
 }
 
 class HeadersBag {
@@ -76,23 +99,24 @@ async function readResponseBody(response) {
 }
 
 function extractChallenge(response, parsedBody) {
-  const headerValue = response.headers?.get?.("x-x402-challenge");
+  const headerValue = firstHeader(response.headers, [
+    "payment-required",
+    "PAYMENT-REQUIRED",
+    "x-payment-required",
+    "X-Payment-Required",
+    "x-x402-challenge",
+  ]);
   if (headerValue) {
-    try {
-      return JSON.parse(headerValue);
-    } catch {
-      return { raw: headerValue };
-    }
+    return parseJsonOrBase64Json(headerValue) ?? { raw: headerValue };
   }
   if (parsedBody?.json?.challenge) return parsedBody.json.challenge;
   return null;
 }
 
 function normalizeFetchResult(result) {
-  if (!result || typeof result.status !== "number") {
-    throw new Error("x402Fetch did not return a Response-like object");
-  }
-  return result.response && typeof result.response.status === "number" ? result.response : result;
+  if (result?.response && typeof result.response.status === "number") return result.response;
+  if (result && typeof result.status === "number") return result;
+  throw new Error("x402Fetch did not return a Response-like object");
 }
 
 function networkError(message, details = {}) {
@@ -130,7 +154,7 @@ async function fallbackX402Fetch(url, options = {}) {
 
   for (let attempt = 0; attempt <= maxNetworkRetries + 1; attempt += 1) {
     const requestHeaders = new HeadersBag(baseHeaders);
-    if (authorization) requestHeaders.set("x-x402-authorization", authorization);
+    if (authorization) requestHeaders.set("PAYMENT-SIGNATURE", authorization);
 
     let response;
     try {
@@ -165,20 +189,31 @@ async function fallbackX402Fetch(url, options = {}) {
       }
 
       const fingerprint = sha256(JSON.stringify(challenge));
-      if (!authorization || fingerprint !== challengeFingerprint) {
-        const payment = await pay({
-          url,
-          method,
+      if (authorization) {
+        const err = createHttpPaymentError("Paid retry was rejected with another HTTP 402", {
+          status: 402,
           idempotencyKey,
           challenge,
+          previousChallengeFingerprint: challengeFingerprint,
+          repeatedChallengeFingerprint: fingerprint,
         });
-        const token = typeof payment === "string" ? payment : payment?.authorization;
-        if (!token) {
-          throw new Error("pay callback must return an authorization string or { authorization }");
-        }
-        authorization = token;
-        challengeFingerprint = fingerprint;
+        throw err;
       }
+
+      const payment = await pay({
+        url,
+        method,
+        idempotencyKey,
+        challenge,
+      });
+      const token = typeof payment === "string"
+        ? payment
+        : payment?.authorization ?? payment?.paymentSignature ?? payment?.payment_signature;
+      if (!token) {
+        throw new Error("pay callback must return an authorization string, paymentSignature, or { authorization }");
+      }
+      authorization = token;
+      challengeFingerprint = fingerprint;
 
       continue;
     }
@@ -201,6 +236,14 @@ async function fallbackX402Fetch(url, options = {}) {
   }
 
   throw new Error("x402Fetch exhausted retries without a terminal result");
+}
+
+function createHttpPaymentError(message, details = {}) {
+  const err = new Error(message);
+  err.name = "X402PaymentRejected";
+  err.classification = "payment_rejected";
+  Object.assign(err, details);
+  return err;
 }
 
 async function loadX402Fetch() {
@@ -227,16 +270,44 @@ async function loadX402Fetch() {
 }
 
 function buildReceiptChecklist({ response, payload, idempotencyKey }) {
-  const receiptHeader = response.headers?.get?.("x-x402-receipt");
-  const challengeIdHeader = response.headers?.get?.("x-x402-challenge-id");
+  const receiptHeader = firstHeader(response.headers, [
+    "payment-receipt",
+    "Payment-Receipt",
+    "x-payment-receipt",
+    "X-Payment-Receipt",
+    "x-x402-receipt",
+  ]);
+  const challengeIdHeader = firstHeader(response.headers, [
+    "payment-challenge-id",
+    "Payment-Challenge-Id",
+    "x-payment-challenge-id",
+    "X-Payment-Challenge-Id",
+    "x-x402-challenge-id",
+  ]);
   const receipt = payload?.receipt ?? null;
-  const challengeId = challengeIdHeader ?? receipt?.challengeId ?? null;
+  const receiptFromHeader = parseJsonOrBase64Json(receiptHeader);
+  const receiptRecord = receipt && typeof receipt === "object" ? receipt : receiptFromHeader;
+  const challengeId = challengeIdHeader ?? receiptRecord?.challengeId ?? receiptRecord?.challenge_id ?? null;
+  const receiptIdempotencyKey = receiptRecord?.idempotencyKey
+    ?? receiptRecord?.idempotency_key
+    ?? payload?.idempotencyKey
+    ?? payload?.idempotency_key
+    ?? null;
+  const claimsSettlement = Boolean(
+    receiptRecord?.settled
+    || receiptRecord?.settledAt
+    || receiptRecord?.settled_at
+    || receiptRecord?.settlementStatus === "settled"
+    || receiptRecord?.settlement_status === "settled"
+  );
 
   return [
     {
-      item: "Request used an idempotency key",
-      pass: typeof idempotencyKey === "string" && idempotencyKey.length > 0,
-      evidence: idempotencyKey,
+      item: "Request and receipt use the same idempotency key",
+      pass: typeof idempotencyKey === "string"
+        && idempotencyKey.length > 0
+        && receiptIdempotencyKey === idempotencyKey,
+      evidence: `request=${idempotencyKey || "missing"} receipt=${receiptIdempotencyKey || "missing"}`,
     },
     {
       item: "Paid call completed with HTTP 2xx",
@@ -245,8 +316,8 @@ function buildReceiptChecklist({ response, payload, idempotencyKey }) {
     },
     {
       item: "Response included a receipt handle",
-      pass: Boolean(receiptHeader || receipt?.id),
-      evidence: receiptHeader || receipt?.id || "missing",
+      pass: Boolean(receiptHeader || receiptRecord?.id),
+      evidence: receiptHeader || receiptRecord?.id || "missing",
     },
     {
       item: "Receipt is linked to a paid challenge",
@@ -255,13 +326,13 @@ function buildReceiptChecklist({ response, payload, idempotencyKey }) {
     },
     {
       item: "Receipt data is structurally present in the body",
-      pass: Boolean(receipt && typeof receipt === "object"),
-      evidence: receipt ? JSON.stringify(receipt) : "missing",
+      pass: Boolean(receiptRecord && typeof receiptRecord === "object"),
+      evidence: receiptRecord ? JSON.stringify(receiptRecord) : "missing",
     },
     {
-      item: "Demo does not claim settlement beyond returned receipt fields",
-      pass: !receipt?.settledAt && receipt?.note === "demo - no real funds moved",
-      evidence: receipt?.note || "missing",
+      item: "Demo receipt does not claim settlement",
+      pass: !claimsSettlement,
+      evidence: claimsSettlement ? "settlement claimed" : "no settlement claim",
     },
   ];
 }
@@ -315,7 +386,7 @@ function makeDemoFetch() {
   const fetchImpl = async (_url, init = {}) => {
     state.requestCount += 1;
     const headers = new HeadersBag(init.headers || {});
-    const auth = headers.get("x-x402-authorization");
+    const auth = headers.get("PAYMENT-SIGNATURE");
     const idempotencyKey = headers.get("x-idempotency-key");
 
     state.authorizationSeen.push(auth);
@@ -335,12 +406,12 @@ function makeDemoFetch() {
         },
         {
           "content-type": "application/json",
-          "x-x402-challenge": JSON.stringify({
+          "payment-required": Buffer.from(JSON.stringify({
             id: state.challengeId,
             asset: "demo-usdc",
             amount: "1000",
             note: "demo only",
-          }),
+          })).toString("base64"),
         },
       );
     }
@@ -357,14 +428,15 @@ function makeDemoFetch() {
         receipt: {
           id: state.receiptId,
           challengeId: state.challengeId,
+          idempotencyKey,
           authorizationHash: sha256(auth).slice(0, 16),
           note: "demo - no real funds moved",
         },
       },
       {
         "content-type": "application/json",
-        "x-x402-receipt": state.receiptId,
-        "x-x402-challenge-id": state.challengeId,
+        "Payment-Receipt": state.receiptId,
+        "X-Payment-Challenge-Id": state.challengeId,
       },
     );
   };
@@ -432,7 +504,7 @@ async function main() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     console.error(
       JSON.stringify(
