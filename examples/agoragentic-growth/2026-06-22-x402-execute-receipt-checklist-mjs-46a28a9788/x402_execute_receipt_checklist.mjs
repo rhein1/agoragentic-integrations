@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /* demo — moves no real funds */
 
+import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_RECEIPT_POLL_ATTEMPTS = 4;
@@ -60,7 +63,7 @@ export class X402McpExecuteReceiptChecklistClient {
         mcp_server: request.server,
         tool_name: request.tool,
         buyer: request.buyer,
-        max_price_usdc: request.maxPriceUsdc,
+        max_cost: request.maxPriceUsdc,
       })}`,
       { headers: this.buildCommonHeaders() }
     );
@@ -77,14 +80,8 @@ export class X402McpExecuteReceiptChecklistClient {
     assertRequiredString(input?.tool, 'tool');
     assertRequiredString(input?.quoteId, 'quoteId');
 
-    const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
-    const state = existing || createState(input);
-    if (existing && existing.quote_id !== input.quoteId) {
-      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
-    }
-
     const body = {
-      quote_id: state.quote_id,
+      quote_id: input.quoteId,
       input: {
         transport: 'mcp',
         server: input.server,
@@ -92,6 +89,16 @@ export class X402McpExecuteReceiptChecklistClient {
         arguments: input.arguments || {},
       },
     };
+    const requestFingerprint = hashJson(body);
+    const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
+    const state = existing || createState(input, requestFingerprint);
+    if (existing && existing.quote_id !== input.quoteId) {
+      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
+    }
+    if (existing && !requestMatchesState(existing, body, requestFingerprint)) {
+      throw new Error(`existing session ${state.session_id} is bound to a different execute request body`);
+    }
+    state.request_fingerprint = requestFingerprint;
 
     const x402Fetch = await this.x402FetchPromise;
     state.request_body = cloneJson(body);
@@ -99,7 +106,7 @@ export class X402McpExecuteReceiptChecklistClient {
     await this.receiptStore.save(state);
 
     try {
-      const result = await x402Fetch(`${this.baseUrl}/api/x402/execute`, {
+      const rawResult = await x402Fetch(`${this.baseUrl}/api/x402/execute`, {
         method: 'POST',
         headers: this.buildExecuteHeaders(state.idempotency_key),
         body: JSON.stringify(body),
@@ -153,6 +160,15 @@ export class X402McpExecuteReceiptChecklistClient {
           return cloneJson(state.payment_authorization);
         },
       });
+      const result = await normalizeX402FetchResult(rawResult);
+      if (!result.response?.ok) {
+        const terminal = new Error(`HTTP ${result.response?.status || 'unknown'}`);
+        terminal.response = result.response;
+        terminal.responseBody = result.responseBody;
+        terminal.attempts = result.attempts || 1;
+        terminal.authorization = result.paymentAuthorization || null;
+        throw terminal;
+      }
 
       mergeResponseEvidence(state, result.responseBody, result.response);
       state.attempt_count = Math.max(state.attempt_count, result.attempts || 1);
@@ -226,7 +242,7 @@ export class X402McpExecuteReceiptChecklistClient {
       makeCheck('payment_response_header', Boolean(state.payment_response_header), state.payment_response_header),
       makeCheck('receipt_id', Boolean(state.receipt_id), state.receipt_id),
       makeCheck('invocation_id', Boolean(state.invocation_id), state.invocation_id),
-      makeCheck('terminal_receipt_or_proof', isTerminalReceiptStatus(receiptStatus) || isTerminalProofStatus(proofStatus), { receiptStatus, proofStatus }),
+      makeCheck('terminal_or_explicit_demo_receipt_or_proof', hasTerminalOrExplicitDemoEvidence(state), { receiptStatus, proofStatus }),
       makeCheck('no_submitted_claimed_as_settled', receiptStatus !== 'submitted' && proofStatus !== 'submitted', { receiptStatus, proofStatus }),
     ];
 
@@ -332,23 +348,8 @@ export class X402McpExecuteReceiptChecklistClient {
 }
 
 async function resolveX402Fetch() {
-  const candidates = [
-    'agoragentic/x402-client',
-    '../lib/x402-client.mjs',
-    './lib/x402-client.mjs',
-  ];
-
-  for (const candidate of candidates) {
-    try {
-      const mod = await import(candidate);
-      if (typeof mod.x402Fetch === 'function') {
-        return mod.x402Fetch;
-      }
-    } catch {
-      // fall through to the next candidate
-    }
-  }
-
+  // Keep the example self-contained and on one result contract by default.
+  // Callers that want a package-specific x402 client can pass options.x402Fetch.
   return createFallbackX402Fetch();
 }
 
@@ -470,7 +471,40 @@ function createFallbackX402Fetch() {
   };
 }
 
-function createState(input) {
+async function normalizeX402FetchResult(result) {
+  if (result?.response && result?.responseBody !== undefined) {
+    return result;
+  }
+
+  if (isResponseLike(result)) {
+    return {
+      ok: result.ok,
+      authorized: hasPaymentEvidence(result.headers),
+      challenge: getHeader(result.headers, 'payment-required'),
+      attempts: 1,
+      paymentAuthorization: null,
+      response: result,
+      responseBody: await safeJson(result.clone()),
+    };
+  }
+
+  throw new Error('x402Fetch returned an unsupported result shape');
+}
+
+function isResponseLike(value) {
+  return Boolean(value && typeof value.status === 'number' && value.headers && typeof value.clone === 'function');
+}
+
+function hasPaymentEvidence(headers) {
+  return Boolean(
+    getHeader(headers, 'payment-receipt') ||
+      getHeader(headers, 'payment-response') ||
+      getHeader(headers, 'payment-signature') ||
+      getHeader(headers, 'x-payment-receipt')
+  );
+}
+
+function createState(input, requestFingerprint) {
   return {
     session_id: input.sessionId || generateSessionId(),
     quote_id: input.quoteId,
@@ -491,9 +525,20 @@ function createState(input) {
     proof_snapshot: null,
     result_snapshot: null,
     request_body: null,
+    request_fingerprint: requestFingerprint,
     last_error: null,
     timeline: [{ at: new Date().toISOString(), phase: 'created', note: 'state initialized' }],
   };
+}
+
+function requestMatchesState(existing, body, requestFingerprint) {
+  if (existing.request_fingerprint) {
+    return existing.request_fingerprint === requestFingerprint;
+  }
+  if (existing.request_body) {
+    return hashJson(existing.request_body) === requestFingerprint;
+  }
+  return false;
 }
 
 function appendTimeline(state, phase, note) {
@@ -594,6 +639,17 @@ function isTerminalProofStatus(status) {
   return typeof status === 'string' && ['verified', 'settled', 'completed'].includes(status);
 }
 
+function hasTerminalOrExplicitDemoEvidence(state) {
+  const receiptStatus = readReceiptStatus(state.receipt_snapshot);
+  const proofStatus = readProofStatus(state.proof_snapshot);
+  return (
+    isTerminalReceiptStatus(receiptStatus) ||
+    isTerminalProofStatus(proofStatus) ||
+    (state.receipt_snapshot?.simulated === true && receiptStatus === 'demo-accepted') ||
+    (state.proof_snapshot?.simulated === true && proofStatus === 'demo-accepted')
+  );
+}
+
 function defaultRetryDecision({ response, error }) {
   if (response && isRetryableStatus(response.status)) {
     return { retry: true, reason: `retryable HTTP ${response.status}` };
@@ -628,6 +684,20 @@ function parseLooseJson(value) {
 
 function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function hashJson(value) {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function positiveInt(value, fallback) {
@@ -745,7 +815,8 @@ async function demo() {
       receiptPolls += 1;
       return jsonResponse(200, {
         id: 'rcpt_demo_789',
-        status: receiptPolls >= 2 ? 'settled' : 'pending',
+        status: receiptPolls >= 2 ? 'demo-accepted' : 'pending',
+        simulated: true,
         amount: '2500',
         asset: 'USDC',
       });
@@ -754,7 +825,8 @@ async function demo() {
     if (url.includes('/api/x402/invocations/inv_demo_456/proof')) {
       return jsonResponse(200, {
         invocation_id: 'inv_demo_456',
-        on_chain: { status: receiptPolls >= 2 ? 'verified' : 'pending' },
+        simulated: true,
+        on_chain: { status: receiptPolls >= 2 ? 'demo-accepted' : 'pending' },
       });
     }
 
@@ -832,7 +904,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(error?.stack || String(error));
     process.exitCode = 1;
