@@ -1,5 +1,6 @@
 // demo — moves no real funds
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
@@ -33,6 +34,39 @@ function safeJsonParse(text, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function parseJsonOrBase64Json(value, fallback = null) {
+  if (!value) return fallback;
+  const text = String(value);
+  try {
+    return JSON.parse(text);
+  } catch {
+    try {
+      return JSON.parse(Buffer.from(text, "base64").toString("utf8"));
+    } catch {
+      return fallback;
+    }
+  }
+}
+
+function firstPresent(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
+}
+
+function quoteIdFrom(value) {
+  if (!value || typeof value !== "object") return null;
+  return firstPresent(
+    value.quote_id,
+    value.quoteId,
+    value.quote?.quote_id,
+    value.quote?.quoteId,
+    value.receipt?.quote_id,
+    value.receipt?.quoteId,
+  );
 }
 
 class SimpleHeaders {
@@ -128,6 +162,18 @@ function challengeFingerprint(paymentRequiredHeader, request) {
     .digest("hex");
 }
 
+function paymentStateSummary(cachedPayment, paymentRequiredHeader, request) {
+  return {
+    authorizationPrepared: Boolean(cachedPayment),
+    hasAuthorizationHeader: Boolean(cachedPayment?.authorizationHeader),
+    hasPaymentSignature: Boolean(cachedPayment?.paymentSignature),
+    challengeFingerprint: paymentRequiredHeader
+      ? challengeFingerprint(paymentRequiredHeader, request)
+      : null,
+    retryWithSameIdempotencyKey: true,
+  };
+}
+
 async function importPreferredX402Fetch() {
   try {
     const mod = await import("agoragentic/x402-client");
@@ -219,6 +265,21 @@ async function localX402Fetch(url, options) {
         });
       }
 
+      if (cachedPayment) {
+        throw createHttpError("Paid retry was rejected with another HTTP 402", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          retryable: false,
+          paymentState: paymentStateSummary(cachedPayment, paymentRequiredHeader, {
+            url,
+            method,
+            body,
+            idempotencyKey,
+          }),
+        });
+      }
+
       if (typeof pay !== "function") {
         throw createHttpError("Paid call requires a pay callback", {
           status: 402,
@@ -265,6 +326,12 @@ async function localX402Fetch(url, options) {
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
           networkRetriesUsed: networkFailuresAfterAuthorization,
+          paymentState: paymentStateSummary(cachedPayment, paymentRequiredHeader, {
+            url,
+            method,
+            body,
+            idempotencyKey,
+          }),
         });
       }
 
@@ -291,8 +358,13 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   const headers = normalizeResponseHeaders(response);
   const paymentReceipt = headers["payment-receipt"] ?? null;
   const paymentResponse = headers["payment-response"] ?? null;
+  const parsedReceipt = parseJsonOrBase64Json(paymentReceipt, null);
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
-  const price = payload?.price_usdc ?? payload?.price ?? payload?.cost ?? null;
+  const price = firstPresent(payload?.price_usdc, payload?.price, payload?.cost);
+  const payloadQuoteId = quoteIdFrom(payload);
+  const receiptQuoteId = quoteIdFrom(parsedReceipt);
+  const observedQuoteId = firstPresent(payloadQuoteId, receiptQuoteId);
+  const quoteMatches = !observedQuoteId || !quoteId || observedQuoteId === quoteId;
 
   const items = [
     {
@@ -324,6 +396,13 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
       item: "price_visibility",
       status: price !== null ? "pass" : "warn",
       evidence: price !== null ? String(price) : "response omitted price/cost fields",
+    },
+    {
+      item: "quote_matches_request",
+      status: quoteMatches ? (observedQuoteId ? "pass" : "warn") : "fail",
+      evidence: observedQuoteId
+        ? `requested=${quoteId || "missing"} observed=${observedQuoteId}`
+        : "response omitted quote_id in payload and receipt",
     },
   ];
 
@@ -359,6 +438,7 @@ export function classifyExecuteError(error) {
       retryable: true,
       message: error.message,
       idempotencyKey: error.idempotencyKey ?? null,
+      paymentState: error.paymentState ?? null,
       guidance: "Retry the same execute() call with the same idempotency key and reuse the existing payment authorization if your x402 helper exposes it.",
     };
   }
@@ -366,9 +446,11 @@ export function classifyExecuteError(error) {
   if (error.name === "HttpError") {
     return {
       kind: "http_failure",
-      retryable: error.status >= 500,
+      retryable: error.retryable ?? error.status >= 500,
       status: error.status ?? null,
       message: error.message,
+      idempotencyKey: error.idempotencyKey ?? null,
+      paymentState: error.paymentState ?? null,
       guidance: error.status === 402
         ? "Execution still requires a caller-supplied pay callback. Do not auto-pay without an explicit gate."
         : "Inspect the response payload before retrying.",
@@ -545,6 +627,7 @@ export function createMockPaidFetch() {
       }, {
         success: true,
         provider: "three.ws",
+        quote_id: "quote_threews_paid_001",
         invocation_id: "inv_threews_001",
         result: {
           summary: "three.ws processed the request",
@@ -636,7 +719,7 @@ async function runSelfTest() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
