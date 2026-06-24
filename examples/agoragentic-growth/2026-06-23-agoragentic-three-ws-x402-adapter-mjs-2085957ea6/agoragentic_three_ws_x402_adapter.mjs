@@ -1,5 +1,6 @@
 // demo — moves no real funds
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
@@ -33,6 +34,10 @@ function safeJsonParse(text, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function isRetryableHttpStatus(status) {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 class SimpleHeaders {
@@ -128,6 +133,18 @@ function challengeFingerprint(paymentRequiredHeader, request) {
     .digest("hex");
 }
 
+function paymentStateSummary(cachedPayment, paymentRequiredHeader, request) {
+  return {
+    authorizationPrepared: Boolean(cachedPayment),
+    hasAuthorizationHeader: Boolean(cachedPayment?.authorizationHeader),
+    hasPaymentSignature: Boolean(cachedPayment?.paymentSignature),
+    challengeFingerprint: paymentRequiredHeader
+      ? challengeFingerprint(paymentRequiredHeader, request)
+      : null,
+    retryWithSameIdempotencyKey: true,
+  };
+}
+
 async function importPreferredX402Fetch() {
   try {
     const mod = await import("agoragentic/x402-client");
@@ -203,6 +220,10 @@ async function localX402Fetch(url, options) {
       const response = await dispatch(Boolean(cachedPayment));
 
       if (response.status !== 402) {
+        if (!response.ok && cachedPayment && isRetryableHttpStatus(response.status) && networkFailuresAfterAuthorization < maxNetworkRetries) {
+          networkFailuresAfterAuthorization += 1;
+          continue;
+        }
         return markX402Meta(response, {
           paymentAttempted: sawPaymentChallenge,
           paymentAuthorized: Boolean(cachedPayment),
@@ -216,6 +237,21 @@ async function localX402Fetch(url, options) {
       if (!paymentRequiredHeader) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
           status: 402,
+        });
+      }
+
+      if (cachedPayment) {
+        throw createHttpError("Paid retry was rejected with another HTTP 402", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          retryable: false,
+          paymentState: paymentStateSummary(cachedPayment, paymentRequiredHeader, {
+            url,
+            method,
+            body,
+            idempotencyKey,
+          }),
         });
       }
 
@@ -265,6 +301,12 @@ async function localX402Fetch(url, options) {
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
           networkRetriesUsed: networkFailuresAfterAuthorization,
+          paymentState: paymentStateSummary(cachedPayment, paymentRequiredHeader, {
+            url,
+            method,
+            body,
+            idempotencyKey,
+          }),
         });
       }
 
@@ -275,10 +317,28 @@ async function localX402Fetch(url, options) {
   throw lastError ?? new Error("x402Fetch failed without a response");
 }
 
+function normalizePreferredOptions(options = {}) {
+  const headers = {
+    "content-type": "application/json",
+    "idempotency-key": options.idempotencyKey,
+    ...lowerCaseHeaders(options.headers || {}),
+  };
+  const body = options.body === undefined
+    ? undefined
+    : typeof options.body === "string"
+      ? options.body
+      : JSON.stringify(options.body);
+  return {
+    ...options,
+    headers,
+    body,
+  };
+}
+
 async function x402Fetch(url, options) {
   const preferred = await importPreferredX402Fetch();
   if (preferred) {
-    const response = await preferred(url, options);
+    const response = await preferred(url, normalizePreferredOptions(options));
     return markX402Meta(response, {
       paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
       idempotencyKey: options?.idempotencyKey ?? null,
@@ -359,6 +419,7 @@ export function classifyExecuteError(error) {
       retryable: true,
       message: error.message,
       idempotencyKey: error.idempotencyKey ?? null,
+      paymentState: error.paymentState ?? null,
       guidance: "Retry the same execute() call with the same idempotency key and reuse the existing payment authorization if your x402 helper exposes it.",
     };
   }
@@ -366,9 +427,11 @@ export function classifyExecuteError(error) {
   if (error.name === "HttpError") {
     return {
       kind: "http_failure",
-      retryable: error.status >= 500,
+      retryable: error.retryable ?? error.status >= 500,
       status: error.status ?? null,
       message: error.message,
+      idempotencyKey: error.idempotencyKey ?? null,
+      paymentState: error.paymentState ?? null,
       guidance: error.status === 402
         ? "Execution still requires a caller-supplied pay callback. Do not auto-pay without an explicit gate."
         : "Inspect the response payload before retrying.",
@@ -636,7 +699,7 @@ async function runSelfTest() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
