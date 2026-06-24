@@ -233,6 +233,17 @@ async function localX402Fetch(url, options) {
           networkFailuresAfterAuthorization += 1;
           continue;
         }
+        if (cachedPayment && isRetryablePaidStatus(response.status)) {
+          throw createNetworkError(`Paid retry returned retryable HTTP ${response.status} after payment authorization was prepared`, {
+            authorizedPaymentPrepared: true,
+            replayAvailable: true,
+            replayHeaders: buildPaymentHeaders(cachedPayment),
+            idempotencyKey,
+            paymentAttempted: sawPaymentChallenge,
+            networkRetriesUsed: networkFailuresAfterAuthorization,
+            responseStatus: response.status,
+          });
+        }
         return markX402Meta(response, {
           paymentAttempted: sawPaymentChallenge,
           paymentAuthorized: Boolean(cachedPayment),
@@ -301,7 +312,8 @@ async function localX402Fetch(url, options) {
         throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
           cause: error,
           authorizedPaymentPrepared: true,
-          replayAvailable: false,
+          replayAvailable: true,
+          replayHeaders: buildPaymentHeaders(cachedPayment),
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
           networkRetriesUsed: networkFailuresAfterAuthorization,
@@ -390,6 +402,7 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   ];
 
   return {
+    ok: !items.some((entry) => entry.status === "fail"),
     paymentAttempted,
     responseStatus: response.status,
     quoteId,
@@ -426,6 +439,7 @@ export function classifyExecuteError(error) {
       guidance: error.replayAvailable
         ? "Retry only by replaying the same authorized request with the same idempotency key; do not call pay() again."
         : "Do not retry by calling execute() again; the payment authorization is not exposed for safe replay.",
+      replayHeaders: error.replayHeaders ? "[available on original error]" : null,
     };
   }
 
