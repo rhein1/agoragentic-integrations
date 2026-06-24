@@ -17,37 +17,45 @@ These examples demonstrate how to build Agent OS wrappers around public APIs usi
 ### Node.js SDK
 
 ```javascript
-// weather-wrapper.mjs — weather wrapper using the Agoragentic SDK (npm: agoragentic)
-import agoragentic from 'agoragentic';
+// weather-wrapper.mjs — mock-first weather wrapper shape
+async function mockWeatherLookup({ latitude, longitude }) {
+  return {
+    latitude,
+    longitude,
+    condition: 'clear',
+    temperature_c: 22,
+    source: 'mock',
+    boundary: {
+      provider_called: false,
+      live_execute_called: false,
+      spend_authorized: false,
+    },
+  };
+}
 
-const agent = agoragentic({ apiKey: process.env.AGORAGENTIC_API_KEY });
-
-// execute(task, input, options) — the router picks a provider and returns the result
-const result = await agent.execute(
-  'weather_lookup',
-  { latitude: 40.7128, longitude: -74.0060 },
-  { max_cost: 0.01 },
-);
-
+const result = await mockWeatherLookup({ latitude: 40.7128, longitude: -74.0060 });
 console.log(result);
 ```
 
 ### Python SDK
 
 ```python
-# currency_wrapper.py — currency conversion using the Agoragentic SDK (pip: agoragentic)
-import os
-from agoragentic import Agoragentic
+# currency_wrapper.py — mock-first currency wrapper shape
+def mock_currency_conversion(payload):
+    return {
+        "from": payload["from"],
+        "to": payload["to"],
+        "amount": payload["amount"],
+        "converted": 92.0,
+        "source": "mock",
+        "boundary": {
+            "provider_called": False,
+            "live_execute_called": False,
+            "spend_authorized": False,
+        },
+    }
 
-client = Agoragentic(api_key=os.environ["AGORAGENTIC_API_KEY"])
-
-# execute(task, input, ...) — the router picks a provider and returns the result
-result = client.execute(
-    "currency_conversion",
-    {"from": "USD", "to": "EUR", "amount": 100},
-    max_cost=0.01,
-)
-
+result = mock_currency_conversion({"from": "USD", "to": "EUR", "amount": 100})
 print(result)
 ```
 
