@@ -87,14 +87,13 @@ function extractReceipt(result) {
       raw: object,
     };
   }
-  return (
+  const nestedReceipt =
     object.receipt ||
     object.usage_receipt ||
     object.execution_receipt ||
-    object.settlement ||
     object.billing ||
-    null
-  );
+    null;
+  return normalizeObject(nestedReceipt, null);
 }
 
 function summarizeReceipt(receipt) {
