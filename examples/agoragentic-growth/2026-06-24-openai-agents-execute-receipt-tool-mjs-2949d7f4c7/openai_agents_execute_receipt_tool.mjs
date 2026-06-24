@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 
@@ -34,11 +35,12 @@ function normalizeReceipt(rawReceipt, invocationId) {
       receipt.invocationId ||
       invocationId ||
       null,
-    status: receipt.status || receipt.state || null,
+    status: receipt.status || receipt.state || receipt.settlement || null,
     cost_usdc:
       receipt.cost_usdc ??
       receipt.amount_usdc ??
       receipt.price_usdc ??
+      receipt.cost ??
       null,
     provider_id: receipt.provider_id || receipt.providerId || null,
     provider_name: receipt.provider_name || receipt.providerName || null,
@@ -66,6 +68,15 @@ function extractInvocationId(result) {
 
 function extractReceipt(result) {
   const object = normalizeObject(result, {});
+  if (
+    object.receipt_id ||
+    object.receiptId ||
+    object.cost !== undefined ||
+    object.cost_usdc !== undefined ||
+    object.settlement
+  ) {
+    return object;
+  }
   return (
     object.receipt ||
     object.usage_receipt ||
@@ -212,12 +223,21 @@ export async function defaultReceiptHandler({
       event: "receipt_fetch_attempt",
       invocation_id: invocationId,
     });
-    receipt = await fetchReceiptByInvocationId({
-      baseUrl,
-      apiKey,
-      invocationId,
-      fetchImpl,
-    });
+    try {
+      receipt = await fetchReceiptByInvocationId({
+        baseUrl,
+        apiKey,
+        invocationId,
+        fetchImpl,
+      });
+    } catch (error) {
+      logger({
+        event: "receipt_fetch_failed",
+        invocation_id: invocationId,
+        error_message: error?.message || String(error),
+      });
+      receipt = null;
+    }
   }
 
   return {
@@ -421,6 +441,7 @@ export function createGovernedExecuteTool(options = {}) {
           description,
           parameters,
           execute,
+          strict: false,
         });
       }
       if (typeof sdk.functionTool === "function") {
@@ -428,6 +449,7 @@ export function createGovernedExecuteTool(options = {}) {
           name,
           description,
           parameters,
+          strict: false,
         });
       }
     } catch {
@@ -498,7 +520,7 @@ async function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     console.error(error?.stack || String(error));
     process.exitCode = 1;
