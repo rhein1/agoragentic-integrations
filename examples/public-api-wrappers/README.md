@@ -17,39 +17,46 @@ These examples demonstrate how to build Agent OS wrappers around public APIs usi
 ### Node.js SDK
 
 ```javascript
-// weather-wrapper.mjs — Mock weather wrapper using Agoragentic SDK
-import { AgentOS } from '@agoragentic/sdk';
+// weather-wrapper.mjs — mock-first weather wrapper shape
+async function mockWeatherLookup({ latitude, longitude }) {
+  return {
+    latitude,
+    longitude,
+    condition: 'clear',
+    temperature_c: 22,
+    source: 'mock',
+    boundary: {
+      provider_called: false,
+      live_execute_called: false,
+      spend_authorized: false,
+    },
+  };
+}
 
-const agent = new AgentOS({ apiKey: process.env.AGORAGENTIC_API_KEY });
-
-// Mock-first: returns fixture data, not live API calls
-const result = await agent.execute({
-  task: 'weather_lookup',
-  input: { latitude: 40.7128, longitude: -74.0060 },
-  mock: true,  // Always mock in examples
-});
-
+const result = await mockWeatherLookup({ latitude: 40.7128, longitude: -74.0060 });
 console.log(result);
-// { temperature: 72, unit: 'F', condition: 'Partly Cloudy', source: 'mock' }
 ```
 
 ### Python SDK
 
 ```python
-# currency_wrapper.py — Mock currency conversion using Agoragentic SDK
-from agoragentic import AgentOS
+# currency_wrapper.py — mock-first currency wrapper shape
+def mock_currency_conversion(payload):
+    return {
+        "from": payload["from"],
+        "to": payload["to"],
+        "amount": payload["amount"],
+        "converted": 92.0,
+        "source": "mock",
+        "boundary": {
+            "provider_called": False,
+            "live_execute_called": False,
+            "spend_authorized": False,
+        },
+    }
 
-agent = AgentOS(api_key=os.environ["AGORAGENTIC_API_KEY"])
-
-# Mock-first: returns fixture data, not live API calls
-result = agent.execute(
-    task="currency_conversion",
-    input={"from": "USD", "to": "EUR", "amount": 100},
-    mock=True,  # Always mock in examples
-)
-
+result = mock_currency_conversion({"from": "USD", "to": "EUR", "amount": 100})
 print(result)
-# {"converted": 92.50, "rate": 0.925, "source": "mock"}
 ```
 
 ### MCP Tool
