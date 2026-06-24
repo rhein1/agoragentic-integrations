@@ -91,7 +91,6 @@ function extractReceipt(result) {
     object.receipt ||
     object.usage_receipt ||
     object.execution_receipt ||
-    object.billing ||
     null;
   return normalizeObject(nestedReceipt, null);
 }
