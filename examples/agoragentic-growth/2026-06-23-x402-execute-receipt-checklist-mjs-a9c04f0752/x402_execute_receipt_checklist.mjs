@@ -88,6 +88,7 @@ export class X402McpExecuteReceiptChecklistClient {
         arguments: input.arguments || {},
       },
     };
+    const requestFingerprint = stableJsonFingerprint(body);
 
     const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
     const state = existing || createState(input);
@@ -97,6 +98,9 @@ export class X402McpExecuteReceiptChecklistClient {
     if (existing?.request_body && !sameJson(existing.request_body, body)) {
       throw new Error(`existing session ${state.session_id} is bound to a different execute request body`);
     }
+    if (existing?.request_fingerprint && existing.request_fingerprint !== requestFingerprint) {
+      throw new Error(`existing session ${state.session_id} is bound to request fingerprint ${existing.request_fingerprint}, not ${requestFingerprint}`);
+    }
     if (existing && hasTerminalEvidence(existing)) {
       appendTimeline(state, 'terminal_replay', 'returning saved terminal receipt/proof without dispatching execute() again');
       return this.buildResult(state, state.result_snapshot || {});
@@ -105,6 +109,7 @@ export class X402McpExecuteReceiptChecklistClient {
     const x402Fetch = await this.x402FetchPromise;
     let cachedPaymentAuthorization = null;
     state.request_body = cloneJson(body);
+    state.request_fingerprint = requestFingerprint;
     appendTimeline(state, 'initial_request', 'execute() request prepared');
     await this.receiptStore.save(state);
 
@@ -501,6 +506,7 @@ function createState(input) {
     proof_snapshot: null,
     result_snapshot: null,
     request_body: null,
+    request_fingerprint: null,
     last_error: null,
     timeline: [{ at: new Date().toISOString(), phase: 'created', note: 'state initialized' }],
   };
@@ -516,8 +522,7 @@ function mergeResponseEvidence(state, payload, response) {
   state.last_http_status = response.status;
   state.result_snapshot = payload;
   state.invocation_id = payload?.invocation_id || payload?.invocation?.id || state.invocation_id;
-  state.payment_receipt_header = getHeader(response.headers, 'payment-receipt') || state.payment_receipt_header;
-  state.payment_receipt_header = getHeader(response.headers, 'x-payment-receipt') || state.payment_receipt_header;
+  state.payment_receipt_header = getPaymentReceiptHeader(response.headers) || state.payment_receipt_header;
   state.payment_response_header = getHeader(response.headers, 'payment-response') || state.payment_response_header;
   state.receipt_id = extractReceiptId(state.payment_receipt_header, payload) || state.receipt_id;
 }
@@ -531,6 +536,10 @@ function redactAuthorization(authorization) {
     payer: authorization.payer || null,
     chain: authorization.chain || null,
   };
+}
+
+function getPaymentReceiptHeader(headers) {
+  return getHeader(headers, 'payment-receipt') || getHeader(headers, 'x-payment-receipt');
 }
 
 function validateAuthorization(authorization) {
@@ -658,6 +667,10 @@ function cloneJson(value) {
 
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function stableJsonFingerprint(value) {
+  return JSON.stringify(value);
 }
 
 function positiveInt(value, fallback) {
