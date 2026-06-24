@@ -29,7 +29,7 @@ function normalizeObject(value, fallback = {}) {
 function normalizeReceipt(rawReceipt, invocationId) {
   const receipt = normalizeObject(rawReceipt, {});
   return {
-    receipt_id: receipt.receipt_id || receipt.id || null,
+    receipt_id: receipt.receipt_id || receipt.receiptId || receipt.id || null,
     invocation_id:
       receipt.invocation_id ||
       receipt.invocationId ||
@@ -75,7 +75,17 @@ function extractReceipt(result) {
     object.cost_usdc !== undefined ||
     object.settlement
   ) {
-    return object;
+    return {
+      receipt_id: object.receipt_id || object.receiptId || null,
+      invocation_id: object.invocation_id || object.invocationId || null,
+      status: object.status || object.state || object.settlement || null,
+      cost_usdc: object.cost_usdc ?? object.amount_usdc ?? object.price_usdc ?? object.cost ?? null,
+      provider_id: object.provider_id || object.providerId || null,
+      provider_name: object.provider_name || object.providerName || null,
+      settled_at: object.settled_at || object.completed_at || object.created_at || null,
+      metadata: normalizeObject(object.metadata, {}),
+      raw: object,
+    };
   }
   return (
     object.receipt ||
@@ -435,22 +445,18 @@ export function createGovernedExecuteTool(options = {}) {
   async function toOpenAIAgentsTool() {
     try {
       const sdk = await import("@openai/agents");
+      const toolConfig = {
+        name,
+        description,
+        parameters,
+        execute,
+        strict: false,
+      };
       if (typeof sdk.tool === "function") {
-        return sdk.tool({
-          name,
-          description,
-          parameters,
-          execute,
-          strict: false,
-        });
+        return sdk.tool(toolConfig);
       }
       if (typeof sdk.functionTool === "function") {
-        return sdk.functionTool(execute, {
-          name,
-          description,
-          parameters,
-          strict: false,
-        });
+        return sdk.functionTool(execute, toolConfig);
       }
     } catch {
       // SDK is optional for the standalone demo.
