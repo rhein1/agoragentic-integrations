@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* demo — moves no real funds */
 
+import { pathToFileURL } from 'node:url';
+
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_RECEIPT_POLL_ATTEMPTS = 4;
@@ -60,7 +62,7 @@ export class X402McpExecuteReceiptChecklistClient {
         mcp_server: request.server,
         tool_name: request.tool,
         buyer: request.buyer,
-        max_price_usdc: request.maxPriceUsdc,
+        max_cost: request.maxPriceUsdc,
       })}`,
       { headers: this.buildCommonHeaders() }
     );
@@ -77,14 +79,8 @@ export class X402McpExecuteReceiptChecklistClient {
     assertRequiredString(input?.tool, 'tool');
     assertRequiredString(input?.quoteId, 'quoteId');
 
-    const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
-    const state = existing || createState(input);
-    if (existing && existing.quote_id !== input.quoteId) {
-      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
-    }
-
     const body = {
-      quote_id: state.quote_id,
+      quote_id: input.quoteId,
       input: {
         transport: 'mcp',
         server: input.server,
@@ -93,7 +89,21 @@ export class X402McpExecuteReceiptChecklistClient {
       },
     };
 
+    const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
+    const state = existing || createState(input);
+    if (existing && existing.quote_id !== input.quoteId) {
+      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
+    }
+    if (existing?.request_body && !sameJson(existing.request_body, body)) {
+      throw new Error(`existing session ${state.session_id} is bound to a different execute request body`);
+    }
+    if (existing && hasTerminalEvidence(existing)) {
+      appendTimeline(state, 'terminal_replay', 'returning saved terminal receipt/proof without dispatching execute() again');
+      return this.buildResult(state, state.result_snapshot || {});
+    }
+
     const x402Fetch = await this.x402FetchPromise;
+    let cachedPaymentAuthorization = null;
     state.request_body = cloneJson(body);
     appendTimeline(state, 'initial_request', 'execute() request prepared');
     await this.receiptStore.save(state);
@@ -115,6 +125,7 @@ export class X402McpExecuteReceiptChecklistClient {
             state.payment_required_header = getHeader(ctx.response.headers, 'payment-required');
             appendTimeline(state, 'payment_required', `402 received on attempt ${ctx.attemptNumber}`);
           } else if (ctx.phase === 'paid_retry' && ctx.response) {
+            mergeResponseEvidence(state, ctx.responseBody || {}, ctx.response);
             appendTimeline(state, 'paid_response', `paid retry returned HTTP ${ctx.response.status}`);
           } else if (ctx.error) {
             appendTimeline(state, 'transient_error', ctx.error.message || String(ctx.error));
@@ -123,9 +134,9 @@ export class X402McpExecuteReceiptChecklistClient {
         },
         pay: async (paymentRequired, requestContext) => {
           state.payment_required_header = paymentRequired;
-          if (state.payment_authorization) {
+          if (cachedPaymentAuthorization) {
             appendTimeline(state, 'payment_reused', 'reusing cached payment authorization after prior 402');
-            return cloneJson(state.payment_authorization);
+            return cloneJson(cachedPaymentAuthorization);
           }
           appendTimeline(state, 'authorizing_payment', 'calling pay exactly once for this session after HTTP 402');
           const authorization = await this.pay(paymentRequired, {
@@ -140,7 +151,7 @@ export class X402McpExecuteReceiptChecklistClient {
             attempt: requestContext.attemptNumber,
           });
           validateAuthorization(authorization);
-          state.payment_authorization = {
+          cachedPaymentAuthorization = {
             authorizationHeader: authorization.authorizationHeader || null,
             paymentSignature: authorization.paymentSignature || null,
             paymentId: authorization.paymentId || null,
@@ -148,9 +159,10 @@ export class X402McpExecuteReceiptChecklistClient {
             payer: authorization.payer || null,
             chain: authorization.chain || null,
           };
+          state.payment_authorization = redactAuthorization(authorization);
           state.wallet_receipt = authorization.receipt || state.wallet_receipt;
           await this.receiptStore.save(state);
-          return cloneJson(state.payment_authorization);
+          return cloneJson(cachedPaymentAuthorization);
         },
       });
 
@@ -158,14 +170,7 @@ export class X402McpExecuteReceiptChecklistClient {
       state.attempt_count = Math.max(state.attempt_count, result.attempts || 1);
       state.wallet_receipt = result.paymentAuthorization?.receipt || state.wallet_receipt;
       if (result.paymentAuthorization) {
-        state.payment_authorization = {
-          authorizationHeader: result.paymentAuthorization.authorizationHeader || null,
-          paymentSignature: result.paymentAuthorization.paymentSignature || null,
-          paymentId: result.paymentAuthorization.paymentId || null,
-          receipt: result.paymentAuthorization.receipt || null,
-          payer: result.paymentAuthorization.payer || null,
-          chain: result.paymentAuthorization.chain || null,
-        };
+        state.payment_authorization = redactAuthorization(result.paymentAuthorization);
       }
       appendTimeline(state, result.authorized ? 'retrying_paid_request' : 'succeeded', `terminal HTTP ${result.response.status}`);
       await this.tryReconcile(state);
@@ -180,6 +185,11 @@ export class X402McpExecuteReceiptChecklistClient {
       state.attempt_count = Math.max(state.attempt_count, error.attempts || state.attempt_count || 1);
       state.last_error = error instanceof Error ? error.message : String(error);
       await this.tryReconcile(state);
+      if (hasTerminalEvidence(state)) {
+        appendTimeline(state, 'reconciled_after_error', 'terminal receipt/proof found after paid response error');
+        await this.receiptStore.save(state);
+        return this.buildResult(state, state.result_snapshot || {});
+      }
       appendTimeline(state, 'failed', state.last_error);
       await this.receiptStore.save(state);
       throw new FinalFlowError(state.last_error, state, error);
@@ -507,8 +517,20 @@ function mergeResponseEvidence(state, payload, response) {
   state.result_snapshot = payload;
   state.invocation_id = payload?.invocation_id || payload?.invocation?.id || state.invocation_id;
   state.payment_receipt_header = getHeader(response.headers, 'payment-receipt') || state.payment_receipt_header;
+  state.payment_receipt_header = getHeader(response.headers, 'x-payment-receipt') || state.payment_receipt_header;
   state.payment_response_header = getHeader(response.headers, 'payment-response') || state.payment_response_header;
   state.receipt_id = extractReceiptId(state.payment_receipt_header, payload) || state.receipt_id;
+}
+
+function redactAuthorization(authorization) {
+  return {
+    authorizationHeader: authorization.authorizationHeader ? '[redacted]' : null,
+    paymentSignature: authorization.paymentSignature ? '[redacted]' : null,
+    paymentId: authorization.paymentId || null,
+    receipt: authorization.receipt || null,
+    payer: authorization.payer || null,
+    chain: authorization.chain || null,
+  };
 }
 
 function validateAuthorization(authorization) {
@@ -594,6 +616,10 @@ function isTerminalProofStatus(status) {
   return typeof status === 'string' && ['verified', 'settled', 'completed'].includes(status);
 }
 
+function hasTerminalEvidence(state) {
+  return isTerminalReceiptStatus(readReceiptStatus(state.receipt_snapshot)) || isTerminalProofStatus(readProofStatus(state.proof_snapshot));
+}
+
 function defaultRetryDecision({ response, error }) {
   if (response && isRetryableStatus(response.status)) {
     return { retry: true, reason: `retryable HTTP ${response.status}` };
@@ -628,6 +654,10 @@ function parseLooseJson(value) {
 
 function cloneJson(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function positiveInt(value, fallback) {
@@ -745,7 +775,8 @@ async function demo() {
       receiptPolls += 1;
       return jsonResponse(200, {
         id: 'rcpt_demo_789',
-        status: receiptPolls >= 2 ? 'settled' : 'pending',
+        status: receiptPolls >= 2 ? 'completed' : 'pending',
+        demo_no_funds_moved: true,
         amount: '2500',
         asset: 'USDC',
       });
@@ -832,7 +863,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(error?.stack || String(error));
     process.exitCode = 1;
