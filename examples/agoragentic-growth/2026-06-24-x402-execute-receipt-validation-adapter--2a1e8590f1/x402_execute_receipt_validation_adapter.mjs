@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { pathToFileURL } from 'node:url';
 
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_EXECUTE_ATTEMPTS = 3;
@@ -101,14 +102,22 @@ export class X402ExecuteReceiptValidationAdapter {
         }
 
         const evidence = extractExecutionEvidence(normalized);
-        const validation = validateReceipt
-          ? await this.validateReceipt({
+        let validation = null;
+        if (validateReceipt) {
+          try {
+            validation = await this.validateReceipt({
               receiptId: evidence.receiptId,
               invocationId: evidence.invocationId,
               quoteId,
               idempotencyKey,
-            })
-          : null;
+            });
+          } catch (error) {
+            if (error instanceof X402AdapterError) {
+              error.retryable = false;
+            }
+            throw error;
+          }
+        }
 
         return {
           ok: true,
@@ -208,7 +217,7 @@ export class X402ExecuteReceiptValidationAdapter {
           });
         }
 
-        if (isSettledProofStatus(proofStatus)) {
+        if (isSettledProofStatus(proofStatus) && !receiptId) {
           return {
             ok: true,
             source: 'proof',
@@ -240,7 +249,7 @@ export class X402ExecuteReceiptValidationAdapter {
   }
 
   async fetchReceipt(receiptId, idempotencyKey) {
-    const response = await this.fetchImpl(new URL(`/api/x402/receipts/${encodeURIComponent(receiptId)}`, this.baseUrl), {
+    const response = await this.fetchImpl(new URL(`/api/commerce/receipts/${encodeURIComponent(receiptId)}`, this.baseUrl), {
       method: 'GET',
       headers: this.buildHeaders(),
     });
@@ -264,7 +273,7 @@ export class X402ExecuteReceiptValidationAdapter {
 
   async fetchProof(invocationId, idempotencyKey) {
     const response = await this.fetchImpl(
-      new URL(`/api/x402/execute/proof/${encodeURIComponent(invocationId)}`, this.baseUrl),
+      new URL(`/api/x402/invocations/${encodeURIComponent(invocationId)}/proof`, this.baseUrl),
       {
         method: 'GET',
         headers: this.buildHeaders(),
@@ -467,12 +476,15 @@ async function normalizeX402FetchResult(result) {
 function extractExecutionEvidence(normalized) {
   const body = normalized.body || {};
   const response = body.response || body;
+  const paymentReceiptHeader = normalized.headers['payment-receipt'] || normalized.headers['x-payment-receipt'] || null;
   const receiptId =
     response.receipt_id ||
     response.receiptId ||
     response.payment_receipt_id ||
     response.receipt?.receipt_id ||
-    tryParseJsonHeader(normalized.headers['payment-receipt'])?.receipt_id ||
+    parseReceiptHeader(paymentReceiptHeader)?.receipt_id ||
+    parseReceiptHeader(paymentReceiptHeader)?.id ||
+    (paymentReceiptHeader && String(paymentReceiptHeader).trim()) ||
     null;
 
   const invocationId =
@@ -486,7 +498,7 @@ function extractExecutionEvidence(normalized) {
   return {
     receiptId,
     invocationId,
-    paymentReceiptHeader: normalized.headers['payment-receipt'] || null,
+    paymentReceiptHeader,
     paymentResponseHeader: normalized.headers['payment-response'] || null,
   };
 }
@@ -560,7 +572,7 @@ function buildPaymentHeaders(authorization) {
   }
   const headers = {};
   if (authorization.authorizationHeader) headers.authorization = authorization.authorizationHeader;
-  if (authorization.paymentSignature) headers['x-payment-signature'] = authorization.paymentSignature;
+  if (authorization.paymentSignature) headers['payment-signature'] = authorization.paymentSignature;
   if (authorization.paymentId) headers['x-payment-id'] = authorization.paymentId;
   if (authorization.payer) headers['x-payment-payer'] = authorization.payer;
   if (authorization.chain) headers['x-payment-chain'] = authorization.chain;
@@ -599,7 +611,7 @@ function isRejectedReceiptStatus(status) {
 }
 
 function isSettledProofStatus(status) {
-  return ['confirmed', 'finalized', 'settled', 'success', 'succeeded'].includes(status);
+  return ['confirmed', 'finalized', 'settled', 'success', 'succeeded', 'verified'].includes(status);
 }
 
 function isRejectedProofStatus(status) {
@@ -668,6 +680,20 @@ function tryParseJsonHeader(value) {
   if (!value || typeof value !== 'string') return null;
   try {
     return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function parseReceiptHeader(value) {
+  return tryParseJsonHeader(value) || decodeBase64Json(value) || null;
+}
+
+function decodeBase64Json(value) {
+  if (!value || typeof value !== 'string') return null;
+  try {
+    const raw = value.startsWith('x402:') ? value.slice(5) : value;
+    return JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
   } catch {
     return null;
   }
@@ -755,7 +781,7 @@ export function createMockFetch() {
       );
     }
 
-    if (url.endsWith(`/api/x402/receipts/${receiptId}`) && method === 'GET') {
+    if (url.endsWith(`/api/commerce/receipts/${receiptId}`) && method === 'GET') {
       state.receiptPolls += 1;
       if (state.receiptPolls < 2) {
         return jsonResponse(200, {
@@ -773,7 +799,7 @@ export function createMockFetch() {
       });
     }
 
-    if (url.endsWith(`/api/x402/execute/proof/${invocationId}`) && method === 'GET') {
+    if (url.endsWith(`/api/x402/invocations/${invocationId}/proof`) && method === 'GET') {
       state.proofPolls += 1;
       return jsonResponse(200, {
         invocation_id: invocationId,
@@ -848,7 +874,7 @@ async function main() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const printable = error instanceof X402AdapterError ? error.toJSON() : { message: String(error) };
     console.error(JSON.stringify(printable, null, 2));
