@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -89,7 +90,10 @@ async function localX402Fetch(url, options = {}) {
     throw new Error("fetchImpl is required");
   }
 
-  const baseHeaders = lowerCaseHeaders(headers);
+  const baseHeaders = {
+    ...lowerCaseHeaders(headers),
+    "idempotency-key": idempotencyKey,
+  };
   let cachedPayment = null;
   let sawPaymentChallenge = false;
   let networkRetriesUsed = 0;
@@ -97,7 +101,6 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
     };
 
@@ -148,6 +151,13 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
+      if (cachedPayment) {
+        throw createHttpError("Received a second HTTP 402 after payment authorization; refusing to replay rejected payment credentials", {
+          status: 402,
+          idempotencyKey,
+          paymentRequired,
+        });
+      }
       if (!cachedPayment) {
         cachedPayment = normalizePayResult(await pay(paymentRequired, {
           url,
@@ -177,7 +187,7 @@ async function localX402Fetch(url, options = {}) {
 async function x402Fetch(url, options = {}) {
   const preferred = await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
-  const response = await preferred(url, options);
+  const response = await preferred(url, normalizePreferredOptions(options));
   response.x402Meta = {
     paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
     paymentAuthorized: Boolean(readHeader(response, "payment-response")),
@@ -188,10 +198,33 @@ async function x402Fetch(url, options = {}) {
   return response;
 }
 
+function normalizePreferredOptions(options = {}) {
+  const idempotencyKey = options.idempotencyKey ?? randomUUID();
+  const headers = {
+    ...lowerCaseHeaders(options.headers || {}),
+    "idempotency-key": idempotencyKey,
+  };
+  let body = options.body;
+  if (body !== undefined && body !== null && typeof body !== "string") {
+    body = JSON.stringify(body);
+    if (!headers["content-type"]) headers["content-type"] = "application/json";
+  }
+  return {
+    ...options,
+    idempotencyKey,
+    headers,
+    body,
+  };
+}
+
 function extractReceiptReference(payload, response) {
+  const receiptHeader = readHeader(response, "payment-receipt");
+  const parsedReceiptHeader = parseReceiptHeader(receiptHeader);
   return payload?.receipt_id
     ?? payload?.receipt?.id
-    ?? readHeader(response, "payment-receipt")
+    ?? parsedReceiptHeader?.receipt_id
+    ?? parsedReceiptHeader?.id
+    ?? (receiptHeader ? String(receiptHeader).trim() : null)
     ?? null;
 }
 
@@ -340,6 +373,18 @@ function encodePaymentRequired(payload) {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
 }
 
+function parseReceiptHeader(value) {
+  if (!value || typeof value !== "string") return null;
+  try {
+    return JSON.parse(value);
+  } catch {}
+  try {
+    const raw = value.startsWith("x402:") ? value.slice(5) : value;
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+  } catch {}
+  return null;
+}
+
 export function createMockPaidFetch() {
   const state = {
     payCalls: 0,
@@ -438,7 +483,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
