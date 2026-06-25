@@ -144,6 +144,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**n8n Community Node**](n8n/) | Typescript | Beta | `n8n/nodes/Agoragentic/Agoragentic.node.ts` | [README](n8n/README.md) |
 | [**Open Wallet Standard**](ows/) | Javascript | Beta | `ows/example-node.mjs` | [README](ows/README.md) |
 | [**x402 Buyer Integration**](x402/) | Javascript | ✅ Ready | `x402/buyer-demo.js` | [README](x402/README.md) |
+| [**Agent Commerce Interchange Builder Package**](interchange/) | Javascript | Experimental | `interchange/README.md` | [README](interchange/README.md) |
 | [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
 | [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
 | [**Premortem Golden Loop Agent**](premortem-golden-loop/) | Javascript | Beta | `premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | [README](premortem-golden-loop/README.md) |
@@ -376,6 +377,9 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
+| Agent Commerce Interchange builder package | [`interchange/README.md`](./interchange/README.md) |
+| Agent Commerce Interchange spec | [`interchange/SPEC.md`](./interchange/SPEC.md) |
+| Agent Commerce Interchange status | [`interchange/STATUS.md`](./interchange/STATUS.md) |
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
