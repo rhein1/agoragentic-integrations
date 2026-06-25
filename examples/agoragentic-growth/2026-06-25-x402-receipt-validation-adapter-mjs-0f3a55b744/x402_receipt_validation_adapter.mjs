@@ -1,5 +1,6 @@
 // demo pay callback in the self-test moves no real funds.
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -100,6 +101,58 @@ async function readJsonResponse(response) {
   };
 }
 
+function firstPresent(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+  return null;
+}
+
+function parseReceiptHeader(value) {
+  if (!value) return { raw: null, data: null };
+  const raw = String(value);
+  const direct = safeJsonParse(raw, null);
+  if (direct && typeof direct === "object" && !Array.isArray(direct)) {
+    return { raw, data: direct };
+  }
+  try {
+    const decoded = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = safeJsonParse(decoded, null);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { raw, data: parsed };
+    }
+  } catch {
+    // Not a base64url JSON receipt; keep the raw value as the reference.
+  }
+  try {
+    const decoded = Buffer.from(raw, "base64").toString("utf8");
+    const parsed = safeJsonParse(decoded, null);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { raw, data: parsed };
+    }
+  } catch {
+    // Not a base64 JSON receipt; keep the raw value as the reference.
+  }
+  return { raw, data: null };
+}
+
+function normalizePreferredOptions(options = {}) {
+  const normalized = { ...options };
+  normalized.headers = {
+    "content-type": "application/json",
+    ...lowerCaseHeaders(options.headers || {}),
+  };
+  if (options.idempotencyKey) {
+    normalized.headers["idempotency-key"] = options.idempotencyKey;
+  }
+  if (options.body !== undefined && typeof options.body !== "string") {
+    normalized.body = JSON.stringify(options.body);
+  }
+  return normalized;
+}
+
 function createHttpError(message, details = {}) {
   const error = new Error(message);
   error.name = "HttpError";
@@ -171,8 +224,8 @@ async function localX402Fetch(url, options = {}) {
   const requestBody = body === undefined ? undefined : JSON.stringify(body);
   const baseHeaders = {
     "content-type": "application/json",
-    "idempotency-key": idempotencyKey,
     ...lowerCaseHeaders(headers),
+    "idempotency-key": idempotencyKey,
   };
 
   let cachedPayment = null;
@@ -209,6 +262,14 @@ async function localX402Fetch(url, options = {}) {
 
       sawPaymentChallenge = true;
       const paymentRequiredHeader = readHeader(response, "payment-required");
+      if (cachedPayment) {
+        throw createHttpError("Paid retry received a second HTTP 402; refusing to reuse or replace payment authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: sawPaymentChallenge,
+          paymentAuthorized: true,
+        });
+      }
       if (!paymentRequiredHeader) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", { status: 402, idempotencyKey });
       }
@@ -259,7 +320,7 @@ async function localX402Fetch(url, options = {}) {
 export async function x402Fetch(url, options = {}) {
   const shared = await loadSharedX402Fetch();
   if (shared) {
-    const response = await shared(url, options);
+    const response = await shared(url, normalizePreferredOptions(options));
     return attachX402Meta(response, {
       paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
       idempotencyKey: options.idempotencyKey ?? null,
@@ -272,10 +333,35 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
   const headers = normalizeHeaders(response);
   const paymentReceipt = headers["payment-receipt"] ?? null;
   const paymentResponse = headers["payment-response"] ?? null;
+  const parsedPaymentReceipt = parseReceiptHeader(paymentReceipt);
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
   const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? null;
+  const proofId = firstPresent(payload?.proof_id, payload?.proofId, payload?.proof?.proof_id, payload?.proof?.id);
+  const receiptHeaderReference = firstPresent(
+    parsedPaymentReceipt.data?.receipt_id,
+    parsedPaymentReceipt.data?.receiptId,
+    parsedPaymentReceipt.data?.id,
+    parsedPaymentReceipt.data?.receipt?.receipt_id,
+    parsedPaymentReceipt.data?.receipt?.id,
+    parsedPaymentReceipt.raw,
+  );
+  const returnedQuoteId = firstPresent(
+    payload?.quote_id,
+    payload?.quoteId,
+    payload?.quote?.quote_id,
+    payload?.quote?.id,
+    payload?.receipt?.quote_id,
+    payload?.receipt?.quoteId,
+    parsedPaymentReceipt.data?.quote_id,
+    parsedPaymentReceipt.data?.quoteId,
+    parsedPaymentReceipt.data?.quote?.quote_id,
+    parsedPaymentReceipt.data?.quote?.id,
+  );
   const price = payload?.price_usdc ?? payload?.price ?? payload?.cost ?? null;
   const settlement = payload?.settlement ?? payload?.receipt?.settlement ?? null;
+  const settlementState = settlement ? String(settlement).toLowerCase() : null;
+  const failedSettlementStates = new Set(["failed", "rejected", "expired", "cancelled", "canceled", "refunded", "reversed", "voided"]);
+  const durableReceiptReference = firstPresent(receiptId, invocationId, proofId, receiptHeaderReference);
   const paymentAttempted = Boolean(response?.x402Meta?.paymentAttempted || paymentReceipt || paymentResponse);
 
   const checks = [
@@ -296,13 +382,20 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
     },
     {
       item: "receipt_reference_present",
-      status: receiptId ? "pass" : "warn",
-      evidence: receiptId || "response omitted receipt_id",
+      status: durableReceiptReference ? "pass" : (paymentAttempted ? "fail" : "warn"),
+      evidence: durableReceiptReference || "paid response omitted receipt, invocation, proof, and receipt-header references",
     },
     {
       item: "invocation_reference_present",
       status: invocationId ? "pass" : "warn",
       evidence: invocationId || "response omitted invocation_id",
+    },
+    {
+      item: "quote_id_matches",
+      status: quoteId && returnedQuoteId ? (String(returnedQuoteId) === String(quoteId) ? "pass" : "fail") : (quoteId ? "warn" : "skip"),
+      evidence: quoteId && returnedQuoteId
+        ? `requested=${quoteId}; returned=${returnedQuoteId}`
+        : (quoteId ? "response omitted quote_id for comparison" : "no requested quote_id supplied"),
     },
     {
       item: "price_visible",
@@ -311,7 +404,7 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
     },
     {
       item: "settlement_field_visible",
-      status: settlement ? "pass" : "warn",
+      status: settlement ? (failedSettlementStates.has(settlementState) ? "fail" : "pass") : "warn",
       evidence: settlement || "no settlement field returned",
     },
   ];
@@ -320,10 +413,14 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
     ok: checks.every((check) => check.status !== "fail"),
     paymentAttempted,
     quoteId,
+    returnedQuoteId,
     idempotencyKey,
     invocationId,
     receiptId,
+    proofId,
+    receiptHeaderReference,
     paymentReceipt,
+    parsedPaymentReceipt: parsedPaymentReceipt.data,
     paymentResponse,
     settlement,
     checks,
@@ -602,7 +699,7 @@ export async function runSelfTest() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
