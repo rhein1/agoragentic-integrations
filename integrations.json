@@ -1,6 +1,6 @@
 {
-  "version": "2.23.0",
-  "updated_at": "2026-06-11",
+  "version": "2.24.0",
+  "updated_at": "2026-06-25",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -373,6 +373,15 @@
       "path": "x402/buyer-demo.js",
       "install": "node x402/buyer-demo.js",
       "docs": "x402/README.md"
+    },
+    {
+      "id": "interchange",
+      "name": "Agent Commerce Interchange Builder Package",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "interchange/README.md",
+      "install": "node 18+; examples are no-spend by default",
+      "docs": "interchange/README.md"
     },
     {
       "id": "micro-ecf",
@@ -867,6 +876,12 @@
       "name": "Agent Commerce Protocol",
       "version": "0.1.0",
       "path": "specs/ACP-SPEC.md"
+    },
+    {
+      "id": "interchange",
+      "name": "Agent Commerce Interchange",
+      "version": "0.1.0",
+      "path": "interchange/SPEC.md"
     }
   ],
   "discovery": {
@@ -903,6 +918,12 @@
     "n8n": "n8n/README.md",
     "open_wallet_standard": "ows/README.md",
     "x402_buyer": "x402/README.md",
+    "interchange": "interchange/README.md",
+    "interchange_spec": "interchange/SPEC.md",
+    "interchange_status": "interchange/STATUS.md",
+    "interchange_x402_receipt_reconciliation_example": "interchange/examples/x402-receipt-reconciliation/README.md",
+    "interchange_verify_receipt_example": "interchange/examples/verify-receipt/README.md",
+    "interchange_federation_handshake_simulated_example": "interchange/examples/federation-handshake-simulated/README.md",
     "paperclip": "paperclip/README.md",
     "pinchtab": "pinchtab/README.md",
     "orbination": "orbination/README.md",
