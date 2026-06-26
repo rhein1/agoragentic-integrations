@@ -22,6 +22,18 @@ export function paramsWithoutAuth(params = {}) {
   return rest;
 }
 
+export function paramsForPostPinSigning({ method, params = {} }) {
+  const withoutAuth = paramsWithoutAuth(params);
+  if (method === 'federation/follow-referral') {
+    return {
+      relationship_id: withoutAuth.relationship_id,
+      remote_origin: withoutAuth.remote_origin,
+      referral_id: withoutAuth.referral_id,
+    };
+  }
+  return withoutAuth;
+}
+
 export function canonicalPostPinMessage({
   method,
   relationshipId,
@@ -98,14 +110,18 @@ export function runSelfTest() {
   const failures = [];
 
   for (const vector of vectors.post_pin_signing || []) {
-    const paramsHash = hashRef(vector.params_without_auth);
+    const paramsToSign = vector.params_to_sign || paramsForPostPinSigning({
+      method: vector.method,
+      params: vector.wire_params || vector.params_without_auth,
+    });
+    const paramsHash = hashRef(paramsToSign);
     const message = canonicalPostPinMessage({
       method: vector.method,
       relationshipId: vector.relationship_id,
       remoteOrigin: vector.remote_origin,
       nonce: vector.nonce,
       timestamp: vector.timestamp,
-      params: vector.params_without_auth,
+      params: paramsToSign,
     });
     const messageHex = Buffer.from(message, 'utf8').toString('hex');
     if (paramsHash !== vector.expected_params_hash) failures.push(`${vector.id}: params hash mismatch`);
@@ -127,7 +143,10 @@ export function runSelfTest() {
       remoteOrigin: sample.remote_origin,
       nonce: sample.nonce,
       timestamp: sample.timestamp,
-      params: sample.params_without_auth,
+      params: sample.params_to_sign || paramsForPostPinSigning({
+        method: sample.method,
+        params: sample.wire_params || sample.params_without_auth,
+      }),
     });
     const signature = signMessageBase64(demo.privateKey, message);
     if (!verifyMessageBase64(demo.publicKey, message, signature)) failures.push('demo ed25519 signature failed');

@@ -28,6 +28,17 @@ def params_without_auth(params: Dict[str, Any]) -> Dict[str, Any]:
     return {key: value for key, value in (params or {}).items() if key != "auth"}
 
 
+def params_for_post_pin_signing(*, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    without_auth = params_without_auth(params)
+    if method == "federation/follow-referral":
+        return {
+            "relationship_id": without_auth.get("relationship_id"),
+            "remote_origin": without_auth.get("remote_origin"),
+            "referral_id": without_auth.get("referral_id"),
+        }
+    return without_auth
+
+
 def canonical_post_pin_message(
     *,
     method: str,
@@ -90,14 +101,18 @@ def run_self_test() -> Dict[str, Any]:
     failures = []
 
     for vector in vectors.get("post_pin_signing", []):
-        params_hash = hash_ref(vector["params_without_auth"])
+        params_to_sign = vector.get("params_to_sign") or params_for_post_pin_signing(
+            method=vector["method"],
+            params=vector.get("wire_params") or vector["params_without_auth"],
+        )
+        params_hash = hash_ref(params_to_sign)
         message = canonical_post_pin_message(
             method=vector["method"],
             relationship_id=vector["relationship_id"],
             remote_origin=vector["remote_origin"],
             nonce=vector["nonce"],
             timestamp=vector["timestamp"],
-            params=vector["params_without_auth"],
+            params=params_to_sign,
         )
         message_hex = message.encode("utf-8").hex()
         if params_hash != vector["expected_params_hash"]:

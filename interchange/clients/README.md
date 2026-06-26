@@ -42,6 +42,7 @@ without adding a cryptography dependency.
 
 - `stableStringify` / `stable_stringify`
 - `hashRef` / `hash_ref`
+- `paramsForPostPinSigning` / `params_for_post_pin_signing`
 - `canonicalPostPinMessage` / `canonical_post_pin_message`
 - `challengeResponseHashRef` / `challenge_response_hash_ref`
 - the Agent Card federation extension shape

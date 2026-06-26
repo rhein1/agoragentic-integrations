@@ -11,7 +11,7 @@
       "remote_origin": "https://partner.example",
       "nonce": "nonce-123",
       "timestamp": 1710000000000,
-      "params_without_auth": {
+      "params_to_sign": {
         "relationship_id": "fed_partner_demo",
         "remote_origin": "https://partner.example",
         "referral_id": "agx_fedref_demo"
@@ -19,6 +19,23 @@
       "expected_params_hash": "sha256:653dff7cb05e61aa589fa7f2255c0029b2aa6051613fdac303fe51e11982921c",
       "expected_canonical_message": "federation/follow-referral\nfed_partner_demo\nhttps://partner.example\nnonce-123\n1710000000000\nsha256:653dff7cb05e61aa589fa7f2255c0029b2aa6051613fdac303fe51e11982921c",
       "expected_canonical_message_utf8_hex": "66656465726174696f6e2f666f6c6c6f772d726566657272616c0a6665645f706172746e65725f64656d6f0a68747470733a2f2f706172746e65722e6578616d706c650a6e6f6e63652d3132330a313731303030303030303030300a7368613235363a36353364666637636230356536316161353839666137663232353563303032396232616136303531363133666461633330336665353165313139383239323163"
+    },
+    {
+      "id": "refresh-v1",
+      "method": "federation/refresh",
+      "relationship_id": "fed_partner_demo",
+      "remote_origin": "https://partner.example",
+      "nonce": "nonce-refresh-001",
+      "timestamp": "2026-06-26T20:00:00.000Z",
+      "params_to_sign": {
+        "relationship_id": "fed_partner_demo",
+        "remote_origin": "https://partner.example",
+        "evidence_id": "fed_evidence_demo_001",
+        "refresh_reason": "partner_requested_recheck"
+      },
+      "expected_params_hash": "sha256:57894e72d00242f1f65d98c2140906d02db3ea4be0e26ded8ab23163f94e696c",
+      "expected_canonical_message": "federation/refresh\nfed_partner_demo\nhttps://partner.example\nnonce-refresh-001\n2026-06-26T20:00:00.000Z\nsha256:57894e72d00242f1f65d98c2140906d02db3ea4be0e26ded8ab23163f94e696c",
+      "expected_canonical_message_utf8_hex": "66656465726174696f6e2f726566726573680a6665645f706172746e65725f64656d6f0a68747470733a2f2f706172746e65722e6578616d706c650a6e6f6e63652d726566726573682d3030310a323032362d30362d32365432303a30303a30302e3030305a0a7368613235363a35373839346537326430303234326631663635643938633231343039303664303264623365613462653065323664656438616232333136336639346536393663"
     }
   ],
   "challenge_response": [

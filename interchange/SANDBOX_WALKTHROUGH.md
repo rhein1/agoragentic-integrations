@@ -32,7 +32,7 @@ Expected:
 {
   "ok": true,
   "vectors_checked": {
-    "post_pin_signing": 1,
+    "post_pin_signing": 2,
     "challenge_response": 1
   }
 }

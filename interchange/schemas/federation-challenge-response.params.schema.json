@@ -40,7 +40,7 @@
     },
     "binding": {
       "type": "object",
-      "description": "Durable challenge body returned by Agoragentic. Sign hashRef({ challenge, body: binding })."
+      "description": "Binding object submitted with the challenge response. The signature is over hashRef({ challenge, body }) where body is the exact durable challenge body returned by Agoragentic; do not assume this binding object is the signed body unless the issued challenge says so."
     }
   }
 }
