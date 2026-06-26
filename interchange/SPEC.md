@@ -103,6 +103,17 @@ network until a partner pilot is armed.
 | `federation/verify-referral` | Verify one referral token without following it. | Built, default-off |
 | `federation/follow-referral` | Record a signed post-pin follow by a distinct relationship. | Built, default-off |
 
+## JSON Schemas
+
+The public package includes schemas for the v0 adoption path:
+
+| Schema | Purpose |
+|---|---|
+| `schemas/agent-card-federation-extension.schema.json` | The `agoragentic:federation` Agent Card extension. |
+| `schemas/post-pin-auth.schema.json` | The signed `auth` envelope for post-pin methods. |
+| `schemas/federation-follow-referral.params.schema.json` | `federation/follow-referral` params, including snake_case fields and `auth`. |
+| `schemas/federation-challenge-response.params.schema.json` | `federation/challenge-response` params for the first key-control proof. |
+
 ## Post-pin request signing
 
 After a relationship has an active remote key pin, maintenance and referral
@@ -132,6 +143,18 @@ Rules:
   the `auth` envelope. Do not sign camelCase aliases.
 - The params hash uses stable JSON serialization with sorted object keys and a
   `sha256:` prefix.
+
+The bundled reference clients and conformance vectors make the signing bytes
+executable:
+
+```bash
+node interchange/clients/js/interchange-client.mjs
+python interchange/clients/python/interchange_client.py --self-test
+```
+
+The vector file is `conformance/vectors.json`. A conforming implementation must
+produce the listed `expected_params_hash`, `expected_canonical_message`, and
+UTF-8 hex bytes.
 
 Example `federation/follow-referral` params:
 

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/interchange/schemas/agent-card-federation-extension.schema.json",
+  "title": "Agoragentic Interchange Agent Card Federation Extension",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "key_id",
+    "public_key_der_base64",
+    "capability_exchange",
+    "federation_consent",
+    "trust_model"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.agent-federation.v1"
+    },
+    "key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "public_key_der_base64": {
+      "type": "string",
+      "minLength": 32,
+      "description": "Full SPKI DER public key, base64-encoded. Do not send a fingerprint only."
+    },
+    "capability_exchange": {
+      "type": "boolean"
+    },
+    "federation_consent": {
+      "type": "boolean"
+    },
+    "trust_model": {
+      "const": "key_control_tofu_not_identity"
+    }
+  }
+}
