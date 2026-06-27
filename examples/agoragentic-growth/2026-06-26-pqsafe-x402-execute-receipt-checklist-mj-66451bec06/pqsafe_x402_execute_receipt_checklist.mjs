@@ -201,6 +201,11 @@ function classifyChecklist(checks) {
 export function buildReceiptChecklist({ response, payload, request, x402Meta } = {}) {
   const headers = normalizeHeaders(response);
   const shape = canonicalReceiptShape(payload);
+  const terminalStatus = firstPresent(
+    shape.status,
+    payload?.success === true ? "success" : null,
+    payload?.result?.success === true ? "success" : null,
+  );
   const checks = [
     {
       id: "http-success",
@@ -238,8 +243,8 @@ export function buildReceiptChecklist({ response, payload, request, x402Meta } =
     },
     {
       id: "terminal-status-reported",
-      pass: Boolean(shape.status),
-      evidence: shape.status ?? "missing status",
+      pass: Boolean(terminalStatus),
+      evidence: terminalStatus ?? "missing status",
     },
   ];
 
@@ -251,7 +256,7 @@ export function buildReceiptChecklist({ response, payload, request, x402Meta } =
       receiptId: shape.receiptId,
       listingId: shape.listingId,
       providerId: shape.providerId,
-      status: shape.status,
+      status: terminalStatus,
       receiptUrl: shape.receiptUrl,
       paidAmount: shape.paidAmount,
       settlementState: shape.settlementState,
