@@ -383,6 +383,28 @@ function jsonResponse(status, value) {
   };
 }
 
+function assertUsageReceipt(value, capability) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("execute() succeeded without a usage_receipt");
+  }
+  if (typeof value.receipt_id !== "string" || value.receipt_id.trim() === "") {
+    throw new Error("usage_receipt is missing receipt_id");
+  }
+  if (value.capability_id !== capability.capability_id) {
+    throw new Error("usage_receipt capability_id does not match the requested capability");
+  }
+  const digests = value.digests;
+  if (!digests || typeof digests !== "object" || Array.isArray(digests)) {
+    throw new Error("usage_receipt is missing digest evidence");
+  }
+  for (const field of ["prompt_template_digest", "input_digest", "result_digest"]) {
+    if (typeof digests[field] !== "string" || digests[field].trim() === "") {
+      throw new Error(`usage_receipt is missing ${field}`);
+    }
+  }
+  return value;
+}
+
 export async function createPmClaudeMarketplaceCapability(options = {}) {
   const capability = createPmClaudeSkillPackage();
   const x402Module = await maybeImportX402Fetch();
@@ -421,11 +443,12 @@ export async function createPmClaudeMarketplaceCapability(options = {}) {
     }
 
     const payload = await response.json();
+    const usageReceipt = assertUsageReceipt(payload.usage_receipt, capability);
     return {
       invocation_id: payload.invocation_id,
       capability_id: payload.capability_id,
       output: payload.result,
-      usage_receipt: payload.usage_receipt,
+      usage_receipt: usageReceipt,
       wrapper: {
         x402_fetch_source: x402Module.source,
         idempotency_key: idempotencyKey,
@@ -564,6 +587,36 @@ export async function selfTest() {
   );
   assert.equal(demo.execution.usage_receipt.payment.authorization_mode, "demo-pay-gate");
   assert.equal(demo.execution.output.blockers.length >= 2, true);
+
+  const missingReceiptCapability = await createPmClaudeMarketplaceCapability({
+    fetchImpl: async () =>
+      jsonResponse(200, {
+        invocation_id: "inv_missing_receipt",
+        capability_id: "agoragentic.pm_claude_prd_critic.v1",
+        result: simulatePmCritique({
+          product_brief:
+            "This deliberately receipt-free response should fail before callers can treat it as complete.",
+          target_user: "validators",
+        }),
+      }),
+  });
+  await assert.rejects(
+    () =>
+      missingReceiptCapability.execute(
+        {
+          product_brief:
+            "This deliberately receipt-free response should fail before callers can treat it as complete.",
+          target_user: "validators",
+        },
+        {
+          idempotencyKey: "demo-missing-receipt",
+          async pay() {
+            return { authorization: "unused-demo-authorization" };
+          },
+        },
+      ),
+    /usage_receipt/,
+  );
   return "self-test passed";
 }
 
