@@ -280,9 +280,6 @@ class AgoragenticExecuteClient:
         latest_status: Optional[Dict[str, Any]] = None
         current_receipt_id = receipt_id
         while time.time() <= deadline:
-            if current_receipt_id:
-                receipt_payload = self.receipt(current_receipt_id)
-                return {"status": latest_status, "receipt": receipt_payload, "timed_out": False}
             latest_status = self.status(invocation_id)
             current_receipt_id = _extract_receipt_id(latest_status) or current_receipt_id
             status_name = str(latest_status.get("status", "")).lower()
@@ -292,7 +289,8 @@ class AgoragenticExecuteClient:
                 return {"status": latest_status, "receipt": self.receipt(current_receipt_id), "timed_out": False}
             time.sleep(max(0.0, poll_interval_seconds))
         result: Dict[str, Any] = {"status": latest_status, "receipt": None, "timed_out": True}
-        if current_receipt_id:
+        latest_status_name = str(latest_status.get("status", "")).lower() if isinstance(latest_status, Mapping) else ""
+        if current_receipt_id and latest_status_name and latest_status_name not in PENDING_STATUSES:
             result["receipt"] = self.receipt(current_receipt_id)
         return result
 
@@ -304,21 +302,30 @@ def normalize_receipt(receipt_payload: Optional[Dict[str, Any]]) -> Optional[Usa
     if not isinstance(source, Mapping):
         return None
 
-    provider_name = _provider_name(source.get("provider")) or _provider_name(source.get("selected_provider"))
-    settlement_source = source.get("settlement") if isinstance(source.get("settlement"), Mapping) else source
+    provider_name = (
+        _provider_name(source.get("provider"))
+        or _provider_name(source.get("selected_provider"))
+        or _provider_name(source.get("provider_name"))
+        or _provider_name(source.get("provider_id"))
+    )
+    settlement_value = source.get("settlement")
+    settlement_source = settlement_value if isinstance(settlement_value, Mapping) else source
+    settlement_status = _as_optional_str(settlement_value) if isinstance(settlement_value, str) else _as_optional_str(
+        settlement_source.get("status") or settlement_source.get("state")
+    )
     usage_source = source.get("usage") if isinstance(source.get("usage"), Mapping) else {}
 
     return UsageReceipt(
         receipt_id=_as_optional_str(source.get("receipt_id") or source.get("id")),
         invocation_id=_as_optional_str(source.get("invocation_id") or source.get("invocation")),
         provider=provider_name,
-        status=_as_optional_str(source.get("status") or settlement_source.get("status") or settlement_source.get("state")),
-        cost_usdc=_as_optional_float(source.get("cost") or source.get("price_charged") or source.get("amount") or source.get("cost_usdc")),
+        status=_as_optional_str(_first_present(source.get("status"), settlement_status)),
+        cost_usdc=_as_optional_float(_first_present(source.get("cost"), source.get("price_charged"), source.get("amount"), source.get("cost_usdc"))),
         currency=_as_optional_str(source.get("currency")) or "USDC",
         created_at=_as_optional_str(source.get("created_at") or source.get("timestamp")),
         settlement={
             "network": _as_optional_str(settlement_source.get("network") or settlement_source.get("chain")),
-            "status": _as_optional_str(settlement_source.get("status") or settlement_source.get("state")),
+            "status": settlement_status,
             "transaction_hash": _as_optional_str(
                 settlement_source.get("transaction_hash") or settlement_source.get("tx_hash") or settlement_source.get("tx")
             ),
@@ -429,13 +436,20 @@ class OpenMultiAgentLangGraphAdapter:
             artifact["usage"] = _extract_usage_from_execution(execution)
 
         artifact["status"] = str(execution.get("status", "accepted")) if isinstance(execution, Mapping) else "accepted"
-        artifact["provider"] = _provider_name(execution.get("provider")) if isinstance(execution, Mapping) else None
+        artifact["provider"] = (
+            _provider_name(execution.get("provider"))
+            or _provider_name(execution.get("selected_provider"))
+            or _provider_name(execution.get("provider_name"))
+            or _provider_name(execution.get("provider_id"))
+        ) if isinstance(execution, Mapping) else None
         artifact["invocation_id"] = _extract_invocation_id(execution) or (normalized_receipt.invocation_id if normalized_receipt else None)
         artifact["result"] = _extract_result_payload(execution)
         artifact["cost_usdc"] = _as_optional_float(
-            (execution.get("cost") if isinstance(execution, Mapping) else None)
-            or (execution.get("price_charged") if isinstance(execution, Mapping) else None)
-            or (normalized_receipt.cost_usdc if normalized_receipt else None)
+            _first_present(
+                (execution.get("cost") if isinstance(execution, Mapping) else None),
+                (execution.get("price_charged") if isinstance(execution, Mapping) else None),
+                (normalized_receipt.cost_usdc if normalized_receipt else None),
+            )
         )
 
         if str(artifact["status"]).lower() in TERMINAL_ERROR_STATUSES:
@@ -614,6 +628,13 @@ def _extract_error_message(payload: Any) -> Optional[str]:
                 return value.strip()
     if isinstance(payload, str) and payload.strip():
         return payload.strip()
+    return None
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None and value != "":
+            return value
     return None
 
 
@@ -844,6 +865,48 @@ def _self_test() -> Dict[str, Any]:
     assert result_state["usage_receipts"][0]["settlement"]["network"] == "base"
     assert any(call["path"] == "/api/execute" for call in transport.calls)
 
+    scalar_receipt = normalize_receipt(
+        {
+            "receipt_id": "rcpt_free_0",
+            "invocation_id": "inv_free_0",
+            "provider_id": "flat.provider",
+            "provider_name": "Flat Provider",
+            "status": "completed",
+            "cost": 0,
+            "settlement": "settled",
+            "usage": {"requests": 0},
+        }
+    )
+    assert scalar_receipt is not None
+    assert scalar_receipt.cost_usdc == 0.0
+    assert scalar_receipt.provider == "Flat Provider"
+    assert scalar_receipt.status == "completed"
+    assert scalar_receipt.settlement["status"] == "settled"
+
+    running_receipt_transport = StubTransport(
+        {
+            ("GET", "/api/execute/status/inv_running"): {
+                "status": "running",
+                "invocation_id": "inv_running",
+                "receipt_id": "rcpt_allocated_early",
+            }
+        }
+    )
+    running_client = AgoragenticExecuteClient(
+        api_key="amk_test",
+        base_url="https://mock.agoragentic.local",
+        transport=running_receipt_transport,
+    )
+    running_wait = running_client.wait_for_receipt(
+        "inv_running",
+        poll_interval_seconds=0.0,
+        timeout_seconds=0.01,
+    )
+    assert running_wait["timed_out"] is True
+    assert running_wait["receipt"] is None
+    assert running_wait["status"]["status"] == "running"
+    assert not any(call["path"] == "/api/commerce/receipts/rcpt_allocated_early" for call in running_receipt_transport.calls)
+
     return {
         "ok": True,
         "provider": artifact["provider"],
@@ -851,6 +914,12 @@ def _self_test() -> Dict[str, Any]:
         "usage": artifact["usage"],
         "receipt_id": artifact["receipt"]["receipt_id"],
         "transport_calls": len(transport.calls),
+        "regression_assertions": {
+            "zero_cost_preserved": True,
+            "scalar_settlement_preserved": True,
+            "flat_provider_fields_preserved": True,
+            "running_receipt_not_returned": True,
+        },
     }
 
 
