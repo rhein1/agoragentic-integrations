@@ -41,7 +41,6 @@ import hashlib
 import json
 import os
 import sys
-import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
 from urllib import error, parse, request
@@ -172,9 +171,35 @@ class OceanbasePowerMemBuyerAdapter:
         self.budget_policy = budget_policy or BudgetPolicy()
 
     @staticmethod
-    def _new_idempotency_key(task: str) -> str:
+    def _stable_json(value: Any) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+    @classmethod
+    def _stable_idempotency_key(
+        cls,
+        task: str,
+        input_data: Mapping[str, Any],
+        constraints: Mapping[str, Any],
+        quote_id: Optional[str],
+        metadata: Optional[Mapping[str, Any]],
+    ) -> str:
+        explicit = None
+        if metadata:
+            explicit = metadata.get("idempotency_key") or metadata.get("idempotencyKey")
+        if explicit:
+            return str(explicit)
         slug = task.replace(".", "_").replace("/", "_")
-        return f"idem_{slug}_{uuid.uuid4().hex}"
+        fingerprint = hashlib.sha256(
+            cls._stable_json(
+                {
+                    "task": task,
+                    "input": dict(input_data),
+                    "constraints": dict(constraints),
+                    "quote_id": quote_id or "dynamic_execute",
+                }
+            ).encode("utf-8")
+        ).hexdigest()[:24]
+        return f"idem_{slug}_{fingerprint}"
 
     @staticmethod
     def _coerce_float(value: Any) -> Optional[float]:
@@ -184,6 +209,25 @@ class OceanbasePowerMemBuyerAdapter:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _first_present(*values: Any) -> Any:
+        for value in values:
+            if value is not None and value != "":
+                return value
+        return None
+
+    @staticmethod
+    def _is_pending_approval(payload: Mapping[str, Any]) -> bool:
+        status = str(payload.get("status") or payload.get("state") or "").lower()
+        approval = payload.get("approval") if isinstance(payload.get("approval"), Mapping) else {}
+        approval_status = str(approval.get("status") or "").lower()
+        return bool(
+            status in {"pending_approval", "approval_required", "requires_approval"}
+            or approval_status in {"pending", "pending_approval", "approval_required"}
+            or payload.get("approval_id")
+            or payload.get("approvalId")
+        )
 
     def match(self, task: str, *, budget_policy: Optional[BudgetPolicy] = None) -> Dict[str, Any]:
         policy = budget_policy or self.budget_policy
@@ -214,8 +258,6 @@ class OceanbasePowerMemBuyerAdapter:
 
         match_payload = self.match(task, budget_policy=policy) if quote_id is None else {}
         resolved_quote_id = quote_id or match_payload.get("quote_id") or match_payload.get("quote", {}).get("quote_id")
-        if not resolved_quote_id:
-            raise AdapterError(f"No quote_id available for task {task!r}")
 
         matched_price = self._coerce_float(
             match_payload.get("price_usdc")
@@ -228,25 +270,43 @@ class OceanbasePowerMemBuyerAdapter:
                 f"Matched price {matched_price:.6f} exceeds max_cost_usdc={policy.max_cost_usdc:.6f} for {policy.name}"
             )
 
-        idempotency_key = self._new_idempotency_key(task)
-        constraints = dict(policy.to_constraints())
+        constraints = dict(extra_constraints or {})
+        extra_max_cost = self._coerce_float(constraints.get("max_cost"))
+        constraints.update(policy.to_constraints())
+        if extra_max_cost is not None:
+            constraints["max_cost"] = round(min(extra_max_cost, policy.max_cost_usdc), 6)
         if extra_constraints:
-            constraints.update(dict(extra_constraints))
+            constraints["caller_constraints"] = {
+                key: value
+                for key, value in dict(extra_constraints).items()
+                if key not in {"max_cost", "currency", "require_receipt"}
+            }
+
+        input_payload = dict(input_data or {})
+        idempotency_key = self._stable_idempotency_key(
+            task,
+            input_payload,
+            constraints,
+            resolved_quote_id,
+            metadata,
+        )
+        body: Dict[str, Any] = {
+            "task": task,
+            "input": input_payload,
+            "constraints": constraints,
+            "metadata": {
+                "adapter": "langgraph_oceanbase_powermem",
+                "idempotency_key": idempotency_key,
+                **dict(metadata or {}),
+            },
+        }
+        if resolved_quote_id:
+            body["quote_id"] = resolved_quote_id
 
         execution_payload = self.transport.request_json(
             "POST",
             "/api/execute",
-            body={
-                "task": task,
-                "quote_id": resolved_quote_id,
-                "input": dict(input_data or {}),
-                "constraints": constraints,
-                "metadata": {
-                    "adapter": "langgraph_oceanbase_powermem",
-                    "idempotency_key": idempotency_key,
-                    **dict(metadata or {}),
-                },
-            },
+            body=body,
             extra_headers={"Idempotency-Key": idempotency_key},
         )
         receipt = self._normalize_receipt(
@@ -257,7 +317,7 @@ class OceanbasePowerMemBuyerAdapter:
             match_payload=match_payload,
             execution_payload=execution_payload,
         )
-        if policy.require_receipt and not receipt.receipt_id:
+        if policy.require_receipt and not receipt.receipt_id and not self._is_pending_approval(execution_payload):
             raise AdapterError(f"Execution for task {task!r} returned no receipt_id under policy {policy.name!r}")
         return receipt
 
@@ -267,7 +327,7 @@ class OceanbasePowerMemBuyerAdapter:
         task: str,
         policy: BudgetPolicy,
         idempotency_key: str,
-        quote_id: str,
+        quote_id: Optional[str],
         match_payload: Mapping[str, Any],
         execution_payload: Mapping[str, Any],
     ) -> UsageReceipt:
@@ -284,21 +344,31 @@ class OceanbasePowerMemBuyerAdapter:
             or execution_payload.get("result", {}).get("listing_name")
             or match_payload.get("match", {}).get("name")
         )
+        receipt_payload = execution_payload.get("receipt", {}) if isinstance(execution_payload.get("receipt"), Mapping) else {}
         cost = self._coerce_float(
-            execution_payload.get("cost")
-            or execution_payload.get("price")
-            or execution_payload.get("price_usdc")
-            or execution_payload.get("receipt", {}).get("cost")
+            self._first_present(
+                execution_payload.get("cost_usdc"),
+                execution_payload.get("cost"),
+                execution_payload.get("price_usdc"),
+                execution_payload.get("price"),
+                receipt_payload.get("cost_usdc"),
+                receipt_payload.get("cost"),
+            )
         )
         settlement = (
             execution_payload.get("settlement")
-            or execution_payload.get("receipt", {}).get("settlement")
+            or receipt_payload.get("settlement")
+            or execution_payload.get("status")
             or "unknown"
         )
-        receipt_id = execution_payload.get("receipt_id") or execution_payload.get("receipt", {}).get("receipt_id")
+        receipt_id = execution_payload.get("receipt_id") or receipt_payload.get("receipt_id")
         invocation_id = execution_payload.get("invocation_id") or execution_payload.get("invocation", {}).get("id")
         uncertainty: List[str] = []
 
+        if self._is_pending_approval(execution_payload):
+            uncertainty.append(
+                "Execution is pending approval; surface approval evidence to the supervisor and retry after approval."
+            )
         if settlement == "unknown":
             uncertainty.append("Response omitted settlement; reconcile with a receipt endpoint before treating the run as closed.")
         elif settlement not in {"settled", "completed"}:
@@ -488,6 +558,21 @@ class MockTransport(HttpTransport):
                 "powermem.search_memory": 0.06,
                 "oceanbase.hybrid_retrieve": 0.18,
             }.get(task, 0.22)
+            if task == "powermem.search_memory":
+                return {
+                    "candidates": [
+                        {
+                            "name": "oceanbase_powermem_governed_runtime",
+                            "provider": "oceanbase-powermem",
+                            "price_usdc": quoted_cost,
+                        }
+                    ],
+                    "match": {
+                        "name": "oceanbase_powermem_governed_runtime",
+                        "provider": "oceanbase-powermem",
+                        "price_usdc": quoted_cost,
+                    },
+                }
             return {
                 "quote_id": f"quote_{task.replace('.', '_')}",
                 "match": {
@@ -500,7 +585,26 @@ class MockTransport(HttpTransport):
             body = dict(body or {})
             metadata = dict(body.get("metadata") or {})
             input_payload = dict(body.get("input") or {})
+            if input_payload.get("simulate_pending_approval"):
+                return {
+                    "status": "pending_approval",
+                    "approval_id": "approval_demo_123",
+                    "retry_after_approval": True,
+                    "instructions": "Supervisor approval required before a receipt is created.",
+                }
             fingerprint = hashlib.sha256(json.dumps(input_payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+            if input_payload.get("simulate_cost_usdc"):
+                return {
+                    "success": True,
+                    "provider_name": "oceanbase-powermem",
+                    "listing_name": "oceanbase_powermem_governed_runtime",
+                    "invocation_id": f"inv_{fingerprint}",
+                    "receipt": {
+                        "receipt_id": f"rcpt_{fingerprint}",
+                        "cost_usdc": 0.06,
+                        "settlement": "submitted",
+                    },
+                }
             return {
                 "success": True,
                 "provider_name": "oceanbase-powermem",
@@ -557,6 +661,54 @@ def run_self_test() -> Dict[str, Any]:
     _assert(receipt["settlement"] == "submitted", "self-test should preserve non-final settlement wording")
     _assert(receipt["cost_usdc"] == 0.18, "hybrid retrieve should use the quoted paid example")
     _assert(len(result_state["receipts"]) == 1, "node should append one receipt")
+
+    search_input = {
+        "tenant_id": "tenant-demo",
+        "query": "Find PowerMem chunks without requiring a durable quote.",
+        "namespace": "powermem-demo",
+        "simulate_cost_usdc": True,
+    }
+    search_receipt = adapter.execute(
+        "powermem.search_memory",
+        search_input,
+        budget_policy=policy,
+        extra_constraints={"max_cost": 99, "preferred_provider": "oceanbase-powermem"},
+    )
+    search_execute_call = [call for call in transport.calls if call["path"] == "/api/execute"][-1]
+    _assert(search_receipt.quote_id is None, "execute should allow dynamic pricing when match returns no quote_id")
+    _assert(search_receipt.cost_usdc == 0.06, "receipt.cost_usdc should be normalized")
+    _assert("quote_id" not in search_execute_call["body"], "dynamic execute should omit quote_id")
+    _assert(search_execute_call["body"]["constraints"]["max_cost"] == 0.2, "extra constraints must not raise policy cap")
+    _assert(
+        search_execute_call["body"]["constraints"]["caller_constraints"]["preferred_provider"] == "oceanbase-powermem",
+        "non-budget caller constraints should remain visible",
+    )
+
+    search_receipt_retry = adapter.execute(
+        "powermem.search_memory",
+        search_input,
+        budget_policy=policy,
+        extra_constraints={"max_cost": 99, "preferred_provider": "oceanbase-powermem"},
+    )
+    _assert(
+        search_receipt.idempotency_key == search_receipt_retry.idempotency_key,
+        "same task/input/policy retry should preserve idempotency key",
+    )
+
+    approval_receipt = adapter.execute(
+        "powermem.search_memory",
+        {
+            "tenant_id": "tenant-demo",
+            "query": "Needs supervisor approval before execution.",
+            "simulate_pending_approval": True,
+        },
+        budget_policy=policy,
+    )
+    _assert(approval_receipt.receipt_id is None, "pending approval should not fabricate a receipt")
+    _assert(
+        any("pending approval" in warning for warning in approval_receipt.uncertainty),
+        "pending approval should be surfaced as actionable uncertainty",
+    )
 
     blocked_policy = BudgetPolicy(name="too_small", max_cost_usdc=0.05, allowed_tasks=("oceanbase.hybrid_retrieve",))
     try:
