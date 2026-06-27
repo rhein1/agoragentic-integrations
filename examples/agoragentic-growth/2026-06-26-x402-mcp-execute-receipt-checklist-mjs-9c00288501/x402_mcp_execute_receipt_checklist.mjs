@@ -81,6 +81,13 @@ function normalizeRequestForX402(options = {}) {
   };
 }
 
+function buildX402RequestHeaders(baseHeaders, idempotencyKey) {
+  const requestHeaders = { accept: "application/json" };
+  Object.assign(requestHeaders, baseHeaders);
+  requestHeaders["idempotency-key"] = idempotencyKey;
+  return requestHeaders;
+}
+
 function normalizePayResult(payment) {
   if (!payment || typeof payment !== "object") {
     throw new Error("pay callback must return an object");
@@ -122,11 +129,7 @@ async function localX402Fetch(url, options = {}) {
   let networkRetriesUsed = 0;
 
   while (true) {
-    const requestHeaders = {
-      accept: "application/json",
-      ...baseHeaders,
-    };
-    requestHeaders["idempotency-key"] = idempotencyKey;
+    const requestHeaders = buildX402RequestHeaders(baseHeaders, idempotencyKey);
 
     let requestBody = body;
 
@@ -470,6 +473,13 @@ export async function executeForMcpTool({
     };
   } catch (error) {
     const classified = classifyExecuteError(error);
+    const errorPayload = {
+      ok: false,
+      isError: true,
+      task,
+      idempotencyKey,
+      error: classified,
+    };
     return {
       ok: false,
       isError: true,
@@ -480,13 +490,7 @@ export async function executeForMcpTool({
       content: [
         {
           type: "text",
-          text: JSON.stringify({
-            ok: false,
-            isError: true,
-            task,
-            idempotencyKey,
-            error: classified,
-          }, null, 2),
+          text: JSON.stringify(errorPayload, null, 2),
         },
       ],
     };
