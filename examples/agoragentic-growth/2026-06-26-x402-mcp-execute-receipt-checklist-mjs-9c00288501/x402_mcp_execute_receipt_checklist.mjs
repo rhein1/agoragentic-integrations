@@ -490,6 +490,7 @@ export async function executeForMcpTool({
       content: [
         {
           type: "text",
+          isError: true,
           text: JSON.stringify(errorPayload, null, 2),
         },
       ],
