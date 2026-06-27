@@ -10,6 +10,9 @@ function stableId(prefix = "idem") {
 }
 
 function lowerCaseHeaders(headers = {}) {
+  if (headers instanceof Headers || typeof headers.entries === "function") {
+    return Object.fromEntries(Array.from(headers.entries()).map(([key, value]) => [String(key).toLowerCase(), String(value)]));
+  }
   const out = {};
   for (const [key, value] of Object.entries(headers)) {
     if (value === undefined || value === null) continue;
@@ -170,9 +173,9 @@ async function localX402Fetch(url, options = {}) {
 
   const requestBody = body === undefined ? undefined : JSON.stringify(body);
   const baseHeaders = {
+    ...lowerCaseHeaders(headers),
     "content-type": "application/json",
     "idempotency-key": idempotencyKey,
-    ...lowerCaseHeaders(headers),
   };
 
   let cachedPayment = null;
@@ -182,7 +185,11 @@ async function localX402Fetch(url, options = {}) {
   async function dispatch() {
     const attemptHeaders = { ...baseHeaders };
     if (cachedPayment?.authorizationHeader) {
-      attemptHeaders.authorization = cachedPayment.authorizationHeader;
+      if (attemptHeaders.authorization) {
+        attemptHeaders["x-payment-authorization"] = cachedPayment.authorizationHeader;
+      } else {
+        attemptHeaders.authorization = cachedPayment.authorizationHeader;
+      }
     }
     if (cachedPayment?.paymentSignature) {
       attemptHeaders["payment-signature"] = cachedPayment.paymentSignature;
@@ -208,7 +215,15 @@ async function localX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
-      const paymentRequiredHeader = readHeader(response, "payment-required");
+      if (cachedPayment) {
+        throw createHttpError("Paid retry was rejected with HTTP 402; refusing to reuse rejected payment authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          authorizedPaymentReused: true,
+        });
+      }
+      const paymentRequiredHeader = readHeader(response, "payment-required") || readHeader(response, "x-payment-required");
       if (!paymentRequiredHeader) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", { status: 402, idempotencyKey });
       }
@@ -259,10 +274,21 @@ async function localX402Fetch(url, options = {}) {
 export async function x402Fetch(url, options = {}) {
   const shared = await loadSharedX402Fetch();
   if (shared) {
-    const response = await shared(url, options);
+    const callerHeaders = lowerCaseHeaders(options.headers || {});
+    const normalizedIdempotencyKey = options.idempotencyKey ?? callerHeaders["idempotency-key"] ?? stableId("x402");
+    const normalizedOptions = {
+      ...options,
+      idempotencyKey: normalizedIdempotencyKey,
+      headers: {
+        ...callerHeaders,
+        "idempotency-key": normalizedIdempotencyKey,
+      },
+      body: options.body === undefined || typeof options.body === "string" ? options.body : JSON.stringify(options.body),
+    };
+    const response = await shared(url, normalizedOptions);
     return attachX402Meta(response, {
       paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-      idempotencyKey: options.idempotencyKey ?? null,
+      idempotencyKey: normalizedIdempotencyKey,
     });
   }
   return localX402Fetch(url, options);
@@ -270,13 +296,16 @@ export async function x402Fetch(url, options = {}) {
 
 export function validateX402Receipt({ response, payload, quoteId, idempotencyKey }) {
   const headers = normalizeHeaders(response);
-  const paymentReceipt = headers["payment-receipt"] ?? null;
-  const paymentResponse = headers["payment-response"] ?? null;
+  const paymentReceipt = headers["payment-receipt"] ?? headers["x-payment-receipt"] ?? null;
+  const paymentResponse = headers["payment-response"] ?? headers["x-payment-response"] ?? null;
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
-  const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? null;
+  const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? payload?.receipt?.id ?? paymentReceipt ?? null;
   const price = payload?.price_usdc ?? payload?.price ?? payload?.cost ?? null;
   const settlement = payload?.settlement ?? payload?.receipt?.settlement ?? null;
   const paymentAttempted = Boolean(response?.x402Meta?.paymentAttempted || paymentReceipt || paymentResponse);
+  const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+  const quoteMatches = !returnedQuoteId || !quoteId || returnedQuoteId === quoteId;
+  const failedSettlement = typeof settlement === "string" && ["failed", "error", "cancelled", "canceled", "rejected"].includes(settlement.toLowerCase());
 
   const checks = [
     {
@@ -291,13 +320,18 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
     },
     {
       item: "receipt_header_present",
-      status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip",
+      status: paymentAttempted ? (paymentReceipt ? "pass" : "fail") : "skip",
       evidence: paymentAttempted ? (paymentReceipt || "header missing") : "no payment challenge observed",
     },
     {
       item: "receipt_reference_present",
-      status: receiptId ? "pass" : "warn",
+      status: receiptId ? "pass" : (paymentAttempted ? "fail" : "warn"),
       evidence: receiptId || "response omitted receipt_id",
+    },
+    {
+      item: "quote_binding",
+      status: quoteMatches ? "pass" : "fail",
+      evidence: returnedQuoteId ? `${returnedQuoteId} vs ${quoteId || "missing"}` : "no returned quote id",
     },
     {
       item: "invocation_reference_present",
@@ -311,7 +345,7 @@ export function validateX402Receipt({ response, payload, quoteId, idempotencyKey
     },
     {
       item: "settlement_field_visible",
-      status: settlement ? "pass" : "warn",
+      status: failedSettlement ? "fail" : (settlement ? "pass" : "warn"),
       evidence: settlement || "no settlement field returned",
     },
   ];
@@ -555,6 +589,11 @@ export function createMockX402Transport() {
 }
 
 export async function runSelfTest() {
+  const headerProbe = lowerCaseHeaders(new Headers({ Authorization: "Bearer api", "X-Test": "ok" }));
+  if (headerProbe.authorization !== "Bearer api" || headerProbe["x-test"] !== "ok") {
+    throw new Error(`Expected Headers instances to be normalized, saw ${JSON.stringify(headerProbe)}`);
+  }
+
   const mock = createMockX402Transport();
   const adapter = new X402ReceiptValidationAdapter({
     baseUrl: DEFAULT_BASE_URL,
@@ -589,6 +628,83 @@ export async function runSelfTest() {
     throw new Error("Expected settlement field to remain informational as submitted");
   }
 
+  const missingReceiptValidation = validateX402Receipt({
+    response: attachX402Meta(new SimpleResponse(200, { "content-type": "application/json" }, { ok: true }), { paymentAttempted: true }),
+    payload: { ok: true, quote_id: result.quoteId, settlement: "submitted" },
+    quoteId: result.quoteId,
+    idempotencyKey: "missing-receipt",
+  });
+  if (missingReceiptValidation.ok) {
+    throw new Error("Paid responses without receipt evidence must fail validation");
+  }
+
+  const failedSettlementValidation = validateX402Receipt({
+    response: attachX402Meta(new SimpleResponse(200, { "x-payment-receipt": "rcpt_failed" }, { ok: true }), { paymentAttempted: true }),
+    payload: { receipt_id: "rcpt_failed", quote_id: result.quoteId, settlement: "failed" },
+    quoteId: result.quoteId,
+    idempotencyKey: "failed-settlement",
+  });
+  if (failedSettlementValidation.ok) {
+    throw new Error("Failed settlement states must fail validation");
+  }
+
+  const quoteMismatchValidation = validateX402Receipt({
+    response: attachX402Meta(new SimpleResponse(200, { "payment-receipt": "rcpt_quote_mismatch" }, { ok: true }), { paymentAttempted: true }),
+    payload: { receipt_id: "rcpt_quote_mismatch", quote_id: "quote_other", settlement: "settled" },
+    quoteId: result.quoteId,
+    idempotencyKey: "quote-mismatch",
+  });
+  if (quoteMismatchValidation.ok) {
+    throw new Error("Returned quote ids must match the requested quote");
+  }
+
+  const apiAuthHeaders = [];
+  await localX402Fetch("https://demo.agoragentic.local/api/x402/execute", {
+    fetchImpl: async (_url, init = {}) => {
+      const headers = lowerCaseHeaders(init.headers || {});
+      apiAuthHeaders.push(headers);
+      if (!headers["payment-signature"]) {
+        return new SimpleResponse(402, { "x-payment-required": "x402:ZGVtb19jaGFsbGVuZ2U=" }, { error: "payment_required" });
+      }
+      return new SimpleResponse(200, { "x-payment-receipt": "rcpt_api_auth" }, { receipt_id: "rcpt_api_auth", settlement: "settled" });
+    },
+    headers: { Authorization: "Bearer api-key", "Idempotency-Key": "caller-stale" },
+    idempotencyKey: "tracked-idempotency",
+    body: { quote_id: result.quoteId, input: { prompt: "api auth preservation" } },
+    pay: async () => ({ paymentSignature: "sig:api-auth-preserved" }),
+  });
+  if (apiAuthHeaders.some((headers) => headers["idempotency-key"] !== "tracked-idempotency")) {
+    throw new Error("tracked idempotency key must override caller header");
+  }
+  if (apiAuthHeaders[1].authorization !== "Bearer api-key" || apiAuthHeaders[1]["payment-signature"] !== "sig:api-auth-preserved") {
+    throw new Error("API Authorization must be preserved on paid retries when payment-signature is used");
+  }
+
+  let paid402PayCalls = 0;
+  let paid402Attempts = 0;
+  await assertRejects(
+    () => localX402Fetch("https://demo.agoragentic.local/api/x402/execute", {
+      fetchImpl: async (_url, init = {}) => {
+        paid402Attempts += 1;
+        const headers = lowerCaseHeaders(init.headers || {});
+        return new SimpleResponse(402, {
+          "payment-required": "x402:ZGVtb19jaGFsbGVuZ2U=",
+          ...(headers["payment-signature"] ? { "payment-response": "rejected" } : {}),
+        }, { error: "payment_required" });
+      },
+      idempotencyKey: "paid-402-stop",
+      body: { quote_id: result.quoteId, input: { prompt: "reject paid retry" } },
+      pay: async () => {
+        paid402PayCalls += 1;
+        return { paymentSignature: "sig:reject-on-paid-retry" };
+      },
+    }),
+    /Paid retry was rejected/
+  );
+  if (paid402PayCalls !== 1 || paid402Attempts !== 2) {
+    throw new Error("Second paid 402 must stop after one pay callback and one paid retry");
+  }
+
   return {
     ok: true,
     executeAttempts: stats.executeAttempts,
@@ -600,6 +716,18 @@ export async function runSelfTest() {
       authorizedPaymentReused: true,
     })),
   };
+}
+
+async function assertRejects(fn, pattern) {
+  try {
+    await fn();
+  } catch (error) {
+    if (!pattern.test(error.message || String(error))) {
+      throw new Error(`expected rejection matching ${pattern}, saw ${error.message || String(error)}`);
+    }
+    return;
+  }
+  throw new Error(`expected rejection matching ${pattern}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
