@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -56,6 +57,30 @@ function createNetworkError(message, extra = {}) {
   return error;
 }
 
+function normalizeRequestForX402(options = {}) {
+  const idempotencyKey = options.idempotencyKey ?? randomUUID();
+  const headers = lowerCaseHeaders(options.headers || {});
+  delete headers["idempotency-key"];
+  delete headers["x-idempotency-key"];
+
+  let body = options.body;
+  if (body !== undefined && body !== null && typeof body !== "string") {
+    body = JSON.stringify(body);
+    if (!headers["content-type"]) headers["content-type"] = "application/json";
+  }
+
+  return {
+    ...options,
+    idempotencyKey,
+    body,
+    headers: {
+      accept: "application/json",
+      ...headers,
+      "idempotency-key": idempotencyKey,
+    },
+  };
+}
+
 function normalizePayResult(payment) {
   if (!payment || typeof payment !== "object") {
     throw new Error("pay callback must return an object");
@@ -75,16 +100,17 @@ async function importPreferredX402Fetch() {
 }
 
 async function localX402Fetch(url, options = {}) {
+  const normalized = normalizeRequestForX402(options);
   const {
     fetchImpl = globalThis.fetch,
     pay,
-    idempotencyKey = randomUUID(),
+    idempotencyKey,
     method = "GET",
     headers = {},
     body,
     signal,
     maxNetworkRetries = 1,
-  } = options;
+  } = normalized;
 
   if (typeof fetchImpl !== "function") {
     throw new Error("fetchImpl is required");
@@ -98,15 +124,11 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
-    if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
-      requestBody = JSON.stringify(requestBody);
-      if (!requestHeaders["content-type"]) requestHeaders["content-type"] = "application/json";
-    }
 
     if (cachedPayment?.authorizationHeader) {
       requestHeaders.authorization = cachedPayment.authorizationHeader;
@@ -150,6 +172,14 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
+      if (cachedPayment) {
+        throw createHttpError("Paid retry received HTTP 402 after payment authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentRequired,
+          paymentAttempted: sawPaymentChallenge,
+        });
+      }
       if (!cachedPayment) {
         cachedPayment = normalizePayResult(await pay(paymentRequired, {
           url,
@@ -179,23 +209,56 @@ async function localX402Fetch(url, options = {}) {
 async function x402Fetch(url, options = {}) {
   const preferred = await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
-  const response = await preferred(url, options);
+  const normalized = normalizeRequestForX402(options);
+  const response = await preferred(url, normalized);
   response.x402Meta = {
     paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
     paymentAuthorized: Boolean(readHeader(response, "payment-response")),
     authorizedPaymentReused: false,
     networkRetriesUsed: 0,
-    idempotencyKey: options.idempotencyKey ?? null,
+    idempotencyKey: normalized.idempotencyKey ?? null,
     helper: "agoragentic/x402-client",
   };
   return response;
 }
 
+function parseMaybeStructuredHeader(value) {
+  if (!value || typeof value !== "string") return null;
+  for (const candidate of [value, Buffer.from(value, "base64").toString("utf8")]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch {
+      // Try the next representation.
+    }
+  }
+  return null;
+}
+
+function extractReceiptIdFromHeader(value) {
+  if (!value) return null;
+  const parsed = parseMaybeStructuredHeader(value);
+  if (parsed) {
+    return parsed.receipt_id
+      ?? parsed.receiptId
+      ?? parsed.id
+      ?? parsed.receipt?.receipt_id
+      ?? parsed.receipt?.receiptId
+      ?? parsed.receipt?.id
+      ?? null;
+  }
+  return value;
+}
+
 function extractReceiptReference(payload, response) {
+  const paymentReceipt = readHeader(response, "payment-receipt");
   return payload?.receipt_id
+    ?? payload?.receipt?.receipt_id
     ?? payload?.receipt?.id
+    ?? payload?.receipt?.receiptId
     ?? payload?.receiptId
-    ?? readHeader(response, "payment-receipt")
+    ?? extractReceiptIdFromHeader(paymentReceipt)
+    ?? readHeader(response, "x-receipt-id")
     ?? null;
 }
 
@@ -411,6 +474,7 @@ export async function executeForMcpTool({
     const classified = classifyExecuteError(error);
     return {
       ok: false,
+      isError: true,
       tool: "agoragentic_execute",
       task,
       idempotencyKey,
@@ -537,6 +601,76 @@ async function demo() {
   assert.equal(result.x402.networkRetriesUsed, 1);
   assert.equal(result.receiptChecklist.settlement, "submitted");
 
+  const explicitIdempotencyHeaders = [];
+  await localX402Fetch("https://mock.agoragentic.test/api/x402/execute", {
+    fetchImpl: async (url, init = {}) => {
+      explicitIdempotencyHeaders.push(lowerCaseHeaders(init.headers || {}));
+      return jsonResponse(200, { ok: true, receipt_id: "rcpt_explicit_idem" });
+    },
+    idempotencyKey: "explicit-idempotency-key",
+    headers: { "Idempotency-Key": "stale-caller-key" },
+    body: { ok: true },
+  });
+  assert.equal(
+    explicitIdempotencyHeaders[0]["idempotency-key"],
+    "explicit-idempotency-key",
+    "explicit idempotencyKey option must not be overridden by caller headers",
+  );
+
+  let repeated402PayCalls = 0;
+  let repeated402Attempts = 0;
+  await assert.rejects(
+    () =>
+      localX402Fetch("https://mock.agoragentic.test/api/x402/execute", {
+        fetchImpl: async () => {
+          repeated402Attempts += 1;
+          return jsonResponse(402, { error: "payment_required" }, {
+            "payment-required": encodePaymentRequired([{ scheme: "exact", network: "base" }]),
+          });
+        },
+        idempotencyKey: "repeated-402-idempotency-key",
+        pay: async () => {
+          repeated402PayCalls += 1;
+          return { authorizationHeader: "rejected-demo-authorization" };
+        },
+      }),
+    /Paid retry received HTTP 402/,
+  );
+  assert.equal(repeated402PayCalls, 1, "a second paid 402 must not call pay again");
+  assert.equal(repeated402Attempts, 2, "the helper should stop after the rejected paid retry");
+
+  const nestedReceiptChecklist = buildReceiptChecklist({
+    response: jsonResponse(200, { ok: true }),
+    payload: {
+      invocation_id: "inv_nested",
+      receipt: { receipt_id: "rcpt_nested" },
+    },
+    quoteId: "quote_nested",
+    idempotencyKey: "nested-idempotency-key",
+    paymentAttempted: false,
+  });
+  assert.equal(nestedReceiptChecklist.receiptId, "rcpt_nested");
+
+  const encodedReceiptHeader = Buffer.from(JSON.stringify({ receipt_id: "rcpt_header_structured" }), "utf8").toString("base64");
+  const headerReceiptChecklist = buildReceiptChecklist({
+    response: jsonResponse(200, { ok: true }, { "payment-receipt": encodedReceiptHeader }),
+    payload: { invocation_id: "inv_header" },
+    quoteId: "quote_header",
+    idempotencyKey: "header-idempotency-key",
+    paymentAttempted: true,
+  });
+  assert.equal(headerReceiptChecklist.receiptId, "rcpt_header_structured");
+
+  const failureToolResult = await executeForMcpTool({
+    task: "weather",
+    input: { city: "Lisbon" },
+    baseUrl: "https://mock.agoragentic.test",
+    fetchImpl: async () => jsonResponse(500, { error: "match_failed" }),
+    pay: async () => ({ authorizationHeader: "unused" }),
+  });
+  assert.equal(failureToolResult.ok, false);
+  assert.equal(failureToolResult.isError, true, "MCP failure results must set isError");
+
   console.log(JSON.stringify({
     demo: "x402 execute receipt checklist",
     helper: result.x402.helper,
@@ -548,7 +682,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
