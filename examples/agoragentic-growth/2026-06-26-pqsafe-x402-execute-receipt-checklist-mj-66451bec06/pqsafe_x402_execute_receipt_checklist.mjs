@@ -24,7 +24,7 @@ function buildUrl(baseUrl, path, params = {}) {
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") continue;
-    url.searchParams.set(key, String(value));
+    url.searchParams.set(key, typeof value === "object" ? JSON.stringify(value) : String(value));
   }
   return url;
 }
@@ -109,6 +109,13 @@ function firstPresent(...values) {
   return null;
 }
 
+function getHeader(headers, name) {
+  if (!headers) return null;
+  if (typeof headers.get === "function") return headers.get(name);
+  const normalized = lowerCaseHeaders(headers);
+  return normalized[String(name).toLowerCase()] ?? null;
+}
+
 function maskAuthorization(value) {
   if (!value) return null;
   if (value.length <= 16) return `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -155,6 +162,8 @@ function canonicalReceiptShape(payload = {}) {
     status: firstPresent(
       payload.status,
       payload.result?.status,
+      payload.success === true ? "success" : null,
+      payload.result?.success === true ? "success" : null,
       receipt.status,
       settlement.status,
     ),
@@ -278,9 +287,109 @@ async function resolveX402Fetch(explicit) {
     }
   }
 
-  throw new Error(
-    "Unable to load x402Fetch. Install the agoragentic package or add a local x402 client helper.",
-  );
+  return createInlineX402Fetch();
+}
+
+function createInlineX402Fetch() {
+  return async function inlineX402Fetch(url, options = {}) {
+    const {
+      fetchImpl = globalThis.fetch,
+      pay,
+      idempotencyKey,
+      method = "POST",
+      headers = {},
+      body,
+      signal,
+      maxNetworkRetries = 1,
+    } = options;
+
+    if (typeof fetchImpl !== "function") {
+      throw new Error("x402Fetch requires fetchImpl when global fetch is unavailable");
+    }
+    if (!idempotencyKey) {
+      throw new Error("x402Fetch requires an idempotencyKey");
+    }
+
+    const serializedBody = typeof body === "string" ? body : JSON.stringify(body ?? {});
+    let authorization = null;
+    let paymentAttempted = false;
+    let paymentAuthorized = false;
+    let networkRetriesUsed = 0;
+    let paidRequestAlreadyRejected = false;
+
+    for (;;) {
+      const requestHeaders = {
+        accept: "application/json",
+        "content-type": "application/json",
+        "idempotency-key": idempotencyKey,
+        ...lowerCaseHeaders(headers),
+      };
+      if (authorization) {
+        requestHeaders.authorization = authorization;
+      }
+
+      let response;
+      try {
+        response = await fetchImpl(url, {
+          method,
+          headers: requestHeaders,
+          body: serializedBody,
+          signal,
+        });
+      } catch (error) {
+        if (paymentAuthorized && networkRetriesUsed < maxNetworkRetries) {
+          networkRetriesUsed += 1;
+          continue;
+        }
+        throw error;
+      }
+
+      if (response.status !== 402) {
+        response.x402Meta = {
+          paymentAttempted,
+          paymentAuthorized,
+          networkRetriesUsed,
+        };
+        return response;
+      }
+
+      if (paidRequestAlreadyRejected || authorization) {
+        throw new Error("Paid x402 retry received another HTTP 402 response");
+      }
+      if (typeof pay !== "function") {
+        throw new Error("x402Fetch received HTTP 402 but no pay callback was supplied");
+      }
+
+      const paymentRequiredHeader = getHeader(response.headers, "payment-required");
+      const responseText = typeof response.text === "function" ? await response.text() : "";
+      const challenge = safeJsonParse(paymentRequiredHeader || responseText, {});
+      const challengeFingerprint = crypto
+        .createHash("sha256")
+        .update(paymentRequiredHeader || responseText || String(url))
+        .digest("hex");
+      paymentAttempted = true;
+      const payment = await pay(paymentRequiredHeader || challenge, {
+        url: String(url),
+        method,
+        body,
+        idempotencyKey,
+        challenge,
+        challengeFingerprint,
+      });
+
+      authorization = firstPresent(
+        payment?.authorizationHeader,
+        payment?.authorization,
+        payment?.paymentAuthorization,
+        payment?.token,
+      );
+      if (!authorization) {
+        throw new Error("pay callback must return an authorization token");
+      }
+      paymentAuthorized = true;
+      paidRequestAlreadyRejected = true;
+    }
+  };
 }
 
 export class PQSafeX402ChecklistClient {
@@ -298,13 +407,12 @@ export class PQSafeX402ChecklistClient {
       throw new Error("fetchImpl is required");
     }
 
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH), {
-      method: "POST",
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { task, input, ...constraints }), {
+      method: "GET",
       headers: {
-        "content-type": "application/json",
+        accept: "application/json",
         ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
       },
-      body: JSON.stringify({ task, input, constraints }),
     });
 
     const { json, text } = await readJsonResponse(response);
@@ -479,6 +587,45 @@ async function selfTest() {
   assert.equal(result.payload.receipt.id, "rcpt_demo_001");
   assert.equal(result.checklist.summary.failed, 0, "receipt checklist should pass in self-test");
   assert.equal(result.x402Meta.networkRetriesUsed, 1, "helper should report one authorized network retry");
+
+  const matchCalls = [];
+  const matchClient = new PQSafeX402ChecklistClient({
+    baseUrl: DEFAULT_BASE_URL,
+    fetchImpl: async (url, init = {}) => {
+      matchCalls.push({ url: String(url), method: init.method || "GET", body: init.body });
+      return new SimpleResponse(200, { "content-type": "application/json" }, { quote_id: "quote_match_demo" });
+    },
+    x402Fetch: async () => {
+      throw new Error("match() must not invoke x402Fetch");
+    },
+  });
+  const match = await matchClient.match(
+    "buyer.match.example",
+    { objective: "preview PQSafe x402 route" },
+    { max_cost: "0.02", require_receipt: true },
+  );
+  const matchUrl = new URL(matchCalls[0].url);
+  assert.equal(match.quote_id, "quote_match_demo");
+  assert.equal(matchCalls[0].method, "GET", "match previews should use GET");
+  assert.equal(matchCalls[0].body, undefined, "match previews should not send a JSON body");
+  assert.equal(matchUrl.pathname, MATCH_PATH);
+  assert.equal(matchUrl.searchParams.get("task"), "buyer.match.example");
+  assert.equal(matchUrl.searchParams.get("max_cost"), "0.02");
+  assert.equal(matchUrl.searchParams.get("require_receipt"), "true");
+
+  const successChecklist = buildReceiptChecklist({
+    response: new SimpleResponse(200, { "x-receipt-id": "rcpt_success_true" }, {}),
+    payload: {
+      success: true,
+      invocation_id: "inv_success_true",
+      route: { provider_id: "pqsafe-demo-provider" },
+      receipt: { id: "rcpt_success_true" },
+    },
+    request: { idempotencyKey: "success-true-idempotency-key" },
+    x402Meta: { paymentAttempted: true, paymentAuthorized: true, networkRetriesUsed: 0 },
+  });
+  assert.equal(successChecklist.summary.failed, 0, "success=true should count as terminal evidence");
+  assert.equal(successChecklist.observed.status, "success");
 
   return {
     demo: "pqsafe execute buyer retry checklist",
