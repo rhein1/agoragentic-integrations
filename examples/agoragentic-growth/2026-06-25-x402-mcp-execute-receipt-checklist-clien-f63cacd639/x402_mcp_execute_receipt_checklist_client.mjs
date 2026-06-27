@@ -60,7 +60,7 @@ export class X402McpExecuteReceiptChecklistClient {
         mcp_server: request.server,
         tool_name: request.tool,
         buyer: request.buyer,
-        max_price_usdc: request.maxPriceUsdc,
+        max_cost: request.maxCost ?? request.maxPriceUsdc,
       })}`,
       { headers: this.buildCommonHeaders() }
     );
@@ -79,12 +79,8 @@ export class X402McpExecuteReceiptChecklistClient {
 
     const existing = input.sessionId ? await this.receiptStore.load(input.sessionId) : null;
     const state = existing || createState(input);
-    if (existing && existing.quote_id !== input.quoteId) {
-      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
-    }
-
     const body = {
-      quote_id: state.quote_id,
+      quote_id: input.quoteId,
       input: {
         transport: 'mcp',
         server: input.server,
@@ -92,8 +88,20 @@ export class X402McpExecuteReceiptChecklistClient {
         arguments: input.arguments || {},
       },
     };
+    if (existing && existing.quote_id !== input.quoteId) {
+      throw new Error(`existing session ${state.session_id} is bound to quote ${existing.quote_id}, not ${input.quoteId}`);
+    }
+    if (existing?.request_body && stableStringify(existing.request_body) !== stableStringify(body)) {
+      throw new Error(`existing session ${state.session_id} is bound to a different execute request body`);
+    }
+    if (existing && hasTerminalEvidence(existing)) {
+      appendTimeline(state, 'cached_terminal', 'returning cached terminal session without re-executing');
+      await this.receiptStore.save(state);
+      return this.buildResult(state, state.result_snapshot || {});
+    }
 
     const x402Fetch = await this.x402FetchPromise;
+    const runtimeAuthorization = { current: null };
     state.request_body = cloneJson(body);
     appendTimeline(state, 'initial_request', 'execute() request prepared');
     await this.receiptStore.save(state);
@@ -112,9 +120,12 @@ export class X402McpExecuteReceiptChecklistClient {
             state.attempt_count = Math.max(state.attempt_count, ctx.attemptNumber);
           }
           if (ctx.phase === 'initial' && ctx.response?.status === 402) {
-            state.payment_required_header = getHeader(ctx.response.headers, 'payment-required');
+            state.payment_required_header = getHeader(ctx.response.headers, 'payment-required') || getHeader(ctx.response.headers, 'x-payment-required');
             appendTimeline(state, 'payment_required', `402 received on attempt ${ctx.attemptNumber}`);
           } else if (ctx.phase === 'paid_retry' && ctx.response) {
+            if (ctx.responseBody) {
+              mergeResponseEvidence(state, ctx.responseBody, ctx.response);
+            }
             appendTimeline(state, 'paid_response', `paid retry returned HTTP ${ctx.response.status}`);
           } else if (ctx.error) {
             appendTimeline(state, 'transient_error', ctx.error.message || String(ctx.error));
@@ -123,9 +134,9 @@ export class X402McpExecuteReceiptChecklistClient {
         },
         pay: async (paymentRequired, requestContext) => {
           state.payment_required_header = paymentRequired;
-          if (state.payment_authorization) {
+          if (runtimeAuthorization.current) {
             appendTimeline(state, 'payment_reused', 'reusing cached payment authorization after prior 402');
-            return cloneJson(state.payment_authorization);
+            return cloneJson(runtimeAuthorization.current);
           }
           appendTimeline(state, 'authorizing_payment', 'calling pay exactly once for this session after HTTP 402');
           const authorization = await this.pay(paymentRequired, {
@@ -140,38 +151,26 @@ export class X402McpExecuteReceiptChecklistClient {
             attempt: requestContext.attemptNumber,
           });
           validateAuthorization(authorization);
-          state.payment_authorization = {
-            authorizationHeader: authorization.authorizationHeader || null,
-            paymentSignature: authorization.paymentSignature || null,
-            paymentId: authorization.paymentId || null,
-            receipt: authorization.receipt || null,
-            payer: authorization.payer || null,
-            chain: authorization.chain || null,
-          };
+          runtimeAuthorization.current = cloneJson(authorization);
+          state.payment_authorization = redactAuthorization(authorization);
           state.wallet_receipt = authorization.receipt || state.wallet_receipt;
           await this.receiptStore.save(state);
-          return cloneJson(state.payment_authorization);
+          return cloneJson(runtimeAuthorization.current);
         },
       });
+      const normalized = await normalizeX402FetchResult(result);
 
-      mergeResponseEvidence(state, result.responseBody, result.response);
-      state.attempt_count = Math.max(state.attempt_count, result.attempts || 1);
-      state.wallet_receipt = result.paymentAuthorization?.receipt || state.wallet_receipt;
-      if (result.paymentAuthorization) {
-        state.payment_authorization = {
-          authorizationHeader: result.paymentAuthorization.authorizationHeader || null,
-          paymentSignature: result.paymentAuthorization.paymentSignature || null,
-          paymentId: result.paymentAuthorization.paymentId || null,
-          receipt: result.paymentAuthorization.receipt || null,
-          payer: result.paymentAuthorization.payer || null,
-          chain: result.paymentAuthorization.chain || null,
-        };
+      mergeResponseEvidence(state, normalized.responseBody, normalized.response);
+      state.attempt_count = Math.max(state.attempt_count, normalized.attempts || 1);
+      state.wallet_receipt = normalized.paymentAuthorization?.receipt || state.wallet_receipt;
+      if (normalized.paymentAuthorization) {
+        state.payment_authorization = redactAuthorization(normalized.paymentAuthorization);
       }
-      appendTimeline(state, result.authorized ? 'retrying_paid_request' : 'succeeded', `terminal HTTP ${result.response.status}`);
+      appendTimeline(state, normalized.authorized ? 'retrying_paid_request' : 'succeeded', `terminal HTTP ${normalized.response.status}`);
       await this.tryReconcile(state);
       appendTimeline(state, state.receipt_snapshot || state.proof_snapshot ? 'reconciled' : 'succeeded', 'terminal response captured');
       await this.receiptStore.save(state);
-      return this.buildResult(state, result.responseBody);
+      return this.buildResult(state, normalized.responseBody);
     } catch (error) {
       if (error?.response) {
         const bodyPayload = error.responseBody || await safeJson(error.response);
@@ -352,6 +351,83 @@ async function resolveX402Fetch() {
   return createFallbackX402Fetch();
 }
 
+async function normalizeX402FetchResult(result) {
+  if (isResponseLike(result)) {
+    const responseBody = await safeJson(result.clone());
+    if (!result.ok) {
+      const terminal = new Error(`HTTP ${result.status}`);
+      terminal.response = result;
+      terminal.responseBody = responseBody;
+      terminal.attempts = 1;
+      throw terminal;
+    }
+    return {
+      ok: true,
+      authorized: Boolean(
+        getHeader(result.headers, 'payment-receipt')
+        || getHeader(result.headers, 'x-payment-receipt')
+        || getHeader(result.headers, 'payment-response')
+      ),
+      attempts: 1,
+      paymentAuthorization: null,
+      response: result,
+      responseBody,
+    };
+  }
+
+  if (!result || typeof result !== 'object' || !isResponseLike(result.response)) {
+    throw new Error('x402Fetch must return a Response or an object containing response');
+  }
+  const responseBody = result.responseBody ?? await safeJson(result.response.clone());
+  if (!result.response.ok) {
+    const terminal = new Error(`HTTP ${result.response.status}`);
+    terminal.response = result.response;
+    terminal.responseBody = responseBody;
+    terminal.attempts = result.attempts || 1;
+    terminal.authorization = result.paymentAuthorization || null;
+    throw terminal;
+  }
+  return {
+    ...result,
+    responseBody,
+  };
+}
+
+function isResponseLike(value) {
+  return Boolean(value && typeof value === 'object' && typeof value.clone === 'function' && typeof value.text === 'function');
+}
+
+function hasTerminalEvidence(state) {
+  return isTerminalReceiptStatus(readReceiptStatus(state.receipt_snapshot))
+    || isTerminalProofStatus(readProofStatus(state.proof_snapshot));
+}
+
+function stableStringify(value) {
+  return JSON.stringify(sortJson(value));
+}
+
+function sortJson(value) {
+  if (Array.isArray(value)) {
+    return value.map(sortJson);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortJson(value[key])]));
+}
+
+function redactAuthorization(authorization) {
+  if (!authorization) return null;
+  return {
+    authorizationHeader: authorization.authorizationHeader ? '[redacted]' : null,
+    paymentSignature: authorization.paymentSignature ? '[redacted]' : null,
+    paymentId: authorization.paymentId || null,
+    receipt: authorization.receipt || null,
+    payer: authorization.payer || null,
+    chain: authorization.chain || null,
+  };
+}
+
 function createFallbackX402Fetch() {
   return async function x402Fetch(url, options = {}) {
     const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -411,7 +487,7 @@ function createFallbackX402Fetch() {
           throw terminal;
         }
 
-        paidChallenge = getHeader(response.headers, 'payment-required');
+        paidChallenge = getHeader(response.headers, 'payment-required') || getHeader(response.headers, 'x-payment-required');
         if (!paidChallenge) {
           const terminal = new Error('HTTP 402 response missing payment-required header');
           terminal.response = response;
@@ -506,8 +582,8 @@ function mergeResponseEvidence(state, payload, response) {
   state.last_http_status = response.status;
   state.result_snapshot = payload;
   state.invocation_id = payload?.invocation_id || payload?.invocation?.id || state.invocation_id;
-  state.payment_receipt_header = getHeader(response.headers, 'payment-receipt') || state.payment_receipt_header;
-  state.payment_response_header = getHeader(response.headers, 'payment-response') || state.payment_response_header;
+  state.payment_receipt_header = getHeader(response.headers, 'payment-receipt') || getHeader(response.headers, 'x-payment-receipt') || state.payment_receipt_header;
+  state.payment_response_header = getHeader(response.headers, 'payment-response') || getHeader(response.headers, 'x-payment-response') || state.payment_response_header;
   state.receipt_id = extractReceiptId(state.payment_receipt_header, payload) || state.receipt_id;
 }
 
@@ -789,15 +865,21 @@ async function demo() {
   if (quote.quote_id !== 'quote_demo_123') {
     throw new Error(`unexpected preview quote: ${JSON.stringify(quote)}`);
   }
+  const matchCall = callLog.find((entry) => entry.url.includes('/api/x402/execute/match'));
+  const matchUrl = new URL(matchCall.url);
+  if (matchUrl.searchParams.get('max_cost') !== '0.0025' || matchUrl.searchParams.has('max_price_usdc')) {
+    throw new Error(`preview must use max_cost, saw ${matchUrl.search}`);
+  }
 
-  const result = await client.executeToolCall({
+  const executeInput = {
     server: 'docs-server',
     tool: 'search_docs',
     arguments: { query: 'x402 receipt checklist' },
     quoteId: quote.quote_id,
     sessionId: 'session_demo_001',
     idempotencyKey: 'demo-idempotency-key',
-  });
+  };
+  const result = await client.executeToolCall(executeInput);
 
   if (!result.ok) {
     throw new Error('result.ok was false');
@@ -807,6 +889,9 @@ async function demo() {
   }
   if (payCalls !== 1) {
     throw new Error(`expected 1 pay call, saw ${payCalls}`);
+  }
+  if (result.state.payment_authorization.authorizationHeader !== '[redacted]' || result.state.payment_authorization.paymentSignature !== '[redacted]') {
+    throw new Error('persisted payment authorization must be redacted');
   }
 
   const paidRequests = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute') && entry.headers.authorization?.startsWith('Bearer paid:'));
@@ -819,6 +904,52 @@ async function demo() {
   if (new Set(paidRequests.map((entry) => entry.headers['x-idempotency-key'])).size !== 1) {
     throw new Error('expected a stable idempotency key across retries');
   }
+  const executeCallsBeforeCachedRead = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute')).length;
+  const cached = await client.executeToolCall(executeInput);
+  const executeCallsAfterCachedRead = callLog.filter((entry) => entry.url.endsWith('/api/x402/execute')).length;
+  if (executeCallsBeforeCachedRead !== executeCallsAfterCachedRead || cached.state.phase !== 'cached_terminal') {
+    throw new Error('terminal session should be returned from cache without re-executing');
+  }
+  await client.executeToolCall({ ...executeInput, sessionId: 'session_demo_changed', arguments: { query: 'first body' } });
+  await assertRejects(
+    () => client.executeToolCall({ ...executeInput, sessionId: 'session_demo_changed', arguments: { query: 'changed body' } }),
+    /different execute request body/
+  );
+
+  let xHeaderPayCalls = 0;
+  const xHeaderClient = new X402McpExecuteReceiptChecklistClient({
+    baseUrl: 'https://demo.agoragentic.local',
+    receiptPollAttempts: 0,
+    x402Fetch: createFallbackX402Fetch(),
+    fetchImpl: async (url, options = {}) => {
+      const headers = normalizeHeaders(options.headers || {});
+      if (url.endsWith('/api/x402/execute') && !headers['payment-signature']) {
+        return jsonResponse(402, { error: 'payment required' }, { 'x-payment-required': 'x402:ZGVtb19jaGFsbGVuZ2U=' });
+      }
+      return jsonResponse(200, {
+        ok: true,
+        invocation_id: 'inv_x_header',
+        receipt: { receipt_id: 'rcpt_x_header' },
+      }, {
+        'x-payment-receipt': JSON.stringify({ receipt_id: 'rcpt_x_header' }),
+        'x-payment-response': JSON.stringify({ status: 'accepted' }),
+      });
+    },
+    pay: async () => {
+      xHeaderPayCalls += 1;
+      return { paymentSignature: 'sig:x-header-demo' };
+    },
+  });
+  const xHeaderResult = await xHeaderClient.executeToolCall({
+    server: 'docs-server',
+    tool: 'search_docs',
+    arguments: { query: 'x-prefixed payment headers' },
+    quoteId: 'quote_x_header',
+    sessionId: 'session_x_header',
+  });
+  if (xHeaderPayCalls !== 1 || xHeaderResult.state.receipt_id !== 'rcpt_x_header') {
+    throw new Error('x-prefixed payment challenge and receipt headers should be honored');
+  }
 
   console.log(JSON.stringify({
     quote,
@@ -830,6 +961,18 @@ async function demo() {
     execute_calls: callLog.filter((entry) => entry.url.endsWith('/api/x402/execute')).length,
     timeline: result.state.timeline,
   }, null, 2));
+}
+
+async function assertRejects(fn, pattern) {
+  try {
+    await fn();
+  } catch (error) {
+    if (!pattern.test(error.message || String(error))) {
+      throw new Error(`expected rejection matching ${pattern}, saw ${error.message || String(error)}`);
+    }
+    return;
+  }
+  throw new Error(`expected rejection matching ${pattern}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
