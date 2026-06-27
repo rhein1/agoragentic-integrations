@@ -111,9 +111,9 @@ async function localX402Fetch(url, options = {}) {
 
   while (true) {
     const requestHeaders = {
+      ...baseHeaders,
       accept: "application/json",
       "idempotency-key": idempotencyKey,
-      ...baseHeaders,
     };
 
     let requestBody = body;
@@ -152,6 +152,14 @@ async function localX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
+      if (cachedPayment) {
+        throw createHttpError("Paid retry was rejected with HTTP 402; refusing to reuse a rejected authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          authorizedPaymentReused: true,
+        });
+      }
       const paymentRequired = readHeader(response, "payment-required");
       if (!paymentRequired) {
         throw createHttpError("Received HTTP 402 without payment-required header", {
@@ -203,12 +211,14 @@ async function x402Fetch(url, options = {}) {
   }
 
   const response = await preferred.helper(url, options);
+  const helperMeta = response.x402Meta || {};
   response.x402Meta = {
+    ...helperMeta,
     helper: preferred.source,
-    paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-    paymentAuthorized: Boolean(readHeader(response, "payment-response") || readHeader(response, "payment-receipt")),
-    authorizedPaymentReused: true,
-    networkRetriesUsed: 0,
+    paymentAttempted: helperMeta.paymentAttempted ?? Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
+    paymentAuthorized: helperMeta.paymentAuthorized ?? Boolean(readHeader(response, "payment-response") || readHeader(response, "payment-receipt")),
+    authorizedPaymentReused: helperMeta.authorizedPaymentReused ?? true,
+    networkRetriesUsed: helperMeta.networkRetriesUsed ?? 0,
     idempotencyKey: options.idempotencyKey ?? null,
   };
   return response;
@@ -217,6 +227,8 @@ async function x402Fetch(url, options = {}) {
 function extractReceiptReference(payload, response) {
   return payload?.receipt_id
     ?? payload?.receipt?.id
+    ?? payload?.receipt?.receipt_id
+    ?? payload?.receipt?.receiptId
     ?? readHeader(response, "payment-receipt")
     ?? null;
 }
@@ -227,6 +239,8 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   const paymentResponse = readHeader(response, "payment-response");
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
   const cost = payload?.cost ?? payload?.price ?? payload?.price_usdc ?? null;
+  const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+  const quoteMatches = !returnedQuoteId || !quoteId || returnedQuoteId === quoteId;
 
   return {
     integration,
@@ -240,6 +254,7 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
       { item: "http_ok", status: response.ok ? "pass" : "fail", evidence: `HTTP ${response.status}` },
       { item: "idempotency_key_present", status: idempotencyKey ? "pass" : "fail", evidence: idempotencyKey || "missing" },
       { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
+      { item: "quote_binding", status: quoteMatches ? "pass" : "fail", evidence: returnedQuoteId ? `${returnedQuoteId} vs ${quoteId || "missing"}` : "no returned quote id" },
       { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
       { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
       { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
@@ -305,10 +320,10 @@ export class WayforthX402ExecuteBuyer {
 
   async match(constraints = {}) {
     const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, {
+      ...constraints,
       task: this.integration.task,
       seller: this.integration.seller,
       buyer: this.integration.buyer,
-      ...constraints,
     }), {
       method: "GET",
       headers: { accept: "application/json", ...this.headers },
@@ -337,8 +352,8 @@ export class WayforthX402ExecuteBuyer {
     const executePayload = {
       quote_id: quoteId,
       input: {
-        integration: this.integration,
         ...input,
+        integration: this.integration,
       },
     };
 
@@ -365,6 +380,16 @@ export class WayforthX402ExecuteBuyer {
         status: response.status,
         payload,
         idempotencyKey,
+      });
+    }
+    const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+    if (returnedQuoteId && returnedQuoteId !== quoteId) {
+      throw createHttpError("Execute response quote_id did not match requested quote_id", {
+        status: response.status,
+        payload,
+        idempotencyKey,
+        requestedQuoteId: quoteId,
+        returnedQuoteId,
       });
     }
 
@@ -402,9 +427,11 @@ export function createMockWayforthPaidFetch() {
   const state = {
     payCalls: 0,
     executeAttempts: 0,
+    matchQueries: [],
     idempotencyKeys: [],
     authHeaders: [],
     paymentSignatures: [],
+    executeBodies: [],
   };
   let dropOnceAfterAuthorization = true;
 
@@ -414,6 +441,7 @@ export function createMockWayforthPaidFetch() {
     const headers = lowerCaseHeaders(init.headers || {});
 
     if (target.pathname === MATCH_PATH && method === "GET") {
+      state.matchQueries.push(Object.fromEntries(target.searchParams.entries()));
       return jsonResponse(200, {
         quote_id: "quote_wayforth_demo_001",
         match: {
@@ -427,6 +455,7 @@ export function createMockWayforthPaidFetch() {
 
     if (target.pathname === EXECUTE_PATH && method === "POST") {
       state.executeAttempts += 1;
+      state.executeBodies.push(init.body ? JSON.parse(init.body) : null);
       state.idempotencyKeys.push(headers["idempotency-key"] ?? null);
       state.authHeaders.push(headers.authorization ?? null);
       state.paymentSignatures.push(headers["payment-signature"] ?? null);
@@ -472,6 +501,7 @@ async function demo() {
   const buyer = new WayforthX402ExecuteBuyer({
     baseUrl: "https://mock.agoragentic.test",
     fetchImpl,
+    headers: { "Idempotency-Key": "caller-stale-key" },
     maxNetworkRetries: 2,
     async pay(paymentRequired, request) {
       state.payCalls += 1;
@@ -488,15 +518,69 @@ async function demo() {
   const result = await buyer.execute({
     action: "fetch-checklist",
     listing_id: "listing_wayforth_docs_001",
+    integration: { seller: "attacker", buyer: "spoof" },
+  }, {
+    constraints: { task: "attacker/task", seller: "attacker", buyer: "spoof" },
   });
 
   assert.equal(state.payCalls, 1, "payment authorization should be created once");
   assert.equal(state.executeAttempts, 3, "expected initial 402, one network drop, then successful retry");
   assert.equal(new Set(state.idempotencyKeys).size, 1, "same idempotency key must be reused across retries");
+  assert.equal(state.idempotencyKeys[0], result.idempotencyKey, "caller idempotency header must not override tracked key");
+  assert.equal(state.matchQueries[0].task, buyer.integration.task, "match task must not be overridden");
+  assert.equal(state.matchQueries[0].seller, buyer.integration.seller, "match seller must not be overridden");
+  assert.equal(state.matchQueries[0].buyer, buyer.integration.buyer, "match buyer must not be overridden");
   assert.equal(state.authHeaders[1], state.authHeaders[2], "same authorization must be reused after network failure");
+  assert.deepEqual(state.executeBodies[0].input.integration, buyer.integration, "Wayforth routing fields must not be overridden");
   assert.equal(result.receiptChecklist.receiptId, "rcpt_wayforth_demo_001");
+  assert.equal(result.receiptChecklist.checks.find((entry) => entry.item === "quote_binding").status, "pass");
   assert.equal(result.receiptChecklist.checks.find((entry) => entry.item === "payment_receipt_header").status, "pass");
   assert.equal(result.x402.networkRetriesUsed, 1);
+
+  const nestedReceiptChecklist = buildReceiptChecklist({
+    response: jsonResponse(200, { ok: true }),
+    payload: { receipt: { receipt_id: "rcpt_nested_snake_case" } },
+    quoteId: "quote_wayforth_demo_001",
+    idempotencyKey: "idem_nested",
+    paymentAttempted: false,
+    integration: buyer.integration,
+  });
+  assert.equal(nestedReceiptChecklist.receiptId, "rcpt_nested_snake_case", "nested receipt.receipt_id must be recognized");
+
+  const mismatchedQuoteChecklist = buildReceiptChecklist({
+    response: jsonResponse(200, { ok: true }),
+    payload: { quote_id: "quote_other", receipt_id: "rcpt_other" },
+    quoteId: "quote_wayforth_demo_001",
+    idempotencyKey: "idem_mismatch",
+    paymentAttempted: true,
+    integration: buyer.integration,
+  });
+  assert.equal(mismatchedQuoteChecklist.checks.find((entry) => entry.item === "quote_binding").status, "fail");
+
+  let rejectedPayCalls = 0;
+  let rejectedAttempts = 0;
+  await assert.rejects(
+    localX402Fetch(buildUrl("https://mock.agoragentic.test", EXECUTE_PATH), {
+      fetchImpl: async (_url, init = {}) => {
+        rejectedAttempts += 1;
+        const headers = lowerCaseHeaders(init.headers || {});
+        return jsonResponse(402, { error: "payment_required" }, {
+          "payment-required": encodePaymentRequired([{ scheme: "exact", network: "base", maxAmountRequired: "15000", asset: "USDC" }]),
+          ...(headers.authorization ? { "payment-response": "rejected" } : {}),
+        });
+      },
+      method: "POST",
+      body: { quote_id: "quote_wayforth_demo_001", input: { action: "reject-after-payment" } },
+      idempotencyKey: "idem_rejected_paid_402",
+      async pay() {
+        rejectedPayCalls += 1;
+        return { authorizationHeader: "X402 rejected demo authorization" };
+      },
+    }),
+    /Paid retry was rejected/
+  );
+  assert.equal(rejectedPayCalls, 1, "rejected paid 402 must not call pay again");
+  assert.equal(rejectedAttempts, 2, "rejected paid 402 must stop after one paid retry");
 
   console.log(JSON.stringify({
     demo: "wayforth x402 execute receipt checklist",
