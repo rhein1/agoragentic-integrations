@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -20,6 +21,14 @@ function readHeader(source, name) {
   if (typeof source.get === "function") return source.get(name) ?? source.get(String(name).toLowerCase()) ?? null;
   const headers = lowerCaseHeaders(source.headers || source);
   return headers[String(name).toLowerCase()] ?? null;
+}
+
+function readAnyHeader(source, ...names) {
+  for (const name of names) {
+    const value = readHeader(source, name);
+    if (value) return value;
+  }
+  return null;
 }
 
 function buildUrl(baseUrl, path, query = {}) {
@@ -97,8 +106,8 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
@@ -134,7 +143,15 @@ async function localX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
-      const paymentRequired = readHeader(response, "payment-required");
+      if (cachedPayment) {
+        throw createHttpError("Paid retry was rejected with HTTP 402; refusing to reuse rejected payment authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          authorizedPaymentReused: true,
+        });
+      }
+      const paymentRequired = readAnyHeader(response, "payment-required", "x-payment-required");
       if (!paymentRequired) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
           status: 402,
@@ -178,10 +195,12 @@ async function x402Fetch(url, options = {}) {
   const preferred = await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
   const response = await preferred(url, options);
+  const existingMeta = response.x402Meta || {};
   response.x402Meta = {
-    paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-    paymentAuthorized: Boolean(readHeader(response, "payment-response")),
-    networkRetriesUsed: 0,
+    ...existingMeta,
+    paymentAttempted: existingMeta.paymentAttempted ?? Boolean(readAnyHeader(response, "payment-receipt", "x-payment-receipt") || readAnyHeader(response, "payment-response", "x-payment-response")),
+    paymentAuthorized: existingMeta.paymentAuthorized ?? Boolean(readAnyHeader(response, "payment-response", "x-payment-response")),
+    networkRetriesUsed: existingMeta.networkRetriesUsed ?? 0,
     idempotencyKey: options.idempotencyKey ?? null,
     helper: "agoragentic/x402-client",
   };
@@ -191,16 +210,21 @@ async function x402Fetch(url, options = {}) {
 function extractReceiptReference(payload, response) {
   return payload?.receipt_id
     ?? payload?.receipt?.id
+    ?? payload?.receipt?.receipt_id
+    ?? payload?.receipt?.receiptId
     ?? readHeader(response, "payment-receipt")
+    ?? readHeader(response, "x-payment-receipt")
     ?? null;
 }
 
 export function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, paymentAttempted }) {
   const receiptId = extractReceiptReference(payload, response);
-  const paymentReceipt = readHeader(response, "payment-receipt");
-  const paymentResponse = readHeader(response, "payment-response");
+  const paymentReceipt = readAnyHeader(response, "payment-receipt", "x-payment-receipt");
+  const paymentResponse = readAnyHeader(response, "payment-response", "x-payment-response");
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
   const cost = payload?.cost ?? payload?.price ?? payload?.price_usdc ?? null;
+  const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+  const quoteMatches = !returnedQuoteId || !quoteId || returnedQuoteId === quoteId;
 
   return {
     quoteId,
@@ -212,11 +236,12 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
     checks: [
       { item: "http_ok", status: response.ok ? "pass" : "fail", evidence: `HTTP ${response.status}` },
       { item: "idempotency_key_present", status: idempotencyKey ? "pass" : "fail", evidence: idempotencyKey || "missing" },
-      { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
+      { item: "receipt_reference", status: receiptId ? "pass" : (paymentAttempted ? "fail" : "warn"), evidence: receiptId || "missing" },
       { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
       { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
       { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
       { item: "price_visibility", status: cost === null ? "warn" : "pass", evidence: cost === null ? "missing" : String(cost) },
+      { item: "quote_binding", status: quoteMatches ? "pass" : "fail", evidence: returnedQuoteId ? `${returnedQuoteId} vs ${quoteId || "missing"}` : "no returned quote id" },
     ],
     uncertainty: [
       "This checklist only inspects buyer-visible HTTP evidence.",
@@ -262,7 +287,7 @@ export class X402ExecuteBuyer {
   }
 
   async match(task, constraints = {}) {
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { task, ...constraints }), {
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { ...(constraints || {}), task }), {
       method: "GET",
       headers: { accept: "application/json", ...this.headers },
     });
@@ -305,6 +330,15 @@ export class X402ExecuteBuyer {
 
     if (!response.ok) {
       throw createHttpError(`Execute failed with HTTP ${response.status}`, {
+        status: response.status,
+        payload,
+        idempotencyKey,
+      });
+    }
+
+    const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+    if (returnedQuoteId && returnedQuoteId !== quoteId) {
+      throw createHttpError(`Execute receipt quote mismatch: expected ${quoteId}, got ${returnedQuoteId}`, {
         status: response.status,
         payload,
         idempotencyKey,
@@ -427,6 +461,74 @@ async function demo() {
   assert.equal(result.receiptChecklist.checks.find((x) => x.item === "payment_receipt_header").status, "pass");
   assert.equal(result.x402.networkRetriesUsed, 1);
 
+  let matchUrl = null;
+  const matchBuyer = new X402ExecuteBuyer({
+    baseUrl: "https://mock.agoragentic.test",
+    fetchImpl: async (url) => {
+      matchUrl = new URL(url);
+      return jsonResponse(200, { quote_id: "quote_match_task" });
+    },
+  });
+  await matchBuyer.match("expected-task", { task: "malicious-override", segment: "demo" });
+  assert.equal(matchUrl.searchParams.get("task"), "expected-task", "constraints must not override the requested task");
+
+  let repeated402Attempts = 0;
+  let repeated402PayCalls = 0;
+  await assert.rejects(
+    localX402Fetch("https://mock.agoragentic.test/api/x402/execute", {
+      fetchImpl: async (_url, init = {}) => {
+        repeated402Attempts += 1;
+        const headers = lowerCaseHeaders(init.headers || {});
+        return jsonResponse(402, { error: headers.authorization ? "paid_retry_rejected" : "payment_required" }, {
+          "payment-required": encodePaymentRequired([{ scheme: "exact", network: "base", maxAmountRequired: "10000", asset: "USDC" }]),
+        });
+      },
+      pay: async () => {
+        repeated402PayCalls += 1;
+        return { authorizationHeader: "X402 rejected-demo-authorization" };
+      },
+      idempotencyKey: "repeated-402-idem",
+      method: "POST",
+      body: { quote_id: "quote_demo_paid_weather" },
+    }),
+    /Paid retry was rejected/
+  );
+  assert.equal(repeated402Attempts, 2, "paid 402 rejection should stop after the first paid retry");
+  assert.equal(repeated402PayCalls, 1, "paid 402 rejection must not authorize a second payment");
+
+  const nestedReceiptChecklist = buildReceiptChecklist({
+    response: jsonResponse(200, { ok: true }, { "payment-response": "accepted" }),
+    payload: {
+      quote_id: "quote_demo_paid_weather",
+      receipt: { receipt_id: "rcpt_nested_001" },
+    },
+    quoteId: "quote_demo_paid_weather",
+    idempotencyKey: "nested-receipt-idem",
+    paymentAttempted: true,
+  });
+  assert.equal(nestedReceiptChecklist.receiptId, "rcpt_nested_001");
+  assert.equal(nestedReceiptChecklist.checks.find((x) => x.item === "receipt_reference").status, "pass");
+
+  const mismatchBuyer = new X402ExecuteBuyer({
+    baseUrl: "https://mock.agoragentic.test",
+    fetchImpl: async (url, init = {}) => {
+      const target = new URL(url);
+      if (target.pathname === EXECUTE_PATH) {
+        return jsonResponse(200, {
+          quote_id: "quote_other",
+          invocation_id: "inv_quote_mismatch",
+          receipt_id: "rcpt_quote_mismatch",
+        }, { "payment-receipt": "rcpt_quote_mismatch" });
+      }
+      return jsonResponse(404, { error: "not_found" });
+    },
+    pay: async () => ({ authorizationHeader: "unused" }),
+  });
+  await assert.rejects(
+    mismatchBuyer.execute("weather", { city: "Lisbon" }, { quoteId: "quote_demo_paid_weather" }),
+    /quote mismatch/
+  );
+
   console.log(JSON.stringify({
     demo: "x402 execute receipt checklist",
     helper: result.x402.helper,
@@ -434,11 +536,17 @@ async function demo() {
     quoteId: result.quoteId,
     receiptChecklist: result.receiptChecklist,
     payload: result.payload,
-    assertions: "passed",
+    assertions: {
+      defaultFlow: "passed",
+      constraintsCannotOverrideTask: "passed",
+      repeatedPaid402FailsClosed: "passed",
+      nestedReceiptIdsRecognized: "passed",
+      quoteMismatchRejected: "passed",
+    },
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
