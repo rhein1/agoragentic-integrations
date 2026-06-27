@@ -139,14 +139,8 @@ class AgoragenticClient:
         latest_receipt_id = receipt_id
 
         while time.time() <= deadline:
-            if latest_receipt_id:
-                return ReceiptWaitResult(
-                    status_payload=latest_status,
-                    receipt_payload=self.receipt(latest_receipt_id),
-                )
-
             latest_status = self.status(invocation_id)
-            latest_receipt_id = latest_status.get("receipt_id") or latest_status.get("receipt") or latest_receipt_id
+            latest_receipt_id = _extract_receipt_id(latest_status) or latest_receipt_id
             state = str(latest_status.get("status", "")).lower()
 
             if latest_receipt_id and state not in RUNNING_STATES:
@@ -157,7 +151,8 @@ class AgoragenticClient:
 
             time.sleep(poll_interval_seconds)
 
-        receipt_payload = self.receipt(latest_receipt_id) if latest_receipt_id else None
+        latest_state = str(latest_status.get("status", "")).lower() if isinstance(latest_status, dict) else ""
+        receipt_payload = self.receipt(latest_receipt_id) if latest_receipt_id and latest_state and latest_state not in RUNNING_STATES else None
         return ReceiptWaitResult(
             status_payload=latest_status,
             receipt_payload=receipt_payload,
@@ -175,8 +170,23 @@ def _first_present(*values: Any) -> Any:
 def _extract_provider_name(source: Dict[str, Any]) -> Optional[str]:
     provider = source.get("provider")
     if isinstance(provider, dict):
-        return provider.get("name") or provider.get("id")
-    return provider or source.get("provider_name")
+        return provider.get("name") or provider.get("id") or provider.get("provider_id")
+    return provider or source.get("provider_name") or source.get("provider_id")
+
+
+def _extract_receipt_id(source: Any) -> Optional[str]:
+    if not isinstance(source, dict):
+        return None
+    for key in ("receipt_id", "receiptId", "id"):
+        value = source.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    receipt = source.get("receipt")
+    if isinstance(receipt, str) and receipt.strip():
+        return receipt.strip()
+    if isinstance(receipt, dict):
+        return _extract_receipt_id(receipt)
+    return None
 
 
 def normalize_receipt(receipt_payload: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -185,20 +195,22 @@ def normalize_receipt(receipt_payload: Optional[Dict[str, Any]]) -> Optional[Dic
 
     source = receipt_payload.get("receipt") if isinstance(receipt_payload.get("receipt"), dict) else receipt_payload
     usage = source.get("usage") if isinstance(source.get("usage"), dict) else {}
-    settlement = source.get("settlement") if isinstance(source.get("settlement"), dict) else {}
+    settlement_value = source.get("settlement")
+    settlement = settlement_value if isinstance(settlement_value, dict) else {}
+    settlement_status = settlement_value if isinstance(settlement_value, str) else _first_present(settlement.get("status"), settlement.get("state"), source.get("settlement_status"))
 
     return {
-        "receipt_id": _first_present(source.get("receipt_id"), source.get("id")),
+        "receipt_id": _extract_receipt_id(source),
         "invocation_id": source.get("invocation_id"),
         "provider": _extract_provider_name(source),
         "task": source.get("task"),
-        "status": _first_present(source.get("status"), settlement.get("status"), settlement.get("state")),
-        "cost_usdc": _first_present(source.get("cost"), source.get("price_charged"), source.get("amount")),
+        "status": _first_present(source.get("status"), settlement_status),
+        "cost_usdc": _first_present(source.get("cost"), source.get("price_charged"), source.get("amount"), source.get("cost_usdc")),
         "currency": source.get("currency") or "USDC",
         "created_at": _first_present(source.get("created_at"), source.get("timestamp")),
         "settlement": {
             "network": _first_present(settlement.get("network"), settlement.get("chain"), source.get("network"), source.get("chain")),
-            "status": _first_present(settlement.get("status"), settlement.get("state"), source.get("settlement_status")),
+            "status": settlement_status,
             "transaction_hash": _first_present(settlement.get("transaction_hash"), settlement.get("tx_hash"), settlement.get("tx"), source.get("transaction_hash"), source.get("tx_hash")),
         },
         "usage": {
@@ -218,7 +230,8 @@ def build_radar_record(
     radar_run_id: Optional[str] = None,
     radar_tags: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    normalized_receipt = normalize_receipt(receipt_payload)
+    inline_receipt = execution_payload.get("receipt") if isinstance(execution_payload.get("receipt"), dict) else None
+    normalized_receipt = normalize_receipt(receipt_payload if receipt_payload is not None else inline_receipt)
     output = _first_present(
         execution_payload.get("output"),
         execution_payload.get("result"),
@@ -233,7 +246,7 @@ def build_radar_record(
     invocation_id = _first_present(execution_payload.get("invocation_id"), normalized_receipt and normalized_receipt.get("invocation_id"))
     receipt_id = _first_present(
         execution_payload.get("receipt_id"),
-        execution_payload.get("receipt"),
+        _extract_receipt_id(execution_payload),
         normalized_receipt and normalized_receipt.get("receipt_id"),
     )
     cost_usdc = _first_present(
@@ -317,7 +330,7 @@ class AgoragenticRadarExecuteTool(BaseTool):
         client = self._client()
         execution_payload = client.execute(task=task, input_data=input_data or {}, max_cost=max_cost)
         receipt_payload = None
-        receipt_id = _first_present(execution_payload.get("receipt_id"), execution_payload.get("receipt"))
+        receipt_id = _extract_receipt_id(execution_payload)
 
         if receipt_id:
             receipt_payload = client.receipt(str(receipt_id))
@@ -484,6 +497,75 @@ def _self_test() -> Dict[str, Any]:
     assert payload["radar"]["run_id"] == "radar_run_001"
     assert "receipt_id=rcpt_radar_456" in payload["radar"]["audit_line"]
     assert len(session.requests) >= 3
+
+    scalar_receipt = normalize_receipt(
+        {
+            "receipt_id": "rcpt_free_0",
+            "invocation_id": "inv_free_0",
+            "provider_id": "flat.provider",
+            "provider_name": "Flat Provider",
+            "status": "completed",
+            "cost": 0,
+            "settlement": "settled",
+            "usage": {"requests": 0},
+        }
+    )
+    assert scalar_receipt is not None
+    assert scalar_receipt["cost_usdc"] == 0
+    assert scalar_receipt["provider"] == "Flat Provider"
+    assert scalar_receipt["status"] == "completed"
+    assert scalar_receipt["settlement"]["status"] == "settled"
+
+    inline_receipt_record = build_radar_record(
+        {
+            "status": "completed",
+            "task": "inline receipt",
+            "invocation_id": "inv_inline",
+            "provider_id": "inline.provider",
+            "receipt": {
+                "receipt_id": "rcpt_inline",
+                "provider_id": "inline.provider",
+                "settlement": "settled",
+                "cost_usdc": 0,
+            },
+        },
+        receipt_payload=None,
+    )
+    assert inline_receipt_record["receipt_id"] == "rcpt_inline"
+    assert inline_receipt_record["provider"] == "inline.provider"
+    assert inline_receipt_record["cost_usdc"] == 0
+
+    running_session = _MockSession()
+
+    def running_request(method: str, url: str, **kwargs: Any) -> _MockResponse:
+        running_session.requests.append({"method": method, "url": url, "json": kwargs.get("json")})
+        if url.endswith("/api/execute/status/inv_running") and method == "GET":
+            return _MockResponse({"status": "running", "invocation_id": "inv_running", "receipt_id": "rcpt_allocated_early"})
+        return _MockResponse({"message": f"Unhandled route: {method} {url}"}, status_code=404)
+
+    running_session.request = running_request  # type: ignore[method-assign]
+    running_client = AgoragenticClient(
+        api_key="amk_test",
+        base_url="https://mock.agoragentic.local",
+        session=running_session,
+    )
+    running_wait = running_client.wait_for_receipt(
+        "inv_running",
+        poll_interval_seconds=0.0,
+        timeout_seconds=0.01,
+    )
+    assert running_wait.warning
+    assert running_wait.receipt_payload is None
+    assert running_wait.status_payload and running_wait.status_payload["status"] == "running"
+    assert not any(req["url"].endswith("/api/commerce/receipts/rcpt_allocated_early") for req in running_session.requests)
+
+    payload["regression_assertions"] = {
+        "zero_cost_preserved": True,
+        "scalar_settlement_preserved": True,
+        "flat_provider_fields_preserved": True,
+        "inline_receipt_object_not_used_as_url": True,
+        "running_receipt_not_returned": True,
+    }
     return payload
 
 
