@@ -1,9 +1,10 @@
 // demo — moves no real funds
 import crypto from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
-const MATCH_PATH = "/api/match";
-const EXECUTE_PATH = "/api/execute";
+const MATCH_PATH = "/api/x402/execute/match";
+const EXECUTE_PATH = "/api/x402/execute";
 
 function stableId(prefix = "x402") {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -23,6 +24,14 @@ function readHeader(response, name) {
   }
   const headers = lowerCaseHeaders(response.headers);
   return headers[String(name).toLowerCase()] ?? null;
+}
+
+function readAnyHeader(response, ...names) {
+  for (const name of names) {
+    const value = readHeader(response, name);
+    if (value) return value;
+  }
+  return null;
 }
 
 function buildUrl(baseUrl, path, query = null) {
@@ -144,11 +153,15 @@ function normalizeLiteLLMResponse(payload, fallbackModel) {
 
 function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
   const paymentReceipt = readHeader(response, "payment-receipt");
-  const paymentResponse = readHeader(response, "payment-response");
-  const paymentAttempted = Boolean(response?.x402Meta?.paymentAttempted || paymentReceipt || paymentResponse);
-  const invocationId = payload?.invocation_id ?? payload?.invocationId ?? payload?.result?.id ?? null;
-  const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? null;
+  const paymentResponse = readAnyHeader(response, "payment-response", "x-payment-response");
+  const effectivePaymentReceipt = paymentReceipt || readHeader(response, "x-payment-receipt");
+  const paymentAttempted = Boolean(response?.x402Meta?.paymentAttempted || effectivePaymentReceipt || paymentResponse);
+  const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
+  const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? payload?.receipt?.id ?? effectivePaymentReceipt ?? null;
   const settlement = payload?.settlement ?? payload?.receipt?.settlement ?? null;
+  const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
+  const quoteMatches = !returnedQuoteId || !quoteId || returnedQuoteId === quoteId;
+  const failedSettlement = typeof settlement === "string" && ["failed", "error", "cancelled", "canceled", "rejected"].includes(settlement.toLowerCase());
 
   const checks = [
     {
@@ -163,12 +176,12 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
     },
     {
       item: "payment_receipt_header_present",
-      status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip",
-      evidence: paymentAttempted ? (paymentReceipt ?? "header missing") : "no payment challenge observed",
+      status: paymentAttempted ? (effectivePaymentReceipt ? "pass" : "fail") : "skip",
+      evidence: paymentAttempted ? (effectivePaymentReceipt ?? "header missing") : "no payment challenge observed",
     },
     {
       item: "receipt_reference_present",
-      status: receiptId ? "pass" : "warn",
+      status: receiptId ? "pass" : (paymentAttempted ? "fail" : "warn"),
       evidence: receiptId ?? "response omitted receipt_id",
     },
     {
@@ -178,9 +191,14 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
     },
     {
       item: "settlement_state_is_informational_only",
-      status: settlement ? "pass" : "skip",
+      status: failedSettlement ? "fail" : (settlement ? "pass" : "skip"),
       evidence: settlement ?? "settlement field absent",
       note: settlement ? "Treat broadcast/submitted settlement as informational until independently verified." : undefined,
+    },
+    {
+      item: "quote_binding",
+      status: quoteMatches ? "pass" : "fail",
+      evidence: returnedQuoteId ? `${returnedQuoteId} vs ${quoteId ?? "missing"}` : "no returned quote id",
     },
     {
       item: "quote_reference_present",
@@ -192,7 +210,7 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
   return {
     ok: checks.every((check) => check.status !== "fail"),
     paymentAttempted,
-    paymentReceipt,
+    paymentReceipt: effectivePaymentReceipt,
     paymentResponse,
     quoteId,
     idempotencyKey,
@@ -215,11 +233,19 @@ export class LiteLLMX402ExecuteReceiptChecklist {
     this.apiKey = options.apiKey ?? process.env.AGORAGENTIC_API_KEY ?? null;
     this.defaultPay = options.pay;
     this.idempotencyKeyFactory = options.idempotencyKeyFactory ?? (() => stableId("litellm-x402"));
-    this.x402FetchPromise = resolveX402Fetch(options.x402Fetch);
+    this.x402FetchCandidate = options.x402Fetch;
+    this.x402FetchImpl = null;
 
     if (typeof this.fetchImpl !== "function") {
       throw new Error("fetchImpl is required");
     }
+  }
+
+  async getX402Fetch() {
+    if (!this.x402FetchImpl) {
+      this.x402FetchImpl = await resolveX402Fetch(this.x402FetchCandidate);
+    }
+    return this.x402FetchImpl;
   }
 
   defaultHeaders() {
@@ -259,7 +285,7 @@ export class LiteLLMX402ExecuteReceiptChecklist {
       signal,
     } = request;
 
-    const x402Fetch = await this.x402FetchPromise;
+    const x402Fetch = await this.getX402Fetch();
     const resolvedTask = task ?? `litellm.chat.completions.${model ?? "unknown"}`;
     const matchPayload = quoteId ? null : await this.match({ task: resolvedTask, constraints });
     const resolvedQuoteId = quoteId ?? matchPayload?.quote_id ?? matchPayload?.quote?.quote_id ?? null;
@@ -267,24 +293,32 @@ export class LiteLLMX402ExecuteReceiptChecklist {
       throw new Error("execute() requires quote_id from options.quoteId or match()");
     }
 
-    const response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
-      fetchImpl: this.fetchImpl,
-      pay,
-      idempotencyKey,
-      method: "POST",
-      signal,
-      headers: this.defaultHeaders(),
-      body: {
-        quote_id: resolvedQuoteId,
-        input: {
-          model,
-          messages,
-          metadata,
-          ...input,
+    let response;
+    try {
+      response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
+        fetchImpl: this.fetchImpl,
+        pay,
+        idempotencyKey,
+        method: "POST",
+        signal,
+        headers: this.defaultHeaders(),
+        body: {
+          quote_id: resolvedQuoteId,
+          input: {
+            model,
+            messages,
+            metadata,
+            ...input,
+          },
         },
-      },
-      maxNetworkRetries: 1,
-    });
+        maxNetworkRetries: 1,
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && !error.idempotencyKey) {
+        error.idempotencyKey = idempotencyKey;
+      }
+      throw error;
+    }
 
     const payload = await readJsonResponse(response);
     if (!response.ok) {
@@ -424,12 +458,22 @@ function createLocalX402Fetch() {
         }
 
         sawPaymentChallenge = true;
-        const paymentRequiredHeader = readHeader(response, "payment-required");
+        if (paymentAuthorized) {
+          const error = new Error("Paid retry was rejected with HTTP 402; refusing to reuse rejected payment authorization");
+          error.idempotencyKey = idempotencyKey;
+          error.paymentAttempted = true;
+          throw error;
+        }
+        const paymentRequiredHeader = readAnyHeader(response, "payment-required", "x-payment-required");
         if (!paymentRequiredHeader) {
-          throw new Error("Received HTTP 402 without payment-required header");
+          const error = new Error("Received HTTP 402 without payment-required header");
+          error.idempotencyKey = idempotencyKey;
+          throw error;
         }
         if (typeof pay !== "function") {
-          throw new Error("Paid call requires a caller-supplied pay callback");
+          const error = new Error("Paid call requires a caller-supplied pay callback");
+          error.idempotencyKey = idempotencyKey;
+          throw error;
         }
         if (!paymentAuthorized) {
           paymentAuthorized = await pay(paymentRequiredHeader, {
@@ -447,7 +491,10 @@ function createLocalX402Fetch() {
           });
         }
       } catch (error) {
-        if (paymentAuthorized && networkRetriesUsed < maxNetworkRetries) {
+        if (error && typeof error === "object" && !error.idempotencyKey) {
+          error.idempotencyKey = idempotencyKey;
+        }
+        if (paymentAuthorized && !error?.paymentAttempted && networkRetriesUsed < maxNetworkRetries) {
           networkRetriesUsed += 1;
           continue;
         }
@@ -611,6 +658,122 @@ export async function runSelfTest() {
     throw new Error(`Expected output text to include echoed request, got ${result.outputText}`);
   }
 
+  const noReceiptChecklist = buildReceiptChecklist({
+    response: attachX402Meta(new SimpleResponse(200, { "payment-response": "paid" }, { success: true }), {
+      paymentAttempted: true,
+    }),
+    payload: { success: true, quote_id: "quote_litellm_demo_001" },
+    quoteId: "quote_litellm_demo_001",
+    idempotencyKey: "litellm-no-receipt",
+  });
+  if (noReceiptChecklist.ok) {
+    throw new Error("Expected paid checklist without receipt evidence to fail");
+  }
+
+  const failedSettlementChecklist = buildReceiptChecklist({
+    response: attachX402Meta(new SimpleResponse(200, {
+      "payment-receipt": "receipt_failed_demo",
+      "payment-response": "paid",
+    }, {}), { paymentAttempted: true }),
+    payload: {
+      quote_id: "quote_litellm_demo_001",
+      invocation_id: "inv_failed_demo",
+      receipt_id: "rcpt_failed_demo",
+      settlement: "failed",
+    },
+    quoteId: "quote_litellm_demo_001",
+    idempotencyKey: "litellm-failed-settlement",
+  });
+  if (failedSettlementChecklist.ok) {
+    throw new Error("Expected failed settlement state to fail the checklist");
+  }
+
+  const mismatchedQuoteChecklist = buildReceiptChecklist({
+    response: attachX402Meta(new SimpleResponse(200, {
+      "payment-receipt": "receipt_quote_mismatch",
+      "payment-response": "paid",
+    }, {}), { paymentAttempted: true }),
+    payload: {
+      quote_id: "quote_other",
+      invocation_id: "inv_quote_mismatch",
+      receipt_id: "rcpt_quote_mismatch",
+      settlement: "submitted",
+    },
+    quoteId: "quote_litellm_demo_001",
+    idempotencyKey: "litellm-quote-mismatch",
+  });
+  if (mismatchedQuoteChecklist.ok) {
+    throw new Error("Expected returned quote mismatch to fail the checklist");
+  }
+
+  const modelIdOnlyChecklist = buildReceiptChecklist({
+    response: new SimpleResponse(200, { "content-type": "application/json" }, {}),
+    payload: { result: { id: "chatcmpl_model_response_only" } },
+    quoteId: "quote_litellm_demo_001",
+    idempotencyKey: "litellm-model-id-only",
+  });
+  if (modelIdOnlyChecklist.invocationId !== null) {
+    throw new Error("Model response ids must not be treated as invocation ids");
+  }
+
+  const localX402Fetch = createLocalX402Fetch();
+  let paid402Attempts = 0;
+  let paid402PayCalls = 0;
+  try {
+    await localX402Fetch(`${DEFAULT_BASE_URL}${EXECUTE_PATH}`, {
+      fetchImpl: async (_url, init = {}) => {
+        paid402Attempts += 1;
+        const headers = lowerCaseHeaders(init.headers || {});
+        return new SimpleResponse(402, {
+          "payment-required": JSON.stringify({ type: "x402", quote_id: "quote_litellm_demo_001" }),
+        }, {
+          error: headers.authorization ? "paid_retry_rejected" : "payment_required",
+        });
+      },
+      pay: async () => {
+        paid402PayCalls += 1;
+        return { authorizationHeader: "X402 demo-authorization paid-reject" };
+      },
+      idempotencyKey: "litellm-paid-402-idem",
+      body: { quote_id: "quote_litellm_demo_001" },
+    });
+    throw new Error("Expected repeated paid 402 to fail closed");
+  } catch (error) {
+    if (!String(error.message).includes("Paid retry was rejected")) {
+      throw error;
+    }
+    if (error.idempotencyKey !== "litellm-paid-402-idem") {
+      throw new Error(`Expected idempotency key on paid 402 error, got ${error.idempotencyKey}`);
+    }
+    if (paid402Attempts !== 2 || paid402PayCalls !== 1) {
+      throw new Error(`Expected one authorization and two attempts, got attempts=${paid402Attempts} payCalls=${paid402PayCalls}`);
+    }
+  }
+
+  const generatedKeyClient = new LiteLLMX402ExecuteReceiptChecklist({
+    baseUrl: DEFAULT_BASE_URL,
+    fetchImpl: mock.fetchImpl,
+    x402Fetch: async () => {
+      throw new Error("simulated x402 transport failure");
+    },
+    idempotencyKeyFactory: () => "litellm-generated-error-key",
+  });
+  try {
+    await generatedKeyClient.execute({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "fail after generated key" }],
+      quoteId: "quote_litellm_demo_001",
+    });
+    throw new Error("Expected x402 transport failure");
+  } catch (error) {
+    if (!String(error.message).includes("simulated x402 transport failure")) {
+      throw error;
+    }
+    if (error.idempotencyKey !== "litellm-generated-error-key") {
+      throw new Error(`Expected generated idempotency key on thrown error, got ${error.idempotencyKey}`);
+    }
+  }
+
   return {
     ok: true,
     quoteId: result.quoteId,
@@ -620,10 +783,18 @@ export async function runSelfTest() {
     receiptChecklist: result.receiptChecklist,
     modelResponse: result.modelResponse,
     retryGuidance: result.retryGuidance,
+    regressionAssertions: {
+      paidChecklistRequiresReceiptEvidence: true,
+      failedSettlementFailsChecklist: true,
+      quoteMismatchFailsChecklist: true,
+      modelIdsAreNotInvocationIds: true,
+      repeatedPaid402FailsClosed: true,
+      generatedIdempotencyKeySurfacedOnErrors: true,
+    },
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
