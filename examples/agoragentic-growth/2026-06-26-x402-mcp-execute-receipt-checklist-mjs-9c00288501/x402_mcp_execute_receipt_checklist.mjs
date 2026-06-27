@@ -125,8 +125,8 @@ async function localX402Fetch(url, options = {}) {
     const requestHeaders = {
       accept: "application/json",
       ...baseHeaders,
-      "idempotency-key": idempotencyKey,
     };
+    requestHeaders["idempotency-key"] = idempotencyKey;
 
     let requestBody = body;
 
@@ -180,15 +180,13 @@ async function localX402Fetch(url, options = {}) {
           paymentAttempted: sawPaymentChallenge,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(paymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
-          idempotencyKey,
-        }));
-      }
+      cachedPayment = normalizePayResult(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
@@ -484,6 +482,7 @@ export async function executeForMcpTool({
           type: "text",
           text: JSON.stringify({
             ok: false,
+            isError: true,
             task,
             idempotencyKey,
             error: classified,
