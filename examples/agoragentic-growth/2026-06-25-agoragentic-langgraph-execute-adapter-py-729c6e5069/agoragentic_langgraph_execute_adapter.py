@@ -9,6 +9,7 @@ minimal local runner when langgraph is unavailable.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import time
 import uuid
@@ -65,7 +66,7 @@ class AgoragenticExecutionFailed(AgoragenticAPIError):
     """Raised when execute() reaches a failed terminal state."""
 
 
-class AgoragenticTimeout(AgoragenticError):
+class AgoragenticTimeout(AgoragenticAPIError):
     """Raised when execution never reaches a terminal state."""
 
 
@@ -134,6 +135,7 @@ class AgoragenticLangGraphClient:
         self.max_status_checks = max_status_checks
         self.sleep = sleep
         self.retryable_status_codes = frozenset(retryable_status_codes)
+        self.last_request_attempts = 0
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -146,6 +148,18 @@ class AgoragenticLangGraphClient:
         if attempt_index <= 0:
             return
         self.sleep(self.backoff_base * (2 ** (attempt_index - 1)))
+
+    @staticmethod
+    def _stable_json(value: Any) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+    @classmethod
+    def _idempotency_key(cls, task: str, input_data: Mapping[str, Any], constraints: Mapping[str, Any]) -> str:
+        fingerprint = hashlib.sha256(
+            cls._stable_json({"task": task, "input": dict(input_data), "constraints": dict(constraints)}).encode("utf-8")
+        ).hexdigest()[:24]
+        slug = "".join(ch.lower() if ch.isalnum() else "_" for ch in task).strip("_") or "task"
+        return f"idem_{slug}_{fingerprint}"
 
     @staticmethod
     def _safe_payload(response: requests.Response) -> Any:
@@ -174,6 +188,15 @@ class AgoragenticLangGraphClient:
             return value.strip().lower()
         return ""
 
+    @classmethod
+    def _is_failed_execution_payload(cls, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        if payload.get("success") is False or payload.get("ok") is False:
+            return True
+        status = cls._execution_status(payload)
+        return status in FAILED_EXECUTION_STATUSES
+
     @staticmethod
     def _invocation_id(payload: Any) -> Optional[str]:
         if not isinstance(payload, dict):
@@ -198,6 +221,8 @@ class AgoragenticLangGraphClient:
                 value = nested.get(key)
                 if isinstance(value, str) and value.strip():
                     return value.strip()
+        if isinstance(nested, str) and nested.strip():
+            return nested.strip()
         return None
 
     def _request(
@@ -220,6 +245,7 @@ class AgoragenticLangGraphClient:
         last_status_code: Optional[int] = None
 
         for attempt in range(self.max_retries + 1):
+            self.last_request_attempts = attempt + 1
             try:
                 response = self.session.request(
                     method=method,
@@ -235,7 +261,7 @@ class AgoragenticLangGraphClient:
                         message="Agoragentic request failed after retries",
                         payload={"error": str(exc), "path": path, "method": method},
                     ) from exc
-                self._sleep_for_attempt(attempt)
+                self._sleep_for_attempt(attempt + 1)
                 continue
 
             payload = self._safe_payload(response)
@@ -245,7 +271,7 @@ class AgoragenticLangGraphClient:
             last_payload = payload
             last_status_code = response.status_code
             if response.status_code in retryable_codes and attempt < self.max_retries:
-                self._sleep_for_attempt(attempt)
+                self._sleep_for_attempt(attempt + 1)
                 continue
 
             message = self._extract_error_message(payload) or f"Agoragentic request failed for {path}"
@@ -284,7 +310,23 @@ class AgoragenticLangGraphClient:
             "input": input_data or {},
             "constraints": constraints or {},
         }
-        execution = self._request("POST", "/api/execute", json=payload, timeout=self.execute_timeout)
+        idempotency_key = self._idempotency_key(task, input_data or {}, constraints or {})
+        execution = self._request(
+            "POST",
+            "/api/execute",
+            json=payload,
+            timeout=self.execute_timeout,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        attempts = self.last_request_attempts
+        if isinstance(execution, dict):
+            execution.setdefault("_adapter_attempts", attempts)
+            execution.setdefault("_adapter_idempotency_key", idempotency_key)
+        if self._is_failed_execution_payload(execution):
+            raise AgoragenticExecutionFailed(
+                message=self._extract_error_message(execution) or "Agoragentic execution failed",
+                payload=execution,
+            )
         if not wait_for_completion:
             return execution
 
@@ -307,6 +349,16 @@ class AgoragenticLangGraphClient:
         for _ in range(checks_remaining):
             self.sleep(interval)
             execution = self.status(invocation_id)
+            attempts += self.last_request_attempts
+            if isinstance(execution, dict):
+                execution.setdefault("_adapter_attempts", attempts)
+                execution.setdefault("_adapter_idempotency_key", idempotency_key)
+                execution.setdefault("invocation_id", invocation_id)
+            if self._is_failed_execution_payload(execution):
+                raise AgoragenticExecutionFailed(
+                    message=self._extract_error_message(execution) or "Agoragentic execution failed",
+                    payload=execution,
+                )
             status = self._execution_status(execution)
             if status in SUCCESS_EXECUTION_STATUSES or not status:
                 return execution
@@ -316,7 +368,15 @@ class AgoragenticLangGraphClient:
                     payload=execution,
                 )
 
-        raise AgoragenticTimeout(f"Execution {invocation_id} did not complete after {checks_remaining} status checks")
+        raise AgoragenticTimeout(
+            message=f"Execution {invocation_id} did not complete after {checks_remaining} status checks",
+            payload={
+                "invocation_id": invocation_id,
+                "status": status or "timeout",
+                "_adapter_attempts": attempts,
+                "_adapter_idempotency_key": idempotency_key,
+            },
+        )
 
     def status(self, invocation_id: str) -> Dict[str, Any]:
         if not invocation_id or not invocation_id.strip():
@@ -400,7 +460,7 @@ class LangGraphExecuteAdapter:
             invocation_id=invocation_id,
             remote_receipt_id=remote_receipt_id,
             remote_receipt=remote_receipt,
-            attempts=max(1, self.client.max_retries + 1),
+            attempts=max(1, int((result or {}).get("_adapter_attempts") or 1)),
             input_preview=self._preview_map(input_data or {}),
             output_preview=self._preview_map((result or {}).get("output", result or {})),
             error=error,
@@ -632,11 +692,13 @@ def _test_success_graph_receipt() -> None:
     assert result["result"]["output"] == {"answer": "done"}
     assert result["receipt"]["remote_receipt_id"] == "rcpt-123"
     assert result["receipt"]["remote_receipt"]["kind"] == "demo_receipt"
+    assert result["receipt"]["attempts"] == 3
     assert len(session.calls) == 4
+    assert session.calls[0]["headers"]["Idempotency-Key"].startswith("idem_summarize_customer_notes_")
     assert session.calls[1]["url"].endswith("/api/execute/status/inv-123")
     assert session.calls[2]["url"].endswith("/api/execute/status/inv-123")
     assert session.calls[3]["url"].endswith("/api/commerce/receipts/rcpt-123")
-    assert sleeps == [0.0]
+    assert sleeps == [0.0, 0.0]
 
 
 def _test_failure_graph_routes_recovery() -> None:
@@ -675,7 +737,97 @@ def _test_failure_graph_routes_recovery() -> None:
     assert result["status"] == "error"
     assert "provider timeout" in result["error"]
     assert result["recovery"]["recommended_action"].startswith("Inspect receipt.error")
-    assert result["receipt"]["status"] == "error"
+    assert result["receipt"]["status"] == "failed"
+
+
+def _test_documented_execute_failure_payload() -> None:
+    session = _FakeSession([_FakeResponse(200, {"success": False, "error": "budget approval required"})])
+    client = AgoragenticLangGraphClient(
+        api_key="amk_test",
+        session=session,
+        sleep=lambda _: None,
+        poll_interval=0.0,
+        backoff_base=0.0,
+        max_retries=1,
+    )
+    adapter = LangGraphExecuteAdapter(client)
+    graph = build_execute_graph(adapter)
+
+    result = graph.invoke(
+        {
+            "task": "summarize customer notes",
+            "input": {"text": "hello world"},
+            "constraints": {"max_cost": 0.05},
+        }
+    )
+
+    assert result["status"] == "error"
+    assert "budget approval required" in result["error"]
+    assert result["receipt"]["attempts"] == 1
+
+
+def _test_string_receipt_reference() -> None:
+    session = _FakeSession(
+        [
+            _FakeResponse(200, {"invocation_id": "inv-string", "status": "completed", "receipt": "rcpt-string"}),
+            _FakeResponse(200, {"receipt_id": "rcpt-string", "kind": "demo_receipt"}),
+        ]
+    )
+    client = AgoragenticLangGraphClient(
+        api_key="amk_test",
+        session=session,
+        sleep=lambda _: None,
+        poll_interval=0.0,
+        backoff_base=0.0,
+        max_retries=1,
+    )
+    adapter = LangGraphExecuteAdapter(client)
+    graph = build_execute_graph(adapter)
+
+    result = graph.invoke(
+        {
+            "task": "summarize customer notes",
+            "input": {"text": "hello world"},
+            "constraints": {"max_cost": 0.05},
+        }
+    )
+
+    assert result["status"] == "completed"
+    assert result["receipt"]["remote_receipt_id"] == "rcpt-string"
+    assert session.calls[1]["url"].endswith("/api/commerce/receipts/rcpt-string")
+
+
+def _test_timeout_preserves_invocation_id() -> None:
+    session = _FakeSession(
+        [
+            _FakeResponse(200, {"invocation_id": "inv-timeout", "status": "queued"}),
+            _FakeResponse(200, {"invocation_id": "inv-timeout", "status": "queued"}),
+        ]
+    )
+    client = AgoragenticLangGraphClient(
+        api_key="amk_test",
+        session=session,
+        sleep=lambda _: None,
+        poll_interval=0.0,
+        backoff_base=0.0,
+        max_retries=1,
+        max_status_checks=1,
+    )
+    adapter = LangGraphExecuteAdapter(client)
+    graph = build_execute_graph(adapter)
+
+    result = graph.invoke(
+        {
+            "task": "summarize customer notes",
+            "input": {"text": "hello world"},
+            "constraints": {"max_cost": 0.05},
+        }
+    )
+
+    assert result["status"] == "error"
+    assert result["receipt"]["invocation_id"] == "inv-timeout"
+    assert result["recovery"]["invocation_id"] == "inv-timeout"
+    assert result["receipt"]["attempts"] == 2
 
 
 def _demo_success_run() -> Dict[str, Any]:
@@ -733,6 +885,9 @@ def _demo_success_run() -> Dict[str, Any]:
 def main() -> None:
     _test_success_graph_receipt()
     _test_failure_graph_routes_recovery()
+    _test_documented_execute_failure_payload()
+    _test_string_receipt_reference()
+    _test_timeout_preserves_invocation_id()
     demo = _demo_success_run()
     print(json.dumps({"langgraph_installed": HAS_LANGGRAPH, "demo_result": demo}, indent=2, sort_keys=True))
 
