@@ -93,7 +93,14 @@ class X402ReceiptChecklistClient:
                 current_headers["PAYMENT-SIGNATURE"] = payment_token
                 current_headers["X-RETRY-ATTEMPT"] = str(attempt)
 
-            status_code, headers, body = self._post_json("/api/x402/execute", request_body, current_headers)
+            try:
+                status_code, headers, body = self._post_json("/api/x402/execute", request_body, current_headers)
+            except RuntimeError as exc:
+                last_error = exc
+                if payment_token and attempt < self.max_attempts:
+                    time.sleep(self.sleep_seconds)
+                    continue
+                raise
 
             if status_code == 402:
                 if payment_token:
@@ -145,12 +152,24 @@ class X402ReceiptChecklistClient:
             quote = {}
         expected_amount = self._first_nonempty(
             result.payment_challenge.get("amount"),
+            result.payment_challenge.get("amount_usdc"),
+            result.payment_challenge.get("max_amount_usdc"),
             result.payment_challenge.get("maxAmountRequired"),
+            result.payment_challenge.get("maxAmountUsdc"),
+            result.payment_challenge.get("max_cost"),
+            result.payment_challenge.get("maxCost"),
         )
         expected_asset = self._first_nonempty(
             result.payment_challenge.get("asset"),
             result.payment_challenge.get("currency"),
             result.payment_challenge.get("token"),
+        )
+        expected_seller = self._first_nonempty(
+            result.payment_challenge.get("seller"),
+            result.payment_challenge.get("payTo"),
+            result.payment_challenge.get("pay_to"),
+            result.payment_challenge.get("receiver"),
+            result.payment_challenge.get("recipient"),
         )
         report = ReceiptChecklistReport()
 
@@ -164,8 +183,15 @@ class X402ReceiptChecklistClient:
         paid_asset = self._first_nonempty(receipt.get("asset"), receipt.get("currency"), receipt.get("token"))
         quote_id = self._first_nonempty(receipt.get("quote_id"), body.get("quote_id"), quote.get("id"))
         state = str(self._first_nonempty(receipt.get("status"), receipt.get("state"), "")).lower()
-        seller = self._first_nonempty(receipt.get("seller"), receipt.get("receiver"), receipt.get("pay_to"))
-        payment_hash = self._first_nonempty(receipt.get("payment_hash"), receipt.get("proof_hash"))
+        seller = self._first_nonempty(receipt.get("seller"), receipt.get("receiver"), receipt.get("pay_to"), receipt.get("payTo"))
+        payment_hash = self._first_nonempty(
+            receipt.get("payment_hash"),
+            receipt.get("proof_hash"),
+            receipt.get("tx_hash"),
+            receipt.get("transaction_hash"),
+            receipt.get("transactionId"),
+            receipt.get("transaction_id"),
+        )
         echoed_idempotency = self._first_nonempty(receipt.get("idempotency_key"), body.get("idempotency_key"))
 
         report.add("http success", 200 <= result.status_code < 300, f"status_code={result.status_code}")
@@ -187,7 +213,11 @@ class X402ReceiptChecklistClient:
             bool(paid_amount) and (expected_amount is None or str(paid_amount) == str(expected_amount)),
             f"amount={paid_amount!r}, expected={expected_amount!r}",
         )
-        report.add("seller present", bool(seller), f"seller={seller!r}")
+        report.add(
+            "seller matches challenge",
+            bool(seller) and (expected_seller is None or str(seller) == str(expected_seller)),
+            f"seller={seller!r}, expected={expected_seller!r}",
+        )
         report.add("payment proof hash present", bool(payment_hash), f"payment_hash={payment_hash!r}")
         report.add(
             "idempotency echoed",
@@ -217,11 +247,11 @@ class X402ReceiptChecklistClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8")
-                parsed = json.loads(raw or "{}")
+                parsed = _safe_json_object(raw)
                 return response.status, self._normalize_headers(response.headers), parsed if isinstance(parsed, dict) else {}
         except HTTPError as exc:
             raw = exc.read().decode("utf-8")
-            parsed = json.loads(raw or "{}")
+            parsed = _safe_json_object(raw)
             return exc.code, self._normalize_headers(exc.headers), parsed if isinstance(parsed, dict) else {}
         except URLError as exc:
             raise RuntimeError(f"network error: {exc}") from exc
@@ -263,13 +293,32 @@ class X402ReceiptChecklistClient:
 
     @classmethod
     def _extract_receipt(cls, headers: Mapping[str, str], body: Mapping[str, Any]) -> JsonDict:
+        header_receipt = cls._extract_header_receipt(headers)
+        payment_response = cls._extract_payment_response(headers)
         receipt = body.get("receipt")
         if isinstance(receipt, dict):
-            return dict(receipt)
+            merged = dict(receipt)
+            _merge_missing(merged, header_receipt)
+            _merge_missing(merged, payment_response)
+            return merged
+        if header_receipt:
+            _merge_missing(header_receipt, payment_response)
+            receipt_id = body.get("receipt_id") or body.get("id")
+            if receipt_id and not cls._first_nonempty(header_receipt.get("receipt_id"), header_receipt.get("id")):
+                header_receipt["receipt_id"] = receipt_id
+            return header_receipt
         identifier_receipt = cls._receipt_from_identifier(body.get("receipt_id") or body.get("id"))
         if identifier_receipt:
+            _merge_missing(identifier_receipt, payment_response)
             return identifier_receipt
 
+        if payment_response:
+            return payment_response
+
+        raise RuntimeError("success response missing receipt")
+
+    @classmethod
+    def _extract_header_receipt(cls, headers: Mapping[str, str]) -> Optional[JsonDict]:
         for key in ("x-payment-receipt", "payment-receipt"):
             header_value = headers.get(key)
             if not header_value:
@@ -277,8 +326,21 @@ class X402ReceiptChecklistClient:
             header_receipt = cls._receipt_from_header(header_value)
             if header_receipt:
                 return header_receipt
+        return None
 
-        raise RuntimeError("success response missing receipt")
+    @classmethod
+    def _extract_payment_response(cls, headers: Mapping[str, str]) -> Optional[JsonDict]:
+        for key in ("x-payment-response", "payment-response"):
+            header_value = headers.get(key)
+            if not header_value:
+                continue
+            try:
+                parsed = _decode_json_or_base64(header_value)
+                if isinstance(parsed, dict):
+                    return dict(parsed)
+            except Exception:
+                continue
+        return None
 
     @staticmethod
     def _normalize_headers(headers: Mapping[str, Any]) -> Dict[str, str]:
@@ -296,6 +358,8 @@ class X402ReceiptChecklistClient:
 
 
 def _decode_json_or_base64(value: str) -> Any:
+    if value.lower().startswith("x402:"):
+        value = value.split(":", 1)[1]
     try:
         return json.loads(value)
     except json.JSONDecodeError:
@@ -304,11 +368,31 @@ def _decode_json_or_base64(value: str) -> Any:
 
 
 def _normalize_object_or_first(value: Any) -> JsonDict:
+    if isinstance(value, dict) and isinstance(value.get("accepts"), list) and value["accepts"]:
+        value = value["accepts"][0]
+    if isinstance(value, dict) and isinstance(value.get("paymentRequirements"), list) and value["paymentRequirements"]:
+        value = value["paymentRequirements"][0]
     if isinstance(value, list) and value:
         value = value[0]
     if isinstance(value, dict):
         return dict(value)
     raise RuntimeError("value did not decode to an object or non-empty object array")
+
+
+def _safe_json_object(raw: str) -> JsonDict:
+    try:
+        parsed = json.loads(raw or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        return {"raw_body": raw}
+
+
+def _merge_missing(target: JsonDict, source: Optional[Mapping[str, Any]]) -> None:
+    if not isinstance(source, Mapping):
+        return
+    for key, value in source.items():
+        if key not in target or target[key] in (None, ""):
+            target[key] = value
 
 
 class DemoPaidCallServer(ThreadingHTTPServer):
