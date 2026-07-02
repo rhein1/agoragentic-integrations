@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const DEFAULT_RECEIPT_PATH = "/api/commerce/receipts/{receipt_id}";
@@ -19,12 +20,7 @@ async function loadX402Fetch() {
         }
       } catch {}
 
-      const fallback = await import("./x402-receipt-validation-adapter.mjs");
-      if (typeof fallback.x402FetchWithFallback === "function") {
-        return fallback.x402FetchWithFallback;
-      }
-
-      throw new Error("Unable to load x402Fetch helper from agoragentic/x402-client or ./x402-receipt-validation-adapter.mjs");
+      return x402FetchWithFallback;
     })();
   }
   return cachedX402FetchPromise;
@@ -46,6 +42,14 @@ function readHeader(headers, name) {
   return null;
 }
 
+function readAnyHeader(headers, ...names) {
+  for (const name of names) {
+    const value = readHeader(headers, name);
+    if (value !== null && value !== undefined && value !== "") return value;
+  }
+  return null;
+}
+
 function decodeStructuredValue(raw) {
   if (typeof raw !== "string" || !raw.trim()) return null;
   const attempts = [raw.trim()];
@@ -59,6 +63,32 @@ function decodeStructuredValue(raw) {
     } catch {}
   }
   return raw;
+}
+
+function extractReceiptId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const structured = typeof value === "string" ? decodeStructuredValue(value) : value;
+  if (typeof structured === "string") return structured.trim() || null;
+  return getPath(structured,
+    ["receipt_id"],
+    ["receiptId"],
+    ["payment_receipt_id"],
+    ["id"],
+    ["receipt", "receipt_id"],
+    ["receipt", "receiptId"],
+    ["receipt", "id"],
+    ["settlement", "receipt_id"],
+    ["settlement", "receiptId"],
+    ["settlement", "id"]
+  );
+}
+
+function normalizeSettlementStatus(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "object") {
+    return getPath(value, ["status"], ["settlement_status"], ["state"]) ?? null;
+  }
+  return String(value);
 }
 
 function getPath(source, ...paths) {
@@ -118,6 +148,63 @@ function joinUrl(baseUrl, path) {
   return new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`).toString();
 }
 
+async function x402FetchWithFallback(url, options = {}) {
+  const {
+    fetchImpl = globalThis.fetch,
+    pay,
+    idempotencyKey = randomUUID(),
+    method = "POST",
+    headers = {},
+    body,
+    signal,
+  } = options;
+
+  const firstHeaders = {
+    ...headers,
+    "Idempotency-Key": idempotencyKey,
+  };
+  const first = await fetchImpl(url, {
+    method,
+    headers: firstHeaders,
+    body: body === undefined || typeof body === "string" ? body : JSON.stringify(body),
+    signal,
+  });
+
+  if (first.status !== 402) return first;
+
+  const challengeHeader = readAnyHeader(first.headers, "payment-required", "x-payment-required", "PAYMENT-REQUIRED");
+  if (!challengeHeader) {
+    throw new Error("Received HTTP 402 without payment-required header");
+  }
+  if (typeof pay !== "function") {
+    throw new Error("pay callback is required after x402 payment challenge");
+  }
+
+  const payment = await pay(challengeHeader, { idempotencyKey, response: first });
+  const signature = typeof payment === "string"
+    ? payment
+    : payment?.paymentSignature ?? payment?.payment_signature ?? payment?.signature ?? payment?.authorization;
+
+  if (!signature) {
+    throw new Error("pay callback did not return a payment signature");
+  }
+
+  const paid = await fetchImpl(url, {
+    method,
+    headers: {
+      ...headers,
+      "Idempotency-Key": idempotencyKey,
+      "Payment-Signature": signature,
+    },
+    body: body === undefined || typeof body === "string" ? body : JSON.stringify(body),
+    signal,
+  });
+  if (paid.status === 402) {
+    throw new Error("Paid request received another HTTP 402 challenge; refusing to re-authorize payment");
+  }
+  return paid;
+}
+
 async function safeJson(response) {
   const text = await response.text();
   if (!text) return null;
@@ -137,23 +224,56 @@ function normalizeAmount(receiptSource, fallbackPayload, challenge) {
   const raw = normalizeAmountValue(
     getPath(receiptSource,
       ["receipt", "amount"],
+      ["receipt", "amount_usdc"],
+      ["receipt", "cost_usdc"],
+      ["receipt", "price_usdc"],
+      ["receipt", "max_amount_usdc"],
       ["amount"],
+      ["amount_usdc"],
       ["settlement", "amount"],
+      ["settlement", "amount_usdc"],
+      ["settlement", "cost_usdc"],
       ["payment", "amount"],
+      ["payment", "amount_usdc"],
       ["pricing", "amount"],
+      ["pricing", "amount_usdc"],
+      ["pricing", "price_usdc"],
+      ["pricing", "max_amount_usdc"],
+      ["cost_usdc"],
+      ["price_usdc"],
+      ["max_amount_usdc"],
       ["cost"]
     )
     ?? getPath(fallbackPayload,
       ["receipt", "amount"],
+      ["receipt", "amount_usdc"],
+      ["receipt", "cost_usdc"],
+      ["receipt", "price_usdc"],
+      ["receipt", "max_amount_usdc"],
       ["amount"],
+      ["amount_usdc"],
       ["settlement", "amount"],
+      ["settlement", "amount_usdc"],
+      ["settlement", "cost_usdc"],
       ["payment", "amount"],
+      ["payment", "amount_usdc"],
       ["pricing", "amount"],
+      ["pricing", "amount_usdc"],
+      ["pricing", "price_usdc"],
+      ["pricing", "max_amount_usdc"],
+      ["cost_usdc"],
+      ["price_usdc"],
+      ["max_amount_usdc"],
       ["cost"]
     )
     ?? getPath(challenge,
       ["amount"],
+      ["amount_usdc"],
       ["maxAmountRequired"],
+      ["max_amount_usdc"],
+      ["max_cost"],
+      ["maxCost"],
+      ["max_price_usdc"],
       ["value"]
     )
   );
@@ -210,27 +330,45 @@ function normalizeStructuredReceipt({
   const transactionId = normalizeTransactionId(
     getPath(source,
       ["receipt", "txHash"],
+      ["receipt", "tx_hash"],
       ["txHash"],
+      ["tx_hash"],
+      ["transaction_hash"],
       ["transaction_id"],
       ["transactionId"],
       ["payment", "txHash"],
+      ["payment", "tx_hash"],
+      ["payment", "transaction_hash"],
       ["payment", "transactionId"],
       ["settlement", "txHash"],
+      ["settlement", "tx_hash"],
+      ["settlement", "transaction_hash"],
       ["settlement", "transactionId"],
-      ["proof", "txHash"]
+      ["proof", "txHash"],
+      ["proof", "tx_hash"],
+      ["proof", "transaction_hash"]
     )
     ?? getPath(responsePayload,
       ["receipt", "txHash"],
+      ["receipt", "tx_hash"],
       ["txHash"],
+      ["tx_hash"],
+      ["transaction_hash"],
       ["transaction_id"],
       ["transactionId"],
       ["payment", "txHash"],
+      ["payment", "tx_hash"],
+      ["payment", "transaction_hash"],
       ["payment", "transactionId"],
       ["settlement", "txHash"],
+      ["settlement", "tx_hash"],
+      ["settlement", "transaction_hash"],
       ["settlement", "transactionId"]
     )
     ?? getPath(paymentResponse,
       ["txHash"],
+      ["tx_hash"],
+      ["transaction_hash"],
       ["transaction_id"],
       ["transactionId"]
     )
@@ -265,18 +403,20 @@ function normalizeStructuredReceipt({
     timestamp,
     amount,
     transaction_id: transactionId,
-    settlement_status: getPath(source,
+    settlement_status: normalizeSettlementStatus(getPath(source,
       ["receipt", "settlement"],
+      ["receipt", "settlement_status"],
       ["settlement"],
       ["settlement_status"],
       ["status"],
       ["payment", "status"]
     ) ?? getPath(responsePayload,
       ["receipt", "settlement"],
+      ["receipt", "settlement_status"],
       ["settlement"],
       ["settlement_status"],
       ["status"]
-    ) ?? null,
+    )),
     payer: getPath(source, ["receipt", "from"], ["from"], ["payer"], ["settlement", "payer"]) ?? null,
     payee: getPath(source, ["receipt", "to"], ["to"], ["payee"], ["settlement", "payee"]) ?? null,
     chain: getPath(source, ["receipt", "chain"], ["chain"], ["settlement", "chain"]) ?? null,
@@ -359,9 +499,9 @@ export async function validateX402Payment(url, options = {}) {
     maxNetworkRetries,
   });
 
-  const paymentRequiredHeader = readHeader(response.headers, "payment-required");
-  const paymentReceiptHeader = readHeader(response.headers, "payment-receipt");
-  const paymentResponseHeader = readHeader(response.headers, "payment-response");
+  const paymentRequiredHeader = readAnyHeader(response.headers, "payment-required", "x-payment-required", "PAYMENT-REQUIRED");
+  const paymentReceiptHeader = readAnyHeader(response.headers, "payment-receipt", "x-payment-receipt", "PAYMENT-RECEIPT");
+  const paymentResponseHeader = readAnyHeader(response.headers, "payment-response", "x-payment-response", "PAYMENT-RESPONSE");
   const responsePayload = await safeJson(response);
 
   if (!response.ok) {
@@ -384,10 +524,15 @@ export async function validateX402Payment(url, options = {}) {
 
   const receiptId = getPath(responseObject,
     ["receipt_id"],
+    ["receiptId"],
+    ["payment_receipt_id"],
     ["receipt", "receipt_id"],
+    ["receipt", "receiptId"],
     ["receipt", "id"],
+    ["settlement", "receipt_id"],
+    ["settlement", "receiptId"],
     ["settlement", "id"]
-  ) ?? paymentReceiptHeader;
+  ) ?? extractReceiptId(paymentReceiptHeader);
 
   const invocationId = getPath(responseObject,
     ["invocation_id"],
@@ -528,7 +673,7 @@ async function runSelfTest() {
   return receipt;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const receipt = await runSelfTest();
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
