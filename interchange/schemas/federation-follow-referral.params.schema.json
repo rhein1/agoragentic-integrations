@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/interchange/schemas/federation-follow-referral.params.schema.json",
+  "title": "federation/follow-referral Params",
+  "$comment": "Post-pin signature params are exactly relationship_id, remote_origin, and referral_id. The auth envelope is excluded and no extra params are signed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relationship_id",
+    "remote_origin",
+    "referral_id",
+    "auth"
+  ],
+  "properties": {
+    "relationship_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "remote_origin": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "referral_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "auth": {
+      "$ref": "./post-pin-auth.schema.json"
+    }
+  }
+}

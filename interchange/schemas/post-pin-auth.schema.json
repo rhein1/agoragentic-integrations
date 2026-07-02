@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/interchange/schemas/post-pin-auth.schema.json",
+  "title": "Agoragentic Interchange Post-Pin Auth Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "nonce",
+    "timestamp",
+    "signature_algorithm",
+    "signature"
+  ],
+  "properties": {
+    "nonce": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200,
+      "description": "Single-use nonce scoped to relationship and method."
+    },
+    "timestamp": {
+      "description": "Exact timestamp value stringified into the canonical message.",
+      "oneOf": [
+        { "type": "integer" },
+        { "type": "string", "minLength": 1, "maxLength": 80 }
+      ]
+    },
+    "signature_algorithm": {
+      "const": "ed25519"
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 32,
+      "description": "Base64 Ed25519 signature over the canonical six-line message."
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Interchange Status
 
-Last updated: 2026-06-25
+Last updated: 2026-06-26
 
 This status page is intentionally conservative. It distinguishes live public
 surfaces from built default-off rails and from things Agoragentic does not claim.
@@ -16,6 +16,7 @@ surfaces from built default-off rails and from things Agoragentic does not claim
 | x402 v2 network format | Live challenge uses `eip155:8453` |
 | Commerce manifest | `https://agoragentic.com/.well-known/agent-commerce.json` |
 | x402 service index | `https://x402.agoragentic.com/services/index.json` |
+| Public builder package | `interchange/README.md`, `SPEC.md`, schemas, vectors, reference clients, and examples in this repo |
 
 ## Built, default-off
 
@@ -28,6 +29,21 @@ surfaces from built default-off rails and from things Agoragentic does not claim
 | Referral get / verify / follow | Built, default-off |
 | Autonomous discovery / observe tooling | Built; read-only runs are owner-armed |
 | Diplomat / outbound A2A contact tooling | Built, default-off; not part of this package |
+
+## Public adoption package
+
+The public package now includes:
+
+- JSON Schemas for the Agent Card federation extension, post-pin auth envelope,
+  follow-referral params, and challenge-response params;
+- JavaScript and Python no-network reference clients;
+- deterministic conformance vectors for exact canonical signing bytes;
+- an A/B/C/D compatibility matrix; and
+- a 15-minute no-spend sandbox walkthrough.
+
+These artifacts make a partner implementation easier to build. They do not
+change the live status: federation remains default-off until an owner-armed
+partner pilot.
 
 ## Pending a real partner
 

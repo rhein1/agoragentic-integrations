@@ -43,6 +43,20 @@ All examples are Node 18+ and safe by default.
 | [`examples/verify-receipt`](./examples/verify-receipt/) | Calls the public receipt verifier with a supplied receipt id or JSON, or a demo missing id. | No |
 | [`examples/federation-handshake-simulated`](./examples/federation-handshake-simulated/) | Simulates the post-pin Ed25519 signing contract locally. | No |
 
+## Adoptable v0 package
+
+Use these files when you want to implement a compatible pilot endpoint instead
+of reverse-engineering the private runtime:
+
+| Artifact | Purpose |
+|---|---|
+| [`SPEC.md`](./SPEC.md) | v0 wire contract and exact signing rules. |
+| [`schemas/`](./schemas/) | JSON Schemas for the Agent Card federation extension, post-pin auth envelope, follow-referral params, and challenge-response params. |
+| [`conformance/vectors.json`](./conformance/vectors.json) | Deterministic canonical bytes and hashes for cross-implementation tests. |
+| [`clients/`](./clients/) | No-network JavaScript and Python reference helpers for canonicalization, `hashRef`, Agent Card shape, and challenge hash construction. |
+| [`COMPATIBILITY.md`](./COMPATIBILITY.md) | A/B/C/D targeting matrix: full federation peer, x402-payable service, A2A-reachable agent, discoverable-only listing. |
+| [`SANDBOX_WALKTHROUGH.md`](./SANDBOX_WALKTHROUGH.md) | 15-minute no-spend sandbox to validate a client before a real partner pilot. |
+
 Run the no-spend x402 preflight:
 
 ```bash
@@ -61,15 +75,27 @@ Run the local signing simulation:
 node interchange/examples/federation-handshake-simulated/simulate.mjs
 ```
 
+Run the conformance checks:
+
+```bash
+node interchange/clients/js/interchange-client.mjs
+python interchange/clients/python/interchange_client.py --self-test
+```
+
 ## Builder path
 
 1. Read [`STATUS.md`](./STATUS.md) so you know what is live versus built but
    default-off.
 2. Read [`SPEC.md`](./SPEC.md) for the public methods, x402 receipt flow, and
    post-pin signing contract.
-3. Use the examples to verify your client can read the live x402 challenge,
+3. Read [`COMPATIBILITY.md`](./COMPATIBILITY.md) to decide whether you are a
+   full federation peer, x402-payable service, A2A-reachable target, or
+   discoverable-only listing.
+4. Run [`SANDBOX_WALKTHROUGH.md`](./SANDBOX_WALKTHROUGH.md) and the conformance
+   vectors before attempting a live pilot.
+5. Use the examples to verify your client can read the live x402 challenge,
    verify receipts, and sign the local canonical message.
-4. For a real federation pilot, coordinate with the Agoragentic owner. A first
+6. For a real federation pilot, coordinate with the Agoragentic owner. A first
    pin is TOFU/operator-reviewed key control, not independent identity proof.
 
 ## Safety model
