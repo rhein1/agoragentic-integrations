@@ -74,6 +74,24 @@ function parsePaymentRequired(raw) {
   return [];
 }
 
+function normalizePayment(payment) {
+  if (!payment || typeof payment !== "object") {
+    throw new Error("pay callback must return an object with authorizationHeader or paymentSignature");
+  }
+  const authorizationHeader = payment.authorizationHeader || payment.authorization || null;
+  const paymentSignature = payment.paymentSignature || null;
+  if (!authorizationHeader && !paymentSignature) {
+    throw new Error("pay callback must return authorizationHeader or paymentSignature");
+  }
+  return { authorizationHeader, paymentSignature };
+}
+
+function attachPaymentHeaders(headers, payment) {
+  if (!payment) return;
+  if (payment.authorizationHeader) headers.authorization = payment.authorizationHeader;
+  if (payment.paymentSignature) headers["payment-signature"] = payment.paymentSignature;
+}
+
 function extractString(...values) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value;
@@ -120,14 +138,100 @@ async function loadX402Fetch() {
     }
   } catch {}
 
-  try {
-    const fallback = await import("./x402-receipt-validation-adapter.mjs");
-    if (typeof fallback.x402FetchWithFallback === "function") {
-      return { x402Fetch: fallback.x402FetchWithFallback, helperSource: "./x402-receipt-validation-adapter.mjs" };
-    }
-  } catch {}
+  return { x402Fetch: inlineX402Fetch, helperSource: "inline-fallback" };
+}
 
-  throw new Error("Unable to load x402Fetch helper from agoragentic/x402-client or ./x402-receipt-validation-adapter.mjs");
+async function inlineX402Fetch(url, options = {}) {
+  const {
+    fetchImpl = globalThis.fetch,
+    pay,
+    idempotencyKey = randomUUID(),
+    method = "GET",
+    headers = {},
+    body,
+    signal,
+    maxNetworkRetries = DEFAULT_MAX_NETWORK_RETRIES,
+  } = options;
+
+  const baseHeaders = lowerCaseHeaders(headers);
+  let payment = null;
+  let paymentRequired = null;
+  let challenge = null;
+  let networkRetriesUsed = 0;
+
+  while (true) {
+    const requestHeaders = {
+      accept: "application/json",
+      "idempotency-key": idempotencyKey,
+      ...baseHeaders,
+    };
+    attachPaymentHeaders(requestHeaders, payment);
+
+    try {
+      const response = await fetchImpl(url, {
+        method,
+        headers: requestHeaders,
+        body,
+        signal,
+      });
+
+      if (response.status !== 402) {
+        response.x402Meta = {
+          helper: "inline-fallback",
+          idempotencyKey,
+          paymentAttempted: Boolean(paymentRequired),
+          paymentAuthorized: Boolean(payment),
+          challenge,
+          paymentRequired,
+          networkRetriesUsed,
+        };
+        return response;
+      }
+
+      paymentRequired = readHeader(response.headers, "payment-required") || readHeader(response.headers, "x-payment-required");
+      if (!paymentRequired) {
+        throw new HttpStatusError("HTTP 402 missing payment-required header", {
+          status: 402,
+          idempotencyKey,
+        });
+      }
+      if (payment) {
+        throw new HttpStatusError("paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+          status: 402,
+          idempotencyKey,
+          body: { paymentRequired },
+        });
+      }
+      if (typeof pay !== "function") {
+        throw new HttpStatusError("HTTP 402 requires a caller-supplied pay callback", {
+          status: 402,
+          idempotencyKey,
+          body: { paymentRequired },
+        });
+      }
+
+      challenge = parsePaymentRequired(paymentRequired)[0] ?? null;
+      payment = normalizePayment(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body,
+        idempotencyKey,
+        challenge,
+      }));
+    } catch (error) {
+      if (typeof error?.status === "number") throw error;
+      if (!payment) throw error;
+      if (networkRetriesUsed >= maxNetworkRetries) {
+        error.name = error.name === "Error" ? "NetworkError" : error.name;
+        error.idempotencyKey = idempotencyKey;
+        error.networkRetriesUsed = networkRetriesUsed;
+        error.paymentRequired = paymentRequired;
+        throw error;
+      }
+      networkRetriesUsed += 1;
+    }
+  }
 }
 
 function classifyProof(proof) {
@@ -170,11 +274,20 @@ async function fetchProof(fetchImpl, baseUrl, invocationId, timeoutMs, attempts,
 function buildReceiptChecklist({ quoteId, idempotencyKey, response, payload, paymentChallenge, paymentResponse, proof }) {
   const receipt = payload?.receipt ?? {};
   const proofState = classifyProof(proof);
-  const receiptId = extractString(payload?.receipt_id, receipt?.receipt_id, receipt?.id, readHeader(response.headers, "payment-receipt"));
+  const receiptHeader = decodeStructuredValue(readHeader(response.headers, "payment-receipt"));
+  const receiptId = extractString(
+    payload?.receipt_id,
+    receipt?.receipt_id,
+    receipt?.id,
+    receiptHeader?.receipt_id,
+    receiptHeader?.id,
+    typeof receiptHeader === "string" ? receiptHeader : null,
+    readHeader(response.headers, "payment-receipt"),
+  );
   const invocationId = extractString(payload?.invocation_id, payload?.invocation?.id, receipt?.invocation_id);
   const receiptChallengeNonce = extractString(receipt?.challenge_nonce, receipt?.challengeNonce, receipt?.nonce);
   const responseChallengeNonce = extractString(paymentResponse?.challengeNonce, paymentResponse?.challenge_nonce, paymentResponse?.nonce);
-  const echoedIdempotencyKey = extractString(receipt?.idempotency_key, payload?.idempotency_key, readHeader(response.headers, "x-idempotency-key"));
+  const echoedIdempotencyKey = extractString(receipt?.idempotency_key, payload?.idempotency_key, readHeader(response.headers, "idempotency-key"), readHeader(response.headers, "x-idempotency-key"));
   const quotedId = extractString(payload?.quote_id, payload?.quote?.id, receipt?.quote_id);
   const checklist = [
     { item: "http_ok", ok: response.ok, evidence: `HTTP ${response.status}` },
@@ -280,6 +393,7 @@ export async function executeSampedBulterReceiptChecklist({
   const { x402Fetch, helperSource } = await loadX402Fetch();
   const { signal, cancel } = withDeadline(timeoutMs);
   let response;
+  let payload;
 
   try {
     response = await x402Fetch(joinUrl(baseUrl, EXECUTE_PATH), {
@@ -295,6 +409,7 @@ export async function executeSampedBulterReceiptChecklist({
       signal,
       maxNetworkRetries,
     });
+    payload = await safeJson(response);
   } catch (error) {
     cancel();
     if (error?.name === "AbortError" || /timed out/i.test(String(error?.message ?? ""))) {
@@ -305,7 +420,6 @@ export async function executeSampedBulterReceiptChecklist({
     cancel();
   }
 
-  const payload = await safeJson(response);
   if (!response.ok) {
     throw new HttpStatusError(`execute() failed with HTTP ${response.status}`, {
       status: response.status,
