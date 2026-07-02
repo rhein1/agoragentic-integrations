@@ -48,6 +48,16 @@ def ensure_mapping(value: Optional[Mapping[str, Any]], *, name: str) -> Dict[str
     return {str(k): deep_clone(v) for k, v in value.items()}
 
 
+def prepare_execution_config(config: Optional[Mapping[str, Any]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    if config is None:
+        return {}, {}
+    if not isinstance(config, Mapping):
+        raise TypeError("config must be a mapping")
+    execution_config = {str(k): v for k, v in config.items()}
+    receipt_config = {str(k): deep_clone(v) for k, v in config.items()}
+    return execution_config, receipt_config
+
+
 def compact_error(error: BaseException) -> Dict[str, Any]:
     return {
         "type": error.__class__.__name__,
@@ -98,7 +108,7 @@ def normalize_usage(raw: Optional[Mapping[str, Any]], *, input_value: Any, outpu
     return resolved
 
 
-def normalize_output_payload(result: Any) -> Tuple[Any, Dict[str, int], Dict[str, Any]]:
+def normalize_output_payload(result: Any, *, execution_input: Any) -> Tuple[Any, Dict[str, int], Dict[str, Any]]:
     metadata: Dict[str, Any] = {}
     if isinstance(result, Mapping):
         raw_usage = None
@@ -106,10 +116,10 @@ def normalize_output_payload(result: Any) -> Tuple[Any, Dict[str, int], Dict[str
             if isinstance(result.get(key), Mapping):
                 raw_usage = result[key]
                 break
-        normalized_usage = normalize_usage(raw_usage, input_value=result.get("input"), output_value=result)
+        normalized_usage = normalize_usage(raw_usage, input_value=execution_input, output_value=result)
         metadata["output_type"] = "mapping"
         return deep_clone(result), normalized_usage, metadata
-    normalized_usage = normalize_usage(None, input_value=None, output_value=result)
+    normalized_usage = normalize_usage(None, input_value=execution_input, output_value=result)
     metadata["output_type"] = type(result).__name__
     return deep_clone(result), normalized_usage, metadata
 
@@ -236,6 +246,52 @@ class SimpleLangfuseClient:
         return None
 
 
+class LangfuseObservation:
+    def __init__(self, client: Any, *, name: str, input_value: Any, metadata: Any, tags: Sequence[str], user_id: Optional[str], session_id: Optional[str]) -> None:
+        self.client = client
+        self.trace = None
+        self.span = None
+        self._context = None
+        self._records: List[Dict[str, Any]] = []
+        self.trace_id = uuid.uuid4().hex
+        self.span_id = uuid.uuid4().hex
+
+        if hasattr(client, "start_as_current_observation"):
+            self._context = client.start_as_current_observation(
+                name=name,
+                as_type="span",
+                input=input_value,
+                metadata={**dict(metadata or {}), "user_id": user_id, "session_id": session_id},
+            )
+            self.span = self._context.__enter__()
+            self.trace_id = str(getattr(self.span, "trace_id", self.trace_id))
+            self.span_id = str(getattr(self.span, "id", getattr(self.span, "observation_id", self.span_id)))
+            return
+
+        if hasattr(client, "trace"):
+            self.trace = client.trace(name=name, user_id=user_id, session_id=session_id, input=input_value, metadata=metadata, tags=tags)
+            self.trace_id = str(getattr(self.trace, "id", self.trace_id))
+            self.span = self.trace.span(name="local.langgraph.execute", input=input_value, metadata=metadata, tags=tags)
+            self.span_id = str(getattr(self.span, "id", self.span_id))
+            return
+
+        self.span = SimpleLangfuseSpan(self.trace_id, self.span_id, self._records)
+
+    def update(self, **payload: Any) -> None:
+        if hasattr(self.span, "update"):
+            self.span.update(**payload)
+
+    def event(self, **payload: Any) -> None:
+        if hasattr(self.span, "event"):
+            self.span.event(**payload)
+
+    def end(self, **payload: Any) -> None:
+        if hasattr(self.span, "end"):
+            self.span.end(**payload)
+        if self._context is not None:
+            self._context.__exit__(None, None, None)
+
+
 def build_langfuse_client() -> Any:
     try:
         from langfuse import Langfuse  # type: ignore
@@ -279,8 +335,8 @@ class LocalExecutionWrapper:
         if callable(graph):
             fn = graph
             if inspect.iscoroutinefunction(fn):
-                return await self._run_coro(fn(graph_input, config))
-            return await self._run_blocking(lambda: fn(graph_input, config))
+                return await self._run_coro(self._call_async_callable(fn, graph_input, config))
+            return await self._run_blocking(lambda: self._call_sync_callable(fn, graph_input, config))
         raise LocalExecutionError("graph must provide invoke(), ainvoke(), or be callable")
 
     async def _run_async(self, graph: Any, graph_input: Any, config: Optional[Mapping[str, Any]]) -> Any:
@@ -294,7 +350,32 @@ class LocalExecutionWrapper:
         return await asyncio.wait_for(coro, timeout=self.timeout_seconds)
 
     async def _run_blocking(self, fn: Callable[[], Any]) -> Any:
-        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=self.timeout_seconds)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, fn)
+
+    @staticmethod
+    def _callable_accepts_config(fn: Callable[..., Any]) -> bool:
+        try:
+            signature = inspect.signature(fn)
+        except (TypeError, ValueError):
+            return True
+        positional = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.kind in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        has_varargs = any(parameter.kind == parameter.VAR_POSITIONAL for parameter in signature.parameters.values())
+        return has_varargs or len(positional) >= 2 or "config" in signature.parameters
+
+    async def _call_async_callable(self, fn: Callable[..., Awaitable[Any]], graph_input: Any, config: Optional[Mapping[str, Any]]) -> Any:
+        if self._callable_accepts_config(fn):
+            return await fn(graph_input, config)
+        return await fn(graph_input)
+
+    def _call_sync_callable(self, fn: Callable[..., Any], graph_input: Any, config: Optional[Mapping[str, Any]]) -> Any:
+        if self._callable_accepts_config(fn):
+            return fn(graph_input, config)
+        return fn(graph_input)
 
 
 class LangGraphLangfuseLocalExecuteAdapter:
@@ -358,24 +439,19 @@ class LangGraphLangfuseLocalExecuteAdapter:
             raise TypeError("trace_data must be a mapping")
 
         normalized_trace = ensure_mapping(trace_data, name="trace_data")
-        normalized_config = ensure_mapping(config, name="config")
+        execution_config, normalized_config = prepare_execution_config(config)
         normalized_metadata = ensure_mapping(metadata, name="metadata")
         effective_actor = actor or str(normalized_trace.get("user_id") or self.actor)
         effective_workflow = workflow or str(normalized_trace.get("name") or self.workflow)
         execution_input = graph_input if graph_input is not None else normalized_trace.get("input", normalized_trace)
 
-        trace = self.langfuse.trace(
+        observation = LangfuseObservation(
+            self.langfuse,
             name=effective_workflow,
             user_id=normalized_trace.get("user_id"),
             session_id=normalized_trace.get("session_id"),
-            input=execution_input,
+            input_value=execution_input,
             metadata={**normalized_metadata, "source_trace": normalized_trace},
-            tags=list(tags or []),
-        )
-        span = trace.span(
-            name="local.langgraph.execute",
-            input=execution_input,
-            metadata={"config": normalized_config, **normalized_metadata},
             tags=list(tags or []),
         )
 
@@ -387,18 +463,18 @@ class LangGraphLangfuseLocalExecuteAdapter:
             output = await self.wrapper.run(
                 self.graph,
                 graph_input=execution_input,
-                config=normalized_config,
+                config=execution_config,
                 force_async=force_async,
             )
-            normalized_output, usage, output_meta = normalize_output_payload(output)
+            normalized_output, usage, output_meta = normalize_output_payload(output, execution_input=execution_input)
             finished_ns = time.time_ns()
             finished_at = utc_now_iso()
             cost = self._estimate_cost(usage)
             receipt = ExecutionReceipt(
                 schema=USAGE_RECEIPT_SCHEMA,
                 receipt_id=uuid.uuid4().hex,
-                trace_id=getattr(trace, "id", uuid.uuid4().hex),
-                span_id=getattr(span, "id", uuid.uuid4().hex),
+                trace_id=observation.trace_id,
+                span_id=observation.span_id,
                 status="completed",
                 started_at=started_at,
                 finished_at=finished_at,
@@ -418,8 +494,8 @@ class LangGraphLangfuseLocalExecuteAdapter:
                     **output_meta,
                 },
             )
-            span.update(output=normalized_output, metadata={"usage_receipt": asdict(receipt)})
-            span.end(level="DEFAULT", status_message="completed")
+            observation.update(output=normalized_output, metadata={"usage_receipt": asdict(receipt)})
+            observation.end(level="DEFAULT", status_message="completed")
             if hasattr(self.langfuse, "flush"):
                 self.langfuse.flush()
             response = ExecuteResponse(
@@ -451,8 +527,8 @@ class LangGraphLangfuseLocalExecuteAdapter:
             receipt = ExecutionReceipt(
                 schema=USAGE_RECEIPT_SCHEMA,
                 receipt_id=uuid.uuid4().hex,
-                trace_id=getattr(trace, "id", uuid.uuid4().hex),
-                span_id=getattr(span, "id", uuid.uuid4().hex),
+                trace_id=observation.trace_id,
+                span_id=observation.span_id,
                 status="failed",
                 started_at=started_at,
                 finished_at=finished_at,
@@ -473,8 +549,8 @@ class LangGraphLangfuseLocalExecuteAdapter:
                 error=error_payload,
             )
             try:
-                span.event(name="execution_error", level="ERROR", status_message=error_payload["message"], output=error_payload)
-                span.end(level="ERROR", status_message="failed")
+                observation.event(name="execution_error", level="ERROR", status_message=error_payload["message"], output=error_payload)
+                observation.end(level="ERROR", status_message="failed")
                 if hasattr(self.langfuse, "flush"):
                     self.langfuse.flush()
             except Exception:
