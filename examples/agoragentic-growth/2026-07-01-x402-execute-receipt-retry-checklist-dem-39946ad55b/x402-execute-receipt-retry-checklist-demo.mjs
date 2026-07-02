@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 const EXECUTE_PATH = "/api/x402/execute";
 const PROOF_PATH = (invocationId) => `/api/x402/invocations/${encodeURIComponent(invocationId)}/proof`;
@@ -200,6 +201,15 @@ function createInlineX402Fetch() {
             status: 402,
             idempotencyKey,
             paymentRequired,
+          });
+        }
+        if (cachedPayment) {
+          throw new HttpStatusError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+            status: 402,
+            idempotencyKey,
+            paymentRequired,
+            challenge: parsePaymentRequired(paymentRequired)[0] ?? null,
+            paymentAuthorized: true,
           });
         }
         if (!cachedPayment) {
@@ -699,7 +709,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const output = {
       ok: false,
