@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 const DEFAULT_EXECUTE_PATH = "/api/x402/execute";
@@ -122,6 +123,20 @@ function responseJson(status, body, headers = {}) {
   });
 }
 
+function attachPaymentHeaders(requestHeaders, { authorization, paymentSignature }) {
+  if (paymentSignature) {
+    requestHeaders["payment-signature"] = paymentSignature;
+    return;
+  }
+  if (authorization && requestHeaders.authorization) {
+    requestHeaders["payment-signature"] = authorization;
+    return;
+  }
+  if (authorization) {
+    requestHeaders.authorization = authorization;
+  }
+}
+
 async function inlineX402Fetch(url, options = {}) {
   const {
     fetchImpl = globalThis.fetch,
@@ -150,8 +165,7 @@ async function inlineX402Fetch(url, options = {}) {
       "idempotency-key": idempotencyKey,
       ...baseHeaders,
     };
-    if (authorization) requestHeaders.authorization = authorization;
-    if (paymentSignature) requestHeaders["payment-signature"] = paymentSignature;
+    attachPaymentHeaders(requestHeaders, { authorization, paymentSignature });
 
     let requestBody = body;
     if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
@@ -174,7 +188,7 @@ async function inlineX402Fetch(url, options = {}) {
 
       saw402 = true;
       if (authorization || paymentSignature) {
-        throw Object.assign(new Error("Paid request returned HTTP 402 again after authorization"), { status: 402, idempotencyKey });
+        throw Object.assign(new Error("paid request received another HTTP 402 challenge; refusing to re-authorize payment"), { status: 402, idempotencyKey });
       }
       const challenge = readHeader(response, "payment-required");
       if (!challenge) {
@@ -430,26 +444,18 @@ export class AdvancedAiAgentsAgoragenticExecuteWrapper {
 
   async match(request = {}) {
     assertPlainObject(request, "request");
-    const payload = {
-      task: request.task || this.defaultTask,
-      input: deepClone(request.input || {}),
-      constraints: {
-        ...deepClone(this.defaultConstraints),
-        ...deepClone(request.constraints || {}),
-      },
-      metadata: {
-        tool_name: request.toolName || null,
-        local_manifest_id: this.listingId,
-        ...deepClone(request.metadata || {}),
-      },
+    const constraints = {
+      ...deepClone(this.defaultConstraints),
+      ...deepClone(request.constraints || {}),
     };
+    const url = new URL(buildUrl(this.baseUrl, this.matchPath));
+    url.searchParams.set("task", request.task || this.defaultTask);
+    if (request.toolName) url.searchParams.set("tool_name", request.toolName);
+    if (Object.keys(constraints).length > 0) url.searchParams.set("constraints", JSON.stringify(constraints));
 
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, this.matchPath), {
-      method: "POST",
-      headers: {
-        ...this.buildHeaders({ "content-type": "application/json" }),
-      },
-      body: JSON.stringify(payload),
+    const response = await this.fetchImpl(url.toString(), {
+      method: "GET",
+      headers: this.buildHeaders(),
     });
 
     const matchPayload = await safeJson(response);
@@ -468,7 +474,10 @@ export class AdvancedAiAgentsAgoragenticExecuteWrapper {
     if (!this.tools.has(toolName)) {
       throw new Error(`Unknown local tool: ${toolName}`);
     }
-    assertPlainObject(request.input || {}, "request.input");
+    if (!Object.hasOwn(request, "input")) {
+      throw new TypeError("request.input is required before execute() can request payment");
+    }
+    assertPlainObject(request.input, "request.input");
 
     const idempotencyKey = request.idempotencyKey || crypto.randomUUID();
     const x402Fetch = await loadX402Fetch();
@@ -614,8 +623,8 @@ function createMockFetch() {
     if (pathname === DEFAULT_EXECUTE_PATH) {
       state.executeCalls += 1;
       state.lastExecuteHeaders = headers;
-      const auth = headers.authorization || headers["payment-signature"] || "";
-      if (!auth) {
+      const paymentProof = headers["payment-signature"] || (headers.authorization === "Bearer mock_paid_authorization" ? headers.authorization : null);
+      if (!paymentProof) {
         return responseJson(402, { ok: false, error: "payment_required" }, {
           "payment-required": JSON.stringify({
             challenge_id: "pc_demo_123",
@@ -707,7 +716,11 @@ export async function runSelfTest() {
   assert.equal(payCalls, 1, "payment authorization should be created once");
   assert.equal(state.executeCalls, 2, "execute should challenge once and succeed on retry");
   assert.ok(state.lastExecuteHeaders["idempotency-key"], "idempotency key header required");
-  assert.equal(state.lastExecuteHeaders.authorization, "Bearer mock_paid_authorization");
+  assert.equal(
+    state.lastExecuteHeaders.authorization === "Bearer mock_paid_authorization" ||
+      state.lastExecuteHeaders["payment-signature"] === "Bearer mock_paid_authorization",
+    true,
+  );
 
   return {
     ok: true,
@@ -788,7 +801,7 @@ async function main() {
   printJson(await runSelfTest(), args.pretty);
 }
 
-const isMain = import.meta.url === new URL(process.argv[1], "file:").href;
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   main().catch((error) => {
     const payload = {
