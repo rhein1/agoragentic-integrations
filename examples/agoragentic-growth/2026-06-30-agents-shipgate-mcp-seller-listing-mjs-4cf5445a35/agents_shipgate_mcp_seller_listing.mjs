@@ -8,6 +8,8 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.example";
 const DEFAULT_EXECUTE_PATH = "/v1/marketplace/execute";
+const SOURCE_PATH = "examples/agoragentic-growth/2026-06-30-agents-shipgate-mcp-seller-listing-mjs-4cf5445a35/agents_shipgate_mcp_seller_listing.mjs";
+const MIN_PRICE_USDC = 0.001;
 
 function stableStringify(value) {
   if (Array.isArray(value)) {
@@ -59,7 +61,7 @@ function buildShipgateSkill() {
   return {
     skill_id: "agents-shipgate.governed-runtime.execute.v1",
     source_repository: "https://github.com/rhein1/agoragentic-integrations",
-    source_path: "examples/agents_shipgate_mcp_seller_listing.mjs",
+    source_path: SOURCE_PATH,
     title: "agents-shipgate Governed Runtime",
     summary:
       "Package a bounded agents-shipgate runtime request into a marketplace execute() call that returns structured output, recovery metadata, and a usage receipt.",
@@ -163,7 +165,7 @@ export function buildSellerManifest() {
     trust_checks_digest: sha256(trustChecks),
   };
 
-  return {
+  const manifest = {
     manifest_version: "0.1.0",
     seller_id: "rhein1.agents-shipgate",
     capability_id: "agoragentic.agents_shipgate_governed_runtime.v1",
@@ -200,16 +202,41 @@ export function buildSellerManifest() {
     },
     digests: {
       ...digests,
-      manifest_digest: sha256({ skill, trustChecks, digests }),
     },
     skill,
   };
+  manifest.digests.manifest_digest = sha256({
+    manifest_version: manifest.manifest_version,
+    seller_id: manifest.seller_id,
+    capability_id: manifest.capability_id,
+    upstream: manifest.upstream,
+    execution: manifest.execution,
+    payment: manifest.payment,
+    tool: {
+      name: manifest.tool.name,
+      description: manifest.tool.description,
+      input_schema: manifest.tool.input_schema,
+      output_schema: manifest.tool.output_schema,
+    },
+    trust: manifest.trust,
+    digests,
+  });
+  return manifest;
 }
 
-function validateExecuteInput(input) {
+function rejectUnexpectedKeys(value, allowed, path) {
+  for (const key of Object.keys(value || {})) {
+    if (!allowed.includes(key)) {
+      throw new Error(`${path}.${key} is not allowed by the published schema`);
+    }
+  }
+}
+
+function validatePublishedExecuteInput(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("execute() requires an object payload");
   }
+  rejectUnexpectedKeys(input, ["task_brief", "target_route", "runtime_policy", "usage_policy", "caller_note"], "input");
   if (typeof input.task_brief !== "string" || input.task_brief.trim().length < 12) {
     throw new Error("task_brief must be a string with at least 12 characters");
   }
@@ -218,6 +245,7 @@ function validateExecuteInput(input) {
   if (!route || typeof route !== "object" || Array.isArray(route)) {
     throw new Error("target_route must be an object");
   }
+  rejectUnexpectedKeys(route, ["agent_ref", "operation", "max_hops", "preferred_region", "require_receipt_settlement"], "target_route");
   if (typeof route.agent_ref !== "string" || route.agent_ref.trim().length < 3) {
     throw new Error("target_route.agent_ref must be a non-empty string");
   }
@@ -238,6 +266,7 @@ function validateExecuteInput(input) {
   if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) {
     throw new Error("runtime_policy must be an object");
   }
+  rejectUnexpectedKeys(runtime, ["timeout_seconds", "max_retries", "approval_mode", "dry_run"], "runtime_policy");
   if (!Number.isInteger(runtime.timeout_seconds) || runtime.timeout_seconds < 5 || runtime.timeout_seconds > 600) {
     throw new Error("runtime_policy.timeout_seconds must be an integer between 5 and 600");
   }
@@ -255,8 +284,9 @@ function validateExecuteInput(input) {
   if (!usage || typeof usage !== "object" || Array.isArray(usage)) {
     throw new Error("usage_policy must be an object");
   }
-  if (typeof usage.max_price_usdc !== "number" || usage.max_price_usdc <= 0 || usage.max_price_usdc > 50) {
-    throw new Error("usage_policy.max_price_usdc must be a positive number <= 50");
+  rejectUnexpectedKeys(usage, ["max_price_usdc", "bill_to", "require_idempotency_key", "receipt_scope"], "usage_policy");
+  if (typeof usage.max_price_usdc !== "number" || usage.max_price_usdc < MIN_PRICE_USDC || usage.max_price_usdc > 50) {
+    throw new Error("usage_policy.max_price_usdc must be a number between 0.001 and 50");
   }
   if (typeof usage.bill_to !== "string" || usage.bill_to.trim().length < 3) {
     throw new Error("usage_policy.bill_to must be a non-empty string");
@@ -336,7 +366,7 @@ function createUsageReceipt({ manifest, invocationId, idempotencyKey, paymentCha
     payment: {
       rail: manifest.payment.rail,
       asset: manifest.payment.asset,
-      amount_usdc: manifest.payment.max_price_usdc,
+      amount_usdc: paymentChallenge.amount_usdc,
       challenge_id: paymentChallenge.challenge_id,
       authorization_mode: "demo-pay-gate",
       note: "Simulated authorization only; no wallet signing or settlement occurs in this demo.",
@@ -388,6 +418,8 @@ function createInlineX402Fetch() {
       method = "POST",
       headers = {},
       body,
+      signal,
+      maxPaidRetries = 1,
     } = options;
 
     if (typeof fetchImpl !== "function") {
@@ -399,13 +431,14 @@ function createInlineX402Fetch() {
 
     let authorization = null;
     let paidChallengeId = null;
+    let paidTransientRetries = 0;
 
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    while (true) {
       const requestHeaders = {
         accept: "application/json",
         "content-type": "application/json",
-        "idempotency-key": idempotencyKey,
         ...headers,
+        "idempotency-key": idempotencyKey,
       };
       if (authorization) {
         requestHeaders["x-payment-authorization"] = authorization;
@@ -417,23 +450,21 @@ function createInlineX402Fetch() {
           method,
           headers: requestHeaders,
           body,
+          signal,
         });
       } catch (error) {
-        if (attempt >= 3) {
-          throw new Error(`network_error:${error instanceof Error ? error.message : String(error)}`);
-        }
-        continue;
+        throw new Error(`network_error:${error instanceof Error ? error.message : String(error)}`);
       }
 
       if (response.status === 402) {
+        if (authorization) {
+          throw new Error("Server returned another 402 after payment authorization; refusing to re-authorize");
+        }
         if (typeof pay !== "function") {
           throw new Error("x402Fetch received HTTP 402 but no pay callback was supplied");
         }
         const challenge = await response.json();
         const challengeId = challenge.challenge_id || challenge.id || null;
-        if (authorization && challengeId && challengeId === paidChallengeId) {
-          throw new Error(`Server repeated challenge ${challengeId} after payment authorization`);
-        }
         const payment = await pay({ challenge, url, method, body, idempotencyKey });
         authorization = payment?.authorization || payment?.paymentAuthorization || payment?.token || null;
         paidChallengeId = challengeId;
@@ -444,16 +475,15 @@ function createInlineX402Fetch() {
       }
 
       if (response.status >= 500 && response.status < 600) {
-        if (attempt >= 3) {
+        if (!authorization || paidTransientRetries >= maxPaidRetries) {
           return response;
         }
+        paidTransientRetries += 1;
         continue;
       }
 
       return response;
     }
-
-    throw new Error("x402Fetch exhausted retries while waiting for a terminal response");
   };
 }
 
@@ -462,60 +492,9 @@ function createMockMarketplaceFetch(manifest) {
   const receiptsByKey = new Map();
   const attemptsByKey = new Map();
   const authorizationHistoryByKey = new Map();
+  const requestDigestsByKey = new Map();
 
-  return async function fetchImpl(url, options = {}) {
-    const headers = lowerCaseKeys(options.headers || {});
-    const idempotencyKey = headers["idempotency-key"];
-    const authorization = headers["x-payment-authorization"] || null;
-    const capabilityDigest = headers["x-capability-digest"];
-    const attemptCount = (attemptsByKey.get(idempotencyKey) || 0) + 1;
-    attemptsByKey.set(idempotencyKey, attemptCount);
-
-    if (!idempotencyKey) {
-      return jsonResponse(400, { error: "missing_idempotency_key" });
-    }
-    if (capabilityDigest !== manifest.digests.manifest_digest) {
-      return jsonResponse(409, { error: "capability_digest_mismatch" });
-    }
-    if (!url.endsWith(DEFAULT_EXECUTE_PATH)) {
-      return jsonResponse(404, { error: "not_found" });
-    }
-
-    const requestBody = options.body ? JSON.parse(options.body) : {};
-    if (!authorization) {
-      const challenge = {
-        challenge_id: `ch_${sha256(idempotencyKey).slice(0, 12)}`,
-        capability_id: manifest.capability_id,
-        amount_usdc: manifest.payment.max_price_usdc,
-        asset: manifest.payment.asset,
-        pay_to: "demo:marketplace:agents-shipgate",
-        memo: "demo challenge; authorize only through a caller-supplied pay gate",
-      };
-      challengesByKey.set(idempotencyKey, challenge);
-      return jsonResponse(402, challenge);
-    }
-
-    const challenge = challengesByKey.get(idempotencyKey);
-    if (!challenge) {
-      return jsonResponse(409, { error: "missing_prior_challenge" });
-    }
-
-    const expectedAuthorization = `demo-auth::${challenge.challenge_id}::${idempotencyKey}`;
-    if (authorization !== expectedAuthorization) {
-      return jsonResponse(403, { error: "invalid_payment_authorization" });
-    }
-
-    const history = authorizationHistoryByKey.get(idempotencyKey) || [];
-    history.push(authorization);
-    authorizationHistoryByKey.set(idempotencyKey, history);
-
-    if (attemptCount === 2) {
-      return jsonResponse(502, {
-        error: "transient_upstream_failure",
-        detail: "demo shipgate wrapper retries with the same authorization and idempotency key",
-      });
-    }
-
+  function buildOrReuseReceipt({ idempotencyKey, requestBody, challenge, attemptCount, history }) {
     if (!receiptsByKey.has(idempotencyKey)) {
       const invocationId = `inv_${sha256(idempotencyKey).slice(0, 16)}`;
       const output = simulateShipgateOutput(requestBody.input || {});
@@ -545,9 +524,75 @@ function createMockMarketplaceFetch(manifest) {
         },
       });
     }
+    return receiptsByKey.get(idempotencyKey);
+  }
 
-    return jsonResponse(200, receiptsByKey.get(idempotencyKey), {
-      "payment-receipt": receiptsByKey.get(idempotencyKey).usage_receipt.receipt_id,
+  return async function fetchImpl(url, options = {}) {
+    const headers = lowerCaseKeys(options.headers || {});
+    const idempotencyKey = headers["idempotency-key"];
+    const authorization = headers["x-payment-authorization"] || null;
+    const capabilityDigest = headers["x-capability-digest"];
+    const attemptCount = (attemptsByKey.get(idempotencyKey) || 0) + 1;
+    attemptsByKey.set(idempotencyKey, attemptCount);
+
+    if (!idempotencyKey) {
+      return jsonResponse(400, { error: "missing_idempotency_key" });
+    }
+    if (capabilityDigest !== manifest.digests.manifest_digest) {
+      return jsonResponse(409, { error: "capability_digest_mismatch" });
+    }
+    if (!url.endsWith(DEFAULT_EXECUTE_PATH)) {
+      return jsonResponse(404, { error: "not_found" });
+    }
+
+    const requestBody = options.body ? JSON.parse(options.body) : {};
+    const requestDigest = sha256(requestBody);
+    const previousRequestDigest = requestDigestsByKey.get(idempotencyKey);
+    if (previousRequestDigest && previousRequestDigest !== requestDigest) {
+      return jsonResponse(409, { error: "idempotency_key_reused_with_different_request" });
+    }
+    requestDigestsByKey.set(idempotencyKey, requestDigest);
+
+    if (!authorization) {
+      const callerCap = Number(requestBody?.input?.usage_policy?.max_price_usdc ?? manifest.payment.max_price_usdc);
+      const challengeAmount = Number(Math.min(Number(manifest.payment.max_price_usdc), callerCap).toFixed(3));
+      const challenge = {
+        challenge_id: `ch_${sha256(idempotencyKey).slice(0, 12)}`,
+        capability_id: manifest.capability_id,
+        amount_usdc: challengeAmount.toFixed(3),
+        asset: manifest.payment.asset,
+        pay_to: "demo:marketplace:agents-shipgate",
+        memo: "demo challenge; authorize only through a caller-supplied pay gate",
+      };
+      challengesByKey.set(idempotencyKey, challenge);
+      return jsonResponse(402, challenge);
+    }
+
+    const challenge = challengesByKey.get(idempotencyKey);
+    if (!challenge) {
+      return jsonResponse(409, { error: "missing_prior_challenge" });
+    }
+
+    const expectedAuthorization = `demo-auth::${challenge.challenge_id}::${idempotencyKey}`;
+    if (authorization !== expectedAuthorization) {
+      return jsonResponse(403, { error: "invalid_payment_authorization" });
+    }
+
+    const history = authorizationHistoryByKey.get(idempotencyKey) || [];
+    history.push(authorization);
+    authorizationHistoryByKey.set(idempotencyKey, history);
+
+    if (attemptCount === 2) {
+      return jsonResponse(502, {
+        error: "transient_upstream_failure",
+        detail: "demo shipgate wrapper retries with the same authorization and idempotency key",
+      });
+    }
+
+    const receiptEnvelope = buildOrReuseReceipt({ idempotencyKey, requestBody, challenge, attemptCount, history });
+
+    return jsonResponse(200, receiptEnvelope, {
+      "payment-receipt": receiptEnvelope.usage_receipt.receipt_id,
     });
   };
 }
@@ -559,9 +604,10 @@ export async function createLocalExecuteToolWrapper(options = {}) {
   const baseUrl = options.baseUrl || DEFAULT_BASE_URL;
   const executePath = options.executePath || manifest.execution.path || DEFAULT_EXECUTE_PATH;
   const fetchImpl = options.fetchImpl || createMockMarketplaceFetch(manifest);
+  const requestDigestsByIdempotencyKey = new Map();
 
   async function execute(input, runtime = {}) {
-    validateExecuteInput(input);
+    validatePublishedExecuteInput(input);
     const pay = runtime.pay || options.pay;
     if (typeof pay !== "function") {
       throw new Error("execute() requires a caller-supplied pay callback; this wrapper never auto-pays");
@@ -574,17 +620,28 @@ export async function createLocalExecuteToolWrapper(options = {}) {
       trust_mode: manifest.trust.mode,
       input,
     };
+    rememberIdempotencyRequest(requestDigestsByIdempotencyKey, idempotencyKey, requestBody);
+    const timeoutMs = Math.max(1, input.runtime_policy.timeout_seconds) * 1000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error(`runtime_policy.timeout_seconds exceeded after ${input.runtime_policy.timeout_seconds}s`)), timeoutMs);
 
-    const response = await x402Fetch(new URL(executePath, baseUrl).toString(), {
-      method: "POST",
-      fetchImpl,
-      pay,
-      idempotencyKey,
-      body: JSON.stringify(requestBody),
-      headers: {
-        "x-capability-digest": manifest.digests.manifest_digest,
-      },
-    });
+    let response;
+    try {
+      response = await x402Fetch(new URL(executePath, baseUrl).toString(), {
+        method: "POST",
+        fetchImpl,
+        pay,
+        idempotencyKey,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+        maxPaidRetries: input.runtime_policy.max_retries,
+        headers: {
+          "x-capability-digest": manifest.digests.manifest_digest,
+        },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -592,17 +649,7 @@ export async function createLocalExecuteToolWrapper(options = {}) {
     }
 
     const payload = await response.json();
-    return {
-      invocation_id: payload.invocation_id,
-      capability_id: payload.capability_id,
-      output: payload.output,
-      usage_receipt: payload.usage_receipt,
-      seller_status: payload.seller_status,
-      wrapper: {
-        x402_fetch_source: imported.source,
-        idempotency_key: idempotencyKey,
-      },
-    };
+    return buildVerifiedWrapperResult({ payload, manifest, idempotencyKey, x402Source: imported.source });
   }
 
   return {
@@ -615,6 +662,52 @@ export async function createLocalExecuteToolWrapper(options = {}) {
       execute,
     },
     execute,
+  };
+}
+
+function rememberIdempotencyRequest(cache, idempotencyKey, requestBody) {
+  const digest = sha256(requestBody);
+  const previous = cache.get(idempotencyKey);
+  if (previous && previous !== digest) {
+    throw new Error(`idempotency key ${idempotencyKey} was reused with a different request body`);
+  }
+  cache.set(idempotencyKey, digest);
+}
+
+function verifyExecutePayload({ payload, manifest, idempotencyKey }) {
+  if (payload?.capability_id !== manifest.capability_id) {
+    throw new Error(`execute() returned capability_id ${payload?.capability_id ?? "missing"}, expected ${manifest.capability_id}`);
+  }
+  const receipt = payload?.usage_receipt;
+  if (!receipt || typeof receipt !== "object") {
+    throw new Error("execute() response missing usage_receipt");
+  }
+  if (receipt.capability_id !== manifest.capability_id) {
+    throw new Error("usage_receipt capability_id mismatch");
+  }
+  if (receipt.status !== "simulated-settled") {
+    throw new Error(`usage_receipt status ${receipt.status ?? "missing"} is not accepted`);
+  }
+  if (receipt.idempotency_key !== idempotencyKey) {
+    throw new Error("usage_receipt idempotency key mismatch");
+  }
+  if (receipt.digests?.manifest_digest !== manifest.digests.manifest_digest) {
+    throw new Error("usage_receipt manifest digest mismatch");
+  }
+}
+
+function buildVerifiedWrapperResult({ payload, manifest, idempotencyKey, x402Source }) {
+  verifyExecutePayload({ payload, manifest, idempotencyKey });
+  return {
+    invocation_id: payload.invocation_id,
+    capability_id: payload.capability_id,
+    output: payload.output,
+    usage_receipt: payload.usage_receipt,
+    seller_status: payload.seller_status,
+    wrapper: {
+      x402_fetch_source: x402Source,
+      idempotency_key: idempotencyKey,
+    },
   };
 }
 
