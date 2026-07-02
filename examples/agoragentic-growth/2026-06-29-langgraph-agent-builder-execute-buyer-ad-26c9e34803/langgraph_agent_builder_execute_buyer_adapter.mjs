@@ -7,7 +7,8 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.example";
-const EXECUTE_PATH = "/v1/marketplace/execute";
+const EXECUTE_PATH = "/api/x402/execute";
+const WRAPPER_FILE = "examples/agoragentic-growth/2026-06-29-langgraph-agent-builder-execute-buyer-ad-26c9e34803/langgraph_agent_builder_execute_buyer_adapter.mjs";
 const DEFAULT_SERVER_NAME = "langgraph-agent-builder";
 const DEFAULT_TOOL_NAME = "execute";
 const DEFAULT_CAPABILITY_ID = "agoragentic.langgraph.agent_builder.execute.v1";
@@ -236,7 +237,7 @@ export function createMinimalSellerListing(options = {}) {
       path: EXECUTE_PATH,
       thread_resume_safe: true,
       wrapper_runtime: "node>=18",
-      wrapper_file: "examples/langgraph_agent_builder_execute_buyer_adapter.mjs",
+      wrapper_file: WRAPPER_FILE,
     },
     payment: {
       rail: "x402",
@@ -327,6 +328,7 @@ function createInlineX402Fetch() {
 
     let paymentAuthorization = null;
     let paidChallengeId = null;
+    let paidNetworkRetries = 0;
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       const requestHeaders = {
@@ -335,23 +337,17 @@ function createInlineX402Fetch() {
         "x-idempotency-key": idempotencyKey,
         ...headers,
       };
-      if (paymentAuthorization) {
-        requestHeaders["x-payment-authorization"] = paymentAuthorization.authorization;
-        if (paymentAuthorization.paymentSignature) {
-          requestHeaders["x-payment-signature"] = paymentAuthorization.paymentSignature;
-        }
-      }
+      attachPaymentAuthorizationHeaders(requestHeaders, paymentAuthorization);
 
       let response;
       try {
         response = await fetchImpl(url, { method, headers: requestHeaders, body });
       } catch (error) {
-        throw new NetworkExecutionError(`network error before HTTP response: ${asErrorMessage(error)}`, {
-          url,
-          method,
-          idempotencyKey,
-          cause: asErrorMessage(error),
-        });
+        if (canRetryPaidNetworkError(paymentAuthorization, paidNetworkRetries)) {
+          paidNetworkRetries += 1;
+          continue;
+        }
+        throw buildNetworkExecutionError(error, { url, method, idempotencyKey });
       }
 
       if (response.status !== 402) {
@@ -394,6 +390,28 @@ function createInlineX402Fetch() {
 
     throw new UpstreamHttpError("x402Fetch exhausted retries while waiting for a non-402 response", { status: 402 });
   };
+}
+
+function attachPaymentAuthorizationHeaders(requestHeaders, paymentAuthorization) {
+  if (!paymentAuthorization) return;
+  requestHeaders["x-payment-authorization"] = paymentAuthorization.authorization;
+  requestHeaders["payment-signature"] = paymentAuthorization.paymentSignature || paymentAuthorization.authorization;
+  if (paymentAuthorization.paymentSignature) {
+    requestHeaders["x-payment-signature"] = paymentAuthorization.paymentSignature;
+  }
+}
+
+function canRetryPaidNetworkError(paymentAuthorization, paidNetworkRetries) {
+  return Boolean(paymentAuthorization) && paidNetworkRetries < 1;
+}
+
+function buildNetworkExecutionError(error, { url, method, idempotencyKey }) {
+  return new NetworkExecutionError(`network error before HTTP response: ${asErrorMessage(error)}`, {
+    url,
+    method,
+    idempotencyKey,
+    cause: asErrorMessage(error),
+  });
 }
 
 async function readJsonResponse(response) {
@@ -480,10 +498,8 @@ export class LangGraphExecuteBuyerAdapter {
 
   async execute(input = {}, runtime = {}) {
     validateExecuteInput(input);
-    if (typeof runtime.pay === "function") {
-      this.pay = runtime.pay;
-    }
-    if (typeof this.pay !== "function") {
+    const pay = runtime.pay || this.pay;
+    if (typeof pay !== "function") {
       throw new AdapterValidationError("execute() requires a caller-supplied pay callback; the adapter never auto-pays");
     }
     if (typeof this.fetchImpl !== "function") {
@@ -514,7 +530,7 @@ export class LangGraphExecuteBuyerAdapter {
     const { x402Fetch, source } = await this.x402ModulePromise;
     const response = await x402Fetch(`${this.baseUrl}${EXECUTE_PATH}`, {
       fetchImpl: this.fetchImpl,
-      pay: this.pay,
+      pay,
       idempotencyKey,
       headers: {
         "x-mcp-server": this.serverName,
@@ -586,7 +602,7 @@ export class LangGraphExecuteBuyerAdapter {
           null,
           2,
         ),
-        { ok: true, result },
+        result,
         false,
       );
     } catch (error) {
@@ -663,7 +679,8 @@ export function createDemoFetch() {
     seen.count += 1;
     state.seenByIdempotencyKey.set(idempotencyKey, seen);
 
-    if (!headers["x-payment-authorization"]) {
+    const paymentAuthorization = headers["x-payment-authorization"] || headers["payment-signature"];
+    if (!paymentAuthorization) {
       return jsonResponse(
         402,
         {
@@ -679,7 +696,7 @@ export function createDemoFetch() {
       );
     }
 
-    if (headers["x-payment-authorization"] !== `auth:${seen.challengeId}`) {
+    if (paymentAuthorization !== `auth:${seen.challengeId}`) {
       return jsonResponse(403, {
         error: { code: "invalid_payment_authorization", challenge_id: seen.challengeId },
       });
@@ -750,7 +767,7 @@ export async function selfTest() {
   assert.equal(payCalls.length, 1, "payment should be authorized exactly once");
   assert.equal(state.requests.length, 2, "request should retry once after HTTP 402");
   assert.equal(state.requests[0].headers["x-idempotency-key"], state.requests[1].headers["x-idempotency-key"]);
-  assert.equal(state.requests[1].headers["x-payment-authorization"], `auth:${payCalls[0].challenge.challenge_id}`);
+  assert.equal(state.requests[1].headers["payment-signature"], `auth:${payCalls[0].challenge.challenge_id}`);
   assert.equal(result.output.agent_id, "support-triage-agent");
   assert.equal(result.seller_listing.listing_id, DEFAULT_LISTING_ID);
   assert.equal(result.usage_receipt.payment.settlement_status, "authorized");
