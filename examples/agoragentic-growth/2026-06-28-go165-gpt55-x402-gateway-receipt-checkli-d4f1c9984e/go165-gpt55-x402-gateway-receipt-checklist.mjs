@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
-import { x402FetchWithFallback } from "./x402-receipt-validation-adapter.mjs";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
@@ -22,6 +22,14 @@ function readHeader(headers, name) {
   const wanted = String(name).toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
     if (String(key).toLowerCase() === wanted) return value;
+  }
+  return null;
+}
+
+function readFirstHeader(headers, names) {
+  for (const name of names) {
+    const value = readHeader(headers, name);
+    if (value) return value;
   }
   return null;
 }
@@ -62,12 +70,16 @@ function extractString(...values) {
   return null;
 }
 
+function readPaymentReceiptHeader(headers) {
+  return readFirstHeader(headers, ["payment-receipt", "x-payment-receipt"]);
+}
+
 function extractReceiptId(payload, response) {
   return extractString(
     payload?.receipt_id,
     payload?.receipt?.receipt_id,
     payload?.receipt?.id,
-    readHeader(response.headers, "payment-receipt"),
+    readPaymentReceiptHeader(response.headers),
   );
 }
 
@@ -77,7 +89,7 @@ function extractInvocationId(payload) {
 
 function classifyProof(proof) {
   const status = String(proof?.status ?? proof?.on_chain?.status ?? "").toLowerCase();
-  if (["settled", "confirmed", "finalized", "complete", "completed"].includes(status)) {
+  if (["settled", "confirmed", "finalized", "complete", "completed", "verified"].includes(status)) {
     return { status, terminal: true, submitted: false };
   }
   if (["submitted", "broadcast", "pending", "processing"].includes(status)) {
@@ -124,7 +136,66 @@ async function fetchProof(fetchImpl, baseUrl, invocationId, timeoutMs, attempts,
   return lastBody;
 }
 
-function buildChecklist({ idempotencyKey, response, payload, receiptId, invocationId, paymentResponse, proof }) {
+async function x402FetchWithFallback(url, options = {}) {
+  const {
+    fetchImpl,
+    pay,
+    idempotencyKey,
+    method = "GET",
+    headers = {},
+    body,
+    signal,
+    maxNetworkRetries = 0,
+  } = options;
+  let authorization = null;
+  let networkRetriesUsed = 0;
+
+  const send = () => {
+    const requestHeaders = {
+      ...headers,
+      "idempotency-key": idempotencyKey,
+    };
+    if (authorization?.authorizationHeader) requestHeaders.authorization = authorization.authorizationHeader;
+    if (authorization?.paymentSignature) requestHeaders["payment-signature"] = authorization.paymentSignature;
+    return fetchImpl(url, { method, headers: requestHeaders, body, signal });
+  };
+
+  let response = await send();
+  if (response.status === 402) {
+    const paymentRequired = readFirstHeader(response.headers, [
+      "payment-required",
+      "x-payment-required",
+      "x-payment-challenge",
+    ]);
+    if (!paymentRequired) {
+      throw new Error("HTTP 402 response did not include a payment challenge");
+    }
+    authorization = await pay(paymentRequired, {
+      url,
+      method,
+      idempotencyKey,
+      body,
+    });
+  }
+
+  for (;;) {
+    try {
+      if (authorization) {
+        response = await send();
+      }
+      response.x402Meta = {
+        paymentAttempted: Boolean(authorization),
+        networkRetriesUsed,
+      };
+      return response;
+    } catch (error) {
+      if (networkRetriesUsed >= maxNetworkRetries) throw error;
+      networkRetriesUsed += 1;
+    }
+  }
+}
+
+function buildChecklist({ idempotencyKey, response, payload, receiptId, invocationId, paymentResponse, proof, quoteId }) {
   const proofState = classifyProof(proof);
   return [
     { item: "idempotency_key_sent", ok: Boolean(idempotencyKey), evidence: idempotencyKey },
@@ -147,8 +218,11 @@ function buildChecklist({ idempotencyKey, response, payload, receiptId, invocati
     },
     {
       item: "quote_id_echoed",
-      ok: Boolean(payload?.quote_id),
-      evidence: payload?.quote_id ?? null,
+      ok: Boolean(payload?.quote_id) && payload.quote_id === quoteId,
+      evidence: {
+        expected: quoteId,
+        actual: payload?.quote_id ?? null,
+      },
     },
   ];
 }
@@ -225,6 +299,7 @@ export async function executeBuyerRetryReceiptChecklist({
     invocationId,
     paymentResponse,
     proof,
+    quoteId,
   });
   assertChecklistOk(checklist);
 
@@ -235,7 +310,7 @@ export async function executeBuyerRetryReceiptChecklist({
     idempotencyKey,
     receiptId,
     invocationId,
-    paymentReceiptHeader: readHeader(response.headers, "payment-receipt"),
+    paymentReceiptHeader: readPaymentReceiptHeader(response.headers),
     paymentResponseHeader,
     paymentResponse,
     proof,
@@ -379,7 +454,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     process.stderr.write(`${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}\n`);
     process.exitCode = 1;
