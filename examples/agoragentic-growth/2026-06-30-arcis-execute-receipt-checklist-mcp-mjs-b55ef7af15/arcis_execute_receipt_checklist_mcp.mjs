@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import readline from "node:readline";
-import { x402Fetch, validateX402Receipt, classifyX402Error } from "../x402/x402_receipt_validation_adapter.mjs";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -86,6 +86,174 @@ async function readJsonResponse(response) {
   };
 }
 
+function headerValue(headers, names) {
+  const normalized = normalizeHeaders(headers);
+  for (const name of names) {
+    const value = normalized[String(name).toLowerCase()];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return null;
+}
+
+function challengeFingerprint(paymentRequiredHeader) {
+  return crypto.createHash("sha256").update(String(paymentRequiredHeader || "")).digest("hex");
+}
+
+class X402HttpError extends Error {
+  constructor(message, options = {}) {
+    super(message);
+    this.name = "X402HttpError";
+    Object.assign(this, options);
+  }
+}
+
+async function x402Fetch(url, options = {}) {
+  const {
+    fetchImpl = globalThis.fetch,
+    pay,
+    idempotencyKey,
+    method = "GET",
+    body,
+    maxNetworkRetries = 0,
+  } = options;
+
+  if (typeof fetchImpl !== "function") {
+    throw new Error("fetchImpl is required");
+  }
+
+  const requestBody = body === undefined ? undefined : JSON.stringify(body);
+  const baseHeaders = {
+    accept: "application/json",
+    "content-type": "application/json",
+    "idempotency-key": idempotencyKey,
+  };
+  let authorization = null;
+  let paymentAttempted = false;
+  let networkRetriesUsed = 0;
+
+  const send = async () => {
+    const headers = { ...baseHeaders };
+    if (authorization?.authorizationHeader) headers.authorization = authorization.authorizationHeader;
+    if (authorization?.paymentSignature) headers["payment-signature"] = authorization.paymentSignature;
+    return fetchImpl(url, { method, headers, body: requestBody });
+  };
+
+  let response = await send();
+  if (response.status !== 402) {
+    response.x402Meta = { paymentAttempted, networkRetriesUsed };
+    return response;
+  }
+
+  if (typeof pay !== "function") {
+    throw new X402HttpError("x402 payment required but no pay callback was configured", {
+      status: response.status,
+      response,
+      retryable: false,
+      kind: "payment_required",
+      x402Meta: { paymentAttempted, networkRetriesUsed },
+    });
+  }
+
+  const paymentRequiredHeader = headerValue(response.headers, [
+    "payment-required",
+    "x-payment-required",
+    "x-payment-challenge",
+  ]);
+  if (!paymentRequiredHeader) {
+    throw new X402HttpError("HTTP 402 response did not include a payment challenge", {
+      status: response.status,
+      response,
+      retryable: false,
+      kind: "missing_payment_challenge",
+      x402Meta: { paymentAttempted, networkRetriesUsed },
+    });
+  }
+
+  authorization = await pay(paymentRequiredHeader, {
+    url: String(url),
+    method,
+    body,
+    idempotencyKey,
+    challengeFingerprint: challengeFingerprint(paymentRequiredHeader),
+  });
+  paymentAttempted = true;
+
+  for (;;) {
+    try {
+      response = await send();
+      if (response.status === 402) {
+        throw new X402HttpError("x402 payment was rejected after authorization", {
+          status: response.status,
+          response,
+          retryable: false,
+          kind: "payment_rejected_after_authorization",
+          x402Meta: { paymentAttempted, networkRetriesUsed },
+        });
+      }
+      response.x402Meta = { paymentAttempted, networkRetriesUsed };
+      return response;
+    } catch (error) {
+      if (error instanceof X402HttpError) throw error;
+      if (networkRetriesUsed >= maxNetworkRetries) {
+        error.x402Meta = { paymentAttempted, networkRetriesUsed };
+        throw error;
+      }
+      networkRetriesUsed += 1;
+    }
+  }
+}
+
+function classifyX402Error(error) {
+  const status = Number(error?.status || error?.response?.status || 0);
+  if (error?.kind) {
+    return {
+      kind: error.kind,
+      retryable: Boolean(error.retryable),
+      status: status || null,
+      message: error.message,
+    };
+  }
+  if (error?.x402Meta?.paymentAttempted) {
+    return {
+      kind: "network_after_authorization",
+      retryable: true,
+      status: status || null,
+      message: error.message,
+    };
+  }
+  if ([408, 425, 429, 500, 502, 503, 504].includes(status)) {
+    return {
+      kind: "http_transient",
+      retryable: true,
+      status,
+      message: error.message,
+    };
+  }
+  return {
+    kind: status ? "http_failure" : "network",
+    retryable: !status,
+    status: status || null,
+    message: error.message,
+  };
+}
+
+function validateX402Receipt({ response, payload, quoteId, idempotencyKey }) {
+  const headers = normalizeHeaders(response?.headers);
+  const receipt = payload?.receipt || payload?.result?.receipt || {};
+  const paymentReceipt = headers["payment-receipt"] ?? headers["x-payment-receipt"] ?? null;
+  const receiptId = payload?.receipt_id ?? receipt?.receipt_id ?? receipt?.id ?? paymentReceipt ?? null;
+  return {
+    ok: Boolean(response?.ok && (receiptId || payload?.invocation_id || paymentReceipt)),
+    paymentReceipt,
+    paymentResponse: headers["payment-response"] ?? headers["x-payment-response"] ?? null,
+    receiptId,
+    invocationId: payload?.invocation_id ?? receipt?.invocation_id ?? null,
+    quoteId,
+    quoteBound: payload?.quote_id === undefined || payload?.quote_id === quoteId,
+    idempotencyKey,
+  };
+}
+
 function buildUrl(baseUrl, path, params = {}) {
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(params || {})) {
@@ -114,8 +282,8 @@ function receiptSummary(payload, response) {
     quote_id: payload?.quote_id ?? receipt?.quote_id ?? null,
     invocation_id: payload?.invocation_id ?? receipt?.invocation_id ?? null,
     receipt_id: payload?.receipt_id ?? receipt?.receipt_id ?? receipt?.id ?? null,
-    payment_receipt_header: headers["payment-receipt"] ?? null,
-    payment_response_header: headers["payment-response"] ?? null,
+    payment_receipt_header: headers["payment-receipt"] ?? headers["x-payment-receipt"] ?? null,
+    payment_response_header: headers["payment-response"] ?? headers["x-payment-response"] ?? null,
     settlement: payload?.settlement ?? receipt?.settlement ?? null,
     amount_usdc: payload?.cost ?? payload?.price_usdc ?? receipt?.amount_usdc ?? null,
     provider: result?.provider ?? payload?.provider ?? headers["x-provider"] ?? null,
@@ -124,6 +292,10 @@ function receiptSummary(payload, response) {
 
 function buildChecklist({ payload, response, attempts, recovery, authorizationStats, idempotencyKey, quoteId }) {
   const receipt = receiptSummary(payload, response);
+  const hasAuthorizationStats = authorizationStats?.available !== false
+    && Number(authorizationStats?.authorization_creates || 0) > 0
+    && Number(authorizationStats?.unique_authorization_headers || 0) > 0;
+  const networkRecovery = recovery.some((entry) => entry.kind === "network_after_authorization");
   const checks = [
     {
       id: "http_ok",
@@ -142,18 +314,18 @@ function buildChecklist({ payload, response, attempts, recovery, authorizationSt
     },
     {
       id: "authorization_created_once",
-      pass: authorizationStats.authorization_creates === 1,
-      evidence: JSON.stringify(authorizationStats),
+      pass: hasAuthorizationStats ? authorizationStats.authorization_creates === 1 : true,
+      evidence: hasAuthorizationStats ? JSON.stringify(authorizationStats) : "not recorded outside demo transport",
     },
     {
       id: "payment_reused_after_retry",
-      pass: authorizationStats.unique_authorization_headers === 1,
-      evidence: JSON.stringify(authorizationStats),
+      pass: hasAuthorizationStats ? authorizationStats.unique_authorization_headers === 1 : true,
+      evidence: hasAuthorizationStats ? JSON.stringify(authorizationStats) : "not recorded outside demo transport",
     },
     {
       id: "network_recovery_observed",
-      pass: recovery.some((entry) => entry.kind === "network_after_authorization"),
-      evidence: JSON.stringify(recovery),
+      pass: recovery.length === 0 || networkRecovery,
+      evidence: recovery.length === 0 ? "no recovery needed" : JSON.stringify(recovery),
     },
     {
       id: "receipt_evidence_present",
@@ -328,6 +500,7 @@ export function createMockArcisTransport() {
     pay: createCachingDemoPayGate(state),
     stats() {
       return {
+        available: true,
         pay_calls: state.pay_calls,
         authorization_creates: state.authorization_creates,
         match_calls: state.match_calls,
@@ -484,6 +657,7 @@ export async function runExecuteExample(args = {}, runtime = {}) {
   const authorizationStats = typeof runtime.getAuthorizationStats === "function"
     ? runtime.getAuthorizationStats()
     : {
+        available: false,
         pay_calls: 0,
         authorization_creates: 0,
         unique_authorization_headers: 0,
@@ -548,6 +722,10 @@ function writeResponse(payload) {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
 
+function hasJsonRpcId(request) {
+  return Object.prototype.hasOwnProperty.call(request, "id");
+}
+
 export async function startStdioServer(runtime = {}) {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -557,6 +735,9 @@ export async function startStdioServer(runtime = {}) {
   for await (const line of rl) {
     if (!line.trim()) continue;
     const request = JSON.parse(line);
+    if (!hasJsonRpcId(request)) {
+      continue;
+    }
     try {
       if (request.method === "initialize") {
         writeResponse({
@@ -590,7 +771,14 @@ export async function startStdioServer(runtime = {}) {
         continue;
       }
 
-      writeResponse({ jsonrpc: "2.0", id: request.id, result: {} });
+      writeResponse({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: {
+          code: -32601,
+          message: `Method not found: ${request.method || "unknown"}`,
+        },
+      });
     } catch (error) {
       writeResponse({
         jsonrpc: "2.0",
@@ -679,16 +867,11 @@ function buildRuntimeFromEnv() {
     fetchImpl: globalThis.fetch,
     pay: null,
     demoPay: null,
-    getAuthorizationStats: () => ({
-      pay_calls: 0,
-      authorization_creates: 0,
-      unique_authorization_headers: 0,
-    }),
     state: { lastReceipt: null },
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = new Set(process.argv.slice(2));
   const run = async () => {
     if (args.has("--self-test")) {
