@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -65,6 +66,33 @@ function normalizePayResult(payment) {
   return payment;
 }
 
+function clonePaymentAuthorization(payment) {
+  if (!payment) return null;
+  return {
+    authorizationHeader: payment.authorizationHeader ?? null,
+    paymentSignature: payment.paymentSignature ?? null,
+  };
+}
+
+function buildRequestHeaders(baseHeaders, idempotencyKey) {
+  return {
+    accept: "application/json",
+    ...baseHeaders,
+    "idempotency-key": idempotencyKey,
+  };
+}
+
+function networkAfterPaymentError(error, { idempotencyKey, sawPaymentChallenge, networkRetriesUsed, cachedPayment }) {
+  return createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
+    cause: error,
+    idempotencyKey,
+    paymentAttempted: sawPaymentChallenge,
+    authorizedPaymentReused: true,
+    networkRetriesUsed,
+    paymentAuthorization: clonePaymentAuthorization(cachedPayment),
+  });
+}
+
 async function importPreferredX402Fetch() {
   try {
     const mod = await import("agoragentic/x402-client");
@@ -95,11 +123,7 @@ async function localX402Fetch(url, options = {}) {
   let networkRetriesUsed = 0;
 
   while (true) {
-    const requestHeaders = {
-      accept: "application/json",
-      "idempotency-key": idempotencyKey,
-      ...baseHeaders,
-    };
+    const requestHeaders = buildRequestHeaders(baseHeaders, idempotencyKey);
 
     let requestBody = body;
     if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
@@ -148,25 +172,30 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(paymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
+      if (cachedPayment) {
+        throw createHttpError("paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+          status: 402,
           idempotencyKey,
-        }));
+          paymentRequired,
+          paymentAuthorization: clonePaymentAuthorization(cachedPayment),
+        });
       }
+      cachedPayment = normalizePayResult(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
       if (networkRetriesUsed >= maxNetworkRetries) {
-        throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
-          cause: error,
+        throw networkAfterPaymentError(error, {
           idempotencyKey,
-          paymentAttempted: sawPaymentChallenge,
-          authorizedPaymentReused: true,
+          sawPaymentChallenge,
           networkRetriesUsed,
+          cachedPayment,
         });
       }
       networkRetriesUsed += 1;
@@ -189,9 +218,12 @@ async function x402Fetch(url, options = {}) {
 }
 
 function extractReceiptReference(payload, response) {
+  const headerReceipt = readHeader(response, "payment-receipt");
   return payload?.receipt_id
+    ?? payload?.receiptId
+    ?? payload?.receipt?.receipt_id
     ?? payload?.receipt?.id
-    ?? readHeader(response, "payment-receipt")
+    ?? headerReceipt
     ?? null;
 }
 
@@ -438,7 +470,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
