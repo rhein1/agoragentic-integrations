@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.example";
+const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 const DEFAULT_MATCH_PATH = "/api/x402/execute/match";
 const DEFAULT_EXECUTE_PATH = "/api/x402/execute";
 const DEFAULT_TOOL_NAME = "agoragentic_execute";
@@ -134,6 +134,21 @@ function normalizePayResult(payment) {
   };
 }
 
+function attachPaymentHeaders(requestHeaders, cachedPayment) {
+  if (!cachedPayment) return;
+  if (cachedPayment.paymentSignature) {
+    requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
+    return;
+  }
+  if (cachedPayment.authorizationHeader && requestHeaders.authorization) {
+    requestHeaders["payment-signature"] = cachedPayment.authorizationHeader;
+    return;
+  }
+  if (cachedPayment.authorizationHeader) {
+    requestHeaders.authorization = cachedPayment.authorizationHeader;
+  }
+}
+
 class AgoragenticExecuteError extends Error {
   constructor(message, details = {}) {
     super(message);
@@ -217,12 +232,7 @@ function createInlineX402Fetch() {
       if (requestBody !== undefined && requestBody !== null && !requestHeaders["content-type"]) {
         requestHeaders["content-type"] = "application/json";
       }
-      if (cachedPayment?.authorizationHeader) {
-        requestHeaders.authorization = cachedPayment.authorizationHeader;
-      }
-      if (cachedPayment?.paymentSignature) {
-        requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
-      }
+      attachPaymentHeaders(requestHeaders, cachedPayment);
 
       try {
         const response = await fetchImpl(url, {
@@ -402,6 +412,35 @@ function normalizeQuotePayload(payload, fallback = {}) {
   };
 }
 
+function enforceMaxPrice(request, quote) {
+  if (request.maxPriceUsdc === null || request.maxPriceUsdc === undefined) return;
+  const maxPrice = Number(request.maxPriceUsdc);
+  const quotedPrice = Number(quote.priceUsdc);
+  if (!Number.isFinite(maxPrice) || !Number.isFinite(quotedPrice)) return;
+  if (quotedPrice > maxPrice) {
+    throw new AgoragenticExecuteError(`execute quote ${quotedPrice} USDC exceeds caller max_price_usdc ${maxPrice}`, {
+      code: "QUOTE_EXCEEDS_MAX_PRICE",
+      kind: "budget_exceeded",
+      retryable: false,
+      idempotencyKey: request.idempotencyKey,
+      details: {
+        quote_id: quote.quoteId,
+        price_usdc: quote.priceUsdc,
+        max_price_usdc: request.maxPriceUsdc,
+      },
+    });
+  }
+}
+
+function emptyQuote() {
+  return {
+    quoteId: null,
+    priceUsdc: null,
+    listingId: null,
+    capabilityId: null,
+  };
+}
+
 function buildResultEnvelope({ request, executePayload, receipt, ok, error }) {
   const summary = extractTextSummary(executePayload);
   return {
@@ -502,20 +541,29 @@ export class LiteLLMAgoragenticExecuteTool {
   async invoke(args = {}) {
     const request = this.#normalizeRequest(args);
     const startedAt = Date.now();
-    const quote = await this.#matchQuote(request);
-    const executeBody = {
-      quote_id: quote.quoteId,
-      input: {
-        transport: "mcp",
-        server: request.server,
-        tool: request.upstreamTool,
-        arguments: request.arguments,
-      },
-    };
+    return this.#invokeWithReceiptEnvelope(request, startedAt);
+  }
 
-    const { fn: x402Fetch, source: helperSource } = await this.x402FetchPromise;
+  async #invokeWithReceiptEnvelope(request, startedAt) {
+    let quote = emptyQuote();
+    let helperSource = "not_resolved";
 
-    try {
+    const attemptExecution = async () => {
+      quote = await this.#matchQuote(request);
+      enforceMaxPrice(request, quote);
+      const executeBody = {
+        quote_id: quote.quoteId,
+        input: {
+          transport: "mcp",
+          server: request.server,
+          tool: request.upstreamTool,
+          arguments: request.arguments,
+        },
+      };
+
+      const resolvedX402 = await this.x402FetchPromise;
+      const x402Fetch = resolvedX402.fn;
+      helperSource = resolvedX402.source;
       const settledRaw = await x402Fetch(buildUrl(this.baseUrl, this.executePath), {
         method: "POST",
         headers: this.#buildJsonHeaders(),
@@ -560,7 +608,9 @@ export class LiteLLMAgoragenticExecuteTool {
       });
       this.#recordReceipt(receipt);
       return envelope;
-    } catch (error) {
+    };
+
+    return attemptExecution().catch((error) => {
       const normalized = classifyError(error);
       const receipt = this.#buildUsageReceipt({
         request,
@@ -590,7 +640,7 @@ export class LiteLLMAgoragenticExecuteTool {
           details: normalized.details,
         },
       });
-    }
+    });
   }
 
   async #matchQuote(request) {
@@ -777,7 +827,8 @@ export function createMockFetch({ mode = "success" } = {}) {
         });
       }
 
-      if (!headers.authorization) {
+      const paymentProof = headers["payment-signature"] || (headers.authorization?.startsWith("Demo paid ") ? headers.authorization : null);
+      if (!paymentProof) {
         return jsonResponse(402, {
           error: {
             code: "payment_required",
@@ -861,7 +912,11 @@ export async function runSelfTest() {
   assert.equal(mockFetch.executeCalls.length, 2);
   assert.equal(mockFetch.executeCalls[0].idempotencyKey, "idem_demo_success_001");
   assert.equal(mockFetch.executeCalls[1].idempotencyKey, "idem_demo_success_001");
-  assert.equal(mockFetch.executeCalls[1].authorization.startsWith("Demo paid demo-challenge-001"), true);
+  assert.equal(
+    mockFetch.executeCalls[1].authorization?.startsWith("Demo paid demo-challenge-001") ||
+      mockFetch.executeCalls[1].paymentSignature?.startsWith("demo-signature-"),
+    true,
+  );
   assert.equal(tool.listUsageReceipts().length, 1);
 
   const withoutPay = new LiteLLMAgoragenticExecuteTool({
@@ -888,7 +943,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const normalized = classifyError(error);
     process.stderr.write(`${normalized.name}: ${normalized.message}\n`);
