@@ -75,7 +75,7 @@ function canonicalReceipt(payload = {}, response) {
 }
 
 function parsePaymentRequiredHeader(headerValue) {
-  if (!headerValue) return {};
+  if (!headerValue) return null;
   const raw = String(headerValue).trim();
   const candidates = [raw];
   try {
@@ -87,12 +87,12 @@ function parsePaymentRequiredHeader(headerValue) {
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      return parsed && typeof parsed === "object" ? parsed : {};
+      return parsed && typeof parsed === "object" ? parsed : null;
     } catch {
       // Try the next representation.
     }
   }
-  return {};
+  return null;
 }
 
 function makeHttpError(message, response, kind = "http_after_authorization") {
@@ -164,7 +164,13 @@ export async function x402Fetch(url, options = {}) {
       "x-payment-required",
       "x-payment-challenge",
     ]);
+    if (!paymentRequiredHeader) {
+      throw makeHttpError("Received HTTP 402 without payment-required header", firstResponse, "payment_required_challenge_missing");
+    }
     const challenge = parsePaymentRequiredHeader(paymentRequiredHeader);
+    if (!challenge) {
+      throw makeHttpError("HTTP 402 did not include a valid payment-required challenge", firstResponse, "payment_required_challenge_invalid");
+    }
     const challengeFingerprint = crypto
       .createHash("sha256")
       .update(JSON.stringify(challenge) || String(paymentRequiredHeader ?? "missing"))
