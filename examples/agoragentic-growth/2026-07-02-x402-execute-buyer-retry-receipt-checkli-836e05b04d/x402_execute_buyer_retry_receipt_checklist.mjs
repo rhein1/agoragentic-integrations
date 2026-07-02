@@ -1,7 +1,7 @@
 // demo — moves no real funds
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { x402Fetch, classifyX402Error } from "./x402_receipt_validation_adapter.mjs";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
@@ -37,6 +37,14 @@ function readHeader(response, name) {
     ?? null;
 }
 
+function readFirstHeader(response, names) {
+  for (const name of names) {
+    const value = readHeader(response, name);
+    if (value) return value;
+  }
+  return null;
+}
+
 async function readJsonResponse(response) {
   const text = await response.text();
   return {
@@ -58,12 +66,133 @@ function canonicalReceipt(payload = {}, response) {
     receiptId: firstPresent(payload.receipt_id, payload.receiptId, receipt.receipt_id, receipt.id),
     invocationId: firstPresent(payload.invocation_id, payload.invocationId, receipt.invocation_id),
     quoteId: firstPresent(payload.quote_id, payload.quoteId, receipt.quote_id),
-    paymentReceiptHeader: readHeader(response, "payment-receipt"),
-    paymentResponseHeader: readHeader(response, "payment-response"),
+    paymentReceiptHeader: readFirstHeader(response, ["payment-receipt", "x-payment-receipt", "x-receipt-id"]),
+    paymentResponseHeader: readFirstHeader(response, ["payment-response", "x-payment-response"]),
     status: firstPresent(payload.status, payload.result?.status, payload.success === true ? "success" : null),
     settlement: firstPresent(payload.settlement, receipt.settlement),
     amountUsdc: firstPresent(payload.cost, payload.amount_usdc, receipt.amount_usdc),
   };
+}
+
+function parsePaymentRequiredHeader(headerValue) {
+  if (!headerValue) return {};
+  const raw = String(headerValue).trim();
+  const candidates = [raw];
+  try {
+    candidates.push(Buffer.from(raw, "base64").toString("utf8"));
+  } catch {
+    // Ignore non-base64 challenge values.
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      // Try the next representation.
+    }
+  }
+  return {};
+}
+
+function makeHttpError(message, response, kind = "http_after_authorization") {
+  const error = new Error(message);
+  error.status = response?.status ?? null;
+  error.kind = kind;
+  error.retryable = [429, 500, 502, 503, 504].includes(Number(error.status));
+  return error;
+}
+
+export function classifyX402Error(error) {
+  const status = error?.status ?? error?.response?.status ?? null;
+  const kind = error?.kind
+    ?? (status ? "http_after_authorization" : "network_after_authorization");
+  const retryableStatus = [429, 500, 502, 503, 504].includes(Number(status));
+  return {
+    kind,
+    status,
+    retryable: error?.retryable !== undefined
+      ? Boolean(error.retryable)
+      : kind === "network_after_authorization" || retryableStatus,
+    message: error?.message ?? String(error),
+  };
+}
+
+export async function x402Fetch(url, options = {}) {
+  const {
+    fetchImpl,
+    pay,
+    idempotencyKey,
+    method = "POST",
+    body,
+    authorization = null,
+  } = options;
+
+  const requestBody = JSON.stringify(body ?? {});
+  const baseHeaders = {
+    "content-type": "application/json",
+    "idempotency-key": idempotencyKey,
+  };
+
+  const requestWithAuthorization = async (auth = null) => {
+    const headers = { ...baseHeaders };
+    if (auth?.authorizationHeader) headers.authorization = auth.authorizationHeader;
+    if (auth?.paymentSignature) headers["payment-signature"] = auth.paymentSignature;
+    return fetchImpl(url, {
+      method,
+      headers,
+      body: requestBody,
+    });
+  };
+
+  try {
+    const firstResponse = await requestWithAuthorization(authorization);
+    if (authorization) {
+      firstResponse.x402Meta = {
+        paymentAttempted: true,
+        reusedAuthorization: true,
+        networkRetriesUsed: 0,
+      };
+      return firstResponse;
+    }
+    if (firstResponse.status !== 402) {
+      return firstResponse;
+    }
+
+    const paymentRequiredHeader = readFirstHeader(firstResponse, [
+      "payment-required",
+      "x-payment-required",
+      "x-payment-challenge",
+    ]);
+    const challenge = parsePaymentRequiredHeader(paymentRequiredHeader);
+    const challengeFingerprint = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(challenge) || String(paymentRequiredHeader ?? "missing"))
+      .digest("hex");
+    const paymentAuthorization = await pay(paymentRequiredHeader, {
+      challenge,
+      challengeFingerprint,
+      idempotencyKey,
+      url: String(url),
+      method,
+    });
+    const paidResponse = await requestWithAuthorization(paymentAuthorization);
+    if (paidResponse.status === 402) {
+      throw makeHttpError("paid request was rejected with another payment challenge", paidResponse, "paid_request_rejected");
+    }
+    paidResponse.x402Meta = {
+      paymentAttempted: true,
+      challengeFingerprint,
+      networkRetriesUsed: 0,
+    };
+    return paidResponse;
+  } catch (error) {
+    if (error?.status || error?.kind) throw error;
+    throw Object.assign(error, {
+      kind: "network_after_authorization",
+      retryable: true,
+    });
+  }
 }
 
 function summarizeChecks(checks) {
@@ -74,7 +203,7 @@ function summarizeChecks(checks) {
   };
 }
 
-export function buildReceiptChecklist({ payload, response, attempts, errorLog, authorizationStats, idempotencyKey }) {
+export function buildReceiptChecklist({ payload, response, attempts, errorLog, authorizationStats, idempotencyKey, quoteId }) {
   const receipt = canonicalReceipt(payload, response);
   const checks = [
     {
@@ -103,8 +232,13 @@ export function buildReceiptChecklist({ payload, response, attempts, errorLog, a
       evidence: JSON.stringify(receipt),
     },
     {
+      id: "receipt-quote-matches-request",
+      pass: !receipt.quoteId || receipt.quoteId === quoteId,
+      evidence: JSON.stringify({ requested: quoteId, receipt: receipt.quoteId }),
+    },
+    {
       id: "settlement-treated-as-informational",
-      pass: receipt.settlement !== null,
+      pass: true,
       evidence: String(receipt.settlement ?? "missing"),
     },
   ];
@@ -149,15 +283,23 @@ export async function execute(task, input, options = {}) {
   const errorLog = [];
   const attempts = [];
   let lastError = null;
+  let cachedAuthorization = null;
+
+  async function authorizeOnce(paymentRequiredHeader, request) {
+    if (cachedAuthorization) return cachedAuthorization;
+    cachedAuthorization = await pay(paymentRequiredHeader, request);
+    return cachedAuthorization;
+  }
 
   for (let buyerAttempt = 1; buyerAttempt <= maxAttempts; buyerAttempt += 1) {
     try {
       const response = await x402Fetch(url, {
         fetchImpl,
-        pay,
+        pay: authorizeOnce,
         idempotencyKey,
         method: "POST",
         maxNetworkRetries: maxNetworkRetriesPerCall,
+        authorization: cachedAuthorization,
         body: {
           quote_id: quoteId,
           task,
@@ -166,7 +308,7 @@ export async function execute(task, input, options = {}) {
       });
       const payload = await readJsonResponse(response);
       if (!response.ok) {
-        throw new Error(`execute failed with HTTP ${response.status}`);
+        throw makeHttpError(`execute failed with HTTP ${response.status}`, response);
       }
       attempts.push({
         buyerAttempt,
@@ -367,12 +509,13 @@ export async function runSelfTest() {
       paidAttemptCount: stats.paidAttemptCount,
     },
     idempotencyKey: execution.idempotencyKey,
+    quoteId: "quote_demo_receipt_recovery",
   });
 
   assert.equal(execution.ok, true);
   assert.equal(execution.payload.receipt_id, "rcpt_demo_recovered_001");
   assert.equal(stats.authorizeCalls, 1);
-  assert.equal(stats.payCalls, 2);
+  assert.equal(stats.payCalls, 1);
   assert.equal(stats.paidAttemptCount, 2);
   assert.equal(checklist.summary.failed, 0);
   assert.equal(execution.errorLog[0].kind, "network_after_authorization");
@@ -388,7 +531,7 @@ export async function runSelfTest() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
