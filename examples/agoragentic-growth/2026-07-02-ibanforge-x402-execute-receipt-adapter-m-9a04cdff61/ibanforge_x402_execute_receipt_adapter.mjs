@@ -224,8 +224,15 @@ function createFallbackX402Fetch() {
         }
 
         paymentAttempted = true;
-        const encodedChallenge = readHeader(response, "payment-required");
-        const challengePayload = decodePaymentRequired(encodedChallenge) || await safeJson(response) || {};
+        const encodedChallenge = readHeader(response, "payment-required") ?? readHeader(response, "x-payment-required");
+        const challengePayload = decodePaymentRequired(encodedChallenge);
+        if (!challengePayload || typeof challengePayload !== "object") {
+          throw new ExecuteHttpError("HTTP 402 did not include a valid payment-required challenge", {
+            status: 402,
+            idempotencyKey,
+            paymentRequired: encodedChallenge ?? null,
+          });
+        }
         const challengeId = challengePayload.challenge_id || challengePayload.id || null;
 
         if (typeof pay !== "function") {
@@ -233,6 +240,14 @@ function createFallbackX402Fetch() {
             status: 402,
             challenge: challengePayload,
             idempotencyKey,
+          });
+        }
+        if (cachedPayment) {
+          throw new ExecuteHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+            status: 402,
+            challenge: challengePayload,
+            idempotencyKey,
+            paymentAuthorized: true,
           });
         }
 
@@ -306,13 +321,14 @@ export function createIbanforgeManifest(options = {}) {
     output_schema: {
       type: "object",
       additionalProperties: false,
-      required: ["invocation_id", "capability_id", "output", "usage_receipt", "receipt_checklist", "wrapper"],
+      required: ["invocation_id", "capability_id", "output", "usage_receipt", "receipt_checklist", "seller_listing", "wrapper", "raw_response"],
       properties: {
         invocation_id: { type: "string" },
         capability_id: { type: "string" },
         output: { type: "object", additionalProperties: true },
         usage_receipt: { type: "object", additionalProperties: true },
         receipt_checklist: { type: "object", additionalProperties: true },
+        seller_listing: { type: "object", additionalProperties: true },
         wrapper: {
           type: "object",
           additionalProperties: false,
@@ -323,6 +339,7 @@ export function createIbanforgeManifest(options = {}) {
             server_name: { type: "string" },
           },
         },
+        raw_response: { type: "object", additionalProperties: true },
       },
     },
   };
@@ -344,7 +361,7 @@ export function createIbanforgeManifest(options = {}) {
       transport: "marketplace.execute",
       path: DEFAULT_EXECUTE_PATH,
       wrapper_runtime: "node>=18",
-      wrapper_file: "examples/ibanforge_x402_execute_receipt_adapter.mjs",
+      wrapper_file: "examples/agoragentic-growth/2026-07-02-ibanforge-x402-execute-receipt-adapter-m-9a04cdff61/ibanforge_x402_execute_receipt_adapter.mjs",
     },
     payment: {
       rail: "x402",
@@ -748,7 +765,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     process.stderr.write(`${error.stack || error.message}\n`);
     process.exitCode = 1;
