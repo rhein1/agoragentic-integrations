@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -66,6 +67,20 @@ function parsePaymentRequired(raw) {
   return [];
 }
 
+function normalizeAmount(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const asString = String(value).trim();
+  return asString || null;
+}
+
+function paymentResponseEvidenceCheck(paymentAttempted, paymentResponse) {
+  return {
+    item: "payment_response_header",
+    status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip",
+    evidence: paymentAttempted ? JSON.stringify(paymentResponse) : "no x402 challenge observed",
+  };
+}
+
 function createHttpError(message, extra = {}) {
   const error = new Error(message);
   error.name = "HttpError";
@@ -90,6 +105,17 @@ function normalizePayResult(payment) {
   return payment;
 }
 
+async function createPaymentAuthorization({ pay, paymentRequired, url, method, requestHeaders, requestBody, idempotencyKey }) {
+  return normalizePayResult(await pay(paymentRequired, {
+    url,
+    method,
+    headers: requestHeaders,
+    body: requestBody,
+    idempotencyKey,
+    challenge: parsePaymentRequired(paymentRequired)[0] ?? null,
+  }));
+}
+
 async function importPreferredX402Fetch() {
   for (const specifier of ["agoragentic/x402-client", "../lib/x402-client.mjs", "./lib/x402-client.mjs"]) {
     try {
@@ -100,6 +126,22 @@ async function importPreferredX402Fetch() {
     } catch {}
   }
   return null;
+}
+
+function mergePreferredX402Meta(response, preferred, options) {
+  const existingMeta = response.x402Meta || {};
+  response.x402Meta = {
+    ...existingMeta,
+    helper: existingMeta.helper ?? preferred.source,
+    helperSource: existingMeta.helperSource ?? preferred.source,
+    idempotencyKey: existingMeta.idempotencyKey ?? options.idempotencyKey ?? null,
+    networkRetriesUsed: existingMeta.networkRetriesUsed ?? 0,
+    paymentAttempted: existingMeta.paymentAttempted ?? Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
+    paymentAuthorized: existingMeta.paymentAuthorized ?? Boolean(readHeader(response, "payment-response")),
+    paymentRequired: existingMeta.paymentRequired ?? null,
+    authorizedPaymentReused: existingMeta.authorizedPaymentReused ?? null,
+  };
+  return response;
 }
 
 async function inlineX402Fetch(url, options = {}) {
@@ -183,16 +225,23 @@ async function inlineX402Fetch(url, options = {}) {
           paymentRequired: lastPaymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
+      if (cachedPayment) {
+        throw createHttpError("paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+          status: 402,
           idempotencyKey,
-          challenge: parsePaymentRequired(lastPaymentRequired)[0] ?? null,
-        }));
+          paymentAttempted: sawPaymentChallenge,
+          paymentRequired: lastPaymentRequired,
+        });
       }
+      cachedPayment = await createPaymentAuthorization({
+        pay,
+        paymentRequired: lastPaymentRequired,
+        url,
+        method,
+        requestHeaders,
+        requestBody,
+        idempotencyKey,
+      });
     } catch (error) {
       if (typeof error?.status === "number") {
         throw error;
@@ -221,17 +270,7 @@ async function x402Fetch(url, options = {}) {
     return inlineX402Fetch(url, options);
   }
   const response = await preferred.fn(url, options);
-  response.x402Meta = {
-    helper: preferred.source,
-    helperSource: preferred.source,
-    idempotencyKey: options.idempotencyKey ?? null,
-    networkRetriesUsed: 0,
-    paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-    paymentAuthorized: Boolean(readHeader(response, "payment-response")),
-    paymentRequired: null,
-    authorizedPaymentReused: null,
-  };
-  return response;
+  return mergePreferredX402Meta(response, preferred, options);
 }
 
 function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, paymentRequiredRaw = null, paymentAttempted = false }) {
@@ -244,7 +283,9 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, pay
   const echoedIdempotencyKey = receipt?.idempotency_key ?? paymentResponse?.idempotency_key ?? readHeader(response, "x-idempotency-key");
   const challengeId = challenge?.challengeId ?? challenge?.challenge_id ?? null;
   const receiptChallengeId = receipt?.challenge_id ?? null;
-  const paymentAmount = paymentResponse?.maxAmountRequired ?? paymentResponse?.amount ?? null;
+  const paymentAmount = normalizeAmount(paymentResponse?.maxAmountRequired ?? paymentResponse?.amount);
+  const challengeAmount = normalizeAmount(challenge?.maxAmountRequired ?? challenge?.amount);
+  const paymentQuoteId = paymentResponse?.quote_id ?? receipt?.quote_id ?? payload?.payment?.quote_id ?? null;
   const price = payload?.cost ?? payload?.price_usdc ?? payload?.price ?? null;
 
   return {
@@ -260,9 +301,10 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, pay
       { item: "idempotency_key_echo", status: echoedIdempotencyKey === idempotencyKey ? "pass" : "warn", evidence: echoedIdempotencyKey || "missing" },
       { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
       { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
-      { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? JSON.stringify(paymentResponse) : "no x402 challenge observed" },
+      paymentResponseEvidenceCheck(paymentAttempted, paymentResponse),
       { item: "receipt_matches_paid_challenge", status: paymentAttempted ? (challengeId && receiptChallengeId === challengeId ? "pass" : "warn") : "skip", evidence: paymentAttempted ? `${receiptChallengeId || "missing"} vs ${challengeId || "missing"}` : "no x402 challenge observed" },
-      { item: "quoted_amount_visible", status: challenge?.maxAmountRequired || paymentAmount ? "pass" : "warn", evidence: `${challenge?.maxAmountRequired || "missing"} vs ${paymentAmount || "missing"}` },
+      { item: "payment_quote_matches_execute_quote", status: paymentAttempted ? (paymentQuoteId === quoteId ? "pass" : "warn") : "skip", evidence: paymentAttempted ? `${paymentQuoteId || "missing"} vs ${quoteId || "missing"}` : "no x402 challenge observed" },
+      { item: "paid_amount_matches_challenge", status: paymentAttempted ? (challengeAmount && paymentAmount === challengeAmount ? "pass" : "warn") : "skip", evidence: paymentAttempted ? `${challengeAmount || "missing"} vs ${paymentAmount || "missing"}` : "no x402 challenge observed" },
       { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
       { item: "price_visibility", status: price === null ? "warn" : "pass", evidence: price === null ? "missing" : String(price) },
     ],
@@ -553,7 +595,7 @@ async function demo() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({
       error: error.name,
