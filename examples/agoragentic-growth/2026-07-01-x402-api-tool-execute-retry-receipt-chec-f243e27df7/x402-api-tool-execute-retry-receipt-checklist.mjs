@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -65,6 +66,48 @@ function normalizePayResult(payment) {
   return payment;
 }
 
+function clonePaymentAuthorization(payment) {
+  if (!payment) return null;
+  return {
+    authorizationHeader: payment.authorizationHeader ?? null,
+    paymentSignature: payment.paymentSignature ?? null,
+  };
+}
+
+function buildRequestHeaders(baseHeaders, idempotencyKey) {
+  return {
+    accept: "application/json",
+    ...baseHeaders,
+    "idempotency-key": idempotencyKey,
+  };
+}
+
+function attachPaymentHeaders(requestHeaders, cachedPayment) {
+  if (!cachedPayment) return;
+  if (cachedPayment.paymentSignature) {
+    requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
+    return;
+  }
+  if (cachedPayment.authorizationHeader && requestHeaders.authorization) {
+    requestHeaders["payment-signature"] = cachedPayment.authorizationHeader;
+    return;
+  }
+  if (cachedPayment.authorizationHeader) {
+    requestHeaders.authorization = cachedPayment.authorizationHeader;
+  }
+}
+
+function networkAfterPaymentError(error, { idempotencyKey, sawPaymentChallenge, networkRetriesUsed, cachedPayment }) {
+  return createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
+    cause: error,
+    idempotencyKey,
+    paymentAttempted: sawPaymentChallenge,
+    authorizedPaymentReused: true,
+    networkRetriesUsed,
+    paymentAuthorization: clonePaymentAuthorization(cachedPayment),
+  });
+}
+
 async function importPreferredX402Fetch() {
   try {
     const mod = await import("agoragentic/x402-client");
@@ -93,14 +136,8 @@ async function localX402Fetch(url, options = {}) {
   let cachedPayment = null;
   let sawPaymentChallenge = false;
   let networkRetriesUsed = 0;
-  let lastError = null;
-
   while (true) {
-    const requestHeaders = {
-      accept: "application/json",
-      "idempotency-key": idempotencyKey,
-      ...baseHeaders,
-    };
+    const requestHeaders = buildRequestHeaders(baseHeaders, idempotencyKey);
 
     let requestBody = body;
     if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
@@ -108,12 +145,7 @@ async function localX402Fetch(url, options = {}) {
       if (!requestHeaders["content-type"]) requestHeaders["content-type"] = "application/json";
     }
 
-    if (cachedPayment?.authorizationHeader) {
-      requestHeaders.authorization = cachedPayment.authorizationHeader;
-    }
-    if (cachedPayment?.paymentSignature) {
-      requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
-    }
+    attachPaymentHeaders(requestHeaders, cachedPayment);
 
     try {
       const response = await fetchImpl(url, {
@@ -149,26 +181,30 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(paymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
+      if (cachedPayment) {
+        throw createHttpError("paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+          status: 402,
           idempotencyKey,
-        }));
+          paymentRequired,
+          paymentAuthorization: clonePaymentAuthorization(cachedPayment),
+        });
       }
+      cachedPayment = normalizePayResult(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
-      lastError = error;
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
       if (networkRetriesUsed >= maxNetworkRetries) {
-        throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
-          cause: error,
+        throw networkAfterPaymentError(error, {
           idempotencyKey,
-          paymentAttempted: sawPaymentChallenge,
-          authorizedPaymentReused: true,
+          sawPaymentChallenge,
           networkRetriesUsed,
+          cachedPayment,
         });
       }
       networkRetriesUsed += 1;
@@ -192,9 +228,35 @@ async function x402Fetch(url, options = {}) {
 
 function extractReceiptReference(payload, response) {
   return payload?.receipt_id
+    ?? payload?.receiptId
+    ?? payload?.receipt?.receipt_id
     ?? payload?.receipt?.id
     ?? readHeader(response, "payment-receipt")
     ?? null;
+}
+
+function receiptQuoteBindingCheck(receiptQuoteId, quoteId) {
+  if (!receiptQuoteId) {
+    return { item: "receipt_quote_matches_execute_quote", status: "warn", evidence: "receipt quote_id missing" };
+  }
+  return {
+    item: "receipt_quote_matches_execute_quote",
+    status: receiptQuoteId === quoteId ? "pass" : "fail",
+    evidence: `${receiptQuoteId} vs ${quoteId}`,
+  };
+}
+
+function buildChecklistItems({ response, idempotencyKey, receiptId, paymentReceipt, paymentResponse, invocationId, receiptQuoteId, quoteId, cost, paymentAttempted }) {
+  return [
+    { item: "http_ok", status: response.ok ? "pass" : "fail", evidence: `HTTP ${response.status}` },
+    { item: "idempotency_key_present", status: idempotencyKey ? "pass" : "fail", evidence: idempotencyKey || "missing" },
+    { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
+    { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
+    { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
+    { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
+    receiptQuoteBindingCheck(receiptQuoteId, quoteId),
+    { item: "price_visibility", status: cost === null ? "warn" : "pass", evidence: cost === null ? "missing" : String(cost) },
+  ];
 }
 
 export function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, paymentAttempted }) {
@@ -203,6 +265,7 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   const paymentResponse = readHeader(response, "payment-response");
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
   const cost = payload?.cost ?? payload?.price ?? payload?.price_usdc ?? null;
+  const receiptQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.receipt?.quote_id ?? payload?.receipt?.quoteId ?? null;
 
   return {
     quoteId,
@@ -211,15 +274,7 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
     paymentAttempted,
     receiptId,
     invocationId,
-    checks: [
-      { item: "http_ok", status: response.ok ? "pass" : "fail", evidence: `HTTP ${response.status}` },
-      { item: "idempotency_key_present", status: idempotencyKey ? "pass" : "fail", evidence: idempotencyKey || "missing" },
-      { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
-      { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
-      { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
-      { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
-      { item: "price_visibility", status: cost === null ? "warn" : "pass", evidence: cost === null ? "missing" : String(cost) },
-    ],
+    checks: buildChecklistItems({ response, idempotencyKey, receiptId, paymentReceipt, paymentResponse, invocationId, receiptQuoteId, quoteId, cost, paymentAttempted }),
     uncertainty: [
       "This checklist only inspects buyer-visible HTTP evidence.",
       "A payment-receipt header is transport evidence, not independent chain settlement proof.",
@@ -264,7 +319,7 @@ export class X402ExecuteBuyer {
   }
 
   async match(task, constraints = {}) {
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { task, ...constraints }), {
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { ...constraints, task }), {
       method: "GET",
       headers: { accept: "application/json", ...this.headers },
     });
@@ -440,7 +495,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
