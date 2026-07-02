@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -153,6 +154,14 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired: lastPaymentRequired,
         });
       }
+      if (cachedPayment) {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to replay payment authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentRequired: lastPaymentRequired,
+          paymentAuthorized: true,
+        });
+      }
       if (!cachedPayment) {
         cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
           url,
@@ -207,6 +216,7 @@ function decodePaymentRequired(encoded) {
 function extractReceiptReference(payload, response) {
   return payload?.receipt_id
     ?? payload?.receipt?.id
+    ?? payload?.receipt?.receipt_id
     ?? readHeader(response, "payment-receipt")
     ?? null;
 }
@@ -422,7 +432,8 @@ export async function createMockMcpServer() {
       state.authHeaders.push(headers.authorization ?? null);
       const body = await readRequestJson(req);
 
-      if (!headers.authorization) {
+      const paymentAuthorization = headers.authorization ?? headers["payment-signature"] ?? null;
+      if (!paymentAuthorization) {
         return sendJson(res, 402, {
           error: "payment_required",
           quote_id: body?.quote_id ?? state.quoteId,
@@ -453,7 +464,7 @@ export async function createMockMcpServer() {
           id: receiptId,
           challenge_id: state.challengeId,
           idempotency_key: headers["idempotency-key"] ?? null,
-          authorization_fingerprint: stableHash(headers.authorization),
+          authorization_fingerprint: stableHash(paymentAuthorization),
           status: "accepted_by_demo_server",
         },
       }, {
@@ -525,7 +536,7 @@ async function demo() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
