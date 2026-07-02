@@ -3,12 +3,15 @@ import assert from "node:assert/strict";
 import process from "node:process";
 import readline from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_TOOL_NAME = "execute";
 const DEFAULT_SERVER_NAME = "micro-mu-local-adapter";
 const DEFAULT_MAX_ATTEMPTS = 3;
+const ADVERTISED_MAX_ATTEMPTS = 10;
 const DEFAULT_BASE_BACKOFF_MS = 25;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const ADVERTISED_MAX_TIMEOUT_MS = 120_000;
 const METRIC_SCHEMA = "agoragentic:usage-metrics:v1";
 
 function nowIso() {
@@ -51,6 +54,36 @@ function summarizeError(error) {
 
 function createMcpError(code, message, data) {
   return { code, message, data };
+}
+
+function methodNotFoundResponse(id, method) {
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: createMcpError(-32601, `Method not found: ${method}`),
+  };
+}
+
+function isSingleJsonRpcMessage(message) {
+  return Boolean(message) && typeof message === "object" && !Array.isArray(message);
+}
+
+async function runWithAbortableTimeout(work, timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve(work(controller.signal)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort(new Error(`execution timed out after ${timeoutMs}ms`));
+          reject(new TransientExecuteError(`execution timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 class TransientExecuteError extends Error {
@@ -107,7 +140,11 @@ class UsageMetricsLogger {
     if (entry.recovered_after_retry) {
       this.counters.recovered_calls += 1;
     }
-    this.sink(entry);
+    try {
+      this.sink(entry);
+    } catch (error) {
+      entry.sink_error = summarizeError(error);
+    }
     return entry;
   }
 
@@ -136,9 +173,9 @@ export class MicroMuLocalAdapter {
       options.description ||
       "Execute a bounded micro/mu task through a local adapter with retry recovery and usage metrics.";
     this.executeImpl = options.execute;
-    this.maxAttempts = normalizePositiveInt(options.maxAttempts, DEFAULT_MAX_ATTEMPTS);
+    this.maxAttempts = normalizeBoundedPositiveInt(options.maxAttempts, DEFAULT_MAX_ATTEMPTS, ADVERTISED_MAX_ATTEMPTS, "maxAttempts");
     this.baseBackoffMs = normalizePositiveInt(options.baseBackoffMs, DEFAULT_BASE_BACKOFF_MS);
-    this.defaultTimeoutMs = normalizePositiveInt(options.timeoutMs, DEFAULT_TIMEOUT_MS);
+    this.defaultTimeoutMs = normalizeBoundedPositiveInt(options.timeoutMs, DEFAULT_TIMEOUT_MS, ADVERTISED_MAX_TIMEOUT_MS, "timeoutMs");
     this.metrics = options.metrics || new UsageMetricsLogger({
       serverName: this.serverName,
       sink: options.metricsSink,
@@ -271,7 +308,17 @@ export class MicroMuLocalAdapter {
     if (name !== this.toolName) {
       throw new PermanentExecuteError(`unknown tool: ${name}`);
     }
-    const result = await this.execute(args);
+    let result;
+    let isError = false;
+    try {
+      result = await this.execute(args);
+    } catch (error) {
+      const details = error instanceof Error && error.details
+        ? cloneJson(error.details)
+        : { ok: false, error: summarizeError(error) };
+      result = details;
+      isError = true;
+    }
     return {
       content: [
         {
@@ -281,6 +328,7 @@ export class MicroMuLocalAdapter {
               ok: result.ok,
               task: result.task,
               output: result.output,
+              error: result.error,
               recovery: result.recovery,
             },
             null,
@@ -289,16 +337,23 @@ export class MicroMuLocalAdapter {
         },
       ],
       structuredContent: result,
-      isError: false,
+      isError,
     };
   }
 
   async handleRpc(message) {
-    if (!message || typeof message !== "object") {
+    if (Array.isArray(message)) {
+      return this.#handleRpcBatch(message);
+    }
+    if (!isSingleJsonRpcMessage(message)) {
       return { jsonrpc: "2.0", id: null, error: createMcpError(-32600, "Invalid Request") };
     }
 
+    const hasId = Object.prototype.hasOwnProperty.call(message, "id");
     const { id = null, method, params = {} } = message;
+    if (!hasId) {
+      return null;
+    }
     try {
       if (method === "initialize") {
         return {
@@ -311,9 +366,6 @@ export class MicroMuLocalAdapter {
           },
         };
       }
-      if (method === "notifications/initialized") {
-        return null;
-      }
       if (method === "tools/list") {
         return {
           jsonrpc: "2.0",
@@ -322,14 +374,7 @@ export class MicroMuLocalAdapter {
         };
       }
       if (method === "tools/call") {
-        const name = params.name;
-        const args = params.arguments || {};
-        const result = await this.callTool(name, args);
-        return {
-          jsonrpc: "2.0",
-          id,
-          result,
-        };
+        return this.#handleToolCall(id, params);
       }
       if (method === "metrics/get") {
         return {
@@ -338,11 +383,7 @@ export class MicroMuLocalAdapter {
           result: this.metricsSnapshot(),
         };
       }
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: createMcpError(-32601, `Method not found: ${method}`),
-      };
+      return methodNotFoundResponse(id, method);
     } catch (error) {
       return {
         jsonrpc: "2.0",
@@ -368,10 +409,30 @@ export class MicroMuLocalAdapter {
         continue;
       }
       const response = await this.handleRpc(message);
-      if (response) {
+      if (Array.isArray(response)) {
+        output.write(`${JSON.stringify(response)}\n`);
+      } else if (response) {
         output.write(`${JSON.stringify(response)}\n`);
       }
     }
+  }
+
+  async #handleRpcBatch(messages) {
+    const responses = [];
+    for (const item of messages) {
+      const response = await this.handleRpc(item);
+      if (response) responses.push(response);
+    }
+    return responses;
+  }
+
+  async #handleToolCall(id, params = {}) {
+    const result = await this.callTool(params.name, params.arguments || {});
+    return {
+      jsonrpc: "2.0",
+      id,
+      result,
+    };
   }
 
   #normalizeRequest(request) {
@@ -390,8 +451,8 @@ export class MicroMuLocalAdapter {
     if (!constraints || typeof constraints !== "object" || Array.isArray(constraints)) {
       throw new PermanentExecuteError("constraints must be an object when provided");
     }
-    const maxAttempts = normalizePositiveInt(constraints.max_attempts, this.maxAttempts);
-    const timeoutMs = normalizePositiveInt(constraints.timeout_ms, this.defaultTimeoutMs);
+    const maxAttempts = normalizeBoundedPositiveInt(constraints.max_attempts, this.maxAttempts, ADVERTISED_MAX_ATTEMPTS, "constraints.max_attempts");
+    const timeoutMs = normalizeBoundedPositiveInt(constraints.timeout_ms, this.defaultTimeoutMs, ADVERTISED_MAX_TIMEOUT_MS, "constraints.timeout_ms");
     return {
       task,
       input: cloneJson(input),
@@ -402,26 +463,13 @@ export class MicroMuLocalAdapter {
   }
 
   async #executeWithTimeout(normalized, attempt) {
-    let timer;
-    try {
-      return await Promise.race([
-        Promise.resolve(
-          this.executeImpl({
-            task: normalized.task,
-            input: cloneJson(normalized.input),
-            constraints: cloneJson(normalized.constraints),
-            attempt,
-          }),
-        ),
-        new Promise((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new TransientExecuteError(`execution timed out after ${normalized.timeoutMs}ms`));
-          }, normalized.timeoutMs);
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
+    return runWithAbortableTimeout((signal) => this.executeImpl({
+      task: normalized.task,
+      input: cloneJson(normalized.input),
+      constraints: cloneJson(normalized.constraints),
+      attempt,
+      signal,
+    }), normalized.timeoutMs);
   }
 }
 
@@ -436,9 +484,17 @@ function normalizePositiveInt(value, fallback) {
   return parsed;
 }
 
+function normalizeBoundedPositiveInt(value, fallback, max, label) {
+  const parsed = normalizePositiveInt(value, fallback);
+  if (parsed > max) {
+    throw new PermanentExecuteError(`${label} must be <= ${max}`);
+  }
+  return parsed;
+}
+
 export function createDemoMicroMuRuntime() {
   const seen = new Set();
-  return async function execute({ task, input, attempt }) {
+  return async function execute({ task, input, attempt, signal }) {
     if (task === "always_fail") {
       throw new PermanentExecuteError("demo runtime rejected always_fail");
     }
@@ -450,7 +506,7 @@ export function createDemoMicroMuRuntime() {
       }
     }
     if (input.mode === "slow") {
-      await sleep(Number(input.delay_ms) || 50);
+      await sleep(Number(input.delay_ms) || 50, undefined, { signal });
     }
     return {
       runtime: "micro/mu-demo",
@@ -496,6 +552,39 @@ async function runSelfTest() {
   assert.equal(snapshot.counters.recovered_calls, 1);
   assert.equal(metricEvents.length, 2);
 
+  const toolFailure = await adapter.callTool("execute", { task: "always_fail", input: {} });
+  assert.equal(toolFailure.isError, true);
+  assert.equal(toolFailure.structuredContent.ok, false);
+
+  await assert.rejects(
+    () => adapter.execute({ task: "too_many", input: {}, constraints: { max_attempts: 11 } }),
+    /constraints\.max_attempts must be <= 10/,
+  );
+  await assert.rejects(
+    () => adapter.execute({ task: "too_long", input: {}, constraints: { timeout_ms: 120001 } }),
+    /constraints\.timeout_ms must be <= 120000/,
+  );
+
+  const noisyMetricsAdapter = new MicroMuLocalAdapter({
+    execute: createDemoMicroMuRuntime(),
+    metricsSink: () => {
+      throw new Error("metrics offline");
+    },
+  });
+  const noisyResult = await noisyMetricsAdapter.execute({ task: "metrics_best_effort", input: {} });
+  assert.equal(noisyResult.ok, true);
+  assert.equal(noisyResult.usage_metrics.sink_error.message, "metrics offline");
+
+  const rpcAdapter = new MicroMuLocalAdapter({ execute: createDemoMicroMuRuntime() });
+  const batchResponse = await rpcAdapter.handleRpc([
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+    { jsonrpc: "2.0", method: "notifications/cancelled", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+  ]);
+  assert.equal(batchResponse.length, 2);
+  assert.equal(batchResponse[0].id, 1);
+  assert.equal(batchResponse[1].id, 2);
+
   return {
     demo: "micro/mu local MCP adapter",
     recovered_execution: {
@@ -535,7 +624,7 @@ async function main(argv = process.argv.slice(2)) {
   process.exitCode = 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const details = error instanceof Error && error.details ? `\n${JSON.stringify(error.details, null, 2)}` : "";
     process.stderr.write(`${error instanceof Error ? error.stack || error.message : String(error)}${details}\n`);
