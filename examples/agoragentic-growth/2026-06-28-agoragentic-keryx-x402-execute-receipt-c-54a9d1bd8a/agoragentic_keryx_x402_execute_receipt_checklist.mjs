@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
@@ -112,6 +113,122 @@ function createExecuteError(message, extra = {}) {
   return error;
 }
 
+function normalizePayResult(payment) {
+  if (!payment || typeof payment !== "object") {
+    throw new Error("pay callback must return an object");
+  }
+  if (!payment.authorizationHeader && !payment.paymentSignature) {
+    throw new Error("pay callback must return authorizationHeader or paymentSignature");
+  }
+  return payment;
+}
+
+function createInlineX402Fetch() {
+  return async function x402Fetch(url, options = {}) {
+    const {
+      fetchImpl = globalThis.fetch,
+      pay,
+      idempotencyKey = randomUUID(),
+      method = "GET",
+      headers = {},
+      body,
+      signal,
+      maxNetworkRetries = 1,
+    } = options;
+
+    const baseHeaders = lowerCaseHeaders(headers);
+    let cachedPayment = null;
+    let cachedChallenge = null;
+    let sawPaymentChallenge = false;
+    let networkRetriesUsed = 0;
+
+    while (true) {
+      const requestHeaders = {
+        accept: "application/json",
+        "idempotency-key": idempotencyKey,
+        ...baseHeaders,
+      };
+      let requestBody = body;
+      if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
+        requestBody = JSON.stringify(requestBody);
+        if (!requestHeaders["content-type"]) requestHeaders["content-type"] = "application/json";
+      }
+      if (cachedPayment?.authorizationHeader) requestHeaders.authorization = cachedPayment.authorizationHeader;
+      if (cachedPayment?.paymentSignature) requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
+
+      try {
+        const response = await fetchImpl(url, {
+          method,
+          headers: requestHeaders,
+          body: requestBody,
+          signal,
+        });
+
+        if (response.status !== 402) {
+          response.x402Meta = {
+            helper: "inline-x402Fetch",
+            idempotencyKey,
+            paymentAttempted: sawPaymentChallenge,
+            paymentAuthorized: Boolean(cachedPayment),
+            networkRetriesUsed,
+            challenge: cachedChallenge,
+          };
+          return response;
+        }
+
+        sawPaymentChallenge = true;
+        const paymentRequired = readHeader(response, "payment-required") ?? readHeader(response, "x-payment-required");
+        if (!paymentRequired) {
+          throw createExecuteError("Received HTTP 402 without payment-required header", {
+            status: 402,
+            idempotencyKey,
+          });
+        }
+        if (cachedPayment) {
+          throw createExecuteError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+            status: 402,
+            idempotencyKey,
+            paymentRequired,
+            paymentAuthorized: true,
+          });
+        }
+        if (typeof pay !== "function") {
+          throw createExecuteError("HTTP 402 requires a caller-supplied pay callback", {
+            status: 402,
+            idempotencyKey,
+            paymentRequired,
+          });
+        }
+
+        cachedChallenge = parsePaymentRequired(paymentRequired)[0] ?? null;
+        cachedPayment = normalizePayResult(await pay(paymentRequired, {
+          url,
+          method,
+          headers: requestHeaders,
+          body: requestBody,
+          idempotencyKey,
+          challenge: cachedChallenge,
+        }));
+      } catch (error) {
+        if (typeof error?.status === "number") throw error;
+        if (!cachedPayment) throw error;
+        if (networkRetriesUsed >= maxNetworkRetries) {
+          throw createExecuteError(`Network error after payment authorization was prepared: ${error.message}`, {
+            name: "NetworkError",
+            cause: error,
+            idempotencyKey,
+            paymentAttempted: sawPaymentChallenge,
+            paymentAuthorized: true,
+            challenge: cachedChallenge,
+            networkRetriesUsed,
+          });
+        }
+        networkRetriesUsed += 1;
+      }
+    }
+  };
+}
+
 let cachedX402FetchPromise = null;
 async function loadX402Fetch() {
   if (!cachedX402FetchPromise) {
@@ -123,12 +240,14 @@ async function loadX402Fetch() {
         }
       } catch {}
 
-      const fallback = await import("../x402/x402-receipt-validation-adapter.mjs");
-      if (typeof fallback.x402FetchWithFallback === "function") {
-        return fallback.x402FetchWithFallback;
-      }
+      try {
+        const fallback = await import("../x402/x402-receipt-validation-adapter.mjs");
+        if (typeof fallback.x402FetchWithFallback === "function") {
+          return fallback.x402FetchWithFallback;
+        }
+      } catch {}
 
-      throw new Error("Unable to load x402Fetch from agoragentic/x402-client or ../x402/x402-receipt-validation-adapter.mjs");
+      return createInlineX402Fetch();
     })();
   }
   return cachedX402FetchPromise;
@@ -522,7 +641,7 @@ export async function demoKeryxExecuteBuyerRetry() {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demoKeryxExecuteBuyerRetry()
     .then((summary) => {
       console.log(JSON.stringify(summary, null, 2));
