@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -102,8 +103,8 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
@@ -113,7 +114,11 @@ async function localX402Fetch(url, options = {}) {
     }
 
     if (cachedPayment?.authorizationHeader) {
-      requestHeaders.authorization = cachedPayment.authorizationHeader;
+      if (requestHeaders.authorization) {
+        requestHeaders["payment-signature"] = cachedPayment.authorizationHeader;
+      } else {
+        requestHeaders.authorization = cachedPayment.authorizationHeader;
+      }
     }
     if (cachedPayment?.paymentSignature) {
       requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
@@ -144,6 +149,14 @@ async function localX402Fetch(url, options = {}) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
           status: 402,
           idempotencyKey,
+        });
+      }
+      if (cachedPayment) {
+        throw createHttpError("Paid request received another HTTP 402; refusing to re-authorize payment or replay cached authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          paymentRequired: lastPaymentRequired,
         });
       }
       if (typeof pay !== "function") {
@@ -184,13 +197,18 @@ async function x402Fetch(url, options = {}) {
   const preferred = await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
   const response = await preferred(url, options);
+  const existingMeta = response.x402Meta && typeof response.x402Meta === "object" ? response.x402Meta : {};
+  const paymentRequired = existingMeta.paymentRequired ?? readHeader(response, "payment-required") ?? null;
+  const paymentAttempted = existingMeta.paymentAttempted
+    ?? Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response"));
   response.x402Meta = {
+    ...existingMeta,
     helper: "agoragentic/x402-client",
-    idempotencyKey: options.idempotencyKey ?? null,
-    networkRetriesUsed: 0,
-    paymentAuthorized: Boolean(readHeader(response, "payment-response")),
-    paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-    paymentRequired: null,
+    idempotencyKey: existingMeta.idempotencyKey ?? options.idempotencyKey ?? null,
+    networkRetriesUsed: existingMeta.networkRetriesUsed ?? 0,
+    paymentAuthorized: existingMeta.paymentAuthorized ?? Boolean(readHeader(response, "payment-response")),
+    paymentAttempted,
+    paymentRequired,
   };
   return response;
 }
@@ -218,6 +236,13 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
   const cost = payload?.cost ?? payload?.price ?? payload?.price_usdc ?? null;
   const receipt = payload?.receipt ?? null;
+  const responseQuoteId = payload?.quote_id
+    ?? payload?.quoteId
+    ?? payload?.quote?.quote_id
+    ?? payload?.quote?.id
+    ?? receipt?.quote_id
+    ?? receipt?.quoteId
+    ?? null;
   const decodedPaymentRequired = decodePaymentRequired(paymentRequired);
   const paidChallenge = Array.isArray(decodedPaymentRequired) ? decodedPaymentRequired[0] : decodedPaymentRequired;
   const challengeId = paidChallenge?.challengeId ?? null;
@@ -240,6 +265,7 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
       { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
       { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
       { item: "receipt_matches_paid_challenge", status: paymentAttempted ? (challengeId && receiptChallengeId === challengeId ? "pass" : "warn") : "skip", evidence: paymentAttempted ? `${receiptChallengeId || "missing"} vs ${challengeId || "missing"}` : "no x402 challenge observed" },
+      { item: "receipt_quote_binding", status: quoteId ? (responseQuoteId === quoteId ? "pass" : "fail") : "skip", evidence: quoteId ? `${responseQuoteId || "missing"} vs ${quoteId}` : "quote not used" },
       { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
       { item: "price_visibility", status: cost === null ? "warn" : "pass", evidence: cost === null ? "missing" : String(cost) },
     ],
@@ -441,6 +467,7 @@ export async function createMockMcpServer() {
       const receiptId = `rcpt_${stableHash(headers.authorization)}`;
       return sendJson(res, 200, {
         ok: true,
+        quote_id: body?.quote_id ?? state.quoteId,
         invocation_id: `inv_${stableHash(body?.quote_id ?? state.quoteId)}`,
         receipt_id: receiptId,
         cost: 0.01,
@@ -525,7 +552,7 @@ async function demo() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
