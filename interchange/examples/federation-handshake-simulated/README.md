@@ -9,9 +9,10 @@ node interchange/examples/federation-handshake-simulated/simulate.mjs
 ```
 
 The simulation signs the advertised `federation/follow-referral` method and the
-full snake_case wire params after removing only the `auth` envelope. It also
-shows that a legacy method string (`referral.follow`) does not verify against the
-same signature.
+exact snake_case fields the server reconstructs for that method:
+`relationship_id`, `remote_origin`, and `referral_id`. It also shows that a
+legacy method string (`referral.follow`) does not verify against the same
+signature.
 
 This proves client-side canonicalization only. A real federation pilot still
 requires a consenting partner, owner first-pin, live route activation, durable

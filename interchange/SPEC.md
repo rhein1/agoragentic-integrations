@@ -103,6 +103,57 @@ network until a partner pilot is armed.
 | `federation/verify-referral` | Verify one referral token without following it. | Built, default-off |
 | `federation/follow-referral` | Record a signed post-pin follow by a distinct relationship. | Built, default-off |
 
+## JSON Schemas
+
+The public package includes schemas for the v0 adoption path:
+
+| Schema | Purpose |
+|---|---|
+| `schemas/agent-card-federation-extension.schema.json` | The `agoragentic:federation` Agent Card extension. |
+| `schemas/post-pin-auth.schema.json` | The signed `auth` envelope for post-pin methods. |
+| `schemas/federation-follow-referral.params.schema.json` | `federation/follow-referral` params, including snake_case fields and `auth`. |
+| `schemas/federation-challenge-response.params.schema.json` | `federation/challenge-response` params for the first key-control proof. |
+
+## First-handshake challenge response
+
+The first live handshake is:
+
+```text
+federation/propose -> owner first-pin -> federation/challenge-response
+```
+
+After owner first-pin, Agoragentic issues a single-use challenge and a durable
+challenge body. The partner signs this UTF-8 string with the Ed25519 private key
+whose full SPKI public key was reviewed in the Agent Card:
+
+```text
+sha256:<stable-json-sha256-of-{"challenge":"...","body":{...}}>
+```
+
+In helper terms, sign `hashRef({ challenge, body })`, where `body` is the exact
+durable challenge body returned by Agoragentic. Do not hand-write a summary and
+do not sign the later `binding` object unless the issued challenge body is
+exactly that object.
+
+Successful `federation/challenge-response` returns a top-level `status` with
+nested verification/safety fields:
+
+```json
+{
+  "status": "verified_federation_key_control",
+  "verification": {
+    "verified_federation": true
+  },
+  "safety": {
+    "trust_promoted": true,
+    "trust_model": "key_control_tofu_not_identity"
+  }
+}
+```
+
+This proves key control under the owner-reviewed TOFU pin. It is not independent
+legal identity, organic demand, or a connected marketplace network.
+
 ## Post-pin request signing
 
 After a relationship has an active remote key pin, maintenance and referral
@@ -116,7 +167,7 @@ The signed canonical message is:
 <remote_origin>
 <nonce>
 <timestamp>
-sha256:<stable-json-sha256-of-params-without-auth>
+sha256:<stable-json-sha256-of-params-to-sign>
 ```
 
 Rules:
@@ -128,10 +179,29 @@ Rules:
   `https://partner.example`.
 - `nonce` is single-use for that relationship and method.
 - `timestamp` is the exact timestamp value the signer sends in `auth.timestamp`.
-- `params-without-auth` is the full snake_case wire object after removing only
-  the `auth` envelope. Do not sign camelCase aliases.
+- For `federation/refresh`, `federation/revoke`, and
+  `federation/declare-need`, `params-without-auth` is the full snake_case wire
+  object after removing only the `auth` envelope.
+- For `federation/follow-referral`, the server reconstructs and verifies
+  exactly `{ relationship_id, remote_origin, referral_id }`. Do not sign extra
+  fields, even if a local object contains them.
+- Do not sign camelCase aliases.
 - The params hash uses stable JSON serialization with sorted object keys and a
   `sha256:` prefix.
+
+The bundled reference clients and conformance vectors make the signing bytes
+executable:
+
+```bash
+node interchange/clients/js/interchange-client.mjs
+python interchange/clients/python/interchange_client.py --self-test
+```
+
+The vector file is `conformance/vectors.json`. It includes both a
+`federation/follow-referral` vector for the reconstructed three-field rule and a
+generic `federation/refresh` vector for the full-params-minus-auth rule. A
+conforming implementation must produce the listed `expected_params_hash`,
+`expected_canonical_message`, and UTF-8 hex bytes.
 
 Example `federation/follow-referral` params:
 

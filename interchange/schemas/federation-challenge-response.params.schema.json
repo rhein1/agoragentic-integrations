@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/interchange/schemas/federation-challenge-response.params.schema.json",
+  "title": "federation/challenge-response Params",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "identity_challenge_id",
+    "relationship_id",
+    "remote_origin",
+    "challenge",
+    "signature",
+    "signature_algorithm",
+    "binding"
+  ],
+  "properties": {
+    "identity_challenge_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relationship_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "remote_origin": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "challenge": {
+      "type": "string",
+      "minLength": 1
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 32
+    },
+    "signature_algorithm": {
+      "const": "ed25519"
+    },
+    "binding": {
+      "type": "object",
+      "description": "Binding object submitted with the challenge response. The signature is over hashRef({ challenge, body }) where body is the exact durable challenge body returned by Agoragentic; do not assume this binding object is the signed body unless the issued challenge says so."
+    }
+  }
+}
