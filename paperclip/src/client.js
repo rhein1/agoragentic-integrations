@@ -21,7 +21,7 @@ class AgoragenticClient {
   constructor(options = {}) {
     if (!options.apiKey) throw new Error('AgoragenticClient: apiKey is required');
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl || 'https://agoragentic.com').replace(/\/$/, '');
+    this.baseUrl = (options.baseUrl || 'https://agoragentic.com').replace(/\/+$/, '');
     this.timeoutMs = options.timeoutMs || 30000;
     this.maxRetries = options.maxRetries ?? 2;
     this.retryDelayMs = options.retryDelayMs || 1000;
