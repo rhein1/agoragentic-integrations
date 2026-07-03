@@ -17,6 +17,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import inspect
 import json
@@ -27,7 +28,7 @@ import traceback
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 from uuid import uuid4
 
 try:
@@ -97,6 +98,16 @@ class ExecuteResult:
     error: Optional[JsonDict]
 
 
+@dataclass(frozen=True)
+class LocalArcadeContext:
+    """Small simulated context for local tools that expect Arcade-injected context."""
+
+    request_id: str
+    namespace: str
+    metadata: JsonDict
+    simulated: bool = True
+
+
 class ArcadeLocalExecuteAdapter:
     """Standalone local execute() wrapper for Arcade-style MCP tools."""
 
@@ -115,6 +126,11 @@ class ArcadeLocalExecuteAdapter:
 
     def register_tool(self, name: Optional[str] = None, func: Optional[ToolCallable] = None):
         """Register a tool by name or as a decorator."""
+        if callable(name) and func is None:
+            func = name
+            self.tools[func.__name__] = func
+            return func
+
         if func is not None:
             self.tools[name or func.__name__] = func
             return func
@@ -173,17 +189,12 @@ class ArcadeLocalExecuteAdapter:
             )
 
         try:
-            bound_arguments = self._bind_arguments(tool, safe_arguments)
-            output = tool(*bound_arguments[0], **bound_arguments[1])
-        except ArcadeExecuteError as exc:
-            return self._finalize_failure(
-                tool_name=tool_name,
+            bound_arguments = self._bind_arguments(
+                tool,
+                safe_arguments,
                 request_id=request_id,
-                started=started,
-                arguments=safe_arguments,
                 metadata=safe_metadata,
-                input_fingerprint=input_fingerprint,
-                error=exc,
+                receipt_namespace=self.receipt_namespace,
             )
         except TypeError as exc:
             error = ArcadeExecuteError(
@@ -200,6 +211,21 @@ class ArcadeLocalExecuteAdapter:
                 metadata=safe_metadata,
                 input_fingerprint=input_fingerprint,
                 error=error,
+            )
+
+        try:
+            output = tool(*bound_arguments[0], **bound_arguments[1])
+            if inspect.isawaitable(output):
+                output = self._await_sync(output)
+        except ArcadeExecuteError as exc:
+            return self._finalize_failure(
+                tool_name=tool_name,
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=exc,
             )
         except Exception as exc:  # pragma: no cover - exercised by self-test via boom tool
             error = ArcadeExecuteError(
@@ -218,6 +244,137 @@ class ArcadeLocalExecuteAdapter:
                 error=error,
             )
 
+        return self._finalize_success(
+            tool_name=tool_name,
+            request_id=request_id,
+            started=started,
+            arguments=safe_arguments,
+            metadata=safe_metadata,
+            input_fingerprint=input_fingerprint,
+            output=output,
+        )
+
+    async def execute_async(
+        self,
+        tool_name: str,
+        arguments: Optional[Mapping[str, Any]] = None,
+        *,
+        request_id: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> ExecuteResult:
+        started = _utcnow()
+        request_id = request_id or f"arcade_exec_{uuid4().hex}"
+        safe_arguments = dict(arguments or {})
+        safe_metadata = dict(metadata or {})
+        input_fingerprint = _stable_sha256({"tool_name": tool_name, "arguments": safe_arguments, "metadata": safe_metadata})
+
+        if not tool_name or not str(tool_name).strip():
+            error = ArcadeExecuteError("tool_name is required", code="invalid_request", retryable=False)
+            return self._finalize_failure(
+                tool_name=str(tool_name or ""),
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=error,
+            )
+
+        tool = self.tools.get(tool_name)
+        if tool is None:
+            error = ArcadeExecuteError(
+                f"tool not found: {tool_name}",
+                code="tool_not_found",
+                retryable=False,
+                details={"available_tools": self.list_tools()},
+            )
+            return self._finalize_failure(
+                tool_name=tool_name,
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=error,
+            )
+
+        try:
+            bound_arguments = self._bind_arguments(
+                tool,
+                safe_arguments,
+                request_id=request_id,
+                metadata=safe_metadata,
+                receipt_namespace=self.receipt_namespace,
+            )
+        except TypeError as exc:
+            error = ArcadeExecuteError(
+                f"invalid arguments for {tool_name}: {exc}",
+                code="invalid_arguments",
+                retryable=False,
+                details={"traceback": traceback.format_exc(limit=1)},
+            )
+            return self._finalize_failure(
+                tool_name=tool_name,
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=error,
+            )
+
+        try:
+            output = tool(*bound_arguments[0], **bound_arguments[1])
+            if inspect.isawaitable(output):
+                output = await output
+        except ArcadeExecuteError as exc:
+            return self._finalize_failure(
+                tool_name=tool_name,
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=exc,
+            )
+        except Exception as exc:  # pragma: no cover - mirrors sync failure handling
+            error = ArcadeExecuteError(
+                f"tool execution failed: {exc}",
+                code="tool_execution_failed",
+                retryable=False,
+                details={"traceback": traceback.format_exc(limit=8)},
+            )
+            return self._finalize_failure(
+                tool_name=tool_name,
+                request_id=request_id,
+                started=started,
+                arguments=safe_arguments,
+                metadata=safe_metadata,
+                input_fingerprint=input_fingerprint,
+                error=error,
+            )
+
+        return self._finalize_success(
+            tool_name=tool_name,
+            request_id=request_id,
+            started=started,
+            arguments=safe_arguments,
+            metadata=safe_metadata,
+            input_fingerprint=input_fingerprint,
+            output=output,
+        )
+
+    def _finalize_success(
+        self,
+        *,
+        tool_name: str,
+        request_id: str,
+        started: datetime,
+        arguments: Mapping[str, Any],
+        metadata: Mapping[str, Any],
+        input_fingerprint: str,
+        output: Any,
+    ) -> ExecuteResult:
         finished = _utcnow()
         output_fingerprint = _stable_sha256(output)
         receipt = self._build_receipt(
@@ -228,9 +385,9 @@ class ArcadeLocalExecuteAdapter:
             input_fingerprint=input_fingerprint,
             output_fingerprint=output_fingerprint,
             error_code=None,
-            arguments=safe_arguments,
+            arguments=arguments,
             output=output,
-            metadata=safe_metadata,
+            metadata=metadata,
             status="completed",
         )
         self._append_usage_receipt(receipt)
@@ -243,6 +400,18 @@ class ArcadeLocalExecuteAdapter:
             receipt=asdict(receipt),
             error=None,
         )
+
+    async def execute_async_tool(self, tool_name: str, arguments: Optional[Mapping[str, Any]] = None) -> JsonDict:
+        result = await self.execute_async(tool_name=tool_name, arguments=arguments or {})
+        return {
+            "ok": result.ok,
+            "tool_name": result.tool_name,
+            "request_id": result.request_id,
+            "status": result.status,
+            "output": result.output,
+            "receipt": result.receipt,
+            "error": result.error,
+        }
 
     def build_arcade_tool(self) -> ToolCallable:
         """Return a single tool function suitable for MCPApp.tool(...)."""
@@ -263,7 +432,7 @@ class ArcadeLocalExecuteAdapter:
         local_execute.__doc__ = "Execute a locally registered Arcade MCP tool and emit a simulated usage receipt."
         return local_execute
 
-    def create_mcp_app(self, name: str = "arcade-local-execute", version: str = "0.1.0"):
+    def create_mcp_app(self, name: str = "arcade_local_execute", version: str = "0.1.0"):
         """Create an MCP app if arcade_mcp_server is installed."""
         if MCPApp is None:
             raise RuntimeError("Install arcade-mcp-server to expose this adapter as an MCP app")
@@ -342,8 +511,8 @@ class ArcadeLocalExecuteAdapter:
             (json.dumps(signature_payload, sort_keys=True, default=str) + self.receipt_secret).encode("utf-8")
         ).hexdigest()
         receipt_metadata = {
-            "arguments_preview": _truncate_json(arguments),
-            "output_preview": _truncate_json(output),
+            "arguments_preview": _redacted_preview("input", input_fingerprint),
+            "output_preview": _redacted_preview("output", output_fingerprint),
             **dict(metadata),
         }
         return UsageReceipt(
@@ -366,9 +535,30 @@ class ArcadeLocalExecuteAdapter:
         )
 
     @staticmethod
-    def _bind_arguments(tool: ToolCallable, arguments: Mapping[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    def _bind_arguments(
+        tool: ToolCallable,
+        arguments: Mapping[str, Any],
+        *,
+        request_id: str,
+        metadata: Mapping[str, Any],
+        receipt_namespace: str,
+    ) -> tuple[tuple[Any, ...], dict[str, Any]]:
         signature = inspect.signature(tool)
-        bound = signature.bind_partial(**dict(arguments))
+        prepared_arguments = dict(arguments)
+        for name, parameter in signature.parameters.items():
+            if name in prepared_arguments:
+                continue
+            if parameter.default is not inspect.Parameter.empty:
+                continue
+            if parameter.kind not in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY):
+                continue
+            if _looks_like_arcade_context_parameter(name, parameter):
+                prepared_arguments[name] = LocalArcadeContext(
+                    request_id=request_id,
+                    namespace=receipt_namespace,
+                    metadata=dict(metadata),
+                )
+        bound = signature.bind(**prepared_arguments)
         bound.apply_defaults()
         return bound.args, bound.kwargs
 
@@ -383,6 +573,20 @@ class ArcadeLocalExecuteAdapter:
         self.usage_log_path.parent.mkdir(parents=True, exist_ok=True)
         with self.usage_log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(asdict(receipt), sort_keys=True, default=str) + "\n")
+
+    @staticmethod
+    def _await_sync(awaitable: Any) -> Any:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(awaitable)
+        if hasattr(awaitable, "close"):
+            awaitable.close()
+        raise ArcadeExecuteError(
+            "async tool requires execute_async when an event loop is already running",
+            code="async_tool_requires_execute_async",
+            retryable=False,
+        )
 
 
 def build_demo_adapter(usage_log_path: Path | str = DEFAULT_RECEIPT_LOG_PATH) -> ArcadeLocalExecuteAdapter:
@@ -407,6 +611,27 @@ def build_demo_adapter(usage_log_path: Path | str = DEFAULT_RECEIPT_LOG_PATH) ->
     def boom() -> None:
         raise RuntimeError("simulated tool crash")
 
+    @adapter.register_tool
+    def bare_decorator(value: str) -> JsonDict:
+        return {"result": value, "operation": "bare_decorator"}
+
+    @adapter.register_tool("async_echo")
+    async def async_echo(value: str) -> JsonDict:
+        await asyncio.sleep(0)
+        return {"result": value, "operation": "async_echo"}
+
+    @adapter.register_tool("internal_type_error")
+    def internal_type_error(value: str) -> JsonDict:
+        raise TypeError(f"internal type error for {value}")
+
+    @adapter.register_tool("context_echo")
+    def context_echo(context: LocalArcadeContext, value: str) -> JsonDict:
+        return {
+            "context_request_id": context.request_id,
+            "context_namespace": context.namespace,
+            "value": value,
+        }
+
     return adapter
 
 
@@ -426,6 +651,10 @@ def run_self_test() -> None:
         assert success.output == {"result": 7, "operation": "sum"}
         assert success.receipt["simulated"] is True
         assert success.receipt["status"] == "completed"
+        assert success.receipt["metadata"]["arguments_preview"].startswith("input_preview_redacted_by_default")
+        assert success.receipt["metadata"]["output_preview"].startswith("output_preview_redacted_by_default")
+        assert '"a"' not in success.receipt["metadata"]["arguments_preview"]
+        assert '"result"' not in success.receipt["metadata"]["output_preview"]
 
         invalid_args = adapter.execute("sum_numbers", {"a": 2}, request_id="req_bad_args")
         assert invalid_args.ok is False
@@ -447,20 +676,60 @@ def run_self_test() -> None:
         assert crashed.error is not None
         assert crashed.error["code"] == "tool_execution_failed"
 
+        bare = adapter.execute("bare_decorator", {"value": "ok"}, request_id="req_bare")
+        assert bare.ok is True
+        assert bare.output == {"result": "ok", "operation": "bare_decorator"}
+
+        async_result = adapter.execute("async_echo", {"value": "awaited"}, request_id="req_async")
+        assert async_result.ok is True
+        assert async_result.output == {"result": "awaited", "operation": "async_echo"}
+
+        async_result_2 = asyncio.run(adapter.execute_async("async_echo", {"value": "awaited_async"}, request_id="req_async_2"))
+        assert async_result_2.ok is True
+        assert async_result_2.output == {"result": "awaited_async", "operation": "async_echo"}
+
+        internal_type_error = adapter.execute("internal_type_error", {"value": "boom"}, request_id="req_internal_type_error")
+        assert internal_type_error.ok is False
+        assert internal_type_error.error is not None
+        assert internal_type_error.error["code"] == "tool_execution_failed"
+
+        sensitive = adapter.execute(
+            "reverse_text",
+            {"text": "secret-token-123", "uppercase": False},
+            request_id="req_sensitive",
+        )
+        assert "secret-token-123" not in sensitive.receipt["metadata"]["arguments_preview"]
+        assert "321-nekot-terces" not in sensitive.receipt["metadata"]["output_preview"]
+
+        context_result = adapter.execute("context_echo", {"value": "ok"}, request_id="req_context")
+        assert context_result.ok is True
+        assert context_result.output == {
+            "context_request_id": "req_context",
+            "context_namespace": DEFAULT_RECEIPT_NAMESPACE,
+            "value": "ok",
+        }
+
         entries = _read_jsonl(log_path)
-        assert len(entries) == 5
+        assert len(entries) == 11
         assert [entry["request_id"] for entry in entries] == [
             "req_ok",
             "req_bad_args",
             "req_missing",
             "req_guarded",
             "req_crash",
+            "req_bare",
+            "req_async",
+            "req_async_2",
+            "req_internal_type_error",
+            "req_sensitive",
+            "req_context",
         ]
         assert entries[0]["output_sha256"]
         assert entries[1]["error_code"] == "invalid_arguments"
         assert entries[2]["error_code"] == "tool_not_found"
         assert entries[3]["error_code"] == "not_found"
         assert entries[4]["error_code"] == "tool_execution_failed"
+        assert entries[8]["error_code"] == "tool_execution_failed"
         assert all(entry["simulated"] is True for entry in entries)
         assert all(entry["receipt_signature"] for entry in entries)
 
@@ -521,6 +790,21 @@ def _stable_sha256(value: Any) -> str:
 def _truncate_json(value: Any, limit: int = 240) -> str:
     text = json.dumps(value, sort_keys=True, default=str)
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _redacted_preview(label: str, sha256_value: Optional[str]) -> str:
+    fingerprint = sha256_value or "none"
+    return f"{label}_preview_redacted_by_default sha256={fingerprint}"
+
+
+def _looks_like_arcade_context_parameter(name: str, parameter: inspect.Parameter) -> bool:
+    if name in {"context", "ctx"}:
+        return True
+    annotation = parameter.annotation
+    if annotation is inspect.Parameter.empty:
+        return False
+    annotation_name = getattr(annotation, "__name__", "") or str(annotation)
+    return annotation_name.lower().endswith("context")
 
 
 if __name__ == "__main__":
