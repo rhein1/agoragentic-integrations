@@ -11,6 +11,8 @@ on:
       - 'micro-ecf/**'
       - 'harness-core/**'
       - 'scripts/**'
+      - 'examples/agoragentic-growth/**'
+      - 'test/**'
       - '*/README.md'
       - 'README.md'
       - 'AGENTS.md'
@@ -25,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -143,6 +147,12 @@ jobs:
 
       - name: Verify ACP adapter
         run: node scripts/verify-acp.js
+
+      - name: Test growth example validator
+        run: node --test test/validate-growth-examples.test.mjs
+
+      - name: Validate growth-generated examples
+        run: node scripts/validate-growth-examples.mjs --base origin/main
 
       - name: Summary
         run: |

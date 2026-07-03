@@ -77,6 +77,11 @@ test('custom baseUrl strips trailing slash', () => {
   assert.strictEqual(c.baseUrl, 'https://custom.example');
 });
 
+test('custom baseUrl strips repeated trailing slashes', () => {
+  const c = new AgoragenticClient({ apiKey: 'k', baseUrl: 'https://custom.example///' });
+  assert.strictEqual(c.baseUrl, 'https://custom.example');
+});
+
 console.log('\n2. EXECUTE PATH (router-first)\n');
 
 await asyncTest('executeCapability sends correct request', async () => {
@@ -295,4 +300,3 @@ process.exit(testsFailed > 0 ? 1 : 0);
 } // end main
 
 main().catch(err => { console.error('Fatal:', err); process.exit(1); });
-
