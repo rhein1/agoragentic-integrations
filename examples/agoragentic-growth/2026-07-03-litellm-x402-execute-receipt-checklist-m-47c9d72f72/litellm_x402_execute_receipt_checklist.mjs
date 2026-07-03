@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
-const MATCH_PATH = "/api/match";
+const MATCH_PATH = "/api/execute/match";
 const EXECUTE_PATH = "/api/execute";
+const FAILED_SETTLEMENT_STATES = new Set(["failed", "failure", "rejected", "cancelled", "canceled", "reverted"]);
 
 function stableId(prefix = "x402") {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -145,9 +146,12 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
   const paymentReceipt = readHeader(response, "payment-receipt");
   const paymentResponse = readHeader(response, "payment-response");
   const paymentAttempted = Boolean(response?.x402Meta?.paymentAttempted || paymentReceipt || paymentResponse);
-  const invocationId = payload?.invocation_id ?? payload?.invocationId ?? payload?.result?.id ?? null;
+  const invocationId = payload?.invocation_id ?? payload?.invocationId ?? payload?.invocation?.id ?? null;
   const receiptId = payload?.receipt_id ?? payload?.receipt?.receipt_id ?? null;
   const settlement = payload?.settlement ?? payload?.receipt?.settlement ?? null;
+  const settlementState = typeof settlement === "string" ? settlement.toLowerCase() : settlement?.status?.toLowerCase?.() ?? null;
+  const returnedQuoteId = payload?.quote_id ?? payload?.quoteId ?? payload?.quote?.quote_id ?? payload?.receipt?.quote_id ?? null;
+  const hasReceiptEvidence = Boolean(receiptId || paymentReceipt);
 
   const checks = [
     {
@@ -167,7 +171,7 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
     },
     {
       item: "receipt_reference_present",
-      status: receiptId ? "pass" : "warn",
+      status: receiptId ? "pass" : (paymentAttempted && !hasReceiptEvidence ? "fail" : "warn"),
       evidence: receiptId ?? "response omitted receipt_id",
     },
     {
@@ -177,14 +181,14 @@ function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey }) {
     },
     {
       item: "settlement_state_is_informational_only",
-      status: settlement ? "pass" : "skip",
+      status: settlement ? (FAILED_SETTLEMENT_STATES.has(settlementState) ? "fail" : "warn") : "skip",
       evidence: settlement ?? "settlement field absent",
       note: settlement ? "Treat broadcast/submitted settlement as informational until independently verified." : undefined,
     },
     {
-      item: "quote_reference_present",
-      status: quoteId ? "pass" : "warn",
-      evidence: quoteId ?? "quote_id missing",
+      item: "quote_id_matches_requested_quote",
+      status: quoteId ? (returnedQuoteId ? (returnedQuoteId === quoteId ? "pass" : "fail") : "warn") : "warn",
+      evidence: `${returnedQuoteId ?? "missing"} vs ${quoteId ?? "missing"}`,
     },
   ];
 
@@ -297,24 +301,36 @@ export class LiteLLMX402ExecuteReceiptChecklist {
       throw new Error("execute() requires quote_id from options.quoteId or match()");
     }
 
-    const response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
-      fetchImpl: this.fetchImpl,
-      pay,
-      idempotencyKey,
-      method: "POST",
-      signal,
-      headers: this.defaultHeaders(),
-      body: {
-        quote_id: resolvedQuoteId,
-        input: {
-          model,
-          messages,
-          metadata,
-          ...input,
+    let response;
+    try {
+      response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
+        fetchImpl: this.fetchImpl,
+        pay,
+        idempotencyKey,
+        method: "POST",
+        signal,
+        headers: this.defaultHeaders(),
+        body: {
+          task: resolvedTask,
+          quote_id: resolvedQuoteId,
+          input: {
+            model,
+            messages,
+            metadata,
+            ...input,
+          },
         },
-      },
-      maxNetworkRetries: 1,
-    });
+        maxNetworkRetries: 1,
+      });
+    } catch (error) {
+      error.idempotencyKey = error.idempotencyKey ?? idempotencyKey;
+      error.quoteId = error.quoteId ?? resolvedQuoteId;
+      error.retryGuidance = error.retryGuidance ?? {
+        when: "network error after payment authorization or a transport-level timeout",
+        action: "retry the same call with the same idempotency key and reuse the existing payment authorization",
+      };
+      throw error;
+    }
 
     const payload = await readJsonResponse(response);
     if (!response.ok) {
@@ -416,10 +432,11 @@ export function createLocalX402Fetch() {
       throw new Error("idempotencyKey is required");
     }
 
+    const callerHeaders = lowerCaseHeaders(headers);
     const baseHeaders = {
-      "content-type": "application/json",
+      ...callerHeaders,
+      "content-type": callerHeaders["content-type"] ?? "application/json",
       "idempotency-key": idempotencyKey,
-      ...lowerCaseHeaders(headers),
     };
 
     let paymentAuthorized = null;
@@ -429,7 +446,11 @@ export function createLocalX402Fetch() {
     for (;;) {
       const requestHeaders = { ...baseHeaders };
       if (paymentAuthorized?.authorizationHeader) {
-        requestHeaders.authorization = paymentAuthorized.authorizationHeader;
+        if (requestHeaders.authorization) {
+          requestHeaders["payment-authorization"] = paymentAuthorized.authorizationHeader;
+        } else {
+          requestHeaders.authorization = paymentAuthorized.authorizationHeader;
+        }
       }
       if (paymentAuthorized?.paymentSignature) {
         requestHeaders["payment-signature"] = paymentAuthorized.paymentSignature;
@@ -454,7 +475,13 @@ export function createLocalX402Fetch() {
         }
 
         sawPaymentChallenge = true;
-        const paymentRequiredHeader = readHeader(response, "payment-required");
+        if (paymentAuthorized) {
+          const error = new Error("Paid request received another HTTP 402 challenge; refusing to re-authorize payment");
+          error.status = 402;
+          error.paymentAttempted = true;
+          throw error;
+        }
+        const paymentRequiredHeader = readHeader(response, "payment-required") ?? readHeader(response, "x-payment-required");
         if (!paymentRequiredHeader) {
           throw new Error("Received HTTP 402 without payment-required header");
         }
@@ -477,6 +504,9 @@ export function createLocalX402Fetch() {
           });
         }
       } catch (error) {
+        if (typeof error?.status === "number") {
+          throw error;
+        }
         if (paymentAuthorized && networkRetriesUsed < maxNetworkRetries) {
           networkRetriesUsed += 1;
           continue;
