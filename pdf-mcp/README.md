@@ -19,7 +19,7 @@ tool name override is available when you want exact control.
 |------|---------|
 | `agoragentic_pdf_mcp.mjs` | The adapter: MCP stdio client, `executePdfMcp()`, adapter class, canonical tools, CLI |
 | `agoragentic_pdf_mcp.test.mjs` | Offline test suite (`node:test`) — proves the MCP bridge end to end |
-| `test-stub-server.mjs` | Deterministic in-repo MCP stub server used only by tests |
+| `stub-mcp-server.mjs` | Deterministic in-repo MCP stub server used only by tests |
 | `fixtures/sample.pdf` | Tiny one-page PDF fixture |
 | `fixtures/sample-output.json` | Expected normalized adapter output shape |
 
@@ -98,7 +98,7 @@ node --check pdf-mcp/agoragentic_pdf_mcp.mjs
 node --test pdf-mcp/agoragentic_pdf_mcp.test.mjs
 ```
 
-The suite runs fully offline against `test-stub-server.mjs` (newline-delimited
+The suite runs fully offline against `stub-mcp-server.mjs` (newline-delimited
 JSON-RPC over stdio, like a real MCP server), covering: end-to-end extraction,
 explicit tool override, the no-compatible-tool failure path, input validation,
 all three result normalization forms, usage receipts, ranking, and `max_cost`

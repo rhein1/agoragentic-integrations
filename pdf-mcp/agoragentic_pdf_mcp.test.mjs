@@ -1,5 +1,5 @@
 // Tests for the pdf-mcp Agoragentic adapter. They run fully offline against the
-// in-repo stub MCP server (test-stub-server.mjs) — no network, no installed
+// in-repo stub MCP server (stub-mcp-server.mjs) — no network, no installed
 // pdf-mcp package — and prove the stdio MCP client path end to end.
 //
 // Run: node --test pdf-mcp/agoragentic_pdf_mcp.test.mjs
@@ -17,7 +17,7 @@ import {
 } from './agoragentic_pdf_mcp.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const STUB = path.join(HERE, 'test-stub-server.mjs');
+const STUB = path.join(HERE, 'stub-mcp-server.mjs');
 const SAMPLE_PDF = path.join(HERE, 'fixtures', 'sample.pdf');
 
 const stubOptions = (extraEnv = {}) => ({

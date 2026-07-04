@@ -10,7 +10,7 @@
     "adapter": "pdf-mcp",
     "transport": "mcp-stdio",
     "command": "node",
-    "args": ["pdf-mcp/test-stub-server.mjs"],
+    "args": ["pdf-mcp/stub-mcp-server.mjs"],
     "request_id": "req_<dynamic>",
     "selected_tool": "pdf_extract_text",
     "discovered_tools": ["pdf_extract_text", "image_resize"],
