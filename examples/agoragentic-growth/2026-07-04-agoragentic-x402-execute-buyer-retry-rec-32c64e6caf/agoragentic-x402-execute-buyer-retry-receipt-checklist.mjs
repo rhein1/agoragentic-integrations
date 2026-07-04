@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
+import { pathToFileURL } from "node:url";
 
 const EXECUTE_PATH = "/api/x402/execute";
 const PROOF_PATH = (invocationId) => `/api/x402/invocations/${encodeURIComponent(invocationId)}/proof`;
@@ -154,8 +155,8 @@ function createInlineX402Fetch() {
     while (true) {
       const requestHeaders = {
         accept: "application/json",
-        "idempotency-key": idempotencyKey,
         ...baseHeaders,
+        "idempotency-key": idempotencyKey,
       };
 
       let requestBody = body;
@@ -164,7 +165,13 @@ function createInlineX402Fetch() {
         if (!requestHeaders["content-type"]) requestHeaders["content-type"] = "application/json";
       }
 
-      if (cachedPayment?.authorizationHeader) requestHeaders.authorization = cachedPayment.authorizationHeader;
+      if (cachedPayment?.authorizationHeader) {
+        if (requestHeaders.authorization) {
+          requestHeaders["payment-signature"] ??= cachedPayment.authorizationHeader;
+        } else {
+          requestHeaders.authorization = cachedPayment.authorizationHeader;
+        }
+      }
       if (cachedPayment?.paymentSignature) requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
 
       try {
@@ -202,17 +209,27 @@ function createInlineX402Fetch() {
             paymentRequired,
           });
         }
-        if (!cachedPayment) {
-          cachedChallenge = parsePaymentRequired(paymentRequired)[0] ?? null;
-          cachedPayment = normalizePayResult(await pay(paymentRequired, {
-            url,
-            method,
-            headers: requestHeaders,
-            body: requestBody,
-            idempotencyKey,
-            challenge: cachedChallenge,
-          }));
+        if (cachedPayment) {
+          throw new HttpStatusError(
+            "Paid retry received another HTTP 402; refusing to re-authorize payment or replay cached authorization",
+            {
+              status: 402,
+              idempotencyKey,
+              paymentRequired,
+              paymentAttempted: true,
+              challenge: cachedChallenge,
+            },
+          );
         }
+        cachedChallenge = parsePaymentRequired(paymentRequired)[0] ?? null;
+        cachedPayment = normalizePayResult(await pay(paymentRequired, {
+          url,
+          method,
+          headers: requestHeaders,
+          body: requestBody,
+          idempotencyKey,
+          challenge: cachedChallenge,
+        }));
       } catch (error) {
         if (typeof error?.status === "number") throw error;
         if (!cachedPayment) throw error;
@@ -256,10 +273,10 @@ async function loadX402Fetch() {
 
 function classifyProof(proof) {
   const status = String(proof?.status ?? proof?.on_chain?.status ?? "").toLowerCase();
-  if (["settled", "confirmed", "finalized", "complete", "completed"].includes(status)) {
+  if (["settled", "confirmed", "finalized", "complete", "completed", "verified"].includes(status)) {
     return { status, terminal: true, submitted: false };
   }
-  if (["submitted", "broadcast", "pending", "processing", "recorded"].includes(status)) {
+  if (["submitted", "pending_submission", "broadcast", "pending", "processing", "recorded"].includes(status)) {
     return { status, terminal: false, submitted: true };
   }
   return { status, terminal: false, submitted: false };
@@ -288,14 +305,45 @@ async function fetchProof(fetchImpl, baseUrl, invocationId, timeoutMs, attempts,
     }
     if (attempt < attempts) await sleep(intervalMs);
   }
-  return lastBody;
+  return {
+    status: "pending_submission",
+    proof_pending: true,
+    retryable: true,
+    attempts,
+    last_response: lastBody,
+    note: "Proof lookup stayed retryable during the short polling window; no on-chain verification is claimed.",
+  };
 }
 
-function buildChecklist({ idempotencyKey, response, payload, paymentRequired, paymentResponse, proof }) {
+function buildChecklist({ idempotencyKey, quoteId, response, payload, paymentRequired, paymentResponse, proof }) {
   const receipt = payload?.receipt ?? {};
   const receiptId = extractString(payload?.receipt_id, receipt?.receipt_id, receipt?.id, readHeader(response.headers, "payment-receipt"));
   const invocationId = extractString(payload?.invocation_id, payload?.invocation?.id, receipt?.invocation_id);
   const challenge = parsePaymentRequired(paymentRequired)[0] ?? null;
+  const paidChallenge = extractString(challenge?.challenge_id, challenge?.challengeId, challenge?.nonce);
+  const receiptChallenge = extractString(
+    receipt?.challenge_id,
+    receipt?.challengeId,
+    receipt?.challenge_nonce,
+    receipt?.challengeNonce,
+  );
+  const echoedIdempotencyKey = extractString(
+    receipt?.idempotency_key,
+    receipt?.idempotencyKey,
+    readHeader(response.headers, "idempotency-key"),
+    readHeader(response.headers, "x-idempotency-key"),
+    paymentResponse?.idempotency_key,
+    paymentResponse?.idempotencyKey,
+  );
+  const receiptQuoteId = extractString(
+    payload?.quote_id,
+    payload?.quoteId,
+    payload?.quote?.quote_id,
+    payload?.quote?.quoteId,
+    payload?.quote?.id,
+    receipt?.quote_id,
+    receipt?.quoteId,
+  );
   const proofState = classifyProof(proof);
   const steps = [
     {
@@ -325,29 +373,38 @@ function buildChecklist({ idempotencyKey, response, payload, paymentRequired, pa
     {
       step: 5,
       item: "receipt_echoes_idempotency_key",
-      ok: receipt?.idempotency_key === idempotencyKey,
+      ok: echoedIdempotencyKey === idempotencyKey,
       evidence: {
-        receipt_idempotency_key: receipt?.idempotency_key ?? null,
+        receipt_idempotency_key: echoedIdempotencyKey ?? null,
         expected: idempotencyKey,
       },
     },
     {
       step: 6,
-      item: "receipt_matches_paid_challenge_nonce",
-      ok: receipt?.challenge_nonce === (challenge?.nonce ?? null),
+      item: "receipt_matches_paid_challenge",
+      ok: Boolean(paidChallenge) && receiptChallenge === paidChallenge,
       evidence: {
-        receipt_challenge_nonce: receipt?.challenge_nonce ?? null,
-        paid_challenge_nonce: challenge?.nonce ?? null,
+        receipt_challenge: receiptChallenge ?? null,
+        paid_challenge: paidChallenge ?? null,
       },
     },
     {
       step: 7,
+      item: "receipt_matches_paid_quote",
+      ok: quoteId ? receiptQuoteId === quoteId : true,
+      evidence: {
+        requested_quote_id: quoteId ?? null,
+        receipt_quote_id: receiptQuoteId ?? null,
+      },
+    },
+    {
+      step: 8,
       item: "invocation_id_present",
       ok: Boolean(invocationId),
       evidence: invocationId,
     },
     {
-      step: 8,
+      step: 9,
       item: "proof_honestly_classified",
       ok: !proof || proofState.terminal || proofState.submitted,
       evidence: {
@@ -483,6 +540,7 @@ export async function executePaidCallReceiptChecklist({
   const paymentResponse = decodeStructuredValue(readHeader(response.headers, "payment-response"));
   const checklist = buildChecklist({
     idempotencyKey,
+    quoteId,
     response,
     payload,
     paymentRequired,
@@ -620,7 +678,10 @@ async function startDemoServer() {
         on_chain: {
           chain: "eip155:8453",
           status: "submitted",
+          demo_only: true,
+          verification: "simulated_no_on_chain_submission",
         },
+        note: "demo only; no real funds moved and no on-chain submission was performed",
       });
     }
 
@@ -699,7 +760,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const output = {
       ok: false,
