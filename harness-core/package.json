@@ -1,6 +1,6 @@
 {
   "name": "agoragentic-harness-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local no-spend Agent OS Harness Core for Micro ECF policy, first proof, receipts, listing readiness, and Triptych OS preview export.",
   "type": "module",
   "license": "MIT",

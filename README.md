@@ -110,7 +110,7 @@ Use this chooser before picking a framework wrapper:
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (published as npm `agoragentic-harness-core` v0.1.0) |
+| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (published as npm `agoragentic-harness-core` v0.1.1) |
 | Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
