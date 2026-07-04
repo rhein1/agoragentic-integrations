@@ -47,7 +47,7 @@ function validateSchema(schemaRelPath, payload) {
 test('Harness Core package exposes local no-spend CLI bins', () => {
   const pkg = readJson(path.join(packageRoot, 'package.json'));
   assert.equal(pkg.name, 'agoragentic-harness-core');
-  assert.equal(pkg.version, '0.1.0');
+  assert.equal(pkg.version, '0.1.1');
   assert.equal(pkg.bin['agoragentic-harness'], './bin/agoragentic-harness.mjs');
   assert.equal(pkg.bin['agora-harness'], './bin/agoragentic-harness.mjs');
   assert.match(pkg.description, /Local no-spend Agent OS Harness Core/);
