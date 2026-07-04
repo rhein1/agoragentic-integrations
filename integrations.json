@@ -1,6 +1,6 @@
 {
-  "version": "2.24.2",
-  "updated_at": "2026-07-03",
+  "version": "2.25.0",
+  "updated_at": "2026-07-04",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -883,6 +883,15 @@
       "docs": "turbovec/README.md"
     },
     {
+      "id": "gortex",
+      "name": "Gortex Local Code-Intelligence MCP",
+      "language": "json",
+      "status": "beta",
+      "path": "gortex/gortex.mcp.example.json",
+      "install": "Install Gortex locally, then run gortex install && gortex daemon start --detach && gortex track .",
+      "docs": "gortex/README.md"
+    },
+    {
       "id": "pdf-mcp",
       "name": "pdf-mcp MCP Stdio Adapter",
       "language": "javascript",
@@ -1003,6 +1012,8 @@
     "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts",
     "turbovec": "turbovec/README.md",
     "turbovec_adapter": "turbovec/agoragentic_turbovec.py",
+    "gortex": "gortex/README.md",
+    "gortex_mcp_config": "gortex/gortex.mcp.example.json",
     "pdf_mcp": "pdf-mcp/README.md",
     "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs"
   }
