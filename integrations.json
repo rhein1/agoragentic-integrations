@@ -892,6 +892,15 @@
       "docs": "gortex/README.md"
     },
     {
+      "id": "skillspector",
+      "name": "SkillSpector Skill Admission Scan",
+      "language": "json",
+      "status": "beta",
+      "path": "skillspector/skillspector.admission.example.json",
+      "install": "pip install git+https://github.com/NVIDIA/SkillSpector.git@dde36f258729b5aec7c835295a9556e64a2def0c",
+      "docs": "skillspector/README.md"
+    },
+    {
       "id": "pdf-mcp",
       "name": "pdf-mcp MCP Stdio Adapter",
       "language": "javascript",
@@ -1014,6 +1023,8 @@
     "turbovec_adapter": "turbovec/agoragentic_turbovec.py",
     "gortex": "gortex/README.md",
     "gortex_mcp_config": "gortex/gortex.mcp.example.json",
+    "skillspector": "skillspector/README.md",
+    "skillspector_admission_example": "skillspector/skillspector.admission.example.json",
     "pdf_mcp": "pdf-mcp/README.md",
     "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs"
   }
