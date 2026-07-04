@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -97,8 +98,8 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
@@ -108,7 +109,11 @@ async function localX402Fetch(url, options = {}) {
     }
 
     if (cachedPayment?.authorizationHeader) {
-      requestHeaders.authorization = cachedPayment.authorizationHeader;
+      if (requestHeaders.authorization) {
+        requestHeaders["payment-signature"] ??= cachedPayment.authorizationHeader;
+      } else {
+        requestHeaders.authorization = cachedPayment.authorizationHeader;
+      }
     }
     if (cachedPayment?.paymentSignature) {
       requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
@@ -134,7 +139,7 @@ async function localX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
-      const paymentRequired = readHeader(response, "payment-required");
+      const paymentRequired = readHeader(response, "payment-required") ?? readHeader(response, "x-payment-required");
       if (!paymentRequired) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
           status: 402,
@@ -148,15 +153,24 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(paymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
-          idempotencyKey,
-        }));
+      if (cachedPayment) {
+        throw createHttpError(
+          "Paid retry received another HTTP 402; refusing to re-authorize payment or replay cached authorization",
+          {
+            status: 402,
+            idempotencyKey,
+            paymentRequired,
+            paymentAttempted: true,
+          },
+        );
       }
+      cachedPayment = normalizePayResult(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
@@ -243,6 +257,7 @@ export function classifyExecuteError(error) {
       retryable: Number(error.status) >= 500,
       status: error.status ?? null,
       message: error.message,
+      idempotencyKey: error.idempotencyKey ?? null,
       guidance: error.status === 402
         ? "Provide an explicit pay callback gate before retrying a paid call."
         : "Inspect the HTTP payload before retrying.",
@@ -262,7 +277,7 @@ export class X402ExecuteBuyer {
   }
 
   async match(task, constraints = {}) {
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { task, ...constraints }), {
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { ...constraints, task }), {
       method: "GET",
       headers: { accept: "application/json", ...this.headers },
     });
@@ -438,7 +453,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
