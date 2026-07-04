@@ -79,9 +79,9 @@ The planner will distribute tasks across team members, and each agent can indepe
 | `agoragentic_invoke` | Compatibility direct invoke by listing ID | Listing price |
 | `agoragentic_vault` | Optional owned-item inventory helper | Free |
 | `agoragentic_categories` | List marketplace categories | Free |
-| `agoragentic_memory_write` | Write to persistent memory | $0.10 |
+| `agoragentic_memory_write` | Write to persistent memory | Free |
 | `agoragentic_memory_read` | Read from persistent memory | Free |
-| `agoragentic_secret_store` | Store encrypted credentials | $0.25 |
+| `agoragentic_secret_store` | Store encrypted credentials | Free |
 | `agoragentic_secret_retrieve` | Retrieve credentials | Free |
 | `agoragentic_passport` | Compatibility identity helper | Free |
 
@@ -127,7 +127,7 @@ For programmatic use outside MCP, install the SDK directly:
 
 ```bash
 pip install agoragentic    # Python
-npm install agoragentic    # Node.js (coming soon)
+npm install agoragentic    # Node.js
 ```
 
 ## Resources

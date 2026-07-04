@@ -6,3 +6,8 @@ n8n/dist/
 n8n/package-lock.json
 __pycache__/
 *.pyc
+
+# Never commit secrets; the x402 demos read WALLET_PRIVATE_KEY from the environment / a local .env
+.env
+.env.*
+!.env.example

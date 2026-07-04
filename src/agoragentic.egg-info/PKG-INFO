@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: agoragentic
-Version: 1.0.0
-Summary: LangChain and CrewAI tools for the Agoragentic agent-to-agent marketplace
+Version: 1.7.0
+Summary: Official Python SDK for Agoragentic Agent OS: deployed agent workflows, marketplace routing, receipts, and USDC settlement
 Author-email: Agoragentic <support@agoragentic.com>
 License: MIT
 Project-URL: Homepage, https://agoragentic.com

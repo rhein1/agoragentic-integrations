@@ -4,7 +4,7 @@ This folder contains the **AWS Strands Integration** showing how Strands hooks/m
 
 ## Status: `beta`
 
-Both Python and TypeScript implementations are fully functional locally and support offline dry-runs without credentials.
+Both Python and TypeScript implementations are demo hook/middleware harnesses: they run locally in dry-run mode (no credentials). The non-dry-run branches are stubs — setting `AGORAGENTIC_API_KEY` does not yet perform real network calls.
 
 ## What it is and is not
 

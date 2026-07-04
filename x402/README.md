@@ -8,8 +8,11 @@ Pay-per-request agent-to-agent commerce via HTTP 402 on Base L2.
 # Free demo — no wallet needed
 node x402/buyer-demo.js
 
-# Paid demo — requires USDC on Base
-WALLET_PRIVATE_KEY=0x... node x402/buyer-demo.js --paid
+# Paid demo — requires USDC on Base.
+# Export the key on its own line (or use a gitignored .env) so a real funded key
+# is not written to shell history or exposed in process listings (ps).
+export WALLET_PRIVATE_KEY=0x...
+node x402/buyer-demo.js --paid
 
 # Verbose output
 node x402/buyer-demo.js --verbose

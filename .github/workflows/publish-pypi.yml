@@ -1,0 +1,39 @@
+name: Publish agoragentic to PyPI
+
+# Publishes the Python SDK in this repo (packaged from pyproject.toml / src/agoragentic)
+# to PyPI via PyPI Trusted Publishing (OIDC — no long-lived API token).
+#
+# NOTE (owner follow-up): a PyPI Trusted Publisher must be configured once in the
+# PyPI project settings for `agoragentic`, pointing at this repository and this
+# workflow filename (publish-pypi.yml). Until that is done, the publish step below
+# will fail auth. See the PR "Owner follow-ups" section.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    # Gate on Python SDK release tags so npm-tag releases do not trigger a PyPI publish.
+    if: startsWith(github.event.release.tag_name, 'py-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Publish to PyPI with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1

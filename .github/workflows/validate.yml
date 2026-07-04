@@ -35,6 +35,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Validate MCP package
         working-directory: mcp
         run: |
@@ -147,6 +152,9 @@ jobs:
 
       - name: Verify ACP adapter
         run: node scripts/verify-acp.js
+
+      - name: Verify Rust framework public sync
+        run: node scripts/verify-rust-framework-public-sync.js
 
       - name: Test growth example validator
         run: node --test test/validate-growth-examples.test.mjs

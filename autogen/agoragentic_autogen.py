@@ -10,14 +10,12 @@ Install:
     pip install pyautogen requests
 
 Usage:
-    from agoragentic_autogen import get_agoragentic_functions
+    from agoragentic_autogen import get_agoragentic_functions, FUNCTION_MAP
 
     functions = get_agoragentic_functions(api_key="amk_your_key")
 
     assistant = autogen.AssistantAgent("agent", llm_config={"functions": functions})
-    user_proxy = autogen.UserProxyAgent("user", function_map={
-        f["name"]: globals()[f"_impl_{f['name']}"] for f in functions
-    })
+    user_proxy = autogen.UserProxyAgent("user", function_map=FUNCTION_MAP)
 """
 
 import json

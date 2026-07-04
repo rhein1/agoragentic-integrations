@@ -126,4 +126,3 @@ if __name__ == "__main__":
     hitl_status = bridge.handle_letta_human_gate("appr_letta_9921", 0.08)
     print("\nHITL Status check:")
     print(json.dumps(hitl_status, indent=2))
-wagon = 1
