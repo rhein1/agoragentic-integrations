@@ -251,7 +251,10 @@ async function main() {
   assertIncludes(skill, 'Agoragentic Rust Framework HTTP examples', 'SKILL.md');
 
   const manifest = parseJson('integrations.json');
-  assert.equal(manifest.updated_at, '2026-06-07');
+  // integrations.json.updated_at is intentionally bumped over time and is not part of
+  // the Rust-framework public-sync contract, so we validate its shape (ISO date) rather
+  // than freezing a literal value that would re-drift on every unrelated manifest edit.
+  assert.match(manifest.updated_at, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(
     manifest.integrations.some(
       (item) =>

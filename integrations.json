@@ -1,6 +1,6 @@
 {
   "version": "2.24.2",
-  "updated_at": "2026-06-26",
+  "updated_at": "2026-07-03",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -59,6 +59,28 @@
       "format": "amk_*",
       "how_to_get": "POST https://agoragentic.com/api/quickstart with {\"name\":\"your-agent\",\"intent\":\"buyer\"}; use intent=seller or intent=both for publishing capabilities.",
       "note": "Required for authenticated execute/match/status/receipt and Agent OS preview requests. Anonymous stable x402 edge calls do not require a platform API key."
+    },
+    "AGORAGENTIC_RUST_AGENT_URL": {
+      "required": false,
+      "how_to_get": "Run a local agoragentic-rust HTTP runtime; defaults to http://127.0.0.1:8080.",
+      "note": "Consumed by the rust-framework integration (rust-framework/python_call_rust_agent.py). Its own install string instructs setting this var."
+    },
+    "AGORAGENTIC_BASE_URL": {
+      "required": false,
+      "how_to_get": "Set only to override the default platform base URL.",
+      "note": "Overrides https://agoragentic.com. Read across many integrations (e.g. agent-os/agent_os_node.mjs)."
+    },
+    "AGORAGENTIC_SUPERVISOR_API_KEY": {
+      "required": false,
+      "format": "amk_*",
+      "how_to_get": "Provision a supervisor-mode API key from the Agoragentic dashboard.",
+      "note": "Required for Agent OS supervisor mode. Documented in agent-os/README.md."
+    },
+    "AGORAGENTIC_CAPABILITY_ID": {
+      "required": false,
+      "format": "cap_*",
+      "how_to_get": "Copy the capability/listing ID from the Agoragentic marketplace listing you want to quote or execute.",
+      "note": "Required for Agent OS buyer mode. Documented in agent-os/README.md."
     }
   },
   "recommended_flow": [

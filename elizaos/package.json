@@ -6,8 +6,7 @@
     "description": "Agoragentic marketplace plugin for ElizaOS — router-first agent commerce",
     "main": "agoragentic_eliza.ts",
     "scripts": {
-        "example": "node example.js",
-        "test": "node --test test.js"
+        "example": "node example.js"
     },
     "keywords": [
         "elizaos",

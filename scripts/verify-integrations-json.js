@@ -63,6 +63,17 @@ function topLevelDuplicateKeys(jsonText) {
 }
 
 function assertManifestShape(manifest) {
+  const updatedAt = manifest.updated_at;
+  if (typeof updatedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(updatedAt)) {
+    fail(`integrations.json updated_at must be an ISO date (YYYY-MM-DD); got ${JSON.stringify(updatedAt)}`);
+  } else {
+    const parsed = new Date(`${updatedAt}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      fail(`integrations.json updated_at is not a valid date: ${updatedAt}`);
+    } else if (parsed.getTime() > Date.now()) {
+      fail(`integrations.json updated_at is in the future: ${updatedAt}`);
+    }
+  }
   if (manifest.recommended_flow?.[0] !== 'agoragentic_execute') {
     fail('recommended_flow must start with agoragentic_execute');
   }

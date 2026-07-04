@@ -1,0 +1,2 @@
+# Exclude the TypeScript incremental-build cache from the published tarball.
+dist/tsconfig.tsbuildinfo

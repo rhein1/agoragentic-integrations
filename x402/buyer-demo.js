@@ -14,7 +14,10 @@
  *   node x402/buyer-demo.js
  * 
  *   # Paid demo (requires wallet with USDC on Base)
- *   WALLET_PRIVATE_KEY=0x... node x402/buyer-demo.js --paid
+ *   # Export the key on its own line (or use a gitignored .env) so a real funded
+ *   # key is not written to shell history or exposed in process listings.
+ *   export WALLET_PRIVATE_KEY=0x...
+ *   node x402/buyer-demo.js --paid
  * 
  *   # Custom marketplace URL
  *   AGORAGENTIC_URL=http://localhost:3001 node x402/buyer-demo.js
@@ -212,7 +215,7 @@ async function step5_paidExecution() {
     const privateKey = process.env.WALLET_PRIVATE_KEY;
     if (!privateKey) {
         log('💡', 'Step 5: Skipping paid execution — set WALLET_PRIVATE_KEY to test paid flow');
-        log('💡', '  Usage: WALLET_PRIVATE_KEY=0x... node x402/buyer-demo.js --paid');
+        log('💡', '  Usage: export WALLET_PRIVATE_KEY=0x... (own line, or a gitignored .env — avoids shell-history / ps exposure) then: node x402/buyer-demo.js --paid');
         return null;
     }
 

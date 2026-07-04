@@ -5,21 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+_No unreleased changes yet. New, not-yet-shipped work goes here (undated), per the Keep a Changelog format above._
+
+## [manifest 2.16.0–2.24.2] - 2026-07-03
+
+### Added
+- Rolled up the integration-manifest bumps that shipped since `2.15.0`. `integrations.json` is now version `2.24.2` (`updated_at` 2026-07-03). This range covers the discovery/index entries added across many pushes, including but not limited to the `pdf-mcp/` (PDF MCP) and `turbovec/` (TurboVec) integrations, which are present in `integrations.json` and as directories but were previously absent from this changelog.
+- Expanded the Interchange protocol package discovery pointers in `integrations.json`.
+
+### Changed
+- CHANGELOG version headers from here forward track the integration-manifest version so the manifest and changelog no longer drift silently. Because the manifest version bumps on nearly every push, this entry is phrased as a version range rather than a single hardcoded number.
+
+### Removed
+- Removed the Frontier AI hosted-deployment link from `README.md` (originally added in 2.1.0), reconciling the earlier "Added" entry with the current README, which no longer contains it.
+
 ## [micro-ecf-v0.1.3] - 2026-06-14
 
 ### Changed
 - Updated the Micro ECF npm README launch path so the local install command, one-step secret-block proof, and Agent OS handoff boundary are visible from the package page.
 
-## [Unreleased] - 2026-05-19
+## [harness-core-v0.1.0] - 2026-06-04
+
+### Added
+- Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
+- Added Harness Core schemas, tests, and a Trusted Publishing release workflow gated by `harness-core-v*` release tags.
+
+## [premortem-golden-loop-v0.1.6] - 2026-05-24
+
+### Added
+- Added `premortem-golden-loop/`, a free local OSS agent release premortem, no-spend Golden Loop readiness, and safe self-heal scaffold CLI.
+- Added Premortem Golden Loop discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`.
+
+## [2.15.0] - 2026-05-19
 
 ### Added
 - Added `hermes-agent/`, a public Hermes Agent bridge scaffold for Agoragentic MCP tooling, Agent OS handoff manifests, and review-gated self-improvement reflection packets with no live execution authority.
 - Added `rust-framework/`, a public Agoragentic Rust Framework HTTP runtime integration folder with TypeScript/Node and Python examples, a self-hosted Agent OS Harness packet example, and no-spend verification.
 - Added Rust Framework discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md` while keeping hosted Router / Marketplace SDK semantics unchanged.
-- Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
-- Added Harness Core schemas, tests, and a Trusted Publishing release workflow gated by `harness-core-v*` release tags.
-- Added `premortem-golden-loop/`, a free local OSS agent release premortem, no-spend Golden Loop readiness, and safe self-heal scaffold CLI.
-- Added Premortem Golden Loop discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`.
 - Added high-priority adapters for LangGraph, Cloudflare Agents, Microsoft Semantic Kernel, Zapier MCP, Flowise, Composio, and HumanLayer.
 - Added an experimental Zoneless payout reference as documentation-only research while keeping Base settlement canonical.
 - Folded the integration manifest to version `2.15.0` with all public integration surfaces indexed.
@@ -97,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-seller duplicate listing name prevention (409 block) in capabilities API
 - Cross-seller name collision warnings (non-blocking) in capabilities API
 - Admin duplicate listing report endpoint (`GET /api/admin/listings/duplicates`)
-- Fronteir AI hosted deployment link in README (community PR #3 by @ElishaKay)
+- Frontier AI hosted deployment link in README (community PR #3 by @ElishaKay). _(Later removed — see the manifest 2.16.0–2.24.2 rollup; the link no longer appears in README.md.)_
 
 ### Changed
 - x402 execute validation error now includes step-by-step two-step flow guide and direct invoke alternative
@@ -144,7 +168,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SKILL.md capability description
 - Glama registry entry
 
-[2.2.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.1.0...v2.2.0
-[2.1.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/rhein1/agoragentic-integrations/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.0.0
+<!--
+  Only two `vX` tags exist on the remote today: v1.1.0 and v2.1.0. Earlier footer
+  links pointed at v1.0.0 / v2.0.0 / v2.2.0, which are not tagged and returned 404.
+  Until annotated tags are cut for the remaining releases (see PR "Owner follow-ups"),
+  version links point only at refs that resolve: the two real tags, and the main tree.
+-->
+[Unreleased]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[manifest 2.16.0–2.24.2]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[micro-ecf-v0.1.3]: https://github.com/rhein1/agoragentic-integrations/releases/tag/micro-ecf-v0.1.3
+[harness-core-v0.1.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[premortem-golden-loop-v0.1.6]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.15.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.6.2]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.5.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.4.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.3.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.2.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.1.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v2.1.0
+[2.0.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.1.0

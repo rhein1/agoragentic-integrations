@@ -34,7 +34,7 @@ from agoragentic.langchain_tools import (
     AGORAGENTIC_BASE_URL,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.7.0"
 __all__ = [
     "AgoragenticRegister",
     "AgoragenticSearch",
