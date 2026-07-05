@@ -158,6 +158,28 @@ function buildFallbackToolList() {
             },
         },
         {
+            name: 'agoragentic_preview_x402',
+            description:
+                'Preview route-first x402-eligible providers for a task WITHOUT registration, an API key, provider execution, or USDC spend. ' +
+                'Calls the public GET /api/x402/execute/match endpoint and may return an expiring quote_id for a later x402 paid retry. ' +
+                'Use this before agoragentic_register or authenticated agoragentic_match when the buyer has an external Base USDC wallet or wants a zero-auth preview. ' +
+                'This is NOT read-only in the catalog sense: it can mint an expiring quote_id. It is still safe because it does not register an agent, execute a provider, move wallet funds, or settle payment. ' +
+                'Returns JSON with matched providers, selected_provider, quote (including any quote_id), payment rails, and next-step execution metadata.',
+            inputSchema: {
+                type: 'object',
+                properties: {
+                    task: { type: 'string', description: 'Natural-language task to preview, e.g. "receipt reconciliation" or "audit agent discovery for a domain"' },
+                    max_cost: { type: 'number', description: 'Maximum acceptable USDC price per call. Defaults server-side when omitted.' },
+                    category: { type: 'string', description: 'Optional marketplace category filter.' },
+                    max_latency_ms: { type: 'number', description: 'Optional maximum acceptable provider latency in milliseconds.' },
+                    prefer_trusted: { type: 'boolean', description: 'When true, ask the router to prefer trusted providers when ranking.', default: false },
+                    payment_network: { type: 'string', description: 'Optional requested payment network, e.g. "base" or "eip155:8453".' },
+                    payment_asset: { type: 'string', description: 'Optional requested payment asset. Defaults to USDC server-side.' },
+                },
+                required: ['task'],
+            },
+        },
+        {
             name: 'agoragentic_match',
             description:
                 'Preview which providers the Agoragentic Router would select for a given task, without executing or spending USDC. ' +
@@ -275,6 +297,27 @@ async function executeFallbackTool(name, args = {}) {
         if (args.category) params.set('category', args.category);
         if (args.limit !== undefined) params.set('limit', String(args.limit));
         const data = await apiCall('GET', `/api/capabilities?${params.toString()}`);
+        return buildJsonContent(data);
+    }
+
+    if (name === 'agoragentic_preview_x402') {
+        const task = String(args.task || '').trim();
+        if (!task) {
+            return buildJsonContent({
+                ok: false,
+                error: 'missing_task',
+                message: 'task is required for agoragentic_preview_x402',
+            });
+        }
+        const params = new URLSearchParams();
+        params.set('task', task);
+        if (args.max_cost !== undefined) params.set('max_cost', String(args.max_cost));
+        if (args.category) params.set('category', args.category);
+        if (args.max_latency_ms !== undefined) params.set('max_latency_ms', String(args.max_latency_ms));
+        if (args.prefer_trusted !== undefined) params.set('prefer_trusted', args.prefer_trusted ? 'true' : 'false');
+        if (args.payment_network) params.set('payment_network', args.payment_network);
+        if (args.payment_asset) params.set('payment_asset', args.payment_asset);
+        const data = await apiCall('GET', `/api/x402/execute/match?${params.toString()}`);
         return buildJsonContent(data);
     }
 
