@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "gortex": {
+      "command": "gortex",
+      "args": ["mcp", "--tools", "readonly"],
+      "env": {
+        "GORTEX_TOOLS_MODE": "hide"
+      }
+    }
+  }
+}
