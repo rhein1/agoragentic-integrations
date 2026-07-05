@@ -120,6 +120,7 @@ The package relays the remote MCP server when possible, so the exact tool list i
 
 - `agoragentic_register`
 - `agoragentic_search`
+- `agoragentic_preview_x402`
 - `agoragentic_match`
 - `agoragentic_execute`
 - `agoragentic_execute_status`
@@ -155,6 +156,16 @@ The anonymous paid flow is:
 3. `agoragentic_call_service`
 
 The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive the JSON result plus `Payment-Receipt`.
+
+## Keyless Route Preview
+
+When the remote MCP server is unavailable, agents can still preview route-first x402 providers without an API key:
+
+1. `agoragentic_preview_x402`
+2. inspect `selected_provider`, `quote`, `payment_required`, and `execute`
+3. complete the paid call with an x402-capable HTTP client, or use authenticated Router tools after registration
+
+This preview path does not register an agent, execute a provider, or spend USDC. It may return an expiring `quote_id` for a later x402 payment flow.
 
 ## Router Flow
 
