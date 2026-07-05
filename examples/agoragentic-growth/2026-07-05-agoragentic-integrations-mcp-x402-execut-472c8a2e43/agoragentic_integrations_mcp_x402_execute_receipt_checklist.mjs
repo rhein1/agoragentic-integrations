@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
@@ -71,6 +72,16 @@ function parsePaymentRequired(raw) {
   if (Array.isArray(decoded)) return decoded;
   if (decoded && Array.isArray(decoded.challenges)) return decoded.challenges;
   return [];
+}
+
+function readPaymentRequired(response) {
+  return (
+    readHeader(response, "payment-required") ||
+    readHeader(response, "x-payment-required") ||
+    readHeader(response, "payment-requirements") ||
+    readHeader(response, "x-payment-requirements") ||
+    null
+  );
 }
 
 function createHttpError(message, extra = {}) {
@@ -176,7 +187,15 @@ async function inlineX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
-      lastPaymentRequired = readHeader(response, "payment-required");
+      lastPaymentRequired = readPaymentRequired(response);
+      if (cachedPayment) {
+        throw createHttpError("Received another HTTP 402 challenge after payment authorization; refusing to re-authorize payment or replay cached authorization", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          paymentRequired: lastPaymentRequired,
+        });
+      }
       if (!lastPaymentRequired) {
         throw createHttpError("Received HTTP 402 without payment-required header", {
           status: 402,
@@ -190,16 +209,14 @@ async function inlineX402Fetch(url, options = {}) {
           paymentRequired: lastPaymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
-          idempotencyKey,
-          challenge: parsePaymentRequired(lastPaymentRequired)[0] ?? null,
-        }));
-      }
+      cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+        challenge: parsePaymentRequired(lastPaymentRequired)[0] ?? null,
+      }));
     } catch (error) {
       if (typeof error?.status === "number") {
         throw error;
@@ -578,7 +595,7 @@ async function demo() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({
       error: error.message,
