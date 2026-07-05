@@ -3,8 +3,9 @@
 
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
-const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || 'https://agoragentic.example';
+const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || 'https://agoragentic.com';
 const DEFAULT_MATCH_PATH = '/api/x402/execute/match';
 const DEFAULT_EXECUTE_PATH = '/api/x402/execute';
 const DEFAULT_TOOL_NAME = 'agoragentic_execute';
@@ -74,6 +75,46 @@ async function safeJson(response) {
   }
 }
 
+function parseJsonOrBase64(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const candidates = [raw];
+  try {
+    candidates.push(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    // Non-base64 payment requirement values are handled by the raw JSON candidate.
+  }
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  return null;
+}
+
+async function readPaymentChallenge(response) {
+  const headerChallenge = parseJsonOrBase64(
+    readHeader(response.headers, 'payment-required')
+      ?? readHeader(response.headers, 'x-payment-required')
+      ?? readHeader(response.headers, 'payment-requirements')
+      ?? readHeader(response.headers, 'x-payment-requirements'),
+  );
+  if (headerChallenge) return headerChallenge;
+
+  const payload = await safeJson(response);
+  const bodyChallenge = payload?.payment_required
+    ?? payload?.payment_requirements
+    ?? payload?.paymentRequired
+    ?? payload?.paymentRequirements
+    ?? payload?.challenge
+    ?? payload;
+  if (bodyChallenge && typeof bodyChallenge === 'object') return bodyChallenge;
+  throw new TypeError('HTTP 402 response did not include a usable payment-required challenge');
+}
+
 function compactJson(value) {
   return JSON.stringify(value, null, 2);
 }
@@ -113,7 +154,7 @@ function buildDefaultInputSchema() {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['task', 'mcp_server', 'tool_name'],
+    required: ['task', 'mcp_server', 'tool_name', 'tool_arguments', 'max_price_usdc', 'quote_id', 'metadata'],
     properties: {
       task: {
         type: 'string',
@@ -128,20 +169,20 @@ function buildDefaultInputSchema() {
         description: 'MCP tool name exposed by the seller listing.',
       },
       tool_arguments: {
-        type: 'object',
+        type: ['object', 'null'],
         additionalProperties: true,
         description: 'Arguments forwarded to the seller tool.',
       },
       max_price_usdc: {
-        type: 'number',
+        type: ['number', 'null'],
         description: 'Optional buyer-side spend ceiling used during quote matching.',
       },
       quote_id: {
-        type: 'string',
+        type: ['string', 'null'],
         description: 'Optional pre-fetched quote_id. When omitted, the wrapper requests one from execute/match.',
       },
       metadata: {
-        type: 'object',
+        type: ['object', 'null'],
         additionalProperties: true,
         description: 'Caller metadata echoed into the execute request for governance or tracing.',
       },
@@ -231,7 +272,7 @@ function createInlineX402Fetch() {
         }
 
         if (!cachedPayment) {
-          paymentChallenge = await safeJson(response);
+          paymentChallenge = await readPaymentChallenge(response);
           cachedPayment = await pay(paymentChallenge, {
             url: String(url),
             method,
@@ -242,8 +283,8 @@ function createInlineX402Fetch() {
           if (!cachedPayment || typeof cachedPayment !== 'object') {
             throw new TypeError('pay callback must return an authorization object');
           }
-          if (!cachedPayment.authorization && !cachedPayment.authorizationHeader) {
-            throw new TypeError('pay callback must return authorization or authorizationHeader');
+          if (!cachedPayment.authorization && !cachedPayment.authorizationHeader && !cachedPayment.paymentSignature) {
+            throw new TypeError('pay callback must return authorization, authorizationHeader, or paymentSignature');
           }
         } else {
           const error = new Error('server repeated HTTP 402 after payment authorization was already prepared');
@@ -311,7 +352,7 @@ export class AgoragenticExecuteClient {
       tool_name: input.tool_name,
     };
     if (input.max_price_usdc !== null && input.max_price_usdc !== undefined) {
-      query.max_price_usdc = input.max_price_usdc;
+      query.max_cost = input.max_price_usdc;
     }
 
     const url = new URL(this.matchPath, this.baseUrl);
@@ -536,7 +577,7 @@ export async function runDemo() {
   });
 
   const sdkCompatible = await tool.asOpenAIAgentsTool();
-  const result = await sdkCompatible.execute({
+  const result = await invokeOpenAIAgentsTool(sdkCompatible, {
     task: 'Summarize the seller output and include the usage receipt facts.',
     mcp_server: 'seller-weather',
     tool_name: 'forecast',
@@ -564,6 +605,16 @@ export async function runDemo() {
     pay_calls: tracker.payCalls,
     post_attempts: tracker.postAttempts,
   };
+}
+
+async function invokeOpenAIAgentsTool(tool, args, runtime = {}) {
+  if (typeof tool.execute === 'function') {
+    return tool.execute(args, runtime);
+  }
+  if (typeof tool.invoke === 'function') {
+    return tool.invoke(args, runtime);
+  }
+  throw new TypeError('OpenAI Agents tool does not expose execute() or invoke()');
 }
 
 export function createDemoMarketplaceFetch(tracker = { payCalls: 0, postAttempts: 0 }) {
@@ -677,7 +728,7 @@ async function main() {
   console.log(compactJson(summary));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.stack : String(error));
     process.exitCode = 1;
