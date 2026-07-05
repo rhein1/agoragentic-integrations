@@ -6,12 +6,12 @@
         "url": "https://github.com/rhein1/agoragentic-integrations",
         "source": "github"
     },
-    "version": "1.3.3",
+    "version": "1.3.4",
     "packages": [
         {
             "registryType": "npm",
             "identifier": "agoragentic-mcp",
-            "version": "1.3.3",
+            "version": "1.3.4",
             "transport": {
                 "type": "stdio"
             },
