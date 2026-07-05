@@ -248,6 +248,7 @@ export function createSampleMcpManifest(options = {}) {
       manifest_digest: sha256({
         listing_id: listingId,
         capability_id: capabilityId,
+        server_name: serverName,
         tool_name: toolName,
         inputSchema,
         outputSchema,
@@ -280,6 +281,9 @@ export function validatePolicy(policy) {
   const allowedOperations = normalizeStringArray(policy.allowed_operations, "policy.allowed_operations", { minLength: 1 });
   const maxFindings = positiveInteger(policy.max_findings, "policy.max_findings", { min: 1, max: 500 });
   const allowedClassifications = normalizeStringArray(policy.allowed_classifications, "policy.allowed_classifications", { minLength: 1 });
+  if (policy.require_evidence_tags !== true) {
+    throw new Error("policy.require_evidence_tags must be true for governed receipt execution");
+  }
   const denyActions = policy.deny_actions ? normalizeStringArray(policy.deny_actions, "policy.deny_actions") : [];
   const maxCriticalFindings = policy.max_critical_findings === undefined
     ? null
@@ -299,6 +303,7 @@ export function validatePolicy(policy) {
   checks.push({ name: "policy_id_present", status: "pass", evidence: policyId });
   checks.push({ name: "allowed_operations_valid", status: "pass", evidence: allowedOperations.join(",") });
   checks.push({ name: "allowed_classifications_valid", status: "pass", evidence: allowedClassifications.join(",") });
+  checks.push({ name: "evidence_tag_requirement_enforced", status: "pass", evidence: "required" });
   checks.push({ name: "max_findings_bound", status: maxFindings <= 200 ? "pass" : "warn", evidence: String(maxFindings) });
   checks.push({
     name: "deny_actions_present",
@@ -317,7 +322,7 @@ export function validatePolicy(policy) {
     allowed_operations: allowedOperations,
     max_findings: maxFindings,
     allowed_classifications: allowedClassifications,
-    require_evidence_tags: Boolean(policy.require_evidence_tags),
+    require_evidence_tags: true,
     deny_actions: denyActions,
     max_critical_findings: maxCriticalFindings,
     checks,
@@ -485,7 +490,16 @@ export function simulateAuditExecution(input) {
   };
 }
 
-export function createSimulatedReceipt({ requestId, input, policyResult, result, manifestDigest, receiptSecret = DEFAULT_RECEIPT_SECRET }) {
+export function createSimulatedReceipt({
+  requestId,
+  input,
+  policyResult,
+  result,
+  manifestDigest,
+  receiptSecret = DEFAULT_RECEIPT_SECRET,
+  capabilityId = DEFAULT_CAPABILITY_ID,
+  listingId = DEFAULT_LISTING_ID,
+}) {
   const issuedAt = utcNow();
   const receiptPayload = {
     receipt_id: `rcpt_${randomUUID()}`,
@@ -493,8 +507,8 @@ export function createSimulatedReceipt({ requestId, input, policyResult, result,
     simulated: true,
     issued_at: issuedAt,
     request_id: requestId,
-    capability_id: DEFAULT_CAPABILITY_ID,
-    listing_id: DEFAULT_LISTING_ID,
+    capability_id: capabilityId,
+    listing_id: listingId,
     policy_id: input.policy.policy_id,
     manifest_digest: manifestDigest,
     input_digest: sha256({
@@ -562,6 +576,8 @@ export class AuditBimI3fLocalAdapter {
       result,
       manifestDigest: this.manifestCache.digests.manifest_digest,
       receiptSecret: this.receiptSecret,
+      capabilityId: this.capabilityId,
+      listingId: this.listingId,
     });
 
     return {
@@ -718,6 +734,19 @@ export function runSelfTest() {
   assert.match(success.receipt.receipt_signature, /^sim:[0-9a-f]{64}$/);
   assert.equal(success.manifest_digest, manifest.digests.manifest_digest);
 
+  const customAdapter = new AuditBimI3fLocalAdapter({
+    serverName: "audit-bim-i3f-custom",
+    capabilityId: "agoragentic.audit_bim_i3f.custom.v1",
+    listingId: "audit-bim-i3f.custom.v1",
+  });
+  const customManifest = customAdapter.manifest();
+  const defaultManifest = createSampleMcpManifest();
+  assert.notEqual(customManifest.digests.manifest_digest, defaultManifest.digests.manifest_digest);
+  const customSuccess = customAdapter.execute(buildDemoInput({ request_id: "req-custom-ids" }));
+  assert.equal(customSuccess.receipt.capability_id, "agoragentic.audit_bim_i3f.custom.v1");
+  assert.equal(customSuccess.receipt.listing_id, "audit-bim-i3f.custom.v1");
+  assert.equal(customSuccess.manifest_digest, customManifest.digests.manifest_digest);
+
   assert.throws(
     () => {
       adapter.execute(buildDemoInput({
@@ -733,6 +762,18 @@ export function runSelfTest() {
       }));
     },
     (error) => error?.name === "PolicyValidationError" && error?.policy_result?.checks?.some((check) => check.name === "evidence_tags_present" && check.status === "fail"),
+  );
+
+  assert.throws(
+    () => {
+      adapter.execute(buildDemoInput({
+        policy: {
+          ...createDefaultPolicy(),
+          require_evidence_tags: 0,
+        },
+      }));
+    },
+    /policy\.require_evidence_tags must be true/,
   );
 
   const rpcList = handleMcpJsonRpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { adapter });
