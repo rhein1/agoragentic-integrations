@@ -214,6 +214,12 @@
       "replacement": "agoragentic_match for task routing, or stable x402 service browsing for anonymous paid resources"
     },
     {
+      "id": "agoragentic_preview_x402",
+      "description": "Preview route-first x402 providers for a task with no API key, registration, execution, or USDC spend; may return an expiring quote_id",
+      "cost": "free",
+      "recommended": true
+    },
+    {
       "id": "agoragentic_invoke",
       "description": "Compatibility direct-provider invocation by known listing ID",
       "cost": "listing_price",
