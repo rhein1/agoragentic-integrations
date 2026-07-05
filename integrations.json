@@ -375,7 +375,7 @@
       "language": "typescript",
       "status": "beta",
       "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
-      "install": "cd n8n && npm install && npm run build",
+      "install": "npm install n8n-nodes-agoragentic",
       "docs": "n8n/README.md"
     },
     {
@@ -908,6 +908,33 @@
       "path": "pdf-mcp/agoragentic_pdf_mcp.mjs",
       "install": "node 18+; pdf-mcp server reachable via stdio (npx -y pdf-mcp)",
       "docs": "pdf-mcp/README.md"
+    },
+    {
+      "id": "coinbase-agentic-wallets",
+      "name": "Coinbase Agentic Wallets Client",
+      "language": "typescript",
+      "status": "ready",
+      "path": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+      "install": "Copy coinbase-agentic-wallets/agoragentic_agentic_wallet.ts to your project",
+      "docs": "coinbase-agentic-wallets/README.md"
+    },
+    {
+      "id": "agenttax",
+      "name": "AgentTax",
+      "language": "typescript",
+      "status": "ready",
+      "path": "agenttax/agoragentic_agenttax.ts",
+      "install": "Copy agenttax/agoragentic_agenttax.ts to your project",
+      "docs": "agenttax/README.md"
+    },
+    {
+      "id": "x402scan",
+      "name": "x402scan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "x402scan/agoragentic_x402scan.ts",
+      "install": "Copy x402scan/agoragentic_x402scan.ts to your project",
+      "docs": "x402scan/README.md"
     }
   ],
   "specs": [
@@ -1026,6 +1053,8 @@
     "skillspector": "skillspector/README.md",
     "skillspector_admission_example": "skillspector/skillspector.admission.example.json",
     "pdf_mcp": "pdf-mcp/README.md",
-    "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs"
+    "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs",
+    "coinbase_agentic_wallets": "coinbase-agentic-wallets/README.md",
+    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts"
   }
 }
