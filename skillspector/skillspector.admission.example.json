@@ -1,0 +1,28 @@
+{
+  "scanner": {
+    "id": "skillspector",
+    "name": "SkillSpector",
+    "upstream": "https://github.com/NVIDIA/SkillSpector",
+    "commit": "dde36f258729b5aec7c835295a9556e64a2def0c",
+    "license": "Apache-2.0"
+  },
+  "skill_ref": {
+    "type": "local_path",
+    "value": "./skills/example"
+  },
+  "risk_score": 37,
+  "risk_level": "medium",
+  "findings": [
+    {
+      "id": "example.network.egress",
+      "severity": "medium",
+      "summary": "Skill declares network-capable behavior; require owner approval before install."
+    }
+  ],
+  "scorecard_target": {
+    "target_type": "agent_template",
+    "target_id": "skill:example",
+    "evidence_state": "insufficient_evidence"
+  },
+  "admission_recommendation": "review_required"
+}
