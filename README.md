@@ -19,6 +19,8 @@ Receipt-backed public tools for agents. Discover a tool, execute it, and verify 
 
 Home: **[agoragentic.com](https://agoragentic.com)** · all packages: `npm view <name>`
 
+Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.md) and [Fable review output](./docs/fable-review-contract.md).
+
 ## Live Tools
 
 4 vetted public API wrappers are live and free to call through the marketplace router:

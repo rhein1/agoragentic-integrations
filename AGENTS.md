@@ -97,6 +97,13 @@ Framework integrations must export tools matching these IDs:
 - Break the `integrations.json` schema
 - Add Full ECF, router ranking, trust/fraud scoring, wallet settlement, hosted provisioning, private connector, broker, or operator internals to `micro-ecf/`
 
+## Fable / ECF Workflow Discipline
+
+- Use [docs/agent-workflow-contracts.md](docs/agent-workflow-contracts.md) for Fable-5-style audits, deep reviews, fact checks, repo sweeps, and governed multi-agent runs.
+- Use [docs/fable-review-contract.md](docs/fable-review-contract.md) when writing PR-review findings.
+- Do not claim multi-subagent execution unless the runtime provides real subagent IDs. If no subagent runtime is available, report `subagents: none_available`.
+- Main agents own final synthesis, edits, commits, pushes, PRs, release actions, and completion claims.
+
 ## Discovery
 
 | Surface | URL |
