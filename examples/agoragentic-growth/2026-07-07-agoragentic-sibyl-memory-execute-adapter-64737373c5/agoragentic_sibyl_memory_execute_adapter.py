@@ -22,8 +22,10 @@ DEFAULT_PROVIDER_NAME = "Sibyl-Memory"
 DEFAULT_NAMESPACE = os.environ.get("SIBYL_MEMORY_NAMESPACE", "default")
 DEFAULT_TIMEOUT_MS = int(os.environ.get("SIBYL_MEMORY_TIMEOUT_MS", "30000"))
 DEFAULT_LIMIT = int(os.environ.get("SIBYL_MEMORY_LIMIT", "5"))
+MAX_TOP_K = 50
 DEFAULT_TASK = "search relevant memory for the user request"
 COMPATIBLE_NAME_PATTERNS = ("memory", "memories", "recall", "retrieve", "search", "find", "context")
+MUTATING_TOOL_PATTERNS = ("write", "store", "save", "insert", "upsert", "create", "delete", "remove", "mutate")
 
 
 def utc_now_iso() -> str:
@@ -278,11 +280,14 @@ def score_tool(tool: Mapping[str, Any], task: str = DEFAULT_TASK, preferred_tool
     add_if("semantic", 14 if "semantic" in task_text else 4)
     add_if("vector", 10 if "vector" in task_text else 2)
     add_if("context", 10 if "context" in task_text else 3)
-    if any(word in text for word in ("write", "store", "save", "insert", "upsert")) and not any(
-        word in task_text for word in ("write", "store", "save")
-    ):
-        score -= 8
+    if is_mutating_tool(tool):
+        score -= 1000
     return score
+
+
+def is_mutating_tool(tool: Mapping[str, Any]) -> bool:
+    text = f"{tool.get('name') or ''} {tool.get('description') or ''}".lower()
+    return any(pattern in text for pattern in MUTATING_TOOL_PATTERNS)
 
 
 def select_memory_tool(
@@ -295,8 +300,13 @@ def select_memory_tool(
     if preferred_tool_name:
         for tool in normalized:
             if tool["name"] == preferred_tool_name:
+                if is_mutating_tool(tool):
+                    raise SibylToolSelectionError(f"Preferred tool {preferred_tool_name!r} is mutating and cannot be used for retrieval")
                 return tool
         raise SibylToolSelectionError(f"Preferred tool {preferred_tool_name!r} was not present in MCP tools/list")
+    normalized = [tool for tool in normalized if not is_mutating_tool(tool)]
+    if not normalized:
+        raise SibylToolSelectionError("No non-mutating Sibyl-Memory retrieval tool was discovered")
     ranked = sorted(
         ((score_tool(tool, task, preferred_tool_name), tool) for tool in normalized),
         key=lambda item: item[0],
@@ -317,51 +327,70 @@ NAMESPACE_ALIASES = ("namespace", "collection", "memory_space", "scope")
 FILTER_ALIASES = ("filters", "metadata_filter", "metadata", "where")
 
 
-def choose_key(properties: Mapping[str, Any], aliases: Iterable[str], fallback: str) -> str:
+def choose_key(properties: Mapping[str, Any], aliases: Iterable[str]) -> str | None:
     for alias in aliases:
         if alias in properties:
             return alias
-    return fallback
+    return None
+
+
+def schema_allows_extra(schema: Mapping[str, Any]) -> bool:
+    return schema.get("additionalProperties", True) is not False
 
 
 def build_tool_arguments(tool: Mapping[str, Any], params: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(params.get("tool_arguments"), Mapping):
-        return dict(params["tool_arguments"])
+        explicit_args = dict(params["tool_arguments"])
+        for key in LIMIT_ALIASES:
+            if key in explicit_args:
+                validate_limit(explicit_args[key])
+        return explicit_args
     schema = tool.get("inputSchema") if isinstance(tool.get("inputSchema"), Mapping) else {}
     properties = schema.get("properties") if isinstance(schema.get("properties"), Mapping) else {}
+    allow_extra = schema_allows_extra(schema)
     args: dict[str, Any] = {}
-    query_key = choose_key(properties, QUERY_ALIASES, "query")
-    limit_key = choose_key(properties, LIMIT_ALIASES, "limit")
-    namespace_key = choose_key(properties, NAMESPACE_ALIASES, "namespace")
-    filters_key = choose_key(properties, FILTER_ALIASES, "filters")
+    query_key = choose_key(properties, QUERY_ALIASES) or ("query" if allow_extra else None)
+    limit_key = choose_key(properties, LIMIT_ALIASES) or ("limit" if allow_extra else None)
+    namespace_key = choose_key(properties, NAMESPACE_ALIASES) or ("namespace" if allow_extra else None)
+    filters_key = choose_key(properties, FILTER_ALIASES) or ("filters" if allow_extra else None)
 
     query = params.get("query") or params.get("text") or params.get("prompt") or params.get("input")
     if not isinstance(query, str) or not query.strip():
         raise ValueError("input_data must include a non-empty query string")
+    if query_key is None:
+        raise ValueError("selected MCP tool schema does not accept a query argument")
     args[query_key] = query.strip()
 
     limit = params.get("limit", params.get("top_k", DEFAULT_LIMIT))
-    try:
-        limit_int = int(limit)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("limit/top_k must be an integer") from exc
-    if limit_int <= 0:
-        raise ValueError("limit/top_k must be positive")
-    args[limit_key] = limit_int
+    limit_int = validate_limit(limit)
+    if limit_key is not None:
+        args[limit_key] = limit_int
 
     namespace = params.get("namespace", DEFAULT_NAMESPACE)
-    if namespace_key in properties or namespace != DEFAULT_NAMESPACE:
+    if namespace_key is not None and (namespace_key in properties or namespace != DEFAULT_NAMESPACE):
         args[namespace_key] = str(namespace)
 
-    if filters_key in properties and isinstance(params.get("filters"), Mapping):
+    if filters_key is not None and filters_key in properties and isinstance(params.get("filters"), Mapping):
         args[filters_key] = dict(params["filters"])
 
     for extra_key, extra_value in params.items():
         if extra_key in {"query", "text", "prompt", "input", "limit", "top_k", "namespace", "filters", "tool_arguments"}:
             continue
-        if extra_key not in args:
+        if allow_extra and extra_key not in args:
             args[extra_key] = extra_value
     return args
+
+
+def validate_limit(value: Any) -> int:
+    try:
+        limit_int = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("limit/top_k must be an integer") from exc
+    if limit_int <= 0:
+        raise ValueError("limit/top_k must be positive")
+    if limit_int > MAX_TOP_K:
+        raise ValueError(f"limit/top_k must be <= {MAX_TOP_K}")
+    return limit_int
 
 
 @dataclass
@@ -516,7 +545,7 @@ class SibylMemoryExecuteAdapter:
         }
         manifest = self.build_manifest()
         manifest_id = str(manifest["id"])
-        invocation_id = stable_id("inv", task, input_payload, manifest_id)
+        invocation_id = stable_id("inv", task, input_payload, manifest_id, time.time_ns())
         namespace = str((input_data or {}).get("namespace") or self.namespace)
         tool_name = self.preferred_tool_name or ""
         try:
@@ -525,6 +554,8 @@ class SibylMemoryExecuteAdapter:
             tool_name = selected_tool["name"]
             tool_arguments = build_tool_arguments(selected_tool, {**dict(input_data or {}), "namespace": namespace})
             raw_result = self._client.call_tool(tool_name, tool_arguments)
+            if raw_result.get("isError") is True:
+                raise McpProtocolError(f"MCP tool {tool_name} returned isError=true: {extract_tool_error_message(raw_result)}")
             normalized_result = self._normalize_tool_result(raw_result)
             return self._build_response(
                 tool_name=tool_name,
@@ -607,6 +638,19 @@ class SibylMemoryExecuteAdapter:
             "receipt": asdict(receipt),
             "manifest": clone_json(manifest),
         }
+
+
+def extract_tool_error_message(result: Mapping[str, Any]) -> str:
+    content = result.get("content")
+    if isinstance(content, list):
+        texts = [
+            str(item.get("text"))
+            for item in content
+            if isinstance(item, Mapping) and item.get("type") == "text" and item.get("text")
+        ]
+        if texts:
+            return " ".join(texts)[:300]
+    return "tool call failed"
 
 
 def fake_sibyl_search(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -724,6 +768,33 @@ def run_fake_mcp_server() -> int:
 
 
 def run_self_test() -> dict[str, Any]:
+    writer_only_tool = {
+        "name": "sibyl_memory.store_memory",
+        "description": "Store a memory entry.",
+        "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+    }
+    try:
+        select_memory_tool([writer_only_tool])
+        raise AssertionError("writer-only tool should not be selected for retrieval")
+    except SibylToolSelectionError:
+        pass
+
+    closed_query_tool = {
+        "name": "sibyl_memory.search_memories",
+        "description": "Search memory entries.",
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"query": {"type": "string"}},
+        },
+    }
+    assert build_tool_arguments(closed_query_tool, {"query": "refund", "top_k": 2, "namespace": "demo"}) == {"query": "refund"}
+    try:
+        build_tool_arguments(closed_query_tool, {"query": "refund", "top_k": 999})
+        raise AssertionError("oversized top_k should be rejected")
+    except ValueError as exc:
+        assert "<= 50" in str(exc)
+
     adapter = SibylMemoryExecuteAdapter(
         command=[sys.executable, __file__, "--fake-mcp-server"],
         namespace="demo-space",
@@ -745,6 +816,25 @@ def run_self_test() -> dict[str, Any]:
         assert len(normalized.get("results", [])) == 2
         assert result["receipt"]["provider_id"] == DEFAULT_PROVIDER_ID
         assert result["manifest"]["id"] == f"{DEFAULT_PROVIDER_ID}.execute_memory"
+        repeated = adapter.execute(
+            "search relevant memory for the user request",
+            {"query": "refund workflow receipt", "top_k": 2},
+        )
+        assert repeated["receipt"]["invocation_id"] != result["receipt"]["invocation_id"]
+
+        original_call_tool = adapter._client.call_tool
+        adapter._client.call_tool = lambda _name, _arguments: {
+            "isError": True,
+            "content": [{"type": "text", "text": "memory backend unavailable"}],
+        }
+        failed = adapter.execute(
+            "search relevant memory for the user request",
+            {"query": "refund workflow receipt", "top_k": 2},
+        )
+        adapter._client.call_tool = original_call_tool
+        assert failed["ok"] is False
+        assert failed["receipt"]["ok"] is False
+        assert failed["error"]["type"] == "McpProtocolError"
         return {
             "self_test": "passed",
             "tool_count": len(tools),
