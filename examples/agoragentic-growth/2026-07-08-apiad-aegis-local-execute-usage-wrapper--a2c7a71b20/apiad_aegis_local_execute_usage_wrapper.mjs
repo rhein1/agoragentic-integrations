@@ -2,11 +2,13 @@
 /* demo — simulates x402 payment authorization and usage receipts; moves no real funds */
 
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.example";
-const DEFAULT_EXECUTE_PATH = "/v1/marketplace/execute";
+const DEFAULT_EXECUTE_PATH = "/api/x402/execute";
 const DEFAULT_CAPABILITY_ID = "agoragentic.apiad.aegis.execute.v1";
 const DEFAULT_TOOL_NAME = "run_aegis_tool";
 const DEFAULT_SERVER_NAME = "apiad-aegis";
@@ -94,12 +96,147 @@ function getHeader(response, name) {
   return headers[lowered];
 }
 
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function parseJsonMaybe(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function decodePaymentRequiredHeader(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const text = value.trim();
+  const parsed = parseJsonMaybe(text);
+  if (parsed !== null) return parsed;
+
+  try {
+    const decoded = Buffer.from(text, "base64").toString("utf8");
+    return parseJsonMaybe(decoded);
+  } catch {
+    return null;
+  }
+}
+
+function firstRecord(value) {
+  if (Array.isArray(value)) {
+    return value.find((entry) => isRecord(entry)) || null;
+  }
+  if (isRecord(value)) return value;
+  return null;
+}
+
+function normalizePaymentChallenge(response, body) {
+  const paymentRequired =
+    decodePaymentRequiredHeader(getHeader(response, "payment-required")) ||
+    decodePaymentRequiredHeader(getHeader(response, "x-payment-required"));
+  const bodyRecord = firstRecord(body);
+  const requirementRecord =
+    firstRecord(paymentRequired) ||
+    firstRecord(bodyRecord?.requirements) ||
+    firstRecord(bodyRecord?.paymentRequirements) ||
+    firstRecord(bodyRecord?.payment_required);
+  const challenge = {
+    ...(bodyRecord || {}),
+    ...(requirementRecord || {}),
+  };
+
+  challenge.challenge_id =
+    challenge.challenge_id ||
+    challenge.challengeId ||
+    challenge.nonce ||
+    challenge.resource ||
+    getHeader(response, "x-payment-challenge-id") ||
+    null;
+  challenge.challenge =
+    challenge.challenge ||
+    challenge.challengeToken ||
+    challenge.resource ||
+    getHeader(response, "x-payment-challenge") ||
+    null;
+  if (paymentRequired !== null) {
+    challenge.payment_required = clone(paymentRequired);
+  }
+
+  return challenge;
+}
+
+function coerceFiniteNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) ? normalized : null;
+  }
+  return null;
+}
+
+function collectChallengeRecords(challenge) {
+  const records = [];
+  if (isRecord(challenge)) records.push(challenge);
+  const paymentRequired = challenge?.payment_required;
+  if (Array.isArray(paymentRequired)) {
+    records.push(...paymentRequired.filter(isRecord));
+  } else if (isRecord(paymentRequired)) {
+    records.push(paymentRequired);
+  }
+  return records;
+}
+
+function extractChallengeAmountUsdc(challenge) {
+  const candidateKeys = [
+    "max_amount_usdc",
+    "amount_usdc",
+    "price_usdc",
+    "max_amount",
+    "amount",
+    "value",
+    "maxAmount",
+    "maxAmountRequired",
+  ];
+
+  for (const record of collectChallengeRecords(challenge)) {
+    for (const key of candidateKeys) {
+      const value = coerceFiniteNumber(record[key]);
+      if (value === null) continue;
+      const looksLikeMicroUsdc =
+        key === "maxAmountRequired" || key.toLowerCase().includes("micro") || value > 1000;
+      return looksLikeMicroUsdc ? value / 1_000_000 : value;
+    }
+  }
+  return null;
+}
+
+function enforcePriceCeilingBeforePayment(challenge, maxPriceUsdc) {
+  const ceiling = coerceFiniteNumber(maxPriceUsdc);
+  if (ceiling === null) return;
+
+  const requestedAmountUsdc = extractChallengeAmountUsdc(challenge);
+  if (requestedAmountUsdc !== null && requestedAmountUsdc > ceiling) {
+    throw new HttpFailure("x402 challenge exceeds caller price ceiling; refusing to authorize payment", {
+      status: 402,
+      max_price_usdc: ceiling,
+      challenge_amount_usdc: requestedAmountUsdc,
+      challenge,
+    });
+  }
+}
+
 function buildPaymentHeaders(authorization) {
   if (!authorization || typeof authorization !== "object") {
     throw new Error("pay() must return an object with authorization headers or token data");
   }
 
   const headers = lowerCaseHeaders(authorization.headers || {});
+  const paymentSignature =
+    authorization.paymentSignature || authorization.payment_signature || authorization.signature || headers["payment-signature"];
+  if (paymentSignature && !headers["payment-signature"]) {
+    headers["payment-signature"] = String(paymentSignature);
+  }
   if (authorization.authorization && !headers["x-payment-authorization"]) {
     headers["x-payment-authorization"] = String(authorization.authorization);
   }
@@ -108,8 +245,8 @@ function buildPaymentHeaders(authorization) {
       typeof authorization.receipt === "string" ? authorization.receipt : JSON.stringify(authorization.receipt);
   }
 
-  if (!headers["x-payment-authorization"]) {
-    throw new Error("pay() result must include x-payment-authorization headers or authorization text");
+  if (!headers["payment-signature"] && !headers["x-payment-authorization"]) {
+    throw new Error("pay() result must include PAYMENT-SIGNATURE, x-payment-authorization, or authorization text");
   }
 
   return headers;
@@ -218,20 +355,20 @@ function createFallbackX402Fetch() {
       }
 
       const challengeBody = await readJsonSafe(response);
-      const challenge = challengeBody || {
-        challenge_id: getHeader(response, "x-payment-challenge-id") || null,
-        challenge: getHeader(response, "x-payment-challenge") || null,
-      };
+      const challenge = normalizePaymentChallenge(response, challengeBody);
       const challengeDigest = sha256(challenge);
 
-      if (paidChallengeDigest && challengeDigest === paidChallengeDigest) {
-        throw new HttpFailure("received the same HTTP 402 challenge after authorization; refusing to double-pay", {
+      if (paidChallengeDigest) {
+        throw new HttpFailure("received HTTP 402 after payment authorization; refusing to re-authorize or replay payment", {
           status: 402,
           challenge,
           idempotency_key: idempotencyKey,
+          challenge_digest: challengeDigest,
           paid_challenge_digest: paidChallengeDigest,
         });
       }
+
+      enforcePriceCeilingBeforePayment(challenge, options.maxPriceUsdc);
 
       const authorization = await options.pay({
         url,
@@ -411,6 +548,7 @@ export function createAegisCapabilityManifest(options = {}) {
 }
 
 function buildExecutePayload(input, manifest, idempotencyKey) {
+  const callerTrustContext = clone(input.trust_context || {});
   return {
     capability_id: manifest.capability_id,
     seller: clone(manifest.seller),
@@ -419,10 +557,11 @@ function buildExecutePayload(input, manifest, idempotencyKey) {
       arguments: clone(input.arguments || {}),
     },
     trust_context: {
-      requester: input.trust_context?.requester || "local-demo",
-      scope: input.trust_context?.scope || "read-only",
-      review_tags: clone(input.trust_context?.review_tags || ["trust-checked", "receipt-enabled"]),
-      approval_ref: input.trust_context?.approval_ref || null,
+      ...callerTrustContext,
+      requester: callerTrustContext.requester || "local-demo",
+      scope: callerTrustContext.scope || "read-only",
+      review_tags: clone(callerTrustContext.review_tags || ["trust-checked", "receipt-enabled"]),
+      approval_ref: callerTrustContext.approval_ref || null,
     },
     usage_policy: {
       max_price_usdc: input.usage_policy?.max_price_usdc ?? 0.02,
@@ -494,6 +633,7 @@ export async function executeAegisCapability(input, options = {}) {
     pay: options.pay,
     idempotencyKey,
     maxTransportRetries: 1,
+    maxPriceUsdc: executePayload.usage_policy.max_price_usdc,
   });
 
   const responseBody = await readJsonSafe(response);
@@ -546,7 +686,7 @@ export function createMockMarketplaceFetch() {
       body: clone(body),
     });
 
-    if (!headers["x-payment-authorization"]) {
+    if (!headers["x-payment-authorization"] && !headers["payment-signature"]) {
       challengeCount += 1;
       return jsonResponse(
         402,
@@ -631,7 +771,7 @@ export async function selfTest() {
         payCalls.push(clone(context));
         return {
           headers: {
-            "x-payment-authorization": `demo-auth:${sha256(context.challenge).slice(0, 24)}`,
+            "payment-signature": `demo-signature:${sha256(context.challenge).slice(0, 24)}`,
             "x-payment-receipt": JSON.stringify({ demo: true, challenge_id: context.challenge.challenge_id }),
           },
         };
@@ -645,7 +785,7 @@ export async function selfTest() {
   assert.equal(calls[0].headers["x-idempotency-key"], "idem_self_test_apiad_aegis");
   assert.equal(calls[1].headers["x-idempotency-key"], "idem_self_test_apiad_aegis");
   assert.ok(!calls[0].headers["x-payment-authorization"], "first request must be unpaid");
-  assert.ok(calls[1].headers["x-payment-authorization"], "authorized retry must include payment authorization");
+  assert.ok(calls[1].headers["payment-signature"], "authorized retry must include PAYMENT-SIGNATURE");
   assert.equal(result.trust_summary.mode, "trust-checked");
   assert.equal(result.usage_receipt.settlement_state, "simulated");
   assert.equal(result.output.approved, true);
@@ -687,7 +827,7 @@ async function main(argv = process.argv.slice(2)) {
     async pay(context) {
       return {
         headers: {
-          "x-payment-authorization": `demo-auth:${sha256(context.challenge).slice(0, 24)}`,
+          "payment-signature": `demo-signature:${sha256(context.challenge).slice(0, 24)}`,
           "x-payment-receipt": JSON.stringify({ demo: true, challenge_id: context.challenge.challenge_id }),
         },
       };
@@ -697,7 +837,7 @@ async function main(argv = process.argv.slice(2)) {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
-if (import.meta.url === new URL(process.argv[1], "file:").href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((error) => {
     const details = error && typeof error === "object" && "details" in error ? error.details : undefined;
     process.stderr.write(
