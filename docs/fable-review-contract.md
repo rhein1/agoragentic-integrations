@@ -46,4 +46,3 @@ Do not print secret values. State the secret class, file, line, and count if nee
 - Preserve rejected candidates when they explain why an apparent issue is not real.
 - Separate target-system failures from runner/tooling failures.
 - State residual unknowns when the evidence is incomplete.
-

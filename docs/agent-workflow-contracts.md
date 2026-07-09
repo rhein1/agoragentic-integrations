@@ -73,4 +73,3 @@ Workflow Trace
 ## ECF Handoff
 
 Use Micro ECF artifacts for lightweight local policy/source boundaries and ECF Core artifacts for richer self-hosted context governance when they exist in the target repo. Inspect `ECF.md`, `.micro-ecf/*`, or `.ecf-core/*` only as public/local context aids, then verify claims against live source files before editing or reporting.
-
