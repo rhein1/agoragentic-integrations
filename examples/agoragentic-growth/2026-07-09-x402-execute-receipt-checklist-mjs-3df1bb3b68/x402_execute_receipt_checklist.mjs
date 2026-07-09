@@ -3,8 +3,9 @@
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
-const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
+const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || process.env.AGORAGENTIC_URL || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
 const EXECUTE_PATH = "/api/x402/execute";
 
@@ -94,12 +95,13 @@ async function localX402Fetch(url, options = {}) {
   let sawPaymentChallenge = false;
   let networkRetriesUsed = 0;
   let lastError = null;
+  const callerAuthorization = baseHeaders.authorization ?? null;
 
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
@@ -109,7 +111,11 @@ async function localX402Fetch(url, options = {}) {
     }
 
     if (cachedPayment?.authorizationHeader) {
-      requestHeaders.authorization = cachedPayment.authorizationHeader;
+      if (callerAuthorization) {
+        requestHeaders["payment-signature"] = cachedPayment.authorizationHeader;
+      } else {
+        requestHeaders.authorization = cachedPayment.authorizationHeader;
+      }
     }
     if (cachedPayment?.paymentSignature) {
       requestHeaders["payment-signature"] = cachedPayment.paymentSignature;
@@ -135,6 +141,13 @@ async function localX402Fetch(url, options = {}) {
       }
 
       sawPaymentChallenge = true;
+      if (cachedPayment) {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+        });
+      }
       const paymentRequired = readHeader(response, "payment-required");
       if (!paymentRequired) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
@@ -197,8 +210,21 @@ function extractReceiptReference(payload, response) {
     ?? null;
 }
 
+function extractReturnedQuoteId(payload) {
+  return payload?.quote_id
+    ?? payload?.quoteId
+    ?? payload?.quote?.quote_id
+    ?? payload?.quote?.quoteId
+    ?? payload?.receipt?.quote_id
+    ?? payload?.receipt?.quoteId
+    ?? payload?.usage_receipt?.quote_id
+    ?? payload?.usage_receipt?.quoteId
+    ?? null;
+}
+
 export function buildReceiptChecklist({ response, payload, quoteId, idempotencyKey, paymentAttempted }) {
   const receiptId = extractReceiptReference(payload, response);
+  const returnedQuoteId = extractReturnedQuoteId(payload);
   const paymentReceipt = readHeader(response, "payment-receipt");
   const paymentResponse = readHeader(response, "payment-response");
   const invocationId = payload?.invocation_id ?? payload?.invocationId ?? null;
@@ -210,11 +236,13 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
     responseStatus: response.status,
     paymentAttempted,
     receiptId,
+    returnedQuoteId,
     invocationId,
     checks: [
       { item: "http_ok", status: response.ok ? "pass" : "fail", evidence: `HTTP ${response.status}` },
       { item: "idempotency_key_present", status: idempotencyKey ? "pass" : "fail", evidence: idempotencyKey || "missing" },
       { item: "receipt_reference", status: receiptId ? "pass" : "warn", evidence: receiptId || "missing" },
+      { item: "quote_binding", status: returnedQuoteId ? (returnedQuoteId === quoteId ? "pass" : "fail") : "warn", evidence: returnedQuoteId ? `${returnedQuoteId} requested=${quoteId}` : "missing" },
       { item: "payment_receipt_header", status: paymentAttempted ? (paymentReceipt ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentReceipt || "missing") : "no x402 challenge observed" },
       { item: "payment_response_header", status: paymentAttempted ? (paymentResponse ? "pass" : "warn") : "skip", evidence: paymentAttempted ? (paymentResponse || "missing") : "no x402 challenge observed" },
       { item: "invocation_reference", status: invocationId ? "pass" : "warn", evidence: invocationId || "missing" },
@@ -386,6 +414,7 @@ export function createMockPaidFetch() {
 
       return jsonResponse(200, {
         ok: true,
+        quote_id: "quote_demo_paid_claude",
         invocation_id: "inv_demo_001",
         receipt_id: "rcpt_demo_001",
         cost: 0.01,
@@ -422,7 +451,7 @@ async function demo() {
       assert.equal(Array.isArray(decoded), true);
       assert.equal(typeof request.idempotencyKey, "string");
       return {
-        authorizationHeader: `X402 demo authorization for ${request.idempotencyKey}`,
+        paymentSignature: `X402 demo authorization for ${request.idempotencyKey}`,
       };
     },
   });
@@ -438,9 +467,10 @@ async function demo() {
   assert.equal(state.payCalls, 1, "payment authorization should be created once");
   assert.equal(state.executeAttempts, 3, "expected initial 402, one network drop, then successful retry");
   assert.equal(new Set(state.idempotencyKeys).size, 1, "same idempotency key must be reused across retries");
-  assert.equal(state.authHeaders[1], state.authHeaders[2], "same authorization must be reused after network failure");
+  assert.equal(state.paymentSignatures[1], state.paymentSignatures[2], "same payment signature must be reused after network failure");
   assert.equal(result.receiptChecklist.receiptId, "rcpt_demo_001");
   assert.equal(result.receiptChecklist.checks.find((x) => x.item === "payment_receipt_header").status, "pass");
+  assert.equal(result.receiptChecklist.checks.find((x) => x.item === "quote_binding").status, "pass");
   assert.equal(result.x402.networkRetriesUsed, 1);
 
   console.log(JSON.stringify({
@@ -454,7 +484,7 @@ async function demo() {
   }, null, 2));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
