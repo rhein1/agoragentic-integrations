@@ -4,8 +4,11 @@
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
-const DEFAULT_BASE_URL = process.env.AGORAGENTIC_URL || "https://agoragentic.com";
+const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL
+  || process.env.AGORAGENTIC_URL
+  || "https://agoragentic.com";
 const MATCH_PATH = "/api/x402/execute/match";
 const EXECUTE_PATH = "/api/x402/execute";
 
@@ -102,8 +105,8 @@ async function localX402Fetch(url, options = {}) {
   while (true) {
     const requestHeaders = {
       accept: "application/json",
-      "idempotency-key": idempotencyKey,
       ...baseHeaders,
+      "idempotency-key": idempotencyKey,
     };
 
     let requestBody = body;
@@ -139,13 +142,24 @@ async function localX402Fetch(url, options = {}) {
         return response;
       }
 
-      lastPaymentRequired = readHeader(response, "payment-required");
-      if (!lastPaymentRequired) {
+      const nextPaymentRequired = readHeader(response, "payment-required");
+      if (cachedPayment) {
+        throw createHttpError("Received another HTTP 402 after payment authorization; refusing to replay or re-authorize", {
+          status: 402,
+          idempotencyKey,
+          paymentAttempted: true,
+          authorizedPaymentReused: true,
+          paymentRequired: lastPaymentRequired,
+          receivedPaymentRequired: nextPaymentRequired,
+        });
+      }
+      if (!nextPaymentRequired) {
         throw createHttpError("Received HTTP 402 without PAYMENT-REQUIRED header", {
           status: 402,
           idempotencyKey,
         });
       }
+      lastPaymentRequired = nextPaymentRequired;
       if (typeof pay !== "function") {
         throw createHttpError("HTTP 402 requires a caller-supplied pay callback", {
           status: 402,
@@ -180,19 +194,29 @@ async function localX402Fetch(url, options = {}) {
   }
 }
 
+export function preservePreferredX402Meta(response, options = {}) {
+  const helperMeta = response?.x402Meta && typeof response.x402Meta === "object"
+    ? response.x402Meta
+    : {};
+  response.x402Meta = {
+    ...helperMeta,
+    helper: helperMeta.helper ?? "agoragentic/x402-client",
+    idempotencyKey: helperMeta.idempotencyKey ?? options.idempotencyKey ?? null,
+    networkRetriesUsed: helperMeta.networkRetriesUsed ?? 0,
+    paymentAuthorized: helperMeta.paymentAuthorized
+      ?? Boolean(readHeader(response, "payment-response")),
+    paymentAttempted: helperMeta.paymentAttempted
+      ?? Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
+    paymentRequired: helperMeta.paymentRequired ?? null,
+  };
+  return response;
+}
+
 async function x402Fetch(url, options = {}) {
   const preferred = await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
   const response = await preferred(url, options);
-  response.x402Meta = {
-    helper: "agoragentic/x402-client",
-    idempotencyKey: options.idempotencyKey ?? null,
-    networkRetriesUsed: 0,
-    paymentAuthorized: Boolean(readHeader(response, "payment-response")),
-    paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
-    paymentRequired: null,
-  };
-  return response;
+  return preservePreferredX402Meta(response, options);
 }
 
 function decodePaymentRequired(encoded) {
@@ -220,8 +244,8 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
   const receipt = payload?.receipt ?? null;
   const decodedPaymentRequired = decodePaymentRequired(paymentRequired);
   const paidChallenge = Array.isArray(decodedPaymentRequired) ? decodedPaymentRequired[0] : decodedPaymentRequired;
-  const challengeId = paidChallenge?.challengeId ?? null;
-  const receiptChallengeId = receipt?.challenge_id ?? null;
+  const challengeId = paidChallenge?.challenge_id ?? paidChallenge?.challengeId ?? null;
+  const receiptChallengeId = receipt?.challenge_id ?? receipt?.challengeId ?? null;
   const echoedIdempotencyKey = receipt?.idempotency_key ?? readHeader(response, "x-idempotency-key");
 
   return {
@@ -287,7 +311,7 @@ export class X402ExecuteBuyer {
   }
 
   async match(task, constraints = {}) {
-    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { task, ...constraints }), {
+    const response = await this.fetchImpl(buildUrl(this.baseUrl, MATCH_PATH, { ...constraints, task }), {
       method: "GET",
       headers: { accept: "application/json", ...this.headers },
     });
@@ -525,7 +549,7 @@ async function demo() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   demo().catch((error) => {
     console.error(JSON.stringify({ error: error.message, classified: classifyExecuteError(error) }, null, 2));
     process.exitCode = 1;
