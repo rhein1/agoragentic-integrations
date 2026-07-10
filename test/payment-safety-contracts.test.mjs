@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { AgoragenticAgenticWalletClient } from '../coinbase-agentic-wallets/agoragentic_agentic_wallet.ts';
+import {
+  X402ExecuteBuyer,
+  classifyExecuteError,
+} from '../examples/agoragentic-growth/2026-07-09-mcp-execute-buyer-retry-receipt-checklis-ce132a27eb/mcp-execute-buyer-retry-receipt-checklist.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -276,6 +280,314 @@ test('x402 rejects inconsistent payment proof headers', async () => {
   } finally {
     globalThis.fetch = previousFetch;
   }
+});
+
+test('growth buyer fails closed after an ambiguous paid execute without replaying or reauthorizing', async () => {
+  let matchCalls = 0;
+  let executeCalls = 0;
+  let payCalls = 0;
+  let paidSideEffects = 0;
+
+  const buyer = new X402ExecuteBuyer({
+    baseUrl: 'https://example.test',
+    async fetchImpl(url, options = {}) {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/match')) {
+        matchCalls += 1;
+        return new Response(JSON.stringify({ quote_id: 'quote_ambiguous_paid_attempt' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      executeCalls += 1;
+      const headers = new Headers(options.headers);
+      if (!headers.get('authorization')) {
+        return new Response(JSON.stringify({ error: 'payment_required' }), {
+          status: 402,
+          headers: {
+            'Content-Type': 'application/json',
+            'PAYMENT-REQUIRED': 'ambiguous-paid-attempt-challenge',
+          },
+        });
+      }
+
+      paidSideEffects += 1;
+      throw new TypeError('connection reset after the server accepted the paid request');
+    },
+    async pay() {
+      payCalls += 1;
+      return { authorizationHeader: 'X402 signed-payment-proof' };
+    },
+  });
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'charge at most once' }, { idempotencyKey: 'ambiguous-intent' }),
+    (error) => {
+      assert.equal(error.name, 'NetworkError');
+      assert.equal(error.outcomeUnknown, true);
+      assert.equal(error.ambiguousOutcome, true);
+      assert.equal(error.retryable, false);
+      assert.equal(error.paymentAuthorizationMayHaveBeenConsumed, true);
+      assert.equal(error.authorizedPaymentReused, false);
+      assert.equal(error.signedRequestAttempts, 1);
+      assert.equal(error.networkRetriesUsed, 0);
+      assert.equal(error.quoteId, 'quote_ambiguous_paid_attempt');
+      const classified = classifyExecuteError(error);
+      assert.equal(classified.retryable, false);
+      assert.equal(classified.quoteId, 'quote_ambiguous_paid_attempt');
+      assert.equal(classified.ambiguousOutcome, true);
+      assert.equal(classified.paymentAuthorizationMayHaveBeenConsumed, true);
+      assert.equal(classified.signedRequestAttempts, 1);
+      assert.equal(classified.nextAction, 'inspect_receipt_or_proof');
+      assert.match(classified.guidance, /Do not retry or re-authorize automatically/);
+      assert.match(classified.guidance, /\/api\/x402\/claim\/challenge/);
+      assert.match(classified.guidance, /\/api\/commerce\/public-receipts\/\{receipt_id\}/);
+      return true;
+    },
+  );
+
+  assert.deepEqual(
+    { matchCalls, executeCalls, payCalls, paidSideEffects },
+    { matchCalls: 1, executeCalls: 2, payCalls: 1, paidSideEffects: 1 },
+  );
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'must remain blocked' }),
+    (error) => {
+      assert.equal(error.name, 'NetworkError');
+      assert.equal(error.outcomeUnknown, true);
+      assert.equal(error.retryable, false);
+      assert.equal(error.blockedByPriorAmbiguousOutcome, true);
+      assert.equal(error.idempotencyKey, 'ambiguous-intent');
+      return true;
+    },
+  );
+
+  assert.deepEqual(
+    { matchCalls, executeCalls, payCalls, paidSideEffects },
+    { matchCalls: 1, executeCalls: 2, payCalls: 1, paidSideEffects: 1 },
+    'a caller-level retry on the same buyer must be blocked before match, payment, or execute',
+  );
+});
+
+for (const headerShape of ['tuple-array', 'request-init-override']) {
+  test(`growth buyer blocks a preferred-helper replay with ${headerShape} signed headers`, async () => {
+    let matchCalls = 0;
+    let executeCalls = 0;
+    let signedCalls = 0;
+    let payCalls = 0;
+
+    const preferredX402Fetch = async (url, options) => {
+      await options.fetchImpl(url, { method: 'POST', headers: [['Accept', 'application/json']] });
+      const payment = await options.pay('preferred-helper-challenge', {
+        url,
+        method: 'POST',
+        idempotencyKey: options.idempotencyKey,
+      });
+      const sendSigned = () => {
+        const headers = [['Authorization', payment.authorizationHeader]];
+        if (headerShape === 'tuple-array') {
+          return options.fetchImpl(url, { method: 'POST', headers });
+        }
+        const request = new Request(url, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+        });
+        return options.fetchImpl(request, { headers });
+      };
+
+      try {
+        await sendSigned();
+      } catch {}
+      return sendSigned();
+    };
+
+    const buyer = new X402ExecuteBuyer({
+      baseUrl: 'https://example.test',
+      preferredX402Fetch,
+      async fetchImpl(input, init = {}) {
+        const url = typeof input === 'string' ? input : input.url;
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith('/match')) {
+          matchCalls += 1;
+          return new Response(JSON.stringify({ quote_id: `quote_preferred_${headerShape}` }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        executeCalls += 1;
+        const inputHeaders = input instanceof Request ? input.headers : null;
+        const headers = new Headers(init.headers !== undefined ? init.headers : inputHeaders ?? {});
+        if (!headers.get('authorization')) {
+          return new Response(JSON.stringify({ error: 'payment_required' }), {
+            status: 402,
+            headers: { 'PAYMENT-REQUIRED': 'preferred-helper-challenge' },
+          });
+        }
+
+        signedCalls += 1;
+        if (signedCalls === 1) {
+          throw new TypeError('preferred helper lost the first signed response');
+        }
+        return new Response(JSON.stringify({ receipt_id: 'unsafe-replay-receipt' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+      async pay() {
+        payCalls += 1;
+        return { authorizationHeader: 'X402 preferred-signed-proof' };
+      },
+    });
+
+    await assert.rejects(
+      buyer.execute('summarize', { text: 'preferred helper must not replay' }, {
+        idempotencyKey: `preferred-${headerShape}-intent`,
+      }),
+      (error) => {
+        assert.equal(error.name, 'NetworkError');
+        assert.equal(error.ambiguousOutcome, true);
+        assert.equal(error.retryable, false);
+        assert.equal(error.signedRequestAttempts, 1);
+        assert.equal(classifyExecuteError(error).nextAction, 'inspect_receipt_or_proof');
+        return true;
+      },
+    );
+
+    assert.deepEqual(
+      { matchCalls, executeCalls, signedCalls, payCalls },
+      { matchCalls: 1, executeCalls: 2, signedCalls: 1, payCalls: 1 },
+      'the preferred helper must not reach the underlying transport for a second signed request',
+    );
+  });
+}
+
+test('growth buyer locks after a paid response body becomes unreadable', async () => {
+  let matchCalls = 0;
+  let executeCalls = 0;
+  let payCalls = 0;
+
+  const buyer = new X402ExecuteBuyer({
+    baseUrl: 'https://example.test',
+    async fetchImpl(url, options = {}) {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/match')) {
+        matchCalls += 1;
+        return new Response(JSON.stringify({ quote_id: 'quote_unreadable_paid_body' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      executeCalls += 1;
+      const headers = new Headers(options.headers);
+      if (!headers.get('authorization')) {
+        return new Response(JSON.stringify({ error: 'payment_required' }), {
+          status: 402,
+          headers: {
+            'Content-Type': 'application/json',
+            'PAYMENT-REQUIRED': 'unreadable-paid-body-challenge',
+          },
+        });
+      }
+
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError('response stream reset after paid headers'));
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    async pay() {
+      payCalls += 1;
+      return { authorizationHeader: 'X402 signed-payment-proof' };
+    },
+  });
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'body failure' }, { idempotencyKey: 'unreadable-body-intent' }),
+    (error) => {
+      assert.equal(error.name, 'NetworkError');
+      assert.equal(error.ambiguousOutcome, true);
+      assert.equal(error.paymentAuthorizationMayHaveBeenConsumed, true);
+      assert.equal(error.signedRequestAttempts, 1);
+      assert.equal(error.quoteId, 'quote_unreadable_paid_body');
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'must remain blocked' }),
+    (error) => error.blockedByPriorAmbiguousOutcome === true,
+  );
+  assert.deepEqual(
+    { matchCalls, executeCalls, payCalls },
+    { matchCalls: 1, executeCalls: 2, payCalls: 1 },
+  );
+});
+
+test('growth buyer treats a signed HTTP 500 as non-retryable until receipt reconciliation', async () => {
+  let matchCalls = 0;
+  let executeCalls = 0;
+  let payCalls = 0;
+
+  const buyer = new X402ExecuteBuyer({
+    baseUrl: 'https://example.test',
+    async fetchImpl(url, options = {}) {
+      const parsed = new URL(url);
+      if (parsed.pathname.endsWith('/match')) {
+        matchCalls += 1;
+        return new Response(JSON.stringify({ quote_id: 'quote_signed_http_500' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      executeCalls += 1;
+      const headers = new Headers(options.headers);
+      if (!headers.get('authorization')) {
+        return new Response(JSON.stringify({ error: 'payment_required' }), {
+          status: 402,
+          headers: { 'PAYMENT-REQUIRED': 'signed-http-500-challenge' },
+        });
+      }
+      return new Response(JSON.stringify({ error: 'provider_failed_after_payment' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    async pay() {
+      payCalls += 1;
+      return { authorizationHeader: 'X402 signed-payment-proof' };
+    },
+  });
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'signed 500' }, { idempotencyKey: 'signed-http-500-intent' }),
+    (error) => {
+      assert.equal(error.name, 'NetworkError');
+      assert.equal(error.status, 500);
+      assert.equal(error.ambiguousOutcome, true);
+      assert.equal(error.retryable, false);
+      assert.equal(error.paymentAuthorizationMayHaveBeenConsumed, true);
+      assert.equal(error.signedRequestAttempts, 1);
+      assert.equal(classifyExecuteError(error).retryable, false);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    buyer.execute('summarize', { text: 'must remain blocked' }),
+    (error) => error.blockedByPriorAmbiguousOutcome === true,
+  );
+  assert.deepEqual(
+    { matchCalls, executeCalls, payCalls },
+    { matchCalls: 1, executeCalls: 2, payCalls: 1 },
+  );
 });
 
 test('buyer demo is an honest keyless preflight', () => {
