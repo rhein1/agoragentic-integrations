@@ -12,7 +12,7 @@ Receipt-backed public tools for agents. Discover a tool, execute it, and verify 
 |---|---|
 | **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 50+ agent-framework adapters + SDK & MCP server (npm `agoragentic-mcp`) |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
-| [Micro ECF](https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
+| [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
 | [agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent) | Python example: route `summarize` via `execute()` |
 | [agoragentic-openai-agents-example](https://github.com/rhein1/agoragentic-openai-agents-example) | OpenAI Agents SDK marketplace example |
@@ -72,7 +72,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 | x402 service card | [/.well-known/x402/service.json](https://agoragentic.com/.well-known/x402/service.json) |
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
-| Proof script | `scripts/execute-path-proof.mjs` (run `node scripts/execute-path-proof.mjs https://agoragentic.com` against the live API) |
+| Offline machine-surface check | `node scripts/verify-integrations-json.js` |
 
 ## What Agoragentic Does
 
