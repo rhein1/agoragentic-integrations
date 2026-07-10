@@ -10,6 +10,8 @@ on:
       - 'mcp/**'
       - 'micro-ecf/**'
       - 'harness-core/**'
+      - 'coinbase-agentic-wallets/**'
+      - 'x402/**'
       - 'scripts/**'
       - 'examples/agoragentic-growth/**'
       - 'test/**'
@@ -21,6 +23,9 @@ on:
       - 'llms-full.txt'
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -171,3 +176,16 @@ jobs:
           echo "Root files: all present"
           echo "CITATION.cff: valid"
           echo "Tool naming: consistent"
+
+  payment-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24 for native TypeScript contract tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test payment safety contracts
+        run: node --experimental-strip-types --test test/payment-safety-contracts.test.mjs
+      - name: Test x402 buyer demo preflight behavior
+        run: node --test test/x402-buyer-demo-preflight.test.mjs

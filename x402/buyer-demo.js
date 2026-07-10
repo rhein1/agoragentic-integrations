@@ -3,27 +3,23 @@
  * Agoragentic x402 Buyer Demo Script
  * ===================================
  * 
- * Self-contained Node.js script demonstrating the full x402 payment flow:
+ * Self-contained Node.js script demonstrating x402 discovery and preflight:
  *   1. Discover available services
  *   2. Get a quote via execute/match
  *   3. Free-tier execution (echo test)
- *   4. Paid execution with USDC signing (requires wallet)
+ *   4. Optional paid-route preflight that stops at the 402 challenge
  * 
  * Usage:
  *   # Free demo (no wallet needed)
  *   node x402/buyer-demo.js
  * 
- *   # Paid demo (requires wallet with USDC on Base)
- *   # Export the key on its own line (or use a gitignored .env) so a real funded
- *   # key is not written to shell history or exposed in process listings.
- *   export WALLET_PRIVATE_KEY=0x...
- *   node x402/buyer-demo.js --paid
+ *   # Paid-route preflight (never reads a key, signs, retries, or spends)
+ *   node x402/buyer-demo.js --paid-preflight
  * 
  *   # Custom marketplace URL
  *   AGORAGENTIC_URL=http://localhost:3001 node x402/buyer-demo.js
  * 
- * Prerequisites:
- *   npm install @x402/client @x402/core @x402/evm ethers
+ * Prerequisite: Node.js 18+
  * 
  * Learn more:
  *   https://agoragentic.com/api/x402/info
@@ -35,8 +31,13 @@ const http = require('http');
 
 // ─── Configuration ──────────────────────────────────────
 const BASE_URL = process.env.AGORAGENTIC_URL || 'https://agoragentic.com';
-const isPaid = process.argv.includes('--paid');
+const isPaidPreflight = process.argv.includes('--paid-preflight');
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
+
+if (process.argv.includes('--paid')) {
+    console.error('The old --paid mode never signed a payment. Use --paid-preflight for an honest no-spend 402 challenge check.');
+    process.exit(2);
+}
 
 // ─── Helpers ────────────────────────────────────────────
 function log(emoji, message, data = null) {
@@ -96,6 +97,65 @@ function request(method, path, body = null) {
     });
 }
 
+// ─── Canonical match envelope ───────────────────────────
+// GET /api/x402/execute/match returns:
+//   body.quote.payment_required   ← authoritative free-vs-paid boolean
+//   body.quote.quoted_price_usdc  ← price (number, USDC)
+//   body.quote.quote_id, body.quote.next_step { method, url, body }
+//   body.selected_provider        ← provider object (null when no match)
+// Free-vs-paid is decided ONLY by payment_required === false. A missing
+// boolean, missing price, or unrecognized envelope fails closed. next_step.url
+// is honored only when URL resolution keeps it on the configured origin.
+function sameOriginExecutePath(candidate) {
+    const fallback = '/api/x402/execute';
+    if (typeof candidate !== 'string' || candidate.length === 0) {
+        return fallback;
+    }
+    try {
+        const baseUrl = new URL(BASE_URL);
+        const resolved = new URL(candidate, baseUrl);
+        if (resolved.origin !== baseUrl.origin) {
+            return fallback;
+        }
+        return `${resolved.pathname}${resolved.search}`;
+    } catch {
+        return fallback;
+    }
+}
+
+function parseMatchEnvelope(body) {
+    if (!body || typeof body !== 'object') {
+        throw new Error('Match response is not a JSON object; refusing to guess payment terms');
+    }
+    if (!('quote' in body)) {
+        throw new Error('Unrecognized match envelope: missing "quote" field; refusing to treat the route as free');
+    }
+    if (body.quote === null) {
+        return null;
+    }
+    const quote = body.quote;
+    if (typeof quote !== 'object') {
+        throw new Error('Unrecognized match envelope: "quote" is not an object; refusing to treat the route as free');
+    }
+    if (typeof quote.payment_required !== 'boolean') {
+        throw new Error('Quote is missing the boolean "quote.payment_required"; refusing to assume the route is free');
+    }
+    if (typeof quote.quoted_price_usdc !== 'number' || !Number.isFinite(quote.quoted_price_usdc) || quote.quoted_price_usdc < 0) {
+        throw new Error('Quote is missing a finite "quote.quoted_price_usdc"; refusing to assume the route is free');
+    }
+    if (typeof quote.quote_id !== 'string' || quote.quote_id.length === 0) {
+        throw new Error('Quote is missing "quote.quote_id"');
+    }
+    const executePath = sameOriginExecutePath(quote.next_step?.url);
+    return {
+        quoteId: quote.quote_id,
+        paymentRequired: quote.payment_required,
+        priceUsdc: quote.quoted_price_usdc,
+        executePath,
+        provider: body.selected_provider || null,
+    };
+}
+
 // ─── Step 1: Gateway Info ───────────────────────────────
 async function step1_gatewayInfo() {
     log('ℹ️', 'Step 1: Checking x402 gateway info...');
@@ -147,10 +207,15 @@ async function step3_executeMatch(task = 'echo') {
         return null;
     }
 
-    const match = res.body;
-    log('✅', `Best match: "${match.match?.name || match.name}" — $${match.match?.price_usdc || match.price_usdc} USDC`, {
-        quote_id: match.quote_id,
-        listing_id: match.match?.id || match.id,
+    const match = parseMatchEnvelope(res.body);
+    if (!match) {
+        log('⚠️', `No provider matched "${task}" — this is normal if no free listings match`);
+        return null;
+    }
+
+    log('✅', `Best match: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (${match.paymentRequired ? 'paid' : 'free'})`, {
+        quote_id: match.quoteId,
+        listing_id: match.provider?.id,
     });
 
     return match;
@@ -158,14 +223,18 @@ async function step3_executeMatch(task = 'echo') {
 
 // ─── Step 4A: Free Execution ────────────────────────────
 async function step4a_freeExecution(match) {
-    if (!match?.quote_id) {
+    if (!match) {
         log('⚠️', 'Step 4a: Skipping free execution — no quote available');
         return null;
     }
+    if (match.paymentRequired !== false) {
+        log('⚠️', 'Step 4a: Skipping free execution — the matched quote requires payment');
+        return null;
+    }
 
-    log('🚀', `Step 4a: Executing free task (quote: ${match.quote_id})...`);
-    const res = await request('POST', '/api/x402/execute', {
-        quote_id: match.quote_id,
+    log('🚀', `Step 4a: Executing free task (quote: ${match.quoteId})...`);
+    const res = await request('POST', match.executePath, {
+        quote_id: match.quoteId,
         input: {
             text: 'Hello from the x402 buyer demo! This is a test invocation.',
             timestamp: new Date().toISOString(),
@@ -210,81 +279,51 @@ async function step4b_testEcho() {
     return res.body;
 }
 
-// ─── Step 5: Paid Execution (requires wallet) ───────────
-async function step5_paidExecution() {
-    const privateKey = process.env.WALLET_PRIVATE_KEY;
-    if (!privateKey) {
-        log('💡', 'Step 5: Skipping paid execution — set WALLET_PRIVATE_KEY to test paid flow');
-        log('💡', '  Usage: export WALLET_PRIVATE_KEY=0x... (own line, or a gitignored .env — avoids shell-history / ps exposure) then: node x402/buyer-demo.js --paid');
-        return null;
-    }
-
-    log('💰', 'Step 5: Paid execution flow...');
+// ─── Step 5: Paid-route preflight (no signing or spend) ─
+async function step5_paidPreflight() {
+    log('🧾', 'Step 5: Paid-route preflight (stops before signing)...');
 
     // Find a paid listing
     const matchRes = await request('GET', '/api/x402/execute/match?task=analyze&max_cost=1');
-    if (matchRes.status !== 200 || !matchRes.body?.quote_id) {
+    if (matchRes.status !== 200) {
         log('⚠️', 'No paid listing found for "analyze" — skipping paid demo');
         return null;
     }
 
-    const quote = matchRes.body;
-    const priceUsdc = quote.match?.price_usdc || quote.price_usdc || 0;
-
-    if (priceUsdc <= 0) {
-        log('ℹ️', 'Matched listing is free — no payment needed');
+    const match = parseMatchEnvelope(matchRes.body);
+    if (!match) {
+        log('⚠️', 'No provider matched "analyze" — skipping paid demo');
         return null;
     }
 
-    log('💳', `Matched paid listing: "${quote.match?.name}" — $${priceUsdc} USDC`);
+    if (match.paymentRequired === false) {
+        log('ℹ️', 'Matched listing is free (payment_required=false) — no payment needed');
+        return null;
+    }
 
-    try {
-        // Dynamic import of x402 client
-        const { ethers } = require('ethers');
+    log('💳', `Matched paid listing: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (payment_required=true)`);
 
-        // IMPORTANT: The x402 client handles the 402→sign→retry cycle automatically.
-        // When you POST to the execute endpoint:
-        //   1. Server returns HTTP 402 with PAYMENT-REQUIRED header
-        //   2. x402 client reads the payment requirements
-        //   3. Client signs a USDC TransferWithAuthorization (EIP-3009)
-        //   4. Client retries with PAYMENT-SIGNATURE header
-        //   5. Server verifies payment → executes the service → returns result
+    const executeRes = await request('POST', match.executePath, {
+        quote_id: match.quoteId,
+        input: { text: 'x402 paid-route preflight test' },
+    });
 
-        log('🔑', 'Signing USDC payment with wallet...');
-        log('📝', 'In production, use @x402/client for automatic 402→sign→retry:');
-        log('   ', '  const { httpClient } = require("@x402/client");');
-        log('   ', '  const client = httpClient("https://agoragentic.com", walletClient);');
-        log('   ', '  const res = await client.post("/api/x402/execute", { quote_id, input });');
-
-        // For this demo, we show the manual flow
-        const executeRes = await request('POST', '/api/x402/execute', {
-            quote_id: quote.quote_id,
-            input: { text: 'x402 paid demo test' },
-        });
-
-        if (executeRes.status === 402) {
-            log('✅', '402 Payment Required received — this is the correct first step!', {
-                payment_header: executeRes.headers['payment-required'] ? 'present' : 'missing',
-                price: executeRes.body?.price_usdc,
-                how_to_pay: executeRes.body?.how_to_pay ? 'included' : 'missing',
-            });
-            log('💡', 'To complete payment, use the @x402/client SDK which handles signing automatically.');
-        } else if (executeRes.status === 200 && executeRes.body?.success) {
-            log('✅', 'Paid execution succeeded!', {
-                cost: executeRes.body.cost,
-                method: executeRes.body.payment_method,
-            });
-        } else {
-            log('❌', `Unexpected response: ${executeRes.status}`, executeRes.body);
+    if (executeRes.status === 402) {
+        const challenge = executeRes.headers['payment-required'];
+        if (!challenge) {
+            throw new Error('Received HTTP 402 without PAYMENT-REQUIRED; refusing to report a successful paid-route preflight');
         }
-
-        return executeRes.body;
-
-    } catch (err) {
-        log('⚠️', `Paid execution error: ${err.message}`);
-        log('💡', 'Install x402 packages: npm install @x402/client @x402/core @x402/evm ethers');
-        return null;
+        log('✅', '402 Payment Required received (challenge header present); preflight stops here without signing or retrying.', {
+            price: executeRes.body?.price_usdc,
+            how_to_pay: executeRes.body?.how_to_pay ? 'included' : 'missing',
+        });
+    } else if (executeRes.status === 200 && executeRes.body?.success) {
+        log('ℹ️', 'The matched route completed without a paid challenge; no payment was signed.');
+    } else {
+        log('⚠️', `Unexpected preflight response: ${executeRes.status}`, executeRes.body);
     }
+
+    return executeRes.body;
 }
 
 // ─── Step 6: Verify Invocation Proof ────────────────────
@@ -317,7 +356,7 @@ async function main() {
     console.log('║     Agent-to-Agent Commerce on Base L2           ║');
     console.log('╚══════════════════════════════════════════════════╝\n');
     console.log(`  Target: ${BASE_URL}`);
-    console.log(`  Mode:   ${isPaid ? '💰 Paid (with wallet)' : '🆓 Free (no wallet needed)'}\n`);
+    console.log(`  Mode:   ${isPaidPreflight ? '🧾 Paid-route preflight (no signing)' : '🆓 Free (no wallet needed)'}\n`);
 
     try {
         // 1. Gateway info
@@ -340,9 +379,9 @@ async function main() {
         const execResult = await step4a_freeExecution(match);
         console.log();
 
-        // 5. Paid execution (if --paid flag)
-        if (isPaid) {
-            await step5_paidExecution();
+        // 5. Paid-route preflight (if explicitly requested)
+        if (isPaidPreflight) {
+            await step5_paidPreflight();
             console.log();
         }
 
@@ -361,7 +400,7 @@ async function main() {
         log('   ', '1. Browse services:   GET  /api/x402/listings');
         log('   ', '2. Match a service:   GET  /api/x402/execute/match?task=<query>');
         log('   ', '3. Execute (free):    POST /api/x402/execute { quote_id, input }');
-        log('   ', '4. Execute (paid):    Use @x402/client for automatic 402→sign→retry');
+        log('   ', '4. Paid preflight:    Run --paid-preflight; it stops at 402 without signing');
         log('   ', '5. Verify proof:      GET  /api/x402/invocations/:id/proof');
         console.log();
         log('🔗', `API Reference: ${BASE_URL}/api/x402/info`);
