@@ -43,7 +43,7 @@ def digest(value):
 
 def request_digest(method, url, body):
     parsed = urlsplit(url)
-    target = parsed.path or "/"
+    target = f"{parsed.scheme}://{parsed.netloc}{parsed.path or '/'}"
     if parsed.query:
         target += "?" + parsed.query
     return digest(f"{method.upper()}\n{target}\n{body}")
@@ -108,20 +108,24 @@ def validate_challenge(token, key, kid, issuer, payer, req, idem, now):
     return claims
 
 class FakeServer:
-    def __init__(self, store, key, kid, issuer, clock):
+    def __init__(self, store, key, kid, issuer, clock,
+                 amount=7, asset="DEMO", payee="demo-payee"):
         self.store = store
         self.key = key
         self.kid = kid
         self.issuer = issuer
         self.clock = clock
+        self.amount = amount
+        self.asset = asset
+        self.payee = payee
         self.writes = 0
         self.fail_once = False
         self.redirect = False
         self.target_credentials = []
     def issue(self, payer, req, idem):
         claims = {"type": "x402", "issuer": self.issuer, "payer": payer,
-                  "request": req, "idempotency": idem, "amount": 7,
-                  "asset": "DEMO", "payee": "demo-payee", "iat": self.clock(),
+                  "request": req, "idempotency": idem, "amount": self.amount,
+                  "asset": self.asset, "payee": self.payee, "iat": self.clock(),
                   "exp": self.clock() + 60, "challenge_id": digest(idem)[:16]}
         token = sign(claims, self.key, "x402-challenge+jws", self.kid)
         self.store.setdefault("issued", {})[idem] = token
@@ -147,33 +151,35 @@ class FakeServer:
         issued = self.store.setdefault("issued", {}).get(idem)
         if not issued or challenge_digest(issued) != claims.get("challenge"):
             raise SafetyError("authorization names unissued challenge")
-        challenge = validate_challenge(
-            issued, self.key, self.kid, self.issuer, claims.get("payer"),
-            req, idem, self.clock())
         expected = {"payer": claims.get("payer"), "request": req,
                     "idempotency": idem, "challenge": challenge_digest(issued)}
         if any(claims.get(k) != v for k, v in expected.items()):
             raise SafetyError("authorization binding mismatch")
         if binding and binding["authorization"] != digest(auth):
             raise SafetyError("authorization changed")
+        cached = self.store.setdefault("cache", {}).get(idem)
+        if cached:
+            return cached
+        validate_challenge(
+            issued, self.key, self.kid, self.issuer, claims.get("payer"),
+            req, idem, self.clock())
         if self.redirect:
             return {"status": 302, "location": "https://evil.invalid/"}
         if self.fail_once:
             self.fail_once = False
             return {"status": 503}
-        cached = self.store.setdefault("cache", {}).get(idem)
-        if cached:
-            return cached
-        receipt_claims = dict(expected, authorization=digest(auth), result="executed")
+        response_body = {"node": "execute", "ok": True}
+        receipt_claims = dict(expected, authorization=digest(auth),
+                              result="executed", output=digest(response_body))
         receipt = sign(receipt_claims, self.key, "x402-receipt+jws", self.kid)
-        response = {"status": 200, "body": {"node": "execute", "ok": True},
-                    "receipt": receipt}
+        response = {"status": 200, "body": response_body, "receipt": receipt}
         self.store["cache"][idem] = response
         self.writes += 1
         return response
 
 class Adapter:
-    def __init__(self, store, transport, key, kid, issuer, origin, payer, clock):
+    def __init__(self, store, transport, key, kid, issuer, origin, payer, clock,
+                 max_amount=7, asset="DEMO", payee="demo-payee"):
         self.store = store
         self.transport = transport
         self.key = key
@@ -182,6 +188,9 @@ class Adapter:
         self.origin = origin
         self.payer = payer
         self.clock = clock
+        self.max_amount = max_amount
+        self.asset = asset
+        self.payee = payee
     def execute(self, url, body, idem, headers, pay):
         url = validate_url(url, self.origin, self.origin.startswith("http://"))
         headers = clean_headers(headers)
@@ -198,15 +207,22 @@ class Adapter:
             if first["status"] != 402:
                 raise SafetyError("expected initial 402")
             challenge = first["challenge"]
-            validate_challenge(challenge, self.key, self.kid, self.issuer,
-                               self.payer, req, idem, self.clock())
+            terms = validate_challenge(challenge, self.key, self.kid, self.issuer,
+                                       self.payer, req, idem, self.clock())
+            if terms["amount"] > self.max_amount:
+                raise SafetyError("payment amount exceeds limit")
+            if terms["asset"] != self.asset or terms["payee"] != self.payee:
+                raise SafetyError("unexpected payment terms")
             auth = pay(challenge, req, idem, self.payer)
             auth_claims = verify(auth, self.key, "x402-authorization+jws", self.kid)
-            binding = {"request": req, "challenge": challenge_digest(challenge),
+            expected_auth = {"payer": self.payer, "request": req,
+                             "idempotency": idem,
+                             "challenge": challenge_digest(challenge)}
+            if any(auth_claims.get(k) != v for k, v in expected_auth.items()):
+                raise SafetyError("payer changed authorization binding")
+            binding = {"request": req, "challenge": expected_auth["challenge"],
                        "authorization": digest(auth), "payer": self.payer,
                        "state": "authorized", "token": auth}
-            if auth_claims.get("challenge") != binding["challenge"]:
-                raise SafetyError("payer changed challenge")
             self.store.setdefault("bindings", {})[idem] = binding
         trusted = dict(base, **{"payment-authorization": auth})
         for attempt in range(2):
@@ -226,7 +242,8 @@ class Adapter:
             claims = verify(receipt, self.key, "x402-receipt+jws", self.kid)
             expected = {"payer": self.payer, "request": req, "idempotency": idem,
                         "challenge": binding["challenge"],
-                        "authorization": binding["authorization"]}
+                        "authorization": binding["authorization"],
+                        "result": "executed", "output": digest(result["body"])}
             if any(claims.get(k) != v for k, v in expected.items()):
                 raise SafetyError("receipt mismatch")
             binding["state"] = "complete"
@@ -250,6 +267,10 @@ def main():
     url = "http://127.0.0.1/run?q=one"
     result = adapter.execute(url, "{}", "happy", {}, pay)
     assert result["body"]["ok"] and pays[0] == 1 and server.writes == 1
+    now[0] = 2000
+    replay = adapter.execute(url, "{}", "happy", {}, pay)
+    assert replay["body"]["ok"] and pays[0] == 1 and server.writes == 1
+    now[0] = 1000
     server2 = FakeServer(store, key, "demo-k1", "demo-issuer", clock)
     adapter2 = Adapter(store, server2, key, "demo-k1", "demo-issuer",
                        "http://127.0.0.1", "demo-payer", clock)
@@ -273,6 +294,27 @@ def main():
         except SafetyError:
             pass
     assert pays[0] == old
+    expensive = FakeServer({"issued": {}, "bindings": {}, "cache": {}},
+                           key, "demo-k1", "demo-issuer", clock, amount=8)
+    expensive_adapter = Adapter(expensive.store, expensive, key, "demo-k1",
+                                "demo-issuer", "http://127.0.0.1",
+                                "demo-payer", clock)
+    try:
+        expensive_adapter.execute(url, "{}", "expensive", {}, pay)
+        raise AssertionError("expected payment-term failure")
+    except SafetyError:
+        pass
+    assert pays[0] == old
+    def bad_pay(challenge, req, idem, payer):
+        return sign({"payer": payer, "request": "wrong", "idempotency": idem,
+                     "challenge": challenge_digest(challenge)},
+                    key, "x402-authorization+jws", "demo-k1")
+    try:
+        adapter.execute(url, "{}", "bad-auth", {}, bad_pay)
+        raise AssertionError("expected auth binding failure")
+    except SafetyError:
+        pass
+    assert "bad-auth" not in store["bindings"]
     expired_store = {"issued": {}, "bindings": {}, "cache": {}}
     expired_server = FakeServer(expired_store, key, "demo-k1", "demo-issuer",
                                 lambda: 1000)
