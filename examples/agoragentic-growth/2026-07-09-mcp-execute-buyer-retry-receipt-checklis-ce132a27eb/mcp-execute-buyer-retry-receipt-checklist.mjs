@@ -16,6 +16,9 @@ function lowerCaseHeaders(input = {}) {
   if (input instanceof Headers) {
     return Object.fromEntries(Array.from(input.entries(), ([k, v]) => [String(k).toLowerCase(), v]));
   }
+  if (Array.isArray(input)) {
+    return Object.fromEntries(input.map(([k, v]) => [String(k).toLowerCase(), v]));
+  }
   return Object.fromEntries(Object.entries(input).map(([k, v]) => [String(k).toLowerCase(), v]));
 }
 
@@ -63,6 +66,20 @@ function createNetworkError(message, extra = {}) {
   return error;
 }
 
+function createAmbiguousPaymentError(message, extra = {}) {
+  return createNetworkError(message, {
+    ...extra,
+    outcomeUnknown: true,
+    ambiguousOutcome: true,
+    retryable: false,
+    paymentAttempted: true,
+    paymentAuthorizationMayHaveBeenConsumed: true,
+    authorizedPaymentReused: false,
+    signedRequestAttempts: Math.max(1, Number(extra.signedRequestAttempts) || 0),
+    networkRetriesUsed: 0,
+  });
+}
+
 function normalizePayResult(payment) {
   if (!payment || typeof payment !== "object") {
     throw new Error("pay callback must return an object");
@@ -90,7 +107,6 @@ async function localX402Fetch(url, options = {}) {
     headers = {},
     body,
     signal,
-    maxNetworkRetries = 1,
   } = options;
 
   if (typeof fetchImpl !== "function") {
@@ -99,7 +115,7 @@ async function localX402Fetch(url, options = {}) {
 
   const baseHeaders = lowerCaseHeaders(headers);
   let cachedPayment = null;
-  let networkRetriesUsed = 0;
+  const networkRetriesUsed = 0;
   let lastPaymentRequired = null;
 
   while (true) {
@@ -179,17 +195,12 @@ async function localX402Fetch(url, options = {}) {
     } catch (error) {
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
-      if (networkRetriesUsed >= maxNetworkRetries) {
-        throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
-          cause: error,
-          idempotencyKey,
-          paymentAttempted: true,
-          authorizedPaymentReused: true,
-          networkRetriesUsed,
-          paymentRequired: lastPaymentRequired,
-        });
-      }
-      networkRetriesUsed += 1;
+      throw createAmbiguousPaymentError(`Paid execute outcome is unknown after a network error: ${error.message}`, {
+        cause: error,
+        idempotencyKey,
+        paymentRequired: lastPaymentRequired,
+        signedRequestAttempts: 1,
+      });
     }
   }
 }
@@ -212,11 +223,80 @@ export function preservePreferredX402Meta(response, options = {}) {
   return response;
 }
 
-async function x402Fetch(url, options = {}) {
-  const preferred = await importPreferredX402Fetch();
+async function x402Fetch(url, options = {}, preferredOverride = null) {
+  const preferred = preferredOverride ?? await importPreferredX402Fetch();
   if (!preferred) return localX402Fetch(url, options);
-  const response = await preferred(url, options);
-  return preservePreferredX402Meta(response, options);
+
+  let paymentAuthorized = false;
+  let paymentRequired = null;
+  let signedRequestAttempts = 0;
+  const preferredFetch = options.fetchImpl ?? globalThis.fetch;
+  const guardedFetchImpl = async (input, init = {}) => {
+    const inputHeaders = typeof Request !== "undefined" && input instanceof Request
+      ? input.headers
+      : null;
+    const requestHeaders = lowerCaseHeaders(init.headers !== undefined ? init.headers : inputHeaders ?? {});
+    const signed = Boolean(
+      requestHeaders.authorization
+      || requestHeaders["payment-signature"]
+      || requestHeaders["x-payment"],
+    );
+    if (signed && signedRequestAttempts >= 1) {
+      throw createAmbiguousPaymentError("Refusing to replay a signed execute while its first outcome is unknown", {
+        idempotencyKey: options.idempotencyKey ?? null,
+        paymentRequired,
+        signedRequestAttempts,
+      });
+    }
+    if (signed) signedRequestAttempts += 1;
+    return preferredFetch(input, init);
+  };
+  const guardedPay = typeof options.pay === "function"
+    ? async (required, request) => {
+        if (paymentAuthorized) {
+          if (signedRequestAttempts > 0) {
+            throw createAmbiguousPaymentError("Refusing to create another payment authorization after a signed execute attempt", {
+              idempotencyKey: options.idempotencyKey ?? null,
+              paymentRequired,
+              signedRequestAttempts,
+            });
+          }
+          throw createHttpError("Refusing to create more than one payment authorization for an execute call", {
+            status: 402,
+            idempotencyKey: options.idempotencyKey ?? null,
+            paymentAttempted: true,
+          });
+        }
+        paymentRequired = required;
+        const payment = await options.pay(required, request);
+        paymentAuthorized = true;
+        return payment;
+      }
+    : options.pay;
+
+  try {
+    const response = await preferred(url, {
+      ...options,
+      fetchImpl: guardedFetchImpl,
+      pay: guardedPay,
+      maxNetworkRetries: 0,
+    });
+    const preserved = preservePreferredX402Meta(response, options);
+    if (paymentAuthorized) {
+      preserved.x402Meta.paymentAuthorized = true;
+      preserved.x402Meta.paymentAttempted = true;
+      preserved.x402Meta.paymentRequired ??= paymentRequired;
+    }
+    return preserved;
+  } catch (error) {
+    if ((!paymentAuthorized && signedRequestAttempts === 0) || typeof error?.status === "number") throw error;
+    throw createAmbiguousPaymentError(`Paid execute outcome is unknown after a network error: ${error.message}`, {
+      cause: error,
+      idempotencyKey: error?.idempotencyKey ?? options.idempotencyKey ?? null,
+      paymentRequired: error?.paymentRequired ?? paymentRequired,
+      signedRequestAttempts: error?.signedRequestAttempts ?? signedRequestAttempts,
+    });
+  }
 }
 
 function decodePaymentRequired(encoded) {
@@ -277,13 +357,18 @@ export function buildReceiptChecklist({ response, payload, quoteId, idempotencyK
 
 export function classifyExecuteError(error) {
   if (!error) return { kind: "unknown", retryable: false, message: "Unknown execute error" };
-  if (error.name === "NetworkError") {
+  if (error.name === "NetworkError" || error.outcomeUnknown || error.ambiguousOutcome) {
     return {
       kind: "network_after_payment_authorized",
-      retryable: true,
+      retryable: false,
       message: error.message,
       idempotencyKey: error.idempotencyKey ?? null,
-      guidance: "Retry the same execute() call with the same idempotency key and reuse the existing payment authorization.",
+      quoteId: error.quoteId ?? null,
+      ambiguousOutcome: true,
+      paymentAuthorizationMayHaveBeenConsumed: true,
+      signedRequestAttempts: Math.max(1, Number(error.signedRequestAttempts) || 0),
+      nextAction: "inspect_receipt_or_proof",
+      guidance: "Do not retry or re-authorize automatically. Inspect wallet history via GET /api/x402/claim/challenge then POST /api/x402/claim, and use GET /api/commerce/public-receipts/{receipt_id} when known; absence is not proof of no settlement.",
     };
   }
   if (error.name === "HttpError") {
@@ -301,13 +386,17 @@ export function classifyExecuteError(error) {
 }
 
 export class X402ExecuteBuyer {
-  constructor({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThis.fetch, pay, headers = {}, maxNetworkRetries = 1 } = {}) {
+  constructor({ baseUrl = DEFAULT_BASE_URL, fetchImpl = globalThis.fetch, pay, headers = {}, preferredX402Fetch = null } = {}) {
     if (typeof fetchImpl !== "function") throw new Error("fetchImpl is required");
+    if (preferredX402Fetch !== null && typeof preferredX402Fetch !== "function") {
+      throw new Error("preferredX402Fetch must be a function when provided");
+    }
     this.baseUrl = baseUrl;
     this.fetchImpl = fetchImpl;
     this.pay = pay;
     this.headers = lowerCaseHeaders(headers);
-    this.maxNetworkRetries = maxNetworkRetries;
+    this.preferredX402Fetch = preferredX402Fetch;
+    this.ambiguousPaymentOutcome = null;
   }
 
   async match(task, constraints = {}) {
@@ -323,6 +412,13 @@ export class X402ExecuteBuyer {
   }
 
   async execute(task, input = {}, options = {}) {
+    if (this.ambiguousPaymentOutcome) {
+      throw createAmbiguousPaymentError("A prior paid execute has an unknown outcome; this buyer is locked until that receipt or settlement state is inspected", {
+        ...this.ambiguousPaymentOutcome,
+        blockedByPriorAmbiguousOutcome: true,
+      });
+    }
+
     const pay = options.pay ?? this.pay;
     const idempotencyKey = options.idempotencyKey ?? randomUUID();
     let quoteId = options.quoteId ?? null;
@@ -334,25 +430,65 @@ export class X402ExecuteBuyer {
       if (!quoteId) throw new Error("match() did not return quote_id");
     }
 
-    const response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
-      fetchImpl: this.fetchImpl,
-      pay,
-      idempotencyKey,
-      method: "POST",
-      headers: this.headers,
-      body: { quote_id: quoteId, input },
-      signal: options.signal,
-      maxNetworkRetries: options.maxNetworkRetries ?? this.maxNetworkRetries,
-    });
+    let response;
+    const lockAmbiguousOutcome = (error) => {
+      if (!error?.outcomeUnknown && !error?.ambiguousOutcome) return error;
+      error.task = error.task ?? task;
+      error.quoteId = error.quoteId ?? quoteId;
+      this.ambiguousPaymentOutcome = {
+        task,
+        quoteId,
+        idempotencyKey: error.idempotencyKey ?? idempotencyKey,
+        paymentRequired: error.paymentRequired ?? null,
+        signedRequestAttempts: Math.max(1, Number(error.signedRequestAttempts) || 0),
+      };
+      return error;
+    };
+    try {
+      response = await x402Fetch(buildUrl(this.baseUrl, EXECUTE_PATH), {
+        fetchImpl: this.fetchImpl,
+        pay,
+        idempotencyKey,
+        method: "POST",
+        headers: this.headers,
+        body: { quote_id: quoteId, input },
+        signal: options.signal,
+        maxNetworkRetries: 0,
+      }, this.preferredX402Fetch);
+    } catch (error) {
+      throw lockAmbiguousOutcome(error);
+    }
 
-    const payload = await safeJson(response);
     const paymentAttempted = Boolean(
       response?.x402Meta?.paymentAttempted
       || readHeader(response, "payment-receipt")
       || readHeader(response, "payment-response")
     );
+    let payload;
+    try {
+      payload = await safeJson(response);
+    } catch (error) {
+      if (!paymentAttempted) throw error;
+      throw lockAmbiguousOutcome(createAmbiguousPaymentError(`Paid execute outcome is unknown because its response body could not be read: ${error.message}`, {
+        cause: error,
+        idempotencyKey,
+        quoteId,
+        paymentRequired: response?.x402Meta?.paymentRequired ?? null,
+        signedRequestAttempts: 1,
+      }));
+    }
 
     if (!response.ok) {
+      if (paymentAttempted) {
+        throw lockAmbiguousOutcome(createAmbiguousPaymentError(`Paid execute returned HTTP ${response.status}; its payment outcome requires receipt or settlement reconciliation`, {
+          status: response.status,
+          payload,
+          idempotencyKey,
+          quoteId,
+          paymentRequired: response?.x402Meta?.paymentRequired ?? null,
+          signedRequestAttempts: 1,
+        }));
+      }
       throw createHttpError(`Execute failed with HTTP ${response.status}`, {
         status: response.status,
         payload,
@@ -409,7 +545,6 @@ export async function createMockMcpServer() {
     authHeaders: [],
     challengeId: `challenge_${randomUUID()}`,
     quoteId: "quote_demo_paid_weather",
-    authorizedDropInjected: false,
   };
 
   const paymentRequiredPayload = [{
@@ -454,12 +589,6 @@ export async function createMockMcpServer() {
           "payment-required": paymentRequired,
           "x-challenge-id": state.challengeId,
         });
-      }
-
-      if (!state.authorizedDropInjected) {
-        state.authorizedDropInjected = true;
-        req.socket.destroy(new Error("simulated connection reset after authorization"));
-        return;
       }
 
       const receiptId = `rcpt_${stableHash(headers.authorization)}`;
@@ -511,7 +640,6 @@ async function demo() {
   try {
     const buyer = new X402ExecuteBuyer({
       baseUrl: server.baseUrl,
-      maxNetworkRetries: 2,
       async pay(paymentRequired, request) {
         server.state.payCalls += 1;
         const decoded = decodePaymentRequired(paymentRequired);
@@ -528,12 +656,13 @@ async function demo() {
 
     assert.equal(server.state.matchCalls, 1, "match() should be called once");
     assert.equal(server.state.payCalls, 1, "payment authorization should be created once");
-    assert.equal(server.state.executeAttempts, 3, "expected 402 challenge, one dropped authorized request, then success");
-    assert.equal(new Set(server.state.idempotencyKeys).size, 1, "same idempotency key must be reused across retries");
-    assert.equal(server.state.authHeaders[1], server.state.authHeaders[2], "same authorization must be reused after network failure");
+    assert.equal(server.state.executeAttempts, 2, "expected one 402 challenge followed by one authorized request");
+    assert.equal(new Set(server.state.idempotencyKeys).size, 1, "same idempotency key must bind the challenge and authorized request");
+    assert.equal(server.state.authHeaders[0], null, "challenge request must be unsigned");
+    assert.match(server.state.authHeaders[1], /^X402 demo authorization /, "authorized request must carry the payment proof");
     assert.equal(result.receiptChecklist.receiptId, result.payload.receipt.id);
     assert.equal(result.receiptChecklist.checks.find((x) => x.item === "receipt_matches_paid_challenge").status, "pass");
-    assert.equal(result.x402.networkRetriesUsed, 1);
+    assert.equal(result.x402.networkRetriesUsed, 0);
 
     console.log(JSON.stringify({
       demo: "x402 execute receipt checklist with mock MCP server",
