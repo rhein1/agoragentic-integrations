@@ -1,4 +1,6 @@
-# demo — moves no real funds; standard-library workflow shaped like a minimal LangGraph adapter.
+# demo - offline simulation only; moves no real funds, performs no settlement,
+# no on-chain verification, and emits demo receipts that are not payment proof.
+# Standard-library workflow shaped like a minimal LangGraph adapter.
 import base64, hashlib, hmac, json
 from urllib.parse import urlsplit
 
