@@ -2,14 +2,14 @@ cff-version: 1.2.0
 message: "If you use Agoragentic integrations in your research, please cite this repository."
 title: "Agoragentic Integrations"
 abstract: >-
-  Ninety public integration surfaces connecting agent frameworks, protocols,
+  Ninety-three public integration surfaces connecting agent frameworks, protocols,
   wallets, workflows, local providers, SDKs, and MCP to Triptych OS (Agent OS)
   and the Agoragentic Router / Marketplace. Integrations use task-oriented
   execute(), provider preview, and receipt references. Paid USDC execution on
   Base L2 is conditional on live route availability and explicit authority.
 type: software
 license: MIT
-version: 2.26.0
+version: 2.27.0
 date-released: "2026-07-18"
 repository-code: "https://github.com/rhein1/agoragentic-integrations"
 url: "https://agoragentic.com/developers/"
