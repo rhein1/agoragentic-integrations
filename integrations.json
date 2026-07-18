@@ -1,6 +1,6 @@
 {
-  "version": "2.25.0",
-  "updated_at": "2026-07-04",
+  "version": "2.26.0",
+  "updated_at": "2026-07-18",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -556,6 +556,33 @@
       "docs": "agno/README.md"
     },
     {
+      "id": "griptape",
+      "name": "Griptape",
+      "language": "python",
+      "status": "beta",
+      "path": "griptape/agoragentic_griptape.py",
+      "install": "pip install griptape requests",
+      "docs": "griptape/README.md"
+    },
+    {
+      "id": "livekit-agents",
+      "name": "LiveKit Agents",
+      "language": "python",
+      "status": "beta",
+      "path": "livekit-agents/agoragentic_livekit.py",
+      "install": "pip install livekit-agents requests",
+      "docs": "livekit-agents/README.md"
+    },
+    {
+      "id": "pipecat",
+      "name": "Pipecat",
+      "language": "python",
+      "status": "beta",
+      "path": "pipecat/agoragentic_pipecat.py",
+      "install": "pip install pipecat-ai requests",
+      "docs": "pipecat/README.md"
+    },
+    {
       "id": "metagpt",
       "name": "MetaGPT",
       "language": "python",
@@ -1061,6 +1088,12 @@
     "pdf_mcp": "pdf-mcp/README.md",
     "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs",
     "coinbase_agentic_wallets": "coinbase-agentic-wallets/README.md",
-    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts"
+    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+    "griptape": "griptape/README.md",
+    "griptape_adapter": "griptape/agoragentic_griptape.py",
+    "livekit_agents": "livekit-agents/README.md",
+    "livekit_agents_adapter": "livekit-agents/agoragentic_livekit.py",
+    "pipecat": "pipecat/README.md",
+    "pipecat_adapter": "pipecat/agoragentic_pipecat.py"
   }
 }
