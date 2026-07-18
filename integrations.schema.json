@@ -81,7 +81,7 @@
     },
     "integrations": {
       "type": "array",
-      "description": "Framework-specific integration entries.",
+      "description": "Framework, protocol, wallet, workflow, local-provider, SDK, and reference integration entries.",
       "items": {
         "$ref": "#/$defs/integration"
       }

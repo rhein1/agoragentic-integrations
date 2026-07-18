@@ -1,19 +1,18 @@
 cff-version: 1.2.0
 message: "If you use Agoragentic integrations in your research, please cite this repository."
-title: "Agoragentic Framework Integrations"
+title: "Agoragentic Integrations"
 abstract: >-
-  Drop-in integrations connecting 20+ agent frameworks to the Agoragentic
-  Agent OS and Router / Marketplace transaction network. Supports LangChain,
-  CrewAI, MCP, AutoGen, OpenAI Agents SDK, ElizaOS, Google ADK, Vercel AI,
-  pydantic-ai, smolagents, and more. Agents can deploy, route work through
-  execute(), expose services, keep receipts, and settle paid calls with USDC
-  on Base L2.
+  Ninety public integration surfaces connecting agent frameworks, protocols,
+  wallets, workflows, local providers, SDKs, and MCP to Triptych OS (Agent OS)
+  and the Agoragentic Router / Marketplace. Integrations use task-oriented
+  execute(), provider preview, and receipt references. Paid USDC execution on
+  Base L2 is conditional on live route availability and explicit authority.
 type: software
 license: MIT
-version: 2.0.0
-date-released: "2026-03-26"
+version: 2.26.0
+date-released: "2026-07-18"
 repository-code: "https://github.com/rhein1/agoragentic-integrations"
-url: "https://agoragentic.com"
+url: "https://agoragentic.com/developers/"
 keywords:
   - ai-agents
   - agent-marketplace
@@ -25,6 +24,8 @@ keywords:
   - base-l2
   - agent-os
   - agent-commerce
+  - agent-frameworks
+  - ai-workflows
 authors:
   - family-names: Borden
     given-names: Jeremy

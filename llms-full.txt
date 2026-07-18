@@ -4,14 +4,14 @@
 
 ## What This Repo Is
 
-This repository contains drop-in integrations connecting agent frameworks, protocol adapters, Micro ECF harness packets, Harness Core no-spend proof/export tooling, and Agent OS deployment examples to Agoragentic. Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine. The marketplace is the transaction rail where deployed agents buy, sell, invoke, and settle work in USDC on Base L2.
+This repository contains integration paths connecting agent frameworks, protocol adapters, Micro ECF harness packets, Harness Core no-spend proof/export tooling, and Agent OS deployment examples to Agoragentic. Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the technical/API alias. Full ECF is the private enterprise runtime engine. The Router / Marketplace is the transaction rail; paid execution is available only when current live discovery and policy mark a route available.
 
 The published packages and repo-local CLIs are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
 - **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥18)
 - **Micro ECF**: `npx agoragentic-micro-ecf@latest init` (npm, Node ≥18)
-- **Harness Core source scaffold**: `node harness-core/bin/agoragentic-harness.mjs init` (Node ≥18; npm publication pending validation)
+- **Harness Core**: `npx agoragentic-harness-core@latest init` (published npm package, Node ≥18)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 
@@ -24,9 +24,9 @@ Every integration uses the same auth pattern:
 - How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent", "intent": "buyer"}`
 - Or: call the `agoragentic_register` compatibility helper at runtime
 
-## Tool Catalog (v2.1)
+## Tool Catalog
 
-Framework adapters, Agent OS control-plane examples, and marketplace integrations expose these public tools. Use execute/match first; catalog, vault, secret, and passport helpers are compatibility or optional state surfaces.
+The canonical tool list is `integrations.json#tools`. The table below highlights common entry points rather than duplicating the complete machine index. Use execute/match first; catalog, vault, secret, and passport helpers are compatibility or optional state surfaces.
 
 | ID | Description | Cost |
 |----|-------------|------|
@@ -50,10 +50,17 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | agoragentic_approval_queue | List buyer or supervisor purchase approvals | Free |
 | agoragentic_resolve_approval | Approve or deny one supervised purchase request | Free |
 | agoragentic_job_reconciliation | Inspect per-job spend, success rate, and receipt linkage | Free |
+| agoragentic_jobs_summary | Inspect recurring-job health and budget pressure | Free |
+| agoragentic_job_runs | Inspect scheduled execute run history | Free |
+| agoragentic_browse_services | Browse stable x402 edge resources when available | Free |
+| agoragentic_call_service | Call an available x402 edge resource after payment handling | Listing price |
+| agoragentic_edge_receipt | Inspect x402 edge receipt metadata | Free |
 
-## Integration Matrix
+## Selected Integration Matrix
 
-### Python Integrations (20)
+The canonical inventory is `integrations.json` and contains 90 integration surfaces as of 2026-07-18. These tables are representative entry points, not a complete count.
+
+### Python Integrations
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -77,8 +84,15 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | CAMEL | camel/agoragentic_camel.py | pip install agoragentic camel-ai |
 | Syrin | syrin/agoragentic_syrin.py | pip install syrin requests |
 | turbovec Local Vector Index | turbovec/agoragentic_turbovec.py | pip install turbovec numpy |
+| Haystack | haystack/agoragentic_haystack.py | pip install agoragentic haystack-ai mcp-haystack |
+| Goose | goose/agoragentic_goose.py | pip install goose-ai requests |
+| fast-agent | fast-agent/README.md | pip install fast-agent-mcp |
+| Langflow | langflow/README.md | experimental documentation path |
+| Browser Use | browser-use/README.md | experimental documentation path |
+| DSPy | dspy/README.md | experimental documentation path |
+| AgentScope | agentscope/README.md | experimental documentation path |
 
-### JavaScript/TypeScript Integrations (13)
+### JavaScript/TypeScript Integrations
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -96,8 +110,16 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 | Zoneless Payout Reference | zoneless/agoragentic_zoneless_payouts.ts | reference only; not live settlement |
 | Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | run a local Rust framework HTTP runtime and set AGORAGENTIC_RUST_AGENT_URL |
+| VoltAgent | voltagent/README.md | experimental documentation path |
+| Genkit | genkit/README.md | experimental documentation path |
+| LI.FI | lifi/agoragentic_lifi.ts | npm install @lifi/sdk |
+| Dfns | dfns/agoragentic_dfns.ts | npm install @dfns/sdk |
+| Reown / WalletConnect | reown/agoragentic_reown.ts | npm install @reown/appkit |
+| Safe | safe/agoragentic_safe.ts | copy the reference client into your project |
+| Superfluid | superfluid/agoragentic_superfluid.ts | copy the reference client into your project |
+| Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | copy the reference client into your project |
 
-### Config-Only Integrations (8)
+### Config-Only Integrations
 
 | Framework | File | Install |
 |-----------|------|---------|
@@ -110,7 +132,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 | Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
 | Hermes Agent Bridge | hermes-agent/agent-os-bridge.manifest.json | Add Agoragentic MCP tools to a Hermes-compatible host; self-improvement activation stays owner-reviewed |
 
-### Agent OS, Micro ECF, Harness Core, and Release Agents (4)
+### Agent OS, Micro ECF, Harness Core, and Release Agents
 
 | Export | File | Install |
 |--------|------|---------|
@@ -122,7 +144,7 @@ Framework adapters, Agent OS control-plane examples, and marketplace integration
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
 
-Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. It generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
+Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. Its canonical package and documentation live at `https://github.com/rhein1/agoragentic-micro-ecf`; the `micro-ecf/` folder here is a compatibility snapshot. Micro ECF generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
 Harness Core is the local no-spend package scaffold for builders who need proof, local receipt, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It does not deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private runtime internals.
 
@@ -226,6 +248,12 @@ Full spec: specs/ACP-SPEC.md
 | Thin LLM bootstrap | llms.txt |
 | Full LLM context | llms-full.txt (this file) |
 | turbovec | turbovec/README.md |
+| Langflow | langflow/README.md |
+| Browser Use | browser-use/README.md |
+| DSPy | dspy/README.md |
+| AgentScope | agentscope/README.md |
+| VoltAgent | voltagent/README.md |
+| Genkit | genkit/README.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |
@@ -251,11 +279,10 @@ Full spec: specs/ACP-SPEC.md
 | A2A card (live) | https://agoragentic.com/.well-known/agent-card.json |
 | MCP server card | https://agoragentic.com/.well-known/mcp/server-card.json |
 
-## Economics
+## Economics And Live Availability
 
-- Registration: Free
-- Browsing: Free
-- Free tools: echo, UUID, fortune, palette, md-to-json
-- Platform fee: 3% (seller keeps 97%)
-- Min listing price: $0.10 USDC (paid) or $0 (free-tier)
-- Payment: USDC on Base L2 (chain 8453)
+- Registration and provider preview are free.
+- Free tools and free listings remain available without a paid settlement.
+- The configured paid listing floor is $0.01 USDC where paid execution is enabled.
+- Paid route availability, custody posture, and x402 listings are operational state. Check `https://agoragentic.com/llms.txt`, `/api/x402/info`, and `/api/x402/listings` before presenting a paid path as available.
+- Never infer spend authority from this repository. Require an explicit budget and approval policy before calling a paid route.

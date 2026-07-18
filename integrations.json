@@ -1,6 +1,6 @@
 {
-  "version": "2.25.0",
-  "updated_at": "2026-07-04",
+  "version": "2.26.0",
+  "updated_at": "2026-07-18",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -24,7 +24,7 @@
     },
     "agent_os_cli": {
       "name": "agoragentic-os",
-      "install": "npx agoragentic-os@1.6.8 doctor",
+      "install": "npx agoragentic-os@latest doctor",
       "registry": "https://www.npmjs.com/package/agoragentic-os",
       "min_node": "18"
     },
@@ -941,6 +941,177 @@
       "path": "x402scan/agoragentic_x402scan.ts",
       "install": "Copy x402scan/agoragentic_x402scan.ts to your project",
       "docs": "x402scan/README.md"
+    },
+    {
+      "id": "dfns",
+      "name": "Dfns",
+      "language": "typescript",
+      "status": "ready",
+      "path": "dfns/agoragentic_dfns.ts",
+      "install": "npm install @dfns/sdk",
+      "docs": "dfns/README.md"
+    },
+    {
+      "id": "fast-agent",
+      "name": "fast-agent",
+      "language": "python",
+      "status": "ready",
+      "path": "fast-agent/README.md",
+      "install": "pip install fast-agent-mcp",
+      "docs": "fast-agent/README.md"
+    },
+    {
+      "id": "goose",
+      "name": "Goose (Block)",
+      "language": "python",
+      "status": "ready",
+      "path": "goose/agoragentic_goose.py",
+      "install": "pip install goose-ai requests",
+      "docs": "goose/README.md"
+    },
+    {
+      "id": "haystack",
+      "name": "Haystack",
+      "language": "python",
+      "status": "ready",
+      "path": "haystack/agoragentic_haystack.py",
+      "install": "pip install agoragentic haystack-ai mcp-haystack",
+      "docs": "haystack/README.md"
+    },
+    {
+      "id": "kibble",
+      "name": "Kibble",
+      "language": "typescript",
+      "status": "ready",
+      "path": "kibble/agoragentic_kibble.ts",
+      "install": "npm install kibble-pay",
+      "docs": "kibble/README.md"
+    },
+    {
+      "id": "lifi",
+      "name": "LI.FI",
+      "language": "typescript",
+      "status": "ready",
+      "path": "lifi/agoragentic_lifi.ts",
+      "install": "npm install @lifi/sdk",
+      "docs": "lifi/README.md"
+    },
+    {
+      "id": "mppscan",
+      "name": "MPPScan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "mppscan/agoragentic_mppscan.ts",
+      "install": "Copy mppscan/agoragentic_mppscan.ts to your project",
+      "docs": "mppscan/README.md"
+    },
+    {
+      "id": "olas",
+      "name": "Olas / Open Autonomy",
+      "language": "python",
+      "status": "ready",
+      "path": "olas/agoragentic_olas.py",
+      "install": "pip install agoragentic requests",
+      "docs": "olas/README.md"
+    },
+    {
+      "id": "reown",
+      "name": "Reown / WalletConnect",
+      "language": "typescript",
+      "status": "ready",
+      "path": "reown/agoragentic_reown.ts",
+      "install": "npm install @reown/appkit",
+      "docs": "reown/README.md"
+    },
+    {
+      "id": "safe",
+      "name": "Safe",
+      "language": "typescript",
+      "status": "ready",
+      "path": "safe/agoragentic_safe.ts",
+      "install": "Copy safe/agoragentic_safe.ts to your project",
+      "docs": "safe/README.md"
+    },
+    {
+      "id": "superfluid",
+      "name": "Superfluid",
+      "language": "typescript",
+      "status": "ready",
+      "path": "superfluid/agoragentic_superfluid.ts",
+      "install": "Copy superfluid/agoragentic_superfluid.ts to your project",
+      "docs": "superfluid/README.md"
+    },
+    {
+      "id": "tempo-mpp",
+      "name": "Tempo MPP",
+      "language": "typescript",
+      "status": "ready",
+      "path": "tempo-mpp/agoragentic_tempo_mpp.ts",
+      "install": "Copy tempo-mpp/agoragentic_tempo_mpp.ts to your project",
+      "docs": "tempo-mpp/README.md"
+    },
+    {
+      "id": "u402",
+      "name": "u402",
+      "language": "typescript",
+      "status": "ready",
+      "path": "u402/agoragentic_u402.ts",
+      "install": "Copy u402/agoragentic_u402.ts to your project",
+      "docs": "u402/README.md"
+    },
+    {
+      "id": "langflow",
+      "name": "Langflow",
+      "language": "python",
+      "status": "experimental",
+      "path": "langflow/README.md",
+      "install": "uv pip install langflow -U",
+      "docs": "langflow/README.md"
+    },
+    {
+      "id": "browser-use",
+      "name": "Browser Use",
+      "language": "python",
+      "status": "experimental",
+      "path": "browser-use/README.md",
+      "install": "pip install browser-use",
+      "docs": "browser-use/README.md"
+    },
+    {
+      "id": "dspy",
+      "name": "DSPy",
+      "language": "python",
+      "status": "experimental",
+      "path": "dspy/README.md",
+      "install": "pip install dspy",
+      "docs": "dspy/README.md"
+    },
+    {
+      "id": "agentscope",
+      "name": "AgentScope",
+      "language": "python",
+      "status": "experimental",
+      "path": "agentscope/README.md",
+      "install": "pip install agentscope",
+      "docs": "agentscope/README.md"
+    },
+    {
+      "id": "voltagent",
+      "name": "VoltAgent",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "voltagent/README.md",
+      "install": "npm install @voltagent/core zod",
+      "docs": "voltagent/README.md"
+    },
+    {
+      "id": "genkit",
+      "name": "Genkit",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "genkit/README.md",
+      "install": "npm install genkit zod",
+      "docs": "genkit/README.md"
     }
   ],
   "specs": [
@@ -1014,6 +1185,7 @@
     "base_ecosystem": "base-ecosystem/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
+    "micro_ecf_canonical_repo": "https://github.com/rhein1/agoragentic-micro-ecf",
     "harness_core": "harness-core/README.md",
     "premortem_golden_loop": "premortem-golden-loop/README.md",
     "premortem_prompt": "premortem-golden-loop/PROMPT.md",
@@ -1061,6 +1233,12 @@
     "pdf_mcp": "pdf-mcp/README.md",
     "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs",
     "coinbase_agentic_wallets": "coinbase-agentic-wallets/README.md",
-    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts"
+    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+    "langflow": "langflow/README.md",
+    "browser_use": "browser-use/README.md",
+    "dspy": "dspy/README.md",
+    "agentscope": "agentscope/README.md",
+    "voltagent": "voltagent/README.md",
+    "genkit": "genkit/README.md"
   }
 }
