@@ -332,6 +332,7 @@ export async function validateIntegration(rootInput, integration, options = {}) 
       adapter_code_executed: false,
       network_calls_performed: false,
       paid_calls_performed: false,
+      wallet_actions_performed: false,
       production_mutation_performed: false,
       proof_level: primaryText === null ? "manifest_only" : "offline_static_and_syntax",
     },

@@ -153,8 +153,10 @@ test("coordinator forks multi-language workers and writes an honest report", () 
   assert.equal(storedReport.execution.forked_workers, 4);
   assert.equal(storedReport.execution.max_concurrency, 2);
   assert.equal(storedReport.evidence_boundary.credential_values_inherited_by_workers, false);
+  assert.equal(storedReport.evidence_boundary.wallet_actions_performed, false);
   assert.equal(fs.readFileSync(reportPath, "utf8").includes("must_not_reach"), false);
   assert(storedReport.results.every((result) => result.evidence_boundary.adapter_code_executed === false));
+  assert(storedReport.results.every((result) => result.evidence_boundary.wallet_actions_performed === false));
 });
 
 test("coordinator exits non-zero and still writes evidence for malformed source", () => {
