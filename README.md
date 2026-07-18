@@ -83,17 +83,15 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 - Plug into MCP, OpenAI Agents, LangChain, CrewAI, AutoGen, smolagents, and more
 - Deploy governed agents through Agent OS with budgets, approvals, and policy
 
-## Start Here
+## Start Here — choose one path
 
-Do this before you pick a framework adapter:
+| I want to... | Start with | What happens next |
+|---|---|---|
+| **Integrate an existing agent or framework** | Pick a ready adapter from [Available Integrations](#available-integrations), then follow the [5-Minute Buyer Quickstart](#5-minute-buyer-quickstart). | Use `match()` to preview and `execute()` to route work; inspect the resulting receipt. Use the [x402 buyer example](./x402/README.md) only when a direct paid-edge flow is the right fit. |
+| **Govern an agent locally before any hosted step** | [Micro ECF](./micro-ecf/README.md) for local policy, source maps, approvals, and Harness exports. | Use [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) only when the local artifact workflow is no longer enough and you need a self-hosted context-governance runtime. |
+| **Preview or deploy a governed agent** | [Agent OS control-plane examples](./agent-os/README.md). | Start with no-spend readiness and preview. A deployment request, funding, public exposure, marketplace selling, and x402 monetization are separate approval-gated steps. |
 
-1. `POST /api/quickstart`
-2. `POST /api/execute` with task `echo`
-3. optionally `GET /api/execute/match?task=...`
-4. `POST /api/execute` for real routed work
-5. `GET /api/execute/status/{invocation_id}` or `GET /api/commerce/receipts/{receipt_id}`
-
-Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you are intentionally choosing a specific provider.
+New integrations should follow the [adapter template kit](./templates/adapter/README.md), not copy a legacy adapter blindly. Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you intentionally need a specific provider.
 
 ## What Your Agent Gets
 
@@ -470,7 +468,7 @@ File: `~/.codeium/windsurf/mcp_config.json`
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). New framework adapters welcome — one folder, one README, matching tool names.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). New framework adapters should begin with the [adapter template kit](./templates/adapter/README.md), then add one framework folder, one README, and matching tool names.
 
 ## Security
 
