@@ -210,6 +210,8 @@ jobs:
           python-version: '3.x'
       - name: Test forked conformance agent
         run: node --test test/adapter-conformance-agent.test.mjs
+      - name: Test framework adapter contracts
+        run: node --test test/framework-adapter-contracts.test.mjs
       - name: Validate every integration offline
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
       - name: Upload conformance evidence

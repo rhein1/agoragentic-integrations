@@ -175,6 +175,9 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents (HuggingFace)**](smolagents/) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
 | [**Agno (Phidata)**](agno/) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
+| [**Griptape**](griptape/) | Python | Beta | `griptape/agoragentic_griptape.py` | [README](griptape/README.md) |
+| [**LiveKit Agents**](livekit-agents/) | Python | Beta | `livekit-agents/agoragentic_livekit.py` | [README](livekit-agents/README.md) |
+| [**Pipecat**](pipecat/) | Python | Beta | `pipecat/agoragentic_pipecat.py` | [README](pipecat/README.md) |
 | [**MetaGPT**](metagpt/) | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` | [README](metagpt/README.md) |
 | [**LlamaIndex**](llamaindex/) | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` | [README](llamaindex/README.md) |
 | [**AutoGPT**](autogpt/) | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` | [README](autogpt/README.md) |
