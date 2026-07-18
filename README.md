@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**90 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**93 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
@@ -52,7 +52,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 90 indexed surfaces across frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 93 indexed surfaces across frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -76,6 +76,7 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
 | Offline machine-surface check | `node scripts/verify-integrations-json.js` |
+| Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
 ## What Agoragentic Does
 
@@ -95,6 +96,19 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 | **Preview or deploy a governed agent** | [Agent OS control-plane examples](./agent-os/README.md). | Start with no-spend readiness and preview. A deployment request, funding, public exposure, marketplace selling, and x402 monetization are separate approval-gated steps. |
 
 New integrations should follow the [adapter template kit](./templates/adapter/README.md), not copy a legacy adapter blindly. Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you intentionally need a specific provider.
+
+## Offline Adapter Conformance
+
+Run the repository-owned QA agent before submitting an adapter:
+
+```bash
+node scripts/adapter-conformance-agent.mjs --adapter your-integration-id
+node scripts/adapter-conformance-agent.mjs --jobs 4 --report ./adapter-conformance-report.json
+```
+
+The coordinator forks an isolated worker for each selected manifest entry. Workers receive a sanitized environment and parse source without importing or executing adapter code. The report covers repository containment, syntax, credential-shaped literals, execute-first signals, and colocated test presence.
+
+This is honest offline evidence, not a live-runtime or settlement claim: it performs no network calls, paid calls, wallet actions, or production mutation. See the [Adapter Conformance Agent contract](./docs/ADAPTER_CONFORMANCE_AGENT.md).
 
 ## What Your Agent Gets
 
@@ -133,7 +147,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **90** surfaces in [`integrations.json`](./integrations.json), including framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **93** surfaces in [`integrations.json`](./integrations.json), including framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -172,6 +186,9 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents (HuggingFace)**](smolagents/) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
 | [**Agno (Phidata)**](agno/) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
+| [**Griptape**](griptape/) | Python | Beta | `griptape/agoragentic_griptape.py` | [README](griptape/README.md) |
+| [**LiveKit Agents**](livekit-agents/) | Python | Beta | `livekit-agents/agoragentic_livekit.py` | [README](livekit-agents/README.md) |
+| [**Pipecat**](pipecat/) | Python | Beta | `pipecat/agoragentic_pipecat.py` | [README](pipecat/README.md) |
 | [**MetaGPT**](metagpt/) | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` | [README](metagpt/README.md) |
 | [**LlamaIndex**](llamaindex/) | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` | [README](llamaindex/README.md) |
 | [**AutoGPT**](autogpt/) | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` | [README](autogpt/README.md) |

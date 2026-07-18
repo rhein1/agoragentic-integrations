@@ -20,8 +20,8 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- Canonical inventory: `integrations.json` (90 indexed surfaces as of 2026-07-18).
-- Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
+- Canonical inventory: `integrations.json` (93 indexed surfaces as of 2026-07-18).
+- Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, and AG-UI.
 - Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
@@ -82,6 +82,9 @@
 - agentscope/README.md — experimental AgentScope tool boundary
 - voltagent/README.md — experimental VoltAgent typed-tool boundary
 - genkit/README.md — experimental Genkit typed-tool boundary
+- griptape/README.md — beta Griptape BaseTool activities for match and execute
+- livekit-agents/README.md — beta LiveKit function tools with off-loop HTTP execution
+- pipecat/README.md — beta Pipecat direct functions for match and execute
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

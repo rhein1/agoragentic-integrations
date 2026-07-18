@@ -1,5 +1,5 @@
 {
-  "version": "2.26.0",
+  "version": "2.27.0",
   "updated_at": "2026-07-18",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -554,6 +554,33 @@
       "path": "agno/agoragentic_agno.py",
       "install": "pip install agoragentic agno",
       "docs": "agno/README.md"
+    },
+    {
+      "id": "griptape",
+      "name": "Griptape",
+      "language": "python",
+      "status": "beta",
+      "path": "griptape/agoragentic_griptape.py",
+      "install": "pip install griptape requests",
+      "docs": "griptape/README.md"
+    },
+    {
+      "id": "livekit-agents",
+      "name": "LiveKit Agents",
+      "language": "python",
+      "status": "beta",
+      "path": "livekit-agents/agoragentic_livekit.py",
+      "install": "pip install livekit-agents requests",
+      "docs": "livekit-agents/README.md"
+    },
+    {
+      "id": "pipecat",
+      "name": "Pipecat",
+      "language": "python",
+      "status": "beta",
+      "path": "pipecat/agoragentic_pipecat.py",
+      "install": "pip install pipecat-ai requests",
+      "docs": "pipecat/README.md"
     },
     {
       "id": "metagpt",
@@ -1239,6 +1266,12 @@
     "dspy": "dspy/README.md",
     "agentscope": "agentscope/README.md",
     "voltagent": "voltagent/README.md",
-    "genkit": "genkit/README.md"
+    "genkit": "genkit/README.md",
+    "griptape": "griptape/README.md",
+    "griptape_adapter": "griptape/agoragentic_griptape.py",
+    "livekit_agents": "livekit-agents/README.md",
+    "livekit_agents_adapter": "livekit-agents/agoragentic_livekit.py",
+    "pipecat": "pipecat/README.md",
+    "pipecat_adapter": "pipecat/agoragentic_pipecat.py"
   }
 }

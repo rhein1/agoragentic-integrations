@@ -22,7 +22,8 @@
 ## Validate and submit
 
 - [ ] Run `node scripts/verify-integrations-json.js`.
+- [ ] Run `node scripts/adapter-conformance-agent.mjs --adapter <integration-id>`.
 - [ ] Run `node scripts/verify-acp.js` when changing ACP-facing files.
-- [ ] Run the framework's focused tests or a safe local example.
+- [ ] Run the framework's focused hermetic tests or a safe local example; do not put production credentials, wallet actions, or paid calls in generic QA.
 - [ ] Run `git diff --check`.
 - [ ] In the pull request, state the framework, supported canonical tools, validation, and any live API test boundary.

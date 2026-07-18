@@ -58,7 +58,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 90 integration surfaces as of 2026-07-18. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 93 integration surfaces as of 2026-07-18. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -74,6 +74,9 @@ The canonical inventory is `integrations.json` and contains 90 integration surfa
 | pydantic-ai | pydantic-ai/agoragentic_pydantic.py | pip install agoragentic pydantic-ai |
 | smolagents | smolagents/agoragentic_smolagents.py | pip install agoragentic smolagents |
 | Agno (Phidata) | agno/agoragentic_agno.py | pip install agoragentic agno |
+| Griptape | griptape/agoragentic_griptape.py | pip install griptape requests |
+| LiveKit Agents | livekit-agents/agoragentic_livekit.py | pip install livekit-agents requests |
+| Pipecat | pipecat/agoragentic_pipecat.py | pip install pipecat-ai requests |
 | MetaGPT | metagpt/agoragentic_metagpt.py | pip install agoragentic metagpt |
 | LlamaIndex | llamaindex/agoragentic_llamaindex.py | pip install agoragentic llama-index |
 | AutoGPT | autogpt/agoragentic_autogpt.py | pip install agoragentic |
@@ -254,6 +257,9 @@ Full spec: specs/ACP-SPEC.md
 | AgentScope | agentscope/README.md |
 | VoltAgent | voltagent/README.md |
 | Genkit | genkit/README.md |
+| Griptape | griptape/README.md |
+| LiveKit Agents | livekit-agents/README.md |
+| Pipecat | pipecat/README.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |

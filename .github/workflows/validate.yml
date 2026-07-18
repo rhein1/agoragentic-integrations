@@ -14,6 +14,7 @@ on:
       - 'x402/**'
       - 'zoneless/**'
       - 'scripts/**'
+      - 'docs/ADAPTER_CONFORMANCE_AGENT.md'
       - 'examples/agoragentic-growth/**'
       - 'test/**'
       - '*/README.md'
@@ -194,3 +195,30 @@ jobs:
         run: node examples/agoragentic-growth/2026-06-21-solana-x402-paid-call-adapter-demo-mjs-c10944a6cc/solana_x402_paid_call_adapter_demo.mjs
       - name: Test x402 buyer demo preflight behavior
         run: node --test test/x402-buyer-demo-preflight.test.mjs
+
+  adapter-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24 for TypeScript syntax checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Test forked conformance agent
+        run: node --test test/adapter-conformance-agent.test.mjs
+      - name: Test framework adapter contracts
+        run: node --test test/framework-adapter-contracts.test.mjs
+      - name: Validate every integration offline
+        run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adapter-conformance-${{ github.sha }}
+          path: ${{ runner.temp }}/adapter-conformance-report.json
+          if-no-files-found: error
+          retention-days: 30

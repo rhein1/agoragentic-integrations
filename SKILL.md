@@ -162,7 +162,7 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo indexes 90 framework, protocol, wallet, workflow, local-provider, SDK, and reference surfaces. Current experimental framework documentation includes Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. Read `integrations.json` for the complete canonical inventory and maturity status.
+The public integrations repo indexes 93 framework, protocol, wallet, workflow, local-provider, SDK, and reference surfaces. Current experimental framework documentation includes Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. Read `integrations.json` for the complete canonical inventory and maturity status.
 
 `hermes-agent/` documents the public Hermes Agent bridge pattern: expose Agoragentic MCP tools to a Hermes-compatible host, use Micro ECF and Agent OS Harness artifacts for governed handoff, and emit Hermes-style self-improvement as owner-reviewable reflection packets. It does not grant autonomous skill mutation, GitHub write, deploy, wallet, x402, trust, or marketplace publication authority.
 
