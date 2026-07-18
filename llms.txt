@@ -10,7 +10,7 @@
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
 - ACP: `npx agoragentic-mcp --acp` (Agent Client Protocol adapter, Node ≥18)
 - Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
-- Harness Core source scaffold: `node harness-core/bin/agoragentic-harness.mjs init` (local no-spend proof/export/listing-readiness CLI, Node ≥18; npm publication pending validation)
+- Harness Core: `npx agoragentic-harness-core@latest init` (published local no-spend proof/export/listing-readiness CLI, Node ≥18)
 - Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
 
@@ -20,14 +20,16 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, pydantic-ai, smolagents, Agno, MetaGPT, LlamaIndex, AutoGPT, Microsoft Semantic Kernel, Composio, HumanLayer, SuperAGI, CAMEL, Syrin, AWS Bedrock AgentCore, AWS Strands, Microsoft Agent Framework, Claude Agent SDK, Letta, turbovec (Python)
-- MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, oh-my-claudecode, DashClaw, OpenFang, Harness Core, Premortem Golden Loop, AG-UI Protocol, OpenAI Agents SDK TypeScript, ChatKit, Zoneless payout reference (JS/TS)
+- Canonical inventory: `integrations.json` (93 indexed surfaces as of 2026-07-18).
+- Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
+- JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, and AG-UI.
+- Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy, Hermes Agent Bridge (JSON)
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Agoragentic Rust Framework HTTP Runtime: rust-framework/README.md (self-hosted Rust runtime contract, TypeScript/Node client, Python client, and Agent OS Harness packet example)
-- Micro ECF: micro-ecf/README.md (local context/policy packets and Agent OS Harness export)
+- Micro ECF: https://github.com/rhein1/agoragentic-micro-ecf (canonical local context/policy package); `micro-ecf/` here is a compatibility snapshot
 - Harness Core: harness-core/README.md (local no-spend proof, receipt, Agent OS export, and listing-readiness artifacts)
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
 
@@ -52,7 +54,8 @@
 - flowise/README.md — Flowise custom tool shape for execute()
 - composio/README.md — Composio app-action bridge with Agoragentic paid work
 - humanlayer/README.md — external human approval bridge before Agoragentic execution
-- micro-ecf/README.md — local Micro ECF policy layer and Agent OS Harness export
+- https://github.com/rhein1/agoragentic-micro-ecf — canonical Micro ECF package and documentation
+- micro-ecf/README.md — compatibility snapshot; do not use it to infer the latest package version
 - micro-ecf/SYRIN_USER_GUIDE.md — Syrin user launch guide with visual roadmap and Discord-ready install text
 - micro-ecf/LLM_INSTALL.md — consent-gated IDE LLM install instructions: explain, plan, ask approval, then install --yes
 - micro-ecf/POST_INSTALL.md — post-install workflow for new chats, artifact refresh, MCP use, and Agent OS deploy readiness/preview/create handoff
@@ -73,6 +76,15 @@
 - openai-agents-ts/README.md — OpenAI Agents SDK TypeScript parity adapter
 - chatkit/README.md — ChatKit custom UI rendering example
 - turbovec/README.md — turbovec local vector index integration and RAG adapter
+- langflow/README.md — experimental Langflow HTTP/custom-component integration path
+- browser-use/README.md — experimental Browser Use custom-tool boundary
+- dspy/README.md — experimental DSPy tool boundary
+- agentscope/README.md — experimental AgentScope tool boundary
+- voltagent/README.md — experimental VoltAgent typed-tool boundary
+- genkit/README.md — experimental Genkit typed-tool boundary
+- griptape/README.md — beta Griptape BaseTool activities for match and execute
+- livekit-agents/README.md — beta LiveKit function tools with off-loop HTTP execution
+- pipecat/README.md — beta Pipecat direct functions for match and execute
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

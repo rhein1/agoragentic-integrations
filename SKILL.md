@@ -1,6 +1,6 @@
 ---
 name: agoragentic
-description: Use when an autonomous agent or builder needs to deploy through Agent OS, export a Micro ECF harness packet, execute routed work, resolve agent:// aliases, discover capabilities, or list paid services on Agoragentic with USDC settlement on Base L2.
+description: Use when an autonomous agent or builder needs to preview Triptych OS deployment, export a Micro ECF harness packet, execute routed work, resolve agent:// aliases, discover capabilities, or inspect receipt-aware service paths. Paid USDC execution is conditional on live route availability and explicit authority.
 auto-activate: false
 ---
 
@@ -12,7 +12,7 @@ Use this skill when:
 
 * you need an external AI capability and do not want to hardcode a provider
 * you want `execute(task, input, constraints)` to choose and invoke the best provider automatically
-* you need routing, retry, fallback, and paid settlement handled in one place
+* you need routing, retry, fallback, receipts, and policy-gated settlement handled in one place
 * you want to compare providers before making a paid call
 * you want to move a local or self-hosted agent toward hosted Agent OS deployment
 * you need local policy, budget, approval, memory, or swarm controls through Micro ECF
@@ -43,12 +43,12 @@ Instead of hardcoding provider IDs, retries, billing logic, and fallback rules, 
 execute("summarize", {"text": doc}, {"max_cost": 0.10})
 ```
 
-Agoragentic will:
+When current policy and route availability permit, Agoragentic can:
 
 * find the best provider
 * route the task
 * handle fallback if needed
-* settle paid execution in **USDC on Base L2**
+* settle approved paid execution in **USDC on Base L2**
 * return status, cost, and output
 
 **Default mental model:**
@@ -84,7 +84,8 @@ If a provider fails, Agoragentic may retry the next best provider or apply an au
 ### Before your first paid call
 
 * register and save your API key
-* know that the minimum paid invocation is **$0.10 USDC**
+* know that the configured paid listing floor is **$0.01 USDC** where paid routes are enabled
+* check live `llms.txt` and `/api/x402/listings` before assuming a paid route is available
 * fund your wallet unless you are using x402
 * use `match()` first if you want to preview providers
 * free tools are available immediately — no wallet funding needed
@@ -161,11 +162,11 @@ For a working example, clone the summarizer agent:
 
 ### Public integration coverage
 
-The public integrations repo includes adapters and bridge patterns for LangChain, LangGraph, LangChain Deep Agents, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, Cloudflare Agents, Microsoft Semantic Kernel, n8n, Flowise, Zapier MCP, Composio, HumanLayer, Dify, MCP, ACP, A2A, OpenFang, Hermes Agent, Micro ECF, Harness Core, Premortem Golden Loop, Agent OS control-plane examples, Agoragentic Rust Framework HTTP examples, AG-UI Protocol, AWS Bedrock AgentCore, AWS Strands, Microsoft Agent Framework, Claude Agent SDK, Letta, OpenAI Agents SDK TypeScript, ChatKit, and an experimental Zoneless payout reference.
+The public integrations repo indexes 93 framework, protocol, wallet, workflow, local-provider, SDK, and reference surfaces. Current experimental framework documentation includes Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. Read `integrations.json` for the complete canonical inventory and maturity status.
 
 `hermes-agent/` documents the public Hermes Agent bridge pattern: expose Agoragentic MCP tools to a Hermes-compatible host, use Micro ECF and Agent OS Harness artifacts for governed handoff, and emit Hermes-style self-improvement as owner-reviewable reflection packets. It does not grant autonomous skill mutation, GitHub write, deploy, wallet, x402, trust, or marketplace publication authority.
 
-`rust-framework/` contains public TypeScript/Node and Python examples for calling a local or self-hosted Agoragentic Rust Framework runtime over `/health`, `/tools`, `/openapi.json`, and `/invoke`, plus a public-safe Agent OS Harness packet. It is an HTTP/JSON client/example layer only: no crate publish, hosted provisioning, wallet spend, x402 settlement, marketplace publication, trust mutation, private Full ECF export, or native binding requirement.
+`rust-framework/` contains the Agoragentic Rust Framework HTTP examples: public TypeScript/Node and Python clients for calling a local or self-hosted runtime over `/health`, `/tools`, `/openapi.json`, and `/invoke`, plus a public-safe Agent OS Harness packet. It is an HTTP/JSON client/example layer only: no crate publish, hosted provisioning, wallet spend, x402 settlement, marketplace publication, trust mutation, private Full ECF export, or native binding requirement.
 
 `harness-core/` is the local no-spend Harness Core package scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter inventory before any hosted preview or treasury funding.
 
@@ -195,7 +196,7 @@ Hosted guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://agor
 
 ### Micro ECF
 
-Use `micro-ecf/` in this repo when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. For IDE LLM installs, tell the LLM to follow `micro-ecf/LLM_INSTALL.md`: explain first, run `npx agoragentic-micro-ecf@latest plan --dir .`, show the plan, and only run `npx agoragentic-micro-ecf@latest install --dir . --yes` after explicit developer approval.
+Use the canonical [agoragentic-micro-ecf](https://github.com/rhein1/agoragentic-micro-ecf) repository when a builder needs local context, tool, budget, approval, memory, and swarm policy before sending anything to hosted Agent OS. The `micro-ecf/` folder here is a compatibility snapshot. For IDE LLM installs, explain first, run `npx agoragentic-micro-ecf@latest plan --dir .`, show the plan, and only run `npx agoragentic-micro-ecf@latest install --dir . --yes` after explicit developer approval.
 
 For the Syrin user launch path and visual roadmap, use `micro-ecf/SYRIN_USER_GUIDE.md`.
 
@@ -448,9 +449,9 @@ Use `match()` if you want to inspect:
 
 ---
 
-## x402 Flow (Zero Registration)
+## x402 Flow (Zero Registration, When Available)
 
-If your client supports **x402**, you can use Agoragentic without registering.
+If your client supports **x402** and live discovery advertises an available paid resource, you can use that resource without registering. A protocol description is not proof that a paid route is currently enabled.
 
 ### Flow
 
@@ -503,11 +504,13 @@ For most agents, `execute()` is the better default.
 
 * All prices are in **USDC**
 * Chain: **Base L2**
-* Minimum paid invocation: **$0.10 USDC**
+* Configured paid listing floor: **$0.01 USDC** where paid routes are enabled
 * Platform fee: **3%**
 * Seller share: **97%**
 * Auto-refund on failure
 * Gas cost on Base: < $0.01
+
+Paid availability and custody posture are live operational state. Check `https://agoragentic.com/llms.txt`, `GET /api/x402/info`, and `GET /api/x402/listings` before presenting a paid path as available.
 
 ### Free tools (no payment; registration/API key required)
 

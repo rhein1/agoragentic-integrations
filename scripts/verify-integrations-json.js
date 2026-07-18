@@ -85,6 +85,85 @@ function assertManifestShape(manifest) {
   }
 }
 
+function assertInventoryCoverage(manifest) {
+  const ids = new Set();
+  const representedDirectories = new Set();
+
+  for (const integration of manifest.integrations || []) {
+    if (ids.has(integration.id)) fail(`integrations.json has duplicate integration id: ${integration.id}`);
+    ids.add(integration.id);
+
+    for (const field of ['path', 'docs']) {
+      if (!integration[field]) continue;
+      const target = path.join(root, integration[field]);
+      if (!fs.existsSync(target)) fail(`${integration.id}.${field} does not exist: ${integration[field]}`);
+      representedDirectories.add(integration[field].split('/')[0]);
+    }
+  }
+
+  const nonIntegrationDirectories = new Set([
+    '.github',
+    'assets',
+    'deliverables',
+    'dist',
+    'docs',
+    'examples',
+    'skills',
+    'specs',
+    'src',
+    'templates',
+    'test',
+  ]);
+
+  const integrationDirectories = fs.readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .filter((entry) => !nonIntegrationDirectories.has(entry.name))
+    .filter((entry) => fs.existsSync(path.join(root, entry.name, 'README.md')))
+    .map((entry) => entry.name);
+
+  for (const directory of integrationDirectories) {
+    if (!representedDirectories.has(directory)) {
+      fail(`top-level integration directory is missing from integrations.json: ${directory}`);
+    }
+  }
+
+  const expectedExperimentalDocs = ['langflow', 'browser-use', 'dspy', 'agentscope', 'voltagent', 'genkit'];
+  for (const id of expectedExperimentalDocs) {
+    const integration = (manifest.integrations || []).find((entry) => entry.id === id);
+    if (!integration) fail(`integrations.json missing researched framework entry: ${id}`);
+    if (integration?.status !== 'experimental') fail(`${id} must remain experimental until executable framework tests exist`);
+  }
+}
+
+function assertDiscoveryParity(manifest) {
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
+  const nestedSkill = fs.readFileSync(path.join(root, 'skills', 'agoragentic', 'SKILL.md'), 'utf8');
+
+  if (readme.includes('50+ agent-framework adapters')) {
+    fail('README.md contains the stale and untyped "50+ agent-framework adapters" claim');
+  }
+  if (!readme.includes('Featured Integration Paths')) {
+    fail('README.md must label its hand-curated table as Featured Integration Paths');
+  }
+  if (!readme.includes(`contains **${manifest.integrations.length}** surfaces`)) {
+    fail(`README.md must state the canonical manifest count (${manifest.integrations.length})`);
+  }
+  if (!llms.includes(`(${manifest.integrations.length} indexed surfaces`)) {
+    fail(`llms.txt must state the canonical manifest count (${manifest.integrations.length})`);
+  }
+  if (/npm publication pending/i.test(llms)) {
+    fail('llms.txt must not claim Harness Core npm publication is pending');
+  }
+  if (!nestedSkill.includes('https://agoragentic.com/skill.md')
+    || !nestedSkill.includes('https://github.com/rhein1/agoragentic-integrations')) {
+    fail('nested distributable skill must point to canonical live and repository discovery surfaces');
+  }
+  if (nestedSkill.includes('../../SKILL.md')) {
+    fail('nested distributable skill must not depend on a relative file outside its install directory');
+  }
+}
+
 function assertMachineCopy() {
   const banned = [
     /\$0\.50/i,
@@ -117,6 +196,17 @@ function assertA2aRouterFirst() {
   }
 }
 
+function assertRegistryMetadata() {
+  const glama = JSON.parse(fs.readFileSync(path.join(root, 'glama.json'), 'utf8'));
+  const packageVersion = glama.packages?.[0]?.version;
+  if (!glama.version || glama.version !== packageVersion) {
+    fail('glama.json top-level and npm package versions must match');
+  }
+  if (/execute paid work/i.test(glama.description || '')) {
+    fail('glama.json must not present paid execution as unconditionally available');
+  }
+}
+
 function assertDifyRouterFirst() {
   const provider = JSON.parse(fs.readFileSync(path.join(root, 'dify', 'agoragentic_provider.json'), 'utf8'));
   const toolNames = (provider.tools || []).map((tool) => tool.name);
@@ -130,7 +220,10 @@ if (duplicates.length) fail(`integrations.json has duplicate top-level keys: ${d
 
 const manifest = JSON.parse(rawManifest);
 assertManifestShape(manifest);
+assertInventoryCoverage(manifest);
+assertDiscoveryParity(manifest);
 assertMachineCopy();
+assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
 

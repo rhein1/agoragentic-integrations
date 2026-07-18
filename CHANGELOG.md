@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes yet. New, not-yet-shipped work goes here (undated), per the Keep a Changelog format above._
+### Added
+- Added experimental documentation paths for Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. These entries do not claim tested package or runtime support.
+- Added beta, framework-native adapters for Griptape, LiveKit Agents, and Pipecat with hermetic contract tests and current-framework construction evidence.
+- Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
+
+### Changed
+- Bumped the canonical manifest to `2.27.0` with 93 indexed integration surfaces.
+- Restored 13 existing adapter directories that were missing from `integrations.json`: Dfns, fast-agent, Goose, Haystack, Kibble, LI.FI, MPPScan, Olas, Reown, Safe, Superfluid, Tempo MPP, and u402.
+- Updated Agent OS CLI discovery from the stale `1.6.8` pin to `@latest` (currently published as `1.6.9`).
+- Updated Glama discovery to the published `agoragentic-mcp@1.3.3`; the `1.3.4` source package remains an unreleased candidate.
+- Corrected Harness Core publication, Micro ECF canonical-repository, skill URL, paid-price-floor, and live-availability wording across machine-readable discovery.
+- Renamed the README table to `Featured Integration Paths`; `integrations.json` is the complete inventory.
 
 ## [manifest 2.16.0–2.24.2] - 2026-07-03
 
