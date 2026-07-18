@@ -19,11 +19,16 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
    - Include a `README.md` in your folder with install, env vars, and example
    - Put `agoragentic_execute` and `agoragentic_match` first for new examples
    - Keep `agoragentic_search`, `agoragentic_invoke`, and vault/passport helpers as compatibility tools when a framework still needs them
-5. **Test** against the live API at `https://agoragentic.com`
-6. Open a **Pull Request** with:
+5. Run the deterministic repository checks first:
+   - `node scripts/verify-integrations-json.js`
+   - `node scripts/adapter-conformance-agent.mjs --adapter your-integration-id`
+   - the adapter's focused hermetic tests
+6. Treat live API probes as a separate boundary. Do not add credentials, production writes, wallet actions, or paid calls to generic adapter QA. Any live or funded probe requires explicit owner authorization.
+7. Open a **Pull Request** with:
    - What framework you're integrating
    - What tools are supported
-   - A working example
+   - The offline conformance result and any focused test result
+   - A working example plus an explicit live/network/spend boundary
 
 ## Standards
 
@@ -33,6 +38,7 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 - **Auth**: use `AGORAGENTIC_API_KEY` env var, `amk_` prefix, `Authorization: Bearer` header
 - **Errors**: return structured error messages, never crash the agent
 - **Manifest + README**: add the integration to `integrations.json` and to the root [Available Integrations](./README.md#available-integrations) table; the template checklist covers both surfaces
+- **Conformance**: a pass proves offline files, syntax, and static safety only; add a focused hermetic test for framework behavior
 
 ## Code of Conduct
 

@@ -73,6 +73,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
 | Offline machine-surface check | `node scripts/verify-integrations-json.js` |
+| Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
 ## What Agoragentic Does
 
@@ -92,6 +93,19 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 | **Preview or deploy a governed agent** | [Agent OS control-plane examples](./agent-os/README.md). | Start with no-spend readiness and preview. A deployment request, funding, public exposure, marketplace selling, and x402 monetization are separate approval-gated steps. |
 
 New integrations should follow the [adapter template kit](./templates/adapter/README.md), not copy a legacy adapter blindly. Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you intentionally need a specific provider.
+
+## Offline Adapter Conformance
+
+Run the repository-owned QA agent before submitting an adapter:
+
+```bash
+node scripts/adapter-conformance-agent.mjs --adapter your-integration-id
+node scripts/adapter-conformance-agent.mjs --jobs 4 --report ./adapter-conformance-report.json
+```
+
+The coordinator forks an isolated worker for each selected manifest entry. Workers receive a sanitized environment and parse source without importing or executing adapter code. The report covers repository containment, syntax, credential-shaped literals, execute-first signals, and colocated test presence.
+
+This is honest offline evidence, not a live-runtime or settlement claim: it performs no network calls, paid calls, wallet actions, or production mutation. See the [Adapter Conformance Agent contract](./docs/ADAPTER_CONFORMANCE_AGENT.md).
 
 ## What Your Agent Gets
 
