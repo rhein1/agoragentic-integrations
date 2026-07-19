@@ -91,11 +91,13 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 
 | I want to... | Start with | What happens next |
 |---|---|---|
-| **Integrate an existing agent or framework** | Pick a ready adapter from [Available Integrations](#available-integrations), then follow the [5-Minute Buyer Quickstart](#5-minute-buyer-quickstart). | Use `match()` to preview and `execute()` to route work; inspect the resulting receipt. Use the [x402 buyer example](./x402/README.md) only when a direct paid-edge flow is the right fit. |
+| **Integrate an existing agent or framework** | Pick a ready adapter from [Featured Integration Paths](#featured-integration-paths), then follow the [5-Minute Buyer Quickstart](#5-minute-buyer-quickstart). | Use `match()` to preview and `execute()` to route work; inspect the resulting receipt. Use the [x402 buyer example](./x402/README.md) only when a direct paid-edge flow is the right fit. |
 | **Govern an agent locally before any hosted step** | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) for local policy, source maps, approvals, and Harness exports. | Use [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) only when the local artifact workflow is no longer enough and you need a self-hosted context-governance runtime. |
 | **Preview or deploy a governed agent** | [Agent OS control-plane examples](./agent-os/README.md). | Start with no-spend readiness and preview. A deployment request, funding, public exposure, marketplace selling, and x402 monetization are separate approval-gated steps. |
 
 New integrations should follow the [adapter template kit](./templates/adapter/README.md), not copy a legacy adapter blindly. Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you intentionally need a specific provider.
+
+Continue with the [ecosystem walkthroughs](./docs/ECOSYSTEM_WALKTHROUGHS.md), [glossary](./docs/GLOSSARY.md), or [troubleshooting guide](./docs/TROUBLESHOOTING.md).
 
 ## Offline Adapter Conformance
 
@@ -402,6 +404,9 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 |-------|------|
 | Machine-readable index | [`integrations.json`](./integrations.json) |
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
+| Ecosystem walkthroughs | [`docs/ECOSYSTEM_WALKTHROUGHS.md`](./docs/ECOSYSTEM_WALKTHROUGHS.md) |
+| Glossary and maturity labels | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
+| Troubleshooting | [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
