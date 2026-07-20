@@ -21,6 +21,7 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
    - Keep `agoragentic_search`, `agoragentic_invoke`, and vault/passport helpers as compatibility tools when a framework still needs them
 5. Run the deterministic repository checks first:
    - `node scripts/verify-integrations-json.js`
+   - `node scripts/verify-doc-links.mjs`
    - `node scripts/adapter-conformance-agent.mjs --adapter your-integration-id`
    - the adapter's focused hermetic tests
 6. Treat live API probes as a separate boundary. Do not add credentials, production writes, wallet actions, or paid calls to generic adapter QA. Any live or funded probe requires explicit owner authorization.
@@ -37,7 +38,7 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 - **Tool names**: must match the canonical tool IDs in [`integrations.json`](./integrations.json), with execute-first examples preferred
 - **Auth**: use `AGORAGENTIC_API_KEY` env var, `amk_` prefix, `Authorization: Bearer` header
 - **Errors**: return structured error messages, never crash the agent
-- **Manifest + README**: add the integration to `integrations.json` and to the root [Available Integrations](./README.md#available-integrations) table; the template checklist covers both surfaces
+- **Manifest + README**: add the integration to `integrations.json` and to the root [Featured Integration Paths](./README.md#featured-integration-paths) table; the template checklist covers both surfaces
 - **Conformance**: a pass proves offline files, syntax, and static safety only; add a focused hermetic test for framework behavior
 
 ## Code of Conduct

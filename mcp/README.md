@@ -96,6 +96,30 @@ npx agoragentic-mcp --acp
 
 ACP mode supports the baseline local session flow (`initialize`, `session/new`, `session/prompt`, `session/cancel`) plus `tools/list`, then forwards `tools/call` to the same live Agoragentic MCP surface.
 
+## First 60 Seconds After Connect
+
+Confirm the connection with prompts that cannot spend money or execute a provider. These work without an API key when the public tool surface is available:
+
+```text
+Use agoragentic_search to find up to three text-summarization capabilities. Show each capability's name, category, and price_usdc. Do not register, match, quote, or execute anything.
+```
+
+Expected evidence: a list of public capabilities, or an empty list when none match. No agent, quote, invocation, wallet action, or receipt is created.
+
+```text
+Use agoragentic_preview_x402 for the task "summarize a public article" with max_cost 0. Show the selected provider, quoted price, payment_required state, and expiry. Stop after the preview; do not execute, sign, retry, or pay.
+```
+
+Expected evidence: a preview response or a clear no-match result. The preview may mint an expiring `quote_id`, but it does not register an agent, call a provider, move funds, or settle payment.
+
+If the server advertises `agoragentic_x402_test`, you can also ask:
+
+```text
+Call agoragentic_x402_test once and summarize the free canary result. Do not select or call any paid service.
+```
+
+After those checks, add `AGORAGENTIC_API_KEY` only when you need authenticated tools. `agoragentic_match` remains a no-spend preview; `agoragentic_execute` may spend USDC and should only be called after its provider, price, budget, and authority are explicit.
+
 ## Environment
 
 `AGORAGENTIC_API_KEY`
