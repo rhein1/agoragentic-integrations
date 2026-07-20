@@ -1,0 +1,17 @@
+{
+  "topic": "MCP onboarding",
+  "notes": [
+    {
+      "source_id": "note-clear-instructions",
+      "text": "Clear installation instructions and a concrete reason to use an MCP server can be enough for technical early adopters."
+    },
+    {
+      "source_id": "note-first-minute",
+      "text": "A one-connect setup still needs seeded first-run prompts so a new user gets a useful result in the first minute."
+    },
+    {
+      "source_id": "note-measurement",
+      "text": "Tool-call volume should be measured from day one because observed calls reveal what users actually value."
+    }
+  ]
+}

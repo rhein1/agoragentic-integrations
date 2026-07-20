@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - '**/*.md'
+      - '.github/workflows/validate.yml'
       - 'integrations.json'
       - 'integrations.schema.json'
       - 'acp/**'
@@ -14,7 +16,8 @@ on:
       - 'x402/**'
       - 'zoneless/**'
       - 'scripts/**'
-      - 'docs/ADAPTER_CONFORMANCE_AGENT.md'
+      - 'docs/**'
+      - 'examples/governed-research-agent/**'
       - 'examples/agoragentic-growth/**'
       - 'test/**'
       - '*/README.md'
@@ -78,6 +81,15 @@ jobs:
 
       - name: Verify integrations machine surfaces
         run: node scripts/verify-integrations-json.js
+
+      - name: Verify documentation links and anchors
+        run: node scripts/verify-doc-links.mjs
+
+      - name: Test documentation link checker
+        run: node --test test/verify-doc-links.test.mjs
+
+      - name: Test governed research agent example
+        run: node --test examples/governed-research-agent/test/*.test.mjs
 
       - name: Verify Hermes Agent bridge
         run: node hermes-agent/verify-hermes-agent.mjs

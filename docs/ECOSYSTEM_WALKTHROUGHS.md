@@ -8,6 +8,7 @@ Use this page to choose a problem-first path through the repository. It indexes 
 |---|---|---|---|
 | Add routed work to an existing agent or framework | [Existing agent to Router receipt](#existing-agent-to-router-receipt) | Match response, execution result, receipt reference | `match()` is a preview; `execute()` can cost the selected listing price |
 | Govern a local agent before hosted deployment | [Local policy to Agent OS preview](#local-policy-to-agent-os-preview) | Source map, policy summary, context packet, Harness export, preview | Local build, readiness, and preview are no-spend; later hosted actions remain gated |
+| Run a complete governed research proof locally | [Governed research agent example](../examples/governed-research-agent/README.md) | Local quote, cited report, receipt, and reconciliation artifacts | No network, wallet, provider, deployment, or spend path |
 | Inspect a direct x402 payment path safely | [x402 preflight to receipt verification](#x402-preflight-to-receipt-verification) | Validated quote/challenge and receipt or proof state | The provided preflights stop before signing or spending |
 | Prototype a wrapper around an existing API | [Mock-first public API wrapper](#mock-first-public-api-wrapper) | Local mock result with an explicit boundary object | No provider call, listing publication, wallet action, or x402 route |
 

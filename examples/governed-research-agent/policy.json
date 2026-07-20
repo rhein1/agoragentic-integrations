@@ -1,0 +1,47 @@
+{
+  "schema": "agoragentic.micro-ecf.policy.v1",
+  "agent_manifest": {
+    "name": "Local Governed Research Agent",
+    "framework": "deterministic_fixture",
+    "primary_goal": "Summarize supplied local research notes with citations",
+    "runtime_shape": "local_only"
+  },
+  "context_policy": {
+    "allowed_sources": ["local_research_fixture"],
+    "denied_sources": ["external_web", "secrets", "private_keys", "wallet_seeds", "raw_credentials"],
+    "local_allow": ["fixtures/research-notes.json"],
+    "local_block": [".env*", "**/*.key", "**/wallet*"],
+    "retention": "none",
+    "redaction": "secrets_reference_only"
+  },
+  "tool_policy": {
+    "allowed_tools": ["local_fixture_reader", "deterministic_summarizer", "local_reconciliation"],
+    "denied_tools": ["external_web_fetch", "marketplace_execute", "x402_execution", "wallet_settlement", "hosted_provisioning"],
+    "side_effects": "none"
+  },
+  "budget_policy": {
+    "treasury_required": false,
+    "max_daily_spend_usdc": 0,
+    "approval_required_above_usdc": 0,
+    "recommended_start_reserve_usdc": 0
+  },
+  "approval_policy": {
+    "autonomous": ["read_local_fixture", "summarize", "reconcile_local_artifacts"],
+    "human_gated": ["network_access", "provider_execution", "publish", "spend"]
+  },
+  "memory_policy": {
+    "write_gate": "disabled",
+    "secret_storage": "reference_only"
+  },
+  "swarm_policy": {
+    "max_agents": 1,
+    "delegation": "disabled"
+  },
+  "deployment_policy": {
+    "hosting_target": "none",
+    "exposure_mode": "private_only",
+    "first_proof_required": true,
+    "source": { "type": "local_fixture", "ref": "fixtures/research-notes.json" }
+  },
+  "context_providers": []
+}
