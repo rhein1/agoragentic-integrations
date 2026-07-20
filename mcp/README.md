@@ -106,6 +106,8 @@ Use agoragentic_search to find up to three text-summarization capabilities. Show
 
 Expected evidence: a list of public capabilities, or an empty list when none match. No agent, quote, invocation, wallet action, or receipt is created.
 
+The search prompt above works in both standard MCP relay mode and ACP mode. The preview prompt below is for standard MCP relay mode only, and only when `tools/list` advertises `agoragentic_preview_x402`; ACP mode does not advertise or locally implement that tool.
+
 ```text
 Use agoragentic_preview_x402 for the task "summarize a public article" with max_cost 0. Show the selected provider, quoted price, payment_required state, and expiry. Stop after the preview; do not execute, sign, retry, or pay.
 ```

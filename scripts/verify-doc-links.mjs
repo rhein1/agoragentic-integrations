@@ -22,12 +22,122 @@ function withoutFencedCode(markdown) {
   return markdown.split(/\r?\n/).map((line) => {
     const marker = line.match(/^\s*(`{3,}|~{3,})/);
     if (marker) {
-      if (!fence) fence = marker[1][0];
-      else if (marker[1][0] === fence) fence = null;
+      const character = marker[1][0];
+      const length = marker[1].length;
+      if (!fence) fence = { character, length };
+      else if (character === fence.character && length >= fence.length) fence = null;
       return '';
     }
     return fence ? '' : line;
   }).join('\n');
+}
+
+function inlineDestinationClose(text, start) {
+  let cursor = start;
+  while (/\s/.test(text[cursor] || '')) cursor += 1;
+  if (text[cursor] === ')') return cursor;
+
+  const opening = text[cursor];
+  if (!['"', "'", '('].includes(opening)) return -1;
+  const closing = opening === '(' ? ')' : opening;
+  cursor += 1;
+  let escaped = false;
+  for (; cursor < text.length; cursor += 1) {
+    const character = text[cursor];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character !== closing) continue;
+    cursor += 1;
+    while (/\s/.test(text[cursor] || '')) cursor += 1;
+    return text[cursor] === ')' ? cursor : -1;
+  }
+  return -1;
+}
+
+function inlineDestinations(text) {
+  const found = [];
+  for (let index = 0; index < text.length - 1; index += 1) {
+    if (text[index] !== ']' || text[index + 1] !== '(') continue;
+
+    let cursor = index + 2;
+    while (/\s/.test(text[cursor] || '')) cursor += 1;
+
+    if (text[cursor] === '<') {
+      let target = '';
+      let escaped = false;
+      cursor += 1;
+      for (; cursor < text.length; cursor += 1) {
+        const character = text[cursor];
+        if (escaped) {
+          target += character;
+          escaped = false;
+          continue;
+        }
+        if (character === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (character !== '>') {
+          target += character;
+          continue;
+        }
+        const close = inlineDestinationClose(text, cursor + 1);
+        if (close !== -1) {
+          found.push(`<${target}>`);
+          index = close;
+        }
+        break;
+      }
+      continue;
+    }
+
+    let target = '';
+    let depth = 0;
+    let escaped = false;
+    for (; cursor < text.length; cursor += 1) {
+      const character = text[cursor];
+      if (escaped) {
+        target += character;
+        escaped = false;
+        continue;
+      }
+      if (character === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (character === '(') {
+        depth += 1;
+        target += character;
+        continue;
+      }
+      if (character === ')') {
+        if (depth > 0) {
+          depth -= 1;
+          target += character;
+          continue;
+        }
+        if (target) found.push(target);
+        index = cursor;
+        break;
+      }
+      if (/\s/.test(character) && depth === 0) {
+        const close = inlineDestinationClose(text, cursor);
+        if (target && close !== -1) {
+          found.push(target);
+          index = close;
+        }
+        break;
+      }
+      target += character;
+    }
+  }
+  return found;
 }
 
 function slugBase(heading) {
@@ -61,8 +171,7 @@ function anchorsFor(markdown) {
 
 function destinations(markdown) {
   const text = withoutFencedCode(markdown);
-  const found = [];
-  for (const match of text.matchAll(/!?\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+["'][^"']*["'])?\)/g)) found.push(match[1]);
+  const found = inlineDestinations(text);
   for (const match of text.matchAll(/^\s*\[[^\]]+\]:\s*(<[^>]+>|\S+)/gm)) found.push(match[1]);
   for (const match of text.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)) found.push(match[1]);
   return found;

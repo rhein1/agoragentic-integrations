@@ -85,6 +85,9 @@ jobs:
       - name: Verify documentation links and anchors
         run: node scripts/verify-doc-links.mjs
 
+      - name: Test documentation link checker
+        run: node --test test/verify-doc-links.test.mjs
+
       - name: Test governed research agent example
         run: node --test examples/governed-research-agent/test/*.test.mjs
 
