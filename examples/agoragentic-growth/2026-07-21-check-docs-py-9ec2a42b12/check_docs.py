@@ -181,6 +181,11 @@ def check_file(
             problem = check_link(root, path, match.group(2), anchors)
             if problem:
                 errors.append(f"{problem} (line {number})")
+        reference = REF_RE.match(line)
+        if reference:
+            problem = check_link(root, path, reference.group(1), anchors)
+            if problem:
+                errors.append(f"{problem} (line {number})")
     return errors
 
 
@@ -210,7 +215,8 @@ def run_self_test() -> int:
         root = Path(name)
         good = root / "good.md"
         good.write_text(
-            "# Good\n\n[Other](other.md#target)\n",
+            "# Good\n\n[Other](other.md#target)\n\n"
+            "[Reference][other]\n\n[other]: other.md#target\n",
             encoding="utf-8",
         )
         (root / "other.md").write_text("# Target\n", encoding="utf-8")
@@ -218,13 +224,15 @@ def run_self_test() -> int:
         bad = root / "bad.md"
         bad.write_text(
             "# Repeat\n# Repeat\n\n[missing](nope.md)\n\n"
-            "[bad-anchor](other.md#absent)\n##broken\n",
+            "[bad-anchor](other.md#absent)\n\n"
+            "[missing-reference]: absent.md\n##broken\n",
             encoding="utf-8",
         )
         findings = check(root)
-        assert len(findings) == 4, findings
+        assert len(findings) == 5, findings
         assert any("duplicate heading" in item for item in findings)
         assert any("missing local target" in item for item in findings)
+        assert any("absent.md" in item for item in findings)
         assert any("missing heading anchor" in item for item in findings)
         assert any("malformed heading" in item for item in findings)
         bad.unlink()
