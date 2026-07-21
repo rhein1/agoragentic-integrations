@@ -14,7 +14,8 @@ EXIT_FINDINGS = 1
 EXIT_USAGE = 2
 HEADING_RE = re.compile(r"^( {0,3})(#{1,6})(.*)$")
 LINK_RE = re.compile(r"!?\[([^\]]*)\]\(([^)\s]+)(?:\s+['\"].*?['\"])?\)")
-REF_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)")
+REF_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(\S+)")
+REF_USE_RE = re.compile(r"!?\[([^\]]+)\]\[([^\]]*)\]")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 BAD_LINK_SCHEMES = {"http", "https", "mailto", "tel", "ftp", "data"}
 
@@ -38,6 +39,10 @@ def heading_text(raw: str) -> str:
     value = raw.strip()
     value = re.sub(r"\s+#+\s*$", "", value).strip()
     return value
+
+
+def reference_label(raw: str) -> str:
+    return " ".join(raw.split()).casefold()
 
 
 def markdown_files(root: Path) -> list[Path]:
@@ -169,6 +174,19 @@ def check_file(
         lines = read_lines(path)
     except (OSError, UnicodeError):
         return errors
+    definitions: dict[str, tuple[str, int]] = {}
+    fenced = False
+    for number, line in enumerate(lines, 1):
+        fence = FENCE_RE.match(line)
+        if fence:
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        reference = REF_RE.match(line)
+        if reference:
+            label = reference_label(reference.group(1))
+            definitions.setdefault(label, (reference.group(2), number))
     fenced = False
     for number, line in enumerate(lines, 1):
         fence = FENCE_RE.match(line)
@@ -183,9 +201,17 @@ def check_file(
                 errors.append(f"{problem} (line {number})")
         reference = REF_RE.match(line)
         if reference:
-            problem = check_link(root, path, reference.group(1), anchors)
+            problem = check_link(root, path, reference.group(2), anchors)
             if problem:
                 errors.append(f"{problem} (line {number})")
+            continue
+        for match in REF_USE_RE.finditer(line):
+            raw_label = match.group(2) or match.group(1)
+            if reference_label(raw_label) not in definitions:
+                errors.append(
+                    f"{path}: undefined reference label: {raw_label} "
+                    f"(line {number})"
+                )
     return errors
 
 
@@ -216,7 +242,8 @@ def run_self_test() -> int:
         good = root / "good.md"
         good.write_text(
             "# Good\n\n[Other](other.md#target)\n\n"
-            "[Reference][other]\n\n[other]: other.md#target\n",
+            "[Reference][other]\n\n[Collapsed][]\n\n"
+            "[other]: other.md#target\n[collapsed]: other.md#target\n",
             encoding="utf-8",
         )
         (root / "other.md").write_text("# Target\n", encoding="utf-8")
@@ -225,16 +252,22 @@ def run_self_test() -> int:
         bad.write_text(
             "# Repeat\n# Repeat\n\n[missing](nope.md)\n\n"
             "[bad-anchor](other.md#absent)\n\n"
-            "[missing-reference]: absent.md\n##broken\n",
+            "[missing-reference]: absent.md\n\n"
+            "[undefined][missing-ref]\n\n[collapsed-missing][]\n##broken\n",
             encoding="utf-8",
         )
         findings = check(root)
-        assert len(findings) == 5, findings
+        assert len(findings) == 7, findings
         assert any("duplicate heading" in item for item in findings)
         assert any("missing local target" in item for item in findings)
         assert any("absent.md" in item for item in findings)
         assert any("missing heading anchor" in item for item in findings)
         assert any("malformed heading" in item for item in findings)
+        assert any("undefined reference label: missing-ref" in item for item in findings)
+        assert any(
+            "undefined reference label: collapsed-missing" in item
+            for item in findings
+        )
         bad.unlink()
         assert check(root) == []
     print("AGOS_RUNTIME_OK")
