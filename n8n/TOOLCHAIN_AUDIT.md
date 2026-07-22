@@ -19,6 +19,8 @@ Audit date: 2026-07-22
 - `npm audit --omit=dev --audit-level=moderate`: zero production vulnerabilities
 - `npm audit --audit-level=high`: zero high or critical vulnerabilities
 
+Both audit commands run in pull-request validation and again in the trusted-publishing workflow, so the recorded boundary is release-gated rather than advisory-only.
+
 ## Residual Advisory
 
 The stable n8n node CLI currently brings six moderate development-only findings through its AI SDK, LangChain, and `uuid` dependency chain. npm offers only an invalid downgrade of the builder as an automated fix. The package does not ship those development dependencies, and the production dependency audit is clean. This candidate does not force an incompatible transitive override or move to the 0.41 beta toolchain.

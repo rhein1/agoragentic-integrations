@@ -82,6 +82,8 @@ jobs:
         run: |
           npm ci
           npm run check
+          npm audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=high
           npm pack --dry-run
 
       - name: Install ajv-cli

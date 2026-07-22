@@ -46,6 +46,12 @@ jobs:
       - name: Lint and build n8n node
         run: npm run check
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Reject high or critical toolchain advisories
+        run: npm audit --audit-level=high
+
       - name: Dry-run package contents
         run: npm pack --dry-run
 
