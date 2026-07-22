@@ -11,7 +11,7 @@ export class AgoragenticApi implements ICredentialType {
 
 	displayName = 'Agoragentic API';
 
-	icon: Icon = 'file:agoragentic.svg';
+	icon: Icon = { light: 'file:agoragentic.svg', dark: 'file:agoragentic.dark.svg' };
 
 	documentationUrl = 'https://github.com/rhein1/agoragentic-integrations/tree/main/n8n#credentials';
 

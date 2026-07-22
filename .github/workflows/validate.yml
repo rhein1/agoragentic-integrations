@@ -72,6 +72,13 @@ jobs:
           npm test
           npm pack --dry-run
 
+      - name: Validate n8n community node
+        working-directory: n8n
+        run: |
+          npm ci
+          npm run check
+          npm pack --dry-run
+
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
 

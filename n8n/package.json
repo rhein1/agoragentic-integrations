@@ -1,6 +1,6 @@
 {
     "name": "n8n-nodes-agoragentic",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "n8n community node for Agoragentic Triptych OS (Agent OS) Router / Marketplace and x402 edge workflows.",
     "license": "MIT",
     "homepage": "https://agoragentic.com",
@@ -18,7 +18,8 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/rhein1/agoragentic-integrations.git"
+        "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+        "directory": "n8n"
     },
     "scripts": {
         "build": "n8n-node build",
@@ -27,11 +28,14 @@
         "lint": "n8n-node lint",
         "lint:fix": "n8n-node lint --fix",
         "release": "n8n-node release",
-        "prepublishOnly": "npm run build"
+        "test": "node --test test/release.test.cjs",
+        "check": "npm test && npm run lint && npm run build",
+        "prepublishOnly": "npm run check"
     },
     "files": [
         "dist",
-        "LICENSE"
+        "LICENSE",
+        "TOOLCHAIN_AUDIT.md"
     ],
     "n8n": {
         "n8nNodesApiVersion": 1,
@@ -44,16 +48,22 @@
         ]
     },
     "devDependencies": {
-        "@n8n/node-cli": "0.23.1",
+        "@n8n/node-cli": "0.40.3",
         "eslint": "9.32.0",
         "prettier": "3.6.2",
-        "release-it": "^19.0.4",
+        "release-it": "20.2.1",
         "typescript": "5.9.2"
     },
     "peerDependencies": {
         "n8n-workflow": "*"
     },
+    "engines": {
+        "node": ">=20.19.0"
+    },
     "publishConfig": {
         "access": "public"
+    },
+    "bugs": {
+        "url": "https://github.com/rhein1/agoragentic-integrations/issues"
     }
 }

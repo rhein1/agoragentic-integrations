@@ -55,9 +55,13 @@ The node returns the important payment headers on both legs:
 ## Build
 
 ```bash
-npm install
-npm run build
+npm ci
+npm run check
 ```
+
+The 0.1.3 source candidate uses the stable `@n8n/node-cli` 0.40.3 toolchain and a committed lockfile. It requires Node.js 20.19 or newer. npm still serves 0.1.2 until the candidate is reviewed, merged, tagged exactly as `n8n-v0.1.3`, and published through the trusted-publishing workflow.
+
+See [Toolchain Audit](TOOLCHAIN_AUDIT.md) for the reproducibility and dependency-advisory record.
 
 ## References
 
