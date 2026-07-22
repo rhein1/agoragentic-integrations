@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { adapterCatalog } from './adapters/index.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,20 @@ export {
   SCHEMA,
   adapterCatalog,
 };
+
+export { createApprovalRequest, decideApproval, listApprovals, showApproval } from './kernel/approvals.mjs';
+export { contextStatus, importContext } from './kernel/context-import.mjs';
+export { authorityBoundary, createHarnessEvent, sanitizeForPublicEvidence } from './kernel/events.mjs';
+export { listProfiles, loadProfile } from './kernel/profiles.mjs';
+export { probeRuntime, validateLoopbackRuntimeUrl, validatePublicSafeTools } from './kernel/runtime-probe.mjs';
+export { checkDueHarnessSchedules, getHarnessScheduleStatus, listHarnessSchedules, planHarnessSchedule } from './kernel/schedule.mjs';
+export { buildHarnessStatus, writeHarnessStatus } from './kernel/status.mjs';
+export { decideReview, initReviewGates, listReviewGates, requestReview, reviewGateStatus } from './kernel/review-gates.mjs';
+export { initToolManifest, inspectTool, listTools, toolManifestStatus } from './kernel/tool-manifest.mjs';
+export { decideImprovement, improvementCandidateStatus, listImprovements, ownerInboxStatus, suggestImprovements } from './kernel/improvement-candidates.mjs';
+export { budgetPolicyStatus, createBudgetLimitMiddleware, evaluateBudgetUsage, initBudgetPolicy } from './middleware/budget-limit.mjs';
+export { createRetryPolicyMiddleware, evaluateRetryPolicy, initRetryPolicy, retryPolicyStatus } from './middleware/retry-policy.mjs';
+export { attachWorktreeSession, detachWorktreeSession, getWorktreeSessionStatus } from './kernel/worktree-session.mjs';
 
 export async function initProject({ dir = process.cwd(), template = 'codebase_maintenance', force = false } = {}) {
   const target = path.resolve(dir);
@@ -88,6 +103,7 @@ export async function loadProject(dir = process.cwd()) {
 
 export function runValidation(project) {
   const issues = [];
+  const warnings = [];
   const { agent, policy } = project;
 
   requireValue(issues, agent.schema === SCHEMA.agent, 'agent_schema_invalid', `agent.yaml schema must be ${SCHEMA.agent}`);
@@ -112,6 +128,33 @@ export function runValidation(project) {
     });
   }
 
+  const guardPolicy = getGuardPolicy(policy);
+  if (Number(policy.budget_policy?.max_daily_spend_usdc || 0) > 0 && !guardPolicy) {
+    warnings.push({
+      code: 'guard_policy_recommended_for_budgeted_deployment',
+      message: 'Budgeted Agent OS deployments should include guard_policy or wallet_action_policy before wallet-bearing operation.',
+    });
+  }
+
+  const spendCapableTools = findSpendCapableTools(policy.tool_policy?.allowed_tools || policy.tool_policy?.allowed || []);
+  if (spendCapableTools.length) {
+    const humanGated = new Set(policy.approval_policy?.human_gated || policy.approval_policy?.owner_approval_required_for || []);
+    const requiredGates = ['wallet_transfer', 'token_approval', 'swap', 'contract_call'];
+    const missingGates = requiredGates.filter((gate) => !humanGated.has(gate));
+    if (!guardPolicy) {
+      issues.push({
+        code: 'guard_policy_required_for_spend_capable_tools',
+        message: `Spend-capable tools require guard_policy or wallet_action_policy: ${spendCapableTools.join(', ')}`,
+      });
+    }
+    if (missingGates.length) {
+      issues.push({
+        code: 'wallet_action_human_gates_required',
+        message: `Spend-capable tools require approval_policy.human_gated entries: ${missingGates.join(', ')}`,
+      });
+    }
+  }
+
   return {
     ok: issues.length === 0,
     schema: 'agoragentic.harness.validation.v1',
@@ -123,6 +166,7 @@ export function runValidation(project) {
     },
     priority_order: ['owner_policy', 'approval_policy', 'budget_policy', 'tool_policy', 'model_preference'],
     issues,
+    warnings,
   };
 }
 
@@ -197,6 +241,9 @@ export function buildAgentOsExport(project, options = {}) {
   const generatedAt = options.generated_at || new Date().toISOString();
   const policy = project.policy;
   const agent = project.agent;
+  const guardPolicy = getGuardPolicy(policy);
+  const sourceBoundary = guardPolicy?.source_boundary || policy.source_boundary || null;
+  const preActionReview = guardPolicy?.approval_policy || policy.pre_action_review || null;
   const previewRequest = {
     name: agent.name,
     hosting_target: policy.deployment_policy.hosting_target || 'self_hosted_http',
@@ -219,6 +266,9 @@ export function buildAgentOsExport(project, options = {}) {
       approval_policy: policy.approval_policy,
       memory_policy: policy.memory_policy,
       swarm_policy: policy.swarm_policy,
+      ...(guardPolicy ? { guard_policy: guardPolicy } : {}),
+      ...(sourceBoundary ? { source_boundary: sourceBoundary } : {}),
+      ...(preActionReview ? { pre_action_review: preActionReview } : {}),
     },
     deployment_packet: {
       schema: 'agoragentic.micro-ecf.export.v1',
@@ -238,7 +288,7 @@ export function buildAgentOsExport(project, options = {}) {
     generated_at: generatedAt,
     generated_from: {
       source: 'agoragentic-harness-core',
-      package_version: '0.1.1',
+      package_version: '0.2.0',
       local_only: true,
     },
     schema_artifacts: {
@@ -255,6 +305,9 @@ export function buildAgentOsExport(project, options = {}) {
     tool_policy: policy.tool_policy,
     budget_policy: policy.budget_policy,
     approval_policy: policy.approval_policy,
+    ...(guardPolicy ? { guard_policy: guardPolicy, wallet_action_policy: guardPolicy } : {}),
+    ...(sourceBoundary ? { source_boundary: sourceBoundary } : {}),
+    ...(preActionReview ? { pre_action_review: preActionReview } : {}),
     memory_policy: policy.memory_policy,
     swarm_policy: policy.swarm_policy,
     deployment_policy: policy.deployment_policy,
@@ -273,6 +326,29 @@ export function buildAgentOsExport(project, options = {}) {
     agent_os_export: DEFAULT_AGENT_OS_EXPORT,
     agent_os_preview_request: previewRequest,
   };
+}
+
+function getGuardPolicy(policy = {}) {
+  return policy.guard_policy || policy.wallet_action_policy || null;
+}
+
+function findSpendCapableTools(tools = []) {
+  const spendCapable = new Set([
+    'wallet',
+    'wallet_transfer',
+    'transfer',
+    'token_approval',
+    'approve',
+    'swap',
+    'x402',
+    'contract_call',
+    'contract-call',
+    'marketplace_execute',
+    'execute',
+  ]);
+  return tools
+    .map((tool) => String(tool || '').trim())
+    .filter((tool) => spendCapable.has(tool.toLowerCase()));
 }
 
 export async function checkListingReadiness(project, dir = project.dir) {
@@ -399,51 +475,10 @@ function stableId(prefix, seed) {
   return `${prefix}_${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
+// Parses YAML policy/agent files with the spec-compliant `yaml` library.
+// A parse error throws a human-readable YAMLParseError (surfaced by the CLI),
+// rather than silently producing wrong data — important for a policy parser.
 export function parseSimpleYaml(source) {
-  const root = {};
-  const stack = [{ indent: -1, value: root }];
-  const lines = String(source).split(/\r?\n/);
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const raw = lines[index];
-    const withoutComment = raw.replace(/\s+#.*$/, '');
-    if (!withoutComment.trim()) continue;
-    const indent = withoutComment.match(/^ */)[0].length;
-    const trimmed = withoutComment.trim();
-
-    while (stack.length > 1 && indent <= stack[stack.length - 1].indent) stack.pop();
-    const parent = stack[stack.length - 1].value;
-
-    if (trimmed.startsWith('- ')) {
-      if (!Array.isArray(parent)) throw new Error(`Invalid YAML list item without array parent: ${trimmed}`);
-      parent.push(parseScalar(trimmed.slice(2)));
-      continue;
-    }
-
-    const splitIndex = trimmed.indexOf(':');
-    if (splitIndex === -1) throw new Error(`Invalid YAML line: ${trimmed}`);
-    const key = trimmed.slice(0, splitIndex).trim();
-    const valueText = trimmed.slice(splitIndex + 1).trim();
-    if (!valueText) {
-      const nextMeaningful = lines.slice(index + 1).find((line) => line.trim());
-      const value = nextMeaningful && nextMeaningful.trim().startsWith('- ') ? [] : {};
-      parent[key] = value;
-      stack.push({ indent, value });
-    } else {
-      parent[key] = parseScalar(valueText);
-    }
-  }
-
-  return root;
-}
-
-function parseScalar(value) {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  if (value === 'null') return null;
-  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    return value.slice(1, -1);
-  }
-  return value;
+  const parsed = parseYaml(String(source ?? ''));
+  return parsed && typeof parsed === 'object' ? parsed : {};
 }

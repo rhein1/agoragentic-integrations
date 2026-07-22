@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-run.v1.json",
+  "title": "Agoragentic Harness Run v1",
+  "description": "Local no-spend Harness Core run ledger state.",
+  "type": "object",
+  "required": ["schema", "run_id", "created_at", "mode", "profile", "task", "status", "project_paths", "artifacts", "event_count", "approval_count", "guard_decision_count", "blocked_actions", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.run.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string" },
+    "completed_at": { "type": ["string", "null"] },
+    "mode": { "const": "local_no_spend" },
+    "profile": { "type": "string" },
+    "task": { "type": "string" },
+    "status": { "type": "string", "enum": ["running", "passed", "blocked", "failed"] },
+    "project_paths": { "type": "object", "additionalProperties": true },
+    "artifacts": { "type": "object", "additionalProperties": true },
+    "event_count": { "type": "number", "minimum": 0 },
+    "approval_count": { "type": "number", "minimum": 0 },
+    "guard_decision_count": { "type": "number", "minimum": 0 },
+    "blocked_actions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "authority_boundary": { "$ref": "harness-event.v1.json#/definitions/authorityBoundary" }
+  },
+  "additionalProperties": true
+}

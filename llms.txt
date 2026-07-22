@@ -10,7 +10,7 @@
 - MCP: `npx agoragentic-mcp` (npm, Node ≥18)
 - ACP: `npx agoragentic-mcp --acp` (Agent Client Protocol adapter, Node ≥18)
 - Micro ECF: `npx agoragentic-micro-ecf@latest init` (package-ready local context CLI, Node ≥18)
-- Harness Core: `npx agoragentic-harness-core@latest init` (published local no-spend proof/export/listing-readiness CLI, Node ≥18)
+- Harness Core: `npx agoragentic-harness-core@latest init` (published local no-spend CLI; npm is v0.1.1 while this repo carries the review-gated v0.2.0 middleware-kernel candidate, Node ≥18)
 - Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
 
@@ -20,7 +20,7 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- Canonical inventory: `integrations.json` (93 indexed surfaces as of 2026-07-18).
+- Canonical inventory: `integrations.json` (93 indexed surfaces as of 2026-07-22).
 - Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, and AG-UI.
 - Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
@@ -30,7 +30,7 @@
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)
 - Agoragentic Rust Framework HTTP Runtime: rust-framework/README.md (self-hosted Rust runtime contract, TypeScript/Node client, Python client, and Agent OS Harness packet example)
 - Micro ECF: https://github.com/rhein1/agoragentic-micro-ecf (canonical local context/policy package); `micro-ecf/` here is a compatibility snapshot
-- Harness Core: harness-core/README.md (local no-spend proof, receipt, Agent OS export, and listing-readiness artifacts)
+- Harness Core: harness-core/README.md (local no-spend policy, event ledger, proof, receipt, review, runtime-metadata probe, Agent OS export, and listing-readiness artifacts)
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
 
 ## Machine Index
@@ -65,7 +65,7 @@
 - ECF.md — generated per-project Micro ECF contract with machine-readable front matter and human-readable policy rationale
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp
-- harness-core/bin/agoragentic-harness.mjs — package-ready no-spend CLI: init, validate, proof, export --to agent-os, listing check, adapters
+- harness-core/bin/agoragentic-harness.mjs — local no-spend CLI: init, validate, proof/run ledger, loop, review, approvals, profiles, runtime probe, context refs, status, events, export --to agent-os, listing check, and adapters
 - premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs — free local no-spend CLI: session, premortem, golden-loop, run, heal, HTML reports, transcripts, JSON/Markdown receipts, and additive self-heal plans
 - ag-ui/README.md — AG-UI Protocol Bridge (quote, match, approval, receipt mapping)
 - bedrock-agentcore/README.md — AWS Bedrock AgentCore adapter and policy mapping

@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-approval-request.v1.json",
+  "title": "Agoragentic Harness Approval Request v1",
+  "description": "Local approval request artifact. Decisions record owner intent only and never execute the requested action.",
+  "type": "object",
+  "required": ["schema", "approval_id", "run_id", "created_at", "status", "requested_action", "risk_class", "reason", "required_approvals", "default_decision", "decision_options", "authority_boundary", "source_event_id"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.approval-request.v1" },
+    "approval_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": ["string", "null"] },
+    "created_at": { "type": "string" },
+    "status": { "type": "string", "enum": ["pending", "approved", "rejected", "edited", "expired"] },
+    "requested_action": { "type": "object", "additionalProperties": true },
+    "risk_class": { "type": "string" },
+    "reason": { "type": "string" },
+    "required_approvals": { "type": "array", "items": { "type": "string" } },
+    "default_decision": { "const": "reject" },
+    "decision_options": { "type": "array", "items": { "type": "string", "enum": ["approve", "reject", "edit"] } },
+    "authority_boundary": { "$ref": "harness-event.v1.json#/definitions/authorityBoundary" },
+    "source_event_id": { "type": ["string", "null"] },
+    "guard_decision_id": { "type": "string" }
+  },
+  "additionalProperties": true
+}

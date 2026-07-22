@@ -30,7 +30,12 @@
     "next_actions": {
       "type": "array",
       "items": { "type": "string" }
-    }
+    },
+    "owner_approval_required": { "const": true },
+    "private_context_excluded": { "const": true },
+    "publication_triggered": { "const": false },
+    "x402_route_created": { "const": false },
+    "recommendation": { "type": "string" }
   },
   "additionalProperties": true
 }

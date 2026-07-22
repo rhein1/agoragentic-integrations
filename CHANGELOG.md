@@ -8,12 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added the Harness Core 0.2.0 public-source candidate: middleware lifecycle, append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, all public schemas, and framework-wrapping examples.
 - Added experimental documentation paths for Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. These entries do not claim tested package or runtime support.
 - Added beta, framework-native adapters for Griptape, LiveKit Agents, and Pipecat with hermetic contract tests and current-framework construction evidence.
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
 - Prepared the `n8n-nodes-agoragentic` 0.1.3 candidate on stable `@n8n/node-cli` 0.40.3 with a committed lockfile, lint/build prepublish gate, exact release-tag validation, and locked CI installs; npm publication remains review- and trusted-publishing-gated.
+- Bumped the canonical manifest to `2.28.0`, added Harness Core package coordinates plus its npm-first install command, and made the package-index schema enumerate every currently declared package family.
+- Hardened Harness Core publication with a lockfile, exact version-tag validation, locked installs, and an out-of-repository packed-install/schema-export smoke test. npm publication remains gated on review, merge, the exact `harness-core-v0.2.0` release, and trusted publishing.
 - Bumped the canonical manifest to `2.27.0` with 93 indexed integration surfaces.
 - Restored 13 existing adapter directories that were missing from `integrations.json`: Dfns, fast-agent, Goose, Haystack, Kibble, LI.FI, MPPScan, Olas, Reown, Safe, Superfluid, Tempo MPP, and u402.
 - Updated Agent OS CLI discovery from the stale `1.6.8` pin to `@latest` (currently published as `1.6.9`).

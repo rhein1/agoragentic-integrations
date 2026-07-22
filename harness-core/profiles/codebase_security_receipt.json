@@ -1,0 +1,31 @@
+{
+  "schema": "agoragentic.harness.profile.v1",
+  "id": "codebase_security_receipt",
+  "description": "Local security receipt profile for codebase-review evidence without shell/process-control authority.",
+  "middleware": ["policy-gate", "trap-shield", "guard-core", "receipt-writer", "observability"],
+  "authority_boundary": {
+    "mode": "local_no_spend",
+    "wallet_spend": false,
+    "wallet_mutation": false,
+    "deploy_runtime": false,
+    "hosted_runtime_provisioning": false,
+    "marketplace_publication": false,
+    "x402_settlement": false,
+    "x402_route_activation": false,
+    "trust_mutation": false,
+    "ranking_mutation": false,
+    "provider_dispatch": false,
+    "public_execute_mutation": false,
+    "public_invoke_mutation": false,
+    "private_ecf_export": false,
+    "owner_approval_bypass": false,
+    "process_control": false,
+    "arbitrary_shell": false
+  },
+  "default_artifacts": ["state.json", "events.jsonl", "local-proof.json", "local-receipt.json", "summary.md"],
+  "blocked_actions": ["arbitrary_shell", "process_control", "repo_mutation_without_review", "secret_exfiltration", "credential_mutation"],
+  "required_approval_classes": ["owner_code_change_review", "security_finding_review"],
+  "runtime_probe": {
+    "enabled_by_default": false
+  }
+}

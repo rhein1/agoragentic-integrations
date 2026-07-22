@@ -1,0 +1,201 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-owner-inbox.v1.json",
+  "title": "Agoragentic Harness Owner Inbox v1",
+  "description": "Local refs-only owner review inbox for a Harness Core loop. It grants no wallet, x402, marketplace, hosted runtime, provider, trust, private ECF, public execute/invoke, approval-bypass, process-control, shell, service-start, SSH, or tunnel authority.",
+  "type": "object",
+  "required": [
+    "schema",
+    "generated_at",
+    "mode",
+    "loop",
+    "latest_run",
+    "event_count",
+    "refs",
+    "proof_ref",
+    "receipt_ref",
+    "agent_os_export_ref",
+    "listing_readiness_status",
+    "review_gates",
+    "open_review_requests",
+    "required_checker_decisions",
+    "blocked_review_actions",
+    "latest_review_decision_refs",
+    "schedule",
+    "due_schedules",
+    "worktree_session",
+    "blockers",
+    "pending_approvals",
+    "next_owner_actions",
+    "artifact_policy",
+    "proposal_boundary",
+    "authority_boundary",
+    "no_authority_granted"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.owner-inbox.v1" },
+    "generated_at": { "type": "string" },
+    "mode": { "const": "local_no_spend" },
+    "loop": {
+      "type": "object",
+      "required": ["id", "profile", "once", "scheduling_enabled", "write_inbox"],
+      "properties": {
+        "id": { "const": "seller-listing-readiness" },
+        "profile": { "const": "seller_listing_readiness" },
+        "once": { "const": true },
+        "scheduling_enabled": { "const": false },
+        "write_inbox": { "const": true }
+      },
+      "additionalProperties": true
+    },
+    "latest_run": { "type": ["object", "null"], "additionalProperties": true },
+    "event_count": { "type": "number", "minimum": 0 },
+    "refs": {
+      "type": "object",
+      "required": ["run", "state", "events", "proof", "receipt", "agent_os_export", "listing_readiness", "review_gates", "schedule", "worktree_session", "status"],
+      "properties": {
+        "run": { "type": ["string", "null"] },
+        "state": { "type": ["string", "null"] },
+        "events": { "type": ["string", "null"] },
+        "proof": { "type": ["string", "null"] },
+        "receipt": { "type": ["string", "null"] },
+        "agent_os_export": { "type": ["string", "null"] },
+        "listing_readiness": { "type": ["string", "null"] },
+        "review_gates": { "type": ["string", "null"] },
+        "schedule": { "type": ["string", "null"] },
+        "worktree_session": { "type": ["string", "null"] },
+        "status": { "type": "string" },
+        "status_markdown": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "proof_ref": { "type": ["string", "null"] },
+    "receipt_ref": { "type": ["string", "null"] },
+    "agent_os_export_ref": { "type": ["string", "null"] },
+    "listing_readiness": { "type": ["object", "null"], "additionalProperties": true },
+    "listing_readiness_status": { "type": ["string", "null"] },
+    "review_gates": {
+      "type": "object",
+      "required": ["present", "path", "open_review_requests", "required_checker_decisions", "blocked_actions", "latest_decision_refs"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "path": { "type": ["string", "null"] },
+        "open_review_requests": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "required_checker_decisions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "blocked_actions": { "type": "array", "items": { "type": "string" } },
+        "latest_decision_refs": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": true
+    },
+    "open_review_requests": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "required_checker_decisions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "blocked_review_actions": { "type": "array", "items": { "type": "string" } },
+    "latest_review_decision_refs": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "schedule": {
+      "type": "object",
+      "required": ["intent_present", "schedules", "due"],
+      "properties": {
+        "intent_present": { "type": "boolean" },
+        "path": { "type": ["string", "null"] },
+        "schedules": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "execution_policy": { "type": ["object", "null"], "additionalProperties": true },
+        "due": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": true
+    },
+    "due_schedules": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "worktree_session": {
+      "type": "object",
+      "required": ["present", "active", "path", "session", "latest_harness_run_ref"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "path": { "type": ["string", "null"] },
+        "session": { "type": ["object", "null"], "additionalProperties": true },
+        "latest_harness_run_ref": { "type": ["object", "null"], "additionalProperties": true }
+      },
+      "additionalProperties": true
+    },
+    "blockers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "pending_approvals": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "next_owner_actions": { "type": "array", "items": { "type": "string" } },
+    "artifact_policy": {
+      "type": "object",
+      "required": ["refs_only", "raw_payloads_included", "raw_prompts_included", "raw_tool_outputs_included", "private_ecf_payloads_included", "secrets_included"],
+      "properties": {
+        "refs_only": { "const": true },
+        "raw_payloads_included": { "const": false },
+        "raw_prompts_included": { "const": false },
+        "raw_tool_outputs_included": { "const": false },
+        "private_ecf_payloads_included": { "const": false },
+        "secrets_included": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "proposal_boundary": {
+      "type": "object",
+      "required": ["listing_readiness_only", "marketplace_publication_triggered", "x402_route_created", "hosted_provisioning_triggered", "trust_or_ranking_mutated", "public_execute_or_invoke_changed"],
+      "properties": {
+        "listing_readiness_only": { "const": true },
+        "marketplace_publication_triggered": { "const": false },
+        "x402_route_created": { "const": false },
+        "hosted_provisioning_triggered": { "const": false },
+        "trust_or_ranking_mutated": { "const": false },
+        "public_execute_or_invoke_changed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["wallet_spend", "wallet_mutation", "deploy_runtime", "hosted_runtime_provisioning", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "ranking_mutation", "provider_dispatch", "public_execute_mutation", "public_invoke_mutation", "private_ecf_export", "owner_approval_bypass", "process_control", "arbitrary_shell", "service_start", "ssh", "tunnel"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "deploy_runtime": { "const": false },
+        "hosted_runtime_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "ranking_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "public_execute_mutation": { "const": false },
+        "public_invoke_mutation": { "const": false },
+        "private_ecf_export": { "const": false },
+        "owner_approval_bypass": { "const": false },
+        "process_control": { "const": false },
+        "arbitrary_shell": { "const": false },
+        "service_start": { "const": false },
+        "ssh": { "const": false },
+        "tunnel": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "no_authority_granted": {
+      "type": "object",
+      "required": ["statement", "wallet_spend", "wallet_mutation", "x402_settlement", "x402_route_activation", "marketplace_publication", "hosted_provisioning", "provider_dispatch", "trust_mutation", "ranking_mutation", "private_ecf_export", "public_execute_invoke_change", "owner_approval_bypass", "process_control", "shell", "service_start", "ssh", "tunnel"],
+      "properties": {
+        "statement": { "type": "string" },
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "marketplace_publication": { "const": false },
+        "hosted_provisioning": { "const": false },
+        "provider_dispatch": { "const": false },
+        "trust_mutation": { "const": false },
+        "ranking_mutation": { "const": false },
+        "private_ecf_export": { "const": false },
+        "public_execute_invoke_change": { "const": false },
+        "owner_approval_bypass": { "const": false },
+        "process_control": { "const": false },
+        "shell": { "const": false },
+        "service_start": { "const": false },
+        "ssh": { "const": false },
+        "tunnel": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

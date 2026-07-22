@@ -11,7 +11,7 @@ The published packages and repo-local CLIs are:
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
 - **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥18)
 - **Micro ECF**: `npx agoragentic-micro-ecf@latest init` (npm, Node ≥18)
-- **Harness Core**: `npx agoragentic-harness-core@latest init` (published npm package, Node ≥18)
+- **Harness Core**: `npx agoragentic-harness-core@latest init` (npm currently serves v0.1.1; this repo carries the review-gated v0.2.0 middleware-kernel candidate, Node ≥18)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 
@@ -58,7 +58,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 93 integration surfaces as of 2026-07-18. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 93 integration surfaces as of 2026-07-22. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -142,14 +142,14 @@ The canonical inventory is `integrations.json` and contains 93 integration surfa
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
 | Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | set AGORAGENTIC_RUST_AGENT_URL for self-hosted runtime calls |
 | Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
-| Harness Core No-Spend Scaffold | harness-core/bin/agoragentic-harness.mjs | node harness-core/bin/agoragentic-harness.mjs init |
+| Harness Core Middleware Kernel | harness-core/bin/agoragentic-harness.mjs | npx agoragentic-harness-core@latest init |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
 
 Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. Its canonical package and documentation live at `https://github.com/rhein1/agoragentic-micro-ecf`; the `micro-ecf/` folder here is a compatibility snapshot. Micro ECF generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
-Harness Core is the local no-spend package scaffold for builders who need proof, local receipt, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It does not deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private runtime internals.
+Harness Core is the local no-spend middleware kernel for builders who need policy gates, append-only event/run evidence, local approvals and review records, proof, receipts, loopback runtime metadata probes, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It records or blocks proposed actions; it does not execute frameworks or tools, deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private Full ECF internals.
 
 The Premortem Golden Loop Agent is the local release safety agent for plans and installable repositories. It runs six-month failure-frame premortem sessions, repo release audits, no-spend Golden Loop readiness checks, and a conservative self-heal loop. `heal --repo .` writes only a plan; `heal --repo . --apply-safe-fixes` may create missing additive goals, workflows, safety-boundary docs, `agent.json`, `.env.example`, or a no-spend GitHub Actions workflow. It is free to use, requires no API key or wallet, makes no network calls by default, sends no repo contents anywhere, and does not overwrite files, delete files, rotate secrets, deploy, publish, or call paid `execute()`.
 

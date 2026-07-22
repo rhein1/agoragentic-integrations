@@ -1,0 +1,135 @@
+{
+  "schema": "agoragentic.harness.framework-wrapping-examples.v1",
+  "issue": "#855",
+  "positioning": "A portable policy, evidence, receipt, and readiness layer for agents built with any framework.",
+  "not_framework_replacement": true,
+  "rust_runtime_role": "self_hosted_reference_runtime_only",
+  "authority_boundary": {
+    "hosted_provisioning": false,
+    "wallet_spend": false,
+    "x402_route_created": false,
+    "marketplace_publication": false,
+    "trust_or_ranking_mutation": false,
+    "provider_dispatch": false,
+    "private_ecf_export": false,
+    "owner_approval_bypass": false,
+    "public_execute_or_invoke_mutation": false
+  },
+  "examples": [
+    {
+      "id": "langgraph",
+      "framework": "LangGraph",
+      "wraps": ["graph_definition", "entrypoint", "tool_policy"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    },
+    {
+      "id": "crewai",
+      "framework": "CrewAI",
+      "wraps": ["crew_config", "task_list", "tool_policy"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    },
+    {
+      "id": "mcp",
+      "framework": "MCP",
+      "wraps": ["server_manifest", "resource_policy", "tool_policy"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    },
+    {
+      "id": "codex",
+      "framework": "Codex",
+      "wraps": ["repo_path", "test_command", "blocked_paths"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    },
+    {
+      "id": "hermes",
+      "framework": "Hermes",
+      "wraps": ["reflection_packet", "review_receipt", "memory_policy"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    },
+    {
+      "id": "rust_reference_runtime",
+      "framework": "Rust reference runtime",
+      "wraps": ["agent_card", "openapi_profile", "harness_export"],
+      "harness_outputs": ["policy.yaml", "local-proof.json", "local-receipt.json", "agent-os-harness.json", "listing-readiness.json"],
+      "runtime_role": "self_hosted_reference_runtime_only",
+      "framework_replacement": false,
+      "agent_os_preview_only": true,
+      "authority_boundary": {
+        "hosted_provisioning": false,
+        "wallet_spend": false,
+        "x402_route_created": false,
+        "marketplace_publication": false,
+        "trust_or_ranking_mutation": false,
+        "provider_dispatch": false,
+        "private_ecf_export": false,
+        "owner_approval_bypass": false,
+        "public_execute_or_invoke_mutation": false
+      }
+    }
+  ]
+}

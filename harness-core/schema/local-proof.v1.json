@@ -38,6 +38,16 @@
       "type": "object",
       "required": ["spend_usdc", "call_router_execute", "publish_marketplace_listing", "enable_x402", "provision_hosted_runtime", "mutate_trust", "write_memory"],
       "additionalProperties": true
+    },
+    "public_boundary": {
+      "type": "object",
+      "properties": {
+        "spend_triggered": { "const": false },
+        "hosted_provisioning_triggered": { "const": false },
+        "marketplace_publication_triggered": { "const": false },
+        "x402_route_created": { "const": false }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

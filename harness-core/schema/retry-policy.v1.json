@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-core/retry-policy.v1.json",
+  "title": "Agoragentic Harness Core Retry Policy v1",
+  "description": "Local Harness Core retry policy for safe read-only runtime probes. High-authority actions are blocked, not retried; the policy grants no paid call, wallet, x402, marketplace, trust, hosted memory, provider, framework, shell, Router execute, or global invoke authority.",
+  "type": "object",
+  "required": ["schema", "created_at", "updated_at", "mode", "applies_to", "safe_read_only_retry_only", "high_authority_actions_retried", "tools", "blocked_tool_ids", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.retry-policy.v1" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "mode": { "const": "local_no_spend_read_only_retries" },
+    "applies_to": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "safe_read_only_retry_only": { "const": true },
+    "high_authority_actions_retried": { "const": false },
+    "tools": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/definitions/tool_retry_policy" }
+    },
+    "blocked_tool_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "last_evaluation": {
+      "type": ["object", "null"],
+      "properties": {
+        "checked_at": { "type": "string" },
+        "reason": { "type": "string" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/violation" }
+        },
+        "status": { "enum": ["passed", "blocked"] }
+      },
+      "additionalProperties": true
+    },
+    "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "tool_retry_policy": {
+      "type": "object",
+      "required": ["safe_read_only", "max_retries", "retry_on"],
+      "properties": {
+        "safe_read_only": { "type": "boolean" },
+        "max_retries": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "initial_delay_ms": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "backoff_factor": { "type": "number", "minimum": 1, "maximum": 10 },
+        "max_delay_ms": { "type": "integer", "minimum": 0, "maximum": 5000 },
+        "retry_on": {
+          "type": "array",
+          "items": {
+            "enum": ["timeout", "connection_reset", "http_502", "http_503", "http_504"]
+          }
+        },
+        "blocked_in_local_no_spend": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "violation": {
+      "type": "object",
+      "required": ["code", "tool_id"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "tool_id": { "type": "string", "minLength": 1 },
+        "max_retries": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["wallet_spend", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "provider_dispatch", "hosted_memory_write", "high_authority_actions_retried", "paid_calls_retried", "provider_dispatch_retried"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "hosted_memory_write": { "const": false },
+        "high_authority_actions_retried": { "const": false },
+        "paid_calls_retried": { "const": false },
+        "provider_dispatch_retried": { "const": false }
+      },
+      "additionalProperties": true
+    }
+  }
+}

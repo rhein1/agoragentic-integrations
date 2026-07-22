@@ -1,14 +1,9 @@
 {
   "name": "agoragentic-harness-core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Local no-spend Agent OS Harness Core for Micro ECF policy, first proof, receipts, listing readiness, and Triptych OS preview export.",
   "type": "module",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
-    "directory": "harness-core"
-  },
+  "license": "Apache-2.0",
   "bin": {
     "agoragentic-harness": "./bin/agoragentic-harness.mjs",
     "agoragentic-harness-core": "./bin/agoragentic-harness.mjs",
@@ -16,20 +11,71 @@
   },
   "exports": {
     ".": "./src/index.mjs",
-    "./adapters": "./src/adapters/index.mjs"
+    "./adapters": "./src/adapters/index.mjs",
+    "./adapters/claude-code": "./src/adapters/claude-code.mjs",
+    "./kernel/events": "./src/kernel/events.mjs",
+    "./kernel/loop": "./src/kernel/loop.mjs",
+    "./kernel/middleware-registry": "./src/kernel/middleware-registry.mjs",
+    "./kernel/review-gates": "./src/kernel/review-gates.mjs",
+    "./kernel/run": "./src/kernel/run.mjs",
+    "./kernel/runtime-probe": "./src/kernel/runtime-probe.mjs",
+    "./kernel/schedule": "./src/kernel/schedule.mjs",
+    "./kernel/status": "./src/kernel/status.mjs",
+    "./kernel/worktree-session": "./src/kernel/worktree-session.mjs",
+    "./schema/agent-os-harness.v1.json": "./schema/agent-os-harness.v1.json",
+    "./schema/budget-policy.v1.json": "./schema/budget-policy.v1.json",
+    "./schema/harness-approval-request.v1.json": "./schema/harness-approval-request.v1.json",
+    "./schema/harness-context-import.v1.json": "./schema/harness-context-import.v1.json",
+    "./schema/harness-event.v1.json": "./schema/harness-event.v1.json",
+    "./schema/harness-profile.v1.json": "./schema/harness-profile.v1.json",
+    "./schema/harness-run.v1.json": "./schema/harness-run.v1.json",
+    "./schema/harness-runtime-probe.v1.json": "./schema/harness-runtime-probe.v1.json",
+    "./schema/harness-schedule.v1.json": "./schema/harness-schedule.v1.json",
+    "./schema/harness-status.v1.json": "./schema/harness-status.v1.json",
+    "./schema/improvement-candidates.v1.json": "./schema/improvement-candidates.v1.json",
+    "./schema/listing-readiness.v1.json": "./schema/listing-readiness.v1.json",
+    "./schema/local-proof.v1.json": "./schema/local-proof.v1.json",
+    "./schema/local-receipt.v1.json": "./schema/local-receipt.v1.json",
+    "./schema/owner-inbox.v1.json": "./schema/owner-inbox.v1.json",
+    "./schema/retry-policy.v1.json": "./schema/retry-policy.v1.json",
+    "./schema/review-gates.v1.json": "./schema/review-gates.v1.json",
+    "./schema/tool-manifest.v1.json": "./schema/tool-manifest.v1.json",
+    "./schema/worktree-session.v1.json": "./schema/worktree-session.v1.json"
   },
   "files": [
     "bin/",
     "src/",
+    "profiles/",
     "schema/",
     "templates/",
-    "test/",
-    "README.md",
+    "CHANGELOG.md",
     "LICENSE",
+    "README.md",
+    "RELEASE_SCOPE.md",
     "TRUSTED_PUBLISHING.md"
   ],
+  "dependencies": {
+    "yaml": "^2.5.0"
+  },
   "scripts": {
-    "test": "node test/cli.test.cjs"
+    "test": "node --test test/cli.test.cjs",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "prepublishOnly": "npm test && npm run pack:smoke"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "harness-core"
+  },
+  "homepage": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "agoragentic",

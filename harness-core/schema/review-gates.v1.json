@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-core/review-gates.v1.json",
+  "title": "Agoragentic Harness Core Review Gates v1",
+  "description": "Local maker-checker review gate artifact for Harness Core owner decisions. Records requests and decisions only; it grants no hosted approval, spend, publication, provisioning, x402, trust, memory, process-control, SSH, or tunnel authority.",
+  "type": "object",
+  "required": ["schema", "created_at", "updated_at", "mode", "gates", "requests", "decisions", "summary", "action_executed", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.review-gates.v1" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "mode": { "const": "local_maker_checker_no_spend" },
+    "gates": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["gate_id", "label", "maker_checker_required", "decision_options", "required_evidence_refs", "blocked_actions", "authority_boundary"],
+        "properties": {
+          "gate_id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "maker_checker_required": { "const": true },
+          "decision_options": {
+            "type": "array",
+            "items": { "enum": ["approve", "reject", "needs_changes"] },
+            "minItems": 3
+          },
+          "default_decision": { "enum": ["approve", "reject", "needs_changes"] },
+          "required_evidence_refs": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/evidence_ref_template" }
+          },
+          "blocked_actions": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "requests": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/review_request" }
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/review_decision" }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["request_count", "open_request_count", "decision_count", "action_executed"],
+      "properties": {
+        "request_count": { "type": "integer", "minimum": 0 },
+        "open_request_count": { "type": "integer", "minimum": 0 },
+        "decision_count": { "type": "integer", "minimum": 0 },
+        "latest_decision_ref": { "type": ["string", "null"] },
+        "action_executed": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "action_executed": { "const": false },
+    "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "identity": {
+      "type": "object",
+      "required": ["label", "role"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["maker", "checker"] }
+      },
+      "additionalProperties": true
+    },
+    "evidence_ref_template": {
+      "type": "object",
+      "required": ["id", "ref", "required"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["id", "ref", "required", "present", "raw_content_inlined"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "present": { "type": "boolean" },
+        "hash": { "type": ["string", "null"] },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "raw_content_inlined": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "review_request": {
+      "type": "object",
+      "required": ["schema", "review_id", "gate_id", "created_at", "status", "maker", "checker_required", "checker_must_differ_from_maker", "required_evidence_refs", "blocked_actions", "action_executed", "authority_boundary"],
+      "properties": {
+        "schema": { "const": "agoragentic.harness.review-request.v1" },
+        "review_id": { "type": "string", "minLength": 1 },
+        "gate_id": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pending", "approved", "rejected", "needs_changes"] },
+        "maker": { "$ref": "#/definitions/identity" },
+        "checker": { "$ref": "#/definitions/identity" },
+        "checker_required": { "const": true },
+        "checker_must_differ_from_maker": { "const": true },
+        "required_evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/evidence_ref" }
+        },
+        "missing_required_evidence_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "decision": { "type": ["string", "null"], "enum": ["approve", "reject", "needs_changes", null] },
+        "latest_decision_ref": { "type": ["string", "null"] },
+        "action_executed": { "const": false },
+        "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+      },
+      "additionalProperties": true
+    },
+    "review_decision": {
+      "type": "object",
+      "required": ["schema", "decision_id", "review_id", "gate_id", "decided_at", "decision", "status", "maker", "checker", "checker_different_from_maker", "blocked_actions", "action_executed", "decision_ref", "authority_boundary"],
+      "properties": {
+        "schema": { "const": "agoragentic.harness.review-decision.v1" },
+        "decision_id": { "type": "string", "minLength": 1 },
+        "review_id": { "type": "string", "minLength": 1 },
+        "gate_id": { "type": "string", "minLength": 1 },
+        "decided_at": { "type": "string", "minLength": 1 },
+        "decision": { "enum": ["approve", "reject", "needs_changes"] },
+        "status": { "enum": ["approved", "rejected", "needs_changes"] },
+        "maker": { "$ref": "#/definitions/identity" },
+        "checker": { "$ref": "#/definitions/identity" },
+        "checker_different_from_maker": { "const": true },
+        "required_evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/evidence_ref" }
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "action_executed": { "const": false },
+        "decision_ref": { "type": "string", "minLength": 1 },
+        "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+      },
+      "additionalProperties": true
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["wallet_spend", "wallet_mutation", "deploy_runtime", "hosted_runtime_provisioning", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "ranking_mutation", "provider_dispatch", "public_execute_mutation", "public_invoke_mutation", "private_ecf_export", "owner_approval_bypass", "process_control", "arbitrary_shell", "hosted_approval_flow", "hosted_memory_write", "hermes_service_start", "ssh", "tunnel"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "deploy_runtime": { "const": false },
+        "hosted_runtime_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "ranking_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "public_execute_mutation": { "const": false },
+        "public_invoke_mutation": { "const": false },
+        "private_ecf_export": { "const": false },
+        "owner_approval_bypass": { "const": false },
+        "process_control": { "const": false },
+        "arbitrary_shell": { "const": false },
+        "hosted_approval_flow": { "const": false },
+        "hosted_memory_write": { "const": false },
+        "hermes_service_start": { "const": false },
+        "ssh": { "const": false },
+        "tunnel": { "const": false }
+      },
+      "additionalProperties": true
+    }
+  }
+}

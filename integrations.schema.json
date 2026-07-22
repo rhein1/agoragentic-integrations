@@ -46,7 +46,22 @@
         "node_sdk": {
           "$ref": "#/$defs/package"
         },
+        "agent_os_cli": {
+          "$ref": "#/$defs/package"
+        },
         "mcp": {
+          "$ref": "#/$defs/package"
+        },
+        "agent_client_protocol": {
+          "$ref": "#/$defs/package"
+        },
+        "micro_ecf": {
+          "$ref": "#/$defs/package"
+        },
+        "harness_core": {
+          "$ref": "#/$defs/package"
+        },
+        "premortem_golden_loop": {
           "$ref": "#/$defs/package"
         }
       }

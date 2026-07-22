@@ -12,6 +12,7 @@
     "created_at": { "type": "string" },
     "mode": { "const": "local_no_spend_receipt" },
     "status": { "type": "string", "enum": ["recorded", "blocked"] },
+    "settlement_status": { "const": "not_settlement_receipt" },
     "spend": {
       "type": "object",
       "required": ["amount_usdc", "settlement_network", "settlement_status"],
@@ -30,6 +31,18 @@
     "receipt_boundary": {
       "type": "object",
       "required": ["router_invocation_created", "x402_payment_attempted", "marketplace_published", "hosted_runtime_provisioned", "memory_written"],
+      "additionalProperties": true
+    },
+    "public_boundary": {
+      "type": "object",
+      "properties": {
+        "spend_triggered": { "const": false },
+        "settlement_triggered": { "const": false },
+        "payout_triggered": { "const": false },
+        "publication_triggered": { "const": false },
+        "hosted_provisioning_triggered": { "const": false },
+        "x402_route_created": { "const": false }
+      },
       "additionalProperties": true
     }
   },

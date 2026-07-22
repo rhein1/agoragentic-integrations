@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://agoragentic.com/schema/agent-os-harness.v1.json",
   "title": "Agent OS Harness Packet v1",
-  "description": "Public packet format for moving a local Micro ECF policy bundle into Agent OS preview. Canonical hosted copy: https://agoragentic.com/schema/agent-os-harness.v1.json.",
+  "description": "Public packet format for moving a local Micro ECF policy bundle into Agent OS preview.",
   "type": "object",
   "required": [
     "schema",
@@ -14,6 +14,7 @@
     "memory_policy",
     "swarm_policy",
     "deployment_policy",
+    "public_boundary",
     "agent_os_export",
     "agent_os_preview_request"
   ],
@@ -21,9 +22,38 @@
     "schema": {
       "const": "agoragentic.agent-os.harness.v1"
     },
+    "generated_at": { "type": "string" },
+    "generated_from": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "schema_artifacts": {
+      "type": "object",
+      "properties": {
+        "agent_os_harness": {
+          "type": "string"
+        },
+        "micro_ecf_policy": {
+          "type": "string"
+        },
+        "local_inference_pack": {
+          "type": "string"
+        },
+        "local_inference_receipt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
     "agent_manifest": {
       "type": "object",
       "required": ["name", "primary_goal"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "framework": { "type": "string" },
+        "primary_goal": { "type": "string", "minLength": 1 },
+        "runtime_shape": { "type": "string" }
+      },
       "additionalProperties": true
     },
     "context_policy": {
@@ -39,6 +69,12 @@
     "budget_policy": {
       "type": "object",
       "required": ["treasury_required", "max_daily_spend_usdc", "approval_required_above_usdc"],
+      "properties": {
+        "treasury_required": { "type": "boolean" },
+        "max_daily_spend_usdc": { "type": "number", "minimum": 0 },
+        "approval_required_above_usdc": { "type": "number", "minimum": 0 },
+        "recommended_start_reserve_usdc": { "type": "number", "minimum": 0 }
+      },
       "additionalProperties": true
     },
     "approval_policy": {
@@ -59,10 +95,32 @@
     "deployment_policy": {
       "type": "object",
       "required": ["exposure_mode", "first_proof_required"],
+      "properties": {
+        "hosting_target": { "type": "string" },
+        "exposure_mode": {
+          "type": "string",
+          "enum": ["private_only", "public_api", "marketplace_seller", "x402_paid_edge"]
+        },
+        "first_proof_required": { "type": "boolean" }
+      },
       "additionalProperties": true
     },
     "public_boundary": {
       "type": "object",
+      "required": [
+        "no_spend_export",
+        "hosted_billing",
+        "cloud_provisioning",
+        "marketplace_publication",
+        "hosted_runtime_secrets"
+      ],
+      "properties": {
+        "no_spend_export": { "const": true },
+        "hosted_billing": { "const": false },
+        "cloud_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "hosted_runtime_secrets": { "const": false }
+      },
       "additionalProperties": true
     },
     "learning_memory_boundary": {
@@ -85,18 +143,132 @@
       },
       "additionalProperties": true
     },
+    "local_inference_pack": {
+      "type": "object",
+      "description": "Optional Local Inference Pack policy. It can route low-risk cognition to local providers, but does not grant tools, code execution, spend, publication, trust mutation, or hosted runtime authority.",
+      "required": ["schema", "pack_id", "mode", "provider", "limits", "receipt_policy", "decision_contract", "authority_boundary"],
+      "properties": {
+        "schema": { "const": "agoragentic.agent-os.local-inference-pack.v1" },
+        "pack_id": { "type": "string", "minLength": 1 },
+        "mode": {
+          "type": "string",
+          "enum": ["disabled", "mock", "ollama", "openai_compatible", "local_http"]
+        },
+        "provider": { "type": "object", "additionalProperties": true },
+        "limits": { "type": "object", "additionalProperties": true },
+        "receipt_policy": {
+          "type": "object",
+          "properties": {
+            "receipt_required": { "const": true },
+            "store_raw_prompt": { "const": false },
+            "store_raw_output": { "const": false }
+          },
+          "additionalProperties": true
+        },
+        "decision_contract": { "type": "object", "additionalProperties": true },
+        "authority_boundary": {
+          "type": "object",
+          "properties": {
+            "agent_os_remains_authority": { "const": true },
+            "local_tool_calls_allowed": { "const": false },
+            "local_code_execution_allowed": { "const": false },
+            "local_repo_mutation_allowed": { "const": false },
+            "local_spend_allowed": { "const": false },
+            "local_publication_allowed": { "const": false },
+            "raw_prompt_logging_allowed": { "const": false },
+            "privileged_credentials_allowed": { "const": false },
+            "full_ecf_private_internals_excluded": { "const": true }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "local_inference_receipts": {
+      "type": "array",
+      "description": "Optional redacted Local Inference Pack receipt references or inline receipts. Raw prompts and outputs are not stored.",
+      "items": {
+        "type": "object",
+        "required": ["schema", "receipt_id"],
+        "properties": {
+          "schema": { "const": "agoragentic.agent-os.local-inference-receipt.v1" },
+          "receipt_id": { "type": "string", "minLength": 1 },
+          "ref": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "guard_policy": {
+      "type": "object",
+      "description": "Optional Agoragentic Guard policy preview metadata. It is a no-spend preflight policy and does not grant wallet, settlement, execute, or custody authority.",
+      "properties": {
+        "schema": { "const": "agoragentic.guard.policy.v1" },
+        "mode": { "const": "local_preflight_no_spend" }
+      },
+      "additionalProperties": true
+    },
+    "wallet_action_policy": {
+      "type": "object",
+      "description": "Alias of guard_policy for wallet-action preflight metadata. Descriptive only; no wallet execution authority.",
+      "additionalProperties": true
+    },
+    "source_boundary": {
+      "type": "object",
+      "description": "Source boundary policy summary. External content remains data, not instructions.",
+      "additionalProperties": true
+    },
+    "pre_action_review": {
+      "type": "object",
+      "description": "Pre-action review policy summary for side-effect proposals.",
+      "additionalProperties": true
+    },
     "agent_os_export": {
       "type": "object",
       "required": ["catalog_endpoint", "preview_endpoint", "deployment_endpoint", "treasury_endpoint", "workspace_surface"],
       "properties": {
+        "catalog_endpoint": { "type": "string" },
         "preview_endpoint": { "const": "POST /api/hosting/agent-os/preview" },
-        "deployment_endpoint": { "const": "POST /api/hosting/agent-os/deployments" }
+        "deployment_endpoint": { "const": "POST /api/hosting/agent-os/deployments" },
+        "treasury_endpoint": { "type": "string" },
+        "workspace_surface": { "type": "string" },
+        "marketplace_router": { "type": "string" },
+        "x402_edge": { "type": "string" }
       },
       "additionalProperties": true
     },
     "agent_os_preview_request": {
       "type": "object",
       "required": ["name", "hosting_target", "template_id", "runtime_lane", "exposure_mode", "goals", "safety_policy", "deployment_packet"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "hosting_target": { "type": "string" },
+        "template_id": { "type": "string" },
+        "runtime_lane": { "type": "string" },
+        "exposure_mode": {
+          "type": "string",
+          "enum": ["private_only", "public_api", "marketplace_seller", "x402_paid_edge"]
+        },
+        "goals": {
+          "type": "object",
+          "required": ["primary_goal", "budget"],
+          "additionalProperties": true
+        },
+        "safety_policy": {
+          "type": "object",
+          "required": ["first_proof_required", "context_policy", "tool_policy", "approval_policy", "memory_policy", "swarm_policy"],
+          "additionalProperties": true
+        },
+        "deployment_packet": {
+          "type": "object",
+          "required": ["schema", "source", "harness_schema"],
+          "properties": {
+            "schema": { "const": "agoragentic.micro-ecf.export.v1" },
+            "source": { "type": "string", "enum": ["public_micro_ecf", "harness_core_local"] },
+            "harness_schema": { "const": "agoragentic.agent-os.harness.v1" }
+          },
+          "additionalProperties": true
+        }
+      },
       "additionalProperties": true
     }
   },
