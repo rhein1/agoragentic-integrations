@@ -746,8 +746,15 @@ async function runAcpAdapter() {
 
 const entrypoint = ACP_MODE ? runAcpAdapter : runMcpRelay;
 
-entrypoint().catch((error) => {
-    const message = error instanceof Error ? error.stack || error.message : String(error);
-    console.error(`[agoragentic-mcp] fatal: ${message}`);
-    process.exit(1);
-});
+if (require.main === module) {
+    entrypoint().catch((error) => {
+        const message = error instanceof Error ? error.stack || error.message : String(error);
+        console.error(`[agoragentic-mcp] fatal: ${message}`);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    buildFallbackToolList,
+    executeFallbackTool,
+};

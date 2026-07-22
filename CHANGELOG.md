@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated Glama discovery to the published `agoragentic-mcp@1.3.3`; the `1.3.4` source package remains an unreleased candidate.
 - Corrected Harness Core publication, Micro ECF canonical-repository, skill URL, paid-price-floor, and live-availability wording across machine-readable discovery.
 - Renamed the README table to `Featured Integration Paths`; `integrations.json` is the complete inventory.
+- Hardened the unreleased `agoragentic-mcp@1.3.4` candidate with a lockfile-only install, exact release-tag gate, hermetic keyless-preview tests, package-source metadata, and a high/critical npm audit gate. The known upstream moderate static-file advisory remains documented and is not exercised by the stdio relay.
 
 ## [manifest 2.16.0–2.24.2] - 2026-07-03
 

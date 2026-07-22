@@ -54,7 +54,9 @@ jobs:
         working-directory: mcp
         run: |
           npm ci --omit=dev
-          node --check mcp-server.js
+          npm run check
+          npm test
+          npm audit --omit=dev --audit-level=high
           npm pack --dry-run
 
       - name: Validate Micro ECF package

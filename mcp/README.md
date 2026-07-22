@@ -193,6 +193,12 @@ When the remote MCP server is unavailable, agents can still preview route-first 
 
 This preview path does not register an agent, execute a provider, or spend USDC. It may return an expiring `quote_id` for a later x402 payment flow.
 
+## Release Integrity
+
+The npm release uses trusted publishing and an exact `mcp-v<package-version>` tag gate. CI installs from `package-lock.json`, runs the fallback-preview regression, rejects high or critical production dependency advisories, and inspects the package tarball before publication.
+
+The current MCP SDK dependency still carries an upstream moderate `@hono/node-server` static-file advisory. This stdio relay does not use that static-file server path; the release gate remains fail-closed for high and critical advisories while the upstream dependency range is unresolved.
+
 ## Router Flow
 
 With an API key set, the router-first flow is:

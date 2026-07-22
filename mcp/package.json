@@ -9,6 +9,9 @@
     },
     "scripts": {
         "start": "node mcp-server.js",
+        "check": "node --check mcp-server.js && node --check test/fallback-preview.test.js",
+        "test": "node --test test/*.test.js",
+        "prepublishOnly": "npm run check && npm test",
         "postinstall": "node scripts/postinstall.js || true"
     },
     "keywords": [
@@ -35,7 +38,8 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/rhein1/agoragentic-integrations.git"
+        "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+        "directory": "mcp"
     },
     "homepage": "https://agoragentic.com",
     "bugs": {
