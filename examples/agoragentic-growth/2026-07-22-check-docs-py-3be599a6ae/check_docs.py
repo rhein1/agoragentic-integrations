@@ -10,7 +10,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 _LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
-_REF_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+_REF_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(\S+)", re.MULTILINE)
+_REF_USE_RE = re.compile(r"!?\[([^\]]+)\]\[([^\]]*)\]")
 _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
 _HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 
@@ -33,6 +34,25 @@ def _target_path(source: Path, target: str) -> Path | None:
 
 def _line_number(text: str, position: int) -> int:
     return text.count("\n", 0, position) + 1
+
+
+def _reference_label(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _destination_error(
+    source: Path, root: Path, target: str, line: int, kind: str
+) -> str | None:
+    destination = _target_path(source, target)
+    if destination is None:
+        return None
+    try:
+        destination.relative_to(root)
+    except ValueError:
+        return f"{source}:{line}: {kind} escapes root: {target}"
+    if not destination.exists():
+        return f"{source}:{line}: broken local {kind}: {target}"
+    return None
 
 
 def check_file(path: Path, root: Path | None = None) -> list[str]:
@@ -61,24 +81,26 @@ def check_file(path: Path, root: Path | None = None) -> list[str]:
         errors.append(f"{path}:{number}: unclosed fenced code block ({marker})")
     for match in _LINK_RE.finditer(text):
         target = match.group(1)
-        destination = _target_path(path, target)
-        if destination is None:
-            continue
-        try:
-            destination.relative_to(root)
-        except ValueError:
-            errors.append(f"{path}:{_line_number(text, match.start())}: link escapes root: {target}")
-            continue
-        if not destination.exists():
-            errors.append(
-                f"{path}:{_line_number(text, match.start())}: broken local link: {target}"
-            )
+        error = _destination_error(
+            path, root, target, _line_number(text, match.start()), "link"
+        )
+        if error:
+            errors.append(error)
+    definitions: dict[str, tuple[str, int]] = {}
     for match in _REF_RE.finditer(text):
-        target = match.group(1)
-        destination = _target_path(path, target)
-        if destination is not None and not destination.exists():
+        label = _reference_label(match.group(1))
+        target = match.group(2)
+        line = _line_number(text, match.start())
+        definitions[label] = (target, line)
+        error = _destination_error(path, root, target, line, "reference")
+        if error:
+            errors.append(error)
+    for match in _REF_USE_RE.finditer(text):
+        label = match.group(2) or match.group(1)
+        if _reference_label(label) not in definitions:
             errors.append(
-                f"{path}:{_line_number(text, match.start())}: broken local reference: {target}"
+                f"{path}:{_line_number(text, match.start())}: "
+                f"undefined reference: {label}"
             )
     return errors
 
@@ -130,6 +152,25 @@ class DocumentationCheckerTests(unittest.TestCase):
             errors = check_tree(root)
             self.assertEqual(len(errors), 1)
             self.assertIn("broken local reference", errors[0])
+
+    def test_undefined_full_and_collapsed_references(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            _write(root, "guide.md", "See [target][missing] and [collapsed][].\n")
+            errors = check_tree(root)
+            self.assertEqual(len(errors), 2)
+            self.assertTrue(all("undefined reference" in error for error in errors))
+
+    def test_reference_target_cannot_escape_root(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            container = Path(raw)
+            root = container / "docs"
+            root.mkdir()
+            _write(container, "outside.md", "# Outside\n")
+            _write(root, "guide.md", "See [outside][out].\n\n[out]: ../outside.md\n")
+            errors = check_tree(root)
+            self.assertEqual(len(errors), 1)
+            self.assertIn("reference escapes root", errors[0])
 
     def test_malformed_fence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
