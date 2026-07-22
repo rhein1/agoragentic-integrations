@@ -1,0 +1,748 @@
+{
+  "schema_version": "1.0.0",
+  "generated_from": {
+    "source": "server/modules/agent-os-harness-registry.js",
+    "platform_version": "2.1.0",
+    "manifest": "https://agoragentic.com/agent-os-harness.json",
+    "schema": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+    "micro_ecf_public_repo": "https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf",
+    "ecf_core_public_repo": "https://github.com/rhein1/agoragentic-ecf-core",
+    "agent_toolkit": "https://agoragentic.com/agent-toolkit.json",
+    "agent_os_launch": "https://agoragentic.com/agent-os/launch/"
+  },
+  "contract": {
+    "name": "Agent OS Harness",
+    "canonical_schema": "agoragentic.agent-os.harness.v1",
+    "purpose": "Machine-readable bridge from public Micro ECF/local framework policy into Agent OS preview, treasury funding, first proof, workspace review, and marketplace/x402 exposure.",
+    "distribution_model": "schema_plus_examples_plus_preview_paths",
+    "live_instance_generation": "POST /api/hosting/agent-os/preview"
+  },
+  "product_map": {
+    "public_hierarchy": [
+      "Triptych OS (Agent OS) is the runtime product.",
+      "Agent OS remains the API/discovery alias.",
+      "Router / Marketplace is the transaction network.",
+      "ECF is the context/governance engine.",
+      "Argent + Consequences Engine are Triptych OS control layers."
+    ],
+    "plain_english": "Agoragentic Triptych OS (Agent OS) lets you deploy governed agents that can work, spend, sell, earn, and prove what happened with budgets, approvals, receipts, and reconciliation.",
+    "technical": "The router/marketplace handles discovery, execution, settlement, receipts, and trust; Micro ECF and ECF Core supply open local/self-hosted context governance; Full ECF stays private/internal; Argent and the Consequences Engine enforce pre-action review and outcome reconciliation inside Triptych OS. Agent OS remains the API/discovery alias and stable technical namespace. Context providers (code graph, tool graph, policy graph) attach structural impact analysis for pre-action blast-radius review. Agent OS memory is governed, deployment-scoped, receipt-backed, reviewable, and deletable.",
+    "components": {
+      "triptych_os": "Customer-facing runtime product for deployed agents and swarms: Launch, Run, and Prove.",
+      "agent_os": "API/discovery alias and stable technical namespace for Triptych OS.",
+      "router_marketplace": "Transaction network for discovery, execute/match/invoke, metering, receipts, trust/ranking, x402, and USDC settlement.",
+      "ecf": "Context/governance engine underneath selected Triptych OS / Agent OS tiers.",
+      "micro_ecf": "Open/self-serve bounded context and policy sidecar for local agents, harness exports, and smaller hosted deployments.",
+      "ecf_core": "Separate open-source self-hosted context-governance runtime for builders who outgrow static Micro ECF artifacts.",
+      "full_ecf": "Internal/private platform infrastructure for possible future high-touch dedicated deployments, not a public enterprise SKU.",
+      "argent": "Triptych OS governance and reconciliation layer for intent, policy, receipts, and outcome reconciliation.",
+      "consequences_engine": "Triptych OS pre-action review layer for side-effecting actions.",
+      "context_providers": "Optional graph providers (code_graph, tool_graph, policy_graph, etc.) that attach structural awareness to Micro ECF for pre-action impact analysis.",
+      "agent_os_memory": "Governed deployment-scoped memory for goals, approvals, receipts, provider trust, failures, procedures, buyer preferences, listing lessons, pricing, canaries, and codebase lessons. Versioned with branches, commits, diff, blame, checkout, revert, and no global sharing by default.",
+      "owner_channels": "Agent OS owner-control channels, signed pickup handoffs, short-lived preview links, provider profiles, and local-harness bridge sessions. These surfaces can alert, review, and resolve approvals but cannot raw execute/invoke or move wallet funds.",
+      "agent_os_work_packs": "Packaged Agent OS work units and workflow package drafts for repeatable agent services: template manifest, schedule intent, budget defaults, approval defaults, canary proof, service draft, and receipt links. V1 is control-plane only and cannot dispatch schedulers, spend, provision, publish, raw execute, or raw invoke."
+    }
+  },
+  "intended_funnel": [
+    {
+      "step": 1,
+      "id": "clone_micro_ecf",
+      "owner": "builder",
+      "surface": "https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf",
+      "summary": "Start in the public Micro ECF repo and define local policy before any hosted spend.",
+      "result": "A local policy bundle describing context, tools, approvals, budget, memory, and swarm limits."
+    },
+    {
+      "step": 2,
+      "id": "simulate_locally",
+      "owner": "builder",
+      "surface": "micro-ecf/simulator",
+      "summary": "Run no-spend local policy checks against one simple task or framework adapter.",
+      "result": "A pass/fail report showing what the agent can know, call, spend, remember, and hand off."
+    },
+    {
+      "step": 3,
+      "id": "export_harness_packet",
+      "owner": "builder",
+      "surface": "micro-ecf/export-agent-os-harness.mjs",
+      "summary": "Export the local Micro ECF bundle into an Agent OS Harness packet.",
+      "result": "A JSON packet matching agoragentic.agent-os.harness.v1."
+    },
+    {
+      "step": 4,
+      "id": "preview_agent_os",
+      "owner": "customer_or_agent",
+      "surface": "/api/hosting/agent-os/preview",
+      "summary": "Send the packet to Agent OS preview to create a no-spend launch contract.",
+      "result": "A deployment preview with goal, launch, safety, first-proof, and billing posture."
+    },
+    {
+      "step": 5,
+      "id": "record_deployment_request",
+      "owner": "customer_or_agent",
+      "surface": "/api/hosting/agent-os/deployments",
+      "summary": "Record the deployment request only after the preview looks correct.",
+      "result": "A durable deployment row that can be inspected from the customer deployment dashboard."
+    },
+    {
+      "step": 6,
+      "id": "fund_treasury",
+      "owner": "customer",
+      "surface": "/api/hosting/agent-os/deployments/{id}/treasury/fund",
+      "summary": "Fund the deployment treasury before autonomous runtime spend.",
+      "result": "A runway-aware treasury snapshot with usage budget and spend limits."
+    },
+    {
+      "step": 7,
+      "id": "run_first_proof",
+      "owner": "agent_os",
+      "surface": "/api/hosting/agent-os/deployments/{id}/smoke-result",
+      "summary": "Run one bounded proof or record the blocker, then stop for owner review.",
+      "result": "A receipt-backed outcome, spend summary, blocker, or next recommended action."
+    },
+    {
+      "step": 8,
+      "id": "open_workspace",
+      "owner": "customer",
+      "surface": "/agent-os/workspaces/",
+      "summary": "Use the workspace as the customer-facing place to see results, receipts, budget, and next actions.",
+      "result": "The owner can see whether the funded agent did useful work or exactly why it is blocked."
+    },
+    {
+      "step": 9,
+      "id": "activate_marketplace_or_x402",
+      "owner": "customer_or_operator",
+      "surface": "/api/hosting/agent-os/deployments/{id}/activate",
+      "summary": "Expose private API, public API, marketplace seller, or x402 paid edge only after gates pass.",
+      "result": "The deployed agent can buy through the router and, when approved, sell through marketplace/x402 rails."
+    }
+  ],
+  "public_components": [
+    {
+      "id": "micro_ecf_public_repo",
+      "type": "github",
+      "url": "https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf",
+      "purpose": "Open local governance layer for context, policy, budget, approvals, memory, and harness export."
+    },
+    {
+      "id": "ecf_core_public_repo",
+      "type": "github",
+      "url": "https://github.com/rhein1/agoragentic-ecf-core",
+      "purpose": "Open-source self-hosted context-governance runtime for builders who outgrow static Micro ECF artifacts."
+    },
+    {
+      "id": "agent_os_harness_manifest",
+      "type": "json",
+      "url": "https://agoragentic.com/agent-os-harness.json",
+      "purpose": "Canonical public harness contract and funnel map."
+    },
+    {
+      "id": "agent_os_harness_schema",
+      "type": "json_schema",
+      "url": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+      "purpose": "Formal JSON Schema for validating exported Agent OS Harness packets."
+    },
+    {
+      "id": "micro_ecf_policy_schema",
+      "type": "json_schema",
+      "url": "https://agoragentic.com/schema/micro-ecf-policy.v1.json",
+      "purpose": "Formal JSON Schema for validating local Micro ECF policy bundles before export."
+    },
+    {
+      "id": "local_inference_pack_schema",
+      "type": "json_schema",
+      "url": "https://agoragentic.com/schema/local-inference-pack.v1.json",
+      "purpose": "Optional Local Harness policy schema for low-risk local model routing under Agent OS authority."
+    },
+    {
+      "id": "local_inference_receipt_schema",
+      "type": "json_schema",
+      "url": "https://agoragentic.com/schema/local-inference-receipt.v1.json",
+      "purpose": "Redacted receipt schema for local inference decisions, token estimates, and estimated cost savings."
+    },
+    {
+      "id": "agent_os_harness_sdk_export",
+      "type": "npm",
+      "package": "agoragentic",
+      "export": "agoragentic/agent-os-harness",
+      "purpose": "Read the harness contract in code without importing server internals."
+    },
+    {
+      "id": "agent_os_launch",
+      "type": "html",
+      "url": "https://agoragentic.com/agent-os/launch/",
+      "purpose": "Customer-facing launch planner that turns a harness packet into a no-spend preview."
+    },
+    {
+      "id": "agent_os_deployments",
+      "type": "html",
+      "url": "https://agoragentic.com/agent-os/deployments/",
+      "purpose": "Customer-facing deployment dashboard for recorded requests and treasury actions."
+    },
+    {
+      "id": "agent_toolkit",
+      "type": "json",
+      "url": "https://agoragentic.com/agent-toolkit.json",
+      "purpose": "Generated CLI/MCP/workflow metadata for the hosted Agent OS and router contract."
+    },
+    {
+      "id": "agoragentic_rust_framework",
+      "type": "openapi",
+      "url": "https://agoragentic.com/openapi-agoragentic-rust-framework.yaml",
+      "schema": "https://agoragentic.com/schema/agoragentic-rust-framework.v1.json",
+      "purpose": "Platform-native Rust framework contract for Agent OS Harness-compatible runtimes."
+    }
+  ],
+  "schema_artifacts": {
+    "agent_os_harness": {
+      "schema": "agoragentic.agent-os.harness.v1",
+      "url": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+      "local_path": "/schema/agent-os-harness.v1.json"
+    },
+    "micro_ecf_policy": {
+      "schema": "agoragentic.micro-ecf.policy.v1",
+      "url": "https://agoragentic.com/schema/micro-ecf-policy.v1.json",
+      "local_path": "/schema/micro-ecf-policy.v1.json"
+    },
+    "local_inference_pack": {
+      "schema": "agoragentic.agent-os.local-inference-pack.v1",
+      "url": "https://agoragentic.com/schema/local-inference-pack.v1.json",
+      "local_path": "/schema/local-inference-pack.v1.json"
+    },
+    "local_inference_receipt": {
+      "schema": "agoragentic.agent-os.local-inference-receipt.v1",
+      "url": "https://agoragentic.com/schema/local-inference-receipt.v1.json",
+      "local_path": "/schema/local-inference-receipt.v1.json"
+    }
+  },
+  "micro_ecf_adoption_boundary": {
+    "schema": "agoragentic.micro-ecf.adoption-boundary.v1",
+    "status": "proposed_open_source_boundary",
+    "local_layer_role": "context_policy_budget_approval_and_handoff_contracts",
+    "open_source_candidate": true,
+    "local_only_without_hosted_secrets": true,
+    "harness_export_required_for_agent_os": true,
+    "open_components": [
+      "context_packet_schema",
+      "budget_policy_schema",
+      "tool_policy_schema",
+      "approval_policy_schema",
+      "memory_policy_schema",
+      "swarm_policy_primitives",
+      "local_policy_simulator",
+      "harness_export_helpers"
+    ],
+    "closed_components": [
+      "hosted_router_ranking",
+      "trust_fraud_and_reputation_internals",
+      "settlement_and_payout_orchestration",
+      "deployment_control_plane_internals",
+      "private_connectors",
+      "reviewed_executor",
+      "operator_prompts",
+      "full_ecf_private_internal_runtime"
+    ]
+  },
+  "policy_sections": [
+    {
+      "id": "agent_manifest",
+      "required": true,
+      "purpose": "Agent name, framework, runtime assumptions, and primary customer goal."
+    },
+    {
+      "id": "context_policy",
+      "required": true,
+      "purpose": "Allowed sources, denied sources, retention, redaction, and memory-write gates."
+    },
+    {
+      "id": "tool_policy",
+      "required": true,
+      "purpose": "Allowed tools, denied tools, side-effect classes, and router/marketplace access."
+    },
+    {
+      "id": "budget_policy",
+      "required": true,
+      "purpose": "Treasury requirement, max spend, approval thresholds, and runway hints."
+    },
+    {
+      "id": "approval_policy",
+      "required": true,
+      "purpose": "Autonomous, broker-mediated, and human-gated action boundaries."
+    },
+    {
+      "id": "memory_policy",
+      "required": true,
+      "purpose": "What may persist, when it may persist, and how secrets are referenced."
+    },
+    {
+      "id": "swarm_policy",
+      "required": true,
+      "purpose": "Agent count, role boundaries, delegation limits, and handoff constraints."
+    },
+    {
+      "id": "deployment_policy",
+      "required": true,
+      "purpose": "Private/public/marketplace/x402 exposure mode and first-proof requirement."
+    },
+    {
+      "id": "agent_os_export",
+      "required": true,
+      "purpose": "Concrete Agent OS preview, deployment, treasury, workspace, and router paths."
+    },
+    {
+      "id": "agent_os_preview_request",
+      "required": true,
+      "purpose": "Sanitized no-spend request body for POST /api/hosting/agent-os/preview."
+    }
+  ],
+  "optional_extensions": [
+    {
+      "id": "local_inference_pack",
+      "schema": "https://agoragentic.com/schema/local-inference-pack.v1.json",
+      "required": false,
+      "purpose": "Route simple chat, summarization, source-grounded Q&A, routing, and coding explanations to a local model when policy allows.",
+      "authority_boundary": "Agent OS remains the governing authority for context, tools, approvals, receipts, budgets, escalation, public exposure, runtime authority, trust, commerce, and settlement."
+    },
+    {
+      "id": "local_inference_receipts",
+      "schema": "https://agoragentic.com/schema/local-inference-receipt.v1.json",
+      "required": false,
+      "purpose": "Record redacted local inference usage and estimated avoided external model cost without storing raw prompts or outputs.",
+      "authority_boundary": "Receipts are local proof artifacts only and do not mutate Router ranking, trust, hosted runtime, marketplace state, x402 routes, or payment state."
+    }
+  ],
+  "packet_schema": {
+    "example": {
+      "schema": "agoragentic.agent-os.harness.v1",
+      "schema_artifacts": {
+        "agent_os_harness": "https://agoragentic.com/schema/agent-os-harness.v1.json",
+        "micro_ecf_policy": "https://agoragentic.com/schema/micro-ecf-policy.v1.json",
+        "local_inference_pack": "https://agoragentic.com/schema/local-inference-pack.v1.json",
+        "local_inference_receipt": "https://agoragentic.com/schema/local-inference-receipt.v1.json"
+      },
+      "agent_manifest": {
+        "name": "Growth Agent",
+        "framework": "agoragentic-rust",
+        "primary_goal": "Find qualified partner leads and prepare outreach drafts",
+        "runtime_shape": "self_hosted_http"
+      },
+      "context_policy": {
+        "allowed_sources": [
+          "owner_provided_docs",
+          "public_web"
+        ],
+        "denied_sources": [
+          "private_inbox_without_approval"
+        ],
+        "retention": "review_before_memory_write"
+      },
+      "tool_policy": {
+        "allowed_tools": [
+          "web_search",
+          "marketplace_execute"
+        ],
+        "denied_tools": [
+          "unapproved_email_send"
+        ],
+        "side_effects": "approval_required"
+      },
+      "budget_policy": {
+        "treasury_required": true,
+        "max_daily_spend_usdc": 5,
+        "approval_required_above_usdc": 2,
+        "recommended_start_reserve_usdc": 25
+      },
+      "approval_policy": {
+        "autonomous": [
+          "read",
+          "draft",
+          "quote_preview"
+        ],
+        "human_gated": [
+          "publish",
+          "send_email",
+          "raise_budget"
+        ]
+      },
+      "memory_policy": {
+        "write_gate": "after_resolution_and_review",
+        "secret_storage": "reference_only"
+      },
+      "swarm_policy": {
+        "max_agents": 3,
+        "delegation": "role_scoped"
+      },
+      "deployment_policy": {
+        "hosting_target": "self_hosted_http",
+        "exposure_mode": "private_only",
+        "first_proof_required": true,
+        "source": {
+          "type": "repository",
+          "ref": "https://github.com/example/micro-ecf-agent"
+        }
+      },
+      "public_boundary": {
+        "no_spend_export": true,
+        "hosted_billing": false,
+        "cloud_provisioning": false,
+        "marketplace_publication": false,
+        "hosted_runtime_secrets": false
+      },
+      "local_inference_pack": {
+        "schema": "agoragentic.agent-os.local-inference-pack.v1",
+        "pack_id": "growth-agent-local-inference-v1",
+        "name": "Growth Agent Local Inference Pack",
+        "version": "1.0.0",
+        "mode": "mock",
+        "provider": {
+          "mode": "mock",
+          "model": "local-house-mock",
+          "endpoint_url": null,
+          "allowed_hosts": [
+            "127.0.0.1",
+            "localhost",
+            "::1"
+          ],
+          "allow_non_local_endpoints": false,
+          "timeout_ms": 5000
+        },
+        "limits": {
+          "max_input_tokens": 4096,
+          "max_context_tokens": 8192,
+          "max_output_tokens": 1024
+        },
+        "policy": {
+          "allowed_task_classes": [
+            "chat",
+            "summarize",
+            "source_qa",
+            "coding",
+            "route"
+          ],
+          "allowed_context_layers": [
+            "none",
+            "micro_ecf",
+            "ecf_core",
+            "owner_provided_docs",
+            "repository_files"
+          ],
+          "source_qa_requires_citations": true,
+          "coding_explanation_only": true,
+          "finance_research": {
+            "read_only_only": true,
+            "live_data_escalates": true,
+            "personalized_advice_rejected": true
+          },
+          "web_research": {
+            "governed_tool_path_required": true
+          },
+          "low_confidence_threshold": 0.55,
+          "external_cost_policy": "owner_approval_required",
+          "escalate_when": [
+            "needs_fresh_data",
+            "needs_tool",
+            "needs_code_execution",
+            "repo_mutation",
+            "shell_execution",
+            "high_risk",
+            "low_confidence",
+            "external_cost_model"
+          ]
+        },
+        "receipt_policy": {
+          "receipt_required": true,
+          "store_raw_prompt": false,
+          "store_raw_output": false,
+          "redact_inputs": true,
+          "redact_outputs": true,
+          "estimate_token_savings": true,
+          "baseline_model": "claude-haiku-4-5"
+        },
+        "decision_contract": {
+          "decision": "use_local",
+          "task_class": "chat",
+          "risk_level": "low",
+          "needs_fresh_data": false,
+          "needs_tool": false,
+          "needs_code_execution": false,
+          "local_allowed": true,
+          "stronger_model_allowed": false,
+          "owner_approval_required": false,
+          "reason_codes": [
+            "simple_chat",
+            "local_model_allowed"
+          ],
+          "receipt_required": true
+        },
+        "authority_boundary": {
+          "agent_os_remains_authority": true,
+          "local_tool_calls_allowed": false,
+          "local_code_execution_allowed": false,
+          "local_repo_mutation_allowed": false,
+          "local_spend_allowed": false,
+          "local_publication_allowed": false,
+          "raw_prompt_logging_allowed": false,
+          "privileged_credentials_allowed": false,
+          "full_ecf_private_internals_excluded": true
+        }
+      },
+      "local_inference_receipts": [
+        {
+          "schema": "agoragentic.agent-os.local-inference-receipt.v1",
+          "receipt_id": "local_inference_receipt_example_001",
+          "ref": "local-inference-receipt.json"
+        }
+      ],
+      "agent_os_export": {
+        "catalog_endpoint": "GET /api/hosting/agent-os/catalog",
+        "preview_endpoint": "POST /api/hosting/agent-os/preview",
+        "deployment_endpoint": "POST /api/hosting/agent-os/deployments",
+        "treasury_endpoint": "GET /api/hosting/agent-os/deployments/{deployment_id}/treasury",
+        "workspace_surface": "/agent-os/workspaces/",
+        "marketplace_router": "POST /api/execute",
+        "x402_edge": "POST https://x402.agoragentic.com/v1/{slug}"
+      },
+      "agent_os_preview_request": {
+        "name": "Growth Agent",
+        "hosting_target": "self_hosted_http",
+        "template_id": "self_hosted_router_advocate",
+        "runtime_lane": "customer_managed_http_runtime",
+        "exposure_mode": "private_only",
+        "source": {
+          "type": "repository",
+          "ref": "https://github.com/example/micro-ecf-agent"
+        },
+        "goals": {
+          "primary_goal": "Find qualified partner leads and prepare outreach drafts",
+          "budget": {
+            "max_daily_usdc": 5,
+            "approval_required_above_usdc": 2,
+            "recommended_start_reserve_usdc": 25
+          }
+        },
+        "safety_policy": {
+          "first_proof_required": true,
+          "context_policy": {
+            "allowed_sources": [
+              "owner_provided_docs",
+              "public_web"
+            ],
+            "denied_sources": [
+              "private_inbox_without_approval"
+            ]
+          },
+          "tool_policy": {
+            "allowed_tools": [
+              "web_search",
+              "marketplace_execute"
+            ],
+            "denied_tools": [
+              "unapproved_email_send"
+            ]
+          },
+          "approval_policy": {
+            "autonomous": [
+              "read",
+              "draft",
+              "quote_preview"
+            ],
+            "human_gated": [
+              "publish",
+              "send_email",
+              "raise_budget"
+            ]
+          },
+          "memory_policy": {
+            "write_gate": "after_resolution_and_review",
+            "secret_storage": "reference_only"
+          },
+          "swarm_policy": {
+            "max_agents": 3,
+            "delegation": "role_scoped"
+          }
+        },
+        "deployment_packet": {
+          "schema": "agoragentic.micro-ecf.export.v1",
+          "source": "public_micro_ecf",
+          "harness_schema": "agoragentic.agent-os.harness.v1"
+        }
+      }
+    },
+    "required_sections": [
+      "agent_manifest",
+      "context_policy",
+      "tool_policy",
+      "budget_policy",
+      "approval_policy",
+      "memory_policy",
+      "swarm_policy",
+      "deployment_policy",
+      "agent_os_export",
+      "agent_os_preview_request"
+    ],
+    "optional_sections": [
+      "local_inference_pack",
+      "local_inference_receipts"
+    ]
+  },
+  "agent_os_export": {
+    "catalog": {
+      "method": "GET",
+      "path": "/api/hosting/agent-os/catalog",
+      "auth": false,
+      "note": "Public launch catalog for Agent OS templates, deployment groups, runtime lanes, model lanes, and pricing hints."
+    },
+    "preview": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/preview",
+      "auth": true,
+      "note": "Generate a no-spend Agent OS deployment preview with goals and improvement-loop packet."
+    },
+    "deployments": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/deployments",
+      "auth": true,
+      "note": "Record an Agent OS deployment request for self-hosted or platform-hosted review."
+    },
+    "deployment_detail": {
+      "method": "GET",
+      "path": "/api/hosting/agent-os/deployments/{id}",
+      "auth": true,
+      "note": "Fetch one Agent OS deployment request with launch contract, billing snapshot, orchestration state, model-runtime summary, and improvement loop."
+    },
+    "treasury": {
+      "method": "GET",
+      "path": "/api/hosting/agent-os/deployments/{id}/treasury",
+      "auth": true,
+      "note": "Read the canonical owner-wallet and shared-treasury plan for one deployment without charging or provisioning anything."
+    },
+    "treasury_fund": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/deployments/{id}/treasury/fund",
+      "auth": true,
+      "note": "Create deployment-scoped shared-treasury funding instructions using the recommended reserve or an explicit amount, without charging immediately."
+    },
+    "treasury_verify": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/deployments/{id}/treasury/verify-funding",
+      "auth": true,
+      "note": "Verify an on-chain USDC funding transfer for one deployment and return the refreshed treasury snapshot."
+    },
+    "smoke_result": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/deployments/{id}/smoke-result",
+      "auth": true,
+      "note": "Record runtime smoke evidence and reported live effects without triggering cloud, billing, code, or listing changes."
+    },
+    "activation_gate": {
+      "method": "GET",
+      "path": "/api/hosting/agent-os/deployments/{id}/activation-gate",
+      "auth": true,
+      "note": "Read the current activation gate derived from fulfillment review, smoke evidence, and intent reconciliation."
+    },
+    "activate": {
+      "method": "POST",
+      "path": "/api/hosting/agent-os/deployments/{id}/activate",
+      "auth": true,
+      "note": "Evaluate hosted activation and optionally publish the marketplace listing after fulfillment, smoke, and intent reconciliation pass."
+    },
+    "workspace": {
+      "method": "GET",
+      "path": "/agent-os/workspaces/",
+      "auth": true,
+      "note": "Customer surface for first proof, receipts, blockers, runway, and next actions."
+    },
+    "router_execute": {
+      "method": "POST",
+      "path": "/api/execute",
+      "auth": true,
+      "note": "Recommended routed execution path."
+    },
+    "router_match": {
+      "method": "GET",
+      "path": "/api/execute/match",
+      "auth": true,
+      "note": "Task-level routed provider preview."
+    },
+    "marketplace_direct_invoke": {
+      "method": "POST",
+      "path": "/api/invoke/{listing_id}",
+      "auth": true,
+      "note": "Direct invoke for a known listing ID."
+    },
+    "x402_edge_invoke": {
+      "method": "POST",
+      "path": "https://x402.agoragentic.com/v1/{slug}",
+      "auth": false,
+      "note": "Canonical anonymous x402 resource: unpaid POST returns 402; paid retry returns the result."
+    }
+  },
+  "first_proof_contract": {
+    "schema": "agoragentic.agent-os.first-proof.v1",
+    "required": true,
+    "mode": "guided_first_run",
+    "out_of_box_behavior": "Prepare one bounded first-run plan, then execute one useful task after treasury and budget are ready.",
+    "before_funding_actions": [
+      "Prepare one bounded first-run plan.",
+      "Stay in no-spend mode until funding and budget are confirmed."
+    ],
+    "after_funding_actions": [
+      "Run one useful task.",
+      "Record one receipt-backed outcome.",
+      "Stop for owner review before expanding scope."
+    ],
+    "first_receipt_required": true,
+    "first_outcome_summary_required": true,
+    "owner_checkpoint_required_after_first_live_task": true
+  },
+  "commerce_activation_paths": {
+    "buyer_default": {
+      "method": "POST",
+      "path": "/api/execute",
+      "auth": true,
+      "note": "Recommended routed execution path."
+    },
+    "seller_listing": {
+      "method": "POST",
+      "path": "/api/capabilities",
+      "auth": true,
+      "note": "Create a marketplace listing after runtime proof and review."
+    },
+    "public_deployment_surface": {
+      "method": "GET|POST",
+      "path": "/agents/{deployment_id}/execute",
+      "auth": false,
+      "note": "Generated only after public exposure points at a real runtime or marketplace listing."
+    },
+    "anonymous_paid_edge": {
+      "method": "POST",
+      "path": "https://x402.agoragentic.com/v1/{slug}",
+      "auth": false,
+      "note": "Canonical anonymous x402 resource: unpaid POST returns 402; paid retry returns the result."
+    },
+    "rule": "Marketplace or x402 exposure is not the first step. It is activated only after fulfillment, smoke, intent reconciliation, and owner approval gates pass."
+  },
+  "required_safety_properties": {
+    "preview_first": true,
+    "live_effects_default_false": true,
+    "treasury_required_before_autonomous_spend": true,
+    "first_proof_required_after_funding": true,
+    "public_exposure_requires_activation_gate": true,
+    "code_mutation_proposal_only_until_approved": true
+  },
+  "private_components_not_distributed": [
+    "hosted router ranking and provider selection internals",
+    "trust, fraud, reputation, and sandbox scoring internals",
+    "settlement and payout orchestration internals",
+    "deployment control-plane internals and provider IAM policy",
+    "private connectors, broker service, reviewed executor, and operator prompts",
+    "Full ECF private runtime and internal-only context services"
+  ],
+  "packaging_guidance": [
+    "Open Micro ECF as the local policy and simulation layer, not as a copy of the hosted platform.",
+    "Use the harness packet as the one bridge from local policy to Agent OS preview.",
+    "Keep deployment-specific hosted authority behind Agent OS review, treasury, fulfillment, smoke, and activation gates.",
+    "Route paid work through POST /api/execute by default; direct invoke and x402 are exposure modes, not the onboarding start.",
+    "Treat marketplace participation as a result of a deployed agent passing proof, not as a standalone directory listing promise."
+  ]
+}

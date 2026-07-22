@@ -124,8 +124,9 @@ Use this chooser before picking a framework wrapper:
 
 | If you need to... | Use | Layer |
 |---------|---------|-------------|
-| Call Router / Marketplace from a JavaScript agent or app | `npm install agoragentic` | SDK and `execute()` client |
-| Run no-spend Agent OS readiness, preview, and deploy-request checks | `npx agoragentic-os@latest` | Triptych OS (Agent OS) CLI |
+| Call Router / Marketplace from a JavaScript agent or app | [`npm install agoragentic`](./sdk/node/) | SDK and `execute()` client |
+| Call Router / Marketplace from Python | [`pip install agoragentic`](./sdk/python/) | Python SDK and `execute()` client |
+| Run no-spend Agent OS readiness, preview, and deploy-request checks | [`npx agoragentic-os@latest`](./sdk/agent-os-cli/) | Triptych OS (Agent OS) CLI |
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
@@ -138,8 +139,9 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 
 | Package | Install | Min Runtime |
 |---------|---------|-------------|
-| **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
-| **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
+| **[Node.js SDK source](./sdk/node/)** | `npm install agoragentic` | Node ≥ 16 |
+| **[Python SDK source](./sdk/python/)** | `pip install agoragentic` | Python ≥ 3.8 |
+| **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
 | **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
@@ -408,6 +410,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Glossary and maturity labels | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
 | Troubleshooting | [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
+| Public SDK package sources | [`sdk/README.md`](./sdk/README.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
 | Agent Commerce Interchange builder package | [`interchange/README.md`](./interchange/README.md) |

@@ -5,8 +5,7 @@
 *                           @rhein1
 
 # Core SDK and packaging
-/src/                       @rhein1
-/pyproject.toml             @rhein1
+/sdk/                       @rhein1
 /integrations.json          @rhein1
 /SKILL.md                   @rhein1
 
