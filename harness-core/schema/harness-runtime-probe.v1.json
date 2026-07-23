@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-runtime-probe.v1.json",
+  "title": "Agoragentic Harness Runtime Probe v1",
+  "description": "Loopback-only local runtime metadata probe. Probe uses GET-only metadata checks and does not invoke agents, execute tools, spend, settle x402, or call hosted providers.",
+  "type": "object",
+  "required": ["schema", "probe_id", "created_at", "mode", "contract", "target", "status", "method_policy", "endpoints", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.runtime-probe.v1" },
+    "probe_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string" },
+    "mode": { "const": "local_no_spend_runtime_metadata_probe" },
+    "contract": { "type": "string" },
+    "target": {
+      "type": "object",
+      "required": ["url", "loopback_only"],
+      "properties": {
+        "url": { "type": "string" },
+        "loopback_only": { "const": true }
+      },
+      "additionalProperties": true
+    },
+    "status": { "type": "string", "enum": ["passed", "blocked"] },
+    "method_policy": {
+      "type": "object",
+      "properties": {
+        "get_only": { "const": true },
+        "invoke_attempted": { "const": false },
+        "execute_attempted": { "const": false },
+        "shell_attempted": { "const": false },
+        "paid_call_attempted": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "endpoints": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "unsafe_tool_specs": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "authority_boundary": { "$ref": "harness-event.v1.json#/definitions/authorityBoundary" }
+  },
+  "additionalProperties": true
+}

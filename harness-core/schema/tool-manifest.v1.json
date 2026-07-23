@@ -1,0 +1,167 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-core/tool-manifest.v1.json",
+  "title": "Agoragentic Harness Core Tool Manifest v1",
+  "description": "Local Harness Core tool side-effect manifest. It records tool metadata and policy-relevant authority flags only; it does not execute tools, frameworks, Router execute, global invoke, shell, wallet, x402, marketplace, hosted memory, or provider dispatch.",
+  "type": "object",
+  "required": ["schema", "created_at", "updated_at", "mode", "tools", "summary", "execution_policy", "action_executed", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.tool-manifest.v1" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "mode": { "const": "local_tool_manifest_no_execution" },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/tool_record" }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["tool_count", "blocked_high_authority_tool_count", "blocked_high_authority_tool_ids", "action_executed"],
+      "properties": {
+        "tool_count": { "type": "integer", "minimum": 0 },
+        "blocked_high_authority_tool_count": { "type": "integer", "minimum": 0 },
+        "blocked_high_authority_tool_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "action_executed": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "execution_policy": { "$ref": "#/definitions/execution_policy" },
+    "action_executed": { "const": false },
+    "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "tool_record": {
+      "type": "object",
+      "required": ["schema", "id", "kind", "side_effect_class", "approval_required", "blocked_in_local_no_spend", "authority_flags", "evidence_refs", "execution", "authority_boundary"],
+      "properties": {
+        "schema": { "const": "agoragentic.harness.tool-record.v1" },
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "side_effect_class": {
+          "enum": [
+            "none",
+            "metadata_read",
+            "preview_submission",
+            "publication",
+            "paid_edge_activation",
+            "wallet_spend",
+            "hosted_memory_write",
+            "provider_dispatch",
+            "trust_mutation",
+            "process_control"
+          ]
+        },
+        "approval_required": { "type": "boolean" },
+        "blocked_in_local_no_spend": { "type": "boolean" },
+        "high_authority": { "type": "boolean" },
+        "authority_flags": { "$ref": "#/definitions/authority_flags" },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/evidence_ref" }
+        },
+        "execution": { "$ref": "#/definitions/tool_execution" },
+        "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+      },
+      "additionalProperties": true
+    },
+    "authority_flags": {
+      "type": "object",
+      "required": ["framework_execution", "router_execute", "global_invoke", "shell", "wallet_spend", "wallet_mutation", "x402_settlement", "x402_route_activation", "marketplace_publication", "hosted_runtime_provisioning", "provider_dispatch", "trust_mutation", "hosted_memory_write", "public_execute_mutation", "public_invoke_mutation"],
+      "properties": {
+        "framework_execution": { "type": "boolean" },
+        "router_execute": { "type": "boolean" },
+        "global_invoke": { "type": "boolean" },
+        "shell": { "type": "boolean" },
+        "wallet_spend": { "type": "boolean" },
+        "wallet_mutation": { "type": "boolean" },
+        "x402_settlement": { "type": "boolean" },
+        "x402_route_activation": { "type": "boolean" },
+        "marketplace_publication": { "type": "boolean" },
+        "hosted_runtime_provisioning": { "type": "boolean" },
+        "provider_dispatch": { "type": "boolean" },
+        "trust_mutation": { "type": "boolean" },
+        "hosted_memory_write": { "type": "boolean" },
+        "public_execute_mutation": { "type": "boolean" },
+        "public_invoke_mutation": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["id", "ref", "kind", "raw_content_inlined"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "raw_content_inlined": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "tool_execution": {
+      "type": "object",
+      "required": ["called", "framework_executed", "router_execute_called", "global_invoke_called", "shell_called", "wallet_spend_called", "x402_called", "marketplace_publication_called", "hosted_memory_write_called", "provider_dispatch_called", "result_embedded"],
+      "properties": {
+        "called": { "const": false },
+        "framework_executed": { "const": false },
+        "router_execute_called": { "const": false },
+        "global_invoke_called": { "const": false },
+        "shell_called": { "const": false },
+        "wallet_spend_called": { "const": false },
+        "x402_called": { "const": false },
+        "marketplace_publication_called": { "const": false },
+        "hosted_memory_write_called": { "const": false },
+        "provider_dispatch_called": { "const": false },
+        "result_embedded": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "execution_policy": {
+      "type": "object",
+      "required": ["tool_execution_allowed", "framework_execution_called", "router_execute_called", "global_invoke_called", "shell_called", "wallet_spend_called", "x402_called", "marketplace_publication_called", "hosted_memory_write_called", "provider_dispatch_called"],
+      "properties": {
+        "tool_execution_allowed": { "const": false },
+        "framework_execution_called": { "const": false },
+        "router_execute_called": { "const": false },
+        "global_invoke_called": { "const": false },
+        "shell_called": { "const": false },
+        "wallet_spend_called": { "const": false },
+        "x402_called": { "const": false },
+        "marketplace_publication_called": { "const": false },
+        "hosted_memory_write_called": { "const": false },
+        "provider_dispatch_called": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["wallet_spend", "wallet_mutation", "hosted_runtime_provisioning", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "ranking_mutation", "provider_dispatch", "public_execute_mutation", "public_invoke_mutation", "private_ecf_export", "process_control", "arbitrary_shell", "framework_execution", "router_execute", "global_invoke", "shell", "hosted_memory_write"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "hosted_runtime_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "ranking_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "public_execute_mutation": { "const": false },
+        "public_invoke_mutation": { "const": false },
+        "private_ecf_export": { "const": false },
+        "process_control": { "const": false },
+        "arbitrary_shell": { "const": false },
+        "framework_execution": { "const": false },
+        "router_execute": { "const": false },
+        "global_invoke": { "const": false },
+        "shell": { "const": false },
+        "hosted_memory_write": { "const": false }
+      },
+      "additionalProperties": true
+    }
+  }
+}

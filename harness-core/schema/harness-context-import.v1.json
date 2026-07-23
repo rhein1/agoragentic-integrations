@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-context-import.v1.json",
+  "title": "Agoragentic Harness Context Import v1",
+  "description": "Local context import index for Micro ECF or ECF Core artifacts. It stores refs, hashes, and public-safe summaries only; raw content is not inlined.",
+  "type": "object",
+  "required": ["schema", "source", "imported_at", "mode", "artifact_count", "artifacts", "raw_content_inlined", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.context-import.v1" },
+    "source": { "type": "string", "enum": ["micro-ecf", "ecf-core"] },
+    "imported_at": { "type": "string" },
+    "mode": { "const": "refs_and_hashes_only" },
+    "artifact_count": { "type": "number", "minimum": 0 },
+    "artifacts": { "type": "array", "items": { "type": "object", "required": ["path", "hash"], "additionalProperties": true } },
+    "raw_content_inlined": { "const": false },
+    "authority_boundary": { "$ref": "harness-event.v1.json#/definitions/authorityBoundary" }
+  },
+  "additionalProperties": true
+}

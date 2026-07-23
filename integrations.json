@@ -1,6 +1,6 @@
 {
-  "version": "2.27.0",
-  "updated_at": "2026-07-18",
+  "version": "2.28.0",
+  "updated_at": "2026-07-22",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -44,6 +44,12 @@
       "name": "agoragentic-micro-ecf",
       "install": "npx agoragentic-micro-ecf init",
       "registry": "https://www.npmjs.com/package/agoragentic-micro-ecf",
+      "min_node": "18"
+    },
+    "harness_core": {
+      "name": "agoragentic-harness-core",
+      "install": "npx agoragentic-harness-core@latest init",
+      "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
       "min_node": "18"
     },
     "premortem_golden_loop": {
@@ -426,7 +432,7 @@
       "language": "javascript",
       "status": "beta",
       "path": "harness-core/bin/agoragentic-harness.mjs",
-      "install": "node harness-core/bin/agoragentic-harness.mjs init",
+      "install": "npx agoragentic-harness-core@latest init",
       "docs": "harness-core/README.md"
     },
     {

@@ -82,7 +82,9 @@ jobs:
       - name: Validate Harness Core package
         working-directory: harness-core
         run: |
+          npm ci
           npm test
+          npm run pack:smoke
           npm pack --dry-run
 
       - name: Setup Node 22 for n8n toolchain

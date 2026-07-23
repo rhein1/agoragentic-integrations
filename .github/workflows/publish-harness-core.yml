@@ -30,8 +30,24 @@ jobs:
           node --version
           npm --version
 
+      - name: Verify exact release tag
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          expected="harness-core-v${version}"
+          if [ "${GITHUB_REF_NAME}" != "${expected}" ]; then
+            echo "Expected release tag ${expected}, got ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Install locked dependencies
+        run: npm ci
+
       - name: Test Harness Core
         run: npm test
+
+      - name: Test packed install outside the repository
+        run: npm run pack:smoke
 
       - name: Dry-run package contents
         run: npm pack --dry-run

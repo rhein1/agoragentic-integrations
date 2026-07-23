@@ -1,0 +1,31 @@
+{
+  "schema": "agoragentic.harness.profile.v1",
+  "id": "finance_research_no_action",
+  "description": "No-action finance research profile that records evidence only and blocks trading, payment, and provider dispatch.",
+  "middleware": ["policy-gate", "trap-shield", "guard-core", "receipt-writer", "observability"],
+  "authority_boundary": {
+    "mode": "local_no_spend",
+    "wallet_spend": false,
+    "wallet_mutation": false,
+    "deploy_runtime": false,
+    "hosted_runtime_provisioning": false,
+    "marketplace_publication": false,
+    "x402_settlement": false,
+    "x402_route_activation": false,
+    "trust_mutation": false,
+    "ranking_mutation": false,
+    "provider_dispatch": false,
+    "public_execute_mutation": false,
+    "public_invoke_mutation": false,
+    "private_ecf_export": false,
+    "owner_approval_bypass": false,
+    "process_control": false,
+    "arbitrary_shell": false
+  },
+  "default_artifacts": ["state.json", "events.jsonl", "local-proof.json", "local-receipt.json", "summary.md"],
+  "blocked_actions": ["trade", "order", "wallet_spend", "brokerage_call", "provider_dispatch", "x402_settlement", "personalized_advice"],
+  "required_approval_classes": ["owner_compliance_review", "finance_no_action_review"],
+  "runtime_probe": {
+    "enabled_by_default": false
+  }
+}

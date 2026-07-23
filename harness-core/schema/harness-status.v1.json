@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-status.v1.json",
+  "title": "Agoragentic Harness Status v1",
+  "description": "Local Harness Core status summary. Status is local evidence only and does not mutate hosted Agent OS, Router, Marketplace, x402, wallet, trust, or private ECF state.",
+  "type": "object",
+  "required": ["schema", "generated_at", "mode", "latest_run", "runs", "pending_approvals", "guard_receipts", "runtime_probes", "context_imports", "blockers", "next_actions", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.status.v1" },
+    "generated_at": { "type": "string" },
+    "mode": { "const": "local_no_spend" },
+    "latest_run": { "type": ["object", "null"], "additionalProperties": true },
+    "runs": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "latest_proof": { "type": ["object", "null"], "additionalProperties": true },
+    "latest_receipt": { "type": ["object", "null"], "additionalProperties": true },
+    "agent_os_export": { "type": ["object", "null"], "additionalProperties": true },
+    "listing_readiness": { "type": ["object", "null"], "additionalProperties": true },
+    "pending_approvals": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "guard_receipts": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "runtime_probes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "context_imports": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "blockers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "next_actions": { "type": "array", "items": { "type": "string" } },
+    "authority_boundary": { "$ref": "harness-event.v1.json#/definitions/authorityBoundary" }
+  },
+  "additionalProperties": true
+}

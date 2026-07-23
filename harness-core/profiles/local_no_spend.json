@@ -1,0 +1,31 @@
+{
+  "schema": "agoragentic.harness.profile.v1",
+  "id": "local_no_spend",
+  "description": "Default local no-spend proof run with policy, trap, receipt, and observability middleware.",
+  "middleware": ["policy-gate", "trap-shield", "guard-core", "receipt-writer", "observability"],
+  "authority_boundary": {
+    "mode": "local_no_spend",
+    "wallet_spend": false,
+    "wallet_mutation": false,
+    "deploy_runtime": false,
+    "hosted_runtime_provisioning": false,
+    "marketplace_publication": false,
+    "x402_settlement": false,
+    "x402_route_activation": false,
+    "trust_mutation": false,
+    "ranking_mutation": false,
+    "provider_dispatch": false,
+    "public_execute_mutation": false,
+    "public_invoke_mutation": false,
+    "private_ecf_export": false,
+    "owner_approval_bypass": false,
+    "process_control": false,
+    "arbitrary_shell": false
+  },
+  "default_artifacts": ["state.json", "events.jsonl", "local-proof.json", "local-receipt.json", "summary.md"],
+  "blocked_actions": ["wallet_spend", "x402_settlement", "marketplace_publication", "hosted_runtime_provisioning", "trust_mutation", "provider_dispatch", "private_ecf_export", "process_control"],
+  "required_approval_classes": ["side_effect", "public_exposure", "wallet_action"],
+  "runtime_probe": {
+    "enabled_by_default": false
+  }
+}

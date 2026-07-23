@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-core/budget-policy.v1.json",
+  "title": "Agoragentic Harness Core Budget Policy v1",
+  "description": "Local no-spend Harness Core budget policy for runtime probes and future tool lifecycle checks. It records hard limits only and grants no model call, paid tool call, wallet spend, x402, marketplace, trust, memory, or provider authority.",
+  "type": "object",
+  "required": ["schema", "created_at", "updated_at", "mode", "limits", "hard_stop_on_violation", "applies_to", "current_usage", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.budget-policy.v1" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "mode": { "const": "local_no_spend" },
+    "limits": {
+      "type": "object",
+      "required": ["model_calls", "paid_tool_calls", "wallet_spend_usdc", "network_calls", "runtime_probe_timeout_ms"],
+      "properties": {
+        "model_calls": { "const": 0 },
+        "paid_tool_calls": { "const": 0 },
+        "wallet_spend_usdc": { "const": 0 },
+        "network_calls": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "runtime_probe_timeout_ms": { "type": "integer", "minimum": 1, "maximum": 30000 }
+      },
+      "additionalProperties": true
+    },
+    "hard_stop_on_violation": { "const": true },
+    "applies_to": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "current_usage": { "$ref": "#/definitions/usage" },
+    "last_evaluation": {
+      "type": ["object", "null"],
+      "properties": {
+        "checked_at": { "type": "string" },
+        "reason": { "type": "string" },
+        "usage": { "$ref": "#/definitions/usage" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/violation" }
+        },
+        "status": { "enum": ["passed", "blocked"] },
+        "hard_stop_on_violation": { "const": true }
+      },
+      "additionalProperties": true
+    },
+    "authority_boundary": { "$ref": "#/definitions/authority_boundary" }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "usage": {
+      "type": "object",
+      "required": ["model_calls", "paid_tool_calls", "wallet_spend_usdc", "network_calls", "runtime_probe_timeout_ms"],
+      "properties": {
+        "model_calls": { "type": "number", "minimum": 0 },
+        "paid_tool_calls": { "type": "number", "minimum": 0 },
+        "wallet_spend_usdc": { "type": "number", "minimum": 0 },
+        "network_calls": { "type": "number", "minimum": 0 },
+        "runtime_probe_timeout_ms": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "violation": {
+      "type": "object",
+      "required": ["code", "field", "limit", "actual"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "limit": { "type": "number" },
+        "actual": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "authority_boundary": {
+      "type": "object",
+      "required": ["wallet_spend", "wallet_mutation", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "provider_dispatch", "hosted_memory_write", "model_calls_allowed", "paid_tool_calls_allowed", "wallet_spend_allowed"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "hosted_memory_write": { "const": false },
+        "model_calls_allowed": { "const": false },
+        "paid_tool_calls_allowed": { "const": false },
+        "wallet_spend_allowed": { "const": false }
+      },
+      "additionalProperties": true
+    }
+  }
+}

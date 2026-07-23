@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/harness-event.v1.json",
+  "title": "Agoragentic Harness Event v1",
+  "description": "Append-only local Harness Core event record. Events are local no-spend evidence and grant no wallet, x402, marketplace, hosted runtime, trust, provider, process-control, public execute/invoke, owner-approval-bypass, or private ECF authority.",
+  "type": "object",
+  "required": ["schema", "event_id", "run_id", "type", "created_at", "severity", "summary", "data", "authority_boundary"],
+  "properties": {
+    "schema": { "const": "agoragentic.harness.event.v1" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": ["before_agent", "after_agent", "before_policy", "after_policy", "before_tool", "after_tool", "before_receipt", "after_receipt", "before_export", "after_export", "approval_required", "guard_decision", "artifact_written", "run_completed", "run_blocked"]
+    },
+    "created_at": { "type": "string" },
+    "severity": { "type": "string", "enum": ["info", "warning", "blocked", "error"] },
+    "summary": { "type": "string" },
+    "data": { "type": "object", "additionalProperties": true },
+    "authority_boundary": { "$ref": "#/definitions/authorityBoundary" }
+  },
+  "definitions": {
+    "authorityBoundary": {
+      "type": "object",
+      "required": ["wallet_spend", "wallet_mutation", "deploy_runtime", "hosted_runtime_provisioning", "marketplace_publication", "x402_settlement", "x402_route_activation", "trust_mutation", "ranking_mutation", "provider_dispatch", "public_execute_mutation", "public_invoke_mutation", "private_ecf_export", "owner_approval_bypass", "process_control", "arbitrary_shell"],
+      "properties": {
+        "wallet_spend": { "const": false },
+        "wallet_mutation": { "const": false },
+        "deploy_runtime": { "const": false },
+        "hosted_runtime_provisioning": { "const": false },
+        "marketplace_publication": { "const": false },
+        "x402_settlement": { "const": false },
+        "x402_route_activation": { "const": false },
+        "trust_mutation": { "const": false },
+        "ranking_mutation": { "const": false },
+        "provider_dispatch": { "const": false },
+        "public_execute_mutation": { "const": false },
+        "public_invoke_mutation": { "const": false },
+        "private_ecf_export": { "const": false },
+        "owner_approval_bypass": { "const": false },
+        "process_control": { "const": false },
+        "arbitrary_shell": { "const": false }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
