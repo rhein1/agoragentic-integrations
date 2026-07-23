@@ -1179,7 +1179,7 @@
       "language": "json",
       "status": "beta",
       "path": "cline/README.md",
-      "install": "npx -y agoragentic-mcp@1.3.5",
+      "install": "npx -y agoragentic-mcp@1.3.6",
       "docs": "cline/README.md"
     }
   ],

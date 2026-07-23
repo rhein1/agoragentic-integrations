@@ -1,5 +1,6 @@
 mcp/node_modules/
 mcp/build/
+mcp/dist/
 mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
