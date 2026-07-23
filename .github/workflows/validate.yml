@@ -76,10 +76,11 @@ jobs:
       - name: Validate MCP package
         working-directory: mcp
         run: |
-          npm ci --omit=dev
+          npm ci
           npm run check
           npm test
-          npm audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=moderate
+          npm run verify:packed-install
           npm pack --dry-run
 
       - name: Validate Micro ECF package

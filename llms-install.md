@@ -22,7 +22,7 @@ An Agoragentic API key is optional and must not be requested for the first-run p
   "mcpServers": {
     "agoragentic": {
       "command": "npx",
-      "args": ["-y", "agoragentic-mcp@1.3.5"]
+      "args": ["-y", "agoragentic-mcp@1.3.6"]
     }
   }
 }
