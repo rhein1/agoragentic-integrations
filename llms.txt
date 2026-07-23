@@ -20,7 +20,8 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- Canonical inventory: `integrations.json` (93 indexed surfaces as of 2026-07-22).
+- Canonical inventory: `integrations.json` (97 indexed surfaces as of 2026-07-23).
+- Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), and Cline (`llms-install.md`). Package readiness does not imply external marketplace approval.
 - Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, and AG-UI.
 - Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
@@ -36,6 +37,12 @@
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
 - integrations.schema.json — JSON Schema for validation
+- docs/catalog-profile.json — canonical descriptions, assets, package coordinate, authority boundary, and channel status
+- docs/DISTRIBUTION.md — client-native install and external-submission status
+- .cursor-plugin/plugin.json — Cursor plugin manifest
+- gemini-extension.json and GEMINI.md — Gemini CLI extension package
+- .claude-plugin/marketplace.json — self-hosted Claude Code marketplace
+- llms-install.md — consent-gated Cline MCP install guide
 - AGENTS.md — agent instruction file
 - SKILL.md — capability description
 - a2a/agent-card.json — A2A protocol card

@@ -1,0 +1,107 @@
+{
+  "schema": "agoragentic.integration-distribution.v1",
+  "version": "1.0.0",
+  "updated_at": "2026-07-23",
+  "product": {
+    "name": "Agoragentic",
+    "display_name": "Agoragentic for Triptych OS",
+    "short_description": "Preview and route agent capabilities through Triptych OS (Agent OS) with policy boundaries and receipt evidence.",
+    "repository": "https://github.com/rhein1/agoragentic-integrations",
+    "website": "https://agoragentic.com/integrations/",
+    "documentation": "https://agoragentic.com/developers/",
+    "support_email": "support@agoragentic.com",
+    "license": "MIT"
+  },
+  "assets": {
+    "icon_400": "assets/agoragentic-plugin-icon.png",
+    "social_card": "assets/agoragentic-integrations-social.png",
+    "social_card_source": "assets/agoragentic-agent-commerce-banner.svg"
+  },
+  "mcp": {
+    "registry_name": "io.github.rhein1/agoragentic",
+    "npm_package": "agoragentic-mcp",
+    "package_version": "1.3.4",
+    "command": "npx -y agoragentic-mcp@1.3.4",
+    "transport": "stdio-relay",
+    "remote_endpoint": "https://agoragentic.com/api/mcp",
+    "tool_inventory": "dynamic_and_auth_dependent",
+    "static_tool_count_allowed": false
+  },
+  "authority_boundary": {
+    "credentials_embedded": false,
+    "spend_authority_granted": false,
+    "wallet_mutation_authority_granted": false,
+    "x402_activation_authority_granted": false,
+    "marketplace_publication_authority_granted": false,
+    "deployment_authority_granted": false,
+    "trust_mutation_authority_granted": false,
+    "hosted_memory_write_authority_granted": false
+  },
+  "channels": [
+    {
+      "id": "npm",
+      "status": "active",
+      "url": "https://www.npmjs.com/package/agoragentic-mcp"
+    },
+    {
+      "id": "official-mcp-registry",
+      "status": "active",
+      "url": "https://registry.modelcontextprotocol.io/"
+    },
+    {
+      "id": "smithery",
+      "status": "active_needs_metadata_refresh",
+      "url": "https://smithery.ai/servers/rhein1/agoragentic-mcp",
+      "note": "The listing is live but still presents an old static tool count and marketplace-first description."
+    },
+    {
+      "id": "glama",
+      "status": "active",
+      "url": "https://glama.ai/mcp/servers/rhein1/agoragentic-integrations"
+    },
+    {
+      "id": "pulsemcp",
+      "status": "active",
+      "url": "https://www.pulsemcp.com/servers/agoragentic"
+    },
+    {
+      "id": "mcp-so",
+      "status": "needs_owner_claim",
+      "url": "https://mcp.so/server/agoragentic/rhein1",
+      "note": "The page carries materially stale copy and a second older slug exists; both require directory-side claim and consolidation."
+    },
+    {
+      "id": "cursor-marketplace",
+      "status": "ready_for_submission",
+      "artifact": ".cursor-plugin/plugin.json"
+    },
+    {
+      "id": "gemini-cli-gallery",
+      "status": "install_ready",
+      "artifact": "gemini-extension.json",
+      "note": "Gallery discovery requires the gemini-cli-extension GitHub topic after merge."
+    },
+    {
+      "id": "claude-code-marketplace",
+      "status": "install_ready",
+      "artifact": ".claude-plugin/marketplace.json",
+      "note": "Self-hosted community marketplace; not an Anthropic-operated listing."
+    },
+    {
+      "id": "cline-marketplace",
+      "status": "ready_for_submission",
+      "artifact": "llms-install.md"
+    },
+    {
+      "id": "docker-mcp-catalog",
+      "status": "ready_after_merge",
+      "artifact": "Dockerfile",
+      "note": "The upstream registry entry must pin a public commit containing the client packages."
+    },
+    {
+      "id": "openai-plugin-directory",
+      "status": "blocked_policy",
+      "note": "Do not submit the commerce MCP surface as a ChatGPT app/plugin while current OpenAI app rules prohibit digital-service commerce and execution of crypto transfers."
+    }
+  ]
+}

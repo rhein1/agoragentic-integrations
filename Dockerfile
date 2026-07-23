@@ -2,9 +2,10 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Copy MCP server files
+# Copy package metadata and the lifecycle script before the locked install.
 COPY mcp/package.json mcp/package-lock.json* ./mcp/
-RUN cd mcp && npm install --production
+COPY mcp/scripts/postinstall.js ./mcp/scripts/postinstall.js
+RUN cd mcp && npm ci --omit=dev
 
 COPY mcp/ ./mcp/
 

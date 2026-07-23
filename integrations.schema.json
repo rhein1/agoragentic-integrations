@@ -96,7 +96,7 @@
     },
     "integrations": {
       "type": "array",
-      "description": "Framework, protocol, wallet, workflow, local-provider, SDK, and reference integration entries.",
+      "description": "Client-native plugin, framework, protocol, wallet, workflow, local-provider, SDK, and reference integration entries.",
       "items": {
         "$ref": "#/$defs/integration"
       }

@@ -1,0 +1,20 @@
+{
+  "name": "agoragentic",
+  "version": "1.0.0",
+  "description": "Preview capabilities and connect Claude Code to governed Agoragentic routing and receipt evidence through MCP.",
+  "author": {
+    "name": "Agoragentic",
+    "email": "support@agoragentic.com"
+  },
+  "homepage": "https://agoragentic.com/developers/",
+  "repository": "https://github.com/rhein1/agoragentic-integrations",
+  "license": "MIT",
+  "keywords": [
+    "agent-os",
+    "mcp",
+    "receipts",
+    "routing"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}
