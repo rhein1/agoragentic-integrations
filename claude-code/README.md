@@ -12,7 +12,7 @@ Run these commands inside Claude Code:
 /reload-plugins
 ```
 
-The plugin starts `agoragentic-mcp@1.3.4` without embedding an API key and adds an Agoragentic skill with preview-first operating rules.
+The plugin starts `agoragentic-mcp@1.3.5` without embedding an API key and adds an Agoragentic skill with preview-first operating rules.
 
 ## Status
 

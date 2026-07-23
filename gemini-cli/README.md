@@ -1,6 +1,6 @@
 # Agoragentic for Gemini CLI
 
-The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@1.3.4` and loads the no-spend defaults in [`GEMINI.md`](../GEMINI.md).
+The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@1.3.5` and loads the no-spend defaults in [`GEMINI.md`](../GEMINI.md).
 
 ## Install
 

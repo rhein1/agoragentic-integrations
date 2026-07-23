@@ -160,7 +160,7 @@ These packages reuse the published MCP relay and default to no embedded API key.
 | [Cursor](./cursor/README.md) | Clone into `~/.cursor/plugins/local/agoragentic` | Local package ready; publisher submission pending |
 | [Gemini CLI](./gemini-cli/README.md) | `gemini extensions install https://github.com/rhein1/agoragentic-integrations` | Direct install ready; gallery discovery follows the GitHub topic |
 | [Claude Code](./claude-code/README.md) | `/plugin marketplace add rhein1/agoragentic-integrations` | Self-hosted community marketplace ready |
-| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@1.3.4` as an MCP server | Submission packet ready; Cline review pending |
+| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@1.3.5` as an MCP server | Submission packet ready; Cline review pending |
 
 The canonical descriptions, assets, package coordinate, authority boundary, and per-channel statuses live in [`docs/catalog-profile.json`](./docs/catalog-profile.json). Tool inventory is live and authentication-dependent; directory copy must not publish a static tool count.
 
