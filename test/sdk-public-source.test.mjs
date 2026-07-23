@@ -64,3 +64,12 @@ test('PyPI trusted publishing builds from the public sdk/python source', () => {
   assert.match(workflow, /packages-dir: sdk\/python\/dist\//);
   assert.doesNotMatch(workflow, /password:|api-token:|PYPI_API_TOKEN/);
 });
+
+test('trusted publishers bind release tags through environment variables', () => {
+  for (const relativePath of ['.github/workflows/publish-mcp.yml', '.github/workflows/publish-pypi.yml']) {
+    const workflow = read(relativePath);
+    assert.match(workflow, /RELEASE_TAG: \$\{\{ github\.event\.release\.tag_name \}\}/);
+    assert.match(workflow, /test "\$\{RELEASE_TAG\}"/);
+    assert.doesNotMatch(workflow, /test "\$\{\{ github\.event\.release\.tag_name \}\}"/);
+  }
+});
