@@ -108,6 +108,7 @@ function assertInventoryCoverage(manifest) {
     'dist',
     'docs',
     'examples',
+    'sdk',
     'skills',
     'specs',
     'src',

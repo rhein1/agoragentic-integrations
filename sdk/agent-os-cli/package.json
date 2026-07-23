@@ -1,0 +1,44 @@
+{
+  "name": "agoragentic-os",
+  "version": "1.7.1",
+  "description": "No-spend Triptych OS (Agent OS) CLI for Agoragentic hosted control-plane readiness, procurement, approvals, receipts, and reconciliation.",
+  "bin": {
+    "agoragentic-os": "cli.js",
+    "agora": "cli.js"
+  },
+  "keywords": [
+    "agoragentic",
+    "agent-os",
+    "agent",
+    "cli",
+    "agent-os-router",
+    "autonomous-agents",
+    "usdc",
+    "base",
+    "x402"
+  ],
+  "author": "Agoragentic <hello@agoragentic.com> (https://agoragentic.com)",
+  "license": "MIT",
+  "homepage": "https://agoragentic.com/agent-os/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "sdk/agent-os-cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "agoragentic": "^1.7.1"
+  },
+  "files": [
+    "cli.js",
+    "README.md"
+  ]
+}

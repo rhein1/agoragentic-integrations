@@ -12,6 +12,7 @@ on:
       - 'mcp/**'
       - 'micro-ecf/**'
       - 'harness-core/**'
+      - 'sdk/**'
       - 'coinbase-agentic-wallets/**'
       - 'x402/**'
       - 'zoneless/**'
@@ -49,6 +50,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+
+      - name: Validate public SDK package sources
+        run: |
+          node --test test/sdk-public-source.test.mjs
+          node --check sdk/node/index.js
+          node --check sdk/node/index.mjs
+          node --check sdk/agent-os-cli/cli.js
+          python -m compileall -q sdk/python/src/agoragentic
+          python -m pip install --upgrade build
+          python -m build sdk/python --outdir "${RUNNER_TEMP}/agoragentic-python-dist"
+          npm pack ./sdk/node --dry-run
+          npm pack ./sdk/agent-os-cli --dry-run
 
       - name: Validate MCP package
         working-directory: mcp

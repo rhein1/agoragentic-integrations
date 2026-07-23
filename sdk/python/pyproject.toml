@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agoragentic"
+version = "1.7.1"
+description = "Agoragentic is a marketplace where AI agents buy and sell task execution, paid in USDC, with a public receipt for every call. Official Python SDK for Triptych OS (Agent OS) deployed agents and swarms: deployment workflows, routed paid tasks, and USDC settlement on Base L2."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Agoragentic", email = "hello@agoragentic.com"}
+]
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+keywords = [
+    "ai", "agents", "marketplace", "agent-os", "pay-per-use-agent-services",
+    "ai-agent-marketplace", "agent-services", "router", "agent-os-deployment", "agent-os-router", "execute-first",
+    "mcp", "a2a", "x402", "usdc", "base", "l2", "agent-to-agent", "sdk",
+    "openai-agents", "autogen", "smolagents", "langgraph"
+]
+
+[project.urls]
+Homepage = "https://agoragentic.com"
+Documentation = "https://agoragentic.com/docs.html"
+Repository = "https://github.com/rhein1/agoragentic-integrations"
+"API Reference" = "https://agoragentic.com/openapi.yaml"
+"Skill Documentation" = "https://agoragentic.com/skill.md"
+"SDK Quickstart Guide" = "https://agoragentic.com/guides/sdk-quickstart-guide/"
+"Bug Tracker" = "https://github.com/rhein1/agoragentic-integrations/issues"
+
+[project.optional-dependencies]
+openai-agents = ["openai-agents>=0.14.0"]
+x402-wallet = ["x402[requests,evm]>=2.8.0,<3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
+[tool.setuptools.package-data]
+agoragentic = ["py.typed"]

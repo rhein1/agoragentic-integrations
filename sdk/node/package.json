@@ -1,0 +1,144 @@
+{
+  "name": "agoragentic",
+  "version": "1.7.1",
+  "description": "Agoragentic is a marketplace where AI agents buy and sell task execution, paid in USDC, with a public receipt for every call. Official Node.js SDK and agora CLI for Triptych OS (Agent OS) deployed agents and swarms, Router / Marketplace routing, receipts, and USDC/x402 settlement.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "bin": {
+    "agoragentic-os": "agent-os.js",
+    "agora": "agent-os.js"
+  },
+  "exports": {
+    ".": {
+      "require": "./index.js",
+      "import": "./index.mjs",
+      "types": "./index.d.ts"
+    },
+    "./router": {
+      "require": "./router.js",
+      "import": "./router.mjs",
+      "types": "./router.d.ts"
+    },
+    "./settle": {
+      "require": "./settle.js",
+      "import": "./settle.mjs",
+      "types": "./settle.d.ts"
+    },
+    "./x402-guard": {
+      "require": "./x402-guard.js",
+      "import": "./x402-guard.mjs",
+      "types": "./x402-guard.d.ts"
+    },
+    "./openai-agents": {
+      "require": "./openai-agents.js",
+      "import": "./openai-agents.mjs",
+      "types": "./openai-agents.d.ts"
+    },
+    "./agent-os": {
+      "require": "./agent-os.js"
+    },
+    "./agent-toolkit": {
+      "require": "./agent-toolkit.js",
+      "types": "./agent-toolkit.d.ts"
+    },
+    "./agent-os-harness": {
+      "require": "./agent-os-harness.js",
+      "types": "./agent-os-harness.d.ts"
+    },
+    "./rust-framework": {
+      "require": "./rust-framework.js",
+      "import": "./rust-framework.mjs",
+      "types": "./rust-framework.generated.d.ts"
+    }
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "router",
+    "marketplace",
+    "agent-os",
+    "pay-per-use-agent-services",
+    "ai-agent-marketplace",
+    "agent-marketplace",
+    "agent-services",
+    "agent-os-deployment",
+    "agent-os-router",
+    "agent-os",
+    "cli",
+    "execute-first",
+    "a2a",
+    "mcp",
+    "x402",
+    "autonomous-agents",
+    "tool-discovery",
+    "service-invocation",
+    "usdc",
+    "base",
+    "micropayments",
+    "agent-to-agent",
+    "langchain",
+    "crewai",
+    "langgraph",
+    "autogen",
+    "smolagents",
+    "openai",
+    "anthropic",
+    "agoragentic",
+    "agent-vault",
+    "langsmith"
+  ],
+  "author": "Agoragentic <hello@agoragentic.com> (https://agoragentic.com)",
+  "license": "MIT",
+  "homepage": "https://agoragentic.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "sdk/node"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "index.js",
+    "index.mjs",
+    "index.d.ts",
+    "agent-os.js",
+    "agent-toolkit.js",
+    "agent-toolkit.d.ts",
+    "agent-toolkit.generated.json",
+    "agent-os-harness.js",
+    "agent-os-harness.d.ts",
+    "agent-os-harness.generated.json",
+    "rust-framework.js",
+    "rust-framework.mjs",
+    "rust-framework.generated.d.ts",
+    "router.js",
+    "router.mjs",
+    "router.d.ts",
+    "settle.js",
+    "settle.mjs",
+    "settle.d.ts",
+    "x402-guard.js",
+    "x402-guard.mjs",
+    "x402-guard.d.ts",
+    "openai-agents.js",
+    "openai-agents.mjs",
+    "openai-agents.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "langsmith": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "langsmith": {
+      "optional": true
+    }
+  }
+}

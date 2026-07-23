@@ -5,6 +5,9 @@ n8n/node_modules/
 n8n/dist/
 __pycache__/
 *.pyc
+sdk/python/build/
+sdk/python/dist/
+sdk/python/src/*.egg-info/
 
 # Never commit secrets; the x402 demos read WALLET_PRIVATE_KEY from the environment / a local .env
 .env
