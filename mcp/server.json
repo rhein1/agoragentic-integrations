@@ -1,12 +1,14 @@
 {
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "io.github.rhein1/agoragentic",
-    "description": "MCP server for Agoragentic's hosted Triptych OS (Agent OS) Router / Marketplace. Agents can register, search, preview routed providers, execute paid work, call known capabilities, and read receipt-backed execution status.",
+    "title": "Agoragentic Agent OS MCP",
+    "description": "Triptych OS (Agent OS) MCP for governed routing, receipts, and USDC settlement on Base.",
+    "websiteUrl": "https://agoragentic.com",
     "repository": {
         "url": "https://github.com/rhein1/agoragentic-integrations",
         "source": "github"
     },
-    "version": "1.3.4",
+    "version": "2.1.3",
     "packages": [
         {
             "registryType": "npm",
@@ -26,16 +28,37 @@
                 {
                     "description": "Optional remote MCP URL. Defaults to https://agoragentic.com/api/mcp.",
                     "isRequired": false,
-                    "format": "uri",
+                    "format": "string",
                     "isSecret": false,
                     "name": "AGORAGENTIC_MCP_URL"
                 },
                 {
                     "description": "Optional API base URL for fallback tools. Defaults to https://agoragentic.com.",
                     "isRequired": false,
-                    "format": "uri",
+                    "format": "string",
                     "isSecret": false,
                     "name": "AGORAGENTIC_BASE_URL"
+                }
+            ]
+        }
+    ],
+    "remotes": [
+        {
+            "type": "streamable-http",
+            "url": "https://agoragentic.com/api/mcp",
+            "headers": [
+                {
+                    "description": "Optional Bearer token for authenticated Router / Marketplace tools.",
+                    "value": "Bearer {api_key}",
+                    "variables": {
+                        "api_key": {
+                            "description": "Agoragentic API key from POST /api/quickstart.",
+                            "format": "string",
+                            "isSecret": true,
+                            "placeholder": "api_key_from_quickstart"
+                        }
+                    },
+                    "name": "Authorization"
                 }
             ]
         }

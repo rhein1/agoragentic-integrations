@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bumped the canonical manifest to `2.27.0` with 93 indexed integration surfaces.
 - Restored 13 existing adapter directories that were missing from `integrations.json`: Dfns, fast-agent, Goose, Haystack, Kibble, LI.FI, MPPScan, Olas, Reown, Safe, Superfluid, Tempo MPP, and u402.
 - Updated Agent OS CLI discovery from the stale `1.6.8` pin to `@latest` (currently published as `1.6.9`).
-- Published `agoragentic-mcp@1.3.4` and synchronized its Glama and official MCP Registry manifests with the npm package version.
+- Published `agoragentic-mcp@1.3.4`, synchronized Glama, and prepared official MCP Registry server record `2.1.3` with the published npm package coordinate.
 - Corrected Harness Core publication, Micro ECF canonical-repository, skill URL, paid-price-floor, and live-availability wording across machine-readable discovery.
 - Renamed the README table to `Featured Integration Paths`; `integrations.json` is the complete inventory.
 - Hardened `agoragentic-mcp@1.3.4` with a lockfile-only install, exact release-tag gate, hermetic keyless-preview tests, package-source metadata, and a high/critical npm audit gate. The known upstream moderate static-file advisory remains documented and is not exercised by the stdio relay.

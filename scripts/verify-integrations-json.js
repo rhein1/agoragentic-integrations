@@ -208,8 +208,11 @@ function assertRegistryMetadata() {
   if (glama.version !== packageVersion) {
     fail(`glama.json version must match mcp/package.json (${packageVersion})`);
   }
-  if (server.version !== packageVersion || server.packages?.[0]?.version !== packageVersion) {
-    fail(`mcp/server.json versions must match mcp/package.json (${packageVersion})`);
+  if (server.packages?.[0]?.version !== packageVersion) {
+    fail(`mcp/server.json npm package version must match mcp/package.json (${packageVersion})`);
+  }
+  if (typeof server.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(server.version)) {
+    fail('mcp/server.json registry version must be a semantic version');
   }
   if (mcpPackage.mcpName !== server.name || server.name !== glama.name) {
     fail('MCP package and registry names must match');
