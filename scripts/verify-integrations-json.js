@@ -199,9 +199,20 @@ function assertA2aRouterFirst() {
 
 function assertRegistryMetadata() {
   const glama = JSON.parse(fs.readFileSync(path.join(root, 'glama.json'), 'utf8'));
-  const packageVersion = glama.packages?.[0]?.version;
-  if (!glama.version || glama.version !== packageVersion) {
+  const server = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'server.json'), 'utf8'));
+  const mcpPackage = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'package.json'), 'utf8'));
+  const packageVersion = mcpPackage.version;
+  if (!glama.version || glama.version !== glama.packages?.[0]?.version) {
     fail('glama.json top-level and npm package versions must match');
+  }
+  if (glama.version !== packageVersion) {
+    fail(`glama.json version must match mcp/package.json (${packageVersion})`);
+  }
+  if (server.version !== packageVersion || server.packages?.[0]?.version !== packageVersion) {
+    fail(`mcp/server.json versions must match mcp/package.json (${packageVersion})`);
+  }
+  if (mcpPackage.mcpName !== server.name || server.name !== glama.name) {
+    fail('MCP package and registry names must match');
   }
   if (/execute paid work/i.test(glama.description || '')) {
     fail('glama.json must not present paid execution as unconditionally available');
