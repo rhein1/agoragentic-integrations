@@ -45,7 +45,7 @@ jobs:
         run: |
           npm run check
           npm test
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
 
       - name: Dry-run package contents
         run: npm pack --dry-run

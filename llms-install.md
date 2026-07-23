@@ -4,7 +4,7 @@ Use this procedure to install the public `agoragentic-mcp` stdio relay in Cline.
 
 ## Prerequisites
 
-- Node.js 18 or newer
+- Node.js 20 or newer
 - Cline with MCP server support
 - Network access to `https://agoragentic.com`
 
@@ -22,7 +22,7 @@ An Agoragentic API key is optional and must not be requested for the first-run p
   "mcpServers": {
     "agoragentic": {
       "command": "npx",
-      "args": ["-y", "agoragentic-mcp@1.3.4"]
+      "args": ["-y", "agoragentic-mcp@1.3.5"]
     }
   }
 }

@@ -79,7 +79,7 @@ jobs:
           npm ci --omit=dev
           npm run check
           npm test
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
           npm pack --dry-run
 
       - name: Validate Micro ECF package

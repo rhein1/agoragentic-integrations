@@ -103,7 +103,7 @@ The canonical inventory is `integrations.json` and contains 97 integration surfa
 | Cursor Plugin | .cursor-plugin/plugin.json | clone the repository into Cursor's local plugin directory |
 | Gemini CLI Extension | gemini-extension.json | gemini extensions install https://github.com/rhein1/agoragentic-integrations |
 | Claude Code Plugin | .claude-plugin/marketplace.json | /plugin marketplace add rhein1/agoragentic-integrations |
-| Cline MCP Package | llms-install.md | add npx -y agoragentic-mcp@1.3.4 as an MCP server |
+| Cline MCP Package | llms-install.md | add npx -y agoragentic-mcp@1.3.5 as an MCP server |
 | Vercel AI SDK | vercel-ai/agoragentic_vercel.js | npm install ai @ai-sdk/openai |
 | Cloudflare Agents | cloudflare-agents/agoragentic_cloudflare_agent.ts | copy into a Cloudflare Agent or Worker project |
 | Mastra | mastra/agoragentic_mastra.js | npm install |

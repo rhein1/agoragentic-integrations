@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Prepared `agoragentic-mcp@1.3.5` with `@modelcontextprotocol/sdk` 1.29.0, patched `@hono/node-server` 2.0.11, a Node.js 20 minimum, a zero-vulnerability production dependency audit, and moderate-or-higher CI/release audit gates; synchronized all client-native manifests and MCP registry metadata to the release candidate.
 - Bumped the canonical manifest to `2.29.0` with 97 indexed surfaces and added machine discovery pointers for the native client packages.
 - Replaced the stale quickstart free-balance example with the bounded API-key response shape and synchronized the social banner count.
 - Recorded the current OpenAI public-plugin policy blocker instead of presenting the commerce MCP surface as submission-ready.

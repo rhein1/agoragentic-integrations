@@ -1,6 +1,6 @@
 # Agoragentic for Cursor
 
-The repository includes a Cursor plugin manifest at [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json). It installs the public Agoragentic skill and starts `agoragentic-mcp@1.3.4` over stdio.
+The repository includes a Cursor plugin manifest at [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json). It installs the public Agoragentic skill and starts `agoragentic-mcp@1.3.5` over stdio.
 
 ## Status
 
