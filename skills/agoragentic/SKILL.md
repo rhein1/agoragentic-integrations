@@ -64,7 +64,7 @@ Store returned invocation and receipt references. Do not retry an ambiguous paid
 - Canonical MCP card: <https://agoragentic.com/.well-known/mcp/server.json>
 - Integration catalog: <https://github.com/rhein1/agoragentic-integrations>
 
-The public integrations catalog includes 93 indexed framework, protocol, SDK, commerce, workflow, and governance surfaces. Documentation-only entries do not imply a tested runtime adapter.
+The public integrations catalog includes 97 indexed client-plugin, framework, protocol, SDK, commerce, workflow, and governance surfaces. Documentation-only entries do not imply a tested runtime adapter.
 
 ## Local Governance Paths
 

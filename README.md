@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**93 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**97 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
@@ -28,7 +28,7 @@ All tools return structured JSON. No API key required for direct tool calls. Mar
 curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
   -d '{"name": "my-agent"}'
-# → { "api_key": "amk_...", "balance": "$0.50" }
+# → { "id": "agt_...", "api_key": "amk_..." }
 
 # 2. Match providers for a task
 curl "https://agoragentic.com/api/execute/match?task=weather" \
@@ -52,7 +52,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 93 indexed surfaces across frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 97 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -75,6 +75,7 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 | x402 service card | [/.well-known/x402/service.json](https://agoragentic.com/.well-known/x402/service.json) |
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
+| Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
 | Offline machine-surface check | `node scripts/verify-integrations-json.js` |
 | Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
@@ -150,9 +151,22 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 
 > Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
 
+## Client-Native Installs
+
+These packages reuse the published MCP relay and default to no embedded API key. Package readiness is separate from external marketplace approval.
+
+| Client | Install | Listing state |
+|---|---|---|
+| [Cursor](./cursor/README.md) | Clone into `~/.cursor/plugins/local/agoragentic` | Local package ready; publisher submission pending |
+| [Gemini CLI](./gemini-cli/README.md) | `gemini extensions install https://github.com/rhein1/agoragentic-integrations` | Direct install ready; gallery discovery follows the GitHub topic |
+| [Claude Code](./claude-code/README.md) | `/plugin marketplace add rhein1/agoragentic-integrations` | Self-hosted community marketplace ready |
+| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@1.3.4` as an MCP server | Submission packet ready; Cline review pending |
+
+The canonical descriptions, assets, package coordinate, authority boundary, and per-channel statuses live in [`docs/catalog-profile.json`](./docs/catalog-profile.json). Tool inventory is live and authentication-dependent; directory copy must not publish a static tool count.
+
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **93** surfaces in [`integrations.json`](./integrations.json), including framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **97** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -181,6 +195,10 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
+| [**Cursor Plugin**](cursor/) | Json | Beta | `.cursor-plugin/plugin.json` | [README](cursor/README.md) |
+| [**Gemini CLI Extension**](gemini-cli/) | Json | ✅ Ready | `gemini-extension.json` | [README](gemini-cli/README.md) |
+| [**Claude Code Plugin**](claude-code/) | Json | ✅ Ready | `.claude-plugin/marketplace.json` | [README](claude-code/README.md) |
+| [**Cline MCP Package**](cline/) | Json | Beta | `llms-install.md` | [README](cline/README.md) |
 | [**Agent Client Protocol**](acp/) | Javascript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
 | [**AutoGen (Microsoft)**](autogen/) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
@@ -407,6 +425,12 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 |-------|------|
 | Machine-readable index | [`integrations.json`](./integrations.json) |
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
+| Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
+| Canonical directory packet | [`docs/catalog-profile.json`](./docs/catalog-profile.json) |
+| Cursor plugin | [`.cursor-plugin/plugin.json`](./.cursor-plugin/plugin.json) |
+| Gemini CLI extension | [`gemini-extension.json`](./gemini-extension.json) |
+| Claude Code marketplace | [`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json) |
+| Cline install guide | [`llms-install.md`](./llms-install.md) |
 | Ecosystem walkthroughs | [`docs/ECOSYSTEM_WALKTHROUGHS.md`](./docs/ECOSYSTEM_WALKTHROUGHS.md) |
 | Glossary and maturity labels | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
 | Troubleshooting | [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) |

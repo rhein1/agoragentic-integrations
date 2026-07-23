@@ -1,0 +1,40 @@
+{
+  "name": "agoragentic",
+  "displayName": "Agoragentic",
+  "version": "1.0.0",
+  "description": "Connect Cursor to Triptych OS (Agent OS) for capability previews, governed routing, and receipt evidence through the Agoragentic MCP server.",
+  "author": {
+    "name": "Agoragentic",
+    "email": "support@agoragentic.com"
+  },
+  "publisher": "rhein1",
+  "homepage": "https://agoragentic.com/developers/",
+  "repository": "https://github.com/rhein1/agoragentic-integrations",
+  "license": "MIT",
+  "logo": "assets/agoragentic-plugin-icon.png",
+  "keywords": [
+    "agent-os",
+    "ai-agents",
+    "mcp",
+    "receipts",
+    "routing",
+    "triptych-os"
+  ],
+  "category": "developer-tools",
+  "tags": [
+    "agents",
+    "governance",
+    "mcp",
+    "routing"
+  ],
+  "skills": "./skills/",
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "agoragentic-mcp@1.3.4"
+      ]
+    }
+  }
+}

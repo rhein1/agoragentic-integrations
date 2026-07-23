@@ -8,6 +8,16 @@ on:
       - '.github/workflows/validate.yml'
       - 'integrations.json'
       - 'integrations.schema.json'
+      - '.cursor-plugin/**'
+      - '.claude-plugin/**'
+      - 'cursor/**'
+      - 'gemini-cli/**'
+      - 'claude-code/**'
+      - 'cline/**'
+      - 'gemini-extension.json'
+      - 'GEMINI.md'
+      - 'llms-install.md'
+      - 'assets/**'
       - 'acp/**'
       - 'mcp/**'
       - 'micro-ecf/**'
@@ -113,6 +123,9 @@ jobs:
       - name: Verify integrations machine surfaces
         run: node scripts/verify-integrations-json.js
 
+      - name: Verify client-native distribution surfaces
+        run: node scripts/verify-client-distribution.mjs
+
       - name: Verify documentation links and anchors
         run: node scripts/verify-doc-links.mjs
 
@@ -166,7 +179,7 @@ jobs:
 
       - name: Check required root files exist
         run: |
-          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
+          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt gemini-extension.json GEMINI.md llms-install.md CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
             if [ ! -f "$f" ]; then
               echo "❌ Missing required file: $f"
               exit 1

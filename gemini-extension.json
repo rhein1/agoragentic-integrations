@@ -1,0 +1,15 @@
+{
+  "name": "agoragentic",
+  "version": "1.0.0",
+  "description": "Connect Gemini CLI to Triptych OS (Agent OS) capability previews, governed routing, and receipt evidence through MCP.",
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "agoragentic-mcp@1.3.4"
+      ]
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

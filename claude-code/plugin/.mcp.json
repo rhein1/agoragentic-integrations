@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agoragentic": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "agoragentic-mcp@1.3.4"
+      ]
+    }
+  }
+}
