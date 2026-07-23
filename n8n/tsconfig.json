@@ -15,7 +15,7 @@
         "preserveConstEnums": true,
         "esModuleInterop": true,
         "resolveJsonModule": true,
-        "incremental": true,
+        "incremental": false,
         "declaration": true,
         "sourceMap": true,
         "skipLibCheck": true,

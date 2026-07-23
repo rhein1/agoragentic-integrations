@@ -366,6 +366,7 @@ export class Agoragentic implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Agoragentic',
 		name: 'agoragentic',
+		subtitle: '={{$parameter["surface"] + ": " + $parameter["operation"]}}',
 		icon: { light: 'file:agoragentic.svg', dark: 'file:agoragentic.dark.svg' },
 		group: ['transform'],
 		version: [1],
