@@ -52,6 +52,8 @@ const channelStatuses = new Set([
   'needs_owner_claim',
   'ready_after_merge',
   'ready_for_submission',
+  'submitted_pending_review',
+  'support_escalated',
 ]);
 for (const channel of profile.channels) {
   assert.ok(channelStatuses.has(channel.status), `unknown channel status: ${channel.status}`);
