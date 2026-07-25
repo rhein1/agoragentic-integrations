@@ -8,6 +8,8 @@ import ast
 import dataclasses
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -15,10 +17,11 @@ from typing import Iterable, List, Sequence, Tuple
 
 
 COMMAND = re.compile(
-    r"(?m)^[ \t]*(?:[$>]\s*)?"
-    r"(?:python(?:3)?|node)\s+"
-    r"([^\s;&|`'\"\\]+)"
-    r"(?:\s|$)"
+    r"(?<![\w.-])(?:python(?:3)?|node)\s+"
+    r"(?!-)"
+    r"([^\s;&|`'\"<>]+?\.(?:py|mjs|js))"
+    r"(?=$|[\s`'\"\]),.;:])",
+    re.IGNORECASE,
 )
 README_NAMES = {"README", "README.md", "README.rst", "README.txt"}
 SUPPORTED = {".py", ".mjs", ".js"}
@@ -50,16 +53,16 @@ def repository_readmes(root: pathlib.Path) -> Iterable[pathlib.Path]:
 
 
 def documented_entrypoints(readme: pathlib.Path) -> List[str]:
-    values: List[str] = []
-    for match in COMMAND.finditer(read_text(readme)):
-        candidate = match.group(1).strip()
-        if candidate.startswith(("./", "../")):
-            values.append(candidate)
-    return values
+    return [match.group(1).strip() for match in COMMAND.finditer(read_text(readme))]
 
 
-def resolve_entrypoint(readme: pathlib.Path, value: str) -> pathlib.Path:
-    return (readme.parent / value).resolve()
+def resolve_entrypoint(
+    root: pathlib.Path, readme: pathlib.Path, value: str
+) -> pathlib.Path:
+    normalized = value.replace("\\", "/")
+    parts = pathlib.PurePosixPath(normalized).parts
+    base = root if parts and parts[0] == "examples" else readme.parent
+    return (base.joinpath(*parts)).resolve()
 
 
 def relative_path(root: pathlib.Path, path: pathlib.Path) -> str:
@@ -90,6 +93,35 @@ def syntax_finding(root: pathlib.Path, path: pathlib.Path) -> Finding | None:
                 relative_path(root, path),
                 "entrypoint contains no executable text",
             )
+        node = shutil.which("node")
+        if node is None:
+            return Finding(
+                "javascript_syntax_unverified",
+                relative_path(root, path),
+                "Node.js is required to validate JavaScript syntax",
+            )
+        try:
+            result = subprocess.run(
+                [node, "--check", relative_path(root, path)],
+                capture_output=True,
+                check=False,
+                cwd=root,
+                text=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return Finding(
+                "javascript_syntax_unverified",
+                relative_path(root, path),
+                str(exc),
+            )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            return Finding(
+                "invalid_javascript_syntax",
+                relative_path(root, path),
+                detail or f"node --check exited {result.returncode}",
+            )
     return None
 
 
@@ -116,7 +148,7 @@ def check_readme(root: pathlib.Path, readme: pathlib.Path) -> List[Finding]:
             )
             continue
         seen.add(value)
-        target = resolve_entrypoint(readme, value)
+        target = resolve_entrypoint(root, readme, value)
         if root not in target.parents:
             findings.append(Finding("entrypoint_outside_repository", readme_name, value))
             continue
@@ -141,6 +173,22 @@ def check_readme(root: pathlib.Path, readme: pathlib.Path) -> List[Finding]:
 
 
 def check_repository(root: pathlib.Path) -> List[Finding]:
+    if not root.exists():
+        return [
+            Finding(
+                "invalid_repository_root",
+                root.as_posix(),
+                "path does not exist",
+            )
+        ]
+    if not root.is_dir():
+        return [
+            Finding(
+                "invalid_repository_root",
+                root.as_posix(),
+                "path is not a directory",
+            )
+        ]
     readmes = list(repository_readmes(root))
     if not readmes:
         # Repositories may legitimately have no examples yet; there is
@@ -152,13 +200,11 @@ def check_repository(root: pathlib.Path) -> List[Finding]:
     return findings
 
 
-def make_case(files: dict[str, str]) -> pathlib.Path:
-    root = pathlib.Path(tempfile.mkdtemp(prefix="entrypoint-smoke-"))
+def write_case(root: pathlib.Path, files: dict[str, str]) -> None:
     for name, content in files.items():
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(content), encoding="utf-8")
-    return root
 
 
 def test_cases() -> Sequence[Tuple[str, dict[str, str], Sequence[str]]]:
@@ -185,6 +231,25 @@ def test_cases() -> Sequence[Tuple[str, dict[str, str], Sequence[str]]]:
             (),
         ),
         (
+            "valid_root_relative",
+            {
+                "examples/demo/README.md": (
+                    "From the repository root, run "
+                    "`node examples/demo/main.mjs`.\n"
+                ),
+                "examples/demo/main.mjs": "console.log('ok');\n",
+            },
+            (),
+        ),
+        (
+            "valid_readme_relative",
+            {
+                "examples/demo/README.md": "Run `python src/pipeline.py`.\n",
+                "examples/demo/src/pipeline.py": "print('ok')\n",
+            },
+            (),
+        ),
+        (
             "missing_file",
             {"examples/demo/README.md": "python3 ./missing.py\n"},
             ("missing_entrypoint",),
@@ -196,6 +261,14 @@ def test_cases() -> Sequence[Tuple[str, dict[str, str], Sequence[str]]]:
                 "examples/demo/main.py": "def broken(:\n",
             },
             ("invalid_python_syntax",),
+        ),
+        (
+            "bad_javascript",
+            {
+                "examples/demo/README.md": "node ./main.mjs\n",
+                "examples/demo/main.mjs": "const broken = ;\n",
+            },
+            ("invalid_javascript_syntax",),
         ),
         (
             "duplicate",
@@ -215,11 +288,24 @@ def test_cases() -> Sequence[Tuple[str, dict[str, str], Sequence[str]]]:
 
 def self_test() -> None:
     for name, files, expected in test_cases():
-        findings = check_repository(make_case(files))
-        actual = tuple(item.code for item in findings)
-        if actual != tuple(expected):
-            raise AssertionError(f"{name}: expected {expected!r}, got {actual!r}")
-    print("self-tests: 7 cases passed")
+        with tempfile.TemporaryDirectory(prefix="entrypoint-smoke-") as temp:
+            root = pathlib.Path(temp)
+            write_case(root, files)
+            findings = check_repository(root)
+            actual = tuple(item.code for item in findings)
+            if actual != tuple(expected):
+                raise AssertionError(
+                    f"{name}: expected {expected!r}, got {actual!r}"
+                )
+    with tempfile.TemporaryDirectory(prefix="entrypoint-smoke-") as temp:
+        missing_findings = check_repository(pathlib.Path(temp) / "missing")
+        missing_actual = tuple(item.code for item in missing_findings)
+        if missing_actual != ("invalid_repository_root",):
+            raise AssertionError(
+                "invalid_root: expected ('invalid_repository_root',), "
+                f"got {missing_actual!r}"
+            )
+    print(f"self-tests: {len(test_cases()) + 1} cases passed")
     print("AGOS_RUNTIME_OK")
 
 
