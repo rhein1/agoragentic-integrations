@@ -14,3 +14,9 @@ Inventory:
 - `rust_reference_runtime`
 
 Machine-readable inventory: `framework-wrapping-examples.json`.
+
+Validate the inventory locally from this directory:
+
+```sh
+node ./validate.mjs
+```

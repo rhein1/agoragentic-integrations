@@ -14,6 +14,14 @@ These examples demonstrate how to build Agent OS wrappers around public APIs usi
 
 ## Examples
 
+Run the mock-only self-tests from this directory:
+
+```sh
+node ./weather-wrapper.mjs
+node ./currency-wrapper.mjs
+node ./ip-lookup-wrapper.mjs
+```
+
 ### Node.js SDK
 
 ```javascript
