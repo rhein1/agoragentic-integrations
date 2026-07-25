@@ -50,7 +50,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=moderate
 
       - name: Reject high or critical toolchain advisories
-        run: npm audit --audit-level=high
+        run: npm run audit:dev
 
       - name: Dry-run package contents
         run: npm pack --dry-run
