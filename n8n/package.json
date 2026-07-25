@@ -22,13 +22,14 @@
         "directory": "n8n"
     },
     "scripts": {
+        "audit:dev": "node scripts/audit-dev-dependencies.cjs",
         "build": "n8n-node build",
         "build:watch": "tsc --watch",
         "dev": "n8n-node dev",
         "lint": "n8n-node lint",
         "lint:fix": "n8n-node lint --fix",
         "release": "n8n-node release",
-        "test": "node --test test/release.test.cjs",
+        "test": "node --test test/*.test.cjs",
         "check": "npm test && npm run lint && npm run build",
         "prepublishOnly": "npm run check"
     },
