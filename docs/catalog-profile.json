@@ -1,7 +1,7 @@
 {
   "schema": "agoragentic.integration-distribution.v1",
-  "version": "1.0.0",
-  "updated_at": "2026-07-23",
+  "version": "1.0.1",
+  "updated_at": "2026-07-24",
   "product": {
     "name": "Agoragentic",
     "display_name": "Agoragentic for Triptych OS",
@@ -50,9 +50,9 @@
     },
     {
       "id": "smithery",
-      "status": "active_needs_metadata_refresh",
+      "status": "active",
       "url": "https://smithery.ai/servers/rhein1/agoragentic-mcp",
-      "note": "The listing is live but still presents an old static tool count and marketplace-first description."
+      "note": "Listing metadata is current. Session counts include initialization and listability probes and must not be treated as tool-use evidence."
     },
     {
       "id": "glama",
@@ -66,20 +66,21 @@
     },
     {
       "id": "mcp-so",
-      "status": "needs_owner_claim",
-      "url": "https://mcp.so/server/agoragentic/rhein1",
-      "note": "The page carries materially stale copy and a second older slug exists; both require directory-side claim and consolidation."
+      "status": "support_escalated",
+      "url": "https://mcp.so/servers/agoragentic-integrations",
+      "note": "The owned listing editor did not persist current metadata and the ticket form produced no visible record. Support was emailed on 2026-07-23; repair and duplicate consolidation are not confirmed."
     },
     {
       "id": "cursor-marketplace",
       "status": "ready_for_submission",
-      "artifact": ".cursor-plugin/plugin.json"
+      "artifact": ".cursor-plugin/plugin.json",
+      "note": "The publisher form remains available and no submission receipt or Marketplace listing is confirmed."
     },
     {
       "id": "gemini-cli-gallery",
       "status": "install_ready",
       "artifact": "gemini-extension.json",
-      "note": "Gallery discovery requires the gemini-cli-extension GitHub topic after merge."
+      "note": "The gemini-cli-extension GitHub topic is present; external gallery indexing is not confirmed."
     },
     {
       "id": "claude-code-marketplace",
@@ -89,14 +90,17 @@
     },
     {
       "id": "cline-marketplace",
-      "status": "ready_for_submission",
-      "artifact": "llms-install.md"
+      "status": "submitted_pending_review",
+      "url": "https://github.com/cline/mcp-marketplace/issues/808",
+      "artifact": "llms-install.md",
+      "note": "The submission issue is open and was refreshed with a Cline CLI 3.0.46 install and tools/list smoke against agoragentic-mcp@1.3.6."
     },
     {
       "id": "docker-mcp-catalog",
-      "status": "ready_after_merge",
+      "status": "submitted_pending_review",
+      "url": "https://github.com/docker/mcp-registry/pull/4524",
       "artifact": "Dockerfile",
-      "note": "The upstream registry entry must pin a public commit containing the client packages."
+      "note": "The upstream PR pins source commit 19ffef3c73d0c33aafd17d60c6f7974b1abb4a72 and is mergeable but awaits Docker review."
     },
     {
       "id": "openai-plugin-directory",
