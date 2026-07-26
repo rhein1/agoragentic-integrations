@@ -76,26 +76,47 @@ function markdownFiles(root) {
 function localLinkTargets(markdown, sourceFile) {
   const targets = [];
   const linkPattern = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g;
+  const definitionPattern = /^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))/gm;
+  const referencePattern = /!?\[([^\]]+)\]\[([^\]]*)\]/g;
+  const definitions = new Map();
   let match;
 
+  while ((match = definitionPattern.exec(markdown)) !== null) {
+    definitions.set(normalizeReferenceLabel(match[1]), match[2] || match[3]);
+  }
+
   while ((match = linkPattern.exec(markdown)) !== null) {
-    const raw = match[1].replace(/^<|>$/g, "");
-    if (!raw || raw.startsWith("#")) continue;
-    if (/^[a-z][a-z\d+.-]*:/i.test(raw)) continue;
+    addLocalTarget(targets, match[1], sourceFile);
+  }
 
-    const withoutFragment = raw.split("#", 1)[0].split("?", 1)[0];
-    if (!withoutFragment) continue;
-
-    targets.push({
-      raw,
-      target: path.resolve(path.dirname(sourceFile), withoutFragment),
-    });
+  while ((match = referencePattern.exec(markdown)) !== null) {
+    const label = normalizeReferenceLabel(match[2] || match[1]);
+    const raw = definitions.get(label);
+    if (raw) addLocalTarget(targets, raw, sourceFile);
   }
 
   return targets;
 }
 
-function fencedCodePaths(markdown, sourceFile) {
+function normalizeReferenceLabel(value) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function addLocalTarget(targets, value, sourceFile) {
+  const raw = value.replace(/^<|>$/g, "");
+  if (!raw || raw.startsWith("#")) return;
+  if (/^[a-z][a-z\d+.-]*:/i.test(raw)) return;
+
+  const withoutFragment = raw.split("#", 1)[0].split("?", 1)[0];
+  if (!withoutFragment) return;
+
+  targets.push({
+    raw,
+    target: path.resolve(path.dirname(sourceFile), withoutFragment),
+  });
+}
+
+function fencedCodePaths(markdown, sourceFile, root) {
   const targets = [];
   const fencePattern = /```[^\n]*\n([\s\S]*?)```/g;
   let block;
@@ -106,11 +127,17 @@ function fencedCodePaths(markdown, sourceFile) {
       if (!match) continue;
 
       const candidate = match[1].replace(/[;,.)]+$/, "");
-      if (!candidate.startsWith(".")) continue;
+      const normalized = candidate.replaceAll("\\", "/");
+      const rootRelative = normalized.replace(/^\.\//, "");
+      const startsInExamples =
+        rootRelative === EXAMPLE_ROOT || rootRelative.startsWith(`${EXAMPLE_ROOT}/`);
+      if (!startsInExamples && !normalized.startsWith(".")) continue;
 
       targets.push({
         raw: candidate,
-        target: path.resolve(path.dirname(sourceFile), candidate),
+        target: startsInExamples
+          ? path.resolve(root, rootRelative)
+          : path.resolve(path.dirname(sourceFile), normalized),
       });
     }
   }
@@ -126,7 +153,7 @@ function documentedEntrypoints(root) {
     const text = fs.readFileSync(document, "utf8");
     const candidates = [
       ...localLinkTargets(text, document),
-      ...fencedCodePaths(text, document),
+      ...fencedCodePaths(text, document, root),
     ];
 
     for (const candidate of candidates) {
@@ -186,14 +213,29 @@ function selfTest() {
         "# Fixture",
         "",
         "[working example](examples/demo/index.mjs)",
+        "[reference example][reference]",
+        "",
+        "[reference]: examples/demo/reference.mjs",
         "",
         "```sh",
         "node ./examples/demo/run.mjs",
+        "node examples/demo/plain.mjs",
+        "```",
+        "",
+      ].join("\n"),
+      "docs/guide.md": [
+        "# Nested guide",
+        "",
+        "```sh",
+        "node ./examples/demo/nested.mjs",
         "```",
         "",
       ].join("\n"),
       "examples/demo/index.mjs": "console.log('ok');\n",
+      "examples/demo/reference.mjs": "console.log('ok');\n",
       "examples/demo/run.mjs": "console.log('ok');\n",
+      "examples/demo/plain.mjs": "console.log('ok');\n",
+      "examples/demo/nested.mjs": "console.log('ok');\n",
     });
 
     assert.deepEqual(documentedEntrypoints(root), []);
@@ -209,6 +251,37 @@ function selfTest() {
       "examples/optional.txt": "not referenced\n",
     });
     assert.equal(documentedEntrypoints(root).length, 1);
+
+    writeFixture(root, {
+      "missing-command.md": [
+        "```sh",
+        "node examples/demo/missing-command.mjs",
+        "```",
+        "",
+      ].join("\n"),
+      "missing-reference.md": [
+        "[missing example][missing-reference]",
+        "",
+        "[missing-reference]: examples/demo/missing-reference.mjs",
+        "",
+      ].join("\n"),
+      "docs/missing-nested-command.md": [
+        "```sh",
+        "node ./examples/demo/missing-nested-command.mjs",
+        "```",
+        "",
+      ].join("\n"),
+    });
+
+    assert.deepEqual(
+      documentedEntrypoints(root).map((item) => item.target).sort(),
+      [
+        "examples/demo/missing-command.mjs",
+        "examples/demo/missing-nested-command.mjs",
+        "examples/demo/missing-reference.mjs",
+        "examples/demo/run.mjs",
+      ],
+    );
 
     console.log("fixture checks: OK");
   } finally {
