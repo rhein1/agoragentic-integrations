@@ -31,6 +31,12 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
    - The offline conformance result and any focused test result
    - A working example plus an explicit live/network/spend boundary
 
+## Test An Existing Integration
+
+Independent runtime reports are useful even when you are not changing code. Start with the [community testing guide](./docs/COMMUNITY_TESTING.md), run one adapter's offline conformance check, and optionally exercise the documented free live path only after confirming the matched provider costs `0`.
+
+Share the result through the structured [Show and tell test report](https://github.com/rhein1/agoragentic-integrations/discussions/new?category=show-and-tell). Do not post API keys, wallet material, authorization headers, cookies, or unredacted environment output. A community report is independent runtime evidence; it does not replace repository conformance, security review, or paid settlement proof.
+
 ## Standards
 
 - **Python**: target `>=3.8`, use `requests` for HTTP, follow existing naming
