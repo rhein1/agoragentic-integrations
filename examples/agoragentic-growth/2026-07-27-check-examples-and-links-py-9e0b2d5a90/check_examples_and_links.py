@@ -6,18 +6,25 @@ from __future__ import annotations
 import argparse
 import ast
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
+REFERENCE_DEFINITION_RE = re.compile(
+    r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))"
+)
+REFERENCE_USAGE_RE = re.compile(r"!?\[([^\]]+)\]\[([^\]]*)\]")
 ENTRY_NAMES = re.compile(
     r"(?:^|[-_.])(example|demo|run|smoke|quickstart|x402_execute)(?:[-_.]|$)",
     re.IGNORECASE,
 )
 SOURCE_SUFFIXES = {".py", ".mjs", ".js", ".cjs"}
 SKIP_PARTS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+NODE_CHECK_TIMEOUT_SECONDS = 10
 
 
 def files_under(root: Path) -> Iterable[Path]:
@@ -29,11 +36,23 @@ def files_under(root: Path) -> Iterable[Path]:
         yield path
 
 
-def relative_links(path: Path) -> Iterable[Tuple[str, int]]:
+def normalize_reference_label(label: str) -> str:
+    return " ".join(label.split()).casefold()
+
+
+def is_relative_target(target: str) -> bool:
+    if not target or target.startswith(("#", "/", "//")):
+        return False
+    return re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target) is None
+
+
+def relative_links(path: Path) -> Tuple[List[Tuple[str, int]], Optional[Tuple[str, int]]]:
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return
+        return [], None
+
+    visible_lines: List[Tuple[int, str]] = []
     in_fence = False
     for number, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("```"):
@@ -41,20 +60,52 @@ def relative_links(path: Path) -> Iterable[Tuple[str, int]]:
             continue
         if in_fence:
             continue
+        visible_lines.append((number, line))
+
+    definitions = {}
+    for number, line in visible_lines:
+        match = REFERENCE_DEFINITION_RE.match(line)
+        if not match:
+            continue
+        target = (match.group(2) or match.group(3) or "").strip()
+        definitions.setdefault(
+            normalize_reference_label(match.group(1)), (target, number)
+        )
+
+    links: List[Tuple[str, int]] = []
+    for number, line in visible_lines:
         for match in LINK_RE.finditer(line):
             target = match.group(1).strip().strip("<>")
-            if not target or target.startswith(("#", "/", "//")):
-                continue
-            if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target):
-                continue
-            yield target.split("#", 1)[0].split("?", 1)[0], number
+            if is_relative_target(target):
+                links.append((target.split("#", 1)[0].split("?", 1)[0], number))
+
+        if REFERENCE_DEFINITION_RE.match(line):
+            continue
+        for match in REFERENCE_USAGE_RE.finditer(line):
+            label = match.group(2) or match.group(1)
+            normalized = normalize_reference_label(label)
+            definition = definitions.get(normalized)
+            if definition is None:
+                return links, (label, number)
+            target, _definition_line = definition
+            target = target.strip().strip("<>")
+            if is_relative_target(target):
+                links.append((target.split("#", 1)[0].split("?", 1)[0], number))
+    return links, None
 
 
 def first_broken_link(root: Path) -> Optional[str]:
     for document in files_under(root):
         if document.suffix.lower() not in {".md", ".markdown"}:
             continue
-        for target, line in relative_links(document):
+        links, missing_reference = relative_links(document)
+        if missing_reference:
+            label, line = missing_reference
+            return (
+                f"{document.relative_to(root)}:{line}: "
+                f"missing reference definition: {label}"
+            )
+        for target, line in links:
             if not target:
                 continue
             resolved = (document.parent / target).resolve()
@@ -83,6 +134,32 @@ def is_entrypoint(path: Path, root: Path) -> bool:
     }
 
 
+def check_javascript(path: Path) -> Optional[str]:
+    node = shutil.which("node")
+    if node is None:
+        return "JavaScript syntax check requires Node.js"
+    try:
+        result = subprocess.run(
+            [node, "--check", str(path)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=NODE_CHECK_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return "JavaScript syntax check timed out"
+    except OSError as exc:
+        return f"cannot run JavaScript syntax check ({exc})"
+    if result.returncode == 0:
+        return None
+    output = result.stderr or result.stdout
+    diagnostic = next(
+        (line.strip() for line in output.splitlines() if "SyntaxError" in line),
+        f"Node.js exited with status {result.returncode}",
+    )
+    return f"JavaScript syntax error: {diagnostic}"
+
+
 def check_entrypoint(path: Path) -> Optional[str]:
     try:
         source = path.read_text(encoding="utf-8")
@@ -98,10 +175,7 @@ def check_entrypoint(path: Path) -> Optional[str]:
     else:
         if "\x00" in source:
             return "entrypoint contains a NUL byte"
-        if source.count("{") != source.count("}"):
-            return "unbalanced JavaScript braces"
-        if source.count("(") != source.count(")"):
-            return "unbalanced JavaScript parentheses"
+        return check_javascript(path)
     return None
 
 
@@ -129,30 +203,71 @@ def make_file(root: Path, name: str, text: str) -> None:
 
 def self_test() -> int:
     cases = [
-        ("valid", "# Docs\n\n[example](examples/demo.py)\n", True, True),
-        ("missing-link", "[gone](examples/nope.py)\n", False, True),
-        ("bad-python", "[ok](examples/demo.py)\n", True, False),
-        ("bad-js-shape", "[ok](examples/demo.mjs)\n", True, False),
+        (
+            "valid-inline-python",
+            {"README.md": "[example](examples/demo.py)\n", "examples/demo.py": "print('ok')\n"},
+            None,
+        ),
+        (
+            "valid-reference-python",
+            {
+                "README.md": "[example][demo]\n\n[demo]: examples/demo.py\n",
+                "examples/demo.py": "print('ok')\n",
+            },
+            None,
+        ),
+        (
+            "missing-inline-link",
+            {"README.md": "[gone](examples/nope.py)\n"},
+            "missing relative link",
+        ),
+        (
+            "missing-reference-definition",
+            {"README.md": "[gone][missing-ref]\n"},
+            "missing reference definition: missing-ref",
+        ),
+        (
+            "reference-escape",
+            {"README.md": "[outside][escape]\n\n[escape]: ../outside.md\n"},
+            "link escapes repository",
+        ),
+        (
+            "bad-python",
+            {"README.md": "[ok](examples/demo.py)\n", "examples/demo.py": "def broken(:\n"},
+            "Python syntax error",
+        ),
+        (
+            "bad-javascript",
+            {"README.md": "[ok](examples/demo.mjs)\n", "examples/demo.mjs": "const = ;\n"},
+            "JavaScript syntax error",
+        ),
+        (
+            "valid-javascript-string-delimiter",
+            {
+                "README.md": "[ok](examples/demo.mjs)\n",
+                "examples/demo.mjs": 'console.log("{");\n',
+            },
+            None,
+        ),
     ]
-    for name, markdown, links_ok, entrypoint_ok in cases:
+    for name, files, expected_finding in cases:
         with tempfile.TemporaryDirectory(prefix="agos-check-") as directory:
-            root = Path(directory)
-            make_file(root, "README.md", markdown)
-            if name == "valid":
-                make_file(root, "examples/demo.py", "print('ok')\n")
-            elif name == "missing-link":
-                pass
-            elif name == "bad-python":
-                make_file(root, "examples/demo.py", "def broken(:\n")
-            else:
-                make_file(root, "examples/demo.mjs", "export function demo() {\n")
+            root = Path(directory) / "repository"
+            root.mkdir()
+            for filename, content in files.items():
+                make_file(root, filename, content)
             findings = check_repository(root)
-            got_link_ok = first_broken_link(root) is None
-            got_entrypoint_ok = not any(
-                "syntax error" in item or "unbalanced" in item for item in findings
-            )
-            if got_link_ok != links_ok or got_entrypoint_ok != entrypoint_ok:
-                print(f"self-test failed: {name}", file=sys.stderr)
+            if expected_finding is None and findings:
+                print(f"self-test failed: {name}: {findings}", file=sys.stderr)
+                return 1
+            if expected_finding is not None and not any(
+                expected_finding in finding for finding in findings
+            ):
+                print(
+                    f"self-test failed: {name}: expected {expected_finding!r}, "
+                    f"got {findings}",
+                    file=sys.stderr,
+                )
                 return 1
     print("AGOS_RUNTIME_OK")
     return 0
