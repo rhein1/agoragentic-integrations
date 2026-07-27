@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Integration test report
+    url: https://github.com/rhein1/agoragentic-integrations/discussions/new?category=show-and-tell
+    about: Share independent offline or no-spend runtime evidence through the structured discussion form.
+  - name: Integration questions
+    url: https://github.com/rhein1/agoragentic-integrations/discussions/new?category=q-a
+    about: Ask installation, framework, or adapter questions in GitHub Discussions.
+  - name: Security vulnerability
+    url: https://github.com/rhein1/agoragentic-integrations/security/policy
+    about: Follow the private reporting instructions in the repository security policy.

@@ -1,5 +1,5 @@
 """
-Agoragentic AutoGen Integration — v2.0
+Agoragentic AutoGen Integration - v2.1
 =======================================
 
 Function tools for Microsoft AutoGen agents to use Agoragentic Agent OS:
@@ -7,28 +7,32 @@ preview providers with match(), route work with execute(), inspect receipts,
 and keep catalog/vault/passport helpers as compatibility paths.
 
 Install:
-    pip install pyautogen requests
+    pip install requests autogen-agentchat "autogen-ext[openai]"
 
-Usage:
-    from agoragentic_autogen import get_agoragentic_functions, FUNCTION_MAP
+Usage (AutoGen AgentChat 0.7+):
+    from autogen_agentchat.agents import AssistantAgent
+    from agoragentic_autogen import get_agoragentic_tools
 
-    functions = get_agoragentic_functions(api_key="amk_your_key")
+    tools = get_agoragentic_tools(api_key="amk_your_key")
+    assistant = AssistantAgent("agent", model_client=model_client, tools=tools)
 
-    assistant = autogen.AssistantAgent("agent", llm_config={"functions": functions})
-    user_proxy = autogen.UserProxyAgent("user", function_map=FUNCTION_MAP)
+Legacy schema exports remain available through get_agoragentic_functions()
+and FUNCTION_MAP.
 """
 
+from contextvars import ContextVar
+from functools import wraps
 import json
 import requests
-from typing import Optional
+from typing import Callable, List, Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
-_API_KEY = ""
+_API_KEY = ContextVar("agoragentic_autogen_api_key", default="")
 
 
 def _headers(api_key: str = ""):
     h = {"Content-Type": "application/json"}
-    k = api_key or _API_KEY
+    k = api_key or _API_KEY.get()
     if k:
         h["Authorization"] = f"Bearer {k}"
     return h
@@ -218,9 +222,8 @@ def agoragentic_passport(action: str = "check", wallet_address: str = "") -> str
 # ─── AutoGen Function Schemas ─────────────────────────────
 
 def get_agoragentic_functions(api_key: str = ""):
-    """Get AutoGen-compatible function definitions for Agoragentic tools."""
-    global _API_KEY
-    _API_KEY = api_key
+    """Get legacy AutoGen function schemas and bind their function-map key."""
+    _API_KEY.set(api_key)
 
     return [
         {"name": "agoragentic_register", "description": "Compatibility helper for Agent OS quickstart. Returns API key.",
@@ -277,6 +280,24 @@ def get_agoragentic_functions(api_key: str = ""):
              "wallet_address": {"type": "string"}
          }}}
     ]
+
+
+def _bind_api_key(function: Callable, api_key: str) -> Callable:
+    """Bind one key to one callable without leaking it across agent instances."""
+    @wraps(function)
+    def bound(*args, **kwargs):
+        token = _API_KEY.set(api_key)
+        try:
+            return function(*args, **kwargs)
+        finally:
+            _API_KEY.reset(token)
+
+    return bound
+
+
+def get_agoragentic_tools(api_key: str = "") -> List[Callable]:
+    """Return callables accepted by AutoGen AgentChat AssistantAgent(tools=...)."""
+    return [_bind_api_key(function, api_key) for function in FUNCTION_MAP.values()]
 
 
 # Function map for AutoGen UserProxyAgent

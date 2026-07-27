@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const adapters = [
+  ["AutoGen", "autogen/adapter.test.py"],
   ["Griptape", "griptape/adapter.test.py"],
+  ["LangChain", "langchain/adapter.test.py"],
   ["LiveKit Agents", "livekit-agents/adapter.test.py"],
   ["Pipecat", "pipecat/adapter.test.py"],
 ];
