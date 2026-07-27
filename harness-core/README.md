@@ -14,7 +14,7 @@ The canonical release boundary ships as [Selective OSS Release Scope](RELEASE_SC
 
 ```bash
 npm install
-node packages/harness-core/bin/agoragentic-harness.mjs init
+node harness-core/bin/agoragentic-harness.mjs init
 ```
 
 When published as a standalone package, the intended entrypoint is:

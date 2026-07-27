@@ -96,15 +96,43 @@ def documented_commands(readme: Path) -> List[Command]:
     return commands
 
 
-def resolve_entrypoint(command: Command) -> Optional[Path]:
-    raw = command.entrypoint
-    candidate = (command.directory / raw).resolve()
-    repository = command.directory.resolve()
+def inside_repository(candidate: Path, repository: Path) -> bool:
     try:
         candidate.relative_to(repository)
     except ValueError:
+        return False
+    return True
+
+
+def resolve_entrypoint(command: Command, repository: Path) -> Optional[Path]:
+    raw = Path(command.entrypoint)
+    if raw.is_absolute():
         return None
-    return candidate
+
+    repository = repository.resolve()
+    readme_candidate = (command.directory / raw).resolve()
+    normalized = command.entrypoint.replace("\\", "/")
+    explicit_parent = normalized.startswith("../")
+
+    candidates = [readme_candidate]
+    if not explicit_parent:
+        candidates.append((repository / raw).resolve())
+
+    safe_candidates = [
+        candidate for candidate in candidates
+        if inside_repository(candidate, repository)
+    ]
+    if not safe_candidates:
+        return None
+
+    for candidate in safe_candidates:
+        if candidate.is_file():
+            return candidate
+
+    root_style = normalized.removeprefix("./")
+    if "/" in root_style and len(safe_candidates) > 1:
+        return safe_candidates[-1]
+    return safe_candidates[0]
 
 
 def check_python(path: Path) -> Optional[str]:
@@ -115,11 +143,11 @@ def check_python(path: Path) -> Optional[str]:
     return None
 
 
-def check_command(command: Command) -> Optional[Finding]:
-    entrypoint = resolve_entrypoint(command)
+def check_command(command: Command, repository: Path) -> Optional[Finding]:
+    entrypoint = resolve_entrypoint(command, repository)
     if entrypoint is None:
         return Finding(command.directory, command.line,
-                       f"entrypoint escapes README directory: {command.entrypoint}")
+                       f"entrypoint escapes repository root: {command.entrypoint}")
     if not entrypoint.is_file():
         return Finding(command.directory, command.line,
                        f"missing {command.interpreter} entrypoint "
@@ -132,13 +160,14 @@ def check_command(command: Command) -> Optional[Finding]:
 
 
 def check_root(root: Path) -> Tuple[List[Command], List[Finding]]:
+    repository = root.resolve()
     commands: List[Command] = []
     findings: List[Finding] = []
-    for readme in readmes(root):
+    for readme in readmes(repository):
         found = documented_commands(readme)
         commands.extend(found)
         for command in found:
-            finding = check_command(command)
+            finding = check_command(command, repository)
             if finding:
                 findings.append(finding)
     return commands, findings
@@ -194,6 +223,23 @@ def self_test() -> int:
             {"docs/README.md": "```sh\npython ../examples/run.py\n```\n",
              "examples/run.py": "print('ok')\n"},
             0,
+        ),
+        (
+            "repository path accepted from nested README",
+            {"docs/README.md": "```sh\npython examples/run.py\n```\n",
+             "examples/run.py": "print('ok')\n"},
+            0,
+        ),
+        (
+            "README-local path remains supported",
+            {"docs/README.md": "```sh\npython ./run.py\n```\n",
+             "docs/run.py": "print('ok')\n"},
+            0,
+        ),
+        (
+            "parent path escaping repository rejected",
+            {"docs/README.md": "```sh\npython ../../outside.py\n```\n"},
+            1,
         ),
         (
             "unsupported command ignored",
