@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const DISCOVERY_UNAVAILABLE = 503;
 const DISCOVERY_READY = 200;
@@ -192,7 +193,7 @@ function runSelfTest() {
   process.stdout.write("fixture round-trip passed\n");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest();
   process.stdout.write("AGOS_RUNTIME_OK\n");
 }
