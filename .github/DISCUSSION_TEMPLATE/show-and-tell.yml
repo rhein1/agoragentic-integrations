@@ -1,0 +1,103 @@
+title: "[Integration test] "
+labels:
+  - community-test
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing an Agoragentic integration in your own environment. Remove API keys, wallet material, authorization headers, cookies, private repository content, and unredacted environment output before submitting.
+
+  - type: dropdown
+    id: integration
+    attributes:
+      label: Integration
+      description: Select the adapter or client path you tested.
+      options:
+        - MCP
+        - Claude Code Plugin
+        - Gemini CLI Extension
+        - LangChain
+        - CrewAI
+        - AutoGen
+        - OpenAI Agents SDK
+        - Google ADK
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: framework_version
+    attributes:
+      label: Framework or client version
+      description: Use the exact installed version where possible.
+      placeholder: "Example: langchain 0.3.27"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include operating system and Node.js or Python version.
+      placeholder: "Example: Ubuntu 24.04, Python 3.12.4"
+    validations:
+      required: true
+
+  - type: input
+    id: adapter_version
+    attributes:
+      label: Agoragentic version
+      description: Provide the repository commit, npm package version, or Python package version used.
+      placeholder: "Example: repository commit abc1234 or agoragentic-mcp 1.3.6"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: test_lane
+    attributes:
+      label: Test lane
+      options:
+        - Offline conformance only
+        - Free live runtime only
+        - Offline conformance and free live runtime
+    validations:
+      required: true
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - Pass
+        - Partial
+        - Fail
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Commands and reproduction steps
+      description: Include the smallest redacted sequence another user can repeat.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted result
+      description: State what worked or failed. For a live test, say whether a receipt was returned and whether the cost was zero; do not paste a sensitive receipt.
+      placeholder: "The adapter returned a structured result and a receipt with cost 0."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed API keys, wallet material, authorization headers, cookies, private repository content, and unredacted environment output.
+          required: true
+        - label: I did not make a paid call or approve a wallet transaction as part of this report.
+          required: true

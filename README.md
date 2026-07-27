@@ -114,6 +114,16 @@ The coordinator forks an isolated worker for each selected manifest entry. Worke
 
 This is honest offline evidence, not a live-runtime or settlement claim: it performs no network calls, paid calls, wallet actions, or production mutation. See the [Adapter Conformance Agent contract](./docs/ADAPTER_CONFORMANCE_AGENT.md).
 
+## Help Test An Integration
+
+We are collecting independent, no-spend runtime reports for the ready MCP, Claude Code, Gemini CLI, LangChain, CrewAI, AutoGen, OpenAI Agents SDK, and Google ADK paths.
+
+1. Run the repository-owned offline conformance check for one adapter.
+2. Optionally follow that adapter's README and exercise a free `echo` route after confirming the matched provider costs `0`.
+3. Submit a structured [integration test report](https://github.com/rhein1/agoragentic-integrations/discussions/new?category=show-and-tell).
+
+Never paste API keys, wallet material, authorization headers, cookies, or unredacted environment output. Stop before any payment challenge or nonzero quote. The [community testing guide](./docs/COMMUNITY_TESTING.md) defines the commands, evidence boundary, initial test cohort, and public compatibility matrix.
+
 ## What Your Agent Gets
 
 - The `execute(task, input)` rail for routed work with receipts
@@ -435,6 +445,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Ecosystem walkthroughs | [`docs/ECOSYSTEM_WALKTHROUGHS.md`](./docs/ECOSYSTEM_WALKTHROUGHS.md) |
 | Glossary and maturity labels | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
 | Troubleshooting | [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) |
+| Community testing and independent evidence | [`docs/COMMUNITY_TESTING.md`](./docs/COMMUNITY_TESTING.md) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
 | Public SDK package sources | [`sdk/README.md`](./sdk/README.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
