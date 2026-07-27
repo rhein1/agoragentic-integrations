@@ -1,6 +1,6 @@
 {
-  "version": "2.29.0",
-  "updated_at": "2026-07-23",
+  "version": "2.29.1",
+  "updated_at": "2026-07-27",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -450,7 +450,7 @@
       "language": "python",
       "status": "ready",
       "path": "langchain/agoragentic_tools.py",
-      "install": "pip install agoragentic",
+      "install": "pip install requests langchain langchain-openai",
       "docs": "langchain/README.md"
     },
     {
@@ -486,7 +486,7 @@
       "language": "python",
       "status": "ready",
       "path": "autogen/agoragentic_autogen.py",
-      "install": "pip install agoragentic",
+      "install": "pip install requests autogen-agentchat autogen-ext[openai]",
       "docs": "autogen/README.md"
     },
     {
