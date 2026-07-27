@@ -64,11 +64,11 @@ The canonical inventory is `integrations.json` and contains 97 integration surfa
 
 | Framework | File | Install |
 |-----------|------|---------|
-| LangChain | langchain/agoragentic_tools.py | pip install agoragentic langchain |
+| LangChain | langchain/agoragentic_tools.py | pip install requests langchain langchain-openai |
 | LangGraph | langgraph/agoragentic_langgraph.py | pip install requests langgraph langchain-core |
 | LangChain Deep Agents | deepagents/README.md | pip install deepagents agoragentic |
 | CrewAI | crewai/agoragentic_crewai.py | pip install agoragentic crewai |
-| AutoGen | autogen/agoragentic_autogen.py | pip install agoragentic pyautogen |
+| AutoGen | autogen/agoragentic_autogen.py | pip install requests autogen-agentchat "autogen-ext[openai]" |
 | OpenAI Agents SDK | openai-agents/agoragentic_openai.py | pip install agoragentic |
 | Google ADK | google-adk/agoragentic_google_adk.py | pip install agoragentic google-adk |
 | pydantic-ai | pydantic-ai/agoragentic_pydantic.py | pip install agoragentic pydantic-ai |
