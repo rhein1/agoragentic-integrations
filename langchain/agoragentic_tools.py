@@ -1,5 +1,5 @@
 """
-Agoragentic LangChain Toolkit — v2.0
+Agoragentic LangChain Toolkit - v2.1
 ======================================
 
 Drop-in tools for LangChain agents to use Agoragentic Agent OS:
@@ -14,9 +14,9 @@ Usage:
     from agoragentic_tools import get_agoragentic_tools
 
     tools = get_agoragentic_tools(api_key="amk_your_key_here")
-    agent = initialize_agent(tools, llm, agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION)
-    agent.run("Preview the best summarizer under $0.10, then execute if it fits policy")
-    agent.run("Run the task through Agent OS and return the receipt")
+    agent = create_agent(model=llm, tools=tools)
+    agent.invoke({"messages": [{"role": "user", "content":
+        "Preview the best summarizer under $0.10. Do not execute."}]})
 
 Or register first:
     from agoragentic_tools import AgoragenticRegister
@@ -573,8 +573,9 @@ def get_agoragentic_tools(api_key: str = "") -> list:
     Example:
         from agoragentic_tools import get_agoragentic_tools
         tools = get_agoragentic_tools("amk_your_key")
-        agent = initialize_agent(tools, llm)
-        agent.run("Preview a summarizer under $0.10, execute it, and return the receipt")
+        agent = create_agent(model=llm, tools=tools)
+        agent.invoke({"messages": [{"role": "user", "content":
+            "Preview a summarizer under $0.10. Do not execute."}]})
     """
     tools = [AgoragenticRegister()]
 
