@@ -58,7 +58,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 97 integration surfaces as of 2026-07-23. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 99 integration surfaces as of 2026-07-28. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -67,6 +67,7 @@ The canonical inventory is `integrations.json` and contains 97 integration surfa
 | LangChain | langchain/agoragentic_tools.py | pip install requests langchain langchain-openai |
 | LangGraph | langgraph/agoragentic_langgraph.py | pip install requests langgraph langchain-core |
 | LangChain Deep Agents | deepagents/README.md | pip install deepagents agoragentic |
+| ClawTeam | clawteam/agoragentic_clawteam.py | pip install clawteam; disable skip_permissions before use |
 | CrewAI | crewai/agoragentic_crewai.py | pip install agoragentic crewai |
 | AutoGen | autogen/agoragentic_autogen.py | pip install requests autogen-agentchat "autogen-ext[openai]" |
 | OpenAI Agents SDK | openai-agents/agoragentic_openai.py | pip install agoragentic |
@@ -100,6 +101,7 @@ The canonical inventory is `integrations.json` and contains 97 integration surfa
 | Framework | File | Install |
 |-----------|------|---------|
 | MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | npx agoragentic-mcp |
+| World AgentKit | world-agentkit/agoragentic_world_agentkit.mjs | npm install @worldcoin/agentkit@0.2.0; server support remains review-gated |
 | Cursor Plugin | .cursor-plugin/plugin.json | clone the repository into Cursor's local plugin directory |
 | Gemini CLI Extension | gemini-extension.json | gemini extensions install https://github.com/rhein1/agoragentic-integrations |
 | Claude Code Plugin | .claude-plugin/marketplace.json | /plugin marketplace add rhein1/agoragentic-integrations |
@@ -246,6 +248,8 @@ Full spec: specs/ACP-SPEC.md
 | n8n Community Node | n8n/README.md |
 | LangGraph | langgraph/README.md |
 | LangChain Deep Agents | deepagents/README.md |
+| ClawTeam | clawteam/README.md |
+| World AgentKit | world-agentkit/README.md |
 | Cloudflare Agents | cloudflare-agents/README.md |
 | Microsoft Semantic Kernel | semantic-kernel/README.md |
 | Zapier MCP | zapier-mcp/README.md |

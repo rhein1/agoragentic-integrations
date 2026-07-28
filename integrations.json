@@ -1,6 +1,6 @@
 {
-  "version": "2.29.1",
-  "updated_at": "2026-07-27",
+  "version": "2.30.0",
+  "updated_at": "2026-07-28",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -382,6 +382,15 @@
       "docs": "deepagents/README.md"
     },
     {
+      "id": "clawteam",
+      "name": "ClawTeam",
+      "language": "python",
+      "status": "experimental",
+      "path": "clawteam/agoragentic_clawteam.py",
+      "install": "pip install clawteam; set skip_permissions=false before exposing the bridge",
+      "docs": "clawteam/README.md"
+    },
+    {
       "id": "n8n",
       "name": "n8n Community Node",
       "language": "typescript",
@@ -407,6 +416,15 @@
       "path": "x402/buyer-demo.js",
       "install": "node x402/buyer-demo.js",
       "docs": "x402/README.md"
+    },
+    {
+      "id": "world-agentkit",
+      "name": "World AgentKit",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "world-agentkit/agoragentic_world_agentkit.mjs",
+      "install": "npm install @worldcoin/agentkit@0.2.0; server support remains review-gated",
+      "docs": "world-agentkit/README.md"
     },
     {
       "id": "interchange",
@@ -1234,9 +1252,13 @@
     "openfang_bridge_manifest": "openfang/openfang.agoragentic-hand-bridge.manifest.json",
     "cashclaw": "cashclaw/README.md",
     "deepagents": "deepagents/README.md",
+    "clawteam": "clawteam/README.md",
+    "clawteam_adapter": "clawteam/agoragentic_clawteam.py",
     "n8n": "n8n/README.md",
     "open_wallet_standard": "ows/README.md",
     "x402_buyer": "x402/README.md",
+    "world_agentkit": "world-agentkit/README.md",
+    "world_agentkit_adapter": "world-agentkit/agoragentic_world_agentkit.mjs",
     "interchange": "interchange/README.md",
     "interchange_spec": "interchange/SPEC.md",
     "interchange_status": "interchange/STATUS.md",

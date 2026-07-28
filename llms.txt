@@ -20,10 +20,10 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- Canonical inventory: `integrations.json` (97 indexed surfaces as of 2026-07-23).
+- Canonical inventory: `integrations.json` (99 indexed surfaces as of 2026-07-28).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), and Cline (`llms-install.md`). Package readiness does not imply external marketplace approval.
-- Python frameworks include LangChain, LangGraph, Deep Agents, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
-- JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, and AG-UI.
+- Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
+- JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.
 - Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
 - Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, Scrumboy, Hermes Agent Bridge (JSON)
@@ -51,6 +51,8 @@
 - agent-os/README.md — Agent OS public control-plane export
 - rust-framework/README.md — Rust Framework HTTP/JSON examples and self-hosted runtime boundary
 - openfang/README.md — OpenFang Hand bridge for routed buying, receipts, and seller listing drafts
+- clawteam/README.md — experimental ClawTeam bridge with permission hardening and a zero-USDC default cap
+- world-agentkit/README.md — experimental World AgentKit pre-payment client; server support remains review-gated
 - hermes-agent/README.md — Hermes Agent MCP bridge and review-gated self-improvement packet boundary
 - zoneless/README.md — experimental Solana seller-payout reference only; not live Agoragentic settlement
 - n8n/README.md — n8n community node for x402 edge calls and authenticated router flows
