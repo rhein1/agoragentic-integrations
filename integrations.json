@@ -1,6 +1,6 @@
 {
-  "version": "2.29.1",
-  "updated_at": "2026-07-27",
+  "version": "2.29.2",
+  "updated_at": "2026-07-28",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -1202,6 +1202,9 @@
     "glama": "glama.json",
     "distribution_status": "docs/DISTRIBUTION.md",
     "distribution_profile": "docs/catalog-profile.json",
+    "context_hub_submission_packet": "distribution/context-hub/README.md",
+    "context_hub_agent_os_doc": "distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md",
+    "agent_payments_stack_correction": "distribution/agent-payments-stack/correction.json",
     "cursor_plugin": ".cursor-plugin/plugin.json",
     "gemini_cli_extension": "gemini-extension.json",
     "claude_code_marketplace": ".claude-plugin/marketplace.json",

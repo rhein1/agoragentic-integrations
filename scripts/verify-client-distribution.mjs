@@ -64,6 +64,62 @@ assert.equal(
   'the commerce MCP surface must not be presented as OpenAI-directory eligible',
 );
 
+const contextHubChannel = profile.channels.find((channel) => channel.id === 'context-hub');
+assert.equal(contextHubChannel?.status, 'ready_for_submission');
+assert.equal(
+  contextHubChannel?.artifact,
+  'distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md',
+);
+
+const paymentsStackChannel = profile.channels.find(
+  (channel) => channel.id === 'agent-payments-stack',
+);
+assert.equal(paymentsStackChannel?.status, 'active_needs_metadata_refresh');
+assert.equal(
+  paymentsStackChannel?.artifact,
+  'distribution/agent-payments-stack/correction.json',
+);
+
+const contextHubDoc = readText(contextHubChannel.artifact);
+assert.match(contextHubDoc, /^---\r?\nname: agent-os-api\r?\n/m);
+assert.match(contextHubDoc, /languages: "javascript"/);
+assert.match(contextHubDoc, /versions: "2\.1\.0"/);
+for (const route of [
+  '/api/index.json',
+  '/api/stats',
+  '/api/discovery/check',
+  '/api/capabilities',
+  '/api/execute/match',
+]) {
+  assert.match(contextHubDoc, new RegExp(route.replaceAll('/', '\\/')));
+}
+assert.match(contextHubDoc, /platform_custody_frozen/);
+assert.match(contextHubDoc, /verified.*reachable.*failed/is);
+assert.match(contextHubDoc, /explicit.*approval.*cost ceiling/is);
+assert.doesNotMatch(contextHubDoc, /amk_[a-z0-9]{8,}/i);
+assert.doesNotMatch(contextHubDoc, /\b\d{2,}\+? (verified )?listings\b/i);
+assert.doesNotMatch(contextHubDoc, /Full ECF/i);
+
+const paymentsCorrection = readJson(paymentsStackChannel.artifact);
+assert.equal(paymentsCorrection.schema, 'agoragentic.external-directory-correction.v1');
+assert.equal(paymentsCorrection.directory.id, 'agent-payments-stack');
+assert.equal(paymentsCorrection.submission.status, 'prepared_not_submitted');
+assert.equal(paymentsCorrection.submission.external_write_authorized, false);
+assert.equal(paymentsCorrection.proposed_record.layer, 'L5');
+assert.equal(paymentsCorrection.proposed_record.status, 'live');
+assert.equal(paymentsCorrection.authority.availability, 'https://agoragentic.com/api/index.json');
+assert.equal(paymentsCorrection.authority.metrics, 'https://agoragentic.com/api/stats');
+assert.equal(
+  paymentsCorrection.authority.discovery_proof,
+  'https://agoragentic.com/api/discovery/check',
+);
+const paymentsCorrectionText = JSON.stringify(paymentsCorrection);
+assert.doesNotMatch(paymentsCorrectionText, /170\+/i);
+assert.doesNotMatch(paymentsCorrectionText, /USDC escrow/i);
+assert.doesNotMatch(paymentsCorrection.proposed_record.description, /\b\d+\+? (verified )?listings\b/i);
+assert.match(paymentsCorrection.proposed_record.description, /live availability document/i);
+assert.doesNotMatch(paymentsCorrectionText, /amk_[a-z0-9]{8,}/i);
+
 const cursor = readJson('.cursor-plugin/plugin.json');
 assert.equal(cursor.name, 'agoragentic');
 assert.equal(cursor.skills, './skills/');

@@ -1,7 +1,7 @@
 {
   "schema": "agoragentic.integration-distribution.v1",
-  "version": "1.0.1",
-  "updated_at": "2026-07-24",
+  "version": "1.0.2",
+  "updated_at": "2026-07-28",
   "product": {
     "name": "Agoragentic",
     "display_name": "Agoragentic for Triptych OS",
@@ -106,6 +106,20 @@
       "id": "openai-plugin-directory",
       "status": "blocked_policy",
       "note": "Do not submit the commerce MCP surface as a ChatGPT app/plugin while current OpenAI app rules prohibit digital-service commerce and execution of crypto transfers."
+    },
+    {
+      "id": "context-hub",
+      "status": "ready_for_submission",
+      "url": "https://github.com/andrewyng/context-hub",
+      "artifact": "distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md",
+      "note": "Maintainer-authored Agent OS API documentation is prepared and locally validated; it has not been submitted upstream."
+    },
+    {
+      "id": "agent-payments-stack",
+      "status": "active_needs_metadata_refresh",
+      "url": "https://agentpaymentsstack.com/#agoragentic",
+      "artifact": "distribution/agent-payments-stack/correction.json",
+      "note": "The live directory record has stale inventory and escrow wording. A correction is prepared but has not been submitted."
     }
   ]
 }
