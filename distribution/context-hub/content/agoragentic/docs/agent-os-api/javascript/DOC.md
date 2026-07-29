@@ -4,7 +4,7 @@ description: "Agoragentic Triptych OS Agent OS API for capability discovery, gov
 metadata:
   languages: "javascript"
   versions: "2.1.0"
-  revision: 1
+  revision: 2
   updated-on: "2026-07-28"
   source: maintainer
   tags: "agoragentic,agent-os,triptych,router,marketplace,mcp,a2a,x402,receipts"
@@ -59,7 +59,11 @@ Read both the top-level availability contract and the payment contract returned 
 Stop before quote or execution when paid execution is unavailable:
 
 ```javascript
-function assertPaidExecutionAvailable(index) {
+function assertPaidExecutionAvailable(index, { network, asset }) {
+  if (!network || !asset) {
+    throw new Error('Payment rail network and asset are required');
+  }
+
   const paid = index.availability?.paid_execution;
   const paymentReady = index.payment?.status === 'available';
 
@@ -67,7 +71,17 @@ function assertPaidExecutionAvailable(index) {
     const reason = index.availability?.reason || index.payment?.reason || 'paid_execution_unavailable';
     throw new Error(`Paid execution unavailable: ${reason}`);
   }
+
+  const rail = index.payment?.rails?.find(
+    (candidate) => candidate.network === network && candidate.asset === asset,
+  );
+  if (rail?.execution_ready !== true) {
+    const reason = rail?.status || 'payment_rail_unavailable';
+    throw new Error(`Payment rail unavailable (${network}/${asset}): ${reason}`);
+  }
 }
+
+assertPaidExecutionAvailable(index, { network: 'base', asset: 'USDC' });
 ```
 
 Do not treat an older README, directory listing, package version, or successful health check as authority for current payment availability.

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -99,6 +100,53 @@ assert.match(contextHubDoc, /explicit.*approval.*cost ceiling/is);
 assert.doesNotMatch(contextHubDoc, /amk_[a-z0-9]{8,}/i);
 assert.doesNotMatch(contextHubDoc, /\b\d{2,}\+? (verified )?listings\b/i);
 assert.doesNotMatch(contextHubDoc, /Full ECF/i);
+
+const availabilitySnippet = contextHubDoc.match(
+  /```javascript\r?\n(function assertPaidExecutionAvailable[\s\S]*?\r?\n})\r?\n\r?\nassertPaidExecutionAvailable/,
+);
+assert.ok(availabilitySnippet, 'Context Hub doc must include an executable availability helper');
+const availabilityContext = {};
+runInNewContext(
+  `${availabilitySnippet[1]}\nglobalThis.assertPaidExecutionAvailable = assertPaidExecutionAvailable;`,
+  availabilityContext,
+);
+const mixedAvailabilityIndex = {
+  availability: { paid_execution: 'available' },
+  payment: {
+    status: 'available',
+    rails: [
+      { network: 'base', asset: 'USDC', execution_ready: true, status: 'available' },
+      {
+        network: 'solana',
+        asset: 'USDC',
+        execution_ready: false,
+        status: 'temporarily_unavailable',
+      },
+    ],
+  },
+};
+assert.doesNotThrow(() =>
+  availabilityContext.assertPaidExecutionAvailable(mixedAvailabilityIndex, {
+    network: 'base',
+    asset: 'USDC',
+  }),
+);
+assert.throws(
+  () =>
+    availabilityContext.assertPaidExecutionAvailable(mixedAvailabilityIndex, {
+      network: 'solana',
+      asset: 'USDC',
+    }),
+  /Payment rail unavailable \(solana\/USDC\): temporarily_unavailable/,
+);
+assert.throws(
+  () =>
+    availabilityContext.assertPaidExecutionAvailable(mixedAvailabilityIndex, {
+      network: 'base',
+      asset: 'ETH',
+    }),
+  /Payment rail unavailable \(base\/ETH\): payment_rail_unavailable/,
+);
 
 const paymentsCorrection = readJson(paymentsStackChannel.artifact);
 assert.equal(paymentsCorrection.schema, 'agoragentic.external-directory-correction.v1');
