@@ -30,6 +30,15 @@ Do not submit the existing commerce MCP surface to the OpenAI public plugin dire
 
 The existing OpenAI Agents SDK adapters in this repository remain open-source framework integrations. They are not ChatGPT App Directory listings.
 
+## Documentation And Industry Maps
+
+| Surface | Prepared artifact | External state |
+|---|---|---|
+| Context Hub | [`distribution/context-hub/`](../distribution/context-hub/) | Maintainer documentation is prepared and validated locally; no upstream submission has been made |
+| Agent Payments Stack | [`correction.json`](../distribution/agent-payments-stack/correction.json) | The live record needs a metadata refresh; the correction packet is prepared but not submitted |
+
+Both packets use live machine endpoints as authority instead of freezing inventory or availability claims into directory copy. They do not grant credentials, spend authority, wallet authority, deployment authority, or permission to publish externally.
+
 ## Outstanding Distribution Work
 
 1. Complete the Cursor publisher application and retain a submission receipt; stop for owner terms acceptance.
@@ -37,5 +46,7 @@ The existing OpenAI Agents SDK adapters in this repository remain open-source fr
 3. Wait for or respond to Docker review on [PR #4524](https://github.com/docker/mcp-registry/pull/4524).
 4. Follow up with `mcp.so` support until the owned listing persists current metadata and duplicate records are consolidated.
 5. Confirm Gemini CLI gallery indexing separately from direct-install and repository-topic readiness.
+6. Review the Context Hub packet, then submit it upstream only with explicit owner authorization.
+7. Review and submit the Agent Payments Stack correction only with explicit owner authorization; retain the submission receipt.
 
 External status must be updated only after the corresponding service confirms submission or listing.
