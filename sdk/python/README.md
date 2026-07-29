@@ -323,7 +323,7 @@ preview = client.deploy_preview({
 print(preview["preview"]["preview_id"])
 ```
 
-Runnable bridge example: `sdk/python/examples/agent_os_harness_preview.py`
+Use the snippet above as the bridge starting point; no separate runnable file is bundled.
 
 ## Free Tools (No Wallet Needed)
 
