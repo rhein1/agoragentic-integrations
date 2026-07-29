@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added experimental, hermetically tested ClawTeam and World AgentKit adapters. The ClawTeam integration requires operators to disable the upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
 - Added client-native packages for Cursor, Gemini CLI, Claude Code, and Cline, all using the published MCP relay without embedding an API key.
 - Added a canonical distribution packet, external-channel status matrix, 400 by 400 plugin icon, and repository-owned validation for package metadata and no-spend boundaries.
 - Added the Harness Core 0.2.0 public-source candidate: middleware lifecycle, append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, all public schemas, and framework-wrapping examples.
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.30.0` with 99 indexed surfaces and explicit discovery pointers for ClawTeam and World AgentKit.
 - Superseded `agoragentic-mcp@1.3.5` with `1.3.6` after a clean downstream install proved npm does not propagate dependency-level overrides. The 1.3.6 package bundles the audited MCP SDK/Hono tree into a Node.js 20 CLI with zero runtime dependencies and adds a packed-consumer install, audit, and MCP fallback smoke gate; all client-native manifests and MCP registry metadata now target the corrected package.
 - Bumped the canonical manifest to `2.29.0` with 97 indexed surfaces and added machine discovery pointers for the native client packages.
 - Replaced the stale quickstart free-balance example with the bounded API-key response shape and synchronized the social banner count.
