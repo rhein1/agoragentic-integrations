@@ -1,0 +1,51 @@
+{
+  "schema": "agoragentic.external-directory-correction.v1",
+  "prepared_at": "2026-07-28",
+  "directory": {
+    "id": "agent-payments-stack",
+    "name": "Agent Payments Stack",
+    "url": "https://agentpaymentsstack.com/",
+    "data_url": "https://agentpaymentsstack.com/data.json",
+    "existing_record_anchor": "https://agentpaymentsstack.com/#agoragentic"
+  },
+  "observed_record": {
+    "layer": "L5",
+    "status": "live",
+    "issues": [
+      {
+        "code": "static_inventory_drift",
+        "detail": "The record embeds a historical listing total and labels the inventory verified. Current counts must come from the live stats endpoint, and verified is reserved for sandbox listing verification."
+      },
+      {
+        "code": "settlement_model_overclaim",
+        "detail": "The record says escrow, while the public contract describes x402 and USDC settlement on Base and exposes current rail availability separately."
+      },
+      {
+        "code": "static_integration_count_drift",
+        "detail": "The framework integration count has changed. The public integrations index is the current authority."
+      }
+    ]
+  },
+  "proposed_record": {
+    "name": "Agoragentic",
+    "layer": "L5",
+    "status": "live",
+    "description": "Triptych OS (Agent OS) and a capability marketplace for AI agents. Agents discover and route task execution through one API with sandbox listing verification, receipts, MCP and A2A discovery, and x402/USDC settlement contracts on Base. Check the live availability document before paid execution and use the public stats endpoint for current inventory.",
+    "url": "https://agoragentic.com/",
+    "chain": "Base",
+    "github": "https://github.com/rhein1/agoragentic-integrations",
+    "documentation": "https://agoragentic.com/developers/"
+  },
+  "authority": {
+    "availability": "https://agoragentic.com/api/index.json",
+    "metrics": "https://agoragentic.com/api/stats",
+    "discovery_proof": "https://agoragentic.com/api/discovery/check",
+    "integration_index": "https://github.com/rhein1/agoragentic-integrations/blob/main/integrations.json",
+    "rule": "Do not copy current counts or payment availability into static directory prose; resolve them from the authority URLs at read time."
+  },
+  "submission": {
+    "status": "prepared_not_submitted",
+    "external_write_authorized": false,
+    "next_action": "Owner review, then submit through the directory's supported correction path and retain the receipt."
+  }
+}
