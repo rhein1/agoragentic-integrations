@@ -45,6 +45,29 @@ function targetUrl(baseUrl, path) {
   return target.href;
 }
 
+function fetchTargetUrl(input, origin) {
+  const value =
+    typeof input === "string" || input instanceof URL
+      ? input
+      : input && typeof input.url === "string"
+        ? input.url
+        : null;
+  if (value === null) {
+    throw new AgoragenticWorldAgentkitError(
+      "invalid_fetch_target",
+      "AgentKit fetch targets must be URL strings, URL objects, or Request objects.",
+    );
+  }
+  const target = new URL(value, `${origin}/`);
+  if (target.origin !== origin) {
+    throw new AgoragenticWorldAgentkitError(
+      "cross_origin_request_blocked",
+      "AgentKit calls and retries must stay on the configured origin.",
+    );
+  }
+  return target;
+}
+
 async function officialFactory() {
   const module = await import("@worldcoin/agentkit");
   return module.createAgentkitClient;
@@ -77,7 +100,18 @@ export async function createAgoragenticWorldAgentkitClient({
   if (typeof factory !== "function") {
     throw new AgoragenticWorldAgentkitError("missing_agentkit_factory", "createAgentkitClient is unavailable.");
   }
-  const agentkit = factory({ signer, fetch: fetchImpl, onEvent });
+  const pinnedFetch = async (input, init = undefined) => {
+    fetchTargetUrl(input, origin);
+    const response = await fetchImpl(input, { ...init, redirect: "manual" });
+    if (response?.type === "opaqueredirect" || (response?.status >= 300 && response.status < 400)) {
+      throw new AgoragenticWorldAgentkitError(
+        "redirect_blocked",
+        "AgentKit redirects are blocked before any signed retry.",
+      );
+    }
+    return response;
+  };
+  const agentkit = factory({ signer, fetch: pinnedFetch, onEvent });
   if (!agentkit || typeof agentkit.fetch !== "function") {
     throw new AgoragenticWorldAgentkitError("invalid_agentkit_client", "World AgentKit returned an invalid client.");
   }
@@ -85,7 +119,7 @@ export async function createAgoragenticWorldAgentkitClient({
   return Object.freeze({
     async fetch(path, init = undefined) {
       const method = String(init?.method || "GET").toUpperCase();
-      if (!allowMutation && !["GET", "HEAD"].includes(method)) {
+      if (allowMutation !== true && !["GET", "HEAD"].includes(method)) {
         throw new AgoragenticWorldAgentkitError(
           "mutation_not_authorized",
           "The AgentKit wrapper is read-only unless allowMutation is explicitly enabled.",

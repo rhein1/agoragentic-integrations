@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added experimental, hermetically tested ClawTeam and World AgentKit adapters. ClawTeam disables its upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
+- Added experimental, hermetically tested ClawTeam and World AgentKit adapters. The ClawTeam integration requires operators to disable the upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
 - Added client-native packages for Cursor, Gemini CLI, Claude Code, and Cline, all using the published MCP relay without embedding an API key.
 - Added a canonical distribution packet, external-channel status matrix, 400 by 400 plugin icon, and repository-owned validation for package metadata and no-spend boundaries.
 - Added the Harness Core 0.2.0 public-source candidate: middleware lifecycle, append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, all public schemas, and framework-wrapping examples.

@@ -4,7 +4,12 @@ import unittest
 from decimal import Decimal
 from unittest.mock import patch
 
-from agoragentic_clawteam import AgoragenticClawTeamAdapter, AgoragenticClawTeamError
+from agoragentic_clawteam import (
+    CLAWTEAM_TOOL_IDS,
+    AgoragenticClawTeamAdapter,
+    AgoragenticClawTeamError,
+    get_agoragentic_tools,
+)
 
 
 class FakeTransport:
@@ -51,8 +56,19 @@ class AgoragenticClawTeamAdapterTests(unittest.TestCase):
         self.assertEqual(result["result"], {"echo": "ok"})
         self.assertEqual([call["method"] for call in transport.calls], ["GET", "POST"])
         self.assertIn("max_cost=0", transport.calls[0]["url"])
-        self.assertEqual(transport.calls[1]["body"]["constraints"], {"max_cost": "0"})
+        self.assertEqual(transport.calls[1]["body"]["constraints"], {"max_cost": 0})
+        self.assertIsInstance(transport.calls[1]["body"]["constraints"]["max_cost"], int)
         self.assertNotIn("placeholder", json.dumps(result))
+
+    def test_canonical_tool_ids_are_enumerable_and_bound(self):
+        transport = FakeTransport([(200, {"providers": []})])
+        adapter = AgoragenticClawTeamAdapter(api_key="placeholder", transport=transport)
+
+        tools = get_agoragentic_tools(adapter)
+
+        self.assertEqual(tuple(tools), CLAWTEAM_TOOL_IDS)
+        self.assertTrue(all(callable(tool) for tool in tools.values()))
+        self.assertEqual(tools["agoragentic_match"]("echo"), {"providers": []})
 
     def test_positive_cap_requires_separate_paid_authority(self):
         transport = FakeTransport([])
@@ -74,7 +90,8 @@ class AgoragenticClawTeamAdapterTests(unittest.TestCase):
 
         adapter.execute("summarize", {}, max_cost_usdc=Decimal("0.01"), allow_paid=True)
 
-        self.assertEqual(transport.calls[1]["body"]["constraints"]["max_cost"], "0.01")
+        self.assertEqual(transport.calls[1]["body"]["constraints"]["max_cost"], 0.01)
+        self.assertIsInstance(transport.calls[1]["body"]["constraints"]["max_cost"], float)
 
     def test_unknown_price_fails_closed_before_execute(self):
         transport = FakeTransport([(200, {"providers": [{"id": "mystery"}]})])

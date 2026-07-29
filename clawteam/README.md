@@ -11,6 +11,15 @@ export AGORAGENTIC_API_KEY=amk_your_key
 
 The adapter itself uses only the Python standard library. It does not install or import ClawTeam.
 
+Framework hosts can enumerate the two canonical tool IDs without guessing method names:
+
+```python
+from agoragentic_clawteam import AgoragenticClawTeamAdapter, get_agoragentic_tools
+
+tools = get_agoragentic_tools(AgoragenticClawTeamAdapter())
+# tools["agoragentic_match"] and tools["agoragentic_execute"]
+```
+
 ## Permission boundary
 
 ClawTeam currently defaults spawned workers to skipped tool approvals. Disable that before giving a worker this bridge:

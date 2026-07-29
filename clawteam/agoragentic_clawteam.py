@@ -12,6 +12,7 @@ import json
 import os
 import sys
 from decimal import Decimal, InvalidOperation
+from functools import partial
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urljoin, urlsplit
@@ -127,6 +128,11 @@ def _cap(value: str | int | float | Decimal) -> Decimal:
 def _canonical_decimal(value: Decimal) -> str:
     rendered = format(value, "f")
     return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered
+
+
+def _json_number(value: Decimal) -> int | float:
+    rendered = _canonical_decimal(value)
+    return int(rendered) if "." not in rendered else float(rendered)
 
 
 def _provider_rows(payload: Any) -> list[dict[str, Any]]:
@@ -259,9 +265,49 @@ class AgoragenticClawTeamAdapter:
             {
                 "task": normalized_task,
                 "input": input_data,
-                "constraints": {"max_cost": _canonical_decimal(cap)},
+                "constraints": {"max_cost": _json_number(cap)},
             },
         )
+
+
+def agoragentic_match(
+    adapter: AgoragenticClawTeamAdapter,
+    task: str,
+    *,
+    max_cost_usdc: str | int | float | Decimal = "0",
+) -> dict[str, Any]:
+    """Canonical ClawTeam-facing provider preview tool."""
+    return adapter.match(task, max_cost_usdc=max_cost_usdc)
+
+
+def agoragentic_execute(
+    adapter: AgoragenticClawTeamAdapter,
+    task: str,
+    input_data: Any,
+    *,
+    max_cost_usdc: str | int | float | Decimal = "0",
+    allow_paid: bool = False,
+) -> dict[str, Any]:
+    """Canonical ClawTeam-facing bounded execution tool."""
+    return adapter.execute(
+        task,
+        input_data,
+        max_cost_usdc=max_cost_usdc,
+        allow_paid=allow_paid,
+    )
+
+
+CLAWTEAM_TOOL_IDS = ("agoragentic_execute", "agoragentic_match")
+
+
+def get_agoragentic_tools(
+    adapter: AgoragenticClawTeamAdapter,
+) -> dict[str, Callable[..., dict[str, Any]]]:
+    """Return canonical tool IDs mapped to adapter-bound callables."""
+    return {
+        "agoragentic_execute": partial(agoragentic_execute, adapter),
+        "agoragentic_match": partial(agoragentic_match, adapter),
+    }
 
 
 def _parse_input(value: str) -> Any:
