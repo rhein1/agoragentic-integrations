@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { pathToFileURL } from "node:url";
 
 const SURFACES = Object.freeze([
   "x402_info",
@@ -154,6 +155,6 @@ function runSelfTest() {
   console.log("AGOS_RUNTIME_OK");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runSelfTest();
 }

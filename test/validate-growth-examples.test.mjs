@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { validateGrowthExampleFile } from "../scripts/validate-growth-examples.mjs";
 
@@ -102,4 +103,25 @@ test("rejects paid x402 flows that allow a second 402 after authorization", () =
   `);
 
   assert(codes.includes("x402_paid_retry_reauthorizes_or_replays"));
+});
+
+test("runs the buyer-flow diagnostic through a Windows-safe main guard", async () => {
+  const entrypoint = new URL(
+    "../examples/agoragentic-growth/2026-07-29-buyer-flow-diagnostic-mjs-6b27a5eaae/buyer-flow-diagnostic.mjs",
+    import.meta.url,
+  );
+  const originalArgv1 = process.argv[1];
+  const originalLog = console.log;
+  const output = [];
+
+  process.argv[1] = fileURLToPath(entrypoint);
+  console.log = (...values) => output.push(values.join(" "));
+  try {
+    await import(entrypoint.href);
+  } finally {
+    console.log = originalLog;
+    process.argv[1] = originalArgv1;
+  }
+
+  assert(output.includes("AGOS_RUNTIME_OK"));
 });
