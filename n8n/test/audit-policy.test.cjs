@@ -80,6 +80,19 @@ test('accepts a fully clean development audit', () => {
 	assert.deepEqual(validateAuditReport(report), { clean: true, allowed: [] });
 });
 
+test('accepts a shrinking subset of the documented advisory graph', () => {
+	const report = allowedReport();
+	for (const [name, vulnerability] of Object.entries(report.vulnerabilities)) {
+		if (name !== 'brace-expansion') vulnerability.severity = 'moderate';
+	}
+	report.metadata.vulnerabilities.high = 1;
+	report.metadata.vulnerabilities.moderate = allowedPackages.length - 1;
+	assert.deepEqual(validateAuditReport(report), {
+		clean: false,
+		allowed: ['brace-expansion'],
+	});
+});
+
 test('rejects a new advisory even when it affects an allowed package', () => {
 	const report = allowedReport();
 	report.vulnerabilities['brace-expansion'].via.push({
@@ -103,5 +116,14 @@ test('rejects changes to the affected package graph', () => {
 	assert.throws(
 		() => validateAuditReport(report),
 		/unexpected audit package set/,
+	);
+});
+
+test('rejects inconsistent high-severity counts', () => {
+	const report = allowedReport();
+	report.metadata.vulnerabilities.high -= 1;
+	assert.throws(
+		() => validateAuditReport(report),
+		/unexpected vulnerability counts/,
 	);
 });

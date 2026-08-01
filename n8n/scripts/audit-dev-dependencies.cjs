@@ -30,18 +30,20 @@ function validateAuditReport(report) {
 		),
 	);
 	const names = Object.keys(vulnerabilities);
+	const counts = report.metadata?.vulnerabilities;
+	if (!counts || counts.critical !== 0 || counts.high !== names.length) {
+		throw new Error(
+			`unexpected vulnerability counts: ${JSON.stringify(counts ?? null)}`,
+		);
+	}
 	if (names.length === 0) {
 		return { clean: true, allowed: [] };
 	}
 
 	const unexpectedPackages = names.filter((name) => !ALLOWED_PACKAGES.has(name));
-	const missingPackages = [...ALLOWED_PACKAGES].filter(
-		(name) => !Object.hasOwn(vulnerabilities, name),
-	);
-	if (unexpectedPackages.length || missingPackages.length) {
+	if (unexpectedPackages.length) {
 		throw new Error(
-			`unexpected audit package set; extra=${unexpectedPackages.join(',') || 'none'} ` +
-				`missing=${missingPackages.join(',') || 'none'}`,
+			`unexpected audit package set; extra=${unexpectedPackages.join(',')}`,
 		);
 	}
 
@@ -72,13 +74,6 @@ function validateAuditReport(report) {
 	) {
 		throw new Error(
 			`unexpected advisory set: ${[...advisoryUrls].sort().join(',') || 'none'}`,
-		);
-	}
-
-	const counts = report.metadata?.vulnerabilities;
-	if (!counts || counts.critical !== 0 || counts.high !== ALLOWED_PACKAGES.size) {
-		throw new Error(
-			`unexpected vulnerability counts: ${JSON.stringify(counts ?? null)}`,
 		);
 	}
 
