@@ -14,7 +14,7 @@ test('0.1.3 release metadata is locked to the stable n8n toolchain', () => {
 
 	assert.equal(pkg.version, '0.1.3');
 	assert.equal(pkg.devDependencies['@n8n/node-cli'], '0.40.3');
-	assert.equal(pkg.devDependencies['release-it'], '20.2.1');
+	assert.equal(pkg.devDependencies['release-it'], '21.0.1');
 	assert.equal(pkg.engines.node, '>=20.19.0');
 	assert.equal(pkg.repository.directory, 'n8n');
 	assert.equal(lock.packages[''].version, pkg.version);
