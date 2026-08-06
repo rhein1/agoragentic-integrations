@@ -1,116 +1,162 @@
 # Agoragentic Harness Core
 
-Harness Core is the open, local, no-spend bridge from a self-hosted or framework-specific agent into Triptych OS (Agent OS) preview. It is a policy, event, proof, and receipt harness around local agent runtimes, not a hosted executor.
+![Harness Core — put a policy gate and a receipt around any agent action](assets/harness-core-product-hero.svg)
 
-It does not deploy infrastructure, spend funds, publish marketplace listings, create x402 paid routes, rank providers, expose private connectors, or grant Full ECF access.
+## Put a policy gate and a receipt around any agent action.
 
-## Selective OSS Scope
+**Harness Core is an open, local governance kernel for existing agent hosts and frameworks.** It gives a proposed action a bounded lifecycle:
 
-Harness Core is the open-source package boundary for policy, evidence, receipts, readiness, CLI, schemas, profiles, local run ledger, and host/framework adapters. It wraps existing agent frameworks instead of replacing them.
-
-The canonical release boundary ships as [Selective OSS Release Scope](RELEASE_SCOPE.md). Public framework examples live in [Harness Core framework wrapping examples](https://github.com/rhein1/agoragentic-integrations/tree/main/examples/harness-core-frameworks) and cover LangGraph, CrewAI, MCP, Codex, Hermes, and the Rust reference runtime with preview/readiness-only authority flags.
-
-## Install Locally
-
-```bash
-npm install
-node harness-core/bin/agoragentic-harness.mjs init
+```text
+intent
+→ policy
+→ approval when required
+→ tool execution by the host
+→ evidence capture
+→ clearly labeled local receipt
 ```
 
-When published as a standalone package, the intended entrypoint is:
+Harness Core can observe, allow, ask, deny, record, and export local evidence. It does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.
 
 ```bash
-npx agoragentic-harness-core init
+npx agoragentic-harness-core@latest init
+npx agoragentic-harness-core@latest run \
+  --profile local_no_spend \
+  --task "Inspect this repository and produce local proof"
 ```
 
-Version `0.2.0` is the middleware-kernel release: local run ledgers, lifecycle events, review artifacts, runtime metadata probes, context refs, profiles, schedule intent, and worktree-session evidence remain local and no-spend.
+Expected local outputs include:
 
-## Commands
+```text
+agent.yaml
+policy.yaml
+.agoragentic/
+├── runs/<run_id>/
+│   ├── state.json
+│   ├── events.jsonl
+│   ├── local-proof.json
+│   ├── local-receipt.json
+│   └── summary.md
+├── approvals/
+├── runtime-probes/
+├── listing-readiness.json
+└── agent-os-harness.json
+```
+
+**Local receipts are not settlement receipts, certifications, endorsements, or marketplace verification.** They record supported local policy, lifecycle, evidence, and result facts.
+
+<p>
+  <a href="#five-minute-proof"><strong>Run the proof</strong></a>
+  ·
+  <a href="#live-enforcement"><strong>Enforce a live host</strong></a>
+  ·
+  <a href="#framework-and-host-adapters"><strong>Wrap a framework</strong></a>
+  ·
+  <a href="#agent-os-preview"><strong>Preview Agent OS</strong></a>
+</p>
+
+## Why Harness Core
+
+Agent frameworks are good at running tools. They are not all designed to answer the same governance questions:
+
+- What was the agent trying to do?
+- Which policy applied before the action?
+- Did the action require owner review?
+- What tool was proposed and what actually ran?
+- Which evidence supports the reported result?
+- What remains blocked or unknown?
+- Can the run be handed to a hosted control plane without granting authority early?
+
+Harness Core adds that common control and evidence layer without replacing LangGraph, CrewAI, Codex, Claude Code, MCP, Hermes, a Rust runtime, or another executor.
+
+## Five-minute proof
+
+### 1. Initialize a local harness project
 
 ```bash
-agoragentic-harness init [template]
-agoragentic-harness validate
-agoragentic-harness proof
-agoragentic-harness proof --record
-agoragentic-harness run --profile local_no_spend --task "..."
-agoragentic-harness loop seller-listing-readiness --once --write-inbox
-agoragentic-harness schedule plan seller-listing-readiness --interval daily
-agoragentic-harness schedule list
-agoragentic-harness schedule due
-agoragentic-harness worktree attach --path ../agent-worktree --branch codex/example
-agoragentic-harness worktree status
-agoragentic-harness worktree detach
-agoragentic-harness review gates init --maker local_maker --checker owner_checker
-agoragentic-harness review request --gate listing-readiness --maker local_maker --checker owner_checker
-agoragentic-harness review decide review_<id> --decision approve --checker owner_checker
-agoragentic-harness review list
-agoragentic-harness export --to agent-os
-agoragentic-harness listing check
-agoragentic-harness guard check --policy guard-policy.json --action action.json
-agoragentic-harness runtime probe --url http://127.0.0.1:8080 --contract agoragentic-rust-http
-agoragentic-harness context import --from micro-ecf
-agoragentic-harness context status
-agoragentic-harness approvals list
-agoragentic-harness approvals show approval_<id>
-agoragentic-harness approvals decide approval_<id> --decision approve --note "local review"
-agoragentic-harness runs list
-agoragentic-harness runs show run_<id>
-agoragentic-harness events tail --run run_<id> --limit 50
-agoragentic-harness profiles list
-agoragentic-harness profiles show local_no_spend
-agoragentic-harness status --write
-agoragentic-harness adapters
-agoragentic-harness review init|list|status
-agoragentic-harness review request --gate listing-readiness --maker <label>
-agoragentic-harness review decide review_<id> --decision approve --checker <label>
-agoragentic-harness tools manifest init
-agoragentic-harness tools list
-agoragentic-harness tools inspect agent_os.preview_submit
-agoragentic-harness improve suggest
-agoragentic-harness improve decide improve_<id> --decision accept
-agoragentic-harness owner-inbox
-agoragentic-harness budget init|status
-agoragentic-harness retry init|status
+npx agoragentic-harness-core@latest init
 ```
 
-## Artifacts
+Review the generated `agent.yaml` and `policy.yaml` before running a host or tool.
 
-Harness Core creates:
+### 2. Validate the contract
 
-- `agent.yaml`
-- `policy.yaml`
-- `.agoragentic/runs/<run_id>/state.json`
-- `.agoragentic/runs/<run_id>/events.jsonl`
-- `.agoragentic/runs/<run_id>/local-proof.json`
-- `.agoragentic/runs/<run_id>/local-receipt.json`
-- `.agoragentic/runs/<run_id>/summary.md`
-- `.agoragentic/local-proof.json`
-- `.agoragentic/local-receipt.json`
-- `.agoragentic/agent-os-harness.json`
-- `.agoragentic/listing-readiness.json`
-- `.agoragentic/guard-receipts/*.json` when `guard check --write-receipt` is used
-- `.agoragentic/approvals/approval_<id>.json`
-- `.agoragentic/runtime-probes/<probe_id>.json`
-- `.agoragentic/context-imports/<source>.json`
-- `.agoragentic/status.json` and `.agoragentic/status.md` when `status --write` is used
-- `.agoragentic/owner-inbox.json` and `.agoragentic/owner-inbox.md` when the local loop writes an owner review packet
-- `.agoragentic/review-gates.json` when local maker-checker review gates are initialized or used
-- `.agoragentic/harness-schedule.json` when a local schedule intent is planned
-- `.agoragentic/worktree-session.json` when a coding-agent worktree session is attached
+```bash
+npx agoragentic-harness-core@latest validate
+```
 
-The generated export packet matches `agoragentic.agent-os.harness.v1` and is meant for `POST /api/hosting/agent-os/preview` through the hosted Agent OS flow.
+### 3. Record a no-spend run
 
-Harness projects may include `guard_policy` or `wallet_action_policy` in `policy.yaml`. Harness validates that budgeted or spend-capable packets have a Guard-style policy and exports that policy as preview metadata only. It does not sign transactions, call `/api/execute`, settle x402 payments, mutate wallets, or grant marketplace execution authority.
+```bash
+npx agoragentic-harness-core@latest run \
+  --profile local_no_spend \
+  --task "Create an evidence-backed readiness summary"
+```
 
-## Run Ledger
+### 4. Inspect the ledger and receipt
 
-`agoragentic-harness run` records a local run ledger under `.agoragentic/runs/<run_id>/`. The ledger includes append-only events, state, run-scoped proof/receipt artifacts, and a Markdown summary. `proof --record` is an alias for the recorded run path. The legacy `proof` command still writes only `.agoragentic/local-proof.json` and `.agoragentic/local-receipt.json` for compatibility.
+```bash
+npx agoragentic-harness-core@latest runs list
+npx agoragentic-harness-core@latest runs show run_<id>
+npx agoragentic-harness-core@latest events tail --run run_<id> --limit 50
+```
 
-Local run receipts are not settlement receipts. They prove local policy checks and evidence capture only.
+Success means the run has an append-only event stream, a terminal state, source/evidence references, and a local receipt whose claims match the recorded lifecycle. Missing evidence should remain blocked or unknown rather than being invented.
 
-### Middleware Lifecycle
+## Live enforcement
 
-Adapter authors can import `executeHarnessRun` from `agoragentic-harness-core/kernel/run` and `MiddlewareRegistry` from `agoragentic-harness-core/kernel/middleware-registry`. A passing recorded run dispatches these hooks in boundary order:
+Harness Core can enforce policy in-path when a host exposes a pre-tool hook.
+
+### Claude Code `PreToolUse`
+
+The packaged hook maps a proposed tool call to a capability, checks `policy.yaml`, scans for prompt-injection, secret-exfiltration, and unauthorized-spend signals, writes a redacted decision record, and returns:
+
+```text
+allow
+ask
+or
+deny
+```
+
+Generate the configuration:
+
+```bash
+npx agoragentic-harness-core@latest hooks config
+```
+
+Add the emitted hook to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx agoragentic-harness-core@latest hook pretooluse"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook can block or request review. It does not execute the proposed tool itself. Read-only tools may be allowed by policy; writes, shell, network, and MCP calls may require review; irreversible, publication, wallet, or other prohibited actions may be denied.
+
+Decision records are redacted and stored locally under `.agoragentic/`. Do not treat a hook decision as proof that every downstream side effect occurred safely or correctly.
+
+## Middleware lifecycle
+
+Adapter authors can use the public kernel:
+
+```js
+import { executeHarnessRun } from 'agoragentic-harness-core/kernel/run';
+import { MiddlewareRegistry } from 'agoragentic-harness-core/kernel/middleware-registry';
+```
+
+A recorded run dispatches lifecycle hooks in boundary order:
 
 ```text
 before_agent
@@ -127,85 +173,332 @@ after_agent
 run_completed
 ```
 
-Any hook through `after_agent` may fail closed before the run is marked passed. `after_export` receives the generated packet and local artifact path after the export is written; `before_export` runs before either exists. Hooks observe, validate, record, or block local work; registering middleware does not execute a framework or tool and grants no wallet, x402, marketplace, hosted runtime, provider, trust, public execute/invoke, private ECF, owner-bypass, shell, or process-control authority.
+Hooks through `after_agent` may fail closed before the run is marked passed. `before_export` runs before an Agent OS packet exists; `after_export` receives the generated packet and local artifact reference.
 
-## Local Loop
+Middleware may observe, validate, redact, record, or block. Registering middleware does not grant shell, process-control, provider-dispatch, wallet, x402, public execute/invoke, trust-mutation, hosted-runtime, private ECF, or owner-bypass authority.
 
-`agoragentic-harness loop seller-listing-readiness --once --write-inbox` runs the `seller_listing_readiness` profile once, writes the normal run packet, refreshes status, writes the top-level Agent OS Harness export, runs the proposal-only listing readiness check, and writes `.agoragentic/owner-inbox.json` plus `.md` for owner review.
+## Framework and host adapters
 
-The owner inbox stores refs, statuses, blockers, pending approvals, and next owner actions only. It does not inline raw private payloads, raw prompts, raw tool outputs, private ECF payloads, secrets, or the full Agent OS export packet. It is not a scheduler and does not grant process-control authority.
+List the packaged adapters:
 
-## Local Schedule Intent
-
-`agoragentic-harness schedule plan seller-listing-readiness --interval daily` records local schedule intent in `.agoragentic/harness-schedule.json`. `schedule list` shows planned loop intents. `schedule due` computes whether a loop is due from the latest passed matching local run and the planned interval.
-
-The schedule layer is due-state metadata only. It does not start a background process, daemon, cron job, Task Scheduler job, systemd timer, hosted automation, shell, service, SSH session, tunnel, or loop run. A due loop must still be invoked manually with `agoragentic-harness loop seller-listing-readiness --once --write-inbox`.
-
-## Worktree Session
-
-`agoragentic-harness worktree attach --path <path> --branch <branch>` records which local coding-agent worktree, branch, optional commit SHA, optional PR ref, dirty-state label, and owner-review state the harness is reviewing. `worktree status` reads the local metadata plus latest Harness run ref. `worktree detach` marks the session inactive.
-
-Worktree sessions are refs/status/receipt tracking only. Harness Core does not run `git`, create branches, push, open pull requests, execute shell commands, execute framework tools, dispatch providers, mutate hosted state, or write hosted memory.
-
-## Maker-Checker Review Gates
-
-`agoragentic-harness review gates init` creates `.agoragentic/review-gates.json` with a local `listing-readiness` gate. `review request --gate listing-readiness` records a pending maker-checker request with required evidence refs and blocked actions. `review decide <review_id> --decision approve|reject|needs_changes --checker <label>` records the checker decision.
-
-Review decisions are local records only. They do not execute approvals, submit Agent OS previews, publish listings, activate x402, spend funds, mutate trust, dispatch providers, write hosted memory, bypass owner approval, or change public execute/invoke behavior. Approvals require explicit checker metadata; a maker cannot approve their own review as checker.
-
-## Runtime Probe
-
-`runtime probe` is a metadata/readiness check for local runtimes. It accepts loopback URLs only by default and uses HTTP GET for `/health`, `/.well-known/agent-card.json`, `/tools`, `/openapi.json`, and `/schema/agoragentic-rust-framework.json`. It does not invoke the agent, call `/api/execute`, call `/api/invoke`, make paid calls, shell out, dispatch providers, or provision hosted runtime.
-
-Tool specs are sanitized before export and rejected if they imply wallet, x402, marketplace publication, trust mutation, provider dispatch, process control, global execute/invoke, private ECF export, or owner-approval bypass authority.
-
-## Context Import
-
-`context import` records references and hashes for Micro ECF or ECF Core artifacts. It does not inline raw source content, raw prompts, raw tool output, private ECF payloads, secrets, or raw database content.
-
-## Approvals
-
-Approval artifacts are local decision records only. `approvals decide` records approve/reject/edit intent and explicitly does not execute the requested action or bypass Agent OS owner approval controls.
-
-## Live Enforcement (Claude Code)
-
-Harness Core can enforce policy on a live Claude Code agent through a PreToolUse
-hook — turning the policy from a description into an in-path gate. Before every
-tool call, the hook maps the proposed action to a capability, scans it for prompt
-injection / secret exfiltration / unauthorized-spend phrasing, checks it against
-`policy.yaml` (`denied_tools`, `blocked_paths`) plus built-in safe-by-default
-rules, records a redacted decision to `.agoragentic/claude-code-hook-decisions.jsonl`,
-and returns `allow`, `ask`, or `deny`.
-
-It can only **block** — it never executes a tool, spends, settles, publishes, or
-grants authority. Read-only tools are allowed; writes, shell, network, and MCP
-calls require review; irreversible / publish / wallet actions are denied.
-
-Enable it by adding the snippet from `agoragentic-harness hooks config` to your
-`.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "*", "hooks": [{ "type": "command", "command": "npx agoragentic-harness-core hook pretooluse" }] }
-    ]
-  }
-}
+```bash
+npx agoragentic-harness-core@latest adapters
 ```
 
-## Boundary
+Public framework examples live in [`examples/harness-core-frameworks`](../examples/harness-core-frameworks/) and cover paths such as:
 
-Harness Core is proposal and proof infrastructure only. It keeps all live authority outside the package:
+- LangGraph;
+- CrewAI;
+- MCP;
+- Codex;
+- Claude Code;
+- Hermes;
+- the Agoragentic Rust reference runtime.
 
-- No hosted billing
-- No cloud provisioning
-- No marketplace publication
-- No hosted runtime secrets
-- No wallet custody
-- No settlement or payout orchestration
-- No router ranking or trust mutation
-- No Full ECF internals
-- No provider dispatch
-- No public execute/invoke behavior changes
-- No process control or arbitrary shell execution
+The adapter boundary is intentionally thin:
+
+```text
+external host or framework
+        ↓
+Harness middleware lifecycle
+        ↓
+local policy + approvals + evidence + receipt
+        ↓
+optional owner-reviewed Agent OS preview export
+```
+
+An adapter must not duplicate the policy engine, create a competing receipt family, persist raw tool output by default, or imply that installing it grants hosted or financial authority.
+
+## Policy, approvals, and review gates
+
+### Approval records
+
+```bash
+npx agoragentic-harness-core@latest approvals list
+npx agoragentic-harness-core@latest approvals show approval_<id>
+npx agoragentic-harness-core@latest approvals decide approval_<id> \
+  --decision approve \
+  --note "Reviewed locally"
+```
+
+An approval artifact records a local decision. It does not perform the requested action or bypass a separate Agent OS owner approval.
+
+### Maker-checker gates
+
+```bash
+npx agoragentic-harness-core@latest review gates init \
+  --maker local_maker \
+  --checker owner_checker
+
+npx agoragentic-harness-core@latest review request \
+  --gate listing-readiness \
+  --maker local_maker \
+  --checker owner_checker
+
+npx agoragentic-harness-core@latest review decide review_<id> \
+  --decision approve \
+  --checker owner_checker
+```
+
+A maker cannot approve their own review as checker. Review decisions remain local records and do not publish a listing, activate x402, spend, dispatch a provider, write hosted memory, or mutate trust.
+
+## Run ledger and proof artifacts
+
+`run` records a run-scoped ledger under `.agoragentic/runs/<run_id>/`.
+
+```bash
+npx agoragentic-harness-core@latest proof --record
+```
+
+`proof --record` uses the recorded run path. The legacy `proof` command remains available for compatibility and writes the top-level local proof and receipt files.
+
+Core run artifacts:
+
+| Artifact | Purpose |
+|---|---|
+| `state.json` | terminal and intermediate run state |
+| `events.jsonl` | append-only lifecycle evidence |
+| `local-proof.json` | supported local proof claims and blockers |
+| `local-receipt.json` | local run identity, policy/result facts, evidence refs, and next safe action |
+| `summary.md` | human-readable bounded summary |
+
+Receipts should retain hashes and references rather than secret-bearing raw payloads. Raw prompts, private tool output, private ECF payloads, credentials, and wallet material should not be copied into public or owner-inbox artifacts.
+
+## Runtime probes
+
+Probe a local runtime contract without invoking its business tool:
+
+```bash
+npx agoragentic-harness-core@latest runtime probe \
+  --url http://127.0.0.1:8080 \
+  --contract agoragentic-rust-http
+```
+
+The default probe accepts loopback targets and uses read-only HTTP GET requests for declared metadata such as:
+
+```text
+/health
+/.well-known/agent-card.json
+/tools
+/openapi.json
+/schema/agoragentic-rust-framework.json
+```
+
+A runtime probe does not call `/api/execute`, call `/api/invoke`, make a paid request, shell out, dispatch a provider, or provision hosted runtime.
+
+Tool specifications are sanitized before export and rejected when they imply prohibited wallet, settlement, marketplace-publication, trust-mutation, process-control, owner-bypass, private-ECF, or unrestricted execute/invoke authority.
+
+## Context imports
+
+Import references and hashes from a supported local context system:
+
+```bash
+npx agoragentic-harness-core@latest context import --from micro-ecf
+npx agoragentic-harness-core@latest context status
+```
+
+Context import records bounded artifact references. It does not inline raw repository source, prompts, tool output, database contents, secrets, or private Full ECF payloads.
+
+Use:
+
+- [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) for a lightweight persistent project boundary;
+- [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) for richer self-hosted context routing, evidence, grounding evaluation, and local MCP.
+
+## Local readiness loop
+
+Run the proposal-only seller-listing readiness profile once:
+
+```bash
+npx agoragentic-harness-core@latest loop \
+  seller-listing-readiness \
+  --once \
+  --write-inbox
+```
+
+The loop writes the normal run packet, refreshes local status, exports the current Harness packet, evaluates proposal-only listing readiness, and creates an owner inbox with refs, blockers, pending approvals, and next owner actions.
+
+It does not publish a listing or start an unattended background process.
+
+### Schedule intent
+
+```bash
+npx agoragentic-harness-core@latest schedule plan \
+  seller-listing-readiness \
+  --interval daily
+
+npx agoragentic-harness-core@latest schedule list
+npx agoragentic-harness-core@latest schedule due
+```
+
+The schedule is due-state metadata only. It does not install cron, Task Scheduler, systemd, a daemon, a service, a tunnel, an SSH session, a shell process, or hosted automation. A due loop still requires an explicit invocation.
+
+## Coding-agent worktree sessions
+
+Attach the local branch/worktree being reviewed:
+
+```bash
+npx agoragentic-harness-core@latest worktree attach \
+  --path ../agent-worktree \
+  --branch codex/example
+
+npx agoragentic-harness-core@latest worktree status
+npx agoragentic-harness-core@latest worktree detach
+```
+
+This records refs, dirty-state labels, optional commit/PR references, owner-review state, and the latest Harness run. It does not run Git, create branches, push, open pull requests, execute shell commands, invoke tools, or mutate hosted state.
+
+## Agent OS preview
+
+Generate a no-spend preview packet:
+
+```bash
+npx agoragentic-harness-core@latest export --to agent-os
+```
+
+The export follows `agoragentic.agent-os.harness.v1` and is intended for the hosted preview route:
+
+```text
+POST /api/hosting/agent-os/preview
+```
+
+Harness can include `guard_policy` or `wallet_action_policy` metadata and validate that a spend-capable proposal declares an appropriate policy. It does not sign transactions, call a paid capability, settle x402, mutate a wallet, rank providers, publish a listing, or create a hosted runtime.
+
+Preview validates a handoff. Deployment, funding, public exposure, selling, and paid execution remain separate owner-reviewed steps.
+
+## Listing readiness
+
+```bash
+npx agoragentic-harness-core@latest listing check
+```
+
+The command produces a proposal/readiness artifact. `ready` means the configured local evidence contract passed; it does not mean the listing is published, independently verified, currently invocable, payment-ready, or approved by a marketplace operator.
+
+## Guard receipts
+
+Evaluate an action against a local guard policy:
+
+```bash
+npx agoragentic-harness-core@latest guard check \
+  --policy guard-policy.json \
+  --action action.json \
+  --write-receipt
+```
+
+Guard receipts are local policy-decision records. They are not transaction signatures or settlement evidence.
+
+## Tool manifests and bounded improvement
+
+```bash
+npx agoragentic-harness-core@latest tools manifest init
+npx agoragentic-harness-core@latest tools list
+npx agoragentic-harness-core@latest tools inspect agent_os.preview_submit
+
+npx agoragentic-harness-core@latest improve suggest
+npx agoragentic-harness-core@latest improve decide improve_<id> \
+  --decision accept
+```
+
+Improvement candidates remain proposals. Accepting a local candidate does not automatically promote, publish, deploy, change Router trust, or mutate a hosted skill.
+
+## Command map
+
+```text
+init [template]
+validate
+proof
+proof --record
+run --profile <profile> --task "..."
+
+approvals list|show|decide
+runs list|show
+events tail
+profiles list|show
+status --write
+adapters
+
+review init|list|status
+review gates init
+review request
+review decide
+
+runtime probe
+context import|status
+worktree attach|status|detach
+schedule plan|list|due
+loop seller-listing-readiness --once --write-inbox
+
+listing check
+guard check
+tools manifest init
+tools list|inspect
+improve suggest|decide
+owner-inbox
+budget init|status
+retry init|status
+export --to agent-os
+```
+
+Use `--help` on the relevant command for exact options supported by the installed version.
+
+## Source development
+
+The source tree declares Harness Core `0.2.0`. The npm `@latest` tag reflects current registry state and may trail this branch until a reviewed release is published.
+
+```bash
+git clone https://github.com/rhein1/agoragentic-integrations.git
+cd agoragentic-integrations/harness-core
+npm install
+npm test
+npm run pack:smoke
+```
+
+The package requires Node.js 18 or newer.
+
+## Selective OSS boundary
+
+Harness Core is the public package boundary for:
+
+- policy and lifecycle events;
+- approval and review records;
+- local run ledgers;
+- proof and local receipt schemas;
+- readiness and status artifacts;
+- runtime metadata probes;
+- context references;
+- host/framework adapters;
+- Agent OS preview exports.
+
+See [Selective OSS Release Scope](RELEASE_SCOPE.md).
+
+It does not include or grant:
+
+- hosted billing or cloud provisioning;
+- marketplace publication;
+- hosted runtime secrets;
+- wallet custody, transaction signing, settlement, or payout orchestration;
+- Router ranking, fraud scoring, or trust mutation;
+- provider dispatch or unrestricted public execute/invoke behavior;
+- private Full ECF internals;
+- arbitrary shell or process control;
+- owner-approval bypass.
+
+## Where this fits
+
+```text
+Existing agent host or framework
+→ Harness Core policy, approval, evidence, and local receipts
+→ optional Micro ECF / ECF Core context references
+→ optional owner-reviewed Triptych OS preview
+→ separately authorized deployment or marketplace flow
+```
+
+- [Agoragentic ecosystem profile](../ecosystem.json)
+- [Brand and README contract](../docs/BRAND_SYSTEM.md)
+- [Framework examples](../examples/harness-core-frameworks/)
+- [Triptych OS](https://agoragentic.com/agent-os/)
+- [Marketplace](https://agoragentic.com/marketplace/)
+- [Interchange](https://agoragentic.com/interchange/)
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
