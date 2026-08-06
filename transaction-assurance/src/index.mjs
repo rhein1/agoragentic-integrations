@@ -1,0 +1,734 @@
+import { createHash } from 'node:crypto';
+
+export const AUTHORITY_PROTOCOLS = Object.freeze([
+  'agoragentic_mandate',
+  'google_ap2',
+  'visa_tap',
+  'openai_stripe_acp',
+  'x402',
+  'circle_agent_wallet_policy',
+  'skyfire_kyapay',
+  'mastercard_verifiable_intent',
+  'other',
+]);
+
+export const ASSURANCE_STATES = Object.freeze([
+  'incomplete',
+  'authority_ready',
+  'payment_pending',
+  'payment_observed',
+  'execution_observed',
+  'outcome_verified',
+  'reconciled',
+  'failed',
+  'refunded',
+  'disputed',
+]);
+
+const VERIFICATION_STATUSES = new Set([
+  'not_checked',
+  'unverified',
+  'verified',
+  'failed',
+  'unknown',
+  'not_applicable',
+]);
+
+const MONEY_PATTERN = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function cloneJson(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function sortForCanonicalization(value) {
+  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sortForCanonicalization(value[key])]),
+  );
+}
+
+export function canonicalize(value) {
+  return JSON.stringify(sortForCanonicalization(value));
+}
+
+export function sha256Ref(value) {
+  const input = typeof value === 'string' ? value : canonicalize(value);
+  return `sha256:${createHash('sha256').update(input, 'utf8').digest('hex')}`;
+}
+
+function normalizeDate(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+    return new Date(milliseconds).toISOString();
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function requireIsoDate(value, field) {
+  const normalized = normalizeDate(value);
+  if (!normalized || !ISO_DATE_PATTERN.test(normalized)) {
+    throw new TypeError(`${field} must be an ISO date-time`);
+  }
+  return normalized;
+}
+
+function normalizeMoney(value, fallback = '0') {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'string' && MONEY_PATTERN.test(value)) return value;
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    throw new TypeError(`Invalid non-negative decimal money value: ${JSON.stringify(value)}`);
+  }
+  const normalized = number.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (!MONEY_PATTERN.test(normalized)) throw new TypeError(`Unable to normalize money value: ${value}`);
+  return normalized;
+}
+
+function normalizeString(value, fallback = null, maxLength = 2000) {
+  if (value === null || value === undefined) return fallback;
+  const normalized = String(value).trim();
+  if (!normalized) return fallback;
+  return normalized.slice(0, maxLength);
+}
+
+function normalizeList(value, { maxItems = 200, maxLength = 2000 } = {}) {
+  if (value === null || value === undefined) return [];
+  const source = Array.isArray(value) ? value : [value];
+  return [...new Set(source
+    .map((item) => normalizeString(item, null, maxLength))
+    .filter(Boolean))]
+    .slice(0, maxItems);
+}
+
+function getPath(object, path) {
+  let cursor = object;
+  for (const segment of path.split('.')) {
+    if (!isPlainObject(cursor) && !Array.isArray(cursor)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(cursor, segment)) return undefined;
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+
+function firstValue(object, paths) {
+  for (const path of paths) {
+    const value = getPath(object, path);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
+function flattenKeys(value, output = new Set(), depth = 0) {
+  if (depth > 8 || value === null || value === undefined) return output;
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 100)) flattenKeys(item, output, depth + 1);
+    return output;
+  }
+  if (!isPlainObject(value)) return output;
+  for (const [key, child] of Object.entries(value)) {
+    output.add(String(key).toLowerCase().replace(/[^a-z0-9]/g, ''));
+    flattenKeys(child, output, depth + 1);
+  }
+  return output;
+}
+
+function containsAny(keys, candidates) {
+  return candidates.some((candidate) => keys.has(candidate));
+}
+
+function scoreDetection(protocol, confidence, reasons) {
+  return Object.freeze({ protocol, confidence, reasons: Object.freeze([...reasons]) });
+}
+
+export function detectAuthorityProtocol(artifact, options = {}) {
+  const hint = normalizeString(options.protocolHint);
+  if (hint) {
+    if (!AUTHORITY_PROTOCOLS.includes(hint)) {
+      throw new TypeError(`Unsupported protocolHint: ${hint}`);
+    }
+    return scoreDetection(hint, 'hinted', ['caller supplied protocolHint; recognition is not verification']);
+  }
+
+  if (!isPlainObject(artifact)) {
+    return scoreDetection('other', 'low', ['artifact is not a JSON object']);
+  }
+
+  const keys = flattenKeys(artifact);
+  const schema = normalizeString(firstValue(artifact, ['$schema', 'schema', 'type']), '')?.toLowerCase() || '';
+  const serializedPrefix = canonicalize(artifact).slice(0, 20_000).toLowerCase();
+
+  if (
+    schema.includes('agoragentic')
+    || (containsAny(keys, ['ownerid', 'buyeragentid']) && keys.has('budget'))
+    || containsAny(keys, ['agoragenticagentcommercemandatev1', 'mandateapprovedtransactionplan'])
+  ) {
+    return scoreDetection('agoragentic_mandate', 'high', ['native Agoragentic mandate markers found']);
+  }
+
+  if (
+    schema.includes('ap2')
+    || containsAny(keys, ['intentmandate', 'cartmandate', 'paymentmandate', 'ap2mandate'])
+    || serializedPrefix.includes('ap2-protocol')
+  ) {
+    return scoreDetection('google_ap2', 'high', ['AP2 mandate markers found']);
+  }
+
+  if (
+    containsAny(keys, ['agentrecognition', 'consumerrecognition', 'paymentcontainer', 'signatureinput'])
+    || schema.includes('trusted-agent-protocol')
+    || serializedPrefix.includes('visa tap')
+  ) {
+    return scoreDetection('visa_tap', 'medium', ['Visa TAP identity/intent signature markers found']);
+  }
+
+  if (
+    schema.includes('agentic-commerce-protocol')
+    || containsAny(keys, ['agenticcheckout', 'delegatepayment', 'paymenthandler', 'checkoutsessions'])
+    || serializedPrefix.includes('agentic commerce protocol')
+  ) {
+    return scoreDetection('openai_stripe_acp', 'medium', ['official ACP checkout/delegated-payment markers found']);
+  }
+
+  if (
+    containsAny(keys, [
+      'x402version',
+      'paymentrequired',
+      'paymentpayload',
+      'paymentsignature',
+      'paymentidentifier',
+      'signedoffer',
+      'signedreceipt',
+    ])
+    || schema.includes('x402')
+  ) {
+    return scoreDetection('x402', 'high', ['x402 payment/offer/receipt markers found']);
+  }
+
+  if (
+    containsAny(keys, ['walletsetid', 'spendingpolicy', 'circleagentwallet', 'circlewallet'])
+    || (serializedPrefix.includes('circle') && containsAny(keys, ['walletid', 'policyid', 'rules']))
+  ) {
+    return scoreDetection('circle_agent_wallet_policy', 'medium', ['Circle wallet/policy markers found']);
+  }
+
+  if (
+    containsAny(keys, ['skyfirepayid', 'kyapay', 'kyatoken', 'kya'])
+    || serializedPrefix.includes('skyfire-pay-id')
+  ) {
+    return scoreDetection('skyfire_kyapay', 'medium', ['Skyfire KYA/KYAPay markers found']);
+  }
+
+  if (
+    containsAny(keys, ['verifiableintent', 'mastercardagentpay', 'agentictoken'])
+    || serializedPrefix.includes('mastercard agent pay')
+  ) {
+    return scoreDetection('mastercard_verifiable_intent', 'medium', ['Verifiable Intent or Mastercard Agent Pay markers found']);
+  }
+
+  return scoreDetection('other', 'low', ['no recognized authority/payment protocol markers found']);
+}
+
+function normalizeVerification(verification = {}) {
+  const status = normalizeString(verification.status, 'unverified');
+  if (!VERIFICATION_STATUSES.has(status)) {
+    throw new TypeError(`Unsupported verification status: ${status}`);
+  }
+  return {
+    status,
+    verifier_ref: normalizeString(verification.verifierRef),
+    evidence_ref: normalizeString(verification.evidenceRef),
+    checked_at: normalizeDate(verification.checkedAt),
+  };
+}
+
+function extractDeclaredRevocation(artifact) {
+  const value = firstValue(artifact, [
+    'revocation_status',
+    'revocation.status',
+    'status.revocation',
+    'revoked',
+  ]);
+  if (value === true) return 'revoked';
+  if (value === false) return 'active';
+  const normalized = normalizeString(value, null)?.toLowerCase();
+  if (['active', 'revoked', 'unknown', 'not_checked'].includes(normalized)) return normalized;
+  return null;
+}
+
+export function normalizeAuthorityArtifact(artifact, options = {}) {
+  if (!isPlainObject(artifact)) throw new TypeError('artifact must be a JSON object');
+
+  const detection = detectAuthorityProtocol(artifact, options);
+  const verification = normalizeVerification(options.verification);
+  const revocationStatus = normalizeString(options.revocationStatus, 'not_checked');
+  if (!['not_checked', 'active', 'revoked', 'unknown'].includes(revocationStatus)) {
+    throw new TypeError(`Unsupported revocationStatus: ${revocationStatus}`);
+  }
+
+  const budget = firstValue(artifact, ['budget', 'scope.budget', 'mandate.budget', 'policy.budget']) || {};
+  const constraints = firstValue(artifact, ['scope', 'constraints', 'mandate.scope', 'policy']) || {};
+
+  const principalRef = normalizeString(firstValue(artifact, [
+    'owner_id',
+    'principal_id',
+    'principal.ref',
+    'principal.id',
+    'consumer_id',
+    'user_id',
+    'mandate.principal_id',
+  ]));
+
+  const agentRef = normalizeString(firstValue(artifact, [
+    'buyer_agent_id',
+    'agent_id',
+    'agent.id',
+    'subject.agent_id',
+    'mandate.agent_id',
+    'sub',
+  ]));
+
+  const warnings = [];
+  if (verification.status !== 'verified') warnings.push('artifact was normalized but not cryptographically or institutionally verified');
+  if (!principalRef) warnings.push('principal reference was not found');
+  if (!agentRef) warnings.push('agent reference was not found');
+  if (revocationStatus === 'not_checked') warnings.push('revocation state was not checked');
+  if (detection.protocol === 'other') warnings.push('protocol is unknown; use a versioned adapter or protocolHint');
+
+  return {
+    schema: 'agoragentic.normalized-authority.v1',
+    source_protocol: detection.protocol,
+    detection: cloneJson(detection),
+    source_artifact_ref: normalizeString(options.artifactRef, `inline:${sha256Ref(artifact)}`),
+    source_artifact_hash: sha256Ref(artifact),
+    source_artifact_embedded: false,
+    issuer_ref: normalizeString(firstValue(artifact, [
+      'issuer_ref',
+      'issuer.id',
+      'issuer',
+      'iss',
+      'provider.id',
+      'provider.name',
+    ])),
+    principal_ref: principalRef,
+    agent_ref: agentRef,
+    issued_at: normalizeDate(firstValue(artifact, ['issued_at', 'iat', 'created_at', 'mandate.issued_at'])),
+    expires_at: normalizeDate(firstValue(artifact, ['expires_at', 'exp', 'valid_until', 'mandate.expires_at'])),
+    audience: normalizeString(firstValue(artifact, ['audience', 'aud', 'merchant.audience', 'mandate.audience'])),
+    merchant_binding: normalizeString(firstValue(artifact, [
+      'merchant_binding',
+      'merchant.id',
+      'seller_id',
+      'provider.id',
+      'constraints.merchant_id',
+    ])),
+    allowed_actions: normalizeList(firstValue(constraints, ['allowed_actions', 'actions', 'permissions'])),
+    allowed_sellers: normalizeList(firstValue(constraints, ['allowed_sellers', 'sellers', 'merchants'])),
+    allowed_categories: normalizeList(firstValue(constraints, ['allowed_categories', 'categories', 'merchant_categories'])),
+    allowed_payment_rails: normalizeList(firstValue(constraints, ['allowed_payment_rails', 'payment_rails', 'rails'])),
+    currency: normalizeString(firstValue(budget, ['currency']) ?? firstValue(artifact, ['currency', 'payment.currency']), 'USD', 30),
+    max_per_action: normalizeMoney(firstValue(budget, ['max_per_action', 'max_per_transaction', 'per_transaction', 'transaction_limit']), '0'),
+    max_daily: normalizeMoney(firstValue(budget, ['max_daily', 'daily', 'daily_limit']), '0'),
+    max_total: normalizeMoney(firstValue(budget, ['max_total', 'total', 'total_limit']), '0'),
+    verification,
+    revocation_status: revocationStatus,
+    declared_revocation_status: extractDeclaredRevocation(artifact),
+    normalization_warnings: warnings,
+    authority_flags: {
+      normalized_artifact_grants_authority: false,
+      can_spend: false,
+      can_fund_wallet: false,
+      can_deploy: false,
+      can_publish: false,
+      can_change_trust: false,
+      can_expand_scope: false,
+    },
+  };
+}
+
+function falseAuthorityFlags(prefix) {
+  return {
+    [prefix]: false,
+    can_spend: false,
+    can_fund_wallet: false,
+    can_deploy: false,
+    can_publish: false,
+    can_change_trust: false,
+    can_expand_scope: false,
+  };
+}
+
+export function buildAuthorityRequest(input = {}) {
+  const createdAt = requireIsoDate(input.createdAt || new Date(), 'createdAt');
+  const expiresAt = requireIsoDate(input.expiresAt || new Date(new Date(createdAt).getTime() + 60 * 60 * 1000), 'expiresAt');
+  const principalRef = normalizeString(input.principalRef);
+  const agentId = normalizeString(input.agentId);
+  const purpose = normalizeString(input.purpose);
+  if (!principalRef) throw new TypeError('principalRef is required');
+  if (!agentId) throw new TypeError('agentId is required');
+  if (!purpose) throw new TypeError('purpose is required');
+
+  const requestedAuthority = {
+    purpose,
+    allowed_actions: normalizeList(input.allowedActions),
+    allowed_sellers: normalizeList(input.allowedSellers),
+    allowed_categories: normalizeList(input.allowedCategories),
+    allowed_payment_rails: normalizeList(input.allowedPaymentRails),
+    currency: normalizeString(input.currency, 'USD', 30),
+    max_per_action: normalizeMoney(input.maxPerAction, '0'),
+    max_daily: normalizeMoney(input.maxDaily, '0'),
+    max_total: normalizeMoney(input.maxTotal, '0'),
+  };
+  if (requestedAuthority.allowed_actions.length === 0) {
+    throw new TypeError('at least one allowed action must be requested');
+  }
+
+  const seed = {
+    principalRef,
+    agentId,
+    purpose,
+    createdAt,
+    expiresAt,
+  };
+
+  return {
+    schema: 'agoragentic.agent-authority-request.v1',
+    request_id: normalizeString(input.requestId, `aar_${sha256Ref(seed).slice(7, 23)}`),
+    created_at: createdAt,
+    expires_at: expiresAt,
+    principal_ref: principalRef,
+    agent: {
+      agent_id: agentId,
+      agent_uri: normalizeString(input.agentUri),
+      public_key_ref: normalizeString(input.publicKeyRef),
+    },
+    requested_authority: requestedAuthority,
+    controls: {
+      idempotency_required: true,
+      receipt_required: true,
+      outcome_verification_required: input.outcomeVerificationRequired !== false,
+      reconciliation_required: true,
+      human_review_above: normalizeMoney(input.humanReviewAbove ?? input.maxPerAction, '0'),
+    },
+    status: 'pending_principal_approval',
+    approval: null,
+    request_grants_authority: false,
+    authority_flags: falseAuthorityFlags('request_grants_authority'),
+    public_safe_summary: normalizeString(
+      input.publicSafeSummary,
+      `Agent ${agentId} requests bounded authority for: ${purpose}. This request grants no authority.`,
+      2000,
+    ),
+  };
+}
+
+function normalizedAuthorityToEnvelope(authority = {}) {
+  if (!isPlainObject(authority)) throw new TypeError('normalizedAuthority is required');
+  if (authority.schema !== 'agoragentic.normalized-authority.v1') {
+    throw new TypeError('normalizedAuthority must be produced by normalizeAuthorityArtifact');
+  }
+  return {
+    source_protocol: authority.source_protocol,
+    source_artifact_ref: authority.source_artifact_ref,
+    source_artifact_hash: authority.source_artifact_hash,
+    issuer_ref: authority.issuer_ref,
+    verification_status: authority.verification?.status || 'unverified',
+    issued_at: authority.issued_at,
+    expires_at: authority.expires_at,
+    revocation_status: authority.revocation_status || 'not_checked',
+    audience: authority.audience,
+    merchant_binding: authority.merchant_binding,
+    allowed_actions: normalizeList(authority.allowed_actions),
+    allowed_sellers: normalizeList(authority.allowed_sellers),
+    allowed_categories: normalizeList(authority.allowed_categories),
+    allowed_payment_rails: normalizeList(authority.allowed_payment_rails),
+    currency: normalizeString(authority.currency, 'USD', 30),
+    max_per_action: normalizeMoney(authority.max_per_action, '0'),
+    max_daily: normalizeMoney(authority.max_daily, '0'),
+    max_total: normalizeMoney(authority.max_total, '0'),
+  };
+}
+
+function hasExpired(expiresAt, now = new Date()) {
+  if (!expiresAt) return false;
+  const time = Date.parse(expiresAt);
+  return Number.isFinite(time) && time <= now.getTime();
+}
+
+function deriveState(envelope, now = new Date()) {
+  if (envelope.reconciliation.status === 'refunded') return 'refunded';
+  if (envelope.reconciliation.status === 'disputed') return 'disputed';
+  if (envelope.reconciliation.status === 'failed' || envelope.execution.status === 'failed') return 'failed';
+  if (
+    envelope.reconciliation.status === 'complete'
+    && envelope.outcome.verification_status === 'verified'
+    && envelope.payment.settlement_verification === 'verified'
+    && envelope.payment.settlement_final
+  ) return 'reconciled';
+  if (envelope.outcome.verification_status === 'verified') return 'outcome_verified';
+  if (envelope.execution.status === 'success') return 'execution_observed';
+  if (['observed', 'settled'].includes(envelope.payment.status)) return 'payment_observed';
+  if (['required', 'submitted'].includes(envelope.payment.status)) return 'payment_pending';
+  if (
+    envelope.authority.verification_status === 'verified'
+    && envelope.authority.revocation_status === 'active'
+    && !hasExpired(envelope.authority.expires_at, now)
+    && envelope.commercial_intent.terms_match_status === 'match'
+  ) return 'authority_ready';
+  return 'incomplete';
+}
+
+export function buildTransactionAssuranceEnvelope(input = {}) {
+  const createdAt = requireIsoDate(input.createdAt || new Date(), 'createdAt');
+  const authority = normalizedAuthorityToEnvelope(input.normalizedAuthority);
+  const principalRef = normalizeString(input.principalRef || input.normalizedAuthority?.principal_ref);
+  const agentRef = normalizeString(input.agentRef || input.normalizedAuthority?.agent_ref);
+  if (!principalRef) throw new TypeError('principalRef is required');
+  if (!agentRef) throw new TypeError('agentRef is required');
+
+  const commercialIntentInput = input.commercialIntent || {};
+  const taskRef = normalizeString(commercialIntentInput.taskRef);
+  const sellerRef = normalizeString(commercialIntentInput.sellerRef);
+  const capabilityRef = normalizeString(commercialIntentInput.capabilityRef);
+  const action = normalizeString(commercialIntentInput.action);
+  if (!taskRef || !sellerRef || !capabilityRef || !action) {
+    throw new TypeError('commercialIntent.taskRef, sellerRef, capabilityRef, and action are required');
+  }
+
+  const envelope = {
+    schema: 'agoragentic.transaction-assurance-envelope.v1',
+    envelope_id: normalizeString(input.envelopeId, `tae_${sha256Ref({ principalRef, agentRef, taskRef, createdAt }).slice(7, 23)}`),
+    created_at: createdAt,
+    updated_at: requireIsoDate(input.updatedAt || createdAt, 'updatedAt'),
+    state: 'incomplete',
+    principal: {
+      principal_ref: principalRef,
+      principal_type: normalizeString(input.principalType, 'unknown'),
+      identity_verification: normalizeString(input.principalIdentityVerification, 'not_checked'),
+    },
+    agent: {
+      agent_ref: agentRef,
+      agent_uri: normalizeString(input.agentUri),
+      operator_ref: normalizeString(input.operatorRef),
+      identity_verification: normalizeString(input.agentIdentityVerification, 'not_checked'),
+    },
+    authority,
+    commercial_intent: {
+      action,
+      task_ref: taskRef,
+      task_contract_hash: normalizeString(commercialIntentInput.taskContractHash, sha256Ref({ taskRef, action })),
+      seller_ref: sellerRef,
+      capability_ref: capabilityRef,
+      category: normalizeString(commercialIntentInput.category),
+      quote_ref: normalizeString(commercialIntentInput.quoteRef),
+      quote_hash: normalizeString(commercialIntentInput.quoteHash),
+      quoted_amount: normalizeMoney(commercialIntentInput.quotedAmount, '0'),
+      currency: normalizeString(commercialIntentInput.currency || authority.currency, 'USD', 30),
+      terms_ref: normalizeString(commercialIntentInput.termsRef),
+      terms_hash: normalizeString(commercialIntentInput.termsHash),
+      terms_match_status: normalizeString(commercialIntentInput.termsMatchStatus, 'not_checked'),
+    },
+    payment: {
+      payment_identifier: normalizeString(input.payment?.paymentIdentifier),
+      rail: normalizeString(input.payment?.rail),
+      status: normalizeString(input.payment?.status, 'not_started'),
+      amount: normalizeMoney(input.payment?.amount ?? commercialIntentInput.quotedAmount, '0'),
+      currency: normalizeString(input.payment?.currency || commercialIntentInput.currency || authority.currency, 'USD', 30),
+      offer_ref: normalizeString(input.payment?.offerRef),
+      offer_hash: normalizeString(input.payment?.offerHash),
+      receipt_ref: normalizeString(input.payment?.receiptRef),
+      receipt_hash: normalizeString(input.payment?.receiptHash),
+      settlement_ref: normalizeString(input.payment?.settlementRef),
+      settlement_verification: normalizeString(input.payment?.settlementVerification, 'not_checked'),
+      settlement_final: input.payment?.settlementFinal === true,
+    },
+    execution: {
+      idempotency_key_hash: normalizeString(input.execution?.idempotencyKeyHash),
+      invocation_ref: normalizeString(input.execution?.invocationRef),
+      status: normalizeString(input.execution?.status, 'not_started'),
+      attempt_count: Number.isInteger(input.execution?.attemptCount) ? input.execution.attemptCount : 0,
+      duplicate_detected: input.execution?.duplicateDetected === true,
+      input_hash: normalizeString(input.execution?.inputHash),
+      output_hash: normalizeString(input.execution?.outputHash),
+      started_at: normalizeDate(input.execution?.startedAt),
+      completed_at: normalizeDate(input.execution?.completedAt),
+    },
+    outcome: {
+      delivery_status: normalizeString(input.outcome?.deliveryStatus, 'not_observed'),
+      artifact_refs: normalizeList(input.outcome?.artifactRefs),
+      seller_attestation_ref: normalizeString(input.outcome?.sellerAttestationRef),
+      validation_refs: normalizeList(input.outcome?.validationRefs),
+      verification_status: normalizeString(input.outcome?.verificationStatus, 'not_checked'),
+      verification_scope: normalizeString(
+        input.outcome?.verificationScope,
+        'No outcome verification has been supplied.',
+        3000,
+      ),
+      unknowns: normalizeList(input.outcome?.unknowns),
+    },
+    reconciliation: {
+      status: normalizeString(input.reconciliation?.status, 'not_started'),
+      result: normalizeString(input.reconciliation?.result, 'No reconciliation has been completed.', 3000),
+      refund_ref: normalizeString(input.reconciliation?.refundRef),
+      dispute_ref: normalizeString(input.reconciliation?.disputeRef),
+      next_safe_action: normalizeString(
+        input.reconciliation?.nextSafeAction,
+        'Verify missing authority, payment, execution, outcome, and finality evidence before changing state.',
+        3000,
+      ),
+    },
+    evidence: {
+      refs: normalizeList(input.evidenceRefs),
+      envelope_hash: null,
+      complete_chain_verified: false,
+    },
+    redaction: {
+      raw_prompt_excluded: true,
+      raw_tool_output_excluded: true,
+      raw_payment_credentials_excluded: true,
+      raw_wallet_private_data_excluded: true,
+      private_owner_data_excluded: true,
+      secrets_excluded: true,
+    },
+    authority_flags: falseAuthorityFlags('envelope_grants_authority'),
+    public_safe_summary: normalizeString(
+      input.publicSafeSummary,
+      `Transaction assurance envelope for ${action}; no authority is granted by this envelope.`,
+      3000,
+    ),
+  };
+
+  const now = input.now ? new Date(input.now) : new Date(createdAt);
+  envelope.state = ASSURANCE_STATES.includes(input.state) ? input.state : deriveState(envelope, now);
+  envelope.evidence.envelope_hash = sha256Ref(envelope);
+  return envelope;
+}
+
+function decimalGreaterThan(left, right) {
+  return Number(left) > Number(right);
+}
+
+function includesWhenRestricted(list, value) {
+  return !Array.isArray(list) || list.length === 0 || list.includes(value);
+}
+
+function addUnique(list, value) {
+  if (value && !list.includes(value)) list.push(value);
+}
+
+export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
+  if (!isPlainObject(envelope) || envelope.schema !== 'agoragentic.transaction-assurance-envelope.v1') {
+    throw new TypeError('envelope must use agoragentic.transaction-assurance-envelope.v1');
+  }
+
+  const phase = normalizeString(options.phase, 'pre_execution');
+  if (!['pre_execution', 'post_execution'].includes(phase)) {
+    throw new TypeError('phase must be pre_execution or post_execution');
+  }
+  const now = options.now ? new Date(options.now) : new Date();
+  if (Number.isNaN(now.getTime())) throw new TypeError('options.now must be a valid date');
+
+  const blockers = [];
+  const warnings = [];
+  const authority = envelope.authority || {};
+  const intent = envelope.commercial_intent || {};
+  const payment = envelope.payment || {};
+  const execution = envelope.execution || {};
+  const outcome = envelope.outcome || {};
+  const reconciliation = envelope.reconciliation || {};
+
+  if (authority.verification_status !== 'verified') addUnique(blockers, 'authority_not_verified');
+  if (authority.revocation_status === 'revoked') addUnique(blockers, 'authority_revoked');
+  else if (authority.revocation_status !== 'active') addUnique(blockers, 'authority_revocation_not_verified_active');
+  if (hasExpired(authority.expires_at, now)) addUnique(blockers, 'authority_expired');
+  if (authority.audience && authority.audience !== envelope.agent?.agent_ref) addUnique(blockers, 'authority_audience_mismatch');
+  if (authority.merchant_binding && authority.merchant_binding !== intent.seller_ref) addUnique(blockers, 'merchant_binding_mismatch');
+  if (!includesWhenRestricted(authority.allowed_actions, intent.action)) addUnique(blockers, 'action_out_of_scope');
+  if (!includesWhenRestricted(authority.allowed_sellers, intent.seller_ref)) addUnique(blockers, 'seller_out_of_scope');
+  if (!includesWhenRestricted(authority.allowed_categories, intent.category)) addUnique(blockers, 'category_out_of_scope');
+  if (!includesWhenRestricted(authority.allowed_payment_rails, payment.rail)) addUnique(blockers, 'payment_rail_out_of_scope');
+  if (authority.currency !== intent.currency || authority.currency !== payment.currency) addUnique(blockers, 'currency_mismatch');
+  if (decimalGreaterThan(intent.quoted_amount, authority.max_per_action)) addUnique(blockers, 'quoted_amount_exceeds_per_action_limit');
+  if (decimalGreaterThan(payment.amount, authority.max_per_action)) addUnique(blockers, 'payment_amount_exceeds_per_action_limit');
+  if (decimalGreaterThan(payment.amount, intent.quoted_amount)) addUnique(blockers, 'payment_amount_exceeds_quote');
+  if (intent.terms_match_status === 'changed') addUnique(blockers, 'terms_changed');
+  else if (intent.terms_match_status !== 'match') addUnique(blockers, 'terms_not_verified');
+  if (!execution.idempotency_key_hash) addUnique(blockers, 'idempotency_key_missing');
+  if (execution.duplicate_detected) addUnique(blockers, 'duplicate_attempt_detected');
+  if (!execution.input_hash) addUnique(warnings, 'input_hash_missing');
+
+  if (phase === 'post_execution') {
+    if (!['observed', 'settled', 'refunded'].includes(payment.status)) addUnique(blockers, 'payment_not_observed');
+    if (payment.settlement_verification !== 'verified') addUnique(blockers, 'settlement_not_verified');
+    if (!payment.settlement_final && payment.status !== 'refunded') addUnique(blockers, 'settlement_not_final');
+    if (execution.status !== 'success') addUnique(blockers, 'execution_not_successful');
+    if (!execution.output_hash) addUnique(blockers, 'output_hash_missing');
+    if (outcome.delivery_status !== 'delivered') addUnique(blockers, 'delivery_not_confirmed');
+    if (outcome.verification_status !== 'verified') addUnique(blockers, 'outcome_not_verified');
+    if (reconciliation.status !== 'complete' && reconciliation.status !== 'refunded') {
+      addUnique(blockers, 'reconciliation_not_complete');
+    }
+  }
+
+  const completeChainVerified = phase === 'post_execution' && blockers.length === 0;
+  const hardDeny = blockers.some((code) => [
+    'authority_not_verified',
+    'authority_revoked',
+    'authority_expired',
+    'authority_audience_mismatch',
+    'merchant_binding_mismatch',
+    'action_out_of_scope',
+    'seller_out_of_scope',
+    'category_out_of_scope',
+    'payment_rail_out_of_scope',
+    'currency_mismatch',
+    'quoted_amount_exceeds_per_action_limit',
+    'payment_amount_exceeds_per_action_limit',
+    'payment_amount_exceeds_quote',
+    'terms_changed',
+    'duplicate_attempt_detected',
+  ].includes(code));
+
+  let decision;
+  if (hardDeny) decision = 'deny';
+  else if (blockers.length > 0) decision = 'review';
+  else decision = phase === 'pre_execution' ? 'allow' : 'complete';
+
+  let nextSafeAction = 'No further action is required.';
+  if (decision === 'deny') nextSafeAction = 'Stop. Obtain corrected principal authority or corrected commercial terms before proceeding.';
+  else if (decision === 'review') nextSafeAction = 'Do not guess or blindly retry. Collect the missing evidence and re-evaluate the same payment/idempotency identifiers.';
+  else if (decision === 'allow') nextSafeAction = 'Re-check live rail availability, then execute once with the approved identifiers and preserve all returned evidence.';
+
+  return {
+    schema: 'agoragentic.transaction-assurance-evaluation.v1',
+    phase,
+    decision,
+    complete_chain_verified: completeChainVerified,
+    blockers,
+    warnings,
+    next_safe_action: nextSafeAction,
+    evaluated_at: now.toISOString(),
+    evidence: {
+      envelope_id: envelope.envelope_id || null,
+      envelope_hash: sha256Ref(envelope),
+    },
+    authority_flags: {
+      evaluation_grants_authority: false,
+      can_spend: false,
+      can_fund_wallet: false,
+      can_deploy: false,
+      can_publish: false,
+      can_change_trust: false,
+      can_expand_scope: false,
+    },
+  };
+}
