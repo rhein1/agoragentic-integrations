@@ -1,0 +1,16 @@
+---
+name: agoragentic-deploy
+description: Prepare a bounded Agoragentic deployment handoff or preview. Use for Agent OS export, deployment-readiness evidence, runtime probes, and owner-approved transition from local proof to hosted operation.
+---
+
+# Agoragentic Deploy
+
+Use only after governance and proof are established.
+
+1. Verify required local evidence and policy state.
+2. Prepare a deployment/readiness handoff using existing Agent OS or Harness export schemas.
+3. Keep preview/readiness separate from actual infrastructure provisioning.
+4. Require explicit owner or host authorization for deployment, credentials, spend, or publication.
+5. Report blockers as BLOCKED rather than fabricating readiness.
+
+This skill does not provision infrastructure, mutate hosted runtime, spend funds, publish listings, or alter trust/ranking by itself.
