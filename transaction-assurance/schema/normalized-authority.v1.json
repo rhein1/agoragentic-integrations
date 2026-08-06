@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/normalized-authority.v1.json",
+  "title": "Agoragentic Normalized Authority V1",
+  "description": "A conservative reference-and-hash representation of an authority artifact. Normalization does not grant authority and protocol recognition is not verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source_protocol",
+    "detection",
+    "source_artifact_ref",
+    "source_artifact_hash",
+    "source_artifact_embedded",
+    "issuer_ref",
+    "principal_ref",
+    "agent_ref",
+    "issued_at",
+    "expires_at",
+    "audience",
+    "merchant_binding",
+    "allowed_actions",
+    "allowed_sellers",
+    "allowed_categories",
+    "allowed_payment_rails",
+    "currency",
+    "max_per_action",
+    "max_daily",
+    "max_total",
+    "verification",
+    "revocation_status",
+    "declared_revocation_status",
+    "normalization_warnings",
+    "authority_flags"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.normalized-authority.v1" },
+    "source_protocol": {
+      "enum": [
+        "agoragentic_mandate",
+        "google_ap2",
+        "visa_tap",
+        "openai_stripe_acp",
+        "x402",
+        "circle_agent_wallet_policy",
+        "skyfire_kyapay",
+        "mastercard_verifiable_intent",
+        "other"
+      ]
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "confidence", "reasons"],
+      "properties": {
+        "protocol": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["low", "medium", "high", "hinted"] },
+        "reasons": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "source_artifact_ref": { "$ref": "#/$defs/ref" },
+    "source_artifact_hash": { "$ref": "#/$defs/sha256" },
+    "source_artifact_embedded": { "const": false },
+    "issuer_ref": { "$ref": "#/$defs/nullableRef" },
+    "principal_ref": { "$ref": "#/$defs/nullableRef" },
+    "agent_ref": { "$ref": "#/$defs/nullableRef" },
+    "issued_at": { "$ref": "#/$defs/nullableDate" },
+    "expires_at": { "$ref": "#/$defs/nullableDate" },
+    "audience": { "$ref": "#/$defs/nullableRef" },
+    "merchant_binding": { "$ref": "#/$defs/nullableRef" },
+    "allowed_actions": { "$ref": "#/$defs/stringList" },
+    "allowed_sellers": { "$ref": "#/$defs/stringList" },
+    "allowed_categories": { "$ref": "#/$defs/stringList" },
+    "allowed_payment_rails": { "$ref": "#/$defs/stringList" },
+    "currency": { "type": "string", "minLength": 1, "maxLength": 30 },
+    "max_per_action": { "$ref": "#/$defs/money" },
+    "max_daily": { "$ref": "#/$defs/money" },
+    "max_total": { "$ref": "#/$defs/money" },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "verifier_ref", "evidence_ref", "checked_at"],
+      "properties": {
+        "status": { "$ref": "#/$defs/verificationStatus" },
+        "verifier_ref": { "$ref": "#/$defs/nullableRef" },
+        "evidence_ref": { "$ref": "#/$defs/nullableRef" },
+        "checked_at": { "$ref": "#/$defs/nullableDate" }
+      }
+    },
+    "revocation_status": { "enum": ["not_checked", "active", "revoked", "unknown"] },
+    "declared_revocation_status": {
+      "oneOf": [
+        { "enum": ["not_checked", "active", "revoked", "unknown"] },
+        { "type": "null" }
+      ]
+    },
+    "normalization_warnings": { "$ref": "#/$defs/stringList" },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "normalized_artifact_grants_authority",
+        "can_spend",
+        "can_fund_wallet",
+        "can_deploy",
+        "can_publish",
+        "can_change_trust",
+        "can_expand_scope"
+      ],
+      "properties": {
+        "normalized_artifact_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false },
+        "can_expand_scope": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "nullableRef": { "type": ["string", "null"], "maxLength": 2000 },
+    "nullableDate": { "type": ["string", "null"], "format": "date-time" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "money": { "type": "string", "pattern": "^(0|[1-9]\\d*)(\\.\\d{1,6})?$" },
+    "verificationStatus": {
+      "enum": ["not_checked", "unverified", "verified", "failed", "unknown", "not_applicable"]
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 },
+      "uniqueItems": true,
+      "maxItems": 200
+    }
+  }
+}
