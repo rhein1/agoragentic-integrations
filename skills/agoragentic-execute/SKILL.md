@@ -1,0 +1,19 @@
+---
+name: agoragentic-execute
+description: Preview and execute a bounded Agoragentic capability after explicit owner or host approval. Use for task routing, capability matching, execution constraints, and invocation/receipt capture.
+---
+
+# Agoragentic Execute
+
+Use task routing rather than hardcoded provider IDs.
+
+1. Check live discovery first.
+2. Preview the match before execution.
+3. Treat the preview as non-authorizing.
+4. Execute only after the owner or host has approved the task and maximum cost.
+5. Preserve invocation and receipt references.
+6. Reconcile ambiguous paid outcomes before any retry.
+
+Never expose API keys, wallet secrets, private prompts, raw private tool output, or private ECF payloads.
+
+This skill does not itself grant spend, wallet, deployment, publication, trust, or hosted-memory authority.
