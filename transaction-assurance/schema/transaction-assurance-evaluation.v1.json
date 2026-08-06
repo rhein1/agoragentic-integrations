@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/transaction-assurance-evaluation.v1.json",
+  "title": "Agoragentic Transaction Assurance Evaluation V1",
+  "description": "A deterministic local evaluation of a transaction assurance envelope. It grants no authority and is not certification or a universal safety guarantee.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "phase",
+    "decision",
+    "complete_chain_verified",
+    "blockers",
+    "warnings",
+    "next_safe_action",
+    "evaluated_at",
+    "evidence",
+    "authority_flags"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.transaction-assurance-evaluation.v1" },
+    "phase": { "enum": ["pre_execution", "post_execution"] },
+    "decision": { "enum": ["allow", "review", "deny", "complete"] },
+    "complete_chain_verified": { "type": "boolean" },
+    "blockers": { "$ref": "#/$defs/stringList" },
+    "warnings": { "$ref": "#/$defs/stringList" },
+    "next_safe_action": { "type": "string", "minLength": 1, "maxLength": 3000 },
+    "evaluated_at": { "type": "string", "format": "date-time" },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope_id", "envelope_hash"],
+      "properties": {
+        "envelope_id": { "type": ["string", "null"], "maxLength": 2000 },
+        "envelope_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluation_grants_authority",
+        "can_spend",
+        "can_fund_wallet",
+        "can_deploy",
+        "can_publish",
+        "can_change_trust",
+        "can_expand_scope"
+      ],
+      "properties": {
+        "evaluation_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false },
+        "can_expand_scope": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 },
+      "uniqueItems": true,
+      "maxItems": 200
+    }
+  }
+}
