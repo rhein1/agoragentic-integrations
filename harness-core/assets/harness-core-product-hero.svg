@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Agoragentic Harness Core</title>
+  <desc id="desc">An agent intent passes through policy and approval gates before a tool runs, then produces evidence and a clearly labeled local receipt.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081120"/><stop offset="1" stop-color="#16233b"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#45d6df"/><stop offset="1" stop-color="#ff7453"/></linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <path d="M0 108H1280M0 320H1280M0 532H1280M170 0V640M640 0V640M1110 0V640" stroke="#263550" opacity="0.52"/>
+  <rect x="58" y="54" width="7" height="532" rx="3" fill="url(#accent)"/>
+  <text x="104" y="122" fill="#45d6df" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="750" letter-spacing="2">HARNESS CORE</text>
+  <text x="104" y="218" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">Put a policy gate</text>
+  <text x="104" y="290" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">and a receipt around</text>
+  <text x="104" y="362" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">any agent action.</text>
+  <text x="104" y="430" fill="#b8c5d9" font-family="Inter, Arial, sans-serif" font-size="24">Intent → policy → approval → tool → evidence → receipt</text>
+  <text x="104" y="518" fill="#ff9279" font-family="JetBrains Mono, Consolas, monospace" font-size="18">npx agoragentic-harness-core@latest init</text>
+
+  <g transform="translate(716 70)">
+    <rect width="500" height="500" rx="28" fill="#0b1527" stroke="#2a3a56" stroke-width="2"/>
+    <g transform="translate(28 28)">
+      <rect width="444" height="72" rx="16" fill="#101d33" stroke="#45d6df" stroke-opacity="0.5"/>
+      <text x="22" y="29" fill="#75edf3" font-family="JetBrains Mono, Consolas, monospace" font-size="13">INTENT</text>
+      <text x="22" y="53" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">What is the agent trying to do?</text>
+    </g>
+    <path d="M250 102V126" stroke="url(#accent)" stroke-width="5" stroke-linecap="round"/>
+    <g transform="translate(28 130)">
+      <rect width="210" height="116" rx="16" fill="#101d33" stroke="#ff7453" stroke-opacity="0.55"/>
+      <text x="20" y="29" fill="#ff9b84" font-family="JetBrains Mono, Consolas, monospace" font-size="13">POLICY</text>
+      <text x="20" y="59" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">allow · ask · deny</text>
+      <text x="20" y="86" fill="#91a3be" font-family="Inter, Arial, sans-serif" font-size="14">budget · data · tools</text>
+    </g>
+    <g transform="translate(262 130)">
+      <rect width="210" height="116" rx="16" fill="#101d33" stroke="#45d6df" stroke-opacity="0.5"/>
+      <text x="20" y="29" fill="#75edf3" font-family="JetBrains Mono, Consolas, monospace" font-size="13">APPROVAL</text>
+      <text x="20" y="59" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">owner-readable gate</text>
+      <text x="20" y="86" fill="#91a3be" font-family="Inter, Arial, sans-serif" font-size="14">explicit decision record</text>
+    </g>
+    <path d="M250 248V272" stroke="url(#accent)" stroke-width="5" stroke-linecap="round"/>
+    <g transform="translate(28 276)">
+      <rect width="444" height="82" rx="16" fill="#101d33" stroke="#ff7453" stroke-opacity="0.55"/>
+      <text x="22" y="30" fill="#ff9b84" font-family="JetBrains Mono, Consolas, monospace" font-size="13">TOOL EXECUTION</text>
+      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">Only after policy and approval permit it</text>
+    </g>
+    <path d="M250 360V384" stroke="url(#accent)" stroke-width="5" stroke-linecap="round"/>
+    <g transform="translate(28 388)">
+      <rect width="444" height="82" rx="16" fill="#101d33" stroke="#45d6df" stroke-opacity="0.5"/>
+      <text x="22" y="30" fill="#75edf3" font-family="JetBrains Mono, Consolas, monospace" font-size="13">LOCAL RECEIPT</text>
+      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">what ran · evidence · status · next safe action</text>
+    </g>
+  </g>
+</svg>
