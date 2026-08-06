@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 
+require('./verify-ecosystem-profile.js');
+
 const root = path.resolve(__dirname, '..');
 const manifestPath = path.join(root, 'integrations.json');
 const machineSurfacePaths = [
