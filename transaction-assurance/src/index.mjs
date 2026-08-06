@@ -25,7 +25,7 @@ export const ASSURANCE_STATES = Object.freeze([
   'disputed',
 ]);
 
-const VERIFICATION_STATUSES = new Set([
+const VERIFICATION_STATUSES = Object.freeze([
   'not_checked',
   'unverified',
   'verified',
@@ -33,16 +33,122 @@ const VERIFICATION_STATUSES = new Set([
   'unknown',
   'not_applicable',
 ]);
-
+const PRINCIPAL_TYPES = Object.freeze([
+  'human',
+  'organization',
+  'dao',
+  'treasury',
+  'service_principal',
+  'unknown',
+]);
+const REVOCATION_STATUSES = Object.freeze(['not_checked', 'active', 'revoked', 'unknown']);
+const TERMS_STATUSES = Object.freeze(['not_checked', 'match', 'changed', 'unknown']);
+const PAYMENT_STATUSES = Object.freeze([
+  'not_started',
+  'required',
+  'submitted',
+  'observed',
+  'settled',
+  'failed',
+  'refunded',
+  'unknown',
+]);
+const EXECUTION_STATUSES = Object.freeze([
+  'not_started',
+  'pending',
+  'success',
+  'failed',
+  'timed_out',
+  'ambiguous',
+  'unknown',
+]);
+const DELIVERY_STATUSES = Object.freeze(['not_observed', 'partial', 'delivered', 'failed', 'unknown']);
+const RECONCILIATION_STATUSES = Object.freeze([
+  'not_started',
+  'pending',
+  'complete',
+  'failed',
+  'refunded',
+  'disputed',
+  'unknown',
+]);
 const MONEY_PATTERN = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function cloneJson(value) {
-  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+function normalizeString(value, fallback = null, maxLength = 2000) {
+  if (value === undefined || value === null) return fallback;
+  const normalized = String(value).trim();
+  return normalized ? normalized.slice(0, maxLength) : fallback;
+}
+
+function normalizeList(value, { maxItems = 200, maxLength = 2000 } = {}) {
+  if (value === undefined || value === null) return [];
+  const source = Array.isArray(value) ? value : [value];
+  return [...new Set(source
+    .map((item) => normalizeString(item, null, maxLength))
+    .filter(Boolean))]
+    .slice(0, maxItems);
+}
+
+function normalizeEnum(value, allowed, fallback, field) {
+  const normalized = normalizeString(value, fallback);
+  if (!allowed.includes(normalized)) {
+    throw new TypeError(`${field} must be one of: ${allowed.join(', ')}`);
+  }
+  return normalized;
+}
+
+function normalizeMoney(value, fallback = '0') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'string' && MONEY_PATTERN.test(value)) return value;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    throw new TypeError(`Invalid non-negative decimal money value: ${JSON.stringify(value)}`);
+  }
+  const normalized = numeric.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (!MONEY_PATTERN.test(normalized)) {
+    throw new TypeError(`Unable to normalize money value: ${JSON.stringify(value)}`);
+  }
+  return normalized;
+}
+
+function normalizeDate(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+    return new Date(milliseconds).toISOString();
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function requireDate(value, field) {
+  const normalized = normalizeDate(value);
+  if (!normalized) throw new TypeError(`${field} must be a valid date-time`);
+  return normalized;
+}
+
+function getPath(object, path) {
+  let cursor = object;
+  for (const segment of path.split('.')) {
+    if ((!isPlainObject(cursor) && !Array.isArray(cursor))
+      || !Object.prototype.hasOwnProperty.call(cursor, segment)) {
+      return undefined;
+    }
+    cursor = cursor[segment];
+  }
+  return cursor;
+}
+
+function firstValue(object, paths) {
+  for (const path of paths) {
+    const value = getPath(object, path);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
 }
 
 function sortForCanonicalization(value) {
@@ -64,90 +170,30 @@ export function sha256Ref(value) {
   return `sha256:${createHash('sha256').update(input, 'utf8').digest('hex')}`;
 }
 
-function normalizeDate(value) {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
-    return new Date(milliseconds).toISOString();
-  }
-  const parsed = new Date(String(value));
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-}
-
-function requireIsoDate(value, field) {
-  const normalized = normalizeDate(value);
-  if (!normalized || !ISO_DATE_PATTERN.test(normalized)) {
-    throw new TypeError(`${field} must be an ISO date-time`);
-  }
-  return normalized;
-}
-
-function normalizeMoney(value, fallback = '0') {
-  if (value === null || value === undefined || value === '') return fallback;
-  if (typeof value === 'string' && MONEY_PATTERN.test(value)) return value;
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) {
-    throw new TypeError(`Invalid non-negative decimal money value: ${JSON.stringify(value)}`);
-  }
-  const normalized = number.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-  if (!MONEY_PATTERN.test(normalized)) throw new TypeError(`Unable to normalize money value: ${value}`);
-  return normalized;
-}
-
-function normalizeString(value, fallback = null, maxLength = 2000) {
-  if (value === null || value === undefined) return fallback;
-  const normalized = String(value).trim();
-  if (!normalized) return fallback;
-  return normalized.slice(0, maxLength);
-}
-
-function normalizeList(value, { maxItems = 200, maxLength = 2000 } = {}) {
-  if (value === null || value === undefined) return [];
-  const source = Array.isArray(value) ? value : [value];
-  return [...new Set(source
-    .map((item) => normalizeString(item, null, maxLength))
-    .filter(Boolean))]
-    .slice(0, maxItems);
-}
-
-function getPath(object, path) {
-  let cursor = object;
-  for (const segment of path.split('.')) {
-    if (!isPlainObject(cursor) && !Array.isArray(cursor)) return undefined;
-    if (!Object.prototype.hasOwnProperty.call(cursor, segment)) return undefined;
-    cursor = cursor[segment];
-  }
-  return cursor;
-}
-
-function firstValue(object, paths) {
-  for (const path of paths) {
-    const value = getPath(object, path);
-    if (value !== undefined && value !== null && value !== '') return value;
-  }
-  return undefined;
-}
-
-function flattenKeys(value, output = new Set(), depth = 0) {
-  if (depth > 8 || value === null || value === undefined) return output;
+function flattenedKeys(value, output = new Set(), depth = 0) {
+  if (depth > 8 || value === undefined || value === null) return output;
   if (Array.isArray(value)) {
-    for (const item of value.slice(0, 100)) flattenKeys(item, output, depth + 1);
+    for (const item of value.slice(0, 100)) flattenedKeys(item, output, depth + 1);
     return output;
   }
   if (!isPlainObject(value)) return output;
   for (const [key, child] of Object.entries(value)) {
     output.add(String(key).toLowerCase().replace(/[^a-z0-9]/g, ''));
-    flattenKeys(child, output, depth + 1);
+    flattenedKeys(child, output, depth + 1);
   }
   return output;
 }
 
-function containsAny(keys, candidates) {
-  return candidates.some((candidate) => keys.has(candidate));
+function hasAny(keys, values) {
+  return values.some((value) => keys.has(value));
 }
 
-function scoreDetection(protocol, confidence, reasons) {
-  return Object.freeze({ protocol, confidence, reasons: Object.freeze([...reasons]) });
+function detection(protocol, confidence, reasons) {
+  return Object.freeze({
+    protocol,
+    confidence,
+    reasons: Object.freeze([...reasons]),
+  });
 }
 
 export function detectAuthorityProtocol(artifact, options = {}) {
@@ -156,102 +202,97 @@ export function detectAuthorityProtocol(artifact, options = {}) {
     if (!AUTHORITY_PROTOCOLS.includes(hint)) {
       throw new TypeError(`Unsupported protocolHint: ${hint}`);
     }
-    return scoreDetection(hint, 'hinted', ['caller supplied protocolHint; recognition is not verification']);
+    return detection(hint, 'hinted', [
+      'caller supplied protocolHint; recognition is not verification',
+    ]);
   }
-
   if (!isPlainObject(artifact)) {
-    return scoreDetection('other', 'low', ['artifact is not a JSON object']);
+    return detection('other', 'low', ['artifact is not a JSON object']);
   }
 
-  const keys = flattenKeys(artifact);
+  const keys = flattenedKeys(artifact);
   const schema = normalizeString(firstValue(artifact, ['$schema', 'schema', 'type']), '')?.toLowerCase() || '';
-  const serializedPrefix = canonicalize(artifact).slice(0, 20_000).toLowerCase();
+  const prefix = canonicalize(artifact).slice(0, 20_000).toLowerCase();
 
-  if (
-    schema.includes('agoragentic')
-    || (containsAny(keys, ['ownerid', 'buyeragentid']) && keys.has('budget'))
-    || containsAny(keys, ['agoragenticagentcommercemandatev1', 'mandateapprovedtransactionplan'])
-  ) {
-    return scoreDetection('agoragentic_mandate', 'high', ['native Agoragentic mandate markers found']);
+  if (schema.includes('agoragentic')
+    || (hasAny(keys, ['ownerid', 'buyeragentid']) && keys.has('budget'))
+    || hasAny(keys, ['agoragenticagentcommercemandatev1', 'mandateapprovedtransactionplan'])) {
+    return detection('agoragentic_mandate', 'high', ['native Agoragentic mandate markers found']);
   }
-
-  if (
-    schema.includes('ap2')
-    || containsAny(keys, ['intentmandate', 'cartmandate', 'paymentmandate', 'ap2mandate'])
-    || serializedPrefix.includes('ap2-protocol')
-  ) {
-    return scoreDetection('google_ap2', 'high', ['AP2 mandate markers found']);
+  if (schema.includes('ap2')
+    || hasAny(keys, ['intentmandate', 'cartmandate', 'paymentmandate', 'ap2mandate'])
+    || prefix.includes('ap2-protocol')) {
+    return detection('google_ap2', 'high', ['AP2 mandate markers found']);
   }
-
-  if (
-    containsAny(keys, ['agentrecognition', 'consumerrecognition', 'paymentcontainer', 'signatureinput'])
+  if (hasAny(keys, ['agentrecognition', 'consumerrecognition', 'paymentcontainer', 'signatureinput'])
     || schema.includes('trusted-agent-protocol')
-    || serializedPrefix.includes('visa tap')
-  ) {
-    return scoreDetection('visa_tap', 'medium', ['Visa TAP identity/intent signature markers found']);
+    || prefix.includes('visa tap')) {
+    return detection('visa_tap', 'medium', ['Visa TAP identity or intent signature markers found']);
   }
-
-  if (
-    schema.includes('agentic-commerce-protocol')
-    || containsAny(keys, ['agenticcheckout', 'delegatepayment', 'paymenthandler', 'checkoutsessions'])
-    || serializedPrefix.includes('agentic commerce protocol')
-  ) {
-    return scoreDetection('openai_stripe_acp', 'medium', ['official ACP checkout/delegated-payment markers found']);
+  if (schema.includes('agentic-commerce-protocol')
+    || hasAny(keys, ['agenticcheckout', 'delegatepayment', 'paymenthandler', 'checkoutsessions'])
+    || prefix.includes('agentic commerce protocol')) {
+    return detection('openai_stripe_acp', 'medium', ['official ACP checkout or delegated-payment markers found']);
   }
-
-  if (
-    containsAny(keys, [
-      'x402version',
-      'paymentrequired',
-      'paymentpayload',
-      'paymentsignature',
-      'paymentidentifier',
-      'signedoffer',
-      'signedreceipt',
-    ])
-    || schema.includes('x402')
-  ) {
-    return scoreDetection('x402', 'high', ['x402 payment/offer/receipt markers found']);
+  if (hasAny(keys, [
+    'x402version',
+    'paymentrequired',
+    'paymentpayload',
+    'paymentsignature',
+    'paymentidentifier',
+    'signedoffer',
+    'signedreceipt',
+  ]) || schema.includes('x402')) {
+    return detection('x402', 'high', ['x402 payment, offer, identifier, or receipt markers found']);
   }
-
-  if (
-    containsAny(keys, ['walletsetid', 'spendingpolicy', 'circleagentwallet', 'circlewallet'])
-    || (serializedPrefix.includes('circle') && containsAny(keys, ['walletid', 'policyid', 'rules']))
-  ) {
-    return scoreDetection('circle_agent_wallet_policy', 'medium', ['Circle wallet/policy markers found']);
+  if (hasAny(keys, ['walletsetid', 'spendingpolicy', 'circleagentwallet', 'circlewallet'])
+    || (prefix.includes('circle') && hasAny(keys, ['walletid', 'policyid', 'rules']))) {
+    return detection('circle_agent_wallet_policy', 'medium', ['Circle wallet or policy markers found']);
   }
-
-  if (
-    containsAny(keys, ['skyfirepayid', 'kyapay', 'kyatoken', 'kya'])
-    || serializedPrefix.includes('skyfire-pay-id')
-  ) {
-    return scoreDetection('skyfire_kyapay', 'medium', ['Skyfire KYA/KYAPay markers found']);
+  if (hasAny(keys, ['skyfirepayid', 'kyapay', 'kyatoken', 'kya'])
+    || prefix.includes('skyfire-pay-id')) {
+    return detection('skyfire_kyapay', 'medium', ['Skyfire KYA or KYAPay markers found']);
   }
-
-  if (
-    containsAny(keys, ['verifiableintent', 'mastercardagentpay', 'agentictoken'])
-    || serializedPrefix.includes('mastercard agent pay')
-  ) {
-    return scoreDetection('mastercard_verifiable_intent', 'medium', ['Verifiable Intent or Mastercard Agent Pay markers found']);
+  if (hasAny(keys, ['verifiableintent', 'mastercardagentpay', 'agentictoken'])
+    || prefix.includes('mastercard agent pay')) {
+    return detection('mastercard_verifiable_intent', 'medium', ['Verifiable Intent or Mastercard Agent Pay markers found']);
   }
-
-  return scoreDetection('other', 'low', ['no recognized authority/payment protocol markers found']);
+  return detection('other', 'low', ['no recognized authority or payment protocol markers found']);
 }
 
-function normalizeVerification(verification = {}) {
-  const status = normalizeString(verification.status, 'unverified');
-  if (!VERIFICATION_STATUSES.has(status)) {
-    throw new TypeError(`Unsupported verification status: ${status}`);
-  }
+function noAuthorityFlags() {
   return {
-    status,
-    verifier_ref: normalizeString(verification.verifierRef),
-    evidence_ref: normalizeString(verification.evidenceRef),
-    checked_at: normalizeDate(verification.checkedAt),
+    can_spend: false,
+    can_fund_wallet: false,
+    can_deploy: false,
+    can_publish: false,
+    can_change_trust: false,
+    can_expand_scope: false,
   };
 }
 
-function extractDeclaredRevocation(artifact) {
+function envelopeAuthorityFlags() {
+  return {
+    envelope_grants_authority: false,
+    ...noAuthorityFlags(),
+  };
+}
+
+function evaluationAuthorityFlags() {
+  return {
+    evaluation_grants_authority: false,
+    ...noAuthorityFlags(),
+  };
+}
+
+function normalizedArtifactAuthorityFlags() {
+  return {
+    normalized_artifact_grants_authority: false,
+    ...noAuthorityFlags(),
+  };
+}
+
+function declaredRevocationStatus(artifact) {
   const value = firstValue(artifact, [
     'revocation_status',
     'revocation.status',
@@ -261,23 +302,33 @@ function extractDeclaredRevocation(artifact) {
   if (value === true) return 'revoked';
   if (value === false) return 'active';
   const normalized = normalizeString(value, null)?.toLowerCase();
-  if (['active', 'revoked', 'unknown', 'not_checked'].includes(normalized)) return normalized;
-  return null;
+  return REVOCATION_STATUSES.includes(normalized) ? normalized : null;
 }
 
 export function normalizeAuthorityArtifact(artifact, options = {}) {
   if (!isPlainObject(artifact)) throw new TypeError('artifact must be a JSON object');
 
-  const detection = detectAuthorityProtocol(artifact, options);
-  const verification = normalizeVerification(options.verification);
-  const revocationStatus = normalizeString(options.revocationStatus, 'not_checked');
-  if (!['not_checked', 'active', 'revoked', 'unknown'].includes(revocationStatus)) {
-    throw new TypeError(`Unsupported revocationStatus: ${revocationStatus}`);
-  }
+  const detected = detectAuthorityProtocol(artifact, options);
+  const verification = {
+    status: normalizeEnum(
+      options.verification?.status,
+      VERIFICATION_STATUSES,
+      'unverified',
+      'verification.status',
+    ),
+    verifier_ref: normalizeString(options.verification?.verifierRef),
+    evidence_ref: normalizeString(options.verification?.evidenceRef),
+    checked_at: normalizeDate(options.verification?.checkedAt),
+  };
+  const revocationStatus = normalizeEnum(
+    options.revocationStatus,
+    REVOCATION_STATUSES,
+    'not_checked',
+    'revocationStatus',
+  );
 
   const budget = firstValue(artifact, ['budget', 'scope.budget', 'mandate.budget', 'policy.budget']) || {};
-  const constraints = firstValue(artifact, ['scope', 'constraints', 'mandate.scope', 'policy']) || {};
-
+  const scope = firstValue(artifact, ['scope', 'constraints', 'mandate.scope', 'policy']) || {};
   const principalRef = normalizeString(firstValue(artifact, [
     'owner_id',
     'principal_id',
@@ -287,7 +338,6 @@ export function normalizeAuthorityArtifact(artifact, options = {}) {
     'user_id',
     'mandate.principal_id',
   ]));
-
   const agentRef = normalizeString(firstValue(artifact, [
     'buyer_agent_id',
     'agent_id',
@@ -296,18 +346,23 @@ export function normalizeAuthorityArtifact(artifact, options = {}) {
     'mandate.agent_id',
     'sub',
   ]));
-
   const warnings = [];
-  if (verification.status !== 'verified') warnings.push('artifact was normalized but not cryptographically or institutionally verified');
+  if (verification.status !== 'verified') {
+    warnings.push('artifact was normalized but not cryptographically or institutionally verified');
+  }
   if (!principalRef) warnings.push('principal reference was not found');
   if (!agentRef) warnings.push('agent reference was not found');
   if (revocationStatus === 'not_checked') warnings.push('revocation state was not checked');
-  if (detection.protocol === 'other') warnings.push('protocol is unknown; use a versioned adapter or protocolHint');
+  if (detected.protocol === 'other') warnings.push('protocol is unknown; use a versioned adapter or protocolHint');
 
   return {
     schema: 'agoragentic.normalized-authority.v1',
-    source_protocol: detection.protocol,
-    detection: cloneJson(detection),
+    source_protocol: detected.protocol,
+    detection: {
+      protocol: detected.protocol,
+      confidence: detected.confidence,
+      reasons: [...detected.reasons],
+    },
     source_artifact_ref: normalizeString(options.artifactRef, `inline:${sha256Ref(artifact)}`),
     source_artifact_hash: sha256Ref(artifact),
     source_artifact_embedded: false,
@@ -331,78 +386,53 @@ export function normalizeAuthorityArtifact(artifact, options = {}) {
       'provider.id',
       'constraints.merchant_id',
     ])),
-    allowed_actions: normalizeList(firstValue(constraints, ['allowed_actions', 'actions', 'permissions'])),
-    allowed_sellers: normalizeList(firstValue(constraints, ['allowed_sellers', 'sellers', 'merchants'])),
-    allowed_categories: normalizeList(firstValue(constraints, ['allowed_categories', 'categories', 'merchant_categories'])),
-    allowed_payment_rails: normalizeList(firstValue(constraints, ['allowed_payment_rails', 'payment_rails', 'rails'])),
-    currency: normalizeString(firstValue(budget, ['currency']) ?? firstValue(artifact, ['currency', 'payment.currency']), 'USD', 30),
-    max_per_action: normalizeMoney(firstValue(budget, ['max_per_action', 'max_per_transaction', 'per_transaction', 'transaction_limit']), '0'),
+    allowed_actions: normalizeList(firstValue(scope, ['allowed_actions', 'actions', 'permissions'])),
+    allowed_sellers: normalizeList(firstValue(scope, ['allowed_sellers', 'sellers', 'merchants'])),
+    allowed_categories: normalizeList(firstValue(scope, ['allowed_categories', 'categories', 'merchant_categories'])),
+    allowed_payment_rails: normalizeList(firstValue(scope, ['allowed_payment_rails', 'payment_rails', 'rails'])),
+    currency: normalizeString(
+      firstValue(budget, ['currency']) ?? firstValue(artifact, ['currency', 'payment.currency']),
+      'USD',
+      30,
+    ),
+    max_per_action: normalizeMoney(firstValue(budget, [
+      'max_per_action',
+      'max_per_transaction',
+      'per_transaction',
+      'transaction_limit',
+    ]), '0'),
     max_daily: normalizeMoney(firstValue(budget, ['max_daily', 'daily', 'daily_limit']), '0'),
     max_total: normalizeMoney(firstValue(budget, ['max_total', 'total', 'total_limit']), '0'),
     verification,
     revocation_status: revocationStatus,
-    declared_revocation_status: extractDeclaredRevocation(artifact),
+    declared_revocation_status: declaredRevocationStatus(artifact),
     normalization_warnings: warnings,
-    authority_flags: {
-      normalized_artifact_grants_authority: false,
-      can_spend: false,
-      can_fund_wallet: false,
-      can_deploy: false,
-      can_publish: false,
-      can_change_trust: false,
-      can_expand_scope: false,
-    },
-  };
-}
-
-function falseAuthorityFlags(prefix) {
-  return {
-    [prefix]: false,
-    can_spend: false,
-    can_fund_wallet: false,
-    can_deploy: false,
-    can_publish: false,
-    can_change_trust: false,
-    can_expand_scope: false,
+    authority_flags: normalizedArtifactAuthorityFlags(),
   };
 }
 
 export function buildAuthorityRequest(input = {}) {
-  const createdAt = requireIsoDate(input.createdAt || new Date(), 'createdAt');
-  const expiresAt = requireIsoDate(input.expiresAt || new Date(new Date(createdAt).getTime() + 60 * 60 * 1000), 'expiresAt');
+  const createdAt = requireDate(input.createdAt || new Date(), 'createdAt');
+  const expiresAt = requireDate(
+    input.expiresAt || new Date(Date.parse(createdAt) + 60 * 60 * 1000),
+    'expiresAt',
+  );
   const principalRef = normalizeString(input.principalRef);
   const agentId = normalizeString(input.agentId);
   const purpose = normalizeString(input.purpose);
+  const allowedActions = normalizeList(input.allowedActions);
   if (!principalRef) throw new TypeError('principalRef is required');
   if (!agentId) throw new TypeError('agentId is required');
   if (!purpose) throw new TypeError('purpose is required');
+  if (allowedActions.length === 0) throw new TypeError('at least one allowed action must be requested');
 
-  const requestedAuthority = {
-    purpose,
-    allowed_actions: normalizeList(input.allowedActions),
-    allowed_sellers: normalizeList(input.allowedSellers),
-    allowed_categories: normalizeList(input.allowedCategories),
-    allowed_payment_rails: normalizeList(input.allowedPaymentRails),
-    currency: normalizeString(input.currency, 'USD', 30),
-    max_per_action: normalizeMoney(input.maxPerAction, '0'),
-    max_daily: normalizeMoney(input.maxDaily, '0'),
-    max_total: normalizeMoney(input.maxTotal, '0'),
-  };
-  if (requestedAuthority.allowed_actions.length === 0) {
-    throw new TypeError('at least one allowed action must be requested');
-  }
-
-  const seed = {
-    principalRef,
-    agentId,
-    purpose,
-    createdAt,
-    expiresAt,
-  };
-
+  const requestId = normalizeString(
+    input.requestId,
+    `aar_${sha256Ref({ principalRef, agentId, purpose, createdAt }).slice(7, 23)}`,
+  );
   return {
     schema: 'agoragentic.agent-authority-request.v1',
-    request_id: normalizeString(input.requestId, `aar_${sha256Ref(seed).slice(7, 23)}`),
+    request_id: requestId,
     created_at: createdAt,
     expires_at: expiresAt,
     principal_ref: principalRef,
@@ -411,7 +441,17 @@ export function buildAuthorityRequest(input = {}) {
       agent_uri: normalizeString(input.agentUri),
       public_key_ref: normalizeString(input.publicKeyRef),
     },
-    requested_authority: requestedAuthority,
+    requested_authority: {
+      purpose,
+      allowed_actions: allowedActions,
+      allowed_sellers: normalizeList(input.allowedSellers),
+      allowed_categories: normalizeList(input.allowedCategories),
+      allowed_payment_rails: normalizeList(input.allowedPaymentRails),
+      currency: normalizeString(input.currency, 'USD', 30),
+      max_per_action: normalizeMoney(input.maxPerAction, '0'),
+      max_daily: normalizeMoney(input.maxDaily, '0'),
+      max_total: normalizeMoney(input.maxTotal, '0'),
+    },
     controls: {
       idempotency_required: true,
       receipt_required: true,
@@ -422,7 +462,7 @@ export function buildAuthorityRequest(input = {}) {
     status: 'pending_principal_approval',
     approval: null,
     request_grants_authority: false,
-    authority_flags: falseAuthorityFlags('request_grants_authority'),
+    authority_flags: noAuthorityFlags(),
     public_safe_summary: normalizeString(
       input.publicSafeSummary,
       `Agent ${agentId} requests bounded authority for: ${purpose}. This request grants no authority.`,
@@ -431,131 +471,184 @@ export function buildAuthorityRequest(input = {}) {
   };
 }
 
-function normalizedAuthorityToEnvelope(authority = {}) {
-  if (!isPlainObject(authority)) throw new TypeError('normalizedAuthority is required');
-  if (authority.schema !== 'agoragentic.normalized-authority.v1') {
+function authorityForEnvelope(normalizedAuthority) {
+  if (!isPlainObject(normalizedAuthority)
+    || normalizedAuthority.schema !== 'agoragentic.normalized-authority.v1') {
     throw new TypeError('normalizedAuthority must be produced by normalizeAuthorityArtifact');
   }
   return {
-    source_protocol: authority.source_protocol,
-    source_artifact_ref: authority.source_artifact_ref,
-    source_artifact_hash: authority.source_artifact_hash,
-    issuer_ref: authority.issuer_ref,
-    verification_status: authority.verification?.status || 'unverified',
-    issued_at: authority.issued_at,
-    expires_at: authority.expires_at,
-    revocation_status: authority.revocation_status || 'not_checked',
-    audience: authority.audience,
-    merchant_binding: authority.merchant_binding,
-    allowed_actions: normalizeList(authority.allowed_actions),
-    allowed_sellers: normalizeList(authority.allowed_sellers),
-    allowed_categories: normalizeList(authority.allowed_categories),
-    allowed_payment_rails: normalizeList(authority.allowed_payment_rails),
-    currency: normalizeString(authority.currency, 'USD', 30),
-    max_per_action: normalizeMoney(authority.max_per_action, '0'),
-    max_daily: normalizeMoney(authority.max_daily, '0'),
-    max_total: normalizeMoney(authority.max_total, '0'),
+    source_protocol: normalizedAuthority.source_protocol,
+    source_artifact_ref: normalizedAuthority.source_artifact_ref,
+    source_artifact_hash: normalizedAuthority.source_artifact_hash,
+    issuer_ref: normalizedAuthority.issuer_ref,
+    verification_status: normalizeEnum(
+      normalizedAuthority.verification?.status,
+      VERIFICATION_STATUSES,
+      'unverified',
+      'authority.verification_status',
+    ),
+    issued_at: normalizedAuthority.issued_at,
+    expires_at: normalizedAuthority.expires_at,
+    revocation_status: normalizeEnum(
+      normalizedAuthority.revocation_status,
+      REVOCATION_STATUSES,
+      'not_checked',
+      'authority.revocation_status',
+    ),
+    audience: normalizedAuthority.audience,
+    merchant_binding: normalizedAuthority.merchant_binding,
+    allowed_actions: normalizeList(normalizedAuthority.allowed_actions),
+    allowed_sellers: normalizeList(normalizedAuthority.allowed_sellers),
+    allowed_categories: normalizeList(normalizedAuthority.allowed_categories),
+    allowed_payment_rails: normalizeList(normalizedAuthority.allowed_payment_rails),
+    currency: normalizeString(normalizedAuthority.currency, 'USD', 30),
+    max_per_action: normalizeMoney(normalizedAuthority.max_per_action, '0'),
+    max_daily: normalizeMoney(normalizedAuthority.max_daily, '0'),
+    max_total: normalizeMoney(normalizedAuthority.max_total, '0'),
   };
 }
 
-function hasExpired(expiresAt, now = new Date()) {
+function expired(expiresAt, now) {
   if (!expiresAt) return false;
   const time = Date.parse(expiresAt);
   return Number.isFinite(time) && time <= now.getTime();
 }
 
-function deriveState(envelope, now = new Date()) {
+function deriveState(envelope, now) {
   if (envelope.reconciliation.status === 'refunded') return 'refunded';
   if (envelope.reconciliation.status === 'disputed') return 'disputed';
   if (envelope.reconciliation.status === 'failed' || envelope.execution.status === 'failed') return 'failed';
-  if (
-    envelope.reconciliation.status === 'complete'
+  if (envelope.reconciliation.status === 'complete'
     && envelope.outcome.verification_status === 'verified'
     && envelope.payment.settlement_verification === 'verified'
-    && envelope.payment.settlement_final
-  ) return 'reconciled';
+    && envelope.payment.settlement_final) return 'reconciled';
   if (envelope.outcome.verification_status === 'verified') return 'outcome_verified';
   if (envelope.execution.status === 'success') return 'execution_observed';
   if (['observed', 'settled'].includes(envelope.payment.status)) return 'payment_observed';
   if (['required', 'submitted'].includes(envelope.payment.status)) return 'payment_pending';
-  if (
-    envelope.authority.verification_status === 'verified'
+  if (envelope.authority.verification_status === 'verified'
     && envelope.authority.revocation_status === 'active'
-    && !hasExpired(envelope.authority.expires_at, now)
-    && envelope.commercial_intent.terms_match_status === 'match'
-  ) return 'authority_ready';
+    && !expired(envelope.authority.expires_at, now)
+    && envelope.commercial_intent.terms_match_status === 'match') return 'authority_ready';
   return 'incomplete';
 }
 
 export function buildTransactionAssuranceEnvelope(input = {}) {
-  const createdAt = requireIsoDate(input.createdAt || new Date(), 'createdAt');
-  const authority = normalizedAuthorityToEnvelope(input.normalizedAuthority);
+  const createdAt = requireDate(input.createdAt || new Date(), 'createdAt');
+  const updatedAt = requireDate(input.updatedAt || createdAt, 'updatedAt');
+  const authority = authorityForEnvelope(input.normalizedAuthority);
   const principalRef = normalizeString(input.principalRef || input.normalizedAuthority?.principal_ref);
   const agentRef = normalizeString(input.agentRef || input.normalizedAuthority?.agent_ref);
+  const intentInput = input.commercialIntent || {};
+  const action = normalizeString(intentInput.action);
+  const taskRef = normalizeString(intentInput.taskRef);
+  const sellerRef = normalizeString(intentInput.sellerRef);
+  const capabilityRef = normalizeString(intentInput.capabilityRef);
   if (!principalRef) throw new TypeError('principalRef is required');
   if (!agentRef) throw new TypeError('agentRef is required');
-
-  const commercialIntentInput = input.commercialIntent || {};
-  const taskRef = normalizeString(commercialIntentInput.taskRef);
-  const sellerRef = normalizeString(commercialIntentInput.sellerRef);
-  const capabilityRef = normalizeString(commercialIntentInput.capabilityRef);
-  const action = normalizeString(commercialIntentInput.action);
-  if (!taskRef || !sellerRef || !capabilityRef || !action) {
-    throw new TypeError('commercialIntent.taskRef, sellerRef, capabilityRef, and action are required');
+  if (!action || !taskRef || !sellerRef || !capabilityRef) {
+    throw new TypeError('commercialIntent.action, taskRef, sellerRef, and capabilityRef are required');
   }
 
   const envelope = {
     schema: 'agoragentic.transaction-assurance-envelope.v1',
-    envelope_id: normalizeString(input.envelopeId, `tae_${sha256Ref({ principalRef, agentRef, taskRef, createdAt }).slice(7, 23)}`),
+    envelope_id: normalizeString(
+      input.envelopeId,
+      `tae_${sha256Ref({ principalRef, agentRef, taskRef, createdAt }).slice(7, 23)}`,
+    ),
     created_at: createdAt,
-    updated_at: requireIsoDate(input.updatedAt || createdAt, 'updatedAt'),
+    updated_at: updatedAt,
     state: 'incomplete',
     principal: {
       principal_ref: principalRef,
-      principal_type: normalizeString(input.principalType, 'unknown'),
-      identity_verification: normalizeString(input.principalIdentityVerification, 'not_checked'),
+      principal_type: normalizeEnum(
+        input.principalType,
+        PRINCIPAL_TYPES,
+        'unknown',
+        'principalType',
+      ),
+      identity_verification: normalizeEnum(
+        input.principalIdentityVerification,
+        VERIFICATION_STATUSES,
+        'not_checked',
+        'principalIdentityVerification',
+      ),
     },
     agent: {
       agent_ref: agentRef,
       agent_uri: normalizeString(input.agentUri),
       operator_ref: normalizeString(input.operatorRef),
-      identity_verification: normalizeString(input.agentIdentityVerification, 'not_checked'),
+      identity_verification: normalizeEnum(
+        input.agentIdentityVerification,
+        VERIFICATION_STATUSES,
+        'not_checked',
+        'agentIdentityVerification',
+      ),
     },
     authority,
     commercial_intent: {
       action,
       task_ref: taskRef,
-      task_contract_hash: normalizeString(commercialIntentInput.taskContractHash, sha256Ref({ taskRef, action })),
+      task_contract_hash: normalizeString(
+        intentInput.taskContractHash,
+        sha256Ref({ taskRef, action }),
+      ),
       seller_ref: sellerRef,
       capability_ref: capabilityRef,
-      category: normalizeString(commercialIntentInput.category),
-      quote_ref: normalizeString(commercialIntentInput.quoteRef),
-      quote_hash: normalizeString(commercialIntentInput.quoteHash),
-      quoted_amount: normalizeMoney(commercialIntentInput.quotedAmount, '0'),
-      currency: normalizeString(commercialIntentInput.currency || authority.currency, 'USD', 30),
-      terms_ref: normalizeString(commercialIntentInput.termsRef),
-      terms_hash: normalizeString(commercialIntentInput.termsHash),
-      terms_match_status: normalizeString(commercialIntentInput.termsMatchStatus, 'not_checked'),
+      category: normalizeString(intentInput.category),
+      quote_ref: normalizeString(intentInput.quoteRef),
+      quote_hash: normalizeString(intentInput.quoteHash),
+      quoted_amount: normalizeMoney(intentInput.quotedAmount, '0'),
+      currency: normalizeString(intentInput.currency || authority.currency, 'USD', 30),
+      terms_ref: normalizeString(intentInput.termsRef),
+      terms_hash: normalizeString(intentInput.termsHash),
+      terms_match_status: normalizeEnum(
+        intentInput.termsMatchStatus,
+        TERMS_STATUSES,
+        'not_checked',
+        'commercialIntent.termsMatchStatus',
+      ),
     },
     payment: {
       payment_identifier: normalizeString(input.payment?.paymentIdentifier),
       rail: normalizeString(input.payment?.rail),
-      status: normalizeString(input.payment?.status, 'not_started'),
-      amount: normalizeMoney(input.payment?.amount ?? commercialIntentInput.quotedAmount, '0'),
-      currency: normalizeString(input.payment?.currency || commercialIntentInput.currency || authority.currency, 'USD', 30),
+      status: normalizeEnum(
+        input.payment?.status,
+        PAYMENT_STATUSES,
+        'not_started',
+        'payment.status',
+      ),
+      amount: normalizeMoney(input.payment?.amount ?? intentInput.quotedAmount, '0'),
+      currency: normalizeString(
+        input.payment?.currency || intentInput.currency || authority.currency,
+        'USD',
+        30,
+      ),
       offer_ref: normalizeString(input.payment?.offerRef),
       offer_hash: normalizeString(input.payment?.offerHash),
       receipt_ref: normalizeString(input.payment?.receiptRef),
       receipt_hash: normalizeString(input.payment?.receiptHash),
       settlement_ref: normalizeString(input.payment?.settlementRef),
-      settlement_verification: normalizeString(input.payment?.settlementVerification, 'not_checked'),
+      settlement_verification: normalizeEnum(
+        input.payment?.settlementVerification,
+        VERIFICATION_STATUSES,
+        'not_checked',
+        'payment.settlementVerification',
+      ),
       settlement_final: input.payment?.settlementFinal === true,
     },
     execution: {
       idempotency_key_hash: normalizeString(input.execution?.idempotencyKeyHash),
       invocation_ref: normalizeString(input.execution?.invocationRef),
-      status: normalizeString(input.execution?.status, 'not_started'),
-      attempt_count: Number.isInteger(input.execution?.attemptCount) ? input.execution.attemptCount : 0,
+      status: normalizeEnum(
+        input.execution?.status,
+        EXECUTION_STATUSES,
+        'not_started',
+        'execution.status',
+      ),
+      attempt_count: Number.isInteger(input.execution?.attemptCount)
+        ? input.execution.attemptCount
+        : 0,
       duplicate_detected: input.execution?.duplicateDetected === true,
       input_hash: normalizeString(input.execution?.inputHash),
       output_hash: normalizeString(input.execution?.outputHash),
@@ -563,11 +656,21 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
       completed_at: normalizeDate(input.execution?.completedAt),
     },
     outcome: {
-      delivery_status: normalizeString(input.outcome?.deliveryStatus, 'not_observed'),
+      delivery_status: normalizeEnum(
+        input.outcome?.deliveryStatus,
+        DELIVERY_STATUSES,
+        'not_observed',
+        'outcome.deliveryStatus',
+      ),
       artifact_refs: normalizeList(input.outcome?.artifactRefs),
       seller_attestation_ref: normalizeString(input.outcome?.sellerAttestationRef),
       validation_refs: normalizeList(input.outcome?.validationRefs),
-      verification_status: normalizeString(input.outcome?.verificationStatus, 'not_checked'),
+      verification_status: normalizeEnum(
+        input.outcome?.verificationStatus,
+        VERIFICATION_STATUSES,
+        'not_checked',
+        'outcome.verificationStatus',
+      ),
       verification_scope: normalizeString(
         input.outcome?.verificationScope,
         'No outcome verification has been supplied.',
@@ -576,8 +679,17 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
       unknowns: normalizeList(input.outcome?.unknowns),
     },
     reconciliation: {
-      status: normalizeString(input.reconciliation?.status, 'not_started'),
-      result: normalizeString(input.reconciliation?.result, 'No reconciliation has been completed.', 3000),
+      status: normalizeEnum(
+        input.reconciliation?.status,
+        RECONCILIATION_STATUSES,
+        'not_started',
+        'reconciliation.status',
+      ),
+      result: normalizeString(
+        input.reconciliation?.result,
+        'No reconciliation has been completed.',
+        3000,
+      ),
       refund_ref: normalizeString(input.reconciliation?.refundRef),
       dispute_ref: normalizeString(input.reconciliation?.disputeRef),
       next_safe_action: normalizeString(
@@ -599,7 +711,7 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
       private_owner_data_excluded: true,
       secrets_excluded: true,
     },
-    authority_flags: falseAuthorityFlags('envelope_grants_authority'),
+    authority_flags: envelopeAuthorityFlags(),
     public_safe_summary: normalizeString(
       input.publicSafeSummary,
       `Transaction assurance envelope for ${action}; no authority is granted by this envelope.`,
@@ -608,17 +720,20 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
   };
 
   const now = input.now ? new Date(input.now) : new Date(createdAt);
-  envelope.state = ASSURANCE_STATES.includes(input.state) ? input.state : deriveState(envelope, now);
+  if (Number.isNaN(now.getTime())) throw new TypeError('now must be a valid date-time');
+  envelope.state = input.state === undefined
+    ? deriveState(envelope, now)
+    : normalizeEnum(input.state, ASSURANCE_STATES, 'incomplete', 'state');
   envelope.evidence.envelope_hash = sha256Ref(envelope);
   return envelope;
 }
 
-function decimalGreaterThan(left, right) {
-  return Number(left) > Number(right);
+function unrestrictedOrIncludes(list, value) {
+  return !Array.isArray(list) || list.length === 0 || list.includes(value);
 }
 
-function includesWhenRestricted(list, value) {
-  return !Array.isArray(list) || list.length === 0 || list.includes(value);
+function greaterThan(left, right) {
+  return Number(left) > Number(right);
 }
 
 function addUnique(list, value) {
@@ -626,14 +741,16 @@ function addUnique(list, value) {
 }
 
 export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
-  if (!isPlainObject(envelope) || envelope.schema !== 'agoragentic.transaction-assurance-envelope.v1') {
+  if (!isPlainObject(envelope)
+    || envelope.schema !== 'agoragentic.transaction-assurance-envelope.v1') {
     throw new TypeError('envelope must use agoragentic.transaction-assurance-envelope.v1');
   }
-
-  const phase = normalizeString(options.phase, 'pre_execution');
-  if (!['pre_execution', 'post_execution'].includes(phase)) {
-    throw new TypeError('phase must be pre_execution or post_execution');
-  }
+  const phase = normalizeEnum(
+    options.phase,
+    ['pre_execution', 'post_execution'],
+    'pre_execution',
+    'phase',
+  );
   const now = options.now ? new Date(options.now) : new Date();
   if (Number.isNaN(now.getTime())) throw new TypeError('options.now must be a valid date');
 
@@ -649,17 +766,17 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
   if (authority.verification_status !== 'verified') addUnique(blockers, 'authority_not_verified');
   if (authority.revocation_status === 'revoked') addUnique(blockers, 'authority_revoked');
   else if (authority.revocation_status !== 'active') addUnique(blockers, 'authority_revocation_not_verified_active');
-  if (hasExpired(authority.expires_at, now)) addUnique(blockers, 'authority_expired');
+  if (expired(authority.expires_at, now)) addUnique(blockers, 'authority_expired');
   if (authority.audience && authority.audience !== envelope.agent?.agent_ref) addUnique(blockers, 'authority_audience_mismatch');
   if (authority.merchant_binding && authority.merchant_binding !== intent.seller_ref) addUnique(blockers, 'merchant_binding_mismatch');
-  if (!includesWhenRestricted(authority.allowed_actions, intent.action)) addUnique(blockers, 'action_out_of_scope');
-  if (!includesWhenRestricted(authority.allowed_sellers, intent.seller_ref)) addUnique(blockers, 'seller_out_of_scope');
-  if (!includesWhenRestricted(authority.allowed_categories, intent.category)) addUnique(blockers, 'category_out_of_scope');
-  if (!includesWhenRestricted(authority.allowed_payment_rails, payment.rail)) addUnique(blockers, 'payment_rail_out_of_scope');
+  if (!unrestrictedOrIncludes(authority.allowed_actions, intent.action)) addUnique(blockers, 'action_out_of_scope');
+  if (!unrestrictedOrIncludes(authority.allowed_sellers, intent.seller_ref)) addUnique(blockers, 'seller_out_of_scope');
+  if (!unrestrictedOrIncludes(authority.allowed_categories, intent.category)) addUnique(blockers, 'category_out_of_scope');
+  if (!unrestrictedOrIncludes(authority.allowed_payment_rails, payment.rail)) addUnique(blockers, 'payment_rail_out_of_scope');
   if (authority.currency !== intent.currency || authority.currency !== payment.currency) addUnique(blockers, 'currency_mismatch');
-  if (decimalGreaterThan(intent.quoted_amount, authority.max_per_action)) addUnique(blockers, 'quoted_amount_exceeds_per_action_limit');
-  if (decimalGreaterThan(payment.amount, authority.max_per_action)) addUnique(blockers, 'payment_amount_exceeds_per_action_limit');
-  if (decimalGreaterThan(payment.amount, intent.quoted_amount)) addUnique(blockers, 'payment_amount_exceeds_quote');
+  if (greaterThan(intent.quoted_amount, authority.max_per_action)) addUnique(blockers, 'quoted_amount_exceeds_per_action_limit');
+  if (greaterThan(payment.amount, authority.max_per_action)) addUnique(blockers, 'payment_amount_exceeds_per_action_limit');
+  if (greaterThan(payment.amount, intent.quoted_amount)) addUnique(blockers, 'payment_amount_exceeds_quote');
   if (intent.terms_match_status === 'changed') addUnique(blockers, 'terms_changed');
   else if (intent.terms_match_status !== 'match') addUnique(blockers, 'terms_not_verified');
   if (!execution.idempotency_key_hash) addUnique(blockers, 'idempotency_key_missing');
@@ -674,13 +791,10 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     if (!execution.output_hash) addUnique(blockers, 'output_hash_missing');
     if (outcome.delivery_status !== 'delivered') addUnique(blockers, 'delivery_not_confirmed');
     if (outcome.verification_status !== 'verified') addUnique(blockers, 'outcome_not_verified');
-    if (reconciliation.status !== 'complete' && reconciliation.status !== 'refunded') {
-      addUnique(blockers, 'reconciliation_not_complete');
-    }
+    if (!['complete', 'refunded'].includes(reconciliation.status)) addUnique(blockers, 'reconciliation_not_complete');
   }
 
-  const completeChainVerified = phase === 'post_execution' && blockers.length === 0;
-  const hardDeny = blockers.some((code) => [
+  const hardDenyCodes = new Set([
     'authority_not_verified',
     'authority_revoked',
     'authority_expired',
@@ -696,17 +810,25 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     'payment_amount_exceeds_quote',
     'terms_changed',
     'duplicate_attempt_detected',
-  ].includes(code));
-
-  let decision;
-  if (hardDeny) decision = 'deny';
-  else if (blockers.length > 0) decision = 'review';
-  else decision = phase === 'pre_execution' ? 'allow' : 'complete';
+  ]);
+  const hardDeny = blockers.some((blocker) => hardDenyCodes.has(blocker));
+  const completeChainVerified = phase === 'post_execution' && blockers.length === 0;
+  const decision = hardDeny
+    ? 'deny'
+    : blockers.length > 0
+      ? 'review'
+      : phase === 'pre_execution'
+        ? 'allow'
+        : 'complete';
 
   let nextSafeAction = 'No further action is required.';
-  if (decision === 'deny') nextSafeAction = 'Stop. Obtain corrected principal authority or corrected commercial terms before proceeding.';
-  else if (decision === 'review') nextSafeAction = 'Do not guess or blindly retry. Collect the missing evidence and re-evaluate the same payment/idempotency identifiers.';
-  else if (decision === 'allow') nextSafeAction = 'Re-check live rail availability, then execute once with the approved identifiers and preserve all returned evidence.';
+  if (decision === 'deny') {
+    nextSafeAction = 'Stop. Obtain corrected principal authority or corrected commercial terms before proceeding.';
+  } else if (decision === 'review') {
+    nextSafeAction = 'Do not guess or blindly retry. Collect missing evidence and re-evaluate the same payment and idempotency identifiers.';
+  } else if (decision === 'allow') {
+    nextSafeAction = 'Re-check live rail availability, execute once with the approved identifiers, and preserve all returned evidence.';
+  }
 
   return {
     schema: 'agoragentic.transaction-assurance-evaluation.v1',
@@ -721,14 +843,6 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
       envelope_id: envelope.envelope_id || null,
       envelope_hash: sha256Ref(envelope),
     },
-    authority_flags: {
-      evaluation_grants_authority: false,
-      can_spend: false,
-      can_fund_wallet: false,
-      can_deploy: false,
-      can_publish: false,
-      can_change_trust: false,
-      can_expand_scope: false,
-    },
+    authority_flags: evaluationAuthorityFlags(),
   };
 }
