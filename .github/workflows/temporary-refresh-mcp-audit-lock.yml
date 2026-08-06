@@ -1,0 +1,54 @@
+name: Temporary refresh MCP audit lock
+
+on:
+  push:
+    branches:
+      - codex/agent-outcome-assurance-core
+    paths:
+      - '.github/workflows/temporary-refresh-mcp-audit-lock.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out implementation branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/agent-outcome-assurance-core
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Refresh only lockfile-resolvable security fixes
+        working-directory: mcp
+        run: |
+          npm ci
+          npm audit fix --package-lock-only
+          git diff --exit-code -- package.json
+          npm ci
+          npm audit --audit-level=moderate
+          npm run check
+          npm run build
+          npm run pack:check
+
+      - name: Commit the reviewed lock refresh and remove this temporary workflow
+        run: |
+          git rm .github/workflows/temporary-refresh-mcp-audit-lock.yml
+          if git diff --quiet -- mcp/package-lock.json .github/workflows/temporary-refresh-mcp-audit-lock.yml; then
+            echo 'No MCP lockfile change was required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mcp/package-lock.json .github/workflows/temporary-refresh-mcp-audit-lock.yml
+          git commit -m 'fix(mcp): refresh transitive security pins [skip ci]'
+          git push origin HEAD:codex/agent-outcome-assurance-core
