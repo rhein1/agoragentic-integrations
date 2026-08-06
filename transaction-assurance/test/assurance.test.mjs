@@ -107,6 +107,18 @@ function assertNoAuthority(flags) {
   }
 }
 
+function collectObjectKeys(value, output = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectObjectKeys(item, output));
+  } else if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      output.push(key);
+      collectObjectKeys(child, output);
+    }
+  }
+  return output;
+}
+
 test('canonicalization and hashes are deterministic across object key order', () => {
   const left = { z: 1, a: { y: 2, b: [3, { d: 4, c: 5 }] } };
   const right = { a: { b: [3, { c: 5, d: 4 }], y: 2 }, z: 1 };
@@ -440,13 +452,33 @@ test('a complete post-execution chain can be marked complete without granting au
   assertNoAuthority(evaluation.authority_flags);
 });
 
-test('public objects exclude raw secrets and private payload fields', () => {
+test('public objects exclude raw secret values and forbidden private payload fields', () => {
   const normalized = verifiedAuthority();
   const envelope = buildTransactionAssuranceEnvelope(envelopeInput());
-  const combined = JSON.stringify({ normalized, envelope });
-  assert.doesNotMatch(combined, /private_key|seed_phrase|mnemonic|raw_prompt|raw_tool_output|payment_credential/i);
-  assert.doesNotMatch(combined, /\bamk_[A-Za-z0-9_-]{12,}\b/);
-  assert.doesNotMatch(combined, /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/);
+  const keys = collectObjectKeys({ normalized, envelope });
+  const forbiddenPayloadKeys = new Set([
+    'private_key',
+    'privateKey',
+    'seed_phrase',
+    'seedPhrase',
+    'mnemonic',
+    'raw_prompt',
+    'rawPrompt',
+    'raw_tool_output',
+    'rawToolOutput',
+    'payment_credential',
+    'paymentCredential',
+    'wallet_private_data',
+    'walletPrivateData',
+  ]);
+  assert.deepEqual(keys.filter((key) => forbiddenPayloadKeys.has(key)), []);
+
+  const serialized = JSON.stringify({ normalized, envelope });
+  assert.doesNotMatch(serialized, /\bamk_[A-Za-z0-9_-]{12,}\b/);
+  assert.doesNotMatch(serialized, /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/);
+  assert.equal(envelope.redaction.raw_prompt_excluded, true);
+  assert.equal(envelope.redaction.raw_tool_output_excluded, true);
+  assert.equal(envelope.redaction.raw_payment_credentials_excluded, true);
 });
 
 test('CLI self-test is offline, no-spend, and successful', () => {
