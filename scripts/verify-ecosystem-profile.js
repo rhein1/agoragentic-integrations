@@ -101,13 +101,14 @@ if (!ecosystem || !integrations) {
   }
 
   const brandSystem = fs.readFileSync(path.join(root, 'docs', 'BRAND_SYSTEM.md'), 'utf8');
+  const normalizedBrandSystem = brandSystem.toLowerCase();
   if (!brandSystem.includes('First-screen README contract')) {
     fail('docs/BRAND_SYSTEM.md must define the first-screen README contract');
   }
   if (!brandSystem.includes('Do not bake mutable counts')) {
     fail('docs/BRAND_SYSTEM.md must prohibit mutable counts in images');
   }
-  if (!brandSystem.includes('local receipt is not')) {
+  if (!normalizedBrandSystem.includes('no local receipt is presented as settlement')) {
     fail('docs/BRAND_SYSTEM.md must preserve the local-receipt boundary');
   }
 }
