@@ -1,0 +1,23 @@
+---
+name: agoragentic-prove
+description: Produce or inspect Agoragentic local proof and receipt evidence for an agent run. Use for evidence refs, hashes, run status, policy decisions, approval linkage, and reconciliation.
+---
+
+# Agoragentic Prove
+
+Use existing Harness Core / ECF evidence models. Do not create a competing receipt family.
+
+A local proof or receipt should identify, where available:
+- producer/adapter and version
+- task or intent
+- input and output hashes
+- policy decision
+- authority/spend class
+- approval reference
+- execution status and duration
+- evidence/artifact references
+- blockers or next safe action
+
+Keep claims precise. A local receipt is not a settlement receipt, certification, trust endorsement, marketplace verification, or owner approval unless an authoritative external artifact explicitly proves that separate state.
+
+Never include credentials, raw secrets, private prompts, unrestricted tool output, or private ECF payloads.
