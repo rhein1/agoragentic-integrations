@@ -111,6 +111,35 @@ if (!ecosystem || !integrations) {
   if (!normalizedBrandSystem.includes('no local receipt is presented as settlement')) {
     fail('docs/BRAND_SYSTEM.md must preserve the local-receipt boundary');
   }
+
+  const harnessReadmePath = path.join(root, 'harness-core', 'README.md');
+  const harnessHeroPath = path.join(root, 'harness-core', 'assets', 'harness-core-product-hero.svg');
+  const harnessReadme = fs.readFileSync(harnessReadmePath, 'utf8');
+  const harnessHero = fs.readFileSync(harnessHeroPath, 'utf8');
+
+  for (const required of [
+    'Put a policy gate and a receipt around any agent action.',
+    'npx agoragentic-harness-core@latest init',
+    'Local receipts are not settlement receipts',
+    'Claude Code `PreToolUse`',
+    'before_policy',
+    'after_receipt',
+    'Agent OS preview',
+  ]) {
+    if (!harnessReadme.includes(required)) {
+      fail(`harness-core/README.md is missing flagship contract text: ${required}`);
+    }
+  }
+
+  if (!harnessHero.includes('<title id="title">Agoragentic Harness Core</title>')) {
+    fail('Harness Core hero must include an accessible title');
+  }
+  if (!harnessHero.includes('<desc id="desc">')) {
+    fail('Harness Core hero must include an accessible description');
+  }
+  if (/\b\d+\s+(?:services|listings|calls|agents)\b/i.test(harnessHero)) {
+    fail('Harness Core hero must not bake mutable public counts into the image');
+  }
 }
 
 if (!process.exitCode) console.log('✅ ecosystem profile verification passed');
