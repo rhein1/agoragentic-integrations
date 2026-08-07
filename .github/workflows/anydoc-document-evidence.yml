@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install pinned AnyDoc package
-        run: npm install --no-package-lock --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Syntax and deterministic unit tests
         run: |
           npm run check
