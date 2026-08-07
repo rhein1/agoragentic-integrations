@@ -1,0 +1,46 @@
+name: Prime Agent Governance Extension
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'prime-agent-governance/**'
+      - '.github/workflows/prime-agent-governance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'prime-agent-governance/**'
+      - '.github/workflows/prime-agent-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Syntax checks
+        working-directory: prime-agent-governance
+        run: npm run check
+      - name: Unit and host-contract tests
+        working-directory: prime-agent-governance
+        run: npm test
+      - name: Package dry run
+        working-directory: prime-agent-governance
+        run: npm run pack:dry
