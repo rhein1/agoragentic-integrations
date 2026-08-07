@@ -1,0 +1,48 @@
+{
+  "name": "@agoragentic/anydoc-document-evidence",
+  "version": "0.1.0-alpha.0",
+  "description": "Local Firecrawl AnyDoc adapter that produces bounded Markdown, evidence units, semantic-risk warnings, and an Agoragentic parse-receipt handoff.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "agoragentic-anydoc": "./cli.mjs"
+  },
+  "exports": {
+    ".": "./agoragentic-anydoc.mjs"
+  },
+  "files": [
+    "agoragentic-anydoc.mjs",
+    "cli.mjs",
+    "SKILL.md",
+    "README.md",
+    "listing-candidates.json"
+  ],
+  "dependencies": {
+    "@firecrawl/anydoc": "0.1.7"
+  },
+  "scripts": {
+    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check test.mjs && node --check smoke-anydoc.mjs",
+    "test": "node --test test.mjs",
+    "smoke:anydoc": "node smoke-anydoc.mjs",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "examples/anydoc-document-evidence"
+  },
+  "keywords": [
+    "anydoc",
+    "firecrawl",
+    "document-parsing",
+    "ai-agents",
+    "evidence",
+    "receipts",
+    "ecf",
+    "markdown"
+  ]
+}
