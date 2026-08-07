@@ -1,0 +1,9 @@
+{
+  "schema": "agoragentic.integration-catalog-exception.v1",
+  "catalog_status": "unpublished_alpha",
+  "reason": "The offline challenge remains private until comparable-run manifests and at least two real harness adapters are validated.",
+  "published": false,
+  "external_compatibility_verified": false,
+  "ready_for_manifest": false,
+  "authority_granted": false
+}
