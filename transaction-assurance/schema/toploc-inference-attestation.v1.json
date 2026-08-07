@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/toploc-inference-attestation.v1.json",
+  "title": "Agoragentic TOPLOC Inference Attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "attestation_id",
+    "scheme",
+    "scheme_version",
+    "model_ref",
+    "configuration_hash",
+    "proof_ref",
+    "proof_hash",
+    "validator",
+    "status",
+    "checked_at",
+    "evidence_refs",
+    "scope",
+    "source_artifact_embedded",
+    "non_claims",
+    "authority_flags",
+    "attestation_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.toploc-inference-attestation.v1" },
+    "attestation_id": { "type": "string", "minLength": 1 },
+    "scheme": { "const": "toploc" },
+    "scheme_version": { "type": "string", "minLength": 1 },
+    "model_ref": { "type": "string", "minLength": 1 },
+    "configuration_hash": { "type": "string", "minLength": 1 },
+    "proof_ref": { "type": "string", "minLength": 1 },
+    "proof_hash": { "type": "string", "minLength": 1 },
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "version"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "status": { "enum": ["accept", "reject", "pending", "not_checked", "error"] },
+    "checked_at": { "type": ["string", "null"], "format": "date-time" },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "scope": { "const": "model_configuration_execution" },
+    "source_artifact_embedded": { "const": false },
+    "non_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output_correctness_proven": { "const": false },
+        "task_fulfillment_proven": { "const": false },
+        "seller_identity_proven": { "const": false },
+        "payment_settlement_proven": { "const": false },
+        "delivery_proven": { "const": false },
+        "complete_transaction_verified": { "const": false },
+        "certification": { "const": false },
+        "trust_endorsement": { "const": false }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attestation_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false }
+      }
+    },
+    "attestation_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

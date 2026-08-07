@@ -5,14 +5,11 @@
   "type": "module",
   "license": "Apache-2.0",
   "private": true,
-  "engines": {
-    "node": ">=20"
-  },
-  "bin": {
-    "agora-assure": "./bin/agora-assure.mjs"
-  },
+  "engines": { "node": ">=20" },
+  "bin": { "agora-assure": "./bin/agora-assure.mjs" },
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./toploc-evidence": "./src/toploc-evidence.mjs"
   },
   "files": [
     "bin/",
@@ -21,11 +18,12 @@
     "examples/",
     "SKILL.md",
     "README.md",
+    "TOPLOC_EVIDENCE.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/index.mjs && node --check bin/agora-assure.mjs",
+    "check": "node --check src/index.mjs && node --check src/toploc-evidence.mjs && node --check bin/agora-assure.mjs",
     "self-test": "node bin/agora-assure.mjs self-test",
     "pack:dry": "npm pack --dry-run"
   },
@@ -47,7 +45,5 @@
     "directory": "transaction-assurance"
   },
   "homepage": "https://agoragentic.com/agent-setup.md",
-  "bugs": {
-    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
-  }
+  "bugs": { "url": "https://github.com/rhein1/agoragentic-integrations/issues" }
 }
