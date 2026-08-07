@@ -1,0 +1,9 @@
+{
+  "schema": "agoragentic.integration-catalog-exception.v1",
+  "catalog_status": "unpublished_alpha",
+  "reason": "The package is private while exact Prime Agent extension-loader and event-contract compatibility is still unverified.",
+  "published": false,
+  "external_compatibility_verified": false,
+  "ready_for_manifest": false,
+  "authority_granted": false
+}
