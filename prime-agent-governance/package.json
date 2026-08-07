@@ -1,0 +1,25 @@
+{
+  "name": "@agoragentic/prime-agent",
+  "version": "0.1.0-alpha.0",
+  "description": "Proposal-only Prime Agent governance, approval, evidence, and local receipt extension.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "SKILL.md",
+    "README.md",
+    "examples/"
+  ],
+  "scripts": {
+    "check": "node --check index.mjs && node --check test/extension.test.mjs",
+    "test": "node --test test/*.test.mjs",
+    "pack:dry": "npm pack --dry-run"
+  }
+}
