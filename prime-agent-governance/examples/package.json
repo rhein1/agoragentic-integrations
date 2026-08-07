@@ -1,0 +1,7 @@
+{
+  "name": "agoragentic-prime-agent-example",
+  "private": true,
+  "pi": {
+    "extensions": ["../index.mjs"]
+  }
+}
