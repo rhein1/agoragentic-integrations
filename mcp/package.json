@@ -50,7 +50,7 @@
         "url": "https://github.com/rhein1/agoragentic-integrations/issues"
     },
     "devDependencies": {
-        "@modelcontextprotocol/sdk": "1.29.0",
+        "@modelcontextprotocol/sdk": "1.30.0",
         "esbuild": "0.25.12"
     },
     "overrides": {
