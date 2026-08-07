@@ -7,6 +7,8 @@ import argparse
 import ast
 import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -14,20 +16,14 @@ from pathlib import Path
 from typing import Iterable, List, Sequence, Tuple
 
 
-ENTRYPOINT_NAMES = {
-    "main.py",
-    "app.py",
-    "example.py",
-    "index.js",
-    "index.mjs",
-    "index.cjs",
-    "main.js",
-    "main.mjs",
-    "main.cjs",
-}
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
 CODE_SUFFIXES = {".py", ".js", ".mjs", ".cjs"}
 SKIP_PARTS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+REFERENCE_DEFINITION_RE = re.compile(
+    r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))", re.MULTILINE
+)
+REFERENCE_USAGE_RE = re.compile(r"(?<!!)\[([^\]]+)\]\[([^\]]*)\]")
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 
 @dataclass(frozen=True)
@@ -60,24 +56,74 @@ def relative_target(source: Path, target: str) -> Path:
     return (source.parent / clean).resolve()
 
 
+def reference_label(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
+def markdown_prose(text: str) -> str:
+    """Remove code regions so bracketed source examples are not parsed as links."""
+    lines = []
+    closing_fence = None
+    for line in text.splitlines(keepends=True):
+        fence = FENCE_RE.match(line)
+        if fence:
+            marker = fence.group(1)[0]
+            if closing_fence is None:
+                closing_fence = marker
+            elif marker == closing_fence:
+                closing_fence = None
+            lines.append("\n" if line.endswith("\n") else "")
+            continue
+        if closing_fence is not None or line.startswith(("    ", "\t")):
+            lines.append("\n" if line.endswith("\n") else "")
+            continue
+        lines.append(re.sub(r"`+[^`\n]*`+", "", line))
+    return "".join(lines)
+
+
+def check_local_target(root: Path, source: Path, target: str,
+                       missing_code: str, outside_code: str) -> List[Finding]:
+    if not target or target.startswith(("#", "http://", "https://", "mailto:")):
+        return []
+    resolved = relative_target(source, target)
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError:
+        return [Finding(str(source.relative_to(root)), outside_code, target)]
+    if not resolved.exists():
+        return [Finding(str(source.relative_to(root)), missing_code, target)]
+    return []
+
+
 def check_markdown_links(root: Path) -> List[Finding]:
     findings: List[Finding] = []
     pattern = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
     for source in files_under(root, MARKDOWN_SUFFIXES):
-        text = source.read_text(encoding="utf-8", errors="replace")
+        text = markdown_prose(source.read_text(encoding="utf-8", errors="replace"))
         for target in pattern.findall(text):
-            if not target or target.startswith(("#", "http://", "https://", "mailto:")):
-                continue
-            resolved = relative_target(source, target)
-            try:
-                resolved.relative_to(root.resolve())
-            except ValueError:
+            findings.extend(check_local_target(
+                root, source, target, "missing_relative_link", "link_outside_root"
+            ))
+
+        definitions = {}
+        for match in REFERENCE_DEFINITION_RE.finditer(text):
+            label = reference_label(match.group(1))
+            target = match.group(2) or match.group(3) or ""
+            if label in definitions:
                 findings.append(Finding(str(source.relative_to(root)),
-                                        "link_outside_root", target))
+                                        "duplicate_reference_definition", label))
                 continue
-            if not resolved.exists():
+            definitions[label] = target
+            findings.extend(check_local_target(
+                root, source, target,
+                "missing_reference_link", "reference_link_outside_root"
+            ))
+
+        for match in REFERENCE_USAGE_RE.finditer(text):
+            label = reference_label(match.group(2) or match.group(1))
+            if label and label not in definitions:
                 findings.append(Finding(str(source.relative_to(root)),
-                                        "missing_relative_link", target))
+                                        "missing_reference_definition", label))
     return findings
 
 
@@ -107,34 +153,11 @@ def check_duplicate_navigation(root: Path) -> List[Finding]:
     return findings
 
 
-def balanced_javascript(text: str) -> bool:
-    pairs = {")": "(", "]": "[", "}": "{"}
-    stack: List[str] = []
-    quote = ""
-    escaped = False
-    for char in text:
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-            continue
-        if char in "'\"`":
-            quote = char
-        elif char in "([{":
-            stack.append(char)
-        elif char in ")]}":
-            if not stack or stack.pop() != pairs[char]:
-                return False
-    return not stack and not quote
-
-
 def check_entrypoints(root: Path) -> List[Finding]:
     findings: List[Finding] = []
+    node = shutil.which("node")
     for path in files_under(root, CODE_SUFFIXES):
-        if not is_example_path(path, root) or path.name not in ENTRYPOINT_NAMES:
+        if not is_example_path(path, root) or path.name == "__init__.py":
             continue
         relative = str(path.relative_to(root))
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -147,9 +170,23 @@ def check_entrypoints(root: Path) -> List[Finding]:
             except SyntaxError as error:
                 findings.append(Finding(relative, "python_syntax_error",
                                         f"line {error.lineno}: {error.msg}"))
-        elif not balanced_javascript(text):
-            findings.append(Finding(relative, "javascript_structure_error",
-                                    "unbalanced delimiters or unterminated string"))
+        elif node is None:
+            findings.append(Finding(relative, "javascript_check_unavailable",
+                                    "node --check is required for JavaScript validation"))
+        else:
+            result = subprocess.run(
+                [node, "--check", str(path)],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = next(
+                    (line.strip() for line in result.stderr.splitlines() if line.strip()),
+                    "node --check failed",
+                )
+                findings.append(Finding(relative, "javascript_syntax_error", detail))
     return findings
 
 
@@ -165,7 +202,7 @@ def print_report(findings: Sequence[Finding], root: Path) -> int:
         print(f"AGOS_RUNTIME_FAIL ({len(findings)} finding(s))")
         return 1
     checked = sum(1 for path in files_under(root, CODE_SUFFIXES)
-                  if is_example_path(path, root) and path.name in ENTRYPOINT_NAMES)
+                  if is_example_path(path, root) and path.name != "__init__.py")
     print(f"OK checked {checked} example entrypoint(s), local links, and navigation")
     print("AGOS_RUNTIME_OK")
     return 0
@@ -179,8 +216,12 @@ def self_test() -> int:
          "", True),
         ("bad_js", "examples/demo/index.mjs", "export function main() {\n",
          "", "", True),
+        ("bad_js_balanced", "examples/demo/index.mjs", "const = ;\n",
+         "", "", True),
         ("missing_link", "README.md", "", "README.md",
          "- [Missing](examples/nope/main.py)\n", True),
+        ("missing_reference", "README.md", "", "README.md",
+         "See [Missing][no-such-definition].\n", True),
         ("duplicate_nav", "README.md", "", "README.md",
          "- [Demo](examples/demo/main.py)\n- [Demo](examples/demo/main.py)\n", True),
     ]
@@ -196,7 +237,22 @@ def self_test() -> int:
             if bool(findings) != expected_bad:
                 print(f"SELF_TEST_FAIL {name}: unexpected result")
                 return 1
-    print("self-tests: 5 passed")
+
+    with tempfile.TemporaryDirectory(prefix="example-hygiene-escape-") as folder:
+        container = Path(folder)
+        root = container / "repo"
+        root.mkdir()
+        (container / "outside.md").write_text("outside\n", encoding="utf-8")
+        (root / "README.md").write_text(
+            "[outside]: ../outside.md\nSee [Outside][outside].\n",
+            encoding="utf-8",
+        )
+        codes = {finding.code for finding in validate(root)}
+        if "reference_link_outside_root" not in codes:
+            print("SELF_TEST_FAIL reference_escape: unexpected result")
+            return 1
+
+    print("self-tests: 8 passed")
     print("AGOS_RUNTIME_OK")
     return 0
 
