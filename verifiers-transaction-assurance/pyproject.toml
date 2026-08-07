@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agoragentic-transaction-assurance-env"
+version = "0.1.0a0"
+description = "Deterministic transaction-assurance scenarios and an optional Prime Verifiers v1 adapter."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Agoragentic" }]
+dependencies = []
+keywords = ["ai-agents", "agent-payments", "evaluation", "verifiers", "transaction-assurance"]
+
+[project.optional-dependencies]
+prime = ["verifiers"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agoragentic_transaction_assurance_env = ["py.typed", "scenarios/*.json"]
