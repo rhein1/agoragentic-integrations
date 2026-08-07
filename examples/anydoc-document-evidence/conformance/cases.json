@@ -1,0 +1,71 @@
+{
+  "schema": "agoragentic.anydoc-semantic-conformance-cases.v1",
+  "anydoc_version": "0.1.7",
+  "cases": [
+    {
+      "id": "csv-baseline",
+      "file": "baseline.csv",
+      "format": "csv",
+      "expect_conversion": true,
+      "expected_markdown_tokens": ["alpha", "beta"],
+      "expected_risk": "high",
+      "expected_limitations": [
+        "csv_has_no_content_signature_and_requires_an_explicit_or_filename_format",
+        "types_and_display_formats_are_not_authoritative"
+      ]
+    },
+    {
+      "id": "xlsx-hidden-and-formatted-values",
+      "file": "semantic-risks.xlsx",
+      "format": "xlsx",
+      "expect_conversion": true,
+      "expected_markdown_tokens": ["Visible row", "Hidden row", "0.075"],
+      "expected_risk": "high",
+      "expected_limitations": [
+        "hidden_rows_and_columns_may_be_exposed_as_visible_content",
+        "number_formats_may_be_dropped_or_change_interpretation",
+        "worksheet_identity_and_source_coordinates_may_be_incomplete",
+        "merged_cell_spans_may_be_clipped",
+        "formulas_are_not_independently_recalculated"
+      ],
+      "semantic_observations": [
+        "The workbook displays 7.5%, but current AnyDoc output may expose the stored value 0.075.",
+        "The workbook contains hidden content; presence in Markdown is evidence of a semantic-risk boundary, not a test failure of the adapter."
+      ]
+    },
+    {
+      "id": "docx-nested-table",
+      "file": "nested-table.docx",
+      "format": "docx",
+      "expect_conversion": true,
+      "expected_markdown_tokens": ["Height", "120", "Weight", "34"],
+      "expected_risk": "medium",
+      "expected_limitations": [
+        "nested_tables_may_be_flattened",
+        "embedded_assets_need_separate_review"
+      ]
+    },
+    {
+      "id": "pptx-untitled-slides",
+      "file": "untitled-slides.pptx",
+      "format": "pptx",
+      "expect_conversion": true,
+      "expected_markdown_tokens": [
+        "Second slide, no title placeholder.",
+        "Third slide, also untitled."
+      ],
+      "expected_risk": "medium",
+      "expected_limitations": [
+        "untitled_slide_boundaries_may_be_lossy",
+        "speaker_notes_and_layout_need_output_review"
+      ]
+    },
+    {
+      "id": "pdf-image-only-ocr-required",
+      "file": "image-only.pdf",
+      "format": "pdf",
+      "expect_conversion": false,
+      "expected_error_code": "unsupported_or_ocr_required"
+    }
+  ]
+}
