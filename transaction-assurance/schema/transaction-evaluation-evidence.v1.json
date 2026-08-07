@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/transaction-evaluation-evidence.v1.json",
+  "title": "Agoragentic Transaction Evaluation Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidence_id",
+    "environment_id",
+    "environment_version",
+    "task_id",
+    "evaluators",
+    "observed_at",
+    "redaction_state",
+    "source_exactness",
+    "authority_flags",
+    "evidence_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.transaction-evaluation-evidence.v1" },
+    "evidence_id": { "type": "string", "minLength": 1 },
+    "environment_id": { "type": "string", "minLength": 1 },
+    "environment_version": { "type": "string", "minLength": 1 },
+    "environment_hash": { "type": ["string", "null"] },
+    "task_id": { "type": "string", "minLength": 1 },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "version": { "type": ["string", "null"] }
+      }
+    },
+    "evaluators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evaluator_id",
+          "evaluator_version",
+          "type",
+          "result",
+          "score",
+          "model_ref",
+          "rubric_hash",
+          "evidence_refs",
+          "notes"
+        ],
+        "properties": {
+          "evaluator_id": { "type": "string", "minLength": 1 },
+          "evaluator_version": { "type": "string", "minLength": 1 },
+          "type": {
+            "enum": ["deterministic", "model_judge", "human_review", "external_attestation"]
+          },
+          "result": { "enum": ["pass", "fail", "review", "unknown"] },
+          "score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "model_ref": { "type": ["string", "null"] },
+          "rubric_hash": { "type": ["string", "null"] },
+          "evidence_refs": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "trace_hash": { "type": ["string", "null"] },
+    "artifact_refs": { "type": "array", "items": { "type": "string" } },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "redaction_state": { "enum": ["public_safe", "private_ref_only", "unknown"] },
+    "source_exactness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original_trace_embedded", "normalized_representation", "normalization_lossless"],
+      "properties": {
+        "original_trace_embedded": { "const": false },
+        "normalized_representation": { "const": true },
+        "normalization_lossless": { "type": "boolean" }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluation_grants_authority",
+        "can_spend",
+        "can_fund_wallet",
+        "can_deploy",
+        "can_publish",
+        "can_change_trust",
+        "can_expand_scope"
+      ],
+      "properties": {
+        "evaluation_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false },
+        "can_expand_scope": { "const": false }
+      }
+    },
+    "evidence_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
