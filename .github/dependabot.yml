@@ -1,0 +1,25 @@
+version: 2
+
+# This repository previously had no Dependabot configuration and no automated
+# security fixes, so nine open advisories (three of them high) sat with no
+# remediation pull request. Version updates are scoped to the two npm packages
+# that carry a committed lockfile.
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/mcp"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/n8n"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

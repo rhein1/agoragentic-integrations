@@ -1,14 +1,57 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-07-24
+Audit date: 2026-08-05 (supersedes 2026-07-24)
 
 ## Candidate
 
 - Package: `n8n-nodes-agoragentic@0.1.3`
 - Stable builder: `@n8n/node-cli@0.40.3`
-- Release helper: `release-it@20.2.1`
+- Release helper: `release-it@21.0.1`
 - Minimum Node.js: 20.19
 - Install mode: committed lockfile plus `npm ci`
+
+## 2026-08-05 revision
+
+Three high advisories entered the development graph and the fail-closed
+`npm run audit:dev` gate correctly rejected them
+(`unexpected audit package set; extra=ip-address,undici`, then
+`unexpected advisory set: ...,GHSA-rgw5-rvv9-x895`).
+
+**`ip-address` → 10.4.0.** Lockfile refresh only, satisfies `socks`'
+`^10.1.1`. No manifest change.
+
+**`brace-expansion` → 1.1.18 / 2.1.4 / 5.0.9.** GHSA-rgw5-rvv9-x895 is a
+bypass of the previously accepted GHSA-mh99-v99m-4gvg. The exception recorded
+below is now **stale**: patched releases exist on the 1.x and 2.x lines, so
+the eslint and n8n-cli consumers are fixed in place without being forced onto
+the API-incompatible 5.x line. Both advisories are now resolved rather than
+allowlisted.
+
+**`undici` → 7.29.0.** Reached through `@n8n/backend-network` (`^7.28.0`,
+satisfied directly) and through `release-it@20.2.1`, which pins `undici`
+to exactly `7.28.0`. Two candidate fixes were rejected:
+
+- A scoped `overrides` entry — **rejected by lint.** The
+  `@n8n/community-nodes/no-overrides-field` rule forbids the `overrides` field
+  in community node packages outright.
+- Staying on `release-it@20.x` — **no patched release exists.** `20.2.1` is
+  the final 20.x version.
+
+`release-it` is therefore bumped to `21.0.1`. Note this changes the
+deliberately locked release pin asserted in `test/release.test.cjs`, updated
+in the same change.
+
+`release-it@21` declares `engines.node ^22.21.0 || >=24.0.0`. This does **not**
+change what the published package supports: `engines.node` stays `>=20.19.0`
+for consumers, `release-it` is development-only and is not in the published
+`files` list, and the n8n CI job already runs on Node 22 ("Setup Node 22 for
+n8n toolchain"). Only a maintainer running `npm run release` locally now needs
+Node 22.21 or newer. `release-it` is not used by CI or by
+`publish-n8n.yml`, which publishes via npm trusted publishing.
+
+The `uuid` / LangChain moderates described below are unchanged and remain
+accepted under the existing policy. The gate covers high and critical only,
+so those stay visible rather than suppressed.
 
 ## Validation
 
