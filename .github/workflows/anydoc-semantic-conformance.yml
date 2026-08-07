@@ -1,0 +1,59 @@
+name: AnyDoc Semantic Conformance
+
+on:
+  pull_request:
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - '.github/workflows/anydoc-semantic-conformance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - '.github/workflows/anydoc-semantic-conformance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: examples/anydoc-document-evidence
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Install exact parser and fixture dependencies
+        run: |
+          npm install --no-audit --no-fund
+          python -m pip install --disable-pip-version-check \
+            openpyxl==3.1.5 \
+            python-docx==1.2.0 \
+            python-pptx==1.0.2 \
+            Pillow==11.3.0 \
+            reportlab==4.4.3
+      - name: Generate public-safe fixtures
+        run: python conformance/generate-fixtures.py
+      - name: Run semantic conformance
+        run: node conformance/run-conformance.mjs
+      - name: Upload bounded report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: anydoc-semantic-conformance-node-${{ matrix.node-version }}
+          path: examples/anydoc-document-evidence/conformance/report.json
+          if-no-files-found: error
+          retention-days: 30
