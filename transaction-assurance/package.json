@@ -19,6 +19,7 @@
     "src/",
     "schema/",
     "examples/",
+    "SKILL.md",
     "README.md",
     "LICENSE"
   ],
@@ -37,7 +38,8 @@
     "ap2",
     "x402",
     "mcp",
-    "a2a"
+    "a2a",
+    "agent-skills"
   ],
   "repository": {
     "type": "git",
