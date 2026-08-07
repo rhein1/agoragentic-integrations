@@ -22,6 +22,7 @@
     "examples/",
     "SKILL.md",
     "README.md",
+    "EVALUATION_EVIDENCE.md",
     "LICENSE"
   ],
   "scripts": {
