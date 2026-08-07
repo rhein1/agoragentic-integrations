@@ -47,7 +47,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -239,7 +239,7 @@ jobs:
   payment-contracts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Node 24 for native TypeScript contract tests
         uses: actions/setup-node@v4
         with:
@@ -256,7 +256,7 @@ jobs:
   adapter-conformance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Setup Node 24 for TypeScript syntax checks
         uses: actions/setup-node@v4
         with:
