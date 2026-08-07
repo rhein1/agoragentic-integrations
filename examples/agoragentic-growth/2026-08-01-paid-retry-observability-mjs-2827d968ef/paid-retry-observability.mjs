@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+// Offline observability example only: no funds move, no settlement occurs, and
+// payment evidence is caller-supplied demo data rather than on-chain proof.
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 
@@ -14,11 +17,13 @@ function normalizeOutcome(outcome) {
 
   const status = String(outcome.status ?? "unknown");
   const detail = String(outcome.detail ?? "");
-  const paid = status === "completed";
+  const paymentEvidence = outcome.paymentEvidence === true;
+  const paid = status === "completed" && paymentEvidence;
 
   return Object.freeze({
     status,
     detail,
+    paymentEvidence,
     paid,
   });
 }
@@ -65,6 +70,7 @@ function validateAttempt(attempt, index) {
     status,
     detail,
     authenticated: attempt.authenticated === true,
+    paymentEvidence: attempt.paymentEvidence === true,
   });
 }
 
@@ -74,7 +80,11 @@ function classifyAttempt(attempt) {
   }
 
   if (attempt.status === "completed") {
-    return { status: "completed", detail: attempt.detail || "paid completion recorded" };
+    return {
+      status: "completed",
+      detail: attempt.detail || "authenticated completion recorded",
+      paymentEvidence: attempt.paymentEvidence,
+    };
   }
 
   if (attempt.status === "retryable") {
@@ -111,6 +121,7 @@ function runBoundedBuyerCompletion({
       status: classified.status,
       detail: classified.detail,
       authenticated: observed.authenticated,
+      paymentEvidence: observed.paymentEvidence,
     });
 
     if (classified.status === "completed") {
@@ -144,7 +155,11 @@ function summarize(results) {
   const lines = ["Paid completion reconciliation", ""];
 
   for (const result of results) {
-    const state = result.outcome.paid ? "COMPLETED" : "UNRESOLVED";
+    const state = result.outcome.paid
+      ? "PAID_WITH_EVIDENCE"
+      : result.outcome.status === "completed"
+        ? "COMPLETED_UNVERIFIED"
+        : "UNRESOLVED";
     lines.push(
       `${result.requestId}: ${state}; attempts=${result.attemptsObserved}/${result.retryBudget}; ` +
         `detail=${result.outcome.detail}`,
@@ -153,16 +168,20 @@ function summarize(results) {
     for (const event of result.trace) {
       lines.push(
         `  attempt ${event.number}: ${event.status}; ` +
-          `authenticated=${event.authenticated ? "yes" : "no"}; ${event.detail}`,
+          `authenticated=${event.authenticated ? "yes" : "no"}; ` +
+          `payment_evidence=${event.paymentEvidence ? "yes" : "no"}; ${event.detail}`,
       );
     }
   }
 
-  const completed = results.filter((result) => result.outcome.paid).length;
-  const unresolved = results.length - completed;
+  const paid = results.filter((result) => result.outcome.paid).length;
+  const completedUnverified = results.filter((result) => (
+    result.outcome.status === "completed" && !result.outcome.paid
+  )).length;
+  const unresolved = results.filter((result) => result.outcome.status !== "completed").length;
 
   lines.push("");
-  lines.push(`totals: completed=${completed}; unresolved=${unresolved}`);
+  lines.push(`totals: paid_with_evidence=${paid}; completed_unverified=${completedUnverified}; unresolved=${unresolved}`);
   return lines.join("\n");
 }
 
@@ -173,7 +192,12 @@ function demo() {
       requestId: "purchase-success",
       attempts: [
         { status: "retryable", authenticated: true, detail: "temporary buyer completion failure" },
-        { status: "completed", authenticated: true, detail: "paid completion recorded" },
+        {
+          status: "completed",
+          authenticated: true,
+          paymentEvidence: true,
+          detail: "paid completion evidence recorded",
+        },
       ],
     },
     {
@@ -202,9 +226,9 @@ function selfTest() {
       requestId: "success after retry",
       attempts: [
         { status: "retryable", authenticated: true },
-        { status: "completed", authenticated: true },
+        { status: "completed", authenticated: true, paymentEvidence: true },
       ],
-      expected: ["completed", 2],
+      expected: ["completed", 2, true],
     },
     {
       name: "bounded unresolved",
@@ -215,19 +239,25 @@ function selfTest() {
         { status: "completed", authenticated: true },
       ],
       maxAttempts: 2,
-      expected: ["unresolved", 2],
+      expected: ["unresolved", 2, false],
     },
     {
       name: "missing authentication",
       requestId: "missing authentication",
       attempts: [{ status: "completed", authenticated: false }],
-      expected: ["unresolved", 1],
+      expected: ["unresolved", 1, false],
     },
     {
       name: "non-retryable failure",
       requestId: "non-retryable failure",
       attempts: [{ status: "rejected", authenticated: true, detail: "declined" }],
-      expected: ["unresolved", 1],
+      expected: ["unresolved", 1, false],
+    },
+    {
+      name: "completion without payment evidence",
+      requestId: "completion without payment evidence",
+      attempts: [{ status: "completed", authenticated: true }],
+      expected: ["completed", 1, false],
     },
   ];
 
@@ -238,6 +268,7 @@ function selfTest() {
 
     assert.equal(first.outcome.status, testCase.expected[0], testCase.name);
     assert.equal(first.attemptsObserved, testCase.expected[1], testCase.name);
+    assert.equal(first.outcome.paid, testCase.expected[2], `${testCase.name}: paid evidence`);
     assert.equal(second.status, first.outcome.status, `${testCase.name}: idempotency`);
     assert.equal(recorder.entries().length, 1, `${testCase.name}: one outcome`);
   }
@@ -249,11 +280,12 @@ function selfTest() {
 
   const demoResult = demo();
   assert.equal(demoResult.results[0].outcome.status, "completed");
+  assert.equal(demoResult.results[0].outcome.paid, true);
   assert.equal(demoResult.results[1].outcome.status, "unresolved");
 }
 
 const entrypoint = fileURLToPath(import.meta.url);
-const invokedAs = process.argv[1] ? fileURLToPath(new URL(`file://${process.argv[1]}`)) : "";
+const invokedAs = process.argv[1] ? fileURLToPath(pathToFileURL(process.argv[1])) : "";
 
 if (entrypoint === invokedAs || process.argv[1] === undefined) {
   selfTest();
