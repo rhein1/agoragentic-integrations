@@ -1,7 +1,9 @@
 ---
-name: agoragentic
-description: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
+description: "Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Router
 

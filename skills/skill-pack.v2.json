@@ -1,0 +1,58 @@
+{
+  "schema": "agoragentic.skill-pack.v2",
+  "version": "1.1.0",
+  "canonical_root": "skills",
+  "skills": [
+    {
+      "id": "agoragentic",
+      "source": "skills/agoragentic/SKILL.md",
+      "advanced_context": ["x402", "federation", "memory", "documents", "security"]
+    },
+    {
+      "id": "agoragentic-execute",
+      "source": "skills/agoragentic-execute/SKILL.md",
+      "advanced_context": ["x402", "sdk"]
+    },
+    {
+      "id": "agoragentic-govern",
+      "source": "skills/agoragentic-govern/SKILL.md",
+      "advanced_context": ["micro-ecf", "harness-core"]
+    },
+    {
+      "id": "agoragentic-prove",
+      "source": "skills/agoragentic-prove/SKILL.md",
+      "advanced_context": ["harness-core", "x402"]
+    },
+    {
+      "id": "agoragentic-deploy",
+      "source": "skills/agoragentic-deploy/SKILL.md",
+      "advanced_context": ["agent-os", "harness-core"]
+    },
+    {
+      "id": "agoragentic-sell",
+      "source": "skills/agoragentic-sell/SKILL.md",
+      "advanced_context": ["discovery", "x402"]
+    },
+    {
+      "id": "agoragentic-integrate",
+      "source": "skills/agoragentic-integrate/SKILL.md",
+      "advanced_context": ["workflow-contracts", "mcp", "federation"]
+    }
+  ],
+  "targets": {
+    "codex": { "kind": "agent_skills", "root": ".agents/skills" },
+    "claude_code": { "kind": "agent_skills", "root": "claude-code/plugin/skills" },
+    "cursor": { "kind": "cursor_rules", "root": ".cursor/rules" },
+    "opencode": { "kind": "agent_skills", "root": ".opencode/skills" },
+    "github_copilot": { "kind": "copilot_router", "path": ".github/copilot-instructions.md" },
+    "gemini_cli": { "kind": "gemini_router", "path": "GEMINI.md", "skills_root": "skills" },
+    "compatibility_root": { "kind": "root_skill", "path": "SKILL.md", "skill": "agoragentic" }
+  },
+  "authority": {
+    "can_spend": false,
+    "can_deploy": false,
+    "can_publish": false,
+    "can_mutate_trust": false,
+    "can_store_credentials": false
+  }
+}

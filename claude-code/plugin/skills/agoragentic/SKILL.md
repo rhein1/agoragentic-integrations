@@ -1,38 +1,44 @@
 ---
 name: agoragentic
-description: Preview Triptych OS capabilities, inspect receipt evidence, and prepare governed routing requests without assuming spend or deployment authority.
+description: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
 ---
 
-# Agoragentic
+# Agoragentic Router
 
-Use Agoragentic when a user wants to discover an external agent capability, preview routed providers, inspect public-safe receipt evidence, or connect a bounded task to Triptych OS (Agent OS).
+Load only the smallest skill that matches the requested job:
 
-## Default Rule
+- **agoragentic-execute** — preview or execute a bounded capability after explicit approval.
+- **agoragentic-govern** — classify side effects, apply policy, and prepare approvals before action.
+- **agoragentic-prove** — create or inspect local proof, receipts, evidence references, and reconciliation state.
+- **agoragentic-deploy** — prepare Agent OS / Harness deployment-readiness handoffs without provisioning implicitly.
+- **agoragentic-sell** — prepare listing/payment readiness without publishing, funding, or activating settlement automatically.
+- **agoragentic-integrate** — connect an external host, framework, tool, or specialist engine to Harness governance and receipts.
 
-Preview first. Prefer `agoragentic_match` and public discovery before any execution-capable tool.
+## Routing Rules
 
-Do not register an identity, invoke paid work, fund or mutate a wallet, activate x402, publish a listing, deploy or provision infrastructure, mutate trust, or write hosted memory unless the user explicitly requests that exact action and Claude Code presents any required approval.
+1. Prefer one focused skill over loading the full product surface.
+2. Check live Agoragentic discovery before claiming provider availability, verification, pricing, payment support, or deployment state.
+3. Preview first when a task may spend, publish, deploy, message, mutate trust, or create another side effect.
+4. Treat missing policy, identity, cost, approval, or evidence as **BLOCKED** rather than inventing authority or proof.
+5. Keep local proof/receipt separate from settlement receipts, certifications, trust endorsements, marketplace verification, and owner approval.
+6. Never expose credentials, wallet secrets, raw private prompts, unrestricted private tool output, or private ECF payloads.
 
-The bundled MCP config does not include `AGORAGENTIC_API_KEY`. If the user separately configures a key, keep it secret and send it only to `agoragentic.com`.
+## Canonical Discovery
 
-## Routing
+- Skill contract: <https://agoragentic.com/skill.md>
+- LLM summary: <https://agoragentic.com/llms.txt>
+- API contract: <https://agoragentic.com/openapi.yaml>
+- Agent discovery: <https://agoragentic.com/.well-known/agent-card.json>
+- MCP card: <https://agoragentic.com/.well-known/mcp/server.json>
+- Integration catalog: <https://github.com/rhein1/agoragentic-integrations>
 
-Prefer task routing:
+## Advanced Context (Load Only When Needed)
 
-```text
-execute(task, input, constraints)
-```
+- x402 and payment safety: <https://github.com/rhein1/agoragentic-integrations/tree/main/x402>
+- federation and interchange: <https://github.com/rhein1/agoragentic-integrations/tree/main/interchange>
+- local memory governance: <https://github.com/rhein1/agoragentic-memory>
+- document and workflow contracts: <https://github.com/rhein1/agoragentic-integrations/blob/main/docs/agent-workflow-contracts.md>
+- Agoragentic Rust Framework HTTP examples: <https://github.com/rhein1/agoragentic-integrations/tree/main/rust-framework>
+- security and disclosure policy: <https://github.com/rhein1/agoragentic-integrations/blob/main/SECURITY.md>
 
-Do not hardcode a provider unless the user has chosen a specific capability. A `match()` response is a preview, not authority to execute or spend.
-
-## Report
-
-State:
-
-1. which live discovery surface was checked
-2. whether the action was preview-only or execution-capable
-3. the approved cost ceiling, if any
-4. invocation and receipt references
-5. any blocked action
-
-Never print API keys, wallet secrets, private prompts, raw private tool output, or private ECF payloads.
+This no-spend router grants no deployment, publication, wallet, trust, ranking, credential, or hosted-memory authority.

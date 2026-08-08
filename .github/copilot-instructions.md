@@ -1,6 +1,6 @@
-# Agoragentic Gemini CLI Extension
+# Agoragentic GitHub Copilot Instructions
 
-This Gemini CLI surface uses Agoragentic Skill Pack v2. For an Agoragentic request, load or read only the smallest matching skill before acting:
+This GitHub Copilot surface uses Agoragentic Skill Pack v2. For an Agoragentic request, load or read only the smallest matching skill before acting:
 
 - `agoragentic`: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
 - `agoragentic-execute`: Preview and execute a bounded Agoragentic capability after explicit owner or host approval. Use for task routing, capability matching, execution constraints, and invocation/receipt capture.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,16 @@ const mcpPackage = readJson('mcp/package.json');
 const packageVersion = mcpPackage.version;
 const manifest = readJson('integrations.json');
 const profile = readJson('docs/catalog-profile.json');
+const skillPack = readJson('skills/skill-pack.v2.json');
+
+const skillGeneration = spawnSync(
+  process.execPath,
+  ['scripts/generate-skill-pack.mjs', '--check'],
+  { cwd: root, encoding: 'utf8' },
+);
+assert.equal(skillGeneration.status, 0, skillGeneration.stderr);
+assert.equal(skillPack.schema, 'agoragentic.skill-pack.v2');
+assert.ok(Object.values(skillPack.authority).every((value) => value === false));
 
 assert.equal(profile.mcp.package_version, packageVersion);
 assert.equal(profile.mcp.static_tool_count_allowed, false);
@@ -170,11 +181,13 @@ assert.doesNotMatch(paymentsCorrectionText, /amk_[a-z0-9]{8,}/i);
 
 const cursor = readJson('.cursor-plugin/plugin.json');
 assert.equal(cursor.name, 'agoragentic');
+assert.equal(cursor.version, skillPack.version);
 assert.equal(cursor.skills, './skills/');
 assertMcpCommand(cursor.mcpServers.agoragentic, 'Cursor plugin', packageVersion);
 
 const gemini = readJson('gemini-extension.json');
 assert.equal(gemini.name, 'agoragentic');
+assert.equal(gemini.version, skillPack.version);
 assert.equal(gemini.contextFileName, 'GEMINI.md');
 assertMcpCommand(gemini.mcpServers.agoragentic, 'Gemini extension', packageVersion);
 
@@ -184,6 +197,9 @@ assert.equal(claudeMarketplace.plugins.length, 1);
 assert.equal(claudeMarketplace.plugins[0].source, './claude-code/plugin');
 const claudePlugin = readJson('claude-code/plugin/.claude-plugin/plugin.json');
 assert.equal(claudePlugin.name, 'agoragentic');
+assert.equal(claudePlugin.version, skillPack.version);
+assert.equal(claudeMarketplace.version, skillPack.version);
+assert.equal(claudeMarketplace.plugins[0].version, skillPack.version);
 assert.equal(claudePlugin.mcpServers, './.mcp.json');
 const claudeMcp = readJson('claude-code/plugin/.mcp.json');
 assertMcpCommand(claudeMcp.mcpServers.agoragentic, 'Claude Code plugin', packageVersion);
@@ -194,6 +210,9 @@ const requiredNoSpendDocs = [
   'gemini-cli/README.md',
   'claude-code/README.md',
   'claude-code/plugin/skills/agoragentic/SKILL.md',
+  '.github/copilot-instructions.md',
+  '.agents/skills/agoragentic/SKILL.md',
+  '.opencode/skills/agoragentic/SKILL.md',
   'cline/README.md',
   'llms-install.md',
   'docs/DISTRIBUTION.md',
