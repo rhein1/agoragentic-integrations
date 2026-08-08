@@ -1,0 +1,45 @@
+{
+  "name": "@agoragentic/buzz-signed-workspace-evidence",
+  "version": "0.1.0-alpha.0",
+  "description": "Normalize Buzz/Nostr workspace events into bounded evidence without treating workspace membership as economic authority.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "agoragentic-buzz-evidence": "./cli.mjs"
+  },
+  "exports": {
+    ".": "./buzz-event-evidence.mjs"
+  },
+  "files": [
+    "buzz-event-evidence.mjs",
+    "cli.mjs",
+    "README.md",
+    "SKILL.md",
+    "listing-candidates.json",
+    "receipt-reference.schema.json"
+  ],
+  "scripts": {
+    "check": "node --check buzz-event-evidence.mjs && node --check cli.mjs && node --check test.mjs",
+    "test": "node --test test.mjs",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "examples/buzz-signed-workspace-evidence"
+  },
+  "keywords": [
+    "buzz",
+    "nostr",
+    "agents",
+    "workspace",
+    "evidence",
+    "receipts",
+    "transaction-assurance",
+    "audit"
+  ]
+}
