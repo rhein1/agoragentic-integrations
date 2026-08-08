@@ -1,101 +1,35 @@
 ---
 name: agoragentic
-description: Connect an agent to Triptych OS (Agent OS) and the Agoragentic Router. Preview providers, route bounded tasks, preserve receipt evidence, or prepare local governance artifacts without granting spend or deployment authority.
+description: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
 ---
 
-# Agoragentic
+# Agoragentic Router
 
-Use this skill when an agent needs to discover or route an external capability by task, integrate with Triptych OS (Agent OS), inspect receipt evidence, or prepare a local Micro ECF / Harness handoff.
+Load only the smallest skill that matches the requested job:
 
-## Core Rule
+- **agoragentic-execute** — preview or execute a bounded capability after explicit approval.
+- **agoragentic-govern** — classify side effects, apply policy, and prepare approvals before action.
+- **agoragentic-prove** — create or inspect local proof, receipts, evidence references, and reconciliation state.
+- **agoragentic-deploy** — prepare Agent OS / Harness deployment-readiness handoffs without provisioning implicitly.
+- **agoragentic-sell** — prepare listing/payment readiness without publishing, funding, or activating settlement automatically.
+- **agoragentic-integrate** — connect an external host, framework, tool, or specialist engine to Harness governance and receipts.
 
-Prefer task routing over hardcoded provider IDs:
+## Routing Rules
 
-```text
-execute(task, input, constraints)
-```
+1. Prefer one focused skill over loading the full product surface.
+2. Check live Agoragentic discovery before claiming provider availability, verification, pricing, payment support, or deployment state.
+3. Preview first when a task may spend, publish, deploy, message, mutate trust, or create another side effect.
+4. Treat missing policy, identity, cost, approval, or evidence as **BLOCKED** rather than inventing authority or proof.
+5. Keep local proof/receipt separate from settlement receipts, certifications, trust endorsements, marketplace verification, and owner approval.
+6. Never expose credentials, wallet secrets, raw private prompts, unrestricted private tool output, or private ECF payloads.
 
-Preview first. Treat live discovery as authoritative for provider availability, verification, pricing, and payment requirements.
-
-## No-Spend First Run
-
-Register a buyer identity and keep the returned key private:
-
-```bash
-curl -X POST https://agoragentic.com/api/quickstart \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my-agent"}'
-```
-
-Inspect the catalog or preview a match before execution:
-
-```bash
-curl https://agoragentic.com/api/capabilities
-
-curl "https://agoragentic.com/api/execute/match?task=weather&max_cost=0.01" \
-  -H "Authorization: Bearer amk_YOUR_KEY"
-```
-
-The match response is a preview. It does not authorize spending or execute work.
-
-## Bounded Execute
-
-Only call execute after the owner or host application has approved the task and maximum cost:
-
-```bash
-curl -X POST https://agoragentic.com/api/execute \
-  -H "Authorization: Bearer amk_YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task":"weather",
-    "input":{"latitude":40.71,"longitude":-74.01},
-    "constraints":{"max_cost":0.01}
-  }'
-```
-
-Store returned invocation and receipt references. Do not retry an ambiguous paid request until its prior outcome has been reconciled.
-
-## Agent And Tool Discovery
+## Canonical Discovery
 
 - Skill contract: <https://agoragentic.com/skill.md>
 - LLM summary: <https://agoragentic.com/llms.txt>
 - API contract: <https://agoragentic.com/openapi.yaml>
 - Agent discovery: <https://agoragentic.com/.well-known/agent-card.json>
-- Canonical MCP card: <https://agoragentic.com/.well-known/mcp/server.json>
+- MCP card: <https://agoragentic.com/.well-known/mcp/server.json>
 - Integration catalog: <https://github.com/rhein1/agoragentic-integrations>
 
-The public integrations catalog includes 97 indexed client-plugin, framework, protocol, SDK, commerce, workflow, and governance surfaces. Documentation-only entries do not imply a tested runtime adapter.
-
-## Local Governance Paths
-
-- Micro ECF: local source maps, policy summaries, context packets, and no-spend Agent OS Harness exports.
-- ECF Core: open-source self-hosted context compilation, grounding checks, evidence units, and local MCP.
-- Harness Core: local middleware events, approval records, runtime probes, receipts, and Agent OS preview handoffs.
-
-These artifacts are local evidence. They do not provision a hosted runtime or mutate hosted memory.
-
-## Authority Boundary
-
-This skill never grants permission to:
-
-- spend or fund a wallet
-- activate or settle x402
-- publish a marketplace listing
-- deploy or provision infrastructure
-- mutate trust, ranking, policy, credentials, or hosted memory
-- call a provider or framework without an explicit host-owned execution decision
-- expose private Full ECF payloads or operator internals
-
-Paid availability and custody posture are operational state. Check the live catalog, `llms.txt`, and x402 discovery surfaces before presenting a paid route as available.
-
-## Output Discipline
-
-Report:
-
-1. which live discovery surface was checked
-2. whether the action was preview-only or execution-capable
-3. the approved maximum cost, if any
-4. invocation and public-safe receipt references
-5. actions blocked by the authority boundary
-
-Never print API keys, wallet secrets, private prompts, raw private tool outputs, or private ECF payloads.
+This router grants no spend, deployment, publication, wallet, trust, ranking, credential, or hosted-memory authority.
