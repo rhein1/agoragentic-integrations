@@ -11,6 +11,7 @@ const machineSurfacePaths = [
   path.join(root, 'a2a', 'agent-card.json'),
   path.join(root, 'dify', 'agoragentic_provider.json'),
 ];
+const CATALOG_EXCEPTION_FILE = '.agoragentic-integration.json';
 
 function fail(message) {
   console.error(`❌ ${message}`);
@@ -85,6 +86,34 @@ function assertManifestShape(manifest) {
   }
 }
 
+function hasApprovedCatalogException(directory) {
+  const markerPath = path.join(root, directory, CATALOG_EXCEPTION_FILE);
+  if (!fs.existsSync(markerPath)) return false;
+
+  let marker;
+  try {
+    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+  } catch (error) {
+    fail(`${directory}/${CATALOG_EXCEPTION_FILE} must be valid JSON: ${error.message}`);
+    return true;
+  }
+
+  const requirements = [
+    [marker.schema === 'agoragentic.integration-catalog-exception.v1', 'schema must be agoragentic.integration-catalog-exception.v1'],
+    [marker.catalog_status === 'unpublished_alpha', 'catalog_status must be unpublished_alpha'],
+    [typeof marker.reason === 'string' && marker.reason.trim().length >= 24, 'reason must explain the temporary catalog exception'],
+    [marker.published === false, 'published must remain false'],
+    [marker.external_compatibility_verified === false, 'external_compatibility_verified must remain false'],
+    [marker.ready_for_manifest === false, 'ready_for_manifest must remain false'],
+    [marker.authority_granted === false, 'authority_granted must remain false'],
+  ];
+
+  for (const [valid, message] of requirements) {
+    if (!valid) fail(`${directory}/${CATALOG_EXCEPTION_FILE}: ${message}`);
+  }
+  return true;
+}
+
 function assertInventoryCoverage(manifest) {
   const ids = new Set();
   const representedDirectories = new Set();
@@ -123,7 +152,7 @@ function assertInventoryCoverage(manifest) {
     .map((entry) => entry.name);
 
   for (const directory of integrationDirectories) {
-    if (!representedDirectories.has(directory)) {
+    if (!representedDirectories.has(directory) && !hasApprovedCatalogException(directory)) {
       fail(`top-level integration directory is missing from integrations.json: ${directory}`);
     }
   }

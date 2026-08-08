@@ -1,0 +1,9 @@
+{
+  "schema": "agoragentic.integration-catalog-exception.v1",
+  "catalog_status": "unpublished_alpha",
+  "reason": "The environment remains private until an exact Prime Verifiers release and native eval flow are exercised end to end.",
+  "published": false,
+  "external_compatibility_verified": false,
+  "ready_for_manifest": false,
+  "authority_granted": false
+}
