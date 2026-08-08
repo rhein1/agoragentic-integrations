@@ -59,7 +59,7 @@ npm ci
 npm run check
 ```
 
-The 0.1.3 source candidate uses the stable `@n8n/node-cli` 0.40.3 toolchain and a committed lockfile. It requires Node.js 20.19 or newer. npm still serves 0.1.2 until the candidate is reviewed, merged, tagged exactly as `n8n-v0.1.3`, and published through the trusted-publishing workflow.
+The 0.1.3 source candidate uses the stable `@n8n/node-cli` 0.42.2 toolchain, Prettier 3.9.6, and a committed lockfile. It keeps n8n's compatible ESLint 9 and TypeScript 5 pins, and requires Node.js 20.19 or newer. npm still serves 0.1.2 until the candidate is reviewed, merged, tagged exactly as `n8n-v0.1.3`, and published through the trusted-publishing workflow.
 
 See [Toolchain Audit](TOOLCHAIN_AUDIT.md) for the reproducibility and dependency-advisory record.
 

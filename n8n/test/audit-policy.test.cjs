@@ -3,22 +3,17 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const {
-	validateAuditReport,
-} = require('../scripts/audit-dev-dependencies.cjs');
+const { validateAuditReport } = require('../scripts/audit-dev-dependencies.cjs');
 
 const allowedPackages = [
-	'@eslint/config-array',
-	'@eslint/eslintrc',
-	'@n8n/eslint-plugin-community-nodes',
-	'@n8n/node-cli',
-	'@oclif/core',
-	'brace-expansion',
-	'ejs',
-	'eslint',
-	'filelist',
-	'jake',
-	'minimatch',
+	'@n8n/ai-utilities',
+	'@n8n/api-types',
+	'@n8n/backend-common',
+	'@n8n/backend-network',
+	'@n8n/decorators',
+	'@n8n/utils',
+	'n8n-workflow',
+	'nanoid',
 ];
 
 function allowedReport() {
@@ -28,14 +23,18 @@ function allowedReport() {
 			{
 				severity: 'high',
 				via:
-					name === 'brace-expansion'
+					name === 'nanoid'
 						? [
 								{
-									url: 'https://github.com/advisories/GHSA-mh99-v99m-4gvg',
+									url: 'https://github.com/advisories/GHSA-28wg-ghj8-5hjv',
+									severity: 'high',
+								},
+								{
+									url: 'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
 									severity: 'high',
 								},
 							]
-						: ['brace-expansion'],
+						: ['nanoid'],
 			},
 		]),
 	);
@@ -80,50 +79,57 @@ test('accepts a fully clean development audit', () => {
 	assert.deepEqual(validateAuditReport(report), { clean: true, allowed: [] });
 });
 
-test('accepts a shrinking subset of the documented advisory graph', () => {
+test('accepts remediation-driven shrinkage of the documented advisory graph', () => {
 	const report = allowedReport();
 	for (const [name, vulnerability] of Object.entries(report.vulnerabilities)) {
-		if (name !== 'brace-expansion') vulnerability.severity = 'moderate';
+		if (name !== 'nanoid') vulnerability.severity = 'moderate';
 	}
 	report.metadata.vulnerabilities.high = 1;
 	report.metadata.vulnerabilities.moderate = allowedPackages.length - 1;
 	assert.deepEqual(validateAuditReport(report), {
 		clean: false,
-		allowed: ['brace-expansion'],
+		allowed: ['nanoid'],
 	});
 });
 
 test('rejects a new advisory even when it affects an allowed package', () => {
 	const report = allowedReport();
-	report.vulnerabilities['brace-expansion'].via.push({
+	report.vulnerabilities.nanoid.via.push({
 		url: 'https://github.com/advisories/GHSA-unexpected',
 		severity: 'high',
 	});
-	assert.throws(
-		() => validateAuditReport(report),
-		/unexpected advisory set/,
-	);
+	assert.throws(() => validateAuditReport(report), /unexpected advisory set/);
+});
+
+test('rejects an incomplete advisory set', () => {
+	const report = allowedReport();
+	report.vulnerabilities.nanoid.via.pop();
+	assert.throws(() => validateAuditReport(report), /unexpected advisory set/);
 });
 
 test('rejects changes to the affected package graph', () => {
 	const report = allowedReport();
 	report.vulnerabilities['new-package'] = {
 		severity: 'high',
-		via: ['brace-expansion'],
+		via: ['nanoid'],
 	};
 	report.metadata.vulnerabilities.high += 1;
 	report.metadata.vulnerabilities.total += 1;
-	assert.throws(
-		() => validateAuditReport(report),
-		/unexpected audit package set/,
-	);
+	assert.throws(() => validateAuditReport(report), /unexpected audit package set/);
+});
+
+test('rejects replacing an allowed affected package', () => {
+	const report = allowedReport();
+	delete report.vulnerabilities['@n8n/api-types'];
+	report.vulnerabilities['replacement-package'] = {
+		severity: 'high',
+		via: ['nanoid'],
+	};
+	assert.throws(() => validateAuditReport(report), /unexpected audit package set/);
 });
 
 test('rejects inconsistent high-severity counts', () => {
 	const report = allowedReport();
 	report.metadata.vulnerabilities.high -= 1;
-	assert.throws(
-		() => validateAuditReport(report),
-		/unexpected vulnerability counts/,
-	);
+	assert.throws(() => validateAuditReport(report), /unexpected vulnerability counts/);
 });
