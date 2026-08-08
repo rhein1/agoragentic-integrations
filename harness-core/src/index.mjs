@@ -52,6 +52,18 @@ export { decideImprovement, improvementCandidateStatus, listImprovements, ownerI
 export { budgetPolicyStatus, createBudgetLimitMiddleware, evaluateBudgetUsage, initBudgetPolicy } from './middleware/budget-limit.mjs';
 export { createRetryPolicyMiddleware, evaluateRetryPolicy, initRetryPolicy, retryPolicyStatus } from './middleware/retry-policy.mjs';
 export { attachWorktreeSession, detachWorktreeSession, getWorktreeSessionStatus } from './kernel/worktree-session.mjs';
+export {
+  HARNESS_EVALUATION_SCHEMA,
+  SUPPORTED_IMPECCABLE_REVISION,
+  SUPPORTED_IMPECCABLE_VERSION,
+  SUPPORTED_SARIF_VERSION,
+  attachEvaluationEvidenceToReceipt,
+  computeHarnessEvaluationHash,
+  normalizeImpeccableFindings,
+  normalizeSarifReport,
+  summarizeHarnessEvaluations,
+  verifyHarnessEvaluation,
+} from './evaluations/index.mjs';
 
 export async function initProject({ dir = process.cwd(), template = 'codebase_maintenance', force = false } = {}) {
   const target = path.resolve(dir);

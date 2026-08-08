@@ -28,6 +28,34 @@
       "required": ["agent_name", "primary_goal", "proof_status", "local_artifacts"],
       "additionalProperties": true
     },
+    "evaluations": {
+      "type": "array",
+      "items": { "$ref": "https://agoragentic.com/schema/harness-evaluation.v1.json" }
+    },
+    "evaluation_summary": {
+      "type": "object",
+      "required": [
+        "schema",
+        "result",
+        "evaluation_count",
+        "finding_count",
+        "active_finding_count",
+        "suppressed_finding_count",
+        "blocks_listing_readiness",
+        "certification_claimed"
+      ],
+      "properties": {
+        "schema": { "const": "agoragentic.harness.evaluation-summary.v1" },
+        "result": { "enum": ["pass", "review", "fail"] },
+        "evaluation_count": { "type": "integer", "minimum": 1 },
+        "finding_count": { "type": "integer", "minimum": 0 },
+        "active_finding_count": { "type": "integer", "minimum": 0 },
+        "suppressed_finding_count": { "type": "integer", "minimum": 0 },
+        "blocks_listing_readiness": { "type": "boolean" },
+        "certification_claimed": { "const": false }
+      },
+      "additionalProperties": false
+    },
     "receipt_boundary": {
       "type": "object",
       "required": ["router_invocation_created", "x402_payment_attempted", "marketplace_published", "hosted_runtime_provisioned", "memory_written"],

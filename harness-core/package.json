@@ -13,6 +13,7 @@
     ".": "./src/index.mjs",
     "./adapters": "./src/adapters/index.mjs",
     "./adapters/claude-code": "./src/adapters/claude-code.mjs",
+    "./evaluations": "./src/evaluations/index.mjs",
     "./kernel/events": "./src/kernel/events.mjs",
     "./kernel/loop": "./src/kernel/loop.mjs",
     "./kernel/middleware-registry": "./src/kernel/middleware-registry.mjs",
@@ -27,6 +28,7 @@
     "./schema/harness-approval-request.v1.json": "./schema/harness-approval-request.v1.json",
     "./schema/harness-context-import.v1.json": "./schema/harness-context-import.v1.json",
     "./schema/harness-event.v1.json": "./schema/harness-event.v1.json",
+    "./schema/harness-evaluation.v1.json": "./schema/harness-evaluation.v1.json",
     "./schema/harness-profile.v1.json": "./schema/harness-profile.v1.json",
     "./schema/harness-run.v1.json": "./schema/harness-run.v1.json",
     "./schema/harness-runtime-probe.v1.json": "./schema/harness-runtime-probe.v1.json",
@@ -50,6 +52,7 @@
     "schema/",
     "templates/",
     "CHANGELOG.md",
+    "EVALUATION_ADAPTERS.md",
     "LICENSE",
     "README.md",
     "RELEASE_SCOPE.md",
@@ -59,7 +62,7 @@
     "yaml": "^2.5.0"
   },
   "scripts": {
-    "test": "node --test test/cli.test.cjs",
+    "test": "node --test test/cli.test.cjs test/evaluation-adapters.test.mjs",
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm test && npm run pack:smoke"
   },
