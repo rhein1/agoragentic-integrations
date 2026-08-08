@@ -1,5 +1,5 @@
 {
-  "version": "2.31.0",
+  "version": "2.32.0",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -58,6 +58,22 @@
       "install": "node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .",
       "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/premortem-golden-loop",
       "min_node": "18"
+    },
+    "buzz_signed_workspace_evidence": {
+      "name": "@agoragentic/buzz-signed-workspace-evidence",
+      "install": "cd examples/buzz-signed-workspace-evidence && npm install",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/examples/buzz-signed-workspace-evidence",
+      "distribution_status": "source_only",
+      "source": "examples/buzz-signed-workspace-evidence",
+      "min_node": "20"
+    },
+    "anydoc_document_evidence": {
+      "name": "@agoragentic/anydoc-document-evidence",
+      "install": "cd examples/anydoc-document-evidence && npm install",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/examples/anydoc-document-evidence",
+      "distribution_status": "source_only",
+      "source": "examples/anydoc-document-evidence",
+      "min_node": "20"
     }
   },
   "env_vars": {
@@ -1236,6 +1252,15 @@
       "path": "examples/buzz-signed-workspace-evidence/buzz-event-evidence.mjs",
       "install": "node examples/buzz-signed-workspace-evidence/cli.mjs <events.json> --out buzz-evidence.json",
       "docs": "examples/buzz-signed-workspace-evidence/README.md"
+    },
+    {
+      "id": "anydoc-document-evidence",
+      "name": "AnyDoc Document Evidence Adapter",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
+      "install": "cd examples/anydoc-document-evidence && npm install",
+      "docs": "examples/anydoc-document-evidence/README.md"
     }
   ],
   "specs": [
@@ -1387,6 +1412,8 @@
     "pipecat": "pipecat/README.md",
     "pipecat_adapter": "pipecat/agoragentic_pipecat.py",
     "buzz_signed_workspace_evidence": "examples/buzz-signed-workspace-evidence/README.md",
-    "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json"
+    "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json",
+    "anydoc_document_evidence": "examples/anydoc-document-evidence/README.md",
+    "anydoc_document_evidence_adapter": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs"
   }
 }

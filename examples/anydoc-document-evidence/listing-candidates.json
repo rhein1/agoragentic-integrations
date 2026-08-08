@@ -44,13 +44,19 @@
       "limits": {
         "default_input_bytes": 10485760,
         "hard_input_bytes": 52428800,
-        "max_evidence_units": 256
+        "max_evidence_units": 256,
+        "default_parser_timeout_ms": 30000,
+        "hard_parser_timeout_ms": 120000,
+        "default_parser_v8_heap_mb": 256,
+        "hard_parser_v8_heap_mb": 1024
       },
       "outputs": [
         "markdown",
         "source_hash",
         "output_hash",
         "evidence_units",
+        "evidence_coverage",
+        "parse_completeness",
         "semantic_risk",
         "known_limitations",
         "parse_receipt",

@@ -7,11 +7,15 @@ function usage() {
   return `Usage:
   node cli.mjs <document> [--format <format>] [--out <file>]
                          [--max-bytes <n>] [--max-markdown-chars <n>]
+                         [--chunk-chars <n>] [--max-evidence-units <n>]
+                         [--parser-timeout-ms <n>] [--parser-memory-mb <n>]
                          [--markdown-only]
 
 Converts a local document with Firecrawl AnyDoc and emits a bounded
-Agoragentic evidence handoff. No network, payment, publication, deployment,
-memory write, or trust mutation is performed by the adapter.
+Agoragentic evidence handoff. The adapter makes no network request and guards
+Node network APIs in the parser child, but does not claim OS-level native
+network isolation. No payment, publication, deployment, memory write, or trust
+mutation is performed.
 `;
 }
 
@@ -29,6 +33,10 @@ function parseArgs(argv) {
     else if (value === '--out' || value === '-o') out = args.shift();
     else if (value === '--max-bytes') options.maxInputBytes = Number(args.shift());
     else if (value === '--max-markdown-chars') options.maxMarkdownChars = Number(args.shift());
+    else if (value === '--chunk-chars') options.chunkChars = Number(args.shift());
+    else if (value === '--max-evidence-units') options.maxEvidenceUnits = Number(args.shift());
+    else if (value === '--parser-timeout-ms') options.parserTimeoutMs = Number(args.shift());
+    else if (value === '--parser-memory-mb') options.parserMemoryMb = Number(args.shift());
     else if (value === '--markdown-only') markdownOnly = true;
     else if (String(value).startsWith('-')) throw new Error(`Unknown option: ${value}`);
     else if (!file) file = value;

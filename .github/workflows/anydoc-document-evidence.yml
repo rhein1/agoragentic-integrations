@@ -5,11 +5,17 @@ on:
     branches: [main]
     paths:
       - 'examples/anydoc-document-evidence/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'scripts/verify-integrations-json.js'
       - '.github/workflows/anydoc-document-evidence.yml'
   push:
     branches: [main]
     paths:
       - 'examples/anydoc-document-evidence/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'scripts/verify-integrations-json.js'
       - '.github/workflows/anydoc-document-evidence.yml'
   workflow_dispatch:
 
@@ -40,10 +46,27 @@ jobs:
       - name: Syntax and deterministic unit tests
         run: |
           npm run check
-          npm test
+          npm run test:adversarial
       - name: Exercise the real AnyDoc package
         run: npm run smoke:anydoc
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
+      - name: Install and test the packed artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          pack_dir="$RUNNER_TEMP/anydoc-pack-${{ matrix.node-version }}"
+          install_dir="$RUNNER_TEMP/anydoc-install-${{ matrix.node-version }}"
+          mkdir -p "$pack_dir" "$install_dir"
+          npm pack --json --pack-destination "$pack_dir" > "$pack_dir/pack.json"
+          tarball_name="$(node -e "const p=require(process.argv[1]); process.stdout.write(p[0].filename)" "$pack_dir/pack.json")"
+          node -e "const p=require(process.argv[1]); const files=new Set(p[0].files.map((f)=>f.path)); for (const file of ['LICENSE','agoragentic-anydoc.mjs','network-deny.mjs','parser-worker.mjs','test.mjs','test-fixtures/fake-anydoc.mjs','smoke-anydoc.mjs']) { if (!files.has(file)) throw new Error('packed artifact missing '+file) }" "$pack_dir/pack.json"
+          cd "$install_dir"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$pack_dir/$tarball_name"
+          package_dir="$install_dir/node_modules/@agoragentic/anydoc-document-evidence"
+          npm run check --prefix "$package_dir"
+          npm test --prefix "$package_dir"
+          npm run smoke:anydoc --prefix "$package_dir"
       - name: Package dry run
         run: npm run pack:dry

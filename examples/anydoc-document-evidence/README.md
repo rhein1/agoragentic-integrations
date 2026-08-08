@@ -1,6 +1,6 @@
 # AnyDoc Document Evidence Adapter
 
-> **Convert a local office document into bounded Markdown, evidence units, semantic-loss warnings, and a pending Agoragentic parse receipt—without uploading the file or granting an agent more authority.**
+> **Convert a local office document into bounded Markdown, coverage-accounted evidence units, semantic-loss warnings, and an Agoragentic parse receipt without uploading the file or granting an agent more authority.**
 
 This experimental adapter uses [`@firecrawl/anydoc`](https://github.com/firecrawl/anydoc) `0.1.7` as the local parser. AnyDoc is a fast MIT-licensed Rust library with Node bindings for Word, PowerPoint, spreadsheets, OpenDocument, RTF, EPUB, CSV, and text-based PDFs.
 
@@ -9,16 +9,16 @@ Agoragentic adds the layer AnyDoc intentionally does not provide:
 ```text
 document bytes
 → content-based format detection
-→ local AnyDoc conversion
+→ killable, resource-bounded AnyDoc child process
 → source and output hashes
-→ bounded evidence units
+→ hard-bounded evidence units with explicit coverage
 → known-loss and semantic-risk warnings
-→ pending parse receipt
+→ pending or completeness-blocked parse receipt
 → platform trap scan
 → owner-scoped ECF context packet
 ```
 
-The adapter does not upload the file, call Firecrawl, use OCR, write memory, publish a listing, create x402 routes, spend, settle, or mutate trust.
+The adapter does not upload the file, call Firecrawl, use OCR, write memory, publish a listing, create x402 routes, spend, settle, or mutate trust. The pinned parser runs in a killable child process with a deadline, a V8 heap cap, bounded input/output/traversal, a read-only filesystem allowlist, a sanitized environment, and Node network APIs disabled before parser import. A successful result reports that network use was not observed within that Node API guard; it does not claim OS-level proof that native code made no network syscall.
 
 ## Run the local proof
 
@@ -34,7 +34,9 @@ To write only Markdown:
 node cli.mjs ./report.docx --markdown-only --out ./report.md
 ```
 
-The default input limit is 10 MiB; the adapter hard-caps configuration at 50 MiB. Output Markdown is bounded and chunked into at most 256 local evidence units.
+The default input limit is 10 MiB; the adapter hard-caps configuration at 50 MiB. The parser defaults to a 30-second deadline and a 256 MiB V8 heap cap. Output Markdown is bounded and hard-split into units no larger than the configured chunk size, with at most 256 local evidence units. When a limit omits Markdown or structure, the exact covered/omitted character counts and completeness blockers are returned and the receipt is `incomplete`.
+
+Explicit format aliases accepted by the CLI and API include `docm -> docx`, `pptm -> pptx`, `xlsm -> xlsx`, and `xlsb -> xlsx`, plus the corresponding presentation aliases in the package constants.
 
 ## JavaScript API
 
@@ -69,17 +71,19 @@ agoragentic.anydoc-document-evidence.v1
 
 It includes:
 
-- exact AnyDoc package/version lineage;
+- runtime-verified AnyDoc package/version lineage for the production parser path;
 - source filename, format, size, and SHA-256 hash;
-- bounded Markdown and output hash;
+- bounded Markdown, output hash, and explicit evidence coverage;
 - document-model counts when AnyDoc exposes them;
 - `agoragentic.evidence-unit.v1` chunks;
 - a format-specific semantic-risk profile;
-- a pending `agoragentic.parse-receipt.v1`;
+- a pending `agoragentic.parse-receipt.v1`, or an `incomplete` receipt when output, evidence, structure, or parser provenance is incomplete;
 - an ECF handoff that remains blocked until the platform trap scan and owner policy review run;
 - all authority flags set to false.
 
 Raw source bytes and embedded asset bytes are not copied into the result.
+
+Arbitrary in-process `anydocLoader` functions are rejected. A local custom parser module exists only as an explicit test hook; it still runs in the child boundary, reports `custom_parser_module` with no claimed version, reports network/OCR use as `unknown`, and blocks receipt completeness.
 
 ## Important accuracy boundaries
 
@@ -128,7 +132,7 @@ See [`listing-candidates.json`](listing-candidates.json). The candidates are not
 This adapter:
 
 - reads one local file chosen by the caller;
-- performs no network request during conversion;
+- disables Node network APIs before loading parser code and fails the parse if one is attempted;
 - does not execute macros or embedded objects;
 - does not extract embedded assets into the evidence packet;
 - never approves its own authority;
@@ -138,16 +142,18 @@ This adapter:
 
 AnyDoc itself is an upstream dependency. This repository does not claim partnership, endorsement, or ownership of AnyDoc.
 
+The portable boundary does not claim an OS-level network namespace around native machine code. It combines a pinned, runtime-version-checked AnyDoc native dependency with a sanitized child process and a Node API network deny guard; `parser.network.status` remains `not_observed` with `verified_absent: false`, and `parser.boundary.native_syscall_isolation` remains `false`, so downstream policy can distinguish that boundary from a container or VM network sandbox.
+
 ## Validation
 
 ```bash
 npm run check
-npm test
+npm run test:adversarial
 npm run smoke:anydoc
 npm run pack:dry
 ```
 
-The smoke test exercises the real `@firecrawl/anydoc@0.1.7` package against an in-memory CSV and verifies no-network/no-spend boundaries.
+The adversarial suite exercises hard splitting, exact coverage accounting, alias normalization, custom provenance, structure failures/truncation, blocked network attempts, and timeout termination. The smoke test exercises the real `@firecrawl/anydoc@0.1.7` package against an in-memory CSV and verifies runtime package lineage, process isolation, complete evidence coverage, and no-spend boundaries. CI also installs the generated tarball and reruns its packaged `check`, `test`, and `smoke:anydoc` scripts.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "@agoragentic/anydoc-document-evidence",
   "version": "0.1.0-alpha.0",
-  "description": "Local Firecrawl AnyDoc adapter that produces bounded Markdown, evidence units, semantic-risk warnings, and an Agoragentic parse-receipt handoff.",
+  "description": "Process-isolated Firecrawl AnyDoc adapter that produces bounded Markdown, coverage-accounted evidence units, semantic-risk warnings, and an Agoragentic parse-receipt handoff.",
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
@@ -15,8 +15,14 @@
     ".": "./agoragentic-anydoc.mjs"
   },
   "files": [
+    "LICENSE",
     "agoragentic-anydoc.mjs",
     "cli.mjs",
+    "network-deny.mjs",
+    "parser-worker.mjs",
+    "test.mjs",
+    "test-fixtures/fake-anydoc.mjs",
+    "smoke-anydoc.mjs",
     "SKILL.md",
     "README.md",
     "listing-candidates.json"
@@ -25,10 +31,12 @@
     "@firecrawl/anydoc": "0.1.7"
   },
   "scripts": {
-    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check test.mjs && node --check smoke-anydoc.mjs",
+    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs",
     "test": "node --test test.mjs",
+    "test:adversarial": "node --test test.mjs",
     "smoke:anydoc": "node smoke-anydoc.mjs",
-    "pack:dry": "npm pack --dry-run"
+    "pack:dry": "npm pack --dry-run",
+    "prepack": "npm run check"
   },
   "repository": {
     "type": "git",

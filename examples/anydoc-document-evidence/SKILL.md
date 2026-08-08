@@ -1,6 +1,6 @@
 ---
 name: agoragentic-anydoc-document-evidence
-description: Convert a local Word, PowerPoint, spreadsheet, OpenDocument, RTF, EPUB, CSV, or text-based PDF into bounded Markdown and an Agoragentic evidence handoff. Use when an agent needs document contents plus provenance, known-loss warnings, evidence chunks, and a pending parse receipt without uploading the file.
+description: Convert a local Word, PowerPoint, spreadsheet, OpenDocument, RTF, EPUB, CSV, or text-based PDF into bounded Markdown and an Agoragentic evidence handoff. Use when an agent needs document contents plus verified parser provenance, known-loss warnings, coverage-accounted evidence chunks, and a pending or completeness-blocked parse receipt without uploading the file.
 license: Apache-2.0
 metadata:
   upstream: firecrawl/anydoc
@@ -27,6 +27,8 @@ Rules:
 6. If a PDF is scanned or image-only, report `unsupported_or_ocr_required`; do not pretend text was extracted.
 7. A local parse receipt is not settlement proof, certification, marketplace verification, or a universal correctness claim.
 8. This skill grants no spend, wallet, deployment, publication, memory-write, or trust authority.
+9. Do not continue to trap scanning or context attachment while any parse completeness blocker remains.
+10. Keep the production parser inside its killable child-process boundary; arbitrary in-process parser loaders are not allowed.
 
 Report:
 
@@ -36,6 +38,8 @@ detected format
 parser version
 output hash
 truncation state
+evidence covered and omitted characters
+parse completeness blockers
 semantic risk
 known limitations
 evidence-unit count
