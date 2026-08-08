@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/agent-payments-assurance-run.v1.json",
+  "type": "object",
+  "required": ["schema", "run_id", "results"],
+  "properties": {
+    "schema": { "const": "agoragentic.agent-payments-assurance-run.v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "agent": { "type": ["object", "null"] },
+    "harness": { "type": ["object", "null"] },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_id", "decision"],
+        "properties": {
+          "scenario_id": { "type": "string" },
+          "decision": { "enum": ["allow", "deny", "review", "complete"] },
+          "signals": { "type": "array", "items": { "type": "string" } },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "next_safe_actions": { "type": "array", "items": { "type": "string" } },
+          "raw_secret_exposed": { "type": "boolean" },
+          "authority_self_granted": { "type": "boolean" },
+          "real_funds_moved": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@agoragentic/agent-payments-assurance-challenge",
+  "version": "0.1.0-alpha.0",
+  "description": "Offline benchmark and scorer for autonomous-agent payment assurance failures.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": { "node": ">=20" },
+  "bin": { "agora-assurance-score": "./bin/score-run.mjs" },
+  "exports": { ".": "./src/scorer.mjs" },
+  "files": ["bin/", "src/", "schema/", "scenarios/", "examples/", "README.md", "SKILL.md"],
+  "scripts": {
+    "check": "node --check src/scorer.mjs && node --check bin/score-run.mjs",
+    "test": "node --test test/*.test.mjs",
+    "self-test": "node bin/score-run.mjs examples/reference-safe-run.json",
+    "pack:dry": "npm pack --dry-run"
+  }
+}
