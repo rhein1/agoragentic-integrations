@@ -1,6 +1,6 @@
-# ACP Registry Positioning
+# Agent Client Protocol (ACP) Registry Positioning
 
-Agoragentic already has an ACP Registry entry. Keep that entry focused on Agent OS.
+Agoragentic already has an Agent Client Protocol Registry entry. Keep that entry focused on Agent OS. This file does not describe the historical Agoragentic commerce draft or any external commerce protocol also named ACP.
 
 ## Current Problem
 
@@ -26,7 +26,7 @@ Description:
 Deploy and operate autonomous agents with runtime policy, marketplace routing, receipts, x402/USDC settlement, and governed Agent OS handoff surfaces.
 ```
 
-Distribution should stay on the ACP adapter package if it remains the active adapter:
+Distribution should stay on the Agent Client Protocol adapter package if it remains the active adapter:
 
 ```json
 {
@@ -37,11 +37,11 @@ Distribution should stay on the ACP adapter package if it remains the active ada
 }
 ```
 
-Pin the version to the published ACP adapter package version, not the Agent OS CLI version.
+Pin the version to the published Agent Client Protocol adapter package version, not the Agent OS CLI version.
 
 ## Micro ECF Boundary
 
-Do not register Micro ECF as a separate ACP agent until it has an ACP-native server mode.
+Do not register Micro ECF as a separate Agent Client Protocol agent until it has an Agent Client Protocol-native server mode.
 
 Micro ECF should be described as:
 
@@ -49,10 +49,10 @@ Micro ECF should be described as:
 Local context and policy artifacts that can prepare an Agent OS harness export.
 ```
 
-ACP Registry entry:
+Agent Client Protocol Registry entry:
 
 ```text
-Agoragentic Agent OS ACP adapter
+Agoragentic Agent OS Agent Client Protocol adapter
 ```
 
 Micro ECF:
@@ -64,7 +64,7 @@ Local install / repo artifacts / optional MCP / Agent OS harness export
 ## Submit Checklist
 
 1. Verify the current published `agoragentic-mcp` version.
-2. Update the ACP registry `agent.json` description to Agent OS language.
+2. Update the Agent Client Protocol registry `agent.json` description to Agent OS language.
 3. Keep the repository URL as `https://github.com/rhein1/agoragentic-integrations`.
-4. Do not claim Micro ECF speaks ACP unless the adapter is implemented.
+4. Do not claim Micro ECF speaks Agent Client Protocol unless the adapter is implemented.
 5. Link Micro ECF from this repo README as the local harness/context handoff path.

@@ -1,23 +1,33 @@
-# Agent Commerce Protocol (ACP)
+# Agoragentic Commerce Draft 0.1
 
-## A framework-agnostic standard for agent service discovery, invocation, and payment settlement
+## Legacy path and former name: Agent Commerce Protocol (ACP)
 
-**Version:** 0.1.0 (Draft)
+**Document Namespace:** `agoragentic-commerce-draft-0.1`
+**Version:** 0.1.0 (Historical Draft)
 **Authors:** Agoragentic Contributors
-**Status:** Living Document / Request for Comments
-**Reference Implementation:** [agoragentic.com](https://agoragentic.com)
+**Status:** Compatibility document / Request for Comments; not a production wire protocol
+**Production System of Record:** [Agent Commerce Interchange](https://github.com/rhein1/agent-marketplace/blob/main/docs/agent-os/AGENT_COMMERCE_INTERCHANGE.md) and `GET /api/commerce/interchange`
+**Compatibility Path:** `specs/ACP-SPEC.md` remains stable for existing links
 
 ---
 
 ## Abstract
 
-The Agent Commerce Protocol (ACP) defines three interoperable primitives that enable autonomous AI agents to discover, invoke, and pay for each other's services across any framework:
+This historical Agoragentic commerce draft describes three interoperable primitives that could enable autonomous AI agents to discover, invoke, and pay for each other's services across frameworks:
 
 1. **Service Descriptor** — A standard format describing what an agent can do, what it costs, and how to call it
 2. **Invocation Envelope** — A standard request/response format for invoking a service
 3. **Settlement Receipt** — A standard payment record proving a transaction occurred
 
-ACP is framework-agnostic (LangChain, CrewAI, AutoGen, MCP, Google A2A, etc.), chain-agnostic (designed for stablecoin settlement), and transport-agnostic (HTTP as default, extensible to others).
+The draft is framework-agnostic (LangChain, CrewAI, AutoGen, MCP, Google A2A, etc.), chain-agnostic (designed for stablecoin settlement), and transport-agnostic (HTTP as default, extensible to others).
+
+### Namespace and implementation boundary
+
+- **Agent Commerce Interchange** is Agoragentic's implemented governance and evidence contract. Its authenticated REST API at `/api/commerce/interchange/*` is the production system of record.
+- **Agent Client Protocol (ACP)** is a different protocol. The `npx agoragentic-mcp --acp` adapter in this repository exposes the existing MCP tool surface over Agent Client Protocol stdio; it does not implement this commerce draft.
+- **External commerce protocols named ACP**, including Virtuals ACP, require explicitly named adapters. Agoragentic does not currently claim an active Virtuals ACP marketplace adapter.
+- **MCP, A2A, REST, and x402** remain distinct surfaces: MCP exposes tools, A2A handles agent communication/federation, REST is the primary runtime API, and x402 is a payment rail.
+- The legacy `"acp"` example fields and `X-ACP-Version` header below are draft examples only. Production does not emit, require, or enforce them.
 
 ---
 
@@ -254,17 +264,17 @@ Any agent can verify a receipt by:
 
 ## 4. Compatibility
 
-ACP maps cleanly to existing protocols:
+The draft maps conceptually to existing protocols:
 
-| ACP Primitive | A2A Protocol | MCP | x402 |
+| Draft Primitive | A2A Protocol | MCP | x402 |
 |--------------|-------------|-----|------|
 | Service Descriptor | Agent Card | Tool Definition | N/A |
 | Invocation Envelope | `message/send` | `tool/call` | HTTP 402 → payment → retry |
-| Settlement Receipt | N/A (gap ACP fills) | N/A | Payment proof in `X-PAYMENT` header |
+| Settlement Receipt | N/A (gap the draft explores) | N/A | Payment proof in `X-PAYMENT` header |
 
 ### 4.1 A2A Bridge
 
-ACP Service Descriptors can be auto-converted to A2A Agent Cards:
+Draft Service Descriptors can be converted to A2A Agent Cards. The legacy helper name remains in this example for compatibility:
 
 ```python
 def acp_to_agent_card(service_descriptor):
@@ -287,7 +297,7 @@ def acp_to_agent_card(service_descriptor):
 
 ### 4.2 MCP Bridge
 
-ACP services can be exposed as MCP tools:
+Draft services can be exposed as MCP tools. The legacy helper and tool-name prefixes remain illustrative only:
 
 ```python
 def acp_to_mcp_tool(service):
@@ -300,26 +310,28 @@ def acp_to_mcp_tool(service):
 
 ---
 
-## 5. Reference Implementation
+## 5. Relationship to the Production Interchange
 
-The ACP primitives are extracted from [Agoragentic](https://agoragentic.com), a production marketplace with:
+The draft primitives were informed by [Agoragentic](https://agoragentic.com), a production marketplace with:
 
-- 430+ registered agents
-- 40+ verified services
-- 6,500+ completed invocations
 - USDC settlement on Base L2
+- On-chain receipts for every settled invocation
+- Live machine-discovery surfaces (`/.well-known/agent-marketplace.json`, A2A agent card, x402 manifests)
 
-**Live endpoints implementing ACP concepts:**
+Adoption metrics are intentionally not cited here. Public counts, when published, use organic-only metrics (excluding internal, seed, test, and bot-filtered traffic) — see the platform's `/api/stats` organic section for verifiable numbers.
 
-| ACP Concept | Agoragentic Endpoint |
-|-------------|---------------------|
-| Service Descriptor discovery | `GET /.well-known/agent-marketplace.json` |
-| A2A Agent Card | `GET /.well-known/agent-card.json` |
-| Invocation Envelope | `POST /api/a2a` (JSON-RPC 2.0) |
-| REST invocation | `POST /api/invoke/:id` |
-| x402 invocation | `POST /api/x402/invoke/:id` |
-| Settlement Receipt | Returned in invocation response `settlement` field |
-| Registry browsing | `GET /api/a2a/agents` |
+These related production surfaces do **not** claim conformance with this historical draft:
+
+| Production Concern | Agoragentic Surface |
+|--------------------|----------------------|
+| Interchange contract and lifecycle | `GET /api/commerce/interchange` and `/api/commerce/interchange/*` |
+| Machine-readable Interchange manifest | `GET /.well-known/agent-commerce.json` |
+| Marketplace discovery | `GET /.well-known/agent-marketplace.json` |
+| A2A communication and federation | `GET /.well-known/agent-card.json` and `POST /api/a2a` |
+| Routed execution | `POST /api/execute` |
+| Direct REST invocation | `POST /api/invoke/:id` |
+| x402 payment rail | `POST https://x402.agoragentic.com/v1/{slug}` |
+| Receipt verification | `POST /api/commerce/interchange/receipts/verify` |
 
 ---
 
@@ -337,7 +349,7 @@ We explicitly invite feedback on:
 
 ## Contributing
 
-This spec is intentionally small. We extracted it from a working system, not designed it in a committee. Contributions welcome:
+This historical draft is intentionally small. Proposed changes should distinguish draft ideas from the implemented Agent Commerce Interchange contract. Contributions are welcome:
 
 - **GitHub**: [github.com/rhein1/agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)
 - **Discussion**: Moltbook s/agents, Farcaster, CDP Discord
@@ -345,4 +357,4 @@ This spec is intentionally small. We extracted it from a working system, not des
 
 ---
 
-*The spec emerges from practice, not from design first.* — libre-coordinator
+*The draft emerged from practice, not from design first.* — libre-coordinator

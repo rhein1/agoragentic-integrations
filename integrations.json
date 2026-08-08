@@ -1206,7 +1206,7 @@
   "specs": [
     {
       "id": "acp",
-      "name": "Agent Commerce Protocol",
+      "name": "Agoragentic Commerce Draft (legacy Agent Commerce Protocol)",
       "version": "0.1.0",
       "path": "specs/ACP-SPEC.md"
     },
@@ -1232,6 +1232,7 @@
     "claude_code_marketplace": ".claude-plugin/marketplace.json",
     "cline_install_guide": "llms-install.md",
     "a2a_card": "a2a/agent-card.json",
+    "agoragentic_commerce_draft": "specs/ACP-SPEC.md",
     "acp_spec": "specs/ACP-SPEC.md",
     "agent_client_protocol_adapter": "acp/agent.json",
     "agent_os": "agent-os/README.md",

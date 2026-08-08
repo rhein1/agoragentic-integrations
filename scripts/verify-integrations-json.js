@@ -209,6 +209,39 @@ function assertMachineCopy() {
   }
 }
 
+function assertProtocolNamespaces(manifest) {
+  const clientAdapter = (manifest.integrations || []).find((entry) => entry.id === 'agent-client-protocol');
+  if (clientAdapter?.name !== 'Agent Client Protocol') {
+    fail('agent-client-protocol integration must keep the explicit Agent Client Protocol name');
+  }
+
+  const commerceDraft = (manifest.specs || []).find((entry) => entry.id === 'acp');
+  if (commerceDraft?.name !== 'Agoragentic Commerce Draft (legacy Agent Commerce Protocol)') {
+    fail('legacy acp spec id must be labeled as the Agoragentic Commerce Draft');
+  }
+  if (manifest.discovery?.agoragentic_commerce_draft !== 'specs/ACP-SPEC.md'
+    || manifest.discovery?.acp_spec !== 'specs/ACP-SPEC.md') {
+    fail('discovery must expose the canonical commerce-draft key and preserve acp_spec as its alias');
+  }
+
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+  const draft = fs.readFileSync(path.join(root, 'specs', 'ACP-SPEC.md'), 'utf8');
+  const registry = fs.readFileSync(path.join(root, 'ACP_REGISTRY.md'), 'utf8');
+  const adapterReadme = fs.readFileSync(path.join(root, 'acp', 'README.md'), 'utf8');
+  const mcpServer = fs.readFileSync(path.join(root, 'mcp', 'mcp-server.js'), 'utf8');
+  if (!readme.includes('## Protocol Names')) fail('README.md must explain the ACP namespace collision');
+  if (!draft.includes('not a production wire protocol')) fail('commerce draft must disclaim production wire conformance');
+  if (!registry.startsWith('# Agent Client Protocol (ACP) Registry Positioning')) {
+    fail('ACP_REGISTRY.md must identify Agent Client Protocol explicitly');
+  }
+  if (!adapterReadme.includes('Agent Client Protocol (ACP) clients')) {
+    fail('acp/README.md must expand Agent Client Protocol on first use');
+  }
+  if (!mcpServer.includes('Agent Client Protocol adapter')) {
+    fail('runtime adapter messages must identify Agent Client Protocol explicitly');
+  }
+}
+
 function assertA2aRouterFirst() {
   const card = JSON.parse(fs.readFileSync(path.join(root, 'a2a', 'agent-card.json'), 'utf8'));
   const skillIds = (card.skills || []).map((skill) => skill.id);
@@ -261,6 +294,7 @@ assertManifestShape(manifest);
 assertInventoryCoverage(manifest);
 assertDiscoveryParity(manifest);
 assertMachineCopy();
+assertProtocolNamespaces(manifest);
 assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
