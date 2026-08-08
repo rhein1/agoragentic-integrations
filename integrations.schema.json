@@ -164,6 +164,10 @@
         "min_node": {
           "type": "string",
           "description": "Minimum Node.js version."
+        },
+        "install_after_explicit_approval": {
+          "type": "string",
+          "description": "Install command that may run only after the plan has received explicit approval."
         }
       }
     },
@@ -243,6 +247,10 @@
         "docs": {
           "type": "string",
           "description": "Relative path to the integration README."
+        },
+        "install_after_explicit_approval": {
+          "type": "string",
+          "description": "Install command that may run only after the plan has received explicit approval."
         }
       }
     }

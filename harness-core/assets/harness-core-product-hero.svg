@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
   <title id="title">Agoragentic Harness Core</title>
-  <desc id="desc">An agent intent passes through policy and approval gates before a tool runs, then produces evidence and a clearly labeled local receipt.</desc>
+  <desc id="desc">A proposed agent action passes through local policy and approval checks, stops at the host boundary, and produces configuration proof with a clearly labeled local receipt.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#081120"/><stop offset="1" stop-color="#16233b"/></linearGradient>
     <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#45d6df"/><stop offset="1" stop-color="#ff7453"/></linearGradient>
@@ -9,10 +9,11 @@
   <path d="M0 108H1280M0 320H1280M0 532H1280M170 0V640M640 0V640M1110 0V640" stroke="#263550" opacity="0.52"/>
   <rect x="58" y="54" width="7" height="532" rx="3" fill="url(#accent)"/>
   <text x="104" y="122" fill="#45d6df" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="750" letter-spacing="2">HARNESS CORE</text>
-  <text x="104" y="218" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">Put a policy gate</text>
-  <text x="104" y="290" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">and a receipt around</text>
-  <text x="104" y="362" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="62" font-weight="760">any agent action.</text>
-  <text x="104" y="430" fill="#b8c5d9" font-family="Inter, Arial, sans-serif" font-size="24">Intent → policy → approval → tool → evidence → receipt</text>
+  <text x="104" y="218" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="760">Put a policy gate</text>
+  <text x="104" y="290" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="760">and local proof around</text>
+  <text x="104" y="362" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="760">a proposed action.</text>
+  <text x="104" y="420" fill="#b8c5d9" font-family="Inter, Arial, sans-serif" font-size="21">Intent → policy → approval</text>
+  <text x="104" y="452" fill="#b8c5d9" font-family="Inter, Arial, sans-serif" font-size="21">host boundary → local receipt</text>
   <text x="104" y="518" fill="#ff9279" font-family="JetBrains Mono, Consolas, monospace" font-size="18">npx agoragentic-harness-core@latest init</text>
 
   <g transform="translate(716 70)">
@@ -38,14 +39,14 @@
     <path d="M250 248V272" stroke="url(#accent)" stroke-width="5" stroke-linecap="round"/>
     <g transform="translate(28 276)">
       <rect width="444" height="82" rx="16" fill="#101d33" stroke="#ff7453" stroke-opacity="0.55"/>
-      <text x="22" y="30" fill="#ff9b84" font-family="JetBrains Mono, Consolas, monospace" font-size="13">TOOL EXECUTION</text>
-      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">Only after policy and approval permit it</text>
+      <text x="22" y="30" fill="#ff9b84" font-family="JetBrains Mono, Consolas, monospace" font-size="13">HOST BOUNDARY</text>
+      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">Execution remains with the integrating host</text>
     </g>
     <path d="M250 360V384" stroke="url(#accent)" stroke-width="5" stroke-linecap="round"/>
     <g transform="translate(28 388)">
       <rect width="444" height="82" rx="16" fill="#101d33" stroke="#45d6df" stroke-opacity="0.5"/>
-      <text x="22" y="30" fill="#75edf3" font-family="JetBrains Mono, Consolas, monospace" font-size="13">LOCAL RECEIPT</text>
-      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">what ran · evidence · status · next safe action</text>
+      <text x="22" y="30" fill="#75edf3" font-family="JetBrains Mono, Consolas, monospace" font-size="13">CONFIGURATION RECEIPT</text>
+      <text x="22" y="58" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="750">agent · goal · proof status · artifact refs</text>
     </g>
   </g>
 </svg>

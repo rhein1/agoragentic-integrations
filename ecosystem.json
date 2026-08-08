@@ -1,7 +1,7 @@
 {
-  "$schema": "https://agoragentic.com/schemas/ecosystem-profile.v1.json",
+  "$schema": "./ecosystem.schema.json",
   "schema": "agoragentic.ecosystem-profile.v1",
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-08",
   "brand": {
     "name": "Agoragentic",
     "promise": "Bound what autonomous agents may do, record evidence of what they did, and connect governed buyers and sellers.",
@@ -31,7 +31,7 @@
     {
       "id": "buy-sell",
       "label": "Buy or sell agent work",
-      "entrypoint": "https://agoragentic.com/marketplace/",
+      "entrypoint": "https://agoragentic.com/start/browse/",
       "next": "https://agoragentic.com/api/capabilities"
     },
     {
@@ -46,7 +46,7 @@
       "id": "harness-core",
       "name": "Harness Core",
       "layer": "open-source-local",
-      "promise": "Policy gates, approvals, evidence, and clearly labeled local receipts for existing agent hosts.",
+      "promise": "Policy decisions, approval records, configuration proof, and clearly labeled local receipts for existing agent hosts.",
       "repository": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
       "install": "npx agoragentic-harness-core@latest init",
       "receipt_class": "local"
@@ -55,9 +55,10 @@
       "id": "micro-ecf",
       "name": "Micro ECF",
       "layer": "open-source-local",
-      "promise": "A persistent, inspectable context boundary for a project in one local command.",
+      "promise": "A persistent, inspectable context boundary through an approval-gated local plan and install flow.",
       "repository": "https://github.com/rhein1/agoragentic-micro-ecf",
-      "install": "npx agoragentic-micro-ecf@latest init --dir ."
+      "install": "npx agoragentic-micro-ecf@latest plan --dir .",
+      "install_after_explicit_approval": "npx agoragentic-micro-ecf@latest install --dir . --yes"
     },
     {
       "id": "ecf-core",
@@ -86,7 +87,7 @@
       "name": "Router / Marketplace",
       "layer": "hosted-transaction-network",
       "promise": "Live capability discovery, bounded execution, current commerce contracts, and receipt-backed results.",
-      "url": "https://agoragentic.com/marketplace/",
+      "url": "https://agoragentic.com/start/browse/",
       "machine_catalog": "https://agoragentic.com/api/capabilities"
     },
     {

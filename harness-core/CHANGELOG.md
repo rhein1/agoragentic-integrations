@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.2.0 - Unreleased
+## 0.2.1 - Unreleased
+
+- Added the packaged Harness Core hero and installed-package README link verification.
+- Narrowed receipt and adapter claims to the configuration/proposal evidence emitted by the package.
+
+## 0.2.0 - 2026-07-23
 
 - Added the local middleware kernel, lifecycle events, append-only run ledger, profiles, approvals, review gates, runtime metadata probes, context-reference imports, owner inbox, schedule intent, and worktree-session evidence.
 - Added package exports for every shipped schema and retained the original proof, receipt, readiness, and Agent OS Harness schemas.

@@ -8,15 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a schema-backed canonical ecosystem profile, claim-boundary fixtures, and npm-package-safe Harness Core branding assets.
 - Added experimental, hermetically tested ClawTeam and World AgentKit adapters. The ClawTeam integration requires operators to disable the upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
 - Added client-native packages for Cursor, Gemini CLI, Claude Code, and Cline, all using the published MCP relay without embedding an API key.
 - Added a canonical distribution packet, external-channel status matrix, 400 by 400 plugin icon, and repository-owned validation for package metadata and no-spend boundaries.
-- Added the Harness Core 0.2.0 public-source candidate: middleware lifecycle, append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, all public schemas, and framework-wrapping examples.
+- Added the published Harness Core 0.2.0 middleware kernel and the review-gated 0.2.1 packaging/truthfulness patch candidate: append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, public schemas, and declarative framework mapping examples.
 - Added experimental documentation paths for Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. These entries do not claim tested package or runtime support.
 - Added beta, framework-native adapters for Griptape, LiveKit Agents, and Pipecat with hermetic contract tests and current-framework construction evidence.
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.30.1`, made Micro ECF installation explicitly plan-first and approval-gated, and added ecosystem profile/schema discovery parity.
 - Bumped the canonical manifest to `2.30.0` with 99 indexed surfaces and explicit discovery pointers for ClawTeam and World AgentKit.
 - Superseded `agoragentic-mcp@1.3.5` with `1.3.6` after a clean downstream install proved npm does not propagate dependency-level overrides. The 1.3.6 package bundles the audited MCP SDK/Hono tree into a Node.js 20 CLI with zero runtime dependencies and adds a packed-consumer install, audit, and MCP fallback smoke gate; all client-native manifests and MCP registry metadata now target the corrected package.
 - Bumped the canonical manifest to `2.29.0` with 97 indexed surfaces and added machine discovery pointers for the native client packages.
@@ -24,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recorded the current OpenAI public-plugin policy blocker instead of presenting the commerce MCP surface as submission-ready.
 - Prepared the `n8n-nodes-agoragentic` 0.1.3 candidate on stable `@n8n/node-cli` 0.40.3 with a committed lockfile, lint/build prepublish gate, exact release-tag validation, and locked CI installs; npm publication remains review- and trusted-publishing-gated.
 - Bumped the canonical manifest to `2.28.0`, added Harness Core package coordinates plus its npm-first install command, and made the package-index schema enumerate every currently declared package family.
-- Hardened Harness Core publication with a lockfile, exact version-tag validation, locked installs, and an out-of-repository packed-install/schema-export smoke test. npm publication remains gated on review, merge, the exact `harness-core-v0.2.0` release, and trusted publishing.
+- Hardened Harness Core publication with a lockfile, exact version-tag validation, locked installs, and an out-of-repository packed-install/schema-export smoke test. Version `0.2.0` was published on 2026-07-23; the `0.2.1` patch remains gated on review, merge, the exact release tag, and trusted publishing.
 - Bumped the canonical manifest to `2.27.0` with 93 indexed integration surfaces.
 - Restored 13 existing adapter directories that were missing from `integrations.json`: Dfns, fast-agent, Goose, Haystack, Kibble, LI.FI, MPPScan, Olas, Reown, Safe, Superfluid, Tempo MPP, and u402.
 - Updated Agent OS CLI discovery from the stale `1.6.8` pin to `@latest` (currently published as `1.6.9`).

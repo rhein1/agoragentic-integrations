@@ -47,7 +47,7 @@ function validateSchema(schemaRelPath, payload) {
 test('Harness Core package exposes local no-spend CLI bins', () => {
   const pkg = readJson(path.join(packageRoot, 'package.json'));
   assert.equal(pkg.name, 'agoragentic-harness-core');
-  assert.equal(pkg.version, '0.2.0');
+  assert.equal(pkg.version, '0.2.1');
   assert.equal(pkg.bin['agoragentic-harness'], './bin/agoragentic-harness.mjs');
   assert.equal(pkg.bin['agora-harness'], './bin/agoragentic-harness.mjs');
   assert.match(pkg.description, /Local no-spend Agent OS Harness Core/);
@@ -108,7 +108,7 @@ test('export emits a schema-valid Agent OS Harness packet for preview only', () 
   assert.equal(packet.public_boundary.no_spend_export, true);
   assert.equal(packet.public_boundary.hosted_billing, false);
   assert.equal(packet.agent_os_preview_request.deployment_packet.source, 'harness_core_local');
-  assert.equal(packet.generated_from.package_version, '0.2.0');
+  assert.equal(packet.generated_from.package_version, '0.2.1');
   assert.equal(packet.agent_os_export.preview_endpoint, 'POST /api/hosting/agent-os/preview');
   validateSchema('schema/agent-os-harness.v1.json', packet);
 });

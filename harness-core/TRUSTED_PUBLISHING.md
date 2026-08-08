@@ -24,7 +24,7 @@ Publish only after:
 
 1. Configure npm Trusted Publishing for the package.
 2. Merge the release-ready PR.
-3. Create a GitHub release with the exact package tag `harness-core-v0.2.0`.
+3. Create a GitHub release with the exact package tag `harness-core-v0.2.1`.
 4. The workflow publishes from `harness-core/`.
 
 Do not add `NPM_TOKEN` for this package unless Trusted Publishing is unavailable and the token has been scoped, rotated, and documented.

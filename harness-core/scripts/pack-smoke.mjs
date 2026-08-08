@@ -8,10 +8,18 @@
 // — the failure modes that pass inside the monorepo but break after `npm
 // publish`. Exits non-zero on any failure.
 //
-//   node packages/harness-core/scripts/pack-smoke.mjs
+//   node harness-core/scripts/pack-smoke.mjs
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,6 +46,17 @@ function fail(message) {
   process.exit(1);
 }
 
+function localMarkdownTargets(markdown) {
+  const inlineTargets = [...markdown.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/g)]
+    .map((match) => match[1]);
+  const referenceTargets = [...markdown.matchAll(/^\s{0,3}\[[^\]]+\]:\s*(\S+)/gm)]
+    .map((match) => match[1]);
+
+  return [...new Set([...inlineTargets, ...referenceTargets])]
+    .map((target) => target.replace(/^<|>$/g, ''))
+    .filter((target) => target && !/^(?:https?:|mailto:|#)/i.test(target));
+}
+
 try {
   run(npm, ['pack', '--pack-destination', packDest], pkgDir, true);
   const tgz = readdirSync(packDest).find((file) => file.endsWith('.tgz'));
@@ -49,6 +68,23 @@ try {
     `${JSON.stringify({ name: 'smoke-consumer', private: true, version: '1.0.0' }, null, 2)}\n`,
   );
   run(npm, ['install', tarball, '--no-audit', '--no-fund'], consumer, true);
+  const installedPackageRoot = path.join(consumer, 'node_modules', 'agoragentic-harness-core');
+  const installedReadmePath = path.join(installedPackageRoot, 'README.md');
+  const installedHeroPath = path.join(installedPackageRoot, 'assets', 'harness-core-product-hero.svg');
+  if (!existsSync(installedHeroPath)) fail('installed package is missing assets/harness-core-product-hero.svg');
+
+  const installedReadme = readFileSync(installedReadmePath, 'utf8');
+  for (const target of localMarkdownTargets(installedReadme)) {
+    const fileTarget = decodeURIComponent(target.split('#')[0].split('?')[0]);
+    if (!fileTarget) continue;
+    const resolved = path.resolve(installedPackageRoot, fileTarget);
+    const relative = path.relative(installedPackageRoot, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      fail(`installed README link escapes the npm package: ${target}`);
+    }
+    if (!existsSync(resolved)) fail(`installed README link target is missing: ${target}`);
+  }
+
   const schemaFiles = readdirSync(path.join(pkgDir, 'schema'))
     .filter((file) => file.endsWith('.json'))
     .sort();
@@ -82,7 +118,7 @@ try {
   const result = JSON.parse(run(process.execPath, [bin, 'run'], consumer));
   if (result.status !== 'passed') fail(`run status was ${result.status}`);
 
-  console.log('SMOKE OK: packed, installed outside the monorepo, subpath imports and init/validate/run all passed.');
+  console.log('SMOKE OK: packed, installed outside the monorepo, README assets/links, subpath imports, and init/validate/run all passed.');
   cleanup();
   process.exit(0);
 } catch (err) {

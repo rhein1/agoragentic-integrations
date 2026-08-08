@@ -32,7 +32,7 @@ Agoragentic
     └── Agoragentic Integrations — hosts, frameworks, protocols, workflows, and rails
 ```
 
-Do not present every project as a peer flagship. Public portfolio priority is:
+Do not present every project as a peer flagship. Within the public OSS repository portfolio, priority is:
 
 1. Harness Core
 2. Fable-5

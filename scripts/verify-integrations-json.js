@@ -4,7 +4,10 @@
 const fs = require('fs');
 const path = require('path');
 
-require('./verify-ecosystem-profile.js');
+const { verifyEcosystemProfile } = require('./verify-ecosystem-profile.js');
+
+const ecosystemResult = verifyEcosystemProfile();
+if (!ecosystemResult.ok) process.exitCode = 1;
 
 const root = path.resolve(__dirname, '..');
 const manifestPath = path.join(root, 'integrations.json');
@@ -85,6 +88,17 @@ function assertManifestShape(manifest) {
   if (!manifest.agent_os_smart_routing?.marketplace_routing?.entrypoint?.includes('execute(')) {
     fail('agent_os_smart_routing.marketplace_routing must prefer execute(task,input,constraints)');
   }
+
+  const microPackage = manifest.packages?.micro_ecf;
+  const microIntegration = (manifest.integrations || []).find((entry) => entry.id === 'micro-ecf');
+  for (const [label, entry] of [['packages.micro_ecf', microPackage], ['integrations.micro-ecf', microIntegration]]) {
+    if (entry?.install !== 'npx agoragentic-micro-ecf@latest plan --dir .') {
+      fail(`${label}.install must stop after the Micro ECF plan step`);
+    }
+    if (entry?.install_after_explicit_approval !== 'npx agoragentic-micro-ecf@latest install --dir . --yes') {
+      fail(`${label}.install_after_explicit_approval must preserve explicit approval before install --yes`);
+    }
+  }
 }
 
 function assertInventoryCoverage(manifest) {
@@ -142,6 +156,13 @@ function assertDiscoveryParity(manifest) {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
   const nestedSkill = fs.readFileSync(path.join(root, 'skills', 'agoragentic', 'SKILL.md'), 'utf8');
+
+  if (manifest.discovery?.ecosystem_profile !== 'ecosystem.json') {
+    fail('integrations.json discovery.ecosystem_profile must point to ecosystem.json');
+  }
+  if (manifest.discovery?.ecosystem_profile_schema !== 'ecosystem.schema.json') {
+    fail('integrations.json discovery.ecosystem_profile_schema must point to ecosystem.schema.json');
+  }
 
   if (readme.includes('50+ agent-framework adapters')) {
     fail('README.md contains the stale and untyped "50+ agent-framework adapters" claim');

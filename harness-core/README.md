@@ -1,21 +1,21 @@
 # Agoragentic Harness Core
 
-![Harness Core — put a policy gate and a receipt around any agent action](assets/harness-core-product-hero.svg)
+![Harness Core — policy and local proof for a proposed agent action](assets/harness-core-product-hero.svg)
 
-## Put a policy gate and a receipt around any agent action.
+## Put a policy gate and local proof around a proposed agent action.
 
-**Harness Core is an open, local governance kernel for existing agent hosts and frameworks.** It gives a proposed action a bounded lifecycle:
+**Harness Core is an open, local governance kernel for existing agent hosts and frameworks.** The generic `run` command evaluates configuration and policy, records lifecycle events, and emits local proof and receipt artifacts:
 
 ```text
 intent
 → policy
 → approval when required
-→ tool execution by the host
-→ evidence capture
+→ host boundary
+→ configuration and proof references
 → clearly labeled local receipt
 ```
 
-Harness Core can observe, allow, ask, deny, record, and export local evidence. It does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.
+Host execution is outside the generic `run` path. A host may separately integrate Harness middleware around its own action, and the packaged Claude Code `PreToolUse` adapter can enforce an allow/ask/deny decision before a Claude Code tool call. Harness Core does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.
 
 ```bash
 npx agoragentic-harness-core@latest init
@@ -42,7 +42,7 @@ policy.yaml
 └── agent-os-harness.json
 ```
 
-**Local receipts are not settlement receipts, certifications, endorsements, or marketplace verification.** They record supported local policy, lifecycle, evidence, and result facts.
+**Local receipts are not settlement receipts, certifications, endorsements, or marketplace verification.** The v0.2 receipt records the configured agent name and primary goal, proof status, local artifact references, zero-spend state, and explicit boundaries showing that no Router invocation, x402 payment, marketplace publication, hosted provisioning, or hosted-memory write occurred. It does not claim that the task text was executed or that a host result was produced.
 
 <p>
   <a href="#five-minute-proof"><strong>Run the proof</strong></a>
@@ -61,8 +61,8 @@ Agent frameworks are good at running tools. They are not all designed to answer 
 - What was the agent trying to do?
 - Which policy applied before the action?
 - Did the action require owner review?
-- What tool was proposed and what actually ran?
-- Which evidence supports the reported result?
+- Which host action is being proposed, and where is the host boundary?
+- Which configuration and proof references support the local decision record?
 - What remains blocked or unknown?
 - Can the run be handed to a hosted control plane without granting authority early?
 
@@ -100,7 +100,7 @@ npx agoragentic-harness-core@latest runs show run_<id>
 npx agoragentic-harness-core@latest events tail --run run_<id> --limit 50
 ```
 
-Success means the run has an append-only event stream, a terminal state, source/evidence references, and a local receipt whose claims match the recorded lifecycle. Missing evidence should remain blocked or unknown rather than being invented.
+Success means the run has an append-only event stream, a terminal state, configuration/proof references, and a local receipt whose claims match the recorded no-execution boundary. The `--task` value labels run state; it is not proof that a host executed that task. Missing evidence should remain blocked or unknown rather than being invented.
 
 ## Live enforcement
 
@@ -179,13 +179,15 @@ Middleware may observe, validate, redact, record, or block. Registering middlewa
 
 ## Framework and host adapters
 
-List the packaged adapters:
+List the packaged adapter contracts:
 
 ```bash
 npx agoragentic-harness-core@latest adapters
 ```
 
-Public framework examples live in [`examples/harness-core-frameworks`](../examples/harness-core-frameworks/) and cover paths such as:
+Only Claude Code currently reports `status: "enforcement"` and exposes a packaged live pre-tool decision hook. Every other catalog entry reports `status: "stub"` with `authority: "local_no_spend_mapping_only"`. Those entries are mapping contracts, not executable framework adapters.
+
+Public declarative mapping examples live in [the repository examples directory](https://github.com/rhein1/agoragentic-integrations/tree/main/examples/harness-core-frameworks) and cover:
 
 - LangGraph;
 - CrewAI;
@@ -207,7 +209,7 @@ local policy + approvals + evidence + receipt
 optional owner-reviewed Agent OS preview export
 ```
 
-An adapter must not duplicate the policy engine, create a competing receipt family, persist raw tool output by default, or imply that installing it grants hosted or financial authority.
+A mapping contract must not be presented as executable integration support. Any future executable adapter must add framework-specific tests and must not duplicate the policy engine, create a competing receipt family, persist raw tool output by default, or imply that installing it grants hosted or financial authority.
 
 ## Policy, approvals, and review gates
 
@@ -259,7 +261,7 @@ Core run artifacts:
 | `state.json` | terminal and intermediate run state |
 | `events.jsonl` | append-only lifecycle evidence |
 | `local-proof.json` | supported local proof claims and blockers |
-| `local-receipt.json` | local run identity, policy/result facts, evidence refs, and next safe action |
+| `local-receipt.json` | receipt/proof IDs, configured agent and primary goal, proof status, local artifact refs, zero-spend state, and explicit non-execution boundaries |
 | `summary.md` | human-readable bounded summary |
 
 Receipts should retain hashes and references rather than secret-bearing raw payloads. Raw prompts, private tool output, private ECF payloads, credentials, and wallet material should not be copied into public or owner-inbox artifacts.
@@ -442,7 +444,7 @@ Use `--help` on the relevant command for exact options supported by the installe
 
 ## Source development
 
-The source tree declares Harness Core `0.2.0`. The npm `@latest` tag reflects current registry state and may trail this branch until a reviewed release is published.
+The source tree declares the review-gated Harness Core `0.2.1` patch candidate. npm `@latest` currently serves `0.2.0`; publication remains a separate reviewed release action.
 
 ```bash
 git clone https://github.com/rhein1/agoragentic-integrations.git
@@ -492,11 +494,11 @@ Existing agent host or framework
 → separately authorized deployment or marketplace flow
 ```
 
-- [Agoragentic ecosystem profile](../ecosystem.json)
-- [Brand and README contract](../docs/BRAND_SYSTEM.md)
-- [Framework examples](../examples/harness-core-frameworks/)
+- [Agoragentic ecosystem profile](https://github.com/rhein1/agoragentic-integrations/blob/main/ecosystem.json)
+- [Brand and README contract](https://github.com/rhein1/agoragentic-integrations/blob/main/docs/BRAND_SYSTEM.md)
+- [Framework mapping examples](https://github.com/rhein1/agoragentic-integrations/tree/main/examples/harness-core-frameworks)
 - [Triptych OS](https://agoragentic.com/agent-os/)
-- [Marketplace](https://agoragentic.com/marketplace/)
+- [Router / Marketplace](https://agoragentic.com/start/browse/)
 - [Interchange](https://agoragentic.com/interchange/)
 
 ## License
