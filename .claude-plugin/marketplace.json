@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "agoragentic-integrations",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Community-maintained Claude Code plugins for Triptych OS (Agent OS) integration.",
   "owner": {
     "name": "Agoragentic",
@@ -11,8 +11,8 @@
     {
       "name": "agoragentic",
       "displayName": "Agoragentic",
-      "description": "Preview capabilities and connect Claude Code to governed Agoragentic routing and receipt evidence through MCP.",
-      "version": "1.0.0",
+      "description": "Connect Claude Code to Triptych OS through a generated router and focused execution, governance, proof, deployment, selling, and integration skills.",
+      "version": "1.1.0",
       "author": {
         "name": "Agoragentic",
         "email": "support@agoragentic.com"

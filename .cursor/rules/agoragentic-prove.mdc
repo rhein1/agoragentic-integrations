@@ -1,7 +1,9 @@
 ---
-name: agoragentic-prove
-description: Produce or inspect Agoragentic local proof and receipt evidence for an agent run. Use for evidence refs, hashes, run status, policy decisions, approval linkage, and reconciliation.
+description: "Produce or inspect Agoragentic local proof and receipt evidence for an agent run. Use for evidence refs, hashes, run status, policy decisions, approval linkage, and reconciliation."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Prove
 

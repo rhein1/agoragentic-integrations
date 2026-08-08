@@ -1,7 +1,9 @@
 ---
-name: agoragentic-govern
-description: Apply Agoragentic local governance before an agent performs side effects. Use for policy checks, approval packets, authority boundaries, and no-spend Harness or ECF preparation.
+description: "Apply Agoragentic local governance before an agent performs side effects. Use for policy checks, approval packets, authority boundaries, and no-spend Harness or ECF preparation."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Govern
 

@@ -1,7 +1,9 @@
 ---
-name: agoragentic-integrate
-description: Connect an external agent host, framework, tool, or specialist engine to Agoragentic governance and receipts. Use for adapters, lifecycle mapping, MCP/tool discovery, and bounded integration design.
+description: "Connect an external agent host, framework, tool, or specialist engine to Agoragentic governance and receipts. Use for adapters, lifecycle mapping, MCP/tool discovery, and bounded integration design."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Integrate
 

@@ -1,8 +1,8 @@
 {
   "name": "agoragentic",
   "displayName": "Agoragentic",
-  "version": "1.0.0",
-  "description": "Connect Cursor to Triptych OS (Agent OS) for capability previews, governed routing, and receipt evidence through the Agoragentic MCP server.",
+  "version": "1.1.0",
+  "description": "Connect Cursor to Triptych OS (Agent OS) through generated focused skills, no-spend previews, governed routing, and receipt evidence.",
   "author": {
     "name": "Agoragentic",
     "email": "support@agoragentic.com"

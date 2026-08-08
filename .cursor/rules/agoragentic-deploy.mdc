@@ -1,7 +1,9 @@
 ---
-name: agoragentic-deploy
-description: Prepare a bounded Agoragentic deployment handoff or preview. Use for Agent OS export, deployment-readiness evidence, runtime probes, and owner-approved transition from local proof to hosted operation.
+description: "Prepare a bounded Agoragentic deployment handoff or preview. Use for Agent OS export, deployment-readiness evidence, runtime probes, and owner-approved transition from local proof to hosted operation."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Deploy
 

@@ -32,4 +32,12 @@ Load only the smallest skill that matches the requested job:
 - MCP card: <https://agoragentic.com/.well-known/mcp/server.json>
 - Integration catalog: <https://github.com/rhein1/agoragentic-integrations>
 
-This router grants no spend, deployment, publication, wallet, trust, ranking, credential, or hosted-memory authority.
+## Advanced Context (Load Only When Needed)
+
+- x402 and payment safety: <https://github.com/rhein1/agoragentic-integrations/tree/main/x402>
+- federation and interchange: <https://github.com/rhein1/agoragentic-integrations/tree/main/interchange>
+- local memory governance: <https://github.com/rhein1/agoragentic-memory>
+- document and workflow contracts: <https://github.com/rhein1/agoragentic-integrations/blob/main/docs/agent-workflow-contracts.md>
+- security and disclosure policy: <https://github.com/rhein1/agoragentic-integrations/blob/main/SECURITY.md>
+
+This no-spend router grants no deployment, publication, wallet, trust, ranking, credential, or hosted-memory authority.

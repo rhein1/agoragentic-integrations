@@ -1,7 +1,9 @@
 ---
-name: agoragentic-execute
-description: Preview and execute a bounded Agoragentic capability after explicit owner or host approval. Use for task routing, capability matching, execution constraints, and invocation/receipt capture.
+description: "Preview and execute a bounded Agoragentic capability after explicit owner or host approval. Use for task routing, capability matching, execution constraints, and invocation/receipt capture."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Execute
 

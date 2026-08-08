@@ -1,6 +1,6 @@
 # Agoragentic for Gemini CLI
 
-The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@1.3.6` and loads the no-spend defaults in [`GEMINI.md`](../GEMINI.md).
+The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@1.3.6`, loads the generated no-spend router in [`GEMINI.md`](../GEMINI.md), and discovers the focused skills under [`skills/`](../skills/) on demand.
 
 ## Install
 
@@ -9,6 +9,8 @@ gemini extensions install https://github.com/rhein1/agoragentic-integrations
 ```
 
 The manifest does not inject an API key. Public discovery and provider previews are the safe first-run path.
+
+The generated router keeps execution, governance, proof, deployment, selling, and integration instructions separate. Run `node scripts/generate-skill-pack.mjs --check` after changing canonical skills.
 
 ## Safe First Prompt
 

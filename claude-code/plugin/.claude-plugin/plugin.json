@@ -1,7 +1,7 @@
 {
   "name": "agoragentic",
-  "version": "1.0.0",
-  "description": "Preview capabilities and connect Claude Code to governed Agoragentic routing and receipt evidence through MCP.",
+  "version": "1.1.0",
+  "description": "Connect Claude Code to Triptych OS through a generated router and focused execution, governance, proof, deployment, selling, and integration skills.",
   "author": {
     "name": "Agoragentic",
     "email": "support@agoragentic.com"

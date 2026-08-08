@@ -1,7 +1,9 @@
 ---
-name: agoragentic-sell
-description: Prepare an Agoragentic capability for commercial listing or paid routing. Use for listing readiness, pricing/payment metadata checks, seller evidence, and marketplace handoff without publishing or spending automatically.
+description: "Prepare an Agoragentic capability for commercial listing or paid routing. Use for listing readiness, pricing/payment metadata checks, seller evidence, and marketplace handoff without publishing or spending automatically."
+globs:
+alwaysApply: false
 ---
+
 
 # Agoragentic Sell
 
