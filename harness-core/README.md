@@ -265,6 +265,12 @@ Core run artifacts:
 
 Receipts should retain hashes and references rather than secret-bearing raw payloads. Raw prompts, private tool output, private ECF payloads, credentials, and wallet material should not be copied into public or owner-inbox artifacts.
 
+### Quality and security evaluation evidence
+
+Harness Core includes optional parsers for pinned Impeccable findings and SARIF 2.1.0 reports. They attach a hash-bound `evaluations` section to a local receipt, retain suppressed findings, and apply an explicit severity gate. A configured failure changes the local receipt to `blocked`, so the existing listing-readiness check remains fail-closed.
+
+The parsers do not execute scanners and do not retain raw findings, snippets, messages, absolute paths, prompts, or tool output. Parsing a report does not verify scanner execution, finding accuracy, vulnerability absence, certification, endorsement, deployment safety, or marketplace readiness. See [Quality and security evaluation adapters](EVALUATION_ADAPTERS.md).
+
 ## Runtime probes
 
 Probe a local runtime contract without invoking its business tool:

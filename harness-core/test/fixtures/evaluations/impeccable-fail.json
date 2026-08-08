@@ -1,0 +1,26 @@
+{
+  "findings": [
+    {
+      "antipattern": "inaccessible-contrast",
+      "name": "Contrast failure",
+      "description": "Objective configured failure",
+      "severity": "error",
+      "category": "accessibility",
+      "file": "C:/private/project/src/page.css",
+      "line": 12,
+      "snippet": "API_KEY=must-not-escape"
+    }
+  ],
+  "suppressed_findings": [
+    {
+      "antipattern": "legacy-spacing",
+      "name": "Suppressed spacing finding",
+      "description": "Visible only as bounded evidence",
+      "severity": "warning",
+      "category": "layout",
+      "file": "src/legacy.css",
+      "line": 4,
+      "snippet": "private suppressed excerpt"
+    }
+  ]
+}

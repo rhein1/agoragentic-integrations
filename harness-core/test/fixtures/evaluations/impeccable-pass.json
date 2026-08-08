@@ -1,0 +1,15 @@
+{
+  "findings": [
+    {
+      "antipattern": "em-dash-overuse",
+      "name": "Em dash overuse",
+      "description": "Advisory typography note",
+      "severity": "warning",
+      "category": "type",
+      "file": "src/page.css",
+      "line": 8,
+      "snippet": "private design excerpt",
+      "advisory": true
+    }
+  ]
+}
