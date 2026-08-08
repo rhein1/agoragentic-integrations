@@ -1,0 +1,53 @@
+{
+  "name": "@agoragentic/transaction-assurance",
+  "version": "0.1.0-alpha.0",
+  "description": "Local cross-protocol authority normalization and outcome-assurance envelopes for autonomous agent transactions.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "agora-assure": "./bin/agora-assure.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schema/",
+    "examples/",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/index.mjs && node --check bin/agora-assure.mjs",
+    "self-test": "node bin/agora-assure.mjs self-test",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-payments",
+    "transaction-assurance",
+    "outcome-verification",
+    "reconciliation",
+    "ap2",
+    "x402",
+    "mcp",
+    "a2a",
+    "agent-skills"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "transaction-assurance"
+  },
+  "homepage": "https://agoragentic.com/agent-setup.md",
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  }
+}

@@ -1,0 +1,62 @@
+name: Transaction Assurance
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'transaction-assurance/**'
+      - '.github/workflows/transaction-assurance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'transaction-assurance/**'
+      - '.github/workflows/transaction-assurance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Parse package JSON and schemas
+        working-directory: transaction-assurance
+        run: |
+          node -e "for (const file of [
+            'package.json',
+            'schema/normalized-authority.v1.json',
+            'schema/transaction-assurance-evaluation.v1.json',
+            'examples/native-mandate.json',
+            'examples/authority-request-input.json'
+          ]) { JSON.parse(require('node:fs').readFileSync(file, 'utf8')); console.log('parsed', file); }"
+      - name: Syntax checks
+        working-directory: transaction-assurance
+        run: npm run check
+      - name: Unit and conformance tests
+        working-directory: transaction-assurance
+        run: npm test
+      - name: No-network self-test
+        working-directory: transaction-assurance
+        run: npm run self-test
+      - name: Runnable example
+        working-directory: transaction-assurance
+        run: node examples/build-envelope.mjs > /tmp/transaction-assurance-example.json
+      - name: Package dry run
+        working-directory: transaction-assurance
+        run: npm run pack:dry

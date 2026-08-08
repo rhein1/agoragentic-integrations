@@ -16,6 +16,7 @@ const machineSurfacePaths = [
   path.join(root, 'a2a', 'agent-card.json'),
   path.join(root, 'dify', 'agoragentic_provider.json'),
 ];
+const CATALOG_EXCEPTION_FILE = '.agoragentic-integration.json';
 
 function fail(message) {
   console.error(`❌ ${message}`);
@@ -88,7 +89,6 @@ function assertManifestShape(manifest) {
   if (!manifest.agent_os_smart_routing?.marketplace_routing?.entrypoint?.includes('execute(')) {
     fail('agent_os_smart_routing.marketplace_routing must prefer execute(task,input,constraints)');
   }
-
   const microPackage = manifest.packages?.micro_ecf;
   const microIntegration = (manifest.integrations || []).find((entry) => entry.id === 'micro-ecf');
   for (const [label, entry] of [['packages.micro_ecf', microPackage], ['integrations.micro-ecf', microIntegration]]) {
@@ -99,6 +99,34 @@ function assertManifestShape(manifest) {
       fail(`${label}.install_after_explicit_approval must preserve explicit approval before install --yes`);
     }
   }
+}
+
+function hasApprovedCatalogException(directory) {
+  const markerPath = path.join(root, directory, CATALOG_EXCEPTION_FILE);
+  if (!fs.existsSync(markerPath)) return false;
+
+  let marker;
+  try {
+    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+  } catch (error) {
+    fail(`${directory}/${CATALOG_EXCEPTION_FILE} must be valid JSON: ${error.message}`);
+    return true;
+  }
+
+  const requirements = [
+    [marker.schema === 'agoragentic.integration-catalog-exception.v1', 'schema must be agoragentic.integration-catalog-exception.v1'],
+    [marker.catalog_status === 'unpublished_alpha', 'catalog_status must be unpublished_alpha'],
+    [typeof marker.reason === 'string' && marker.reason.trim().length >= 24, 'reason must explain the temporary catalog exception'],
+    [marker.published === false, 'published must remain false'],
+    [marker.external_compatibility_verified === false, 'external_compatibility_verified must remain false'],
+    [marker.ready_for_manifest === false, 'ready_for_manifest must remain false'],
+    [marker.authority_granted === false, 'authority_granted must remain false'],
+  ];
+
+  for (const [valid, message] of requirements) {
+    if (!valid) fail(`${directory}/${CATALOG_EXCEPTION_FILE}: ${message}`);
+  }
+  return true;
 }
 
 function assertInventoryCoverage(manifest) {
@@ -139,7 +167,7 @@ function assertInventoryCoverage(manifest) {
     .map((entry) => entry.name);
 
   for (const directory of integrationDirectories) {
-    if (!representedDirectories.has(directory)) {
+    if (!representedDirectories.has(directory) && !hasApprovedCatalogException(directory)) {
       fail(`top-level integration directory is missing from integrations.json: ${directory}`);
     }
   }
@@ -156,7 +184,6 @@ function assertDiscoveryParity(manifest) {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
   const nestedSkill = fs.readFileSync(path.join(root, 'skills', 'agoragentic', 'SKILL.md'), 'utf8');
-
   if (manifest.discovery?.ecosystem_profile !== 'ecosystem.json') {
     fail('integrations.json discovery.ecosystem_profile must point to ecosystem.json');
   }
@@ -304,6 +331,5 @@ assertProtocolNamespaces(manifest);
 assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
-
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ integrations machine-surface verification passed');
