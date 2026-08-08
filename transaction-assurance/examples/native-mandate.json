@@ -1,0 +1,27 @@
+{
+  "schema": "agoragentic.agent-commerce.mandate.v1",
+  "owner_id": "owner:example",
+  "buyer_agent_id": "agent:example-research-buyer",
+  "issued_at": "2026-08-06T00:00:00Z",
+  "expires_at": "2026-08-07T00:00:00Z",
+  "scope": {
+    "allowed_actions": [
+      "execute:research"
+    ],
+    "allowed_sellers": [
+      "seller:example"
+    ],
+    "allowed_categories": [
+      "research"
+    ],
+    "allowed_payment_rails": [
+      "x402"
+    ]
+  },
+  "budget": {
+    "currency": "USDC",
+    "max_per_action": "0.10",
+    "max_daily": "1.00",
+    "max_total": "5.00"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "requestId": "aar_example_research_001",
+  "createdAt": "2026-08-06T00:00:00Z",
+  "expiresAt": "2026-08-06T01:00:00Z",
+  "principalRef": "owner:example",
+  "agentId": "agent:example-research-buyer",
+  "agentUri": "agent://example-research-buyer",
+  "purpose": "Purchase bounded research calls for one evidence brief.",
+  "allowedActions": [
+    "execute:research"
+  ],
+  "allowedSellers": [
+    "seller:example"
+  ],
+  "allowedCategories": [
+    "research"
+  ],
+  "allowedPaymentRails": [
+    "x402"
+  ],
+  "currency": "USDC",
+  "maxPerAction": "0.10",
+  "maxDaily": "1.00",
+  "maxTotal": "5.00",
+  "humanReviewAbove": "0.10",
+  "outcomeVerificationRequired": true
+}
