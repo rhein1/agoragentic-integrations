@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/toploc-inference-attestation.v1.json",
+  "title": "Agoragentic TOPLOC Inference Attestation v1",
+  "description": "A caller-supplied, self-hashed TOPLOC result reference. The record is not trusted proof, privacy verification, public-safety verification, or source-exactness verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "attestation_id",
+    "scheme",
+    "scheme_version",
+    "model_ref",
+    "configuration_hash",
+    "proof_ref",
+    "proof_hash",
+    "validator",
+    "status",
+    "checked_at",
+    "evidence_refs",
+    "scope",
+    "source_artifact_embedded",
+    "trust",
+    "provenance",
+    "privacy",
+    "source_exactness",
+    "non_claims",
+    "authority_flags",
+    "attestation_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.toploc-inference-attestation.v1" },
+    "attestation_id": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "scheme": { "const": "toploc" },
+    "scheme_version": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "model_ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "configuration_hash": { "$ref": "#/$defs/sha256" },
+    "proof_ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "proof_hash": { "$ref": "#/$defs/sha256" },
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "version"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "status": { "enum": ["accept", "reject", "pending", "not_checked", "error"] },
+    "checked_at": { "type": ["string", "null"], "format": "date-time" },
+    "evidence_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+    },
+    "scope": { "const": "model_configuration_execution" },
+    "source_artifact_embedded": { "const": false },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verification_status", "trusted_proof", "caller_supplied"],
+      "properties": {
+        "verification_status": { "const": "not_verified" },
+        "trusted_proof": { "const": false },
+        "caller_supplied": { "const": true }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verification_status",
+        "validator_identity_verified",
+        "proof_binding_verified"
+      ],
+      "properties": {
+        "verification_status": { "const": "not_verified" },
+        "validator_identity_verified": { "const": false },
+        "proof_binding_verified": { "const": false }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verification_status", "public_safe_status"],
+      "properties": {
+        "verification_status": { "const": "not_verified" },
+        "public_safe_status": { "const": "not_verified" }
+      }
+    },
+    "source_exactness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verification_status", "exact_source_verified"],
+      "properties": {
+        "verification_status": { "const": "not_verified" },
+        "exact_source_verified": { "const": false }
+      }
+    },
+    "non_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_correctness_proven",
+        "task_fulfillment_proven",
+        "seller_identity_proven",
+        "payment_settlement_proven",
+        "delivery_proven",
+        "complete_transaction_verified",
+        "certification",
+        "trust_endorsement"
+      ],
+      "properties": {
+        "output_correctness_proven": { "const": false },
+        "task_fulfillment_proven": { "const": false },
+        "seller_identity_proven": { "const": false },
+        "payment_settlement_proven": { "const": false },
+        "delivery_proven": { "const": false },
+        "complete_transaction_verified": { "const": false },
+        "certification": { "const": false },
+        "trust_endorsement": { "const": false }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attestation_grants_authority",
+        "can_spend",
+        "can_fund_wallet",
+        "can_deploy",
+        "can_publish",
+        "can_change_trust",
+        "can_expand_scope"
+      ],
+      "properties": {
+        "attestation_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false },
+        "can_expand_scope": { "const": false }
+      }
+    },
+    "attestation_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "enum": ["accept", "reject"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": { "checked_at": { "type": "string", "format": "date-time" } }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}
