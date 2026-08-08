@@ -8,6 +8,7 @@ import {
   buildAuthorityRequest,
   buildTransactionAssuranceEnvelope,
   canonicalize,
+  computeEnvelopeHash,
   detectAuthorityProtocol,
   evaluateTransactionAssuranceEnvelope,
   normalizeAuthorityArtifact,
@@ -51,7 +52,11 @@ function verifiedAuthority(overrides = {}) {
       evidenceRef: 'fixture:signature-proof',
       checkedAt: '2026-08-06T00:00:01Z',
     },
-    revocationStatus: 'active',
+    revocation: {
+      status: 'active',
+      evidenceRef: 'fixture:revocation-proof',
+      checkedAt: '2026-08-06T00:00:02Z',
+    },
     ...overrides,
   });
 }
@@ -64,9 +69,11 @@ function envelopeInput(overrides = {}) {
     principalRef: 'owner:test',
     principalType: 'human',
     principalIdentityVerification: 'verified',
+    principalIdentityEvidenceRef: 'fixture:principal-identity',
     agentRef: 'agent:test',
     agentUri: 'agent://test',
     agentIdentityVerification: 'verified',
+    agentIdentityEvidenceRef: 'fixture:agent-identity',
     normalizedAuthority: verifiedAuthority(),
     commercialIntent: {
       action: 'execute:research',
@@ -88,6 +95,9 @@ function envelopeInput(overrides = {}) {
       status: 'not_started',
       amount: '0.05',
       currency: 'USDC',
+      dailySpendBefore: '0',
+      totalSpendBefore: '0',
+      budgetUsageRef: 'fixture:budget-usage',
     },
     execution: {
       idempotencyKeyHash: sha256Ref('idempotency:test'),
@@ -97,6 +107,7 @@ function envelopeInput(overrides = {}) {
       verificationScope: 'Verify JSON shape and cited source references.',
       unknowns: ['No execution has occurred.'],
     },
+    evidenceRefs: ['fixture:authority-chain'],
     ...overrides,
   };
 }
@@ -187,9 +198,9 @@ test('authority requests are proposal-only and use decimal strings', () => {
     allowedCategories: ['research'],
     allowedPaymentRails: ['x402'],
     currency: 'USDC',
-    maxPerAction: 0.1,
-    maxDaily: 1,
-    maxTotal: 5,
+    maxPerAction: '0.1',
+    maxDaily: '1',
+    maxTotal: '5',
   });
 
   assert.equal(request.status, 'pending_principal_approval');
@@ -210,6 +221,13 @@ test('authority requests are proposal-only and use decimal strings', () => {
   assert.throws(() => buildAuthorityRequest({
     principalRef: 'owner:test',
     agentId: 'agent:test',
+    purpose: 'Unsafe numeric money input',
+    allowedActions: ['execute:research'],
+    maxPerAction: 0.1,
+  }), /decimal strings/);
+  assert.throws(() => buildAuthorityRequest({
+    principalRef: 'owner:test',
+    agentId: 'agent:test',
     purpose: 'No action',
   }), /allowed action/);
 });
@@ -224,6 +242,7 @@ test('verified scoped authority produces an authority-ready pre-execution envelo
   assert.equal(envelope.execution.status, 'not_started');
   assert.equal(envelope.evidence.complete_chain_verified, false);
   assert.match(envelope.evidence.envelope_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(envelope.evidence.envelope_hash, computeEnvelopeHash(envelope));
   assertNoAuthority(envelope.authority_flags);
   for (const value of Object.values(envelope.redaction)) assert.equal(value, true);
 
@@ -244,22 +263,43 @@ test('unverified, revoked, expired, mismatched, or changed authority fails close
       mutate(input) {
         input.normalizedAuthority = normalizeAuthorityArtifact(nativeArtifact(), {
           verification: { status: 'unverified' },
-          revocationStatus: 'active',
+          revocation: {
+            status: 'active',
+            evidenceRef: 'fixture:revocation-proof',
+            checkedAt: '2026-08-06T00:00:02Z',
+          },
         });
       },
       blocker: 'authority_not_verified',
     },
     {
       name: 'revoked',
-      mutate(input) { input.normalizedAuthority = verifiedAuthority({ revocationStatus: 'revoked' }); },
+      mutate(input) {
+        input.normalizedAuthority = verifiedAuthority({
+          revocation: {
+            status: 'revoked',
+            evidenceRef: 'fixture:revocation-proof',
+            checkedAt: '2026-08-06T00:00:02Z',
+          },
+        });
+      },
       blocker: 'authority_revoked',
     },
     {
       name: 'expired',
       mutate(input) {
         input.normalizedAuthority = normalizeAuthorityArtifact(nativeArtifact({ expires_at: '2026-08-05T00:00:00Z' }), {
-          verification: { status: 'verified' },
-          revocationStatus: 'active',
+          verification: {
+            status: 'verified',
+            verifierRef: 'fixture:verifier',
+            evidenceRef: 'fixture:signature-proof',
+            checkedAt: '2026-08-06T00:00:01Z',
+          },
+          revocation: {
+            status: 'active',
+            evidenceRef: 'fixture:revocation-proof',
+            checkedAt: '2026-08-06T00:00:02Z',
+          },
         });
       },
       blocker: 'authority_expired',
@@ -298,7 +338,7 @@ test('unverified, revoked, expired, mismatched, or changed authority fails close
 });
 
 test('missing revocation, terms, or idempotency evidence requires review instead of guessing', () => {
-  const normalizedAuthority = verifiedAuthority({ revocationStatus: 'not_checked' });
+  const normalizedAuthority = verifiedAuthority({ revocation: { status: 'not_checked' } });
   const input = envelopeInput({ normalizedAuthority });
   input.commercialIntent = { ...input.commercialIntent, termsMatchStatus: 'not_checked' };
   input.execution = { ...input.execution, idempotencyKeyHash: null };
@@ -450,6 +490,205 @@ test('a complete post-execution chain can be marked complete without granting au
   assert.deepEqual(evaluation.blockers, []);
   assert.equal(evaluation.complete_chain_verified, true);
   assertNoAuthority(evaluation.authority_flags);
+});
+
+test('authority identity cannot be substituted after verification', () => {
+  assert.throws(() => buildTransactionAssuranceEnvelope(envelopeInput({
+    principalRef: 'owner:other',
+  })), /principalRef must match/);
+  assert.throws(() => buildTransactionAssuranceEnvelope(envelopeInput({
+    agentRef: 'agent:other',
+  })), /agentRef must match/);
+});
+
+test('verified and active claims require durable evidence references', () => {
+  assert.throws(() => normalizeAuthorityArtifact(nativeArtifact(), {
+    verification: { status: 'verified' },
+  }), /verified authority requires/);
+  assert.throws(() => normalizeAuthorityArtifact(nativeArtifact(), {
+    revocationStatus: 'active',
+  }), /active or revoked authority requires/);
+});
+
+test('missing authority scopes fail closed instead of becoming unrestricted', () => {
+  const input = envelopeInput();
+  input.normalizedAuthority = normalizeAuthorityArtifact(nativeArtifact({
+    scope: {
+      allowed_actions: [],
+      allowed_sellers: [],
+      allowed_categories: [],
+      allowed_payment_rails: [],
+    },
+  }), {
+    artifactRef: 'fixture:missing-scope',
+    verification: {
+      status: 'verified',
+      verifierRef: 'fixture:verifier',
+      evidenceRef: 'fixture:signature-proof',
+      checkedAt: '2026-08-06T00:00:01Z',
+    },
+    revocation: {
+      status: 'active',
+      evidenceRef: 'fixture:revocation-proof',
+      checkedAt: '2026-08-06T00:00:02Z',
+    },
+  });
+  const evaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(input),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(evaluation.decision, 'deny');
+  assert.ok(evaluation.blockers.includes('authority_actions_missing'));
+  assert.ok(evaluation.blockers.includes('authority_sellers_missing'));
+  assert.ok(evaluation.blockers.includes('authority_categories_missing'));
+  assert.ok(evaluation.blockers.includes('authority_payment_rails_missing'));
+});
+
+test('daily and total budgets require usage evidence and use exact decimal arithmetic', () => {
+  const missing = envelopeInput();
+  missing.payment = {
+    ...missing.payment,
+    dailySpendBefore: undefined,
+    totalSpendBefore: undefined,
+    budgetUsageRef: undefined,
+  };
+  const missingEvaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(missing),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(missingEvaluation.decision, 'review');
+  assert.ok(missingEvaluation.blockers.includes('budget_usage_evidence_missing'));
+
+  const overDaily = envelopeInput();
+  overDaily.payment = { ...overDaily.payment, dailySpendBefore: '0.96' };
+  const dailyEvaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(overDaily),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(dailyEvaluation.decision, 'deny');
+  assert.ok(dailyEvaluation.blockers.includes('payment_amount_exceeds_daily_limit'));
+
+  const exactLarge = envelopeInput();
+  exactLarge.normalizedAuthority = normalizeAuthorityArtifact(nativeArtifact({
+    budget: {
+      currency: 'USDC',
+      max_per_action: '9007199254740993.000001',
+      max_daily: '9007199254740993.000001',
+      max_total: '9007199254740993.000001',
+    },
+  }), {
+    artifactRef: 'fixture:large-budget',
+    verification: {
+      status: 'verified',
+      verifierRef: 'fixture:verifier',
+      evidenceRef: 'fixture:signature-proof',
+      checkedAt: '2026-08-06T00:00:01Z',
+    },
+    revocation: {
+      status: 'active',
+      evidenceRef: 'fixture:revocation-proof',
+      checkedAt: '2026-08-06T00:00:02Z',
+    },
+  });
+  exactLarge.commercialIntent = {
+    ...exactLarge.commercialIntent,
+    quotedAmount: '9007199254740993.000001',
+  };
+  exactLarge.payment = {
+    ...exactLarge.payment,
+    amount: '9007199254740993.000001',
+  };
+  const exactEvaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(exactLarge),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(exactEvaluation.decision, 'allow');
+});
+
+test('future authority, missing payment identity, and caller-forced state fail closed', () => {
+  const future = envelopeInput();
+  future.normalizedAuthority = normalizeAuthorityArtifact(nativeArtifact({
+    issued_at: '2026-08-06T01:00:00Z',
+  }), {
+    artifactRef: 'fixture:future',
+    verification: {
+      status: 'verified',
+      verifierRef: 'fixture:verifier',
+      evidenceRef: 'fixture:signature-proof',
+      checkedAt: '2026-08-06T00:00:01Z',
+    },
+    revocation: {
+      status: 'active',
+      evidenceRef: 'fixture:revocation-proof',
+      checkedAt: '2026-08-06T00:00:02Z',
+    },
+  });
+  const futureEvaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(future),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(futureEvaluation.decision, 'deny');
+  assert.ok(futureEvaluation.blockers.includes('authority_not_yet_valid'));
+
+  const missingPaymentId = envelopeInput();
+  missingPaymentId.payment = { ...missingPaymentId.payment, paymentIdentifier: null };
+  const paymentEvaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(missingPaymentId),
+    { phase: 'pre_execution', now: NOW },
+  );
+  assert.equal(paymentEvaluation.decision, 'deny');
+  assert.ok(paymentEvaluation.blockers.includes('payment_identifier_missing'));
+
+  assert.throws(() => buildTransactionAssuranceEnvelope(envelopeInput({
+    state: 'reconciled',
+  })), /state must match derived transaction state/);
+});
+
+test('the envelope hash is reproducible and detects later mutation', () => {
+  const envelope = buildTransactionAssuranceEnvelope(envelopeInput());
+  assert.equal(computeEnvelopeHash(envelope), envelope.evidence.envelope_hash);
+  envelope.payment.amount = '0.06';
+  const evaluation = evaluateTransactionAssuranceEnvelope(envelope, {
+    phase: 'pre_execution',
+    now: NOW,
+  });
+  assert.equal(evaluation.decision, 'deny');
+  assert.ok(evaluation.blockers.includes('envelope_hash_mismatch'));
+});
+
+test('post-execution completion requires the full referenced evidence chain', () => {
+  const input = envelopeInput();
+  input.payment = {
+    ...input.payment,
+    status: 'settled',
+    settlementVerification: 'verified',
+    settlementFinal: true,
+  };
+  input.execution = {
+    ...input.execution,
+    status: 'success',
+    outputHash: sha256Ref({ answer: 'unreferenced' }),
+  };
+  input.outcome = {
+    ...input.outcome,
+    deliveryStatus: 'delivered',
+    verificationStatus: 'verified',
+  };
+  input.reconciliation = { status: 'complete' };
+  input.evidenceRefs = [];
+  const evaluation = evaluateTransactionAssuranceEnvelope(
+    buildTransactionAssuranceEnvelope(input),
+    { phase: 'post_execution', now: NOW },
+  );
+  assert.equal(evaluation.decision, 'review');
+  assert.equal(evaluation.complete_chain_verified, false);
+  assert.ok(evaluation.blockers.includes('payment_receipt_evidence_missing'));
+  assert.ok(evaluation.blockers.includes('settlement_reference_missing'));
+  assert.ok(evaluation.blockers.includes('invocation_reference_missing'));
+  assert.ok(evaluation.blockers.includes('outcome_artifact_evidence_missing'));
+  assert.ok(evaluation.blockers.includes('seller_attestation_missing'));
+  assert.ok(evaluation.blockers.includes('outcome_validation_evidence_missing'));
+  assert.ok(evaluation.blockers.includes('evidence_chain_refs_missing'));
 });
 
 test('public objects exclude raw secret values and forbidden private payload fields', () => {

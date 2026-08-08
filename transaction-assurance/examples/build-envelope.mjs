@@ -16,7 +16,11 @@ const normalizedAuthority = normalizeAuthorityArtifact(artifact, {
     evidenceRef: 'example:fixture-signature-evidence',
     checkedAt: '2026-08-06T00:00:01Z',
   },
-  revocationStatus: 'active',
+  revocation: {
+    status: 'active',
+    evidenceRef: 'example:fixture-revocation-evidence',
+    checkedAt: '2026-08-06T00:00:02Z',
+  },
 });
 
 const envelope = buildTransactionAssuranceEnvelope({
@@ -26,9 +30,11 @@ const envelope = buildTransactionAssuranceEnvelope({
   principalRef: 'owner:example',
   principalType: 'human',
   principalIdentityVerification: 'verified',
+  principalIdentityEvidenceRef: 'example:fixture-principal-identity',
   agentRef: 'agent:example-research-buyer',
   agentUri: 'agent://example-research-buyer',
   agentIdentityVerification: 'verified',
+  agentIdentityEvidenceRef: 'example:fixture-agent-identity',
   normalizedAuthority,
   commercialIntent: {
     action: 'execute:research',
@@ -49,6 +55,9 @@ const envelope = buildTransactionAssuranceEnvelope({
     rail: 'x402',
     amount: '0.05',
     currency: 'USDC',
+    dailySpendBefore: '0',
+    totalSpendBefore: '0',
+    budgetUsageRef: 'example:fixture-budget-usage',
   },
   execution: {
     idempotencyKeyHash: sha256Ref('private-example-idempotency-key'),
@@ -58,6 +67,7 @@ const envelope = buildTransactionAssuranceEnvelope({
     verificationScope: 'No execution has occurred; this is a pre-execution example.',
     unknowns: ['Payment and execution have not started.'],
   },
+  evidenceRefs: ['example:fixture-authority-chain'],
 });
 
 const evaluation = evaluateTransactionAssuranceEnvelope(envelope, {

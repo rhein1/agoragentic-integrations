@@ -103,16 +103,34 @@ function normalizeEnum(value, allowed, fallback, field) {
 
 function normalizeMoney(value, fallback = '0') {
   if (value === undefined || value === null || value === '') return fallback;
-  if (typeof value === 'string' && MONEY_PATTERN.test(value)) return value;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric < 0) {
-    throw new TypeError(`Invalid non-negative decimal money value: ${JSON.stringify(value)}`);
+  if (typeof value !== 'string' || !MONEY_PATTERN.test(value)) {
+    throw new TypeError(`Money values must be non-negative decimal strings: ${JSON.stringify(value)}`);
   }
-  const normalized = numeric.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-  if (!MONEY_PATTERN.test(normalized)) {
-    throw new TypeError(`Unable to normalize money value: ${JSON.stringify(value)}`);
-  }
-  return normalized;
+  return value;
+}
+
+function normalizeOptionalMoney(value) {
+  if (value === undefined || value === null || value === '') return null;
+  return normalizeMoney(value);
+}
+
+function moneyUnits(value) {
+  const normalized = normalizeMoney(value, '0');
+  const [whole, fraction = ''] = normalized.split('.');
+  return (BigInt(whole) * 1_000_000n) + BigInt(fraction.padEnd(6, '0'));
+}
+
+function compareMoney(left, right) {
+  const leftUnits = moneyUnits(left);
+  const rightUnits = moneyUnits(right);
+  return leftUnits === rightUnits ? 0 : leftUnits > rightUnits ? 1 : -1;
+}
+
+function addMoney(left, right) {
+  const units = moneyUnits(left) + moneyUnits(right);
+  const whole = units / 1_000_000n;
+  const fraction = String(units % 1_000_000n).padStart(6, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
 function normalizeDate(value) {
@@ -168,6 +186,17 @@ export function canonicalize(value) {
 export function sha256Ref(value) {
   const input = typeof value === 'string' ? value : canonicalize(value);
   return `sha256:${createHash('sha256').update(input, 'utf8').digest('hex')}`;
+}
+
+export function computeEnvelopeHash(envelope) {
+  if (!isPlainObject(envelope)) throw new TypeError('envelope must be a JSON object');
+  return sha256Ref({
+    ...envelope,
+    evidence: {
+      ...(isPlainObject(envelope.evidence) ? envelope.evidence : {}),
+      envelope_hash: null,
+    },
+  });
 }
 
 function flattenedKeys(value, output = new Set(), depth = 0) {
@@ -320,8 +349,30 @@ export function normalizeAuthorityArtifact(artifact, options = {}) {
     evidence_ref: normalizeString(options.verification?.evidenceRef),
     checked_at: normalizeDate(options.verification?.checkedAt),
   };
+  if (verification.status === 'verified'
+    && (!verification.verifier_ref || !verification.evidence_ref || !verification.checked_at)) {
+    throw new TypeError('verified authority requires verifierRef, evidenceRef, and checkedAt');
+  }
+  const revocationCheck = {
+    status: normalizeEnum(
+      options.revocation?.status ?? options.revocationStatus,
+      REVOCATION_STATUSES,
+      'not_checked',
+      'revocation.status',
+    ),
+    evidence_ref: normalizeString(
+      options.revocation?.evidenceRef ?? options.revocationEvidenceRef,
+    ),
+    checked_at: normalizeDate(
+      options.revocation?.checkedAt ?? options.revocationCheckedAt,
+    ),
+  };
+  if (['active', 'revoked'].includes(revocationCheck.status)
+    && (!revocationCheck.evidence_ref || !revocationCheck.checked_at)) {
+    throw new TypeError('active or revoked authority requires revocation evidenceRef and checkedAt');
+  }
   const revocationStatus = normalizeEnum(
-    options.revocationStatus,
+    revocationCheck.status,
     REVOCATION_STATUSES,
     'not_checked',
     'revocationStatus',
@@ -405,6 +456,7 @@ export function normalizeAuthorityArtifact(artifact, options = {}) {
     max_total: normalizeMoney(firstValue(budget, ['max_total', 'total', 'total_limit']), '0'),
     verification,
     revocation_status: revocationStatus,
+    revocation_check: revocationCheck,
     declared_revocation_status: declaredRevocationStatus(artifact),
     normalization_warnings: warnings,
     authority_flags: normalizedArtifactAuthorityFlags(),
@@ -481,12 +533,17 @@ function authorityForEnvelope(normalizedAuthority) {
     source_artifact_ref: normalizedAuthority.source_artifact_ref,
     source_artifact_hash: normalizedAuthority.source_artifact_hash,
     issuer_ref: normalizedAuthority.issuer_ref,
+    principal_ref: normalizeString(normalizedAuthority.principal_ref),
+    agent_ref: normalizeString(normalizedAuthority.agent_ref),
     verification_status: normalizeEnum(
       normalizedAuthority.verification?.status,
       VERIFICATION_STATUSES,
       'unverified',
       'authority.verification_status',
     ),
+    verification_verifier_ref: normalizeString(normalizedAuthority.verification?.verifier_ref),
+    verification_evidence_ref: normalizeString(normalizedAuthority.verification?.evidence_ref),
+    verification_checked_at: normalizeDate(normalizedAuthority.verification?.checked_at),
     issued_at: normalizedAuthority.issued_at,
     expires_at: normalizedAuthority.expires_at,
     revocation_status: normalizeEnum(
@@ -495,6 +552,8 @@ function authorityForEnvelope(normalizedAuthority) {
       'not_checked',
       'authority.revocation_status',
     ),
+    revocation_evidence_ref: normalizeString(normalizedAuthority.revocation_check?.evidence_ref),
+    revocation_checked_at: normalizeDate(normalizedAuthority.revocation_check?.checked_at),
     audience: normalizedAuthority.audience,
     merchant_binding: normalizedAuthority.merchant_binding,
     allowed_actions: normalizeList(normalizedAuthority.allowed_actions),
@@ -537,8 +596,21 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
   const createdAt = requireDate(input.createdAt || new Date(), 'createdAt');
   const updatedAt = requireDate(input.updatedAt || createdAt, 'updatedAt');
   const authority = authorityForEnvelope(input.normalizedAuthority);
-  const principalRef = normalizeString(input.principalRef || input.normalizedAuthority?.principal_ref);
-  const agentRef = normalizeString(input.agentRef || input.normalizedAuthority?.agent_ref);
+  const authorityPrincipalRef = normalizeString(input.normalizedAuthority?.principal_ref);
+  const authorityAgentRef = normalizeString(input.normalizedAuthority?.agent_ref);
+  const requestedPrincipalRef = normalizeString(input.principalRef);
+  const requestedAgentRef = normalizeString(input.agentRef);
+  if (!authorityPrincipalRef || !authorityAgentRef) {
+    throw new TypeError('normalizedAuthority must bind principal_ref and agent_ref');
+  }
+  if (requestedPrincipalRef && requestedPrincipalRef !== authorityPrincipalRef) {
+    throw new TypeError('principalRef must match normalizedAuthority.principal_ref');
+  }
+  if (requestedAgentRef && requestedAgentRef !== authorityAgentRef) {
+    throw new TypeError('agentRef must match normalizedAuthority.agent_ref');
+  }
+  const principalRef = authorityPrincipalRef;
+  const agentRef = authorityAgentRef;
   const intentInput = input.commercialIntent || {};
   const action = normalizeString(intentInput.action);
   const taskRef = normalizeString(intentInput.taskRef);
@@ -573,6 +645,7 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
         'not_checked',
         'principalIdentityVerification',
       ),
+      identity_evidence_ref: normalizeString(input.principalIdentityEvidenceRef),
     },
     agent: {
       agent_ref: agentRef,
@@ -584,6 +657,7 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
         'not_checked',
         'agentIdentityVerification',
       ),
+      identity_evidence_ref: normalizeString(input.agentIdentityEvidenceRef),
     },
     authority,
     commercial_intent: {
@@ -636,6 +710,9 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
         'payment.settlementVerification',
       ),
       settlement_final: input.payment?.settlementFinal === true,
+      daily_spend_before: normalizeOptionalMoney(input.payment?.dailySpendBefore),
+      total_spend_before: normalizeOptionalMoney(input.payment?.totalSpendBefore),
+      budget_usage_ref: normalizeString(input.payment?.budgetUsageRef),
     },
     execution: {
       idempotency_key_hash: normalizeString(input.execution?.idempotencyKeyHash),
@@ -721,19 +798,18 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
 
   const now = input.now ? new Date(input.now) : new Date(createdAt);
   if (Number.isNaN(now.getTime())) throw new TypeError('now must be a valid date-time');
-  envelope.state = input.state === undefined
-    ? deriveState(envelope, now)
-    : normalizeEnum(input.state, ASSURANCE_STATES, 'incomplete', 'state');
-  envelope.evidence.envelope_hash = sha256Ref(envelope);
+  const derivedState = deriveState(envelope, now);
+  if (input.state !== undefined
+    && normalizeEnum(input.state, ASSURANCE_STATES, 'incomplete', 'state') !== derivedState) {
+    throw new TypeError(`state must match derived transaction state: ${derivedState}`);
+  }
+  envelope.state = derivedState;
+  envelope.evidence.envelope_hash = computeEnvelopeHash(envelope);
   return envelope;
 }
 
-function unrestrictedOrIncludes(list, value) {
-  return !Array.isArray(list) || list.length === 0 || list.includes(value);
-}
-
 function greaterThan(left, right) {
-  return Number(left) > Number(right);
+  return compareMoney(left, right) > 0;
 }
 
 function addUnique(list, value) {
@@ -764,42 +840,98 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
   const reconciliation = envelope.reconciliation || {};
 
   if (authority.verification_status !== 'verified') addUnique(blockers, 'authority_not_verified');
+  if (!authority.verification_verifier_ref
+    || !authority.verification_evidence_ref
+    || !authority.verification_checked_at) addUnique(blockers, 'authority_verification_evidence_missing');
   if (authority.revocation_status === 'revoked') addUnique(blockers, 'authority_revoked');
   else if (authority.revocation_status !== 'active') addUnique(blockers, 'authority_revocation_not_verified_active');
+  if (!authority.revocation_evidence_ref || !authority.revocation_checked_at) {
+    addUnique(blockers, 'authority_revocation_evidence_missing');
+  }
   if (expired(authority.expires_at, now)) addUnique(blockers, 'authority_expired');
+  if (authority.issued_at && Date.parse(authority.issued_at) > now.getTime()) addUnique(blockers, 'authority_not_yet_valid');
+  if (authority.verification_checked_at
+    && Date.parse(authority.verification_checked_at) > now.getTime()) addUnique(blockers, 'authority_verification_from_future');
+  if (authority.revocation_checked_at
+    && Date.parse(authority.revocation_checked_at) > now.getTime()) addUnique(blockers, 'authority_revocation_check_from_future');
+  if (authority.principal_ref !== envelope.principal?.principal_ref) addUnique(blockers, 'authority_principal_mismatch');
+  if (authority.agent_ref !== envelope.agent?.agent_ref) addUnique(blockers, 'authority_agent_mismatch');
+  if (envelope.principal?.identity_verification !== 'verified'
+    || !envelope.principal?.identity_evidence_ref) addUnique(blockers, 'principal_identity_not_verified');
+  if (envelope.agent?.identity_verification !== 'verified'
+    || !envelope.agent?.identity_evidence_ref) addUnique(blockers, 'agent_identity_not_verified');
   if (authority.audience && authority.audience !== envelope.agent?.agent_ref) addUnique(blockers, 'authority_audience_mismatch');
   if (authority.merchant_binding && authority.merchant_binding !== intent.seller_ref) addUnique(blockers, 'merchant_binding_mismatch');
-  if (!unrestrictedOrIncludes(authority.allowed_actions, intent.action)) addUnique(blockers, 'action_out_of_scope');
-  if (!unrestrictedOrIncludes(authority.allowed_sellers, intent.seller_ref)) addUnique(blockers, 'seller_out_of_scope');
-  if (!unrestrictedOrIncludes(authority.allowed_categories, intent.category)) addUnique(blockers, 'category_out_of_scope');
-  if (!unrestrictedOrIncludes(authority.allowed_payment_rails, payment.rail)) addUnique(blockers, 'payment_rail_out_of_scope');
+  if (!Array.isArray(authority.allowed_actions) || authority.allowed_actions.length === 0) addUnique(blockers, 'authority_actions_missing');
+  else if (!authority.allowed_actions.includes(intent.action)) addUnique(blockers, 'action_out_of_scope');
+  if (!Array.isArray(authority.allowed_sellers) || authority.allowed_sellers.length === 0) addUnique(blockers, 'authority_sellers_missing');
+  else if (!authority.allowed_sellers.includes(intent.seller_ref)) addUnique(blockers, 'seller_out_of_scope');
+  if (!Array.isArray(authority.allowed_categories) || authority.allowed_categories.length === 0) addUnique(blockers, 'authority_categories_missing');
+  else if (!authority.allowed_categories.includes(intent.category)) addUnique(blockers, 'category_out_of_scope');
+  if (!Array.isArray(authority.allowed_payment_rails) || authority.allowed_payment_rails.length === 0) addUnique(blockers, 'authority_payment_rails_missing');
+  else if (!authority.allowed_payment_rails.includes(payment.rail)) addUnique(blockers, 'payment_rail_out_of_scope');
   if (authority.currency !== intent.currency || authority.currency !== payment.currency) addUnique(blockers, 'currency_mismatch');
   if (greaterThan(intent.quoted_amount, authority.max_per_action)) addUnique(blockers, 'quoted_amount_exceeds_per_action_limit');
   if (greaterThan(payment.amount, authority.max_per_action)) addUnique(blockers, 'payment_amount_exceeds_per_action_limit');
   if (greaterThan(payment.amount, intent.quoted_amount)) addUnique(blockers, 'payment_amount_exceeds_quote');
+  if (payment.daily_spend_before === null || payment.daily_spend_before === undefined
+    || payment.total_spend_before === null || payment.total_spend_before === undefined
+    || !payment.budget_usage_ref) addUnique(blockers, 'budget_usage_evidence_missing');
+  else {
+    if (greaterThan(addMoney(payment.daily_spend_before, payment.amount), authority.max_daily)) {
+      addUnique(blockers, 'payment_amount_exceeds_daily_limit');
+    }
+    if (greaterThan(addMoney(payment.total_spend_before, payment.amount), authority.max_total)) {
+      addUnique(blockers, 'payment_amount_exceeds_total_limit');
+    }
+  }
+  if (!payment.payment_identifier) addUnique(blockers, 'payment_identifier_missing');
+  if (!intent.quote_ref || !intent.quote_hash) addUnique(blockers, 'quote_evidence_missing');
+  if (!intent.terms_ref || !intent.terms_hash) addUnique(blockers, 'terms_evidence_missing');
   if (intent.terms_match_status === 'changed') addUnique(blockers, 'terms_changed');
   else if (intent.terms_match_status !== 'match') addUnique(blockers, 'terms_not_verified');
   if (!execution.idempotency_key_hash) addUnique(blockers, 'idempotency_key_missing');
   if (execution.duplicate_detected) addUnique(blockers, 'duplicate_attempt_detected');
   if (!execution.input_hash) addUnique(warnings, 'input_hash_missing');
+  const expectedEnvelopeHash = computeEnvelopeHash(envelope);
+  if (envelope.evidence?.envelope_hash !== expectedEnvelopeHash) addUnique(blockers, 'envelope_hash_mismatch');
 
   if (phase === 'post_execution') {
     if (!['observed', 'settled', 'refunded'].includes(payment.status)) addUnique(blockers, 'payment_not_observed');
     if (payment.settlement_verification !== 'verified') addUnique(blockers, 'settlement_not_verified');
     if (!payment.settlement_final && payment.status !== 'refunded') addUnique(blockers, 'settlement_not_final');
+    if (!payment.receipt_ref || !payment.receipt_hash) addUnique(blockers, 'payment_receipt_evidence_missing');
+    if (!payment.settlement_ref) addUnique(blockers, 'settlement_reference_missing');
     if (execution.status !== 'success') addUnique(blockers, 'execution_not_successful');
+    if (!execution.invocation_ref) addUnique(blockers, 'invocation_reference_missing');
     if (!execution.output_hash) addUnique(blockers, 'output_hash_missing');
     if (outcome.delivery_status !== 'delivered') addUnique(blockers, 'delivery_not_confirmed');
+    if (!Array.isArray(outcome.artifact_refs) || outcome.artifact_refs.length === 0) addUnique(blockers, 'outcome_artifact_evidence_missing');
+    if (!outcome.seller_attestation_ref) addUnique(blockers, 'seller_attestation_missing');
+    if (!Array.isArray(outcome.validation_refs) || outcome.validation_refs.length === 0) addUnique(blockers, 'outcome_validation_evidence_missing');
     if (outcome.verification_status !== 'verified') addUnique(blockers, 'outcome_not_verified');
     if (!['complete', 'refunded'].includes(reconciliation.status)) addUnique(blockers, 'reconciliation_not_complete');
+    if (!Array.isArray(envelope.evidence?.refs) || envelope.evidence.refs.length === 0) addUnique(blockers, 'evidence_chain_refs_missing');
   }
 
   const hardDenyCodes = new Set([
     'authority_not_verified',
+    'authority_verification_evidence_missing',
     'authority_revoked',
     'authority_expired',
+    'authority_not_yet_valid',
+    'authority_verification_from_future',
+    'authority_revocation_check_from_future',
+    'authority_principal_mismatch',
+    'authority_agent_mismatch',
+    'principal_identity_not_verified',
+    'agent_identity_not_verified',
     'authority_audience_mismatch',
     'merchant_binding_mismatch',
+    'authority_actions_missing',
+    'authority_sellers_missing',
+    'authority_categories_missing',
+    'authority_payment_rails_missing',
     'action_out_of_scope',
     'seller_out_of_scope',
     'category_out_of_scope',
@@ -808,8 +940,12 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     'quoted_amount_exceeds_per_action_limit',
     'payment_amount_exceeds_per_action_limit',
     'payment_amount_exceeds_quote',
+    'payment_amount_exceeds_daily_limit',
+    'payment_amount_exceeds_total_limit',
+    'payment_identifier_missing',
     'terms_changed',
     'duplicate_attempt_detected',
+    'envelope_hash_mismatch',
   ]);
   const hardDeny = blockers.some((blocker) => hardDenyCodes.has(blocker));
   const completeChainVerified = phase === 'post_execution' && blockers.length === 0;
@@ -841,7 +977,7 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     evaluated_at: now.toISOString(),
     evidence: {
       envelope_id: envelope.envelope_id || null,
-      envelope_hash: sha256Ref(envelope),
+      envelope_hash: expectedEnvelopeHash,
     },
     authority_flags: evaluationAuthorityFlags(),
   };

@@ -83,6 +83,7 @@ import {
   buildTransactionAssuranceEnvelope,
   evaluateTransactionAssuranceEnvelope,
   canonicalize,
+  computeEnvelopeHash,
   sha256Ref,
 } from '@agoragentic/transaction-assurance';
 ```
@@ -118,13 +119,17 @@ const normalized = normalizeAuthorityArtifact(externalArtifact, {
     evidenceRef: 'receipt://signature-check/456',
     checkedAt: new Date().toISOString(),
   },
-  revocationStatus: 'active',
+  revocation: {
+    status: 'active',
+    evidenceRef: 'receipt://revocation-check/789',
+    checkedAt: new Date().toISOString(),
+  },
 });
 ```
 
 The normalized record stores the source reference and a deterministic hash. It does not embed the source artifact, credentials, private keys, or raw payment data.
 
-When no verifier evidence is supplied, status defaults to `unverified` and pre-execution evaluation fails closed.
+When no verifier evidence is supplied, status defaults to `unverified` and pre-execution evaluation fails closed. A `verified` status requires a verifier reference, evidence reference, and check timestamp. An `active` or `revoked` revocation result likewise requires its own evidence reference and check timestamp; bare caller assertions are rejected.
 
 ### Let an agent prepare—not approve—an authority request
 
@@ -161,8 +166,10 @@ const envelope = buildTransactionAssuranceEnvelope({
   principalRef: 'owner:acme',
   principalType: 'organization',
   principalIdentityVerification: 'verified',
+  principalIdentityEvidenceRef: 'identity-proof://principal/123',
   agentRef: 'agent:research-buyer',
   agentIdentityVerification: 'verified',
+  agentIdentityEvidenceRef: 'identity-proof://agent/456',
   normalizedAuthority: normalized,
   commercialIntent: {
     action: 'execute:research',
@@ -179,6 +186,9 @@ const envelope = buildTransactionAssuranceEnvelope({
     rail: 'x402',
     amount: '0.05',
     currency: 'USDC',
+    dailySpendBefore: '0.20',
+    totalSpendBefore: '1.20',
+    budgetUsageRef: 'ledger-proof://budget/789',
   },
   execution: {
     idempotencyKeyHash: sha256Ref('private-idempotency-value'),
@@ -188,6 +198,10 @@ const envelope = buildTransactionAssuranceEnvelope({
 ```
 
 The envelope itself grants no authority. It carries evidence and decision context only.
+
+The principal and agent references are bound to the verified normalized authority artifact. Callers cannot substitute different identities after verification. Authority scope lists must be non-empty; an omitted list is not interpreted as unrestricted authority. Daily and total budget limits require a referenced usage snapshot so the evaluator can check the prospective spend exactly with decimal-string arithmetic.
+
+`evidence.envelope_hash` is reproducible with `computeEnvelopeHash(envelope)`. The recipe canonicalizes the full envelope with only `evidence.envelope_hash` replaced by `null`, then hashes those UTF-8 bytes with SHA-256. Evaluation rejects an envelope whose embedded hash no longer matches that recipe.
 
 ### Evaluate before execution
 
@@ -216,11 +230,13 @@ const evaluation = evaluateTransactionAssuranceEnvelope(completedEnvelope, {
 `complete_chain_verified` is true only when required checks establish:
 
 - verified active authority;
+- authority-bound and independently evidenced principal and agent identities;
 - matching action, seller, category, rail, currency, quote, and terms;
+- referenced daily and total budget usage within the approved limits;
 - idempotent execution without duplicate detection;
-- observed, verified, final settlement;
-- successful execution with an output hash;
-- delivered and verified outcome;
+- observed, verified, final settlement with payment, receipt, and settlement references;
+- successful execution with an invocation reference and output hash;
+- delivered and verified outcome with artifact, seller-attestation, and validation references;
 - complete or refunded reconciliation.
 
 ## CLI

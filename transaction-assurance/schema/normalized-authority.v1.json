@@ -29,6 +29,7 @@
     "max_total",
     "verification",
     "revocation_status",
+    "revocation_check",
     "declared_revocation_status",
     "normalization_warnings",
     "authority_flags"
@@ -88,6 +89,16 @@
       }
     },
     "revocation_status": { "enum": ["not_checked", "active", "revoked", "unknown"] },
+    "revocation_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_ref", "checked_at"],
+      "properties": {
+        "status": { "enum": ["not_checked", "active", "revoked", "unknown"] },
+        "evidence_ref": { "$ref": "#/$defs/nullableRef" },
+        "checked_at": { "$ref": "#/$defs/nullableDate" }
+      }
+    },
     "declared_revocation_status": {
       "oneOf": [
         { "enum": ["not_checked", "active", "revoked", "unknown"] },

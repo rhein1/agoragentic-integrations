@@ -17,7 +17,7 @@ function usage() {
 
 Usage:
   agora-assure detect <artifact.json> [--protocol <id>]
-  agora-assure normalize <artifact.json> [--protocol <id>] [--artifact-ref <ref>] [--verification-status <status>] [--verification-ref <ref>] [--revocation-status <status>]
+  agora-assure normalize <artifact.json> [--protocol <id>] [--artifact-ref <ref>] [--verification-status <status>] [--verification-ref <ref>] [--revocation-status <status>] [--revocation-evidence-ref <ref>] [--revocation-checked-at <ISO date>]
   agora-assure authority-request <input.json>
   agora-assure envelope <input.json>
   agora-assure evaluate <envelope.json> [--phase pre_execution|post_execution] [--now <ISO date>]
@@ -74,7 +74,11 @@ function selfTest() {
       evidenceRef: 'fixture:self-test-signature-proof',
       checkedAt: '2026-08-06T00:00:01Z',
     },
-    revocationStatus: 'active',
+    revocation: {
+      status: 'active',
+      evidenceRef: 'fixture:self-test-revocation-proof',
+      checkedAt: '2026-08-06T00:00:02Z',
+    },
   });
 
   const envelope = buildTransactionAssuranceEnvelope({
@@ -84,8 +88,10 @@ function selfTest() {
     principalRef: 'owner:self-test',
     principalType: 'human',
     principalIdentityVerification: 'verified',
+    principalIdentityEvidenceRef: 'fixture:self-test-principal-identity',
     agentRef: 'agent:self-test',
     agentIdentityVerification: 'verified',
+    agentIdentityEvidenceRef: 'fixture:self-test-agent-identity',
     normalizedAuthority,
     commercialIntent: {
       action: 'execute:research',
@@ -107,6 +113,9 @@ function selfTest() {
       status: 'not_started',
       amount: '0.05',
       currency: 'USDC',
+      dailySpendBefore: '0',
+      totalSpendBefore: '0',
+      budgetUsageRef: 'fixture:self-test-budget-usage',
     },
     execution: {
       idempotencyKeyHash: sha256Ref('self-test-idempotency'),
@@ -116,6 +125,7 @@ function selfTest() {
       verificationScope: 'No outcome yet; pre-execution self-test.',
       unknowns: ['Payment and execution have not started.'],
     },
+    evidenceRefs: ['fixture:self-test-authority-chain'],
   });
 
   const evaluation = evaluateTransactionAssuranceEnvelope(envelope, {
@@ -156,7 +166,11 @@ function main() {
       print(normalizeAuthorityArtifact(artifact, {
         protocolHint: option('--protocol'),
         artifactRef: option('--artifact-ref'),
-        revocationStatus: option('--revocation-status'),
+        revocation: {
+          status: option('--revocation-status'),
+          evidenceRef: option('--revocation-evidence-ref'),
+          checkedAt: option('--revocation-checked-at'),
+        },
         verification: {
           status: option('--verification-status') || 'unverified',
           evidenceRef: option('--verification-ref'),
