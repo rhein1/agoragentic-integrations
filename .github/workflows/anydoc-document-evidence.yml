@@ -1,0 +1,49 @@
+name: AnyDoc Document Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - '.github/workflows/anydoc-document-evidence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - '.github/workflows/anydoc-document-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: examples/anydoc-document-evidence
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install pinned AnyDoc package
+        run: npm install --no-audit --no-fund
+      - name: Syntax and deterministic unit tests
+        run: |
+          npm run check
+          npm test
+      - name: Exercise the real AnyDoc package
+        run: npm run smoke:anydoc
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Package dry run
+        run: npm run pack:dry
