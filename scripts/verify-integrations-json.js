@@ -104,6 +104,7 @@ function assertManifestShape(manifest) {
 function assertInventoryCoverage(manifest) {
   const ids = new Set();
   const representedDirectories = new Set();
+  const integrationPaths = [];
 
   for (const integration of manifest.integrations || []) {
     if (ids.has(integration.id)) fail(`integrations.json has duplicate integration id: ${integration.id}`);
@@ -114,6 +115,7 @@ function assertInventoryCoverage(manifest) {
       const target = path.join(root, integration[field]);
       if (!fs.existsSync(target)) fail(`${integration.id}.${field} does not exist: ${integration[field]}`);
       representedDirectories.add(integration[field].split('/')[0]);
+      integrationPaths.push(integration[field].replace(/\\/g, '/'));
     }
   }
 
@@ -150,6 +152,31 @@ function assertInventoryCoverage(manifest) {
     }
   }
 
+  const examplesRoot = path.join(root, 'examples');
+  const packageExamples = fs.readdirSync(examplesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .filter((entry) => fs.existsSync(path.join(examplesRoot, entry.name, 'package.json')));
+  for (const entry of packageExamples) {
+    const source = `examples/${entry.name}`;
+    const prefix = `${source}/`;
+    const packageJson = JSON.parse(fs.readFileSync(path.join(examplesRoot, entry.name, 'package.json'), 'utf8'));
+    if (!integrationPaths.some((candidate) => candidate.startsWith(prefix))) {
+      fail(`package-bearing example is missing from integrations.json.integrations: ${source}`);
+    }
+    const packageEntry = Object.values(manifest.packages || {})
+      .find((candidate) => candidate?.source === source);
+    if (!packageEntry) {
+      fail(`package-bearing example is missing from integrations.json.packages: ${source}`);
+    } else {
+      if (packageEntry.name !== packageJson.name) {
+        fail(`canonical package name does not match ${source}/package.json`);
+      }
+      if (!['published', 'source_only'].includes(packageEntry.distribution_status)) {
+        fail(`canonical package entry must declare distribution_status for ${source}`);
+      }
+    }
+  }
+
   const expectedExperimentalDocs = ['langflow', 'browser-use', 'dspy', 'agentscope', 'voltagent', 'genkit'];
   for (const id of expectedExperimentalDocs) {
     const integration = (manifest.integrations || []).find((entry) => entry.id === id);
@@ -161,6 +188,7 @@ function assertInventoryCoverage(manifest) {
 function assertDiscoveryParity(manifest) {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
+  const llmsFull = fs.readFileSync(path.join(root, 'llms-full.txt'), 'utf8');
   const nestedSkill = fs.readFileSync(path.join(root, 'skills', 'agoragentic', 'SKILL.md'), 'utf8');
   if (manifest.discovery?.ecosystem_profile !== 'ecosystem.json') {
     fail('integrations.json discovery.ecosystem_profile must point to ecosystem.json');
@@ -180,6 +208,13 @@ function assertDiscoveryParity(manifest) {
   }
   if (!llms.includes(`(${manifest.integrations.length} indexed surfaces`)) {
     fail(`llms.txt must state the canonical manifest count (${manifest.integrations.length})`);
+  }
+  if (!llmsFull.includes(`contains ${manifest.integrations.length} integration surfaces`)) {
+    fail(`llms-full.txt must state the canonical manifest count (${manifest.integrations.length})`);
+  }
+  if (manifest.discovery?.anydoc_document_evidence !== 'examples/anydoc-document-evidence/README.md'
+    || manifest.discovery?.anydoc_document_evidence_adapter !== 'examples/anydoc-document-evidence/agoragentic-anydoc.mjs') {
+    fail('discovery must expose the AnyDoc package documentation and adapter entrypoint');
   }
   if (/npm publication pending/i.test(llms)) {
     fail('llms.txt must not claim Harness Core npm publication is pending');

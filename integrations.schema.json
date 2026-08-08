@@ -36,7 +36,7 @@
     },
     "packages": {
       "type": "object",
-      "description": "Published package coordinates.",
+      "description": "Published and source-only package coordinates.",
       "properties": {
         "python": {
           "$ref": "#/$defs/package"
@@ -63,6 +63,12 @@
           "$ref": "#/$defs/package"
         },
         "premortem_golden_loop": {
+          "$ref": "#/$defs/package"
+        },
+        "buzz_signed_workspace_evidence": {
+          "$ref": "#/$defs/package"
+        },
+        "anydoc_document_evidence": {
           "$ref": "#/$defs/package"
         }
       }
@@ -163,7 +169,19 @@
         "registry": {
           "type": "string",
           "format": "uri",
-          "description": "Package registry URL."
+          "description": "Package registry or canonical source-distribution URL."
+        },
+        "distribution_status": {
+          "type": "string",
+          "enum": [
+            "published",
+            "source_only"
+          ],
+          "description": "Whether the package is registry-published or available only from repository source."
+        },
+        "source": {
+          "type": "string",
+          "description": "Repository-relative package source path."
         },
         "min_python": {
           "type": "string",

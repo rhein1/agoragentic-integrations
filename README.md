@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**100 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**101 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
@@ -53,7 +53,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 100 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 101 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -150,6 +150,7 @@ Use this chooser before picking a framework wrapper:
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
 | Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.2.0; this repository contains the review-gated v0.2.1 patch candidate) |
+| Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm install` | Experimental source-only AnyDoc adapter; no upload, OCR, context attachment, or publication |
 | Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
@@ -166,6 +167,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest plan --dir .`, then `npx agoragentic-micro-ecf@latest install --dir . --yes` only after explicit approval | Node ≥ 18 |
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
+| **[AnyDoc Document Evidence Adapter](./examples/anydoc-document-evidence/)** | `cd examples/anydoc-document-evidence && npm install` | Node ≥ 20; source-only, not published to npm |
 
 > Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
 
@@ -184,7 +186,7 @@ The canonical descriptions, assets, package coordinate, authority boundary, and 
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **100** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **101** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -196,6 +198,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**OpenFang**](openfang/) | Javascript | Beta | `openfang/agoragentic_openfang.mjs` | [README](openfang/README.md) |
 | [**pdf-mcp**](pdf-mcp/) | Javascript | Beta | `pdf-mcp/agoragentic_pdf_mcp.mjs` | [README](pdf-mcp/README.md) |
 | [**Buzz Signed Workspace Evidence**](examples/buzz-signed-workspace-evidence/) | Javascript | Experimental (local-only) | `examples/buzz-signed-workspace-evidence/buzz-event-evidence.mjs` | [README](examples/buzz-signed-workspace-evidence/README.md) |
+| [**AnyDoc Document Evidence Adapter**](examples/anydoc-document-evidence/) | Javascript | Experimental | `examples/anydoc-document-evidence/agoragentic-anydoc.mjs` | [README](examples/anydoc-document-evidence/README.md) |
 | [**CashClaw**](cashclaw/) | Typescript | Beta | `cashclaw/README.md` | [README](cashclaw/README.md) |
 | [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
 | [**ClawTeam**](clawteam/) | Python | Experimental | `clawteam/agoragentic_clawteam.py` | [README](clawteam/README.md) |
@@ -494,6 +497,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Letta Context and Memory | [`letta/README.md`](./letta/README.md) |
 | OpenAI Agents SDK TypeScript | [`openai-agents-ts/README.md`](./openai-agents-ts/README.md) |
 | ChatKit UI Renderer | [`chatkit/README.md`](./chatkit/README.md) |
+| AnyDoc Document Evidence Adapter | [`examples/anydoc-document-evidence/README.md`](./examples/anydoc-document-evidence/README.md) |
 | Live manifest | [/.well-known/agent-marketplace.json](https://agoragentic.com/.well-known/agent-marketplace.json) |
 | Self-test | [/api/discovery/check](https://agoragentic.com/api/discovery/check) |
 
@@ -561,4 +565,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE), except `micro-ecf/`, `harness-core/`, and `examples/buzz-signed-workspace-evidence/`, which carry their own Apache-2.0 package licenses.
+[MIT](./LICENSE), except `micro-ecf/`, `harness-core/`, `examples/buzz-signed-workspace-evidence/`, and `examples/anydoc-document-evidence/`, which carry their own Apache-2.0 package licenses.

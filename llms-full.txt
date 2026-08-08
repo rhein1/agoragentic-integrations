@@ -14,6 +14,7 @@ The published packages and repo-local CLIs are:
 - **Harness Core**: `npx agoragentic-harness-core@latest init` (npm currently serves v0.2.0; this repo carries the review-gated v0.2.1 patch candidate, Node ≥18)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
+- **AnyDoc Document Evidence Adapter**: `examples/anydoc-document-evidence/` is an experimental source-only Node >=20 package for process-isolated local office-document parsing, explicit evidence coverage, semantic-loss warnings, and completeness-blocked handoff. It is not published to npm and does not upload, invoke OCR, attach context, publish, or spend.
 
 ## Authentication
 
@@ -58,7 +59,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 99 integration surfaces as of 2026-07-28. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 101 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -127,6 +128,7 @@ The canonical inventory is `integrations.json` and contains 99 integration surfa
 | Safe | safe/agoragentic_safe.ts | copy the reference client into your project |
 | Superfluid | superfluid/agoragentic_superfluid.ts | copy the reference client into your project |
 | Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | copy the reference client into your project |
+| AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/agoragentic-anydoc.mjs | cd examples/anydoc-document-evidence && npm install |
 
 ### Config-Only Integrations
 
@@ -276,6 +278,7 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Griptape | griptape/README.md |
 | LiveKit Agents | livekit-agents/README.md |
 | Pipecat | pipecat/README.md |
+| AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/README.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |

@@ -1,0 +1,116 @@
+{
+  "schema": "agoragentic.document-evidence-listing-candidates.v1",
+  "updated_at": "2026-08-07",
+  "upstream": {
+    "name": "Firecrawl AnyDoc",
+    "repository": "https://github.com/firecrawl/anydoc",
+    "package": "@firecrawl/anydoc",
+    "version": "0.1.7",
+    "license": "MIT",
+    "partnership_claimed": false
+  },
+  "candidates": [
+    {
+      "slug": "document-evidence-compiler",
+      "name": "Document Evidence Compiler",
+      "status": "experimental_not_published",
+      "category": "document-intelligence",
+      "task": "Convert an office document or text PDF into governed Markdown, evidence units, provenance hashes, semantic-risk warnings, and a parse receipt.",
+      "supported_formats": [
+        "doc",
+        "docx",
+        "docm",
+        "ppt",
+        "pptx",
+        "pptm",
+        "xls",
+        "xlsx",
+        "xlsm",
+        "xlsb",
+        "odt",
+        "ods",
+        "odp",
+        "rtf",
+        "epub",
+        "csv",
+        "pdf"
+      ],
+      "transport_plan": [
+        "local_file",
+        "private_artifact_ref",
+        "short_lived_https_url",
+        "direct_upload_future"
+      ],
+      "limits": {
+        "default_input_bytes": 10485760,
+        "hard_input_bytes": 52428800,
+        "max_evidence_units": 256,
+        "default_parser_timeout_ms": 30000,
+        "hard_parser_timeout_ms": 120000,
+        "default_parser_v8_heap_mb": 256,
+        "hard_parser_v8_heap_mb": 1024
+      },
+      "outputs": [
+        "markdown",
+        "source_hash",
+        "output_hash",
+        "evidence_units",
+        "evidence_coverage",
+        "parse_completeness",
+        "semantic_risk",
+        "known_limitations",
+        "parse_receipt",
+        "trap_scan_handoff"
+      ],
+      "pricing": {
+        "status": "unvalidated",
+        "recommended_launch": "free_bounded_canary",
+        "hypothesis_usd_per_document": "0.01",
+        "requires_measured_compute_and_failure_data": true
+      },
+      "readiness": {
+        "local_adapter_executable": true,
+        "hosted_route_implemented": false,
+        "paid_canary_passed": false,
+        "listing_published": false,
+        "x402_enabled": false
+      }
+    },
+    {
+      "slug": "scanned-document-ocr-evidence",
+      "name": "Scanned Document OCR Evidence",
+      "status": "provider_gated_not_published",
+      "category": "document-intelligence",
+      "task": "Convert a scanned or image-only PDF through a bounded OCR provider, then apply Agoragentic provenance, trap scanning, evidence, and receipt controls.",
+      "provider_plan": "Firecrawl /v2/parse with an explicitly selected account and retention policy",
+      "pricing": {
+        "status": "provider_cost_unknown_until_canary",
+        "recommended_launch": "cost_plus_bounded_markup",
+        "fixed_price_allowed": false
+      },
+      "required_controls": [
+        "provider_key_in_secret_broker",
+        "max_pages",
+        "max_input_bytes",
+        "timeout",
+        "zero_data_retention_posture",
+        "no_charge_on_failed_parse",
+        "owner_approval",
+        "result_trap_scan"
+      ],
+      "readiness": {
+        "provider_adapter_implemented": false,
+        "paid_canary_passed": false,
+        "listing_published": false,
+        "x402_enabled": false
+      }
+    }
+  ],
+  "authority": {
+    "publishes_listing": false,
+    "enables_spend": false,
+    "enables_wallet": false,
+    "enables_x402": false,
+    "mutates_trust": false
+  }
+}
