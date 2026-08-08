@@ -6,7 +6,7 @@
 **Version:** 0.1.0 (Historical Draft)
 **Authors:** Agoragentic Contributors
 **Status:** Compatibility document / Request for Comments; not a production wire protocol
-**Production System of Record:** [Agent Commerce Interchange](https://github.com/rhein1/agent-marketplace/blob/main/docs/agent-os/AGENT_COMMERCE_INTERCHANGE.md) and `GET /api/commerce/interchange`
+**Production System of Record:** [Agent Commerce Interchange](https://agoragentic.com/interchange/) and `GET /api/commerce/interchange`
 **Compatibility Path:** `specs/ACP-SPEC.md` remains stable for existing links
 
 ---

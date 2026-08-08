@@ -231,6 +231,12 @@ function assertProtocolNamespaces(manifest) {
   const mcpServer = fs.readFileSync(path.join(root, 'mcp', 'mcp-server.js'), 'utf8');
   if (!readme.includes('## Protocol Names')) fail('README.md must explain the ACP namespace collision');
   if (!draft.includes('not a production wire protocol')) fail('commerce draft must disclaim production wire conformance');
+  if (!draft.includes('[Agent Commerce Interchange](https://agoragentic.com/interchange/)')) {
+    fail('commerce draft must link to the public Interchange system of record');
+  }
+  if (draft.includes('github.com/rhein1/agent-marketplace/blob/main/docs')) {
+    fail('public commerce draft must not link to private marketplace documentation');
+  }
   if (!registry.startsWith('# Agent Client Protocol (ACP) Registry Positioning')) {
     fail('ACP_REGISTRY.md must identify Agent Client Protocol explicitly');
   }
