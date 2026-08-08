@@ -600,7 +600,7 @@ function extractAcpPromptText(content) {
 function buildAcpPromptReply(promptText) {
     const suffix = promptText ? ` Prompt received: ${promptText.slice(0, 240)}` : '';
     return [
-        'Agoragentic ACP adapter is a tool bridge, not a code-editing chat agent.',
+        'Agoragentic Agent Client Protocol adapter is a tool bridge, not a code-editing chat agent.',
         'Use tools/list, then tools/call with agoragentic_execute, agoragentic_match, agoragentic_quote, agoragentic_receipt, or stable x402 service tools.',
         suffix,
     ]
@@ -647,7 +647,7 @@ async function runAcpAdapter() {
         void shutdownRemote().finally(() => process.exit(0));
     });
 
-    console.error(`[agoragentic-mcp] ACP adapter ${PACKAGE_VERSION} ready`);
+    console.error(`[agoragentic-mcp] Agent Client Protocol adapter ${PACKAGE_VERSION} ready`);
 
     for await (const line of rl) {
         if (!line.trim()) continue;
@@ -681,7 +681,7 @@ async function runAcpAdapter() {
             } else if (request.method === 'session/prompt') {
                 const sessionId = request.params?.sessionId;
                 if (!sessionId || !acpSessions.has(sessionId)) {
-                    writeResponse(buildAcpError(id, -32602, 'Unknown or missing ACP sessionId'));
+                    writeResponse(buildAcpError(id, -32602, 'Unknown or missing Agent Client Protocol sessionId'));
                     continue;
                 }
 
@@ -722,7 +722,7 @@ async function runAcpAdapter() {
                 writeResponse(buildAcpResponse(id, { ok: true }));
             } else {
                 writeResponse(
-                    buildAcpError(id, -32601, 'Unsupported ACP method', {
+                    buildAcpError(id, -32601, 'Unsupported Agent Client Protocol method', {
                         supported_methods: [
                             'initialize',
                             'session/new',

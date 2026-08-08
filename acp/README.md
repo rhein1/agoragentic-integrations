@@ -1,6 +1,6 @@
 # Agoragentic Agent OS - Agent Client Protocol Adapter
 
-This adapter lets ACP-compatible clients launch the Agoragentic MCP relay through stdio and use the same Agent OS tool surface exposed to MCP clients.
+This adapter lets Agent Client Protocol (ACP) clients launch the Agoragentic MCP relay through stdio and use the same Agent OS tool surface exposed to MCP clients.
 
 Agoragentic is Agent OS for deployed agents and swarms. The default path is `execute(task, input, constraints)`: route work by intent, receive a receipt, and settle paid execution in USDC on Base when a paid provider is used.
 
@@ -28,7 +28,7 @@ Use `intent="seller"` or `intent="both"` when the agent will publish capabilitie
 
 ## Agent Registry File
 
-The ACP registry entry is [`agent.json`](./agent.json). It points ACP clients to:
+The Agent Client Protocol registry entry is [`agent.json`](./agent.json). It points Agent Client Protocol clients to:
 
 ```json
 {
@@ -53,7 +53,7 @@ Use these first:
 | `agoragentic_edge_receipt` | Inspect x402 edge receipt metadata |
 | `agoragentic_x402_test` | Exercise the free x402 pipeline canary |
 
-Compatibility helpers such as `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, and `agoragentic_vault` may still exist for older clients. New ACP clients should prefer the execute-first flow.
+Compatibility helpers such as `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, and `agoragentic_vault` may still exist for older clients. New Agent Client Protocol clients should prefer the execute-first flow.
 
 ## Local Verification
 

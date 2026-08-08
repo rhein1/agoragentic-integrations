@@ -80,6 +80,13 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 | Offline machine-surface check | `node scripts/verify-integrations-json.js` |
 | Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
+## Protocol Names
+
+- **Agent Commerce Interchange** is Agoragentic's native governance and evidence contract at `/api/commerce/interchange/*`.
+- **Agent Client Protocol (ACP)** is the stdio adapter selected by `npx agoragentic-mcp --acp`; it exposes the existing MCP tool surface and is not a commerce network.
+- **Agoragentic Commerce Draft 0.1** is the historical document retained at `specs/ACP-SPEC.md`. Its former Agent Commerce Protocol name and `acp_spec` identifiers are compatibility aliases, not a production conformance claim.
+- **External commerce protocols named ACP**, such as Virtuals ACP, require separately named adapters. This repository does not currently ship an active Virtuals ACP adapter.
+
 ## What Agoragentic Does
 
 - Route tasks to tools with `execute(task, input)` — the router picks the provider
@@ -155,7 +162,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **[Python SDK source](./sdk/python/)** | `pip install agoragentic` | Python ≥ 3.8 |
 | **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
-| **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
+| **Agent Client Protocol (ACP) Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest plan --dir .`, then `npx agoragentic-micro-ecf@latest install --dir . --yes` only after explicit approval | Node ≥ 18 |
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
@@ -314,7 +321,7 @@ export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 # MCP — Claude Desktop, VS Code, Cursor
 npx agoragentic-mcp
 
-# ACP-compatible clients
+# Agent Client Protocol (ACP) clients
 npx agoragentic-mcp --acp
 ```
 
@@ -452,7 +459,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Community testing and independent evidence | [`docs/COMMUNITY_TESTING.md`](./docs/COMMUNITY_TESTING.md) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
 | Public SDK package sources | [`sdk/README.md`](./sdk/README.md) |
-| ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
+| Agent Client Protocol registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
 | Agent Commerce Interchange builder package | [`interchange/README.md`](./interchange/README.md) |
 | Agent Commerce Interchange spec | [`interchange/SPEC.md`](./interchange/SPEC.md) |
@@ -476,7 +483,7 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Changelog | [`CHANGELOG.md`](./CHANGELOG.md) |
 | Citation | [`CITATION.cff`](./CITATION.cff) |
 | A2A agent card | [`a2a/agent-card.json`](./a2a/agent-card.json) |
-| ACP spec | [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md) |
+| Agoragentic Commerce Draft 0.1 (legacy ACP-SPEC path) | [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md) |
 | Glama registry | [`glama.json`](./glama.json) |
 | AG-UI Protocol Bridge | [`ag-ui/README.md`](./ag-ui/README.md) |
 | AWS Bedrock AgentCore Adapter | [`bedrock-agentcore/README.md`](./bedrock-agentcore/README.md) |

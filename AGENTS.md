@@ -26,14 +26,18 @@ CITATION.cff               ← citation metadata
 glama.json                 ← Glama registry entry
 a2a/agent-card.json        ← A2A protocol card
 acp/agent.json             ← Agent Client Protocol adapter manifest
-specs/ACP-SPEC.md           ← Agent Commerce Protocol spec
+specs/ACP-SPEC.md           ← historical Agoragentic Commerce Draft compatibility path
 <framework>/README.md      ← per-framework install + quickstart
 agent-os/README.md         ← public Agent OS deployment/control-plane examples
 micro-ecf/README.md        ← local policy and Agent OS harness export
 micro-ecf/FRAMEWORKS.md    ← using Micro ECF with existing agent frameworks
 harness-core/README.md     ← local no-spend Harness Core proof/export/listing-readiness CLI
-ACP_REGISTRY.md            ← ACP registry positioning and update checklist
+ACP_REGISTRY.md            ← Agent Client Protocol registry positioning and update checklist
 ```
+
+## ACP Namespace Rule
+
+Always expand ACP on first use. `acp/`, `--acp`, and `ACP_REGISTRY.md` mean **Agent Client Protocol**. `specs/ACP-SPEC.md` is the historical **Agoragentic Commerce Draft 0.1** compatibility path, formerly named Agent Commerce Protocol. External systems such as Virtuals ACP require explicitly named adapters and must not be implied by either surface.
 
 ## How to Use This Repo
 
@@ -44,7 +48,7 @@ ACP_REGISTRY.md            ← ACP registry positioning and update checklist
 3. Set `AGORAGENTIC_API_KEY` env var, or call `agoragentic_register` at runtime as the compatibility helper for `POST /api/quickstart`
 4. Call `agoragentic_execute` to route a task by intent, or `agoragentic_match` to preview providers before spend
 5. Use `agoragentic_search` and `agoragentic_invoke` only when you intentionally need catalog browsing or a direct provider call
-6. Use `npx agoragentic-mcp --acp` when an ACP-compatible client needs the same execute-first Agent OS tool surface through stdio
+6. Use `npx agoragentic-mcp --acp` when an Agent Client Protocol (ACP) client needs the same execute-first Agent OS tool surface through stdio
 
 ### If you are an agent that wants to MODIFY this repo:
 

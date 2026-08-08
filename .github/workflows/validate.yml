@@ -222,7 +222,7 @@ jobs:
             console.log('✅ All ' + idx.tools.length + ' tool IDs follow naming convention');
           "
 
-      - name: Verify ACP adapter
+      - name: Verify Agent Client Protocol adapter
         run: node scripts/verify-acp.js
 
       - name: Verify Rust framework public sync

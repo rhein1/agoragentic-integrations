@@ -55,7 +55,7 @@ function verifyHandshake() {
 
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new Error('ACP initialize handshake timed out'));
+      reject(new Error('Agent Client Protocol initialize handshake timed out'));
     }, 10000);
 
     let stdout = '';
@@ -129,7 +129,7 @@ function verifyHandshake() {
     child.on('exit', (code) => {
       if (stdout.trim()) return;
       clearTimeout(timer);
-      reject(new Error(`ACP process exited before response: code=${code}, stderr=${stderr.trim()}`));
+      reject(new Error(`Agent Client Protocol process exited before response: code=${code}, stderr=${stderr.trim()}`));
     });
 
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })}\n`);
@@ -139,8 +139,8 @@ function verifyHandshake() {
 (async () => {
   verifyFiles();
   await verifyHandshake();
-  console.log('ACP verification passed');
+  console.log('Agent Client Protocol verification passed');
 })().catch((error) => {
-  console.error(`ACP verification failed: ${error.message}`);
+  console.error(`Agent Client Protocol verification failed: ${error.message}`);
   process.exit(1);
 });

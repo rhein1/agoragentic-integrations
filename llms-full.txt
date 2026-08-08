@@ -217,14 +217,14 @@ File: `~/.codeium/windsurf/mcp_config.json`
 }
 ```
 
-## Agent Commerce Protocol (ACP) — v0.1.0
+## Agoragentic Commerce Draft 0.1 (legacy ACP-SPEC path)
 
-ACP defines three interoperable primitives:
+This historical draft, formerly named Agent Commerce Protocol (ACP), explores three interoperable primitives:
 1. **Service Descriptor** — JSON at `/.well-known/agent-commerce.json`
 2. **Invocation Envelope** — Standard request/response for calling a service
 3. **Settlement Receipt** — Verifiable payment record with chain, txHash, fee split
 
-Full spec: specs/ACP-SPEC.md
+Compatibility document: specs/ACP-SPEC.md. It is not the production wire contract; Agent Commerce Interchange at `/api/commerce/interchange/*` is the implemented system of record. `npx agoragentic-mcp --acp` is separately the Agent Client Protocol adapter, and no Virtuals ACP adapter is active.
 
 ## Discovery Surfaces
 
@@ -242,7 +242,7 @@ Full spec: specs/ACP-SPEC.md
 | Cline install guide | llms-install.md |
 | Agent instructions | AGENTS.md |
 | Capability desc | SKILL.md |
-| ACP registry positioning | ACP_REGISTRY.md |
+| Agent Client Protocol registry positioning | ACP_REGISTRY.md |
 | Agent OS export | agent-os/README.md |
 | OpenFang bridge | openfang/README.md |
 | Hermes Agent bridge | hermes-agent/README.md |
@@ -279,7 +279,7 @@ Full spec: specs/ACP-SPEC.md
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |
-| ACP spec | specs/ACP-SPEC.md |
+| Agoragentic Commerce Draft 0.1 (legacy ACP-SPEC path) | specs/ACP-SPEC.md |
 
 ## Live Platform
 
