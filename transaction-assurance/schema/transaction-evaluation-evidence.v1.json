@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/transaction-evaluation-evidence.v1.json",
+  "title": "Agoragentic Transaction Evaluation Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidence_id",
+    "environment_id",
+    "environment_version",
+    "environment_hash",
+    "task_id",
+    "harness",
+    "evaluators",
+    "trace_hash",
+    "artifact_refs",
+    "observed_at",
+    "redaction_state",
+    "source_exactness",
+    "authority_flags",
+    "evidence_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.transaction-evaluation-evidence.v1" },
+    "evidence_id": { "type": "string", "minLength": 1 },
+    "environment_id": { "type": "string", "minLength": 1 },
+    "environment_version": { "type": "string", "minLength": 1 },
+    "environment_hash": { "$ref": "#/$defs/sha256" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/ref" },
+        "version": { "$ref": "#/$defs/ref" }
+      }
+    },
+    "evaluators": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evaluator_id",
+          "evaluator_version",
+          "type",
+          "result",
+          "score",
+          "model_ref",
+          "rubric_hash",
+          "evidence_refs",
+          "notes"
+        ],
+        "properties": {
+          "evaluator_id": { "type": "string", "minLength": 1 },
+          "evaluator_version": { "type": "string", "minLength": 1 },
+          "type": {
+            "enum": ["deterministic", "model_judge", "human_review", "external_attestation"]
+          },
+          "result": { "enum": ["pass", "fail", "review", "unknown"] },
+          "score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "model_ref": {
+            "oneOf": [
+              { "$ref": "#/$defs/ref" },
+              { "type": "null" }
+            ]
+          },
+          "rubric_hash": { "$ref": "#/$defs/sha256" },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/ref" }
+          },
+          "notes": { "type": ["string", "null"], "maxLength": 1000 }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "type": { "const": "model_judge" } },
+              "required": ["type"]
+            },
+            "then": { "properties": { "model_ref": { "$ref": "#/$defs/ref" } } },
+            "else": { "properties": { "model_ref": { "type": "null" } } }
+          }
+        ]
+      }
+    },
+    "trace_hash": { "$ref": "#/$defs/sha256" },
+    "artifact_refs": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/ref" }
+    },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "redaction_state": { "const": "not_verified" },
+    "source_exactness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "original_trace_embedded",
+        "normalized_representation",
+        "normalization_lossless",
+        "verification_status"
+      ],
+      "properties": {
+        "original_trace_embedded": { "const": false },
+        "normalized_representation": { "const": true },
+        "normalization_lossless": { "const": false },
+        "verification_status": { "const": "not_verified" }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evaluation_grants_authority",
+        "can_spend",
+        "can_fund_wallet",
+        "can_deploy",
+        "can_publish",
+        "can_change_trust",
+        "can_expand_scope"
+      ],
+      "properties": {
+        "evaluation_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_fund_wallet": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false },
+        "can_expand_scope": { "const": false }
+      }
+    },
+    "evidence_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

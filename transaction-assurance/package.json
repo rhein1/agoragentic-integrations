@@ -12,7 +12,8 @@
     "agora-assure": "./bin/agora-assure.mjs"
   },
   "exports": {
-    ".": "./src/index.mjs"
+    ".": "./src/index.mjs",
+    "./evaluation-evidence": "./src/evaluation-evidence.mjs"
   },
   "files": [
     "bin/",
@@ -21,11 +22,12 @@
     "examples/",
     "SKILL.md",
     "README.md",
+    "EVALUATION_EVIDENCE.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/index.mjs && node --check bin/agora-assure.mjs",
+    "check": "node --check src/index.mjs && node --check src/evaluation-evidence.mjs && node --check bin/agora-assure.mjs",
     "self-test": "node bin/agora-assure.mjs self-test",
     "pack:dry": "npm pack --dry-run"
   },
