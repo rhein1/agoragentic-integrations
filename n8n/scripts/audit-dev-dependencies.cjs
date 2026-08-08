@@ -2,19 +2,19 @@
 
 const { spawnSync } = require('node:child_process');
 
-const ALLOWED_ADVISORY = 'https://github.com/advisories/GHSA-mh99-v99m-4gvg';
+const ALLOWED_ADVISORIES = new Set([
+	'https://github.com/advisories/GHSA-28wg-ghj8-5hjv',
+	'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
+]);
 const ALLOWED_PACKAGES = new Set([
-	'@eslint/config-array',
-	'@eslint/eslintrc',
-	'@n8n/eslint-plugin-community-nodes',
-	'@n8n/node-cli',
-	'@oclif/core',
-	'brace-expansion',
-	'ejs',
-	'eslint',
-	'filelist',
-	'jake',
-	'minimatch',
+	'@n8n/ai-utilities',
+	'@n8n/api-types',
+	'@n8n/backend-common',
+	'@n8n/backend-network',
+	'@n8n/decorators',
+	'@n8n/utils',
+	'n8n-workflow',
+	'nanoid',
 ]);
 
 function validateAuditReport(report) {
@@ -32,9 +32,7 @@ function validateAuditReport(report) {
 	const names = Object.keys(vulnerabilities);
 	const counts = report.metadata?.vulnerabilities;
 	if (!counts || counts.critical !== 0 || counts.high !== names.length) {
-		throw new Error(
-			`unexpected vulnerability counts: ${JSON.stringify(counts ?? null)}`,
-		);
+		throw new Error(`unexpected vulnerability counts: ${JSON.stringify(counts ?? null)}`);
 	}
 	if (names.length === 0) {
 		return { clean: true, allowed: [] };
@@ -42,9 +40,7 @@ function validateAuditReport(report) {
 
 	const unexpectedPackages = names.filter((name) => !ALLOWED_PACKAGES.has(name));
 	if (unexpectedPackages.length) {
-		throw new Error(
-			`unexpected audit package set; extra=${unexpectedPackages.join(',')}`,
-		);
+		throw new Error(`unexpected audit package set; extra=${unexpectedPackages.join(',')}`);
 	}
 
 	const advisoryUrls = new Set();
@@ -69,12 +65,10 @@ function validateAuditReport(report) {
 	}
 
 	if (
-		advisoryUrls.size !== 1 ||
-		!advisoryUrls.has(ALLOWED_ADVISORY)
+		advisoryUrls.size !== ALLOWED_ADVISORIES.size ||
+		[...ALLOWED_ADVISORIES].some((url) => !advisoryUrls.has(url))
 	) {
-		throw new Error(
-			`unexpected advisory set: ${[...advisoryUrls].sort().join(',') || 'none'}`,
-		);
+		throw new Error(`unexpected advisory set: ${[...advisoryUrls].sort().join(',') || 'none'}`);
 	}
 
 	return { clean: false, allowed: names.sort() };
@@ -91,9 +85,7 @@ function main() {
 	});
 	if (result.error) throw result.error;
 	if (![0, 1].includes(result.status)) {
-		throw new Error(
-			`npm audit failed with status ${result.status}: ${result.stderr.trim()}`,
-		);
+		throw new Error(`npm audit failed with status ${result.status}: ${result.stderr.trim()}`);
 	}
 
 	let report;
@@ -109,7 +101,7 @@ function main() {
 		return;
 	}
 	console.log(
-		`Allowed development-only advisory ${ALLOWED_ADVISORY}; ` +
+		`Allowed ${ALLOWED_ADVISORIES.size} development-only advisories; ` +
 			`${verdict.allowed.length} affected dependency nodes verified.`,
 	);
 }

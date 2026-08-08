@@ -1,86 +1,94 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-08-05 (supersedes 2026-07-24)
+Audit date: 2026-08-08 (supersedes 2026-08-05)
 
 ## Candidate
 
 - Package: `n8n-nodes-agoragentic@0.1.3`
-- Stable builder: `@n8n/node-cli@0.40.3`
+- Stable builder: `@n8n/node-cli@0.42.2`
+- Formatter: `prettier@3.9.6`
+- Linter: `eslint@9.32.0`
+- Compiler: `typescript@5.9.2`
+- Development host fixture: `n8n-workflow@2.29.3`
 - Release helper: `release-it@21.0.1`
-- Minimum Node.js: 20.19
+- Minimum consumer Node.js: 20.19
 - Install mode: committed lockfile plus `npm ci`
 
-## 2026-08-05 revision
+## Coordinated compatibility decision
 
-Three high advisories entered the development graph and the fail-closed
-`npm run audit:dev` gate correctly rejected them
-(`unexpected audit package set; extra=ip-address,undici`, then
-`unexpected advisory set: ...,GHSA-rgw5-rvv9-x895`).
+The `@n8n/node-cli` npm `stable` tag is `0.42.2`. Its generated community-node
+template still pins ESLint 9.32.0, Prettier 3.6.2, and TypeScript 5.9.2. This
+candidate advances the stable CLI and independently validates the compatible
+Prettier 3.9.6 maintenance update while preserving n8n's linter and compiler
+major lines.
 
-**`ip-address` → 10.4.0.** Lockfile refresh only, satisfies `socks`'
-`^10.1.1`. No manifest change.
+The rejected Dependabot majors are not a coherent toolchain:
 
-**`brace-expansion` → 1.1.18 / 2.1.4 / 5.0.9.** GHSA-rgw5-rvv9-x895 is a
-bypass of the previously accepted GHSA-mh99-v99m-4gvg. The exception recorded
-below is now **stale**: patched releases exist on the 1.x and 2.x lines, so
-the eslint and n8n-cli consumers are fixed in place without being forced onto
-the API-incompatible 5.x line. Both advisories are now resolved rather than
-allowlisted.
+- ESLint 10 fails the current n8n lint rules with
+  `TypeError: context.getFilename is not a function`. The bundled community
+  plugin also declares an exact ESLint 9.29.0 peer.
+- TypeScript 7 fails the current parser stack in `ts-api-utils` while reading
+  `Intrinsic`. The current `typescript-eslint` release supports TypeScript
+  versions below 6.1, not TypeScript 7.
 
-**`undici` → 7.29.0.** Reached through `@n8n/backend-network` (`^7.28.0`,
-satisfied directly) and through `release-it@20.2.1`, which pins `undici`
-to exactly `7.28.0`. Two candidate fixes were rejected:
+The release-contract test pins the complete supported set so a future isolated
+major bump cannot look valid after changing only one manifest line.
 
-- A scoped `overrides` entry — **rejected by lint.** The
-  `@n8n/community-nodes/no-overrides-field` rule forbids the `overrides` field
-  in community node packages outright.
-- Staying on `release-it@20.x` — **no patched release exists.** `20.2.1` is
-  the final 20.x version.
+`n8n-workflow@2.29.3` is an explicit development fixture, not a runtime
+constraint. The published peer remains `n8n-workflow: "*"`, so host n8n
+versions are not narrowed. The fixture keeps clean-install build tests
+deterministic and avoids treating a vulnerable auto-installed peer as shipped
+package code.
 
-`release-it` is therefore bumped to `21.0.1`. Note this changes the
-deliberately locked release pin asserted in `test/release.test.cjs`, updated
-in the same change.
+## Security boundary
 
-`release-it@21` declares `engines.node ^22.21.0 || >=24.0.0`. This does **not**
-change what the published package supports: `engines.node` stays `>=20.19.0`
-for consumers, `release-it` is development-only and is not in the published
-`files` list, and the n8n CI job already runs on Node 22 ("Setup Node 22 for
-n8n toolchain"). Only a maintainer running `npm run release` locally now needs
-Node 22.21 or newer. `release-it` is not used by CI or by
-`publish-n8n.yml`, which publishes via npm trusted publishing.
+The published package audit is clean:
 
-The `uuid` / LangChain moderates described below are unchanged and remain
-accepted under the existing policy. The gate covers high and critical only,
-so those stay visible rather than suppressed.
+```text
+npm audit --omit=dev --audit-level=moderate
+found 0 vulnerabilities
+```
+
+The stable n8n CLI's development-only AI SDK graph currently pins
+`@n8n/utils` to `nanoid@3.3.8`. No stable n8n CLI release contains a patched
+upstream pin, npm proposes an invalid downgrade to node-cli 0.20.0, and the n8n
+community-node lint policy forbids an `overrides` field. The fail-closed
+`npm run audit:dev` gate therefore permits exactly these two advisories and the
+eight affected dependency nodes they currently reach:
+
+- `GHSA-28wg-ghj8-5hjv`
+- `GHSA-2v37-7h3g-55p8`
+
+While high findings remain, a new or missing advisory ID, a severity
+escalation, or an affected-package addition/substitution fails the gate. A
+remediation-driven shrinking subset is intentionally accepted, including an
+ancestor dropping below high severity, so an upstream partial fix does not
+require weakening or rewriting the allowlist.
+Moderate LangChain/uuid findings remain visible. In particular, Dependabot
+alert #8 (`GHSA-w5hq-g745-h8pq`) remains in the CLI's nested LangChain graph:
+the stable CLI pins LangChain releases that require `uuid@^10.0.0`, so the
+patched `uuid@11.1.1` cannot satisfy that range. The explicit host fixture does
+resolve `uuid@11.1.1`; removing the nested finding requires an upstream n8n
+CLI/AI SDK release and must not be forced with the lint-forbidden `overrides`
+field. None of these development dependencies are included in the package
+`files` allowlist or npm tarball. Remove the nanoid exception as soon as stable
+n8n packages consume a patched release.
+
+The prior `brace-expansion`, `ip-address`, and `undici` high findings remain
+resolved in the lockfile. `release-it@21` remains development-only and requires
+Node 22.21 or newer for maintainers running the release helper; trusted npm
+publishing does not use that helper.
 
 ## Validation
 
+- `npm ci`
 - `npm test`
 - `npm run lint`
 - `npm run build`
+- formatter output comparison between Prettier 3.6.2 and 3.9.6
+- `npm audit --omit=dev --audit-level=moderate`
+- `npm run audit:dev`
 - `npm pack --dry-run`
-- `npm audit --omit=dev --audit-level=moderate`: zero production vulnerabilities
-- `npm run audit:dev`: only the documented development advisory is present
 
-Both audit commands run in pull-request validation and again in the trusted-publishing workflow, so the recorded boundary is release-gated rather than advisory-only.
-
-## Transitive Security Policy
-
-The stable n8n node CLI currently brings moderate development-only findings
-through its AI SDK, LangChain, and `uuid` dependency chain. npm offers only an
-invalid downgrade of the builder as an automated fix. The package does not ship
-those development dependencies, and the production dependency audit is clean.
-
-The graph also contains GHSA-mh99-v99m-4gvg through older minimatch consumers.
-The only patched `brace-expansion` release is the API-incompatible 5.0.8 line;
-forcing it into those consumers breaks the n8n lint toolchain. This dependency
-is development-only, receives no untrusted glob input in this package, and is
-not included in the published tarball.
-
-CI and trusted publishing run a fail-closed high/critical audit policy that
-permits only GHSA-mh99-v99m-4gvg in the full development graph while rejecting
-every other high or critical advisory. Moderate development-only findings
-remain visible in npm and Dependabot rather than being hidden.
-
-Recheck this exception when n8n promotes a stable CLI release with an updated
-minimatch dependency tree.
+Pull-request validation and trusted publishing repeat the lint, build, audit,
+and package checks.
