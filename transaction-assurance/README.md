@@ -248,7 +248,7 @@ node bin/agora-assure.mjs authority-request examples/authority-request-input.jso
 node bin/agora-assure.mjs self-test
 ```
 
-The CLI reads and writes local JSON only. It never makes a network call.
+The CLI reads and writes local JSON only. It never makes a network call. Its `normalize` command always produces `unverified` / `not_checked` evidence; command-line flags cannot promote an artifact to verified or active. Verification evidence must come from a separately reviewed adapter or institutional verifier using the library API.
 
 ## State model
 
@@ -276,7 +276,9 @@ State names are summaries. Structured evidence and evaluation blockers remain au
 
 The library is designed to carry references, hashes, statuses, and bounded summaries. Do not pass raw secrets into public records.
 
-Generated envelopes assert exclusion of:
+Generated envelopes expose a conservative `redaction.verification_status = not_verified` record. The exclusion booleans default to `false`; the builder does not claim that arbitrary caller-supplied references or summaries are public-safe merely because raw payload fields are absent. Integrators must validate or scrub their supplied strings before publication.
+
+The envelope schema does not include dedicated fields for:
 
 - raw prompts;
 - raw tool output;
@@ -285,7 +287,7 @@ Generated envelopes assert exclusion of:
 - private owner data;
 - secrets.
 
-A hash can still reveal equality and may be sensitive when computed over a small guessable input. Store public hashes only when that disclosure is acceptable. Keep raw source artifacts in an access-controlled system.
+A hash can still reveal equality and may be sensitive when computed over a small guessable input. Store public hashes only when that disclosure is acceptable. Keep raw source artifacts in an access-controlled system. Do not promote the redaction status without a separately reviewed content scanner or provenance-aware producer.
 
 ## Protocol adapters
 

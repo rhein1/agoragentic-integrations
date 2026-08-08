@@ -17,7 +17,7 @@ function usage() {
 
 Usage:
   agora-assure detect <artifact.json> [--protocol <id>]
-  agora-assure normalize <artifact.json> [--protocol <id>] [--artifact-ref <ref>] [--verification-status <status>] [--verification-ref <ref>] [--revocation-status <status>] [--revocation-evidence-ref <ref>] [--revocation-checked-at <ISO date>]
+  agora-assure normalize <artifact.json> [--protocol <id>] [--artifact-ref <ref>]
   agora-assure authority-request <input.json>
   agora-assure envelope <input.json>
   agora-assure evaluate <envelope.json> [--phase pre_execution|post_execution] [--now <ISO date>]
@@ -166,17 +166,6 @@ function main() {
       print(normalizeAuthorityArtifact(artifact, {
         protocolHint: option('--protocol'),
         artifactRef: option('--artifact-ref'),
-        revocation: {
-          status: option('--revocation-status'),
-          evidenceRef: option('--revocation-evidence-ref'),
-          checkedAt: option('--revocation-checked-at'),
-        },
-        verification: {
-          status: option('--verification-status') || 'unverified',
-          evidenceRef: option('--verification-ref'),
-          verifierRef: option('--verifier-ref'),
-          checkedAt: option('--checked-at'),
-        },
       }));
       return;
     }

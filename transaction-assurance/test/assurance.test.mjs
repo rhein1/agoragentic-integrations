@@ -244,7 +244,10 @@ test('verified scoped authority produces an authority-ready pre-execution envelo
   assert.match(envelope.evidence.envelope_hash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(envelope.evidence.envelope_hash, computeEnvelopeHash(envelope));
   assertNoAuthority(envelope.authority_flags);
-  for (const value of Object.values(envelope.redaction)) assert.equal(value, true);
+  assert.equal(envelope.redaction.verification_status, 'not_verified');
+  for (const [key, value] of Object.entries(envelope.redaction)) {
+    if (key !== 'verification_status') assert.equal(value, false);
+  }
 
   const evaluation = evaluateTransactionAssuranceEnvelope(envelope, {
     phase: 'pre_execution',
@@ -691,7 +694,7 @@ test('post-execution completion requires the full referenced evidence chain', ()
   assert.ok(evaluation.blockers.includes('evidence_chain_refs_missing'));
 });
 
-test('public objects exclude raw secret values and forbidden private payload fields', () => {
+test('public objects omit dedicated raw payload fields without claiming arbitrary strings were scrubbed', () => {
   const normalized = verifiedAuthority();
   const envelope = buildTransactionAssuranceEnvelope(envelopeInput());
   const keys = collectObjectKeys({ normalized, envelope });
@@ -715,9 +718,31 @@ test('public objects exclude raw secret values and forbidden private payload fie
   const serialized = JSON.stringify({ normalized, envelope });
   assert.doesNotMatch(serialized, /\bamk_[A-Za-z0-9_-]{12,}\b/);
   assert.doesNotMatch(serialized, /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/);
-  assert.equal(envelope.redaction.raw_prompt_excluded, true);
-  assert.equal(envelope.redaction.raw_tool_output_excluded, true);
-  assert.equal(envelope.redaction.raw_payment_credentials_excluded, true);
+  assert.equal(envelope.redaction.verification_status, 'not_verified');
+  assert.equal(envelope.redaction.raw_prompt_excluded, false);
+  assert.equal(envelope.redaction.raw_tool_output_excluded, false);
+  assert.equal(envelope.redaction.raw_payment_credentials_excluded, false);
+});
+
+test('CLI normalization cannot self-promote caller assertions to verified authority', () => {
+  const result = spawnSync(process.execPath, [
+    cli,
+    'normalize',
+    path.join(root, 'examples', 'native-mandate.json'),
+    '--verification-status',
+    'verified',
+    '--verification-ref',
+    'caller:assertion',
+    '--revocation-status',
+    'active',
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const normalized = JSON.parse(result.stdout);
+  assert.equal(normalized.verification.status, 'unverified');
+  assert.equal(normalized.revocation_status, 'not_checked');
 });
 
 test('CLI self-test is offline, no-spend, and successful', () => {
