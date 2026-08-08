@@ -148,9 +148,9 @@ Decision records are redacted and stored locally under `.agoragentic/`. Do not t
 
 ### OpenCode `tool.execute.before` / `tool.execute.after`
 
-The repository also contains the experimental [`@agoragentic/opencode`](../opencode/) source candidate. It maps OpenCode's native before hook to the existing Harness mapper/evaluator and approval family, then writes only bounded hash-and-shape evidence from the successful after hook into the Harness local-receipt family.
+The repository also contains the experimental [`@agoragentic/opencode`](https://github.com/rhein1/agoragentic-integrations/tree/main/opencode) source candidate. It maps OpenCode's native before hook to the existing Harness mapper/evaluator and approval family, then writes only bounded hash-and-shape evidence from the successful after hook into the Harness local-receipt family.
 
-The compatibility evidence is deliberately narrow: OpenCode `1.18.15`, official source commit `38e10eb1408feb700021b8e8766fb0ab41bf84e2`, and the checked-in [`opencode-plugin-1.18.15.json`](../opencode/contracts/opencode-plugin-1.18.15.json) contract fixture. This is not an end-to-end OpenCode runtime compatibility claim. The plugin is not published to npm and registers no hosted, paid, x402, deployment, publication, or Memory service tools.
+The compatibility evidence is deliberately narrow: OpenCode `1.18.15`, official source commit `38e10eb1408feb700021b8e8766fb0ab41bf84e2`, and the checked-in [`opencode-plugin-1.18.15.json`](https://github.com/rhein1/agoragentic-integrations/blob/main/opencode/contracts/opencode-plugin-1.18.15.json) contract fixture. This is not an end-to-end OpenCode runtime compatibility claim. The plugin is not published to npm and registers no hosted, paid, x402, deployment, publication, or Memory service tools.
 
 ## Middleware lifecycle
 
