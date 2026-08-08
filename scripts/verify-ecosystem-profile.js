@@ -58,6 +58,18 @@ function findProhibitedClaims(ecosystem) {
   return [...new Set(claims)];
 }
 
+function findUnsupportedHarnessBrandClaims(text) {
+  const claims = [];
+  const value = String(text || '');
+  if (/\bverifiable local receipts?\b/i.test(value)) {
+    claims.push('claims that a local receipt is verifiable without naming a verification mechanism');
+  }
+  if (/intent\s*→\s*policy\s*→\s*approval\s*→\s*tool\s*→\s*receipt/i.test(value)) {
+    claims.push('presents Harness Core as executing the tool instead of stopping at the host boundary');
+  }
+  return claims;
+}
+
 function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
   const errors = [];
   const ecosystemPath = path.join(root, 'ecosystem.json');
@@ -176,6 +188,14 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
     if (!normalizedBrandSystem.includes('no local receipt is presented as settlement')) {
       errors.push('docs/BRAND_SYSTEM.md must preserve the local-receipt boundary');
     }
+    if (!brandSystem.includes('intent → policy → approval → host boundary → local receipt')) {
+      errors.push('docs/BRAND_SYSTEM.md must describe Harness Core as stopping at the host boundary');
+    }
+    if (!brandSystem.includes('inspectable, schema-checkable local receipt')) {
+      errors.push('docs/BRAND_SYSTEM.md must scope local-receipt proof to inspection and schema checking');
+    }
+    errors.push(...findUnsupportedHarnessBrandClaims(brandSystem)
+      .map((claim) => `docs/BRAND_SYSTEM.md unsupported Harness Core claim: ${claim}`));
 
     const harnessReadmePath = path.join(root, 'harness-core', 'README.md');
     const harnessHeroPath = path.join(root, 'harness-core', 'assets', 'harness-core-product-hero.svg');
@@ -229,6 +249,7 @@ if (require.main === module) {
 
 module.exports = {
   findProhibitedClaims,
+  findUnsupportedHarnessBrandClaims,
   hasAffirmativeReceiptEquivalence,
   verifyEcosystemProfile,
 };

@@ -74,6 +74,27 @@ try {
   if (!existsSync(installedHeroPath)) fail('installed package is missing assets/harness-core-product-hero.svg');
 
   const installedReadme = readFileSync(installedReadmePath, 'utf8');
+  const expectedReadmeArtifactTree = [
+    'Expected local outputs include:',
+    '',
+    '```text',
+    'agent.yaml',
+    'policy.yaml',
+    '.agoragentic/',
+    '├── local-proof.json',
+    '├── local-receipt.json',
+    '└── runs/<run_id>/',
+    '    ├── state.json',
+    '    ├── events.jsonl',
+    '    ├── local-proof.json',
+    '    ├── local-receipt.json',
+    '    ├── agent-os-harness.json',
+    '    └── summary.md',
+    '```',
+  ].join('\n');
+  if (!installedReadme.replace(/\r\n/g, '\n').includes(expectedReadmeArtifactTree)) {
+    fail('installed README must document the init/run artifact tree exactly');
+  }
   for (const target of localMarkdownTargets(installedReadme)) {
     const fileTarget = decodeURIComponent(target.split('#')[0].split('?')[0]);
     if (!fileTarget) continue;
@@ -117,6 +138,26 @@ try {
   if (!validate.ok) fail(`validate reported issues: ${JSON.stringify(validate.issues || [])}`);
   const result = JSON.parse(run(process.execPath, [bin, 'run'], consumer));
   if (result.status !== 'passed') fail(`run status was ${result.status}`);
+
+  if (typeof result.run_path !== 'string' || !result.run_path) {
+    fail('run did not return a run_path');
+  }
+  for (const artifact of [
+    'agent.yaml',
+    'policy.yaml',
+    path.join('.agoragentic', 'local-proof.json'),
+    path.join('.agoragentic', 'local-receipt.json'),
+    path.join(result.run_path, 'state.json'),
+    path.join(result.run_path, 'events.jsonl'),
+    path.join(result.run_path, 'local-proof.json'),
+    path.join(result.run_path, 'local-receipt.json'),
+    path.join(result.run_path, 'agent-os-harness.json'),
+    path.join(result.run_path, 'summary.md'),
+  ]) {
+    if (!existsSync(path.join(consumer, artifact))) {
+      fail(`installed init/run artifact is missing: ${artifact}`);
+    }
+  }
 
   console.log('SMOKE OK: packed, installed outside the monorepo, README assets/links, subpath imports, and init/validate/run all passed.');
   cleanup();

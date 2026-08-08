@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   findProhibitedClaims,
+  findUnsupportedHarnessBrandClaims,
   hasAffirmativeReceiptEquivalence,
 } = require('../scripts/verify-ecosystem-profile.js');
 
@@ -44,4 +45,22 @@ test('affirmative local-to-settlement receipt equivalence is rejected', () => {
       fixture,
     );
   }
+});
+
+test('unsupported Harness Core execution and receipt claims are rejected', () => {
+  assert.deepEqual(
+    findUnsupportedHarnessBrandClaims(
+      'intent → policy → approval → host boundary → local receipt; inspectable, schema-checkable local receipt',
+    ),
+    [],
+  );
+
+  assert.ok(
+    findUnsupportedHarnessBrandClaims('Give any agent a verifiable local receipt.')
+      .some((claim) => claim.includes('without naming a verification mechanism')),
+  );
+  assert.ok(
+    findUnsupportedHarnessBrandClaims('intent → policy → approval → tool → receipt')
+      .some((claim) => claim.includes('stopping at the host boundary')),
+  );
 });

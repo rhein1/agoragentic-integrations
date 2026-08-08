@@ -30,16 +30,15 @@ Expected local outputs include:
 agent.yaml
 policy.yaml
 .agoragentic/
-├── runs/<run_id>/
-│   ├── state.json
-│   ├── events.jsonl
-│   ├── local-proof.json
-│   ├── local-receipt.json
-│   └── summary.md
-├── approvals/
-├── runtime-probes/
-├── listing-readiness.json
-└── agent-os-harness.json
+├── local-proof.json
+├── local-receipt.json
+└── runs/<run_id>/
+    ├── state.json
+    ├── events.jsonl
+    ├── local-proof.json
+    ├── local-receipt.json
+    ├── agent-os-harness.json
+    └── summary.md
 ```
 
 **Local receipts are not settlement receipts, certifications, endorsements, or marketplace verification.** The v0.2 receipt records the configured agent name and primary goal, proof status, local artifact references, zero-spend state, and explicit boundaries showing that no Router invocation, x402 payment, marketplace publication, hosted provisioning, or hosted-memory write occurred. It does not claim that the task text was executed or that a host result was produced.

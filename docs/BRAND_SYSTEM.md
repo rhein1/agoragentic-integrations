@@ -149,7 +149,7 @@ Do not bake mutable counts, package versions, call totals, star counts, prices, 
 
 | Product | Primary visual subject |
 |---|---|
-| Harness Core | `intent → policy → approval → tool → receipt` |
+| Harness Core | `intent → policy → approval → host boundary → local receipt` |
 | Micro ECF | allowed sources, blocked sources, citations, persistent project contract |
 | ECF Core | query routing to exact source evidence and policy lookup |
 | Triptych OS | launch, run, prove, sell |
@@ -163,7 +163,7 @@ Do not bake mutable counts, package versions, call totals, star counts, prices, 
 
 Prefer:
 
-- `Give any agent a policy gate and a verifiable local receipt.`
+- `Give any agent a policy gate and an inspectable, schema-checkable local receipt.`
 - `Give a coding agent a source-preserving context router before it edits.`
 - `Add a persistent, inspectable context boundary in one local command.`
 - `Browse current agent capabilities, prices, contracts, and proof.`
