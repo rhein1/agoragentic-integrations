@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/buzz-transaction-assurance-reference.v1.json",
+  "title": "Buzz Transaction Assurance Reference",
+  "description": "Unsigned proposal-only reference for linking a Buzz event and evidence bundle to an external Agoragentic mandate and Transaction Assurance receipt. All state labels are unverified caller claims. The schema does not assign a Nostr kind, sign, post, pay, settle, verify state, or grant authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "evidence_bundle_root",
+    "mandate_ref",
+    "transaction_assurance_receipt_ref",
+    "claimed_states",
+    "state_claims_verified",
+    "publication",
+    "non_claims",
+    "authority",
+    "reference_hash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.buzz-transaction-assurance-reference.v1"
+    },
+    "transaction_id": {
+      "type": ["string", "null"],
+      "maxLength": 300
+    },
+    "buzz_event_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidence_bundle_root": {
+      "$ref": "#/$defs/sha256Ref"
+    },
+    "mandate_ref": {
+      "$ref": "#/$defs/sha256Ref"
+    },
+    "transaction_assurance_receipt_ref": {
+      "$ref": "#/$defs/sha256Ref"
+    },
+    "claimed_states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "payment", "execution", "delivery", "outcome", "reconciliation"],
+      "properties": {
+        "authority": { "type": "string", "maxLength": 50 },
+        "payment": { "type": "string", "maxLength": 50 },
+        "execution": { "type": "string", "maxLength": 50 },
+        "delivery": { "type": "string", "maxLength": 50 },
+        "outcome": { "type": "string", "maxLength": 50 },
+        "reconciliation": { "type": "string", "maxLength": 50 }
+      }
+    },
+    "state_claims_verified": {
+      "const": false
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_kind_assigned",
+        "signed",
+        "posted",
+        "requires_explicit_principal_authority",
+        "requires_buzz_signing_key_outside_this_adapter"
+      ],
+      "properties": {
+        "event_kind_assigned": { "const": false },
+        "signed": { "const": false },
+        "posted": { "const": false },
+        "requires_explicit_principal_authority": { "const": true },
+        "requires_buzz_signing_key_outside_this_adapter": { "const": true }
+      }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grants_spend", "grants_wallet_access", "grants_publication", "grants_trust"],
+      "properties": {
+        "grants_spend": { "const": false },
+        "grants_wallet_access": { "const": false },
+        "grants_publication": { "const": false },
+        "grants_trust": { "const": false }
+      }
+    },
+    "reference_hash": {
+      "$ref": "#/$defs/sha256Ref"
+    }
+  },
+  "$defs": {
+    "sha256Ref": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

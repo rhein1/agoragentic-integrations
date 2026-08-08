@@ -1,0 +1,38 @@
+{
+  "schema": "agoragentic.buzz-transaction-assurance-reference.v1",
+  "transaction_id": "txn_example_only",
+  "buzz_event_id": "fbe42b8e93e7acf54b8f8d0f8c30612645503f4ba606789709ec906bc581f33a",
+  "evidence_bundle_root": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "mandate_ref": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "transaction_assurance_receipt_ref": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "claimed_states": {
+    "authority": "unknown",
+    "payment": "unknown",
+    "execution": "unknown",
+    "delivery": "unknown",
+    "outcome": "unknown",
+    "reconciliation": "unknown"
+  },
+  "state_claims_verified": false,
+  "publication": {
+    "event_kind_assigned": false,
+    "signed": false,
+    "posted": false,
+    "requires_explicit_principal_authority": true,
+    "requires_buzz_signing_key_outside_this_adapter": true
+  },
+  "non_claims": [
+    "This reference does not verify the Buzz event signature.",
+    "This reference does not grant payment or publication authority.",
+    "Transaction Assurance state labels are caller-supplied claims and are not independently verified by this adapter.",
+    "A Buzz channel membership is not an Agoragentic economic mandate.",
+    "A relay event is not by itself proof of payment, delivery, or reconciliation."
+  ],
+  "authority": {
+    "grants_spend": false,
+    "grants_wallet_access": false,
+    "grants_publication": false,
+    "grants_trust": false
+  },
+  "reference_hash": "sha256:0adcdd41aa11b5470f3ef350d6e33950362e2e544262327aa661a0fbcb0ace0a"
+}

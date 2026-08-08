@@ -1,0 +1,52 @@
+name: Buzz Signed Workspace Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'examples/buzz-signed-workspace-evidence/**'
+      - 'README.md'
+      - 'llms.txt'
+      - 'integrations.json'
+      - '.github/workflows/buzz-signed-workspace-evidence.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/buzz-signed-workspace-evidence/**'
+      - 'README.md'
+      - 'llms.txt'
+      - 'integrations.json'
+      - '.github/workflows/buzz-signed-workspace-evidence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: examples/buzz-signed-workspace-evidence
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Syntax and tests
+        run: |
+          npm run check
+          npm test
+      - name: Parse machine contracts
+        run: |
+          node -e "for (const file of ['listing-candidates.json','receipt-reference.schema.json','receipt-reference.example.json','upstream-provenance.json']) JSON.parse(require('node:fs').readFileSync(file, 'utf8'))"
+      - name: Package dry run
+        run: npm run pack:dry

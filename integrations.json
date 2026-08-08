@@ -1227,6 +1227,15 @@
       "path": "cline/README.md",
       "install": "npx -y agoragentic-mcp@1.3.6",
       "docs": "cline/README.md"
+    },
+    {
+      "id": "buzz-signed-workspace-evidence",
+      "name": "Buzz Signed Workspace Evidence",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "examples/buzz-signed-workspace-evidence/buzz-event-evidence.mjs",
+      "install": "node examples/buzz-signed-workspace-evidence/cli.mjs <events.json> --out buzz-evidence.json",
+      "docs": "examples/buzz-signed-workspace-evidence/README.md"
     }
   ],
   "specs": [
@@ -1376,6 +1385,8 @@
     "livekit_agents": "livekit-agents/README.md",
     "livekit_agents_adapter": "livekit-agents/agoragentic_livekit.py",
     "pipecat": "pipecat/README.md",
-    "pipecat_adapter": "pipecat/agoragentic_pipecat.py"
+    "pipecat_adapter": "pipecat/agoragentic_pipecat.py",
+    "buzz_signed_workspace_evidence": "examples/buzz-signed-workspace-evidence/README.md",
+    "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json"
   }
 }

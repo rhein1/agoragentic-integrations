@@ -1,0 +1,58 @@
+{
+  "schema": "agoragentic.buzz-upstream-provenance.v1",
+  "retrieved_at": "2026-08-08",
+  "block_buzz": {
+    "repository": "https://github.com/block/buzz",
+    "commit": "f029deafae6ad3b63e13c29104f3be76122cb1df",
+    "commit_url": "https://github.com/block/buzz/tree/f029deafae6ad3b63e13c29104f3be76122cb1df",
+    "kind_registry_path": "crates/buzz-core/src/kind.rs",
+    "kind_registry_url": "https://github.com/block/buzz/blob/f029deafae6ad3b63e13c29104f3be76122cb1df/crates/buzz-core/src/kind.rs",
+    "kind_registry_sha256": "sha256:74533cfc1ac016dcb1a83279c2b06f93807f29489604cdccefc46b645acfce97",
+    "classified_kind_subset": {
+      "0": "profile",
+      "1": "text_note",
+      "7": "reaction",
+      "9": "stream_message",
+      "1617": "git_patch",
+      "1618": "git_pull_request",
+      "10100": "agent_profile",
+      "30174": "agent_engram",
+      "30175": "agent_persona",
+      "30179": "private_managed_agent",
+      "30617": "git_repository_announcement",
+      "40002": "stream_message_v2",
+      "40003": "stream_message_edit",
+      "43001": "agent_job_request",
+      "45001": "forum_post",
+      "45003": "forum_comment"
+    }
+  },
+  "nip_01": {
+    "repository": "https://github.com/nostr-protocol/nips",
+    "commit": "c53877571f96eb423661fc23c620d629d37b8f19",
+    "path": "01.md",
+    "source_url": "https://github.com/nostr-protocol/nips/blob/c53877571f96eb423661fc23c620d629d37b8f19/01.md",
+    "sha256": "sha256:afa8a4eeff70d47503f2acab03b29f4bf0ed90ac95a10d3fd07e4fecddc8ae20",
+    "wire_constraints_exercised": [
+      "lowercase 64-character event IDs and pubkeys",
+      "lowercase 128-character signatures",
+      "integer Unix timestamps",
+      "kind range 0 through 65535",
+      "UTF-8 JSON serialization [0,pubkey,created_at,kind,tags,content]"
+    ]
+  },
+  "validation_scope": {
+    "local_compiler_only": true,
+    "relay_connection_performed": false,
+    "signature_or_event_created": false,
+    "event_posted": false,
+    "live_compatibility_claimed": false,
+    "attestation_reference_verified": false
+  },
+  "non_claims": [
+    "The pinned source review does not prove compatibility with a running Buzz relay.",
+    "This adapter does not verify Schnorr signatures itself.",
+    "This adapter does not connect to, sign for, or post to Buzz.",
+    "This adapter does not grant economic, wallet, deployment, publication, or trust authority."
+  ]
+}
