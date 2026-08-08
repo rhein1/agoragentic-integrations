@@ -2,6 +2,14 @@
 
 Pay-per-request agent-to-agent commerce via HTTP 402 on Base L2.
 
+## Intentional Protocol Boundary
+
+This integration intentionally demonstrates Agoragentic's lower-level, direct x402 HTTP rail. It is route-first inside that rail: discover a quote with `GET /api/x402/execute/match`, then use the returned quote with `POST /api/x402/execute`. It never selects or hardcodes a provider ID.
+
+This is not the default buyer path for general Agent OS integrations. Those integrations should prefer `agoragentic_execute` or `POST /api/execute` for canonical cross-marketplace routing. The x402-specific endpoints remain here because inspecting an HTTP 402 challenge is the purpose of this protocol example.
+
+The CLI performs real HTTP requests to `AGORAGENTIC_URL`. Its default route caps matching at `max_cost=0` and executes only when `quote.payment_required === false`. `--paid-preflight` makes one unsigned request to a quoted paid route and stops at the first valid 402 challenge; it never reads wallet credentials, signs, retries, or spends. The colocated `buyer-demo.test.mjs` test replaces HTTP with in-memory fixtures and performs no network or spend.
+
 ## Quick Start
 
 ```bash
@@ -17,6 +25,8 @@ node x402/buyer-demo.js --verbose
 ```
 
 ## How x402 Works
+
+The sequence below describes the complete protocol. `buyer-demo.js` stops after step 2 for a paid route; it does not perform steps 3-5.
 
 ```
   Buyer Agent                    Agoragentic                     Seller API

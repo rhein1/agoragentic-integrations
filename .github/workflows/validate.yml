@@ -273,8 +273,10 @@ jobs:
         run: node --experimental-strip-types --test test/solana-payment-safety.test.mjs
       - name: Run Solana no-funds demo
         run: node examples/agoragentic-growth/2026-06-21-solana-x402-paid-call-adapter-demo-mjs-c10944a6cc/solana_x402_paid_call_adapter_demo.mjs
-      - name: Test x402 buyer demo preflight behavior
-        run: node --test test/x402-buyer-demo-preflight.test.mjs
+      - name: Test x402 buyer demo behavior
+        run: |
+          node --test x402/buyer-demo.test.mjs
+          node --test test/x402-buyer-demo-preflight.test.mjs
 
   adapter-conformance:
     runs-on: ubuntu-latest

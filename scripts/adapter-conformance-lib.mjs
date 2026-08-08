@@ -8,6 +8,17 @@ const PARSER_TIMEOUT_MS = 10_000;
 const TEST_FILE_PATTERN = /(?:^|\/)(?:test|tests)\/|(?:\.test|\.spec)\.[^.]+$/i;
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules"]);
 
+const FLOW_EXPECTATIONS_BY_INTEGRATION = Object.freeze({
+  x402: {
+    profile: "direct_x402_route_first",
+    signals: [
+      { id: "route_match", scope: "primary", pattern: /\/api\/x402\/execute\/match\b/ },
+      { id: "route_execute", scope: "primary", pattern: /\/api\/x402\/execute(?!\/match)\b/ },
+      { id: "direct_boundary", scope: "docs", pattern: /\bdirect x402\b/ },
+    ],
+  },
+});
+
 const SECRET_PATTERNS = [
   { code: "pem_private_key", pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g },
   { code: "github_token", pattern: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/g },
@@ -211,6 +222,25 @@ function canonicalFlowCheck(integration, files) {
     return makeCheck("execute_first_signal", "not_applicable", "Deprecated entries are not required to advertise the current execute-first flow.");
   }
   const content = files.map((file) => file.text).join("\n").toLowerCase();
+  const expectation = FLOW_EXPECTATIONS_BY_INTEGRATION[integration.id];
+  if (expectation) {
+    const missingSignals = expectation.signals
+      .filter((signal) => {
+        const scopedContent = signal.scope === "primary"
+          ? files.find((file) => file.path === integration.path)?.text || ""
+          : files.find((file) => file.path === integration.docs)?.text || "";
+        return !signal.pattern.test(scopedContent.toLowerCase());
+      })
+      .map((signal) => signal.id);
+    const evidence = {
+      profile: expectation.profile,
+      required_signals: expectation.signals.map((signal) => signal.id),
+      missing_signals: missingSignals,
+    };
+    return missingSignals.length === 0
+      ? makeCheck("execute_first_signal", "pass", "Primary artifact contains the direct x402 routes and docs declare the intentional boundary.", evidence)
+      : makeCheck("execute_first_signal", "advisory", "The x402 integration is missing required direct-route or boundary signals.", evidence);
+  }
   const present = content.includes("agoragentic_execute")
     || content.includes("/api/execute")
     || content.includes("execute(task")

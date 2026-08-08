@@ -3,11 +3,14 @@
  * Agoragentic x402 Buyer Demo Script
  * ===================================
  * 
- * Self-contained Node.js script demonstrating x402 discovery and preflight:
+ * Self-contained Node.js script demonstrating the direct x402 HTTP rail:
  *   1. Discover available services
- *   2. Get a quote via execute/match
+ *   2. Get a route-first quote via /api/x402/execute/match
  *   3. Free-tier execution (echo test)
  *   4. Optional paid-route preflight that stops at the 402 challenge
+ *
+ * This protocol-focused demo intentionally uses /api/x402/execute rather than
+ * the general Agent OS /api/execute entrypoint. It never selects a provider ID.
  * 
  * Usage:
  *   # Free demo (no wallet needed)
@@ -33,11 +36,11 @@ const http = require('http');
 const BASE_URL = process.env.AGORAGENTIC_URL || 'https://agoragentic.com';
 const isPaidPreflight = process.argv.includes('--paid-preflight');
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
-
-if (process.argv.includes('--paid')) {
-    console.error('The old --paid mode never signed a payment. Use --paid-preflight for an honest no-spend 402 challenge check.');
-    process.exit(2);
-}
+const DIRECT_X402_FLOW = Object.freeze({
+    profile: 'direct_x402_route_first',
+    matchPath: '/api/x402/execute/match',
+    executePath: '/api/x402/execute',
+});
 
 // ─── Helpers ────────────────────────────────────────────
 function log(emoji, message, data = null) {
@@ -47,9 +50,9 @@ function log(emoji, message, data = null) {
     }
 }
 
-function request(method, path, body = null) {
+function request(method, path, body = null, baseUrl = BASE_URL) {
     return new Promise((resolve, reject) => {
-        const url = new URL(path, BASE_URL);
+        const url = new URL(path, baseUrl);
         const isSecure = url.protocol === 'https:';
         const transport = isSecure ? https : http;
 
@@ -106,15 +109,15 @@ function request(method, path, body = null) {
 // Free-vs-paid is decided ONLY by payment_required === false. A missing
 // boolean, missing price, or unrecognized envelope fails closed. next_step.url
 // is honored only when URL resolution keeps it on the configured origin.
-function sameOriginExecutePath(candidate) {
-    const fallback = '/api/x402/execute';
+function sameOriginExecutePath(candidate, baseUrl = BASE_URL) {
+    const fallback = DIRECT_X402_FLOW.executePath;
     if (typeof candidate !== 'string' || candidate.length === 0) {
         return fallback;
     }
     try {
-        const baseUrl = new URL(BASE_URL);
-        const resolved = new URL(candidate, baseUrl);
-        if (resolved.origin !== baseUrl.origin) {
+        const configuredBaseUrl = new URL(baseUrl);
+        const resolved = new URL(candidate, configuredBaseUrl);
+        if (resolved.origin !== configuredBaseUrl.origin) {
             return fallback;
         }
         return `${resolved.pathname}${resolved.search}`;
@@ -123,7 +126,7 @@ function sameOriginExecutePath(candidate) {
     }
 }
 
-function parseMatchEnvelope(body) {
+function parseMatchEnvelope(body, baseUrl = BASE_URL) {
     if (!body || typeof body !== 'object') {
         throw new Error('Match response is not a JSON object; refusing to guess payment terms');
     }
@@ -146,7 +149,7 @@ function parseMatchEnvelope(body) {
     if (typeof quote.quote_id !== 'string' || quote.quote_id.length === 0) {
         throw new Error('Quote is missing "quote.quote_id"');
     }
-    const executePath = sameOriginExecutePath(quote.next_step?.url);
+    const executePath = sameOriginExecutePath(quote.next_step?.url, baseUrl);
     return {
         quoteId: quote.quote_id,
         paymentRequired: quote.payment_required,
@@ -157,15 +160,15 @@ function parseMatchEnvelope(body) {
 }
 
 // ─── Step 1: Gateway Info ───────────────────────────────
-async function step1_gatewayInfo() {
-    log('ℹ️', 'Step 1: Checking x402 gateway info...');
-    const res = await request('GET', '/api/x402/info');
+async function step1_gatewayInfo(runtime) {
+    runtime.log('ℹ️', 'Step 1: Checking x402 gateway info...');
+    const res = await runtime.request('GET', '/api/x402/info');
 
     if (res.status !== 200) {
         throw new Error(`Gateway info failed: ${res.status}`);
     }
 
-    log('✅', `Gateway: ${res.body.name || 'Agoragentic x402'}`, {
+    runtime.log('✅', `Gateway: ${res.body.name || 'Agoragentic x402'}`, {
         protocol: res.body.protocol || 'x402',
         network: res.body.network,
         currency: res.body.currency,
@@ -175,45 +178,45 @@ async function step1_gatewayInfo() {
 }
 
 // ─── Step 2: Browse Catalog ─────────────────────────────
-async function step2_browseCatalog() {
-    log('🔍', 'Step 2: Browsing x402 service catalog...');
-    const res = await request('GET', '/api/x402/listings');
+async function step2_browseCatalog(runtime) {
+    runtime.log('🔍', 'Step 2: Browsing x402 service catalog...');
+    const res = await runtime.request('GET', '/api/x402/listings');
 
     if (res.status !== 200) {
         throw new Error(`Catalog fetch failed: ${res.status}`);
     }
 
     const listings = res.body.listings || res.body.capabilities || [];
-    log('📋', `Found ${listings.length} available services`);
+    runtime.log('📋', `Found ${listings.length} available services`);
 
     // Show top 5
     const top5 = listings.slice(0, 5);
     for (const listing of top5) {
         const price = parseFloat(listing.price_usdc || listing.price_per_unit || 0);
         const label = price <= 0 ? 'FREE' : `$${price.toFixed(4)} USDC`;
-        log('   ', `• ${listing.name} — ${label} (${listing.category || 'general'})`);
+        runtime.log('   ', `• ${listing.name} — ${label} (${listing.category || 'general'})`);
     }
 
     return listings;
 }
 
 // ─── Step 3: Match a Service ────────────────────────────
-async function step3_executeMatch(task = 'echo') {
-    log('🎯', `Step 3: Finding best match for "${task}"...`);
-    const res = await request('GET', `/api/x402/execute/match?task=${encodeURIComponent(task)}&max_cost=0`);
+async function step3_executeMatch(runtime, task = 'echo') {
+    runtime.log('🎯', `Step 3: Finding best match for "${task}"...`);
+    const res = await runtime.request('GET', `${DIRECT_X402_FLOW.matchPath}?task=${encodeURIComponent(task)}&max_cost=0`);
 
     if (res.status !== 200) {
-        log('⚠️', `No match found for "${task}" — this is normal if no free listings match`);
+        runtime.log('⚠️', `No match found for "${task}" — this is normal if no free listings match`);
         return null;
     }
 
-    const match = parseMatchEnvelope(res.body);
+    const match = parseMatchEnvelope(res.body, runtime.baseUrl);
     if (!match) {
-        log('⚠️', `No provider matched "${task}" — this is normal if no free listings match`);
+        runtime.log('⚠️', `No provider matched "${task}" — this is normal if no free listings match`);
         return null;
     }
 
-    log('✅', `Best match: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (${match.paymentRequired ? 'paid' : 'free'})`, {
+    runtime.log('✅', `Best match: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (${match.paymentRequired ? 'paid' : 'free'})`, {
         quote_id: match.quoteId,
         listing_id: match.provider?.id,
     });
@@ -222,27 +225,27 @@ async function step3_executeMatch(task = 'echo') {
 }
 
 // ─── Step 4A: Free Execution ────────────────────────────
-async function step4a_freeExecution(match) {
+async function step4a_freeExecution(runtime, match) {
     if (!match) {
-        log('⚠️', 'Step 4a: Skipping free execution — no quote available');
+        runtime.log('⚠️', 'Step 4a: Skipping free execution — no quote available');
         return null;
     }
     if (match.paymentRequired !== false) {
-        log('⚠️', 'Step 4a: Skipping free execution — the matched quote requires payment');
+        runtime.log('⚠️', 'Step 4a: Skipping free execution — the matched quote requires payment');
         return null;
     }
 
-    log('🚀', `Step 4a: Executing free task (quote: ${match.quoteId})...`);
-    const res = await request('POST', match.executePath, {
+    runtime.log('🚀', `Step 4a: Executing free task (quote: ${match.quoteId})...`);
+    const res = await runtime.request('POST', match.executePath, {
         quote_id: match.quoteId,
         input: {
             text: 'Hello from the x402 buyer demo! This is a test invocation.',
-            timestamp: new Date().toISOString(),
+            timestamp: runtime.now(),
         },
     });
 
     if (res.status === 200 && res.body.success) {
-        log('✅', 'Free execution succeeded!', {
+        runtime.log('✅', 'Free execution succeeded!', {
             method: res.body.payment_method,
             cost: res.body.cost,
             invocation_id: res.body.invocation_id,
@@ -251,59 +254,59 @@ async function step4a_freeExecution(match) {
                 : String(res.body.result || '').slice(0, 200),
         });
     } else {
-        log('❌', `Free execution failed: ${res.body?.error || res.status}`, res.body);
+        runtime.log('❌', `Free execution failed: ${res.body?.error || res.status}`, res.body);
     }
 
     return res.body;
 }
 
 // ─── Step 4B: Test Echo ─────────────────────────────────
-async function step4b_testEcho() {
-    log('🔊', 'Step 4b: Testing x402 echo endpoint (free pipeline validation)...');
-    const res = await request('POST', '/api/x402/test/echo', {
+async function step4b_testEcho(runtime) {
+    runtime.log('🔊', 'Step 4b: Testing x402 echo endpoint (free pipeline validation)...');
+    const res = await runtime.request('POST', '/api/x402/test/echo', {
         message: 'Hello from x402 buyer demo!',
-        timestamp: new Date().toISOString(),
+        timestamp: runtime.now(),
     });
 
     if (res.status === 200) {
-        log('✅', 'Echo test passed!', {
+        runtime.log('✅', 'Echo test passed!', {
             method: res.body.method || 'echo',
             echoed: typeof res.body.echoed === 'object'
                 ? JSON.stringify(res.body.echoed).slice(0, 200)
                 : String(res.body.result || res.body.echoed || '').slice(0, 200),
         });
     } else {
-        log('⚠️', `Echo test returned ${res.status}`, res.body);
+        runtime.log('⚠️', `Echo test returned ${res.status}`, res.body);
     }
 
     return res.body;
 }
 
 // ─── Step 5: Paid-route preflight (no signing or spend) ─
-async function step5_paidPreflight() {
-    log('🧾', 'Step 5: Paid-route preflight (stops before signing)...');
+async function step5_paidPreflight(runtime) {
+    runtime.log('🧾', 'Step 5: Paid-route preflight (stops before signing)...');
 
     // Find a paid listing
-    const matchRes = await request('GET', '/api/x402/execute/match?task=analyze&max_cost=1');
+    const matchRes = await runtime.request('GET', `${DIRECT_X402_FLOW.matchPath}?task=analyze&max_cost=1`);
     if (matchRes.status !== 200) {
-        log('⚠️', 'No paid listing found for "analyze" — skipping paid demo');
+        runtime.log('⚠️', 'No paid listing found for "analyze" — skipping paid demo');
         return null;
     }
 
-    const match = parseMatchEnvelope(matchRes.body);
+    const match = parseMatchEnvelope(matchRes.body, runtime.baseUrl);
     if (!match) {
-        log('⚠️', 'No provider matched "analyze" — skipping paid demo');
+        runtime.log('⚠️', 'No provider matched "analyze" — skipping paid demo');
         return null;
     }
 
     if (match.paymentRequired === false) {
-        log('ℹ️', 'Matched listing is free (payment_required=false) — no payment needed');
+        runtime.log('ℹ️', 'Matched listing is free (payment_required=false) — no payment needed');
         return null;
     }
 
-    log('💳', `Matched paid listing: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (payment_required=true)`);
+    runtime.log('💳', `Matched paid listing: "${match.provider?.name || 'unnamed provider'}" — $${match.priceUsdc} USDC (payment_required=true)`);
 
-    const executeRes = await request('POST', match.executePath, {
+    const executeRes = await runtime.request('POST', match.executePath, {
         quote_id: match.quoteId,
         input: { text: 'x402 paid-route preflight test' },
     });
@@ -313,44 +316,91 @@ async function step5_paidPreflight() {
         if (!challenge) {
             throw new Error('Received HTTP 402 without PAYMENT-REQUIRED; refusing to report a successful paid-route preflight');
         }
-        log('✅', '402 Payment Required received (challenge header present); preflight stops here without signing or retrying.', {
+        runtime.log('✅', '402 Payment Required received (challenge header present); preflight stops here without signing or retrying.', {
             price: executeRes.body?.price_usdc,
             how_to_pay: executeRes.body?.how_to_pay ? 'included' : 'missing',
         });
     } else if (executeRes.status === 200 && executeRes.body?.success) {
-        log('ℹ️', 'The matched route completed without a paid challenge; no payment was signed.');
+        runtime.log('ℹ️', 'The matched route completed without a paid challenge; no payment was signed.');
     } else {
-        log('⚠️', `Unexpected preflight response: ${executeRes.status}`, executeRes.body);
+        runtime.log('⚠️', `Unexpected preflight response: ${executeRes.status}`, executeRes.body);
     }
 
     return executeRes.body;
 }
 
 // ─── Step 6: Verify Invocation Proof ────────────────────
-async function step6_verifyProof(invocationId) {
+async function step6_verifyProof(runtime, invocationId) {
     if (!invocationId) {
-        log('ℹ️', 'Step 6: Skipping proof verification — no invocation ID');
+        runtime.log('ℹ️', 'Step 6: Skipping proof verification — no invocation ID');
         return null;
     }
 
-    log('🔗', `Step 6: Checking on-chain invocation proof for ${invocationId}...`);
-    const res = await request('GET', `/api/x402/invocations/${invocationId}/proof`);
+    runtime.log('🔗', `Step 6: Checking on-chain invocation proof for ${invocationId}...`);
+    const res = await runtime.request('GET', `/api/x402/invocations/${invocationId}/proof`);
 
     if (res.status === 200) {
-        log('✅', 'Invocation proof:', {
+        runtime.log('✅', 'Invocation proof:', {
             decision_hash: res.body.decision_hash,
             on_chain_status: res.body.on_chain?.status || 'pending',
             chain: res.body.on_chain?.chain || 'eip155:8453',
         });
     } else {
-        log('⚠️', `Proof check returned ${res.status}`, res.body);
+        runtime.log('⚠️', `Proof check returned ${res.status}`, res.body);
     }
 
     return res.body;
 }
 
+function createRuntime(options = {}) {
+    const baseUrl = options.baseUrl || BASE_URL;
+    return {
+        baseUrl,
+        lineBreak: options.lineBreakFn || (() => console.log()),
+        log: options.logFn || log,
+        now: options.nowFn || (() => new Date().toISOString()),
+        request: options.requestFn || ((method, path, body) => request(method, path, body, baseUrl)),
+    };
+}
+
+async function runDemo(options = {}) {
+    const runtime = createRuntime(options);
+
+    const gateway = await step1_gatewayInfo(runtime);
+    runtime.lineBreak();
+
+    const listings = await step2_browseCatalog(runtime);
+    runtime.lineBreak();
+
+    const match = await step3_executeMatch(runtime, 'echo');
+    runtime.lineBreak();
+
+    const echo = await step4b_testEcho(runtime);
+    runtime.lineBreak();
+
+    const execution = await step4a_freeExecution(runtime, match);
+    runtime.lineBreak();
+
+    let paidPreflight = null;
+    if (options.paidPreflight) {
+        paidPreflight = await step5_paidPreflight(runtime);
+        runtime.lineBreak();
+    }
+
+    const invocationId = execution?.invocation_id;
+    const proof = invocationId ? await step6_verifyProof(runtime, invocationId) : null;
+    if (invocationId) runtime.lineBreak();
+
+    return { gateway, listings, match, echo, execution, paidPreflight, proof };
+}
+
 // ─── Main ───────────────────────────────────────────────
 async function main() {
+    if (process.argv.includes('--paid')) {
+        console.error('The old --paid mode never signed a payment. Use --paid-preflight for an honest no-spend 402 challenge check.');
+        process.exit(2);
+    }
+
     console.log('\n╔══════════════════════════════════════════════════╗');
     console.log('║     Agoragentic x402 Buyer Demo                 ║');
     console.log('║     Agent-to-Agent Commerce on Base L2           ║');
@@ -359,38 +409,7 @@ async function main() {
     console.log(`  Mode:   ${isPaidPreflight ? '🧾 Paid-route preflight (no signing)' : '🆓 Free (no wallet needed)'}\n`);
 
     try {
-        // 1. Gateway info
-        await step1_gatewayInfo();
-        console.log();
-
-        // 2. Browse catalog
-        const listings = await step2_browseCatalog();
-        console.log();
-
-        // 3. Match a service
-        const match = await step3_executeMatch('echo');
-        console.log();
-
-        // 4a. Test echo
-        await step4b_testEcho();
-        console.log();
-
-        // 4b. Free execution
-        const execResult = await step4a_freeExecution(match);
-        console.log();
-
-        // 5. Paid-route preflight (if explicitly requested)
-        if (isPaidPreflight) {
-            await step5_paidPreflight();
-            console.log();
-        }
-
-        // 6. Verify proof (if we got an invocation)
-        const invocationId = execResult?.invocation_id;
-        if (invocationId) {
-            await step6_verifyProof(invocationId);
-            console.log();
-        }
+        await runDemo({ paidPreflight: isPaidPreflight });
 
         // ─── Summary ────────────────────────────────────
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -415,4 +434,13 @@ async function main() {
     }
 }
 
-main();
+module.exports = {
+    DIRECT_X402_FLOW,
+    parseMatchEnvelope,
+    runDemo,
+    sameOriginExecutePath,
+};
+
+if (require.main === module) {
+    main();
+}

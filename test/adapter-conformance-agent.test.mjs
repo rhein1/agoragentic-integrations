@@ -69,6 +69,43 @@ test("syntax proof does not execute adapter top-level code", async () => {
   assert.equal(result.checks.find((check) => check.id === "primary_syntax").state, "pass");
 });
 
+test("x402 uses an integration-specific direct-route flow expectation", async () => {
+  const root = fixtureRoot();
+  write(root, "x402/buyer-demo.js", `
+    const matchPath = "/api/x402/execute/match";
+    const executePath = "/api/x402/execute";
+    module.exports = { matchPath, executePath };
+  `);
+  write(root, "x402/README.md", "# x402\n\nIntentional direct x402 protocol example.\n");
+  write(root, "x402/buyer-demo.test.mjs", "// Hermetic fixture test.\n");
+
+  const x402Result = await validateIntegration(root, entry("x402", "javascript", "x402/buyer-demo.js", "x402/README.md"));
+  const x402Flow = x402Result.checks.find((check) => check.id === "execute_first_signal");
+
+  assert.equal(x402Flow.state, "pass");
+  assert.equal(x402Flow.evidence.profile, "direct_x402_route_first");
+  assert.deepEqual(x402Flow.evidence.missing_signals, []);
+  assert.equal(x402Result.checks.find((check) => check.id === "colocated_tests").state, "pass");
+
+  const genericResult = await validateIntegration(root, entry("demo", "javascript", "x402/buyer-demo.js", "x402/README.md"));
+  assert.equal(genericResult.checks.find((check) => check.id === "execute_first_signal").state, "advisory");
+
+  write(root, "x402/README.md", "# x402\n\nProtocol example without an explicit boundary.\n");
+  const missingBoundary = await validateIntegration(root, entry("x402", "javascript", "x402/buyer-demo.js", "x402/README.md"));
+  assert.deepEqual(
+    missingBoundary.checks.find((check) => check.id === "execute_first_signal").evidence.missing_signals,
+    ["direct_boundary"],
+  );
+
+  write(root, "x402/buyer-demo.js", "module.exports = {};\n");
+  write(root, "x402/README.md", "# x402\n\nIntentional direct x402 flow through /api/x402/execute/match and /api/x402/execute.\n");
+  const docsOnlyRoutes = await validateIntegration(root, entry("x402", "javascript", "x402/buyer-demo.js", "x402/README.md"));
+  assert.deepEqual(
+    docsOnlyRoutes.checks.find((check) => check.id === "execute_first_signal").evidence.missing_signals,
+    ["route_match", "route_execute"],
+  );
+});
+
 test("credential findings identify the rule and path without echoing the value", async () => {
   const root = fixtureRoot();
   const secret = "amk_1234567890abcdefghijklmnopqrstuvwxyz";
