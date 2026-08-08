@@ -1,0 +1,5 @@
+schema: agoragentic.harness.agent.v1
+name: fixture-gstack-release-agent
+framework: gstack
+primary_goal: Produce a bounded local release evidence packet from supplied workflow artifacts.
+runtime_shape: local_cli

@@ -13,6 +13,7 @@ The published packages and repo-local CLIs are:
 - **Micro ECF**: run `npx agoragentic-micro-ecf@latest plan --dir .` first; only after explicit approval run `npx agoragentic-micro-ecf@latest install --dir . --yes` (npm, Node ≥18)
 - **Harness Core**: `npx agoragentic-harness-core@latest init` (npm currently serves v0.2.0; this repo carries the review-gated v0.2.1 patch candidate, Node ≥18)
 - **OpenCode Harness plugin**: `cd opencode && npm ci` from a source checkout (experimental `@agoragentic/opencode` candidate; exact OpenCode 1.18.15 contract fixture only; not published)
+- **gstack Harness bridge**: `cd gstack && npm install` from a source checkout (experimental explicit-artifact adapter; no gstack execution, raw-content retention, hosted authority, or spend)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 - **AnyDoc Document Evidence Adapter**: `examples/anydoc-document-evidence/` is an experimental source-only Node >=20 package for process-isolated local office-document parsing, explicit evidence coverage, semantic-loss warnings, and completeness-blocked handoff. It is not published to npm and does not upload, invoke OCR, attach context, publish, or spend.
@@ -60,7 +61,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 102 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 103 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -109,6 +110,7 @@ The canonical inventory is `integrations.json` and contains 102 integration surf
 | Claude Code Plugin | .claude-plugin/marketplace.json | /plugin marketplace add rhein1/agoragentic-integrations |
 | Cline MCP Package | llms-install.md | add npx -y agoragentic-mcp@1.3.6 as an MCP server |
 | OpenCode Harness Plugin | opencode/src/server.mjs | cd opencode && npm ci from a source checkout; exact OpenCode 1.18.15 contract fixture only |
+| gstack Harness Bridge | gstack/gstack-harness.mjs | cd gstack && npm install from a source checkout; explicit artifact paths only |
 | Vercel AI SDK | vercel-ai/agoragentic_vercel.js | npm install ai @ai-sdk/openai |
 | Cloudflare Agents | cloudflare-agents/agoragentic_cloudflare_agent.ts | copy into a Cloudflare Agent or Worker project |
 | Mastra | mastra/agoragentic_mastra.js | npm install |
@@ -154,6 +156,7 @@ The canonical inventory is `integrations.json` and contains 102 integration surf
 | Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
 | Harness Core Middleware Kernel | harness-core/bin/agoragentic-harness.mjs | npx agoragentic-harness-core@latest init |
 | OpenCode Harness Plugin | opencode/src/server.mjs | cd opencode && npm ci from a source checkout |
+| gstack Harness Bridge | gstack/gstack-harness.mjs | cd gstack && npm install from a source checkout |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
 
 Agent OS is the hosted operating layer for deployed agents and swarms, not a local OS installation. External agents use the public SDK/API surface for launch previews, account checks, quote creation, procurement checks, supervisor approvals, quote-locked execution, receipts, and reconciliation. The examples in `agent-os/` are no-spend by default and only execute when `AGORAGENTIC_EXECUTE=true`.
@@ -163,6 +166,8 @@ Micro ECF is the local context wedge for context, tools, budgets, approvals, mem
 Harness Core is the local no-spend middleware kernel for builders who need policy gates, append-only event/run evidence, local approvals and review records, proof, receipts, loopback runtime metadata probes, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It records or blocks proposed actions; it does not execute frameworks or tools, deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private Full ECF internals.
 
 The experimental OpenCode Harness source plugin applies those existing Harness families inside OpenCode's native tool hooks. Its evidence is limited to the exact OpenCode 1.18.15 official-source contract fixture and hermetic direct-hook tests; it is not published and does not claim an end-to-end OpenCode run. It registers no hosted tools and persists only bounded hashes, shape metadata, references, approvals, and local receipts.
+
+The experimental gstack Harness bridge accepts four explicit owner-supplied planning, review, QA, and release files. It treats them as untrusted data, retains hashes and bounded shape metadata instead of raw content, and emits existing Harness proof, receipt, readiness, and Agent OS preview families only when local gates pass. It does not run gstack or claim end-to-end runtime compatibility.
 
 The Premortem Golden Loop Agent is the local release safety agent for plans and installable repositories. It runs six-month failure-frame premortem sessions, repo release audits, no-spend Golden Loop readiness checks, and a conservative self-heal loop. `heal --repo .` writes only a plan; `heal --repo . --apply-safe-fixes` may create missing additive goals, workflows, safety-boundary docs, `agent.json`, `.env.example`, or a no-spend GitHub Actions workflow. It is free to use, requires no API key or wallet, makes no network calls by default, sends no repo contents anywhere, and does not overwrite files, delete files, rotate secrets, deploy, publish, or call paid `execute()`.
 
@@ -268,6 +273,8 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Harness Core | harness-core/README.md |
 | OpenCode Harness plugin | opencode/README.md |
 | OpenCode pinned contract fixture | opencode/contracts/opencode-plugin-1.18.15.json |
+| gstack Harness bridge | gstack/README.md |
+| gstack upstream provenance | gstack/upstream-provenance.json |
 | Premortem Golden Loop Agent | premortem-golden-loop/README.md |
 | Premortem prompt | premortem-golden-loop/PROMPT.md |
 | Syrin Micro ECF guide | micro-ecf/SYRIN_USER_GUIDE.md |

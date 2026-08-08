@@ -1,0 +1,38 @@
+{
+  "name": "@agoragentic/gstack-harness-bridge",
+  "version": "0.1.0-alpha.0",
+  "description": "Local no-spend bridge from explicit gstack workflow artifacts to Harness Core proof, receipt, readiness, and Agent OS preview artifacts.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "agoragentic-gstack-harness": "./cli.mjs"
+  },
+  "exports": {
+    ".": "./gstack-harness.mjs"
+  },
+  "dependencies": {
+    "agoragentic-harness-core": "file:../harness-core"
+  },
+  "scripts": {
+    "check": "node --check gstack-harness.mjs && node --check cli.mjs && node --check test.mjs",
+    "test": "node --test test.mjs",
+    "pretest": "npm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "gstack"
+  },
+  "keywords": [
+    "gstack",
+    "harness",
+    "evidence",
+    "receipts",
+    "agent-os",
+    "no-spend"
+  ]
+}

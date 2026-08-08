@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added the experimental source-only gstack Harness bridge for four explicit owner-supplied planning/review/QA/release artifacts, emitting hash-and-shape-only local proof, receipt, policy findings, listing readiness, and Agent OS preview artifacts without running gstack or gaining network, deployment, publication, provider, or money authority.
 - Added the experimental `@agoragentic/opencode` source candidate for the exact OpenCode 1.18.15 native tool-hook contract, reusing Harness Core allow/ask/deny evaluation, one-shot local approvals, bounded hash-only output evidence, refs-only optional Memory handoff candidates, and clearly labeled local receipts without hosted, network, spend, publish, or deployment tools.
 - Added a schema-backed canonical ecosystem profile, claim-boundary fixtures, and npm-package-safe Harness Core branding assets.
 - Added experimental, hermetically tested ClawTeam and World AgentKit adapters. The ClawTeam integration requires operators to disable the upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.34.0` with 103 indexed surfaces and explicit gstack artifact-bridge provenance at upstream revision `94993f74012782fd94416dd44b8314f6363a13a4`.
 - Bumped the canonical manifest from upstream `2.32.0` to `2.33.0` with 102 indexed surfaces and explicit unpublished/fixture-only OpenCode package discovery.
 - Bumped the canonical manifest to `2.30.1`, made Micro ECF installation explicitly plan-first and approval-gated, and added ecosystem profile/schema discovery parity.
 - Bumped the canonical manifest to `2.30.0` with 99 indexed surfaces and explicit discovery pointers for ClawTeam and World AgentKit.

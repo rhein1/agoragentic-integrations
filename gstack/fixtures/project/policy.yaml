@@ -1,0 +1,29 @@
+schema: agoragentic.harness.policy.v1
+context_policy:
+  allowed_sources:
+    - owner_supplied_local_artifacts
+  denied_sources:
+    - network
+tool_policy:
+  allowed_tools: []
+  denied_tools:
+    - network
+    - shell
+budget_policy:
+  treasury_required: false
+  max_daily_spend_usdc: 0
+  approval_required_above_usdc: 0
+approval_policy:
+  autonomous: []
+  human_gated:
+    - deploy
+memory_policy:
+  write_gate: owner_review
+  secret_storage: forbidden
+swarm_policy:
+  max_agents: 1
+  delegation: disabled
+deployment_policy:
+  hosting_target: self_hosted_http
+  exposure_mode: private_only
+  first_proof_required: true

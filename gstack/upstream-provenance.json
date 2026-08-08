@@ -1,0 +1,12 @@
+{
+  "schema": "agoragentic.upstream-provenance.v1",
+  "name": "gstack",
+  "repository": "https://github.com/garrytan/gstack",
+  "revision": "94993f74012782fd94416dd44b8314f6363a13a4",
+  "license": "MIT",
+  "reviewed_surface": "README.md and public repository metadata",
+  "observed_workflow_stages": ["planning", "review", "qa", "release"],
+  "copied_upstream_code": false,
+  "partnership_claimed": false,
+  "runtime_compatibility_verified": false
+}
