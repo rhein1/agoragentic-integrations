@@ -15,7 +15,7 @@ intent
 → clearly labeled local receipt
 ```
 
-Host execution is outside the generic `run` path. A host may separately integrate Harness middleware around its own action, and the packaged Claude Code `PreToolUse` adapter can enforce an allow/ask/deny decision before a Claude Code tool call. Harness Core does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.
+Host execution is outside the generic `run` path. A host may separately integrate Harness middleware around its own action. The packaged Claude Code `PreToolUse` adapter and the repository's experimental OpenCode source plugin can enforce an allow/ask/deny decision before their respective host tool calls. Harness Core does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.
 
 ```bash
 npx agoragentic-harness-core@latest init
@@ -146,6 +146,12 @@ The hook can block or request review. It does not execute the proposed tool itse
 
 Decision records are redacted and stored locally under `.agoragentic/`. Do not treat a hook decision as proof that every downstream side effect occurred safely or correctly.
 
+### OpenCode `tool.execute.before` / `tool.execute.after`
+
+The repository also contains the experimental [`@agoragentic/opencode`](https://github.com/rhein1/agoragentic-integrations/tree/main/opencode) source candidate. It maps OpenCode's native before hook to the existing Harness mapper/evaluator and approval family, then writes only bounded hash-and-shape evidence from the successful after hook into the Harness local-receipt family.
+
+The compatibility evidence is deliberately narrow: OpenCode `1.18.15`, official source commit `38e10eb1408feb700021b8e8766fb0ab41bf84e2`, and the checked-in [`opencode-plugin-1.18.15.json`](https://github.com/rhein1/agoragentic-integrations/blob/main/opencode/contracts/opencode-plugin-1.18.15.json) contract fixture. This is not an end-to-end OpenCode runtime compatibility claim. The plugin is not published to npm and registers no hosted, paid, x402, deployment, publication, or Memory service tools.
+
 ## Middleware lifecycle
 
 Adapter authors can use the public kernel:
@@ -184,7 +190,7 @@ List the packaged adapter contracts:
 npx agoragentic-harness-core@latest adapters
 ```
 
-Only Claude Code currently reports `status: "enforcement"` and exposes a packaged live pre-tool decision hook. Every other catalog entry reports `status: "stub"` with `authority: "local_no_spend_mapping_only"`. Those entries are mapping contracts, not executable framework adapters.
+Claude Code reports `status: "enforcement"` for its packaged live pre-tool decision hook. The source tree also reports OpenCode enforcement through `@agoragentic/opencode`, limited to its exact contract fixture and local tests. Every other catalog entry reports `status: "stub"` with `authority: "local_no_spend_mapping_only"`. Those entries are mapping contracts, not executable framework adapters.
 
 Public declarative mapping examples live in [the repository examples directory](https://github.com/rhein1/agoragentic-integrations/tree/main/examples/harness-core-frameworks) and cover:
 
@@ -193,6 +199,7 @@ Public declarative mapping examples live in [the repository examples directory](
 - MCP;
 - Codex;
 - Claude Code;
+- OpenCode through the native plugin package and exact contract fixture;
 - Hermes;
 - the Agoragentic Rust reference runtime.
 

@@ -137,7 +137,7 @@
   ],
   "inventory": {
     "integration_manifest": "./integrations.json",
-    "integration_count": 101,
+    "integration_count": 102,
     "count_rule": "integration_count must equal integrations.json.integrations.length",
     "public_copy_rule": "Other repositories should link to this inventory instead of hard-coding the count."
   },

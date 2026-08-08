@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    [
+      "file:./opencode",
+      {
+        "policy_file": "policy.yaml",
+        "memory_handoff": "local_ref"
+      }
+    ]
+  ]
+}

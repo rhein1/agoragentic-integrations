@@ -1,5 +1,5 @@
 {
-  "version": "2.32.1",
+  "version": "2.33.0",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -52,6 +52,15 @@
       "install": "npx agoragentic-harness-core@latest init",
       "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
       "min_node": "18"
+    },
+    "opencode": {
+      "name": "@agoragentic/opencode",
+      "install": "cd opencode && npm ci",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/opencode",
+      "distribution_status": "source_only",
+      "source": "opencode",
+      "min_node": "18",
+      "compatibility_scope": "OpenCode 1.18.15 official-source contract fixture only; no end-to-end runtime claim"
     },
     "premortem_golden_loop": {
       "name": "agoragentic-premortem-golden-loop",
@@ -1273,6 +1282,15 @@
       "path": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
       "install": "cd examples/anydoc-document-evidence && npm install",
       "docs": "examples/anydoc-document-evidence/README.md"
+    },
+    {
+      "id": "opencode-harness-plugin",
+      "name": "OpenCode Harness Plugin",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "opencode/src/server.mjs",
+      "install": "cd opencode && npm ci",
+      "docs": "opencode/README.md"
     }
   ],
   "specs": [
@@ -1303,6 +1321,8 @@
     "gemini_cli_extension": "gemini-extension.json",
     "claude_code_marketplace": ".claude-plugin/marketplace.json",
     "cline_install_guide": "llms-install.md",
+    "opencode_harness_plugin": "opencode/README.md",
+    "opencode_contract_fixture": "opencode/contracts/opencode-plugin-1.18.15.json",
     "a2a_card": "a2a/agent-card.json",
     "agoragentic_commerce_draft": "specs/ACP-SPEC.md",
     "acp_spec": "specs/ACP-SPEC.md",

@@ -62,6 +62,9 @@
         "harness_core": {
           "$ref": "#/$defs/package"
         },
+        "opencode": {
+          "$ref": "#/$defs/package"
+        },
         "premortem_golden_loop": {
           "$ref": "#/$defs/package"
         },
@@ -194,6 +197,10 @@
         "install_after_explicit_approval": {
           "type": "string",
           "description": "Install command that may run only after the plan has received explicit approval."
+        },
+        "compatibility_scope": {
+          "type": "string",
+          "description": "Bounded statement of the package compatibility evidence."
         }
       }
     },

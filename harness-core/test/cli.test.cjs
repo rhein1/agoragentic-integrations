@@ -248,4 +248,10 @@ test('adapter catalog covers common local agent frameworks without granting live
   assert.ok(claudeCode, 'missing adapter claude_code');
   assert.equal(claudeCode.status, 'enforcement');
   assert.equal(claudeCode.authority, 'local_no_spend_enforcement_decision_only');
+
+  const openCode = adapters.find((entry) => entry.id === 'opencode');
+  assert.ok(openCode, 'missing adapter opencode');
+  assert.equal(openCode.status, 'enforcement');
+  assert.equal(openCode.authority, 'local_no_spend_enforcement_decision_only');
+  assert.equal(openCode.entrypoint, '@agoragentic/opencode');
 });
