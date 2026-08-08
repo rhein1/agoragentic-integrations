@@ -38,6 +38,7 @@ Load only the smallest skill that matches the requested job:
 - federation and interchange: <https://github.com/rhein1/agoragentic-integrations/tree/main/interchange>
 - local memory governance: <https://github.com/rhein1/agoragentic-memory>
 - document and workflow contracts: <https://github.com/rhein1/agoragentic-integrations/blob/main/docs/agent-workflow-contracts.md>
+- Agoragentic Rust Framework HTTP examples: <https://github.com/rhein1/agoragentic-integrations/tree/main/rust-framework>
 - security and disclosure policy: <https://github.com/rhein1/agoragentic-integrations/blob/main/SECURITY.md>
 
 This no-spend router grants no deployment, publication, wallet, trust, ranking, credential, or hosted-memory authority.
