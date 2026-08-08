@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added the experimental `@agoragentic/opencode` source candidate for the exact OpenCode 1.18.15 native tool-hook contract, reusing Harness Core allow/ask/deny evaluation, one-shot local approvals, bounded hash-only output evidence, refs-only optional Memory handoff candidates, and clearly labeled local receipts without hosted, network, spend, publish, or deployment tools.
 - Added a schema-backed canonical ecosystem profile, claim-boundary fixtures, and npm-package-safe Harness Core branding assets.
 - Added experimental, hermetically tested ClawTeam and World AgentKit adapters. The ClawTeam integration requires operators to disable the upstream skip-permissions default and keeps execution at a zero-USDC cap unless two local paid-authority inputs are present; World AgentKit performs only the official pre-payment access attempt and does not claim live server support.
 - Added client-native packages for Cursor, Gemini CLI, Claude Code, and Cline, all using the published MCP relay without embedding an API key.
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest from upstream `2.32.0` to `2.33.0` with 102 indexed surfaces and explicit unpublished/fixture-only OpenCode package discovery.
 - Bumped the canonical manifest to `2.30.1`, made Micro ECF installation explicitly plan-first and approval-gated, and added ecosystem profile/schema discovery parity.
 - Bumped the canonical manifest to `2.30.0` with 99 indexed surfaces and explicit discovery pointers for ClawTeam and World AgentKit.
 - Superseded `agoragentic-mcp@1.3.5` with `1.3.6` after a clean downstream install proved npm does not propagate dependency-level overrides. The 1.3.6 package bundles the audited MCP SDK/Hono tree into a Node.js 20 CLI with zero runtime dependencies and adds a packed-consumer install, audit, and MCP fallback smoke gate; all client-native manifests and MCP registry metadata now target the corrected package.

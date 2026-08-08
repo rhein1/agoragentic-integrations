@@ -25,6 +25,7 @@ on:
       - 'micro-ecf/**'
       - 'harness-core/**'
       - 'agent-payments-assurance-challenge/**'
+      - 'opencode/**'
       - 'sdk/**'
       - 'coinbase-agentic-wallets/**'
       - 'x402/**'
@@ -124,6 +125,14 @@ jobs:
           npm run check
           node --test test.mjs
           npm run pack:dry
+
+      - name: Validate OpenCode Harness plugin package
+        working-directory: opencode
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm pack --dry-run
 
       - name: Setup Node 22 for n8n toolchain
         uses: actions/setup-node@v7

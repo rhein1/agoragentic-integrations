@@ -1,0 +1,52 @@
+{
+  "name": "@agoragentic/opencode",
+  "version": "0.1.0",
+  "description": "Experimental local no-spend Harness Core policy and receipt plugin for the pinned OpenCode tool-hook contract.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./server": "./src/server.mjs"
+  },
+  "files": [
+    "contracts/",
+    "examples/",
+    "src/",
+    "LICENSE",
+    "README.md"
+  ],
+  "dependencies": {
+    "agoragentic-harness-core": "0.2.0"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
+  },
+  "scripts": {
+    "check": "node --check src/index.mjs && node --check src/mapping.mjs && node --check src/runtime.mjs && node --check src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run check && npm test"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "opencode": "=1.18.15"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "opencode"
+  },
+  "homepage": "https://github.com/rhein1/agoragentic-integrations/tree/main/opencode",
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "agoragentic",
+    "opencode",
+    "agent-harness",
+    "policy",
+    "receipts"
+  ]
+}

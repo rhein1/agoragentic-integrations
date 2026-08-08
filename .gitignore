@@ -5,6 +5,7 @@ mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
 harness-core/node_modules/
+opencode/node_modules/
 __pycache__/
 *.pyc
 sdk/python/build/

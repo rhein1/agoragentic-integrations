@@ -1,0 +1,55 @@
+{
+  "schema": "agoragentic.opencode-contract-fixture.v1",
+  "fixture_scope": "official_source_contract_only",
+  "opencode_version": "1.18.15",
+  "plugin_package": "@opencode-ai/plugin",
+  "plugin_package_version": "1.18.15",
+  "plugin_package_integrity": "sha512-AY10RtFbzLkf951dbLkSGJdBeddeS6ojbjvqCpWnINedqlj2cK/GF91xWjWnlHpqQZ4GABLPCuoSJx8mGmKvCw==",
+  "source_repository": "https://github.com/anomalyco/opencode",
+  "source_commit": "38e10eb1408feb700021b8e8766fb0ab41bf84e2",
+  "source_contracts": {
+    "plugin_types": "packages/plugin/src/index.ts",
+    "plugin_loader": "packages/opencode/src/plugin/index.ts",
+    "plugin_entry_resolution": "packages/opencode/src/plugin/shared.ts",
+    "tool_runtime_order": "packages/opencode/src/session/tools.ts",
+    "official_docs": "packages/web/src/content/docs/plugins.mdx"
+  },
+  "package_entry": {
+    "export": "./server",
+    "module_default": "object",
+    "required_fields": [
+      "id",
+      "server"
+    ]
+  },
+  "hooks": {
+    "tool.execute.before": {
+      "input_fields": [
+        "tool",
+        "sessionID",
+        "callID"
+      ],
+      "output_fields": [
+        "args"
+      ],
+      "runs_before_tool_execute": true,
+      "throw_blocks_tool_execute": true
+    },
+    "tool.execute.after": {
+      "input_fields": [
+        "tool",
+        "sessionID",
+        "callID",
+        "args"
+      ],
+      "output_fields": [
+        "title",
+        "output",
+        "metadata"
+      ],
+      "runs_after_successful_tool_execute": true,
+      "error_hook_declared": false
+    }
+  },
+  "compatibility_claim": "fixture_only_not_end_to_end_runtime_verification"
+}
