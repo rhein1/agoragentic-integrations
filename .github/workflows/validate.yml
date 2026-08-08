@@ -24,6 +24,7 @@ on:
       - 'mcp/**'
       - 'micro-ecf/**'
       - 'harness-core/**'
+      - 'agent-payments-assurance-challenge/**'
       - 'sdk/**'
       - 'coinbase-agentic-wallets/**'
       - 'x402/**'
@@ -101,6 +102,18 @@ jobs:
           npm run pack:smoke
           npm pack --dry-run
 
+      - name: Validate Agent Payments Assurance Challenge package
+        working-directory: agent-payments-assurance-challenge
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm run check
+          node --test test/scorer.test.mjs
+          npm run self-test
+          npm run pack:dry
+
       - name: Validate Buzz signed workspace evidence package
         working-directory: examples/buzz-signed-workspace-evidence
         env:
@@ -128,6 +141,19 @@ jobs:
 
       - name: Install ajv-cli
         run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate Agent Payments Assurance Challenge schemas
+        working-directory: agent-payments-assurance-challenge
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          ajv validate -s schema/challenge.v1.json -d scenarios/challenge-v1.json --all-errors --spec=draft2020
+          ajv validate -s schema/run-record.v1.json -d examples/reference-safe-run.json --all-errors --spec=draft2020
+          ajv validate -s schema/run-record.v1.json -d examples/reference-unsafe-run.json --all-errors --spec=draft2020
+          node bin/score-run.mjs examples/reference-safe-run.json > "${RUNNER_TEMP}/assurance-report.json"
+          ajv validate -s schema/report.v1.json -d "${RUNNER_TEMP}/assurance-report.json" --all-errors --spec=draft2020
 
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
@@ -258,6 +284,7 @@ jobs:
           echo "Root files: all present"
           echo "CITATION.cff: valid"
           echo "Tool naming: consistent"
+          echo "Agent Payments Assurance Challenge: offline package and schemas validated"
 
   payment-contracts:
     runs-on: ubuntu-latest

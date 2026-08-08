@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/agent-payments-assurance-report.v1.json",
+  "title": "Agent Payments Assurance Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "challenge_id",
+    "challenge_version",
+    "challenge_manifest_hash",
+    "run_record_hash",
+    "run_id",
+    "agent",
+    "harness",
+    "model",
+    "policy",
+    "scenario_count",
+    "submitted_scenario_count",
+    "complete_result_set",
+    "passed_scenarios",
+    "mean_score",
+    "all_scenarios_passed",
+    "results",
+    "evidence_boundary",
+    "claims",
+    "authority_flags",
+    "report_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.agent-payments-assurance-report.v1" },
+    "challenge_id": { "$ref": "#/$defs/token" },
+    "challenge_version": { "$ref": "#/$defs/versionToken" },
+    "challenge_manifest_hash": { "$ref": "#/$defs/hash" },
+    "run_record_hash": { "$ref": "#/$defs/hash" },
+    "run_id": { "$ref": "#/$defs/token" },
+    "agent": { "$ref": "#/$defs/componentMetadata" },
+    "harness": { "$ref": "#/$defs/componentMetadata" },
+    "model": { "$ref": "#/$defs/modelMetadata" },
+    "policy": { "$ref": "#/$defs/componentMetadata" },
+    "scenario_count": { "type": "integer", "minimum": 1, "maximum": 128 },
+    "submitted_scenario_count": { "type": "integer", "minimum": 1, "maximum": 128 },
+    "complete_result_set": { "const": true },
+    "passed_scenarios": { "type": "integer", "minimum": 0, "maximum": 128 },
+    "mean_score": { "$ref": "#/$defs/score" },
+    "all_scenarios_passed": { "type": "boolean" },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/result" }
+    },
+    "evidence_boundary": { "$ref": "#/$defs/evidenceBoundary" },
+    "claims": { "$ref": "#/$defs/claims" },
+    "authority_flags": { "$ref": "#/$defs/authorityFlags" },
+    "report_hash": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "versionToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "componentMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "configuration_hash"],
+      "properties": {
+        "id": { "$ref": "#/$defs/token" },
+        "version": { "$ref": "#/$defs/versionToken" },
+        "configuration_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "modelMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "id", "version", "configuration_hash"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/token" },
+        "id": { "$ref": "#/$defs/token" },
+        "version": { "$ref": "#/$defs/versionToken" },
+        "configuration_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "required_signals",
+        "forbidden_signals",
+        "evidence_labels",
+        "next_safe_actions",
+        "declared_secret_boundary",
+        "declared_authority_boundary",
+        "declared_offline_boundary"
+      ],
+      "properties": {
+        "decision": { "$ref": "#/$defs/score" },
+        "required_signals": { "$ref": "#/$defs/score" },
+        "forbidden_signals": { "$ref": "#/$defs/score" },
+        "evidence_labels": { "$ref": "#/$defs/score" },
+        "next_safe_actions": { "$ref": "#/$defs/score" },
+        "declared_secret_boundary": { "$ref": "#/$defs/score" },
+        "declared_authority_boundary": { "$ref": "#/$defs/score" },
+        "declared_offline_boundary": { "$ref": "#/$defs/score" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "score", "passed", "failures", "components"],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/token" },
+        "score": { "$ref": "#/$defs/score" },
+        "passed": { "type": "boolean" },
+        "failures": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+          }
+        },
+        "components": { "$ref": "#/$defs/components" }
+      }
+    },
+    "evidenceBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "bounded_allowlist_contract",
+        "raw_observation_payload_fields_supported",
+        "safety_declarations_independently_verified",
+        "transaction_assurance_invoked",
+        "scorer_network_access_performed",
+        "scorer_payment_action_performed",
+        "publication_review_required",
+        "public_safe"
+      ],
+      "properties": {
+        "source": { "const": "self_attested_run_record" },
+        "bounded_allowlist_contract": { "const": true },
+        "raw_observation_payload_fields_supported": { "const": false },
+        "safety_declarations_independently_verified": { "const": false },
+        "transaction_assurance_invoked": { "const": false },
+        "scorer_network_access_performed": { "const": false },
+        "scorer_payment_action_performed": { "const": false },
+        "publication_review_required": { "const": true },
+        "public_safe": { "const": false }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_conformance",
+        "agent_behavior_verified",
+        "observations_independently_verified",
+        "transaction_assurance_evaluated",
+        "certification",
+        "settlement_proof",
+        "marketplace_verification",
+        "universal_safety",
+        "production_readiness"
+      ],
+      "properties": {
+        "record_conformance": { "type": "boolean" },
+        "agent_behavior_verified": { "const": false },
+        "observations_independently_verified": { "const": false },
+        "transaction_assurance_evaluated": { "const": false },
+        "certification": { "const": false },
+        "settlement_proof": { "const": false },
+        "marketplace_verification": { "const": false },
+        "universal_safety": { "const": false },
+        "production_readiness": { "const": false }
+      }
+    },
+    "authorityFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_grants_authority", "can_spend", "can_deploy", "can_publish", "can_change_trust"],
+      "properties": {
+        "report_grants_authority": { "const": false },
+        "can_spend": { "const": false },
+        "can_deploy": { "const": false },
+        "can_publish": { "const": false },
+        "can_change_trust": { "const": false }
+      }
+    }
+  }
+}

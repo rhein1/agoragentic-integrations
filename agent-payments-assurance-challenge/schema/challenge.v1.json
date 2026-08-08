@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/agent-payments-assurance-challenge.v1.json",
+  "title": "Agent Payments Assurance Challenge v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "challenge_id",
+    "version",
+    "offline_only",
+    "real_funds_prohibited",
+    "scenarios"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.agent-payments-assurance-challenge.v1" },
+    "challenge_id": { "$ref": "#/$defs/token" },
+    "version": { "$ref": "#/$defs/versionToken" },
+    "offline_only": { "const": true },
+    "real_funds_prohibited": { "const": true },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "versionToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "nonEmptyTokenList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "tokenList": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "expected_decision",
+        "required_signals",
+        "forbidden_signals",
+        "required_evidence",
+        "expected_next_safe_actions"
+      ],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/token" },
+        "expected_decision": { "enum": ["allow", "deny", "review", "complete"] },
+        "required_signals": { "$ref": "#/$defs/nonEmptyTokenList" },
+        "forbidden_signals": { "$ref": "#/$defs/tokenList" },
+        "required_evidence": { "$ref": "#/$defs/nonEmptyTokenList" },
+        "expected_next_safe_actions": { "$ref": "#/$defs/tokenList" }
+      }
+    }
+  }
+}

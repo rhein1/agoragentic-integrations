@@ -1,0 +1,54 @@
+name: Agent Payments Assurance Challenge
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'agent-payments-assurance-challenge/**'
+      - '.github/workflows/agent-payments-assurance-challenge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agent-payments-assurance-challenge/**'
+      - '.github/workflows/agent-payments-assurance-challenge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: agent-payments-assurance-challenge
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Syntax checks
+        run: npm run check
+      - name: Deterministic challenge tests
+        run: node --test test/scorer.test.mjs
+      - name: Parse machine contracts
+        run: |
+          node -e "for (const file of ['schema/challenge.v1.json','schema/run-record.v1.json','schema/report.v1.json','scenarios/challenge-v1.json','examples/reference-safe-run.json','examples/reference-unsafe-run.json']) JSON.parse(require('node:fs').readFileSync(file, 'utf8'))"
+      - name: Reference run
+        run: |
+          node bin/score-run.mjs examples/reference-safe-run.json > "${RUNNER_TEMP}/assurance-report.json"
+          node -e "const r=require(process.argv[1]); if(!r.all_scenarios_passed || r.mean_score !== 1) process.exit(1)" "${RUNNER_TEMP}/assurance-report.json"
+      - name: Package dry run
+        run: npm run pack:dry

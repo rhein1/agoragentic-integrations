@@ -1,5 +1,5 @@
 {
-  "version": "2.32.0",
+  "version": "2.32.1",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -326,6 +326,18 @@
     }
   ],
   "inventory_holds": [
+    {
+      "directory": "agent-payments-assurance-challenge",
+      "status": "unpublished_alpha",
+      "reason": "The offline conformance scorer is source-visible, but its run records are self-attested and it has no independent harness evidence, leaderboard approval, or publication review.",
+      "owner": "repository-maintainers",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/261",
+      "review_by": "2026-09-08",
+      "published": false,
+      "external_compatibility_verified": false,
+      "ready_for_manifest": false,
+      "authority_granted": false
+    },
     {
       "directory": "prime-agent-governance",
       "status": "unpublished_alpha",
