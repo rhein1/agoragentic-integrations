@@ -30,7 +30,7 @@ The worker does not import or execute adapter code. JavaScript is passed to `nod
 | Repository containment | A primary or documentation path is missing, absolute, traverses outside the repo, or resolves through an escaping symlink. |
 | Syntax | The primary JavaScript, TypeScript, Python, or JSON artifact cannot be parsed offline. Documentation-only entries are `not_applicable`. |
 | Credential literals | A credential-shaped literal is present in the primary artifact or its documentation. Reports include only the rule and file path, never the matched value. |
-| Execute-first signal | An advisory is emitted when neither the primary artifact nor docs expose the current execute-first path. |
+| Execution-flow signal | General integrations must expose the current execute-first path. Integration-specific profiles may require a narrower protocol-native flow instead: `x402` must declare its intentional direct x402 boundary and include both `/api/x402/execute/match` and `/api/x402/execute`. Missing profile signals remain advisory rather than being waived. |
 | Colocated tests | An advisory is emitted when no adapter-local test file is present. This keeps syntax-only evidence from being mistaken for runtime coverage. |
 
 ## Evidence boundary
