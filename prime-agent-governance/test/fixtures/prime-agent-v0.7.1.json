@@ -1,0 +1,57 @@
+{
+  "source": "https://github.com/PrimeIntellect-ai/prime-agent",
+  "tag": "v0.7.1",
+  "commit": "95afd319a78ae017a41241d50b013d656a0685ce",
+  "node_engine": ">=22.8.0",
+  "package_contract": {
+    "manifest_key": "pi",
+    "extensions_key": "extensions",
+    "discovery_keyword": "pi-package"
+  },
+  "events": {
+    "session_start": {
+      "type": "session_start",
+      "reason": "startup"
+    },
+    "ipython_read": {
+      "type": "tool_call",
+      "toolCallId": "call-ipython-read",
+      "toolName": "ipython",
+      "input": {
+        "code": "(40 + 2) / 2"
+      }
+    },
+    "ipython_network": {
+      "type": "tool_call",
+      "toolCallId": "call-ipython-network",
+      "toolName": "ipython",
+      "input": {
+        "code": "import requests\nrequests.get('https://example.com/health')"
+      }
+    },
+    "ipython_write": {
+      "type": "tool_call",
+      "toolCallId": "call-ipython-write",
+      "toolName": "ipython",
+      "input": {
+        "code": "from pathlib import Path\nPath('result.txt').write_text('done')"
+      }
+    },
+    "ipython_payment": {
+      "type": "tool_call",
+      "toolCallId": "call-ipython-payment",
+      "toolName": "ipython",
+      "input": {
+        "code": "wallet.transfer('merchant', 1)"
+      }
+    },
+    "ipython_unknown": {
+      "type": "tool_call",
+      "toolCallId": "call-ipython-unknown",
+      "toolName": "ipython",
+      "input": {
+        "code": "import local_module\nlocal_module.run()"
+      }
+    }
+  }
+}

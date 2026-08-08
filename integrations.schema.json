@@ -10,6 +10,7 @@
     "canonical_url",
     "packages",
     "tools",
+    "inventory_holds",
     "integrations"
   ],
   "properties": {
@@ -92,6 +93,13 @@
       "description": "Canonical tool definitions exposed by all integrations.",
       "items": {
         "$ref": "#/$defs/tool"
+      }
+    },
+    "inventory_holds": {
+      "type": "array",
+      "description": "Centrally governed, time-bounded holds for top-level integrations that are not eligible for public catalog inclusion.",
+      "items": {
+        "$ref": "#/$defs/inventoryHold"
       }
     },
     "integrations": {
@@ -194,6 +202,59 @@
             "listing_price"
           ],
           "description": "Whether this tool is free or costs the listing price."
+        }
+      }
+    },
+    "inventoryHold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directory",
+        "status",
+        "reason",
+        "owner",
+        "tracking_ref",
+        "review_by",
+        "published",
+        "external_compatibility_verified",
+        "ready_for_manifest",
+        "authority_granted"
+      ],
+      "properties": {
+        "directory": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "status": {
+          "const": "unpublished_alpha"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 24
+        },
+        "owner": {
+          "const": "repository-maintainers"
+        },
+        "tracking_ref": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://github\\.com/rhein1/agoragentic-integrations/(issues|pull)/[0-9]+$"
+        },
+        "review_by": {
+          "type": "string",
+          "format": "date"
+        },
+        "published": {
+          "const": false
+        },
+        "external_compatibility_verified": {
+          "const": false
+        },
+        "ready_for_manifest": {
+          "const": false
+        },
+        "authority_granted": {
+          "const": false
         }
       }
     },

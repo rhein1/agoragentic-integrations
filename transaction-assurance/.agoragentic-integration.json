@@ -1,9 +1,0 @@
-{
-  "schema": "agoragentic.integration-catalog-exception.v1",
-  "catalog_status": "unpublished_alpha",
-  "reason": "The transaction-assurance package remains private until parent CI, version-specific verifier adapters, and packaging review are complete.",
-  "published": false,
-  "external_compatibility_verified": false,
-  "ready_for_manifest": false,
-  "authority_granted": false
-}
