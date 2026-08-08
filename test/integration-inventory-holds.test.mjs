@@ -9,6 +9,11 @@ const require = createRequire(import.meta.url);
 const { validateInventoryHolds } = require('../scripts/integration-inventory-holds.js');
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = JSON.parse(readFileSync(resolve(ROOT, 'integrations.json'), 'utf8'));
+const HELD_DIRECTORIES = [
+  'agent-payments-assurance-challenge',
+  'prime-agent-governance',
+  'transaction-assurance',
+];
 const REPRESENTED = (MANIFEST.integrations || [])
   .flatMap((integration) => [integration.path, integration.docs])
   .filter(Boolean)
@@ -20,7 +25,7 @@ function cloneManifest() {
 
 function validate(manifest, options = {}) {
   return validateInventoryHolds(manifest, {
-    integrationDirectories: ['prime-agent-governance', 'transaction-assurance'],
+    integrationDirectories: HELD_DIRECTORIES,
     representedDirectories: REPRESENTED,
     today: '2026-08-08',
     ...options,
@@ -30,7 +35,7 @@ function validate(manifest, options = {}) {
 test('current central inventory hold is bounded and valid', () => {
   const result = validate(MANIFEST);
   assert.deepEqual(result.errors, []);
-  assert.deepEqual([...result.heldDirectories], ['prime-agent-governance', 'transaction-assurance']);
+  assert.deepEqual([...result.heldDirectories], HELD_DIRECTORIES);
 });
 
 test('expired inventory holds fail closed', () => {

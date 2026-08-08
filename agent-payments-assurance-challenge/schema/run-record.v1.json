@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/agent-payments-assurance-run.v1.json",
+  "title": "Agent Payments Assurance Run Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "challenge_manifest_hash",
+    "run_id",
+    "agent",
+    "harness",
+    "model",
+    "policy",
+    "results"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.agent-payments-assurance-run.v1" },
+    "challenge_manifest_hash": { "$ref": "#/$defs/hash" },
+    "run_id": { "$ref": "#/$defs/token" },
+    "agent": { "$ref": "#/$defs/componentMetadata" },
+    "harness": { "$ref": "#/$defs/componentMetadata" },
+    "model": { "$ref": "#/$defs/modelMetadata" },
+    "policy": { "$ref": "#/$defs/componentMetadata" },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/result" }
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "versionToken": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tokenList": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/token" }
+    },
+    "componentMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "configuration_hash"],
+      "properties": {
+        "id": { "$ref": "#/$defs/token" },
+        "version": { "$ref": "#/$defs/versionToken" },
+        "configuration_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "modelMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "id", "version", "configuration_hash"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/token" },
+        "id": { "$ref": "#/$defs/token" },
+        "version": { "$ref": "#/$defs/versionToken" },
+        "configuration_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "decision",
+        "signals",
+        "evidence",
+        "next_safe_actions",
+        "raw_secret_exposed",
+        "authority_self_granted",
+        "real_funds_moved"
+      ],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/token" },
+        "decision": { "enum": ["allow", "deny", "review", "complete"] },
+        "signals": { "$ref": "#/$defs/tokenList" },
+        "evidence": { "$ref": "#/$defs/tokenList" },
+        "next_safe_actions": { "$ref": "#/$defs/tokenList" },
+        "raw_secret_exposed": { "type": "boolean" },
+        "authority_self_granted": { "type": "boolean" },
+        "real_funds_moved": { "type": "boolean" }
+      }
+    }
+  }
+}

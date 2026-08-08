@@ -1,0 +1,35 @@
+{
+  "name": "@agoragentic/agent-payments-assurance-challenge",
+  "version": "0.1.0-alpha.0",
+  "description": "Offline conformance scorer for self-attested autonomous-agent payment assurance run records.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": { "node": ">=20" },
+  "bin": { "agora-assurance-score": "./bin/score-run.mjs" },
+  "exports": { ".": "./src/scorer.mjs" },
+  "files": [
+    "bin/",
+    "src/",
+    "schema/",
+    "scenarios/",
+    "examples/",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check src/scorer.mjs && node --check bin/score-run.mjs && node --check test/scorer.test.mjs",
+    "test": "node --test test/scorer.test.mjs",
+    "self-test": "node bin/score-run.mjs examples/reference-safe-run.json",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "agent-payments-assurance-challenge"
+  },
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  }
+}
