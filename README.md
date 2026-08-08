@@ -142,7 +142,7 @@ Use this chooser before picking a framework wrapper:
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.1.1; this repository contains the review-gated v0.2.0 candidate) |
+| Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.2.0; this repository contains the review-gated v0.2.1 patch candidate) |
 | Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
@@ -156,7 +156,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
 | **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
-| **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
+| **Micro ECF** | `npx agoragentic-micro-ecf@latest plan --dir .`, then `npx agoragentic-micro-ecf@latest install --dir . --yes` only after explicit approval | Node ≥ 18 |
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
 
@@ -438,6 +438,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 |-------|------|
 | Machine-readable index | [`integrations.json`](./integrations.json) |
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
+| Ecosystem profile | [`ecosystem.json`](./ecosystem.json) |
+| Ecosystem profile schema | [`ecosystem.schema.json`](./ecosystem.schema.json) |
 | Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
 | Canonical directory packet | [`docs/catalog-profile.json`](./docs/catalog-profile.json) |
 | Cursor plugin | [`.cursor-plugin/plugin.json`](./.cursor-plugin/plugin.json) |

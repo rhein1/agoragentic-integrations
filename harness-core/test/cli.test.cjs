@@ -7,9 +7,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
+const Ajv = require('ajv');
+const addFormats = require('ajv-formats');
 
 const packageRoot = path.join(__dirname, '..');
 const cliPath = path.join(packageRoot, 'bin', 'agoragentic-harness.mjs');
+const ajv = new Ajv({ allErrors: true, strict: false });
+addFormats(ajv);
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agoragentic-harness-core-'));
@@ -34,20 +38,26 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+for (const schemaFile of fs.readdirSync(path.join(packageRoot, 'schema'))
+  .filter((file) => file.endsWith('.json'))) {
+  ajv.addSchema(readJson(path.join(packageRoot, 'schema', schemaFile)));
+}
+
 function validateSchema(schemaRelPath, payload) {
   const schema = readJson(path.join(packageRoot, schemaRelPath));
-  for (const key of schema.required || []) {
-    assert.ok(Object.hasOwn(payload, key), `${schemaRelPath} requires ${key}`);
-  }
-  if (schema.properties?.schema?.const) {
-    assert.equal(payload.schema, schema.properties.schema.const);
-  }
+  const validate = ajv.getSchema(schema.$id);
+  assert.ok(validate, `${schemaRelPath} must be registered with Ajv`);
+  assert.equal(
+    validate(payload),
+    true,
+    `${schemaRelPath} validation failed: ${ajv.errorsText(validate.errors)}`,
+  );
 }
 
 test('Harness Core package exposes local no-spend CLI bins', () => {
   const pkg = readJson(path.join(packageRoot, 'package.json'));
   assert.equal(pkg.name, 'agoragentic-harness-core');
-  assert.equal(pkg.version, '0.2.0');
+  assert.equal(pkg.version, '0.2.1');
   assert.equal(pkg.bin['agoragentic-harness'], './bin/agoragentic-harness.mjs');
   assert.equal(pkg.bin['agora-harness'], './bin/agoragentic-harness.mjs');
   assert.match(pkg.description, /Local no-spend Agent OS Harness Core/);
@@ -92,7 +102,15 @@ test('proof writes schema-valid no-spend proof and receipt artifacts', () => {
   assert.equal(proofRun.json.receipt.receipt_boundary.x402_payment_attempted, false);
 
   validateSchema('schema/local-proof.v1.json', readJson(path.join(dir, '.agoragentic', 'local-proof.json')));
-  validateSchema('schema/local-receipt.v1.json', readJson(path.join(dir, '.agoragentic', 'local-receipt.json')));
+  const receipt = readJson(path.join(dir, '.agoragentic', 'local-receipt.json'));
+  validateSchema('schema/local-receipt.v1.json', receipt);
+  assert.throws(
+    () => validateSchema('schema/local-receipt.v1.json', {
+      ...receipt,
+      spend: { ...receipt.spend, amount_usdc: 1 },
+    }),
+    /amount_usdc.*constant/,
+  );
 });
 
 test('export emits a schema-valid Agent OS Harness packet for preview only', () => {
@@ -108,7 +126,7 @@ test('export emits a schema-valid Agent OS Harness packet for preview only', () 
   assert.equal(packet.public_boundary.no_spend_export, true);
   assert.equal(packet.public_boundary.hosted_billing, false);
   assert.equal(packet.agent_os_preview_request.deployment_packet.source, 'harness_core_local');
-  assert.equal(packet.generated_from.package_version, '0.2.0');
+  assert.equal(packet.generated_from.package_version, '0.2.1');
   assert.equal(packet.agent_os_export.preview_endpoint, 'POST /api/hosting/agent-os/preview');
   validateSchema('schema/agent-os-harness.v1.json', packet);
 });

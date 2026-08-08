@@ -6,6 +6,8 @@ on:
     paths:
       - '**/*.md'
       - '.github/workflows/validate.yml'
+      - 'ecosystem.json'
+      - 'ecosystem.schema.json'
       - 'integrations.json'
       - 'integrations.schema.json'
       - '.cursor-plugin/**'
@@ -118,6 +120,12 @@ jobs:
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
 
+      - name: Validate ecosystem.json against schema
+        run: ajv validate -s ecosystem.schema.json -d ecosystem.json --all-errors --spec=draft2020 -c ajv-formats
+
+      - name: Test ecosystem claim boundaries
+        run: node --test test/verify-ecosystem-profile.test.cjs
+
       - name: Validate integrations.json is valid JSON
         run: node -e "JSON.parse(require('fs').readFileSync('integrations.json','utf8')); console.log('✅ integrations.json is valid JSON')"
 
@@ -180,7 +188,7 @@ jobs:
 
       - name: Check required root files exist
         run: |
-          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt gemini-extension.json GEMINI.md llms-install.md CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
+          for f in ecosystem.json ecosystem.schema.json integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt gemini-extension.json GEMINI.md llms-install.md CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
             if [ ! -f "$f" ]; then
               echo "❌ Missing required file: $f"
               exit 1

@@ -1,0 +1,159 @@
+{
+  "$schema": "./ecosystem.schema.json",
+  "schema": "agoragentic.ecosystem-profile.v1",
+  "updated_at": "2026-08-08",
+  "brand": {
+    "name": "Agoragentic",
+    "promise": "Bound what autonomous agents may do, record evidence of what they did, and connect governed buyers and sellers.",
+    "short_positioning": "Control, proof, and transaction rails for autonomous agents.",
+    "public_home": "https://agoragentic.com/",
+    "github_profile": "https://github.com/rhein1"
+  },
+  "funnels": [
+    {
+      "id": "build",
+      "label": "Add controls to an agent",
+      "entrypoint": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
+      "next": "https://agoragentic.com/agoragentic-harness/"
+    },
+    {
+      "id": "context",
+      "label": "Govern agent context",
+      "entrypoint": "https://github.com/rhein1/agoragentic-micro-ecf",
+      "next": "https://github.com/rhein1/agoragentic-ecf-core"
+    },
+    {
+      "id": "operate",
+      "label": "Launch and operate an agent",
+      "entrypoint": "https://agoragentic.com/agent-os/",
+      "next": "https://agoragentic.com/agent-os/start/"
+    },
+    {
+      "id": "buy-sell",
+      "label": "Buy or sell agent work",
+      "entrypoint": "https://agoragentic.com/start/browse/",
+      "next": "https://agoragentic.com/api/capabilities"
+    },
+    {
+      "id": "connect-market",
+      "label": "Connect a marketplace or agent network",
+      "entrypoint": "https://agoragentic.com/interchange/",
+      "next": "https://agoragentic.com/federate/"
+    }
+  ],
+  "products": [
+    {
+      "id": "harness-core",
+      "name": "Harness Core",
+      "layer": "open-source-local",
+      "promise": "Policy decisions, approval records, configuration proof, and clearly labeled local receipts for existing agent hosts.",
+      "repository": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
+      "install": "npx agoragentic-harness-core@latest init",
+      "receipt_class": "local"
+    },
+    {
+      "id": "micro-ecf",
+      "name": "Micro ECF",
+      "layer": "open-source-local",
+      "promise": "A persistent, inspectable context boundary through an approval-gated local plan and install flow.",
+      "repository": "https://github.com/rhein1/agoragentic-micro-ecf",
+      "install": "npx agoragentic-micro-ecf@latest plan --dir .",
+      "install_after_explicit_approval": "npx agoragentic-micro-ecf@latest install --dir . --yes"
+    },
+    {
+      "id": "ecf-core",
+      "name": "ECF Core",
+      "layer": "open-source-self-hosted",
+      "promise": "Source-preserving context governance and local MCP for coding agents.",
+      "repository": "https://github.com/rhein1/agoragentic-ecf-core",
+      "install": "npx agoragentic-ecf-core@latest init ."
+    },
+    {
+      "id": "fable5-codex",
+      "name": "Fable-5 for Codex",
+      "layer": "open-source-developer-tool",
+      "promise": "Evidence-first audits, reviews, fact checks, understanding, design options, and repo sweeps.",
+      "repository": "https://github.com/rhein1/fable5-codex"
+    },
+    {
+      "id": "triptych-os",
+      "name": "Triptych OS (Agent OS)",
+      "layer": "hosted-runtime",
+      "promise": "Mandates, budgets, approvals, stop controls, runtime state, receipts, and reconciliation for deployed agents.",
+      "url": "https://agoragentic.com/agent-os/"
+    },
+    {
+      "id": "router-marketplace",
+      "name": "Router / Marketplace",
+      "layer": "hosted-transaction-network",
+      "promise": "Live capability discovery, bounded execution, current commerce contracts, and receipt-backed results.",
+      "url": "https://agoragentic.com/start/browse/",
+      "machine_catalog": "https://agoragentic.com/api/capabilities"
+    },
+    {
+      "id": "interchange",
+      "name": "Agoragentic Interchange",
+      "layer": "hosted-cross-market-network",
+      "promise": "Cross-market discovery, mandate enforcement, receipt verification, and reconciliation.",
+      "url": "https://agoragentic.com/interchange/"
+    }
+  ],
+  "repositories": [
+    {
+      "name": "agoragentic-integrations",
+      "url": "https://github.com/rhein1/agoragentic-integrations",
+      "role": "canonical integration and distribution hub"
+    },
+    {
+      "name": "agoragentic-micro-ecf",
+      "url": "https://github.com/rhein1/agoragentic-micro-ecf",
+      "role": "lightweight local context boundary"
+    },
+    {
+      "name": "agoragentic-ecf-core",
+      "url": "https://github.com/rhein1/agoragentic-ecf-core",
+      "role": "self-hosted context-governance runtime"
+    },
+    {
+      "name": "fable5-codex",
+      "url": "https://github.com/rhein1/fable5-codex",
+      "role": "evidence-first Codex engineering workflows"
+    },
+    {
+      "name": "agoragentic-premortem-golden-loop",
+      "url": "https://github.com/rhein1/agoragentic-premortem-golden-loop",
+      "role": "pre-launch audit and release-readiness CLI"
+    },
+    {
+      "name": "agoragentic-openai-agents-example",
+      "url": "https://github.com/rhein1/agoragentic-openai-agents-example",
+      "role": "OpenAI Agents SDK acquisition example"
+    },
+    {
+      "name": "agoragentic-summarizer-agent",
+      "url": "https://github.com/rhein1/agoragentic-summarizer-agent",
+      "role": "minimal Python Router example"
+    }
+  ],
+  "inventory": {
+    "integration_manifest": "./integrations.json",
+    "integration_count": 99,
+    "count_rule": "integration_count must equal integrations.json.integrations.length",
+    "public_copy_rule": "Other repositories should link to this inventory instead of hard-coding the count."
+  },
+  "live_truth": {
+    "capabilities": "https://agoragentic.com/api/capabilities",
+    "public_proof": "https://agoragentic.com/public-proof.json",
+    "health": "https://agoragentic.com/api/health",
+    "openapi": "https://agoragentic.com/openapi.yaml",
+    "agents": "https://agoragentic.com/agents.txt",
+    "mcp": "https://agoragentic.com/.well-known/mcp/server.json",
+    "x402": "https://x402.agoragentic.com/.well-known/x402.json"
+  },
+  "boundaries": [
+    "A public listing does not by itself mean the capability is invocable.",
+    "A local receipt is not a settlement receipt, certification, endorsement, or marketplace verification.",
+    "Documentation and metadata do not grant spend, deployment, publication, wallet, trust, ranking, or hosted-memory authority.",
+    "Live availability, pricing, verification, retry guidance, and payment requirements must be read from current machine surfaces."
+  ]
+}

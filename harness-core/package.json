@@ -1,6 +1,6 @@
 {
   "name": "agoragentic-harness-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local no-spend Agent OS Harness Core for Micro ECF policy, first proof, receipts, listing readiness, and Triptych OS preview export.",
   "type": "module",
   "license": "Apache-2.0",
@@ -43,6 +43,7 @@
     "./schema/worktree-session.v1.json": "./schema/worktree-session.v1.json"
   },
   "files": [
+    "assets/",
     "bin/",
     "src/",
     "profiles/",
@@ -85,5 +86,9 @@
     "agent-harness",
     "x402",
     "receipts"
-  ]
+  ],
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  }
 }

@@ -1,6 +1,6 @@
 {
-  "version": "2.30.0",
-  "updated_at": "2026-07-28",
+  "version": "2.30.1",
+  "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -42,7 +42,8 @@
     },
     "micro_ecf": {
       "name": "agoragentic-micro-ecf",
-      "install": "npx agoragentic-micro-ecf init",
+      "install": "npx agoragentic-micro-ecf@latest plan --dir .",
+      "install_after_explicit_approval": "npx agoragentic-micro-ecf@latest install --dir . --yes",
       "registry": "https://www.npmjs.com/package/agoragentic-micro-ecf",
       "min_node": "18"
     },
@@ -441,7 +442,8 @@
       "language": "javascript",
       "status": "beta",
       "path": "micro-ecf/bin/micro-ecf.mjs",
-      "install": "npx agoragentic-micro-ecf plan --dir . && npx agoragentic-micro-ecf install --dir . --yes && npx agoragentic-micro-ecf doctor --dir .",
+      "install": "npx agoragentic-micro-ecf@latest plan --dir .",
+      "install_after_explicit_approval": "npx agoragentic-micro-ecf@latest install --dir . --yes",
       "docs": "micro-ecf/README.md"
     },
     {
@@ -1216,6 +1218,8 @@
     }
   ],
   "discovery": {
+    "ecosystem_profile": "ecosystem.json",
+    "ecosystem_profile_schema": "ecosystem.schema.json",
     "skill_md": "SKILL.md",
     "glama": "glama.json",
     "distribution_status": "docs/DISTRIBUTION.md",

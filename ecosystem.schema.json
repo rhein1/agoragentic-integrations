@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agoragentic Ecosystem Profile",
+  "description": "Durable public portfolio positioning and links to current machine truth surfaces.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema",
+    "updated_at",
+    "brand",
+    "funnels",
+    "products",
+    "repositories",
+    "inventory",
+    "live_truth",
+    "boundaries"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./ecosystem.schema.json"
+    },
+    "schema": {
+      "const": "agoragentic.ecosystem-profile.v1"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "promise", "short_positioning", "public_home", "github_profile"],
+      "properties": {
+        "name": { "const": "Agoragentic" },
+        "promise": { "type": "string", "minLength": 1 },
+        "short_positioning": { "type": "string", "minLength": 1 },
+        "public_home": { "type": "string", "format": "uri" },
+        "github_profile": { "type": "string", "format": "uri" }
+      }
+    },
+    "funnels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "entrypoint", "next"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "entrypoint": { "type": "string", "format": "uri" },
+          "next": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "products": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "layer", "promise"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "layer": { "type": "string", "minLength": 1 },
+          "promise": { "type": "string", "minLength": 1 },
+          "repository": { "type": "string", "format": "uri" },
+          "url": { "type": "string", "format": "uri" },
+          "machine_catalog": { "type": "string", "format": "uri" },
+          "install": { "type": "string", "minLength": 1 },
+          "install_after_explicit_approval": { "type": "string", "minLength": 1 },
+          "receipt_class": { "type": "string", "enum": ["local"] }
+        },
+        "anyOf": [
+          { "required": ["repository"] },
+          { "required": ["url"] }
+        ]
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "url", "role"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "format": "uri" },
+          "role": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["integration_manifest", "integration_count", "count_rule", "public_copy_rule"],
+      "properties": {
+        "integration_manifest": { "const": "./integrations.json" },
+        "integration_count": { "type": "integer", "minimum": 1 },
+        "count_rule": { "type": "string", "minLength": 1 },
+        "public_copy_rule": { "type": "string", "minLength": 1 }
+      }
+    },
+    "live_truth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capabilities", "public_proof", "health", "openapi", "agents", "mcp", "x402"],
+      "properties": {
+        "capabilities": { "type": "string", "format": "uri" },
+        "public_proof": { "type": "string", "format": "uri" },
+        "health": { "type": "string", "format": "uri" },
+        "openapi": { "type": "string", "format": "uri" },
+        "agents": { "type": "string", "format": "uri" },
+        "mcp": { "type": "string", "format": "uri" },
+        "x402": { "type": "string", "format": "uri" }
+      }
+    },
+    "boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
