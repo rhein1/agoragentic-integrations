@@ -561,4 +561,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE), except `micro-ecf/` and `harness-core/`, which carry their own Apache-2.0 package licenses.
+[MIT](./LICENSE), except `micro-ecf/`, `harness-core/`, and `examples/buzz-signed-workspace-evidence/`, which carry their own Apache-2.0 package licenses.

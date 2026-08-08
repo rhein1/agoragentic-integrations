@@ -30,6 +30,7 @@ on:
       - 'zoneless/**'
       - 'scripts/**'
       - 'docs/**'
+      - 'examples/buzz-signed-workspace-evidence/**'
       - 'examples/governed-research-agent/**'
       - 'examples/agoragentic-growth/**'
       - 'test/**'
@@ -99,6 +100,17 @@ jobs:
           npm test
           npm run pack:smoke
           npm pack --dry-run
+
+      - name: Validate Buzz signed workspace evidence package
+        working-directory: examples/buzz-signed-workspace-evidence
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm run check
+          node --test test.mjs
+          npm run pack:dry
 
       - name: Setup Node 22 for n8n toolchain
         uses: actions/setup-node@v7

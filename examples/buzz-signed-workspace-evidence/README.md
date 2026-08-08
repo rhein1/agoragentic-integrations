@@ -79,17 +79,18 @@ It then:
 - records deterministic hashes for channel, event, pubkey, address, repository, and identifier references;
 - hashes the signature instead of embedding it;
 - hashes content by default;
-- optionally stores bounded, secret-redacted content;
-- accepts only typed external attestation references bound to the exact event ID, pubkey, and signature hash;
+- optionally stores bounded raw content after best-effort known-pattern redaction, while marking it unsafe for publication;
+- accepts only typed external attestation references bound to the exact event ID, pubkey, and signature hash, with relay-audit claims additionally bound to the exact source relay hash;
 - records those claims as unverified references; it never labels a signature, principal binding, or relay persistence as verified without a separate trusted resolver;
-- commits source metadata and every normalized evidence field into a deterministic bundle root;
+- commits every deterministic security-relevant output field into `bundle_root`, while retaining `event_root` as the subordinate event/source commitment;
+- exposes `verifyBuzzEvidenceBundle()` to recompute both roots and derived policy fields without claiming signature, attestation, or verifier-identity validation;
 - keeps every financial, deployment, publication, memory, and trust authority flag false.
 
 It also defines an unsigned, proposal-only reference that can later link:
 
 ```text
 Buzz event
-+ Buzz evidence root
++ Buzz full bundle root
 + Agoragentic mandate
 + Transaction Assurance receipt
 ```
@@ -123,7 +124,7 @@ node cli.mjs ./events.json \
   --out ./buzz-evidence.json
 ```
 
-The bounded mode applies basic credential-pattern redaction and caps embedded content. It is not a full data-loss-prevention system.
+The bounded mode redacts a limited set of known credential and payment-card patterns before capping embedded content. It still emits raw workspace content, sets `redaction_complete: false` and `safe_for_publication: false`, and requires explicit content authority, private handling, and publication review. It is not a data-loss-prevention system and must not be used to make an untrusted export public-safe.
 
 ## JavaScript API
 
@@ -131,6 +132,7 @@ The bounded mode applies basic credential-pattern redaction and caps embedded co
 import {
   compileBuzzEvidenceBundle,
   buildBuzzTransactionAssuranceReference,
+  verifyBuzzEvidenceBundle,
 } from './buzz-event-evidence.mjs';
 
 const bundle = compileBuzzEvidenceBundle({
@@ -165,6 +167,7 @@ const bundle = compileBuzzEvidenceBundle({
       event_id: events[0].id,
       pubkey: events[0].pubkey,
       signature_hash: 'sha256:<hash of this event signature>',
+      relay_url_hash: 'sha256:<hash of the exact input relay_url>',
       persistence_status: 'persisted',
       audit_entry_ref: 'sha256:<audit entry>',
       audit_head_ref: 'sha256:<audit head>',
@@ -174,9 +177,13 @@ const bundle = compileBuzzEvidenceBundle({
     }
   }
 });
+
+const verification = verifyBuzzEvidenceBundle(bundle);
 ```
 
-First create a hash-only packet to obtain the emitted `signature_hash`; an independent verifier or export process can then produce an attestation bound to that exact event. The compiler verifies only that the caller-supplied fields are structurally bound to the event. It does not fetch or authenticate the attestation artifact, validate the verifier identity, or turn a claim into verification. The compiler never accepts a naked `signature_valid`, `persisted`, or principal-binding boolean as verification evidence.
+First create a hash-only packet with the exact `relay_url` to obtain the emitted `signature_hash` and `source.relay_url_hash`; an independent verifier or export process can then produce attestations bound to that event and relay. The compiler verifies only that the caller-supplied fields are structurally bound to the event and, for persistence claims, the source relay. It does not fetch or authenticate the attestation artifact, validate the verifier identity, or turn a claim into verification. The compiler never accepts a naked `signature_valid`, `persisted`, or principal-binding boolean as verification evidence.
+
+`verifyBuzzEvidenceBundle()` checks internal commitment consistency, derived summaries, privacy posture, readiness, and fixed no-authority fields. Pass a previously trusted `expected_bundle_root` to detect a fully rehashed replacement. It does not verify Nostr signatures, authenticate external attestations, or establish a trusted origin for the root.
 
 Even with typed signature, principal, and audit attestation references, the bundle remains blocked until an independently verifiable attestation artifact, trusted verifier policy, explicit Agoragentic mandate, and external enforcement chokepoint exist.
 
@@ -219,7 +226,7 @@ Output:
 - typed but unverified actor and principal-binding references;
 - release evidence graph;
 - missing-approval and missing-persistence findings;
-- public-safe evidence bundle;
+- bounded evidence bundle with explicit privacy and publication-review flags;
 - local Agoragentic receipt.
 
 This is more valuable than generic channel export because it answers:
@@ -236,7 +243,7 @@ Connect an Agent OS deployment to Buzz through ACP or the JSON CLI while keeping
 
 ### Transaction Assurance Reference
 
-After an externally enforced transaction completes, post an owner-authorized, signed reference back to Buzz so the channel can point to the mandate, evidence root, payment/outcome receipt, and reconciliation state without embedding private payment data.
+After an externally enforced transaction completes, post an owner-authorized, signed reference back to Buzz so the channel can point to the mandate, full bundle root, and payment/outcome receipt without embedding private payment data. The proposal accepts the full commitment only as `evidence_bundle_root`; it rejects the ambiguous subordinate name `evidence_root`. It uses `claimed_states` plus `state_claims_verified: false`; those caller-supplied labels are references for an external verifier, not proof that any Transaction Assurance state is final.
 
 ## Recommended implementation order
 
@@ -272,7 +279,7 @@ npm test
 npm run pack:dry
 ```
 
-The dedicated workflow runs on Node 20, 22, and 24 with no credentials, network calls, relay writes, or funds. It verifies the packed local artifact can install and run the CLI offline, and that it includes this folder's Apache-2.0 [`LICENSE`](LICENSE) and upstream provenance record.
+The test suite also supports direct execution with `node --test test.mjs`; it does not depend on npm-populated environment variables. The dedicated workflow runs on Node 20, 22, and 24 with no credentials, network calls, relay writes, or funds, while the repository's required `validate` job runs the package checks directly. The tests verify the packed local artifact can install and run the CLI offline, and that it includes this folder's Apache-2.0 [`LICENSE`](LICENSE) and upstream provenance record.
 
 ## License
 

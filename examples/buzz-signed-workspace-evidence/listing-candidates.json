@@ -36,7 +36,7 @@
         "typed but unverified attestation references",
         "release evidence graph",
         "missing authority and persistence blockers",
-        "evidence root",
+        "full security-envelope bundle root",
         "local receipt"
       ],
       "pricing": {
@@ -51,6 +51,7 @@
         "nip01_vector_checked": true,
         "hash_only_metadata_default": true,
         "event_bound_attestations_required": true,
+        "relay_bound_audit_attestations_required": true,
         "independent_attestation_verifier_available": false,
         "live_buzz_export_adapter": false,
         "signature_verifier": false,

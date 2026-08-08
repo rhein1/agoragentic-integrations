@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
@@ -12,6 +14,7 @@ import {
   buildBuzzTransactionAssuranceReference,
   canonicalBuzzEventId,
   compileBuzzEvidenceBundle,
+  verifyBuzzEvidenceBundle,
 } from './buzz-event-evidence.mjs';
 import { MAX_INPUT_BYTES } from './cli.mjs';
 
@@ -19,6 +22,7 @@ const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const PUBKEY_A = '1'.repeat(64);
 const PUBKEY_B = '2'.repeat(64);
 const SIGNATURE = '3'.repeat(128);
+const RELAY_URL = 'wss://relay.example.test';
 const ref = character => `sha256:${character.repeat(64)}`;
 
 const NIP01_VECTOR = Object.freeze({
@@ -49,8 +53,72 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function typedAttestations(message) {
-  const preliminary = compileBuzzEvidenceBundle({ events: [message] });
+function testStableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(item => testStableStringify(item)).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => (
+    `${JSON.stringify(key)}:${testStableStringify(value[key])}`
+  )).join(',')}}`;
+}
+
+function testSha256(value) {
+  return `sha256:${createHash('sha256').update(value, 'utf8').digest('hex')}`;
+}
+
+function rehashBundle(bundle) {
+  bundle.event_commitments = bundle.events.map(value => ({
+    event_id: value.event_id,
+    commitment_ref: testSha256(testStableStringify(value)),
+  }));
+  bundle.event_root = testSha256(testStableStringify({
+    schema: 'agoragentic.buzz-evidence-root.v2',
+    source: bundle.source,
+    relationships: bundle.relationships,
+    event_commitments: bundle.event_commitments,
+  }));
+  bundle.bundle_root = testSha256(testStableStringify({
+    schema: 'agoragentic.buzz-evidence-bundle-root.v1',
+    bundle_schema: bundle.schema,
+    source: bundle.source,
+    event_root: bundle.event_root,
+    event_commitments: bundle.event_commitments,
+    events: bundle.events,
+    relationships: bundle.relationships,
+    summary: bundle.summary,
+    privacy: bundle.privacy,
+    transaction_assurance_readiness: bundle.transaction_assurance_readiness,
+    authority: bundle.authority,
+  }));
+  bundle.bundle_id = `buzz_bundle_${bundle.bundle_root.slice(7, 19)}`;
+  return bundle;
+}
+
+function resolveNpmCli() {
+  const executableDirectory = dirname(process.execPath);
+  const installRoot = dirname(executableDirectory);
+  const candidates = [
+    process.env.npm_execpath,
+    join(executableDirectory, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    join(installRoot, 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ];
+  for (const pathEntry of (process.env.PATH || '').split(delimiter).filter(Boolean)) {
+    candidates.push(join(pathEntry, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+    candidates.push(join(dirname(pathEntry), 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+  }
+  return candidates.find(candidate => candidate && existsSync(candidate)) || null;
+}
+
+function runNpm(args, options) {
+  const npmCli = resolveNpmCli();
+  if (npmCli) return spawnSync(process.execPath, [npmCli, ...args], options);
+  return spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, {
+    ...options,
+    shell: process.platform === 'win32',
+  });
+}
+
+function typedAttestations(message, relayUrl = RELAY_URL) {
+  const preliminary = compileBuzzEvidenceBundle({ events: [message], relay_url: relayUrl });
   const signatureHash = preliminary.events[0].signature.signature_hash;
   const binding = {
     event_id: message.id,
@@ -78,6 +146,7 @@ function typedAttestations(message) {
     audit_attestations: {
       [message.id]: {
         ...binding,
+        relay_url_hash: preliminary.source.relay_url_hash,
         persistence_status: 'persisted',
         audit_entry_ref: ref('6'),
         audit_head_ref: ref('7'),
@@ -101,7 +170,7 @@ function assertReceiptReferenceInstance(schema, instance) {
 
   const shaRefPattern = new RegExp(schema.$defs.sha256Ref.pattern);
   assert.equal(instance.schema, schema.properties.schema.const);
-  assert.match(instance.evidence_root, shaRefPattern);
+  assert.match(instance.evidence_bundle_root, shaRefPattern);
   assert.match(instance.mandate_ref, shaRefPattern);
   assert.match(instance.transaction_assurance_receipt_ref, shaRefPattern);
   assert.match(instance.reference_hash, shaRefPattern);
@@ -109,12 +178,13 @@ function assertReceiptReferenceInstance(schema, instance) {
   assert.equal(typeof instance.transaction_id, 'string');
   assert(instance.transaction_id.length <= schema.properties.transaction_id.maxLength);
 
-  const stateSchema = schema.properties.states;
-  assert.deepEqual(Object.keys(instance.states).sort(), stateSchema.required.slice().sort());
-  for (const value of Object.values(instance.states)) {
+  const stateSchema = schema.properties.claimed_states;
+  assert.deepEqual(Object.keys(instance.claimed_states).sort(), stateSchema.required.slice().sort());
+  for (const value of Object.values(instance.claimed_states)) {
     assert.equal(typeof value, 'string');
     assert(value.length <= stateSchema.properties.authority.maxLength);
   }
+  assert.equal(instance.state_claims_verified, schema.properties.state_claims_verified.const);
 
   for (const [field, definition] of Object.entries(schema.properties.publication.properties)) {
     assert.equal(instance.publication[field], definition.const);
@@ -173,10 +243,15 @@ test('compiles canonical Buzz events without emitting raw workspace metadata by 
   assert.equal(bundle.events[0].source_integrity.canonical_event_id_verified, true);
   assert.equal(bundle.events[0].signature.status, 'not_verified');
   assert.equal(bundle.events[0].content.policy, 'hash_only');
+  assert.equal(bundle.events[0].content.raw_content_embedded, false);
+  assert.equal(bundle.events[0].content.safe_for_publication, false);
   assert.equal(bundle.source.metadata_policy, 'hash_only');
   assert.equal(bundle.source.raw_source_metadata_embedded, false);
   assert.equal(bundle.source.compatibility_verified_against_live_relay, false);
   assert.equal(bundle.events[0].author_pubkey, undefined);
+  assert.equal(bundle.privacy.raw_content_embedded, false);
+  assert.equal(bundle.privacy.safe_for_publication, false);
+  assert.equal(bundle.privacy.publication_review_required, true);
   assert.match(bundle.events[0].references.channel_ref_hashes[0], /^sha256:[a-f0-9]{64}$/);
   assert.equal(bundle.transaction_assurance_readiness.ready_for_economic_action, false);
   assert(bundle.transaction_assurance_readiness.blockers.includes('workspace_membership_is_not_an_economic_mandate'));
@@ -185,7 +260,7 @@ test('compiles canonical Buzz events without emitting raw workspace metadata by 
 
 test('records typed, event-bound attestations as unverified claims rather than external verification', () => {
   const message = event();
-  const bundle = compileBuzzEvidenceBundle({ events: [message] }, typedAttestations(message));
+  const bundle = compileBuzzEvidenceBundle({ events: [message], relay_url: RELAY_URL }, typedAttestations(message));
 
   assert.equal(bundle.summary.signature_validity_claims_by_unverified_attestation_reference, 1);
   assert.equal(bundle.summary.principal_binding_claims_by_unverified_attestation_reference, 1);
@@ -197,6 +272,7 @@ test('records typed, event-bound attestations as unverified claims rather than e
   assert.equal(bundle.events[0].principal_binding.binding_verified, false);
   assert.equal(bundle.events[0].relay_audit.status, 'persistence_claimed_by_unverified_attestation_reference');
   assert.equal(bundle.events[0].relay_audit.attestation_reference_verified, false);
+  assert.equal(bundle.events[0].relay_audit.claimed_binding.relay_url_hash, bundle.source.relay_url_hash);
   assert.equal(bundle.events[0].authority.principal_mandate_verified, false);
   assert.equal(bundle.source.attestation_references_independently_verified, false);
   assert.equal(bundle.transaction_assurance_readiness.ready_for_payment, false);
@@ -221,14 +297,17 @@ test('records typed, event-bound attestations as unverified claims rather than e
   const mismatched = typedAttestations(message);
   mismatched.signature_attestations[message.id].pubkey = PUBKEY_B;
   assert.throws(
-    () => compileBuzzEvidenceBundle({ events: [message] }, mismatched),
+    () => compileBuzzEvidenceBundle({ events: [message], relay_url: RELAY_URL }, mismatched),
     error => error instanceof BuzzEvidenceError && error.code === 'attestation_binding_mismatch',
   );
 
   const forgedButWellFormed = typedAttestations(message);
   forgedButWellFormed.signature_attestations[message.id].verifier = 'attacker-supplied-label';
   forgedButWellFormed.signature_attestations[message.id].attestation_ref = ref('f');
-  const forgedBundle = compileBuzzEvidenceBundle({ events: [message] }, forgedButWellFormed);
+  const forgedBundle = compileBuzzEvidenceBundle(
+    { events: [message], relay_url: RELAY_URL },
+    forgedButWellFormed,
+  );
   assert.equal(
     forgedBundle.events[0].signature.status,
     'validity_claimed_by_unverified_attestation_reference',
@@ -237,7 +316,31 @@ test('records typed, event-bound attestations as unverified claims rather than e
   assert.equal(forgedBundle.events[0].signature.attestation_reference_verified, false);
 });
 
-test('commits all material evidence and source metadata into the event root', () => {
+test('requires relay-audit attestations to bind the exact source relay', () => {
+  const message = event();
+  const attestations = typedAttestations(message, RELAY_URL);
+
+  assert.throws(
+    () => compileBuzzEvidenceBundle({ events: [message] }, attestations),
+    error => error instanceof BuzzEvidenceError && error.code === 'relay_binding_required',
+  );
+  assert.throws(
+    () => compileBuzzEvidenceBundle(
+      { events: [message], relay_url: 'wss://other-relay.example.test' },
+      attestations,
+    ),
+    error => error instanceof BuzzEvidenceError && error.code === 'attestation_binding_mismatch',
+  );
+
+  const missingRelayBinding = clone(attestations);
+  delete missingRelayBinding.audit_attestations[message.id].relay_url_hash;
+  assert.throws(
+    () => compileBuzzEvidenceBundle({ events: [message], relay_url: RELAY_URL }, missingRelayBinding),
+    error => error instanceof BuzzEvidenceError && error.code === 'invalid_reference',
+  );
+});
+
+test('commits normalized event evidence and source metadata into the event root', () => {
   const message = event();
   const input = {
     events: [message],
@@ -260,7 +363,10 @@ test('commits all material evidence and source metadata into the event root', ()
   assert.notEqual(compileBuzzEvidenceBundle(input, auditMutation).event_root, baseline);
 
   assert.notEqual(
-    compileBuzzEvidenceBundle({ ...input, relay_url: 'wss://other.example.test' }, options).event_root,
+    compileBuzzEvidenceBundle(
+      { ...input, relay_url: 'wss://other.example.test' },
+      typedAttestations(message, 'wss://other.example.test'),
+    ).event_root,
     baseline,
   );
 
@@ -269,6 +375,58 @@ test('commits all material evidence and source metadata into the event root', ()
     compileBuzzEvidenceBundle({ ...input, events: [signatureMutationEvent] }, typedAttestations(signatureMutationEvent)).event_root,
     baseline,
   );
+});
+
+test('commits and verifies the complete deterministic security envelope', () => {
+  const message = event();
+  const bundle = compileBuzzEvidenceBundle(
+    { events: [message], relay_url: RELAY_URL, community_ref: 'community:test' },
+    typedAttestations(message),
+  );
+  const valid = verifyBuzzEvidenceBundle(bundle, { expected_bundle_root: bundle.bundle_root });
+
+  assert.equal(valid.valid, true);
+  assert.deepEqual(valid.failures, []);
+  assert.equal(valid.recomputed_bundle_root, bundle.bundle_root);
+  assert.equal(valid.recomputed_event_root, bundle.event_root);
+  assert.equal(bundle.bundle_id, `buzz_bundle_${bundle.bundle_root.slice(7, 19)}`);
+
+  const mutations = [
+    ['authority', value => { value.authority.grants_spend = true; }, 'authority_mismatch'],
+    ['readiness', value => { value.transaction_assurance_readiness.ready_for_payment = true; }, 'transaction_assurance_readiness_mismatch'],
+    ['blockers', value => { value.transaction_assurance_readiness.blockers = []; }, 'transaction_assurance_readiness_mismatch'],
+    ['privacy', value => { value.privacy.safe_for_publication = true; }, 'privacy_mismatch'],
+    ['summary', value => { value.summary.event_count = 99; }, 'summary_mismatch'],
+    ['source', value => { value.source.partnership_claimed = true; }, 'source_policy_mismatch'],
+    ['raw source', value => { value.source.relay_url = RELAY_URL; }, 'invalid_source'],
+    ['event', value => { value.events[0].content.content_hash = ref('e'); }, 'event_commitments_mismatch'],
+    ['raw event', value => { value.events[0].raw_event = { content: 'private' }; }, 'invalid_event_evidence'],
+    ['raw reference', value => { value.events[0].references.repository_ref_hashes = ['private-repository']; }, 'event_reference_privacy_mismatch'],
+    ['event authority', value => { value.events[0].authority.spend_allowed = true; }, 'event_authority_mismatch'],
+    ['signature boundary', value => { value.events[0].signature.status = 'verified'; }, 'signature_evidence_boundary_mismatch'],
+    ['relay binding', value => { value.events[0].relay_audit.claimed_binding.relay_url_hash = ref('f'); }, 'relay_attestation_binding_mismatch'],
+  ];
+  for (const [label, mutate, expectedFailure] of mutations) {
+    const tampered = clone(bundle);
+    mutate(tampered);
+    const result = verifyBuzzEvidenceBundle(tampered, { expected_bundle_root: bundle.bundle_root });
+    assert.equal(result.valid, false, `${label} mutation must fail verification`);
+    assert(result.failures.includes(expectedFailure), `${label} mutation must report ${expectedFailure}`);
+    assert(result.failures.includes('bundle_root_mismatch'), `${label} mutation must break the bundle root`);
+  }
+
+  const unexpectedField = { ...clone(bundle), created_at: new Date().toISOString() };
+  const unexpectedResult = verifyBuzzEvidenceBundle(unexpectedField);
+  assert.equal(unexpectedResult.valid, false);
+  assert(unexpectedResult.failures.includes('unexpected_field:created_at'));
+
+  const rehashedPolicyForgery = clone(bundle);
+  rehashedPolicyForgery.events[0].authority.spend_allowed = true;
+  rehashBundle(rehashedPolicyForgery);
+  const rehashedResult = verifyBuzzEvidenceBundle(rehashedPolicyForgery);
+  assert.equal(rehashedResult.valid, false);
+  assert(rehashedResult.failures.includes('event_authority_mismatch'));
+  assert(!rehashedResult.failures.includes('bundle_root_mismatch'));
 });
 
 test('pins the classifier to the reviewed Block/Buzz registry subset', async () => {
@@ -286,18 +444,46 @@ test('pins the classifier to the reviewed Block/Buzz registry subset', async () 
   assert.equal(bundle.events[1].event_type, 'workflow_event');
 });
 
-test('bounded content is redacted and never represented as exact after redaction', () => {
+test('bounded content uses best-effort redaction and is marked raw and unsafe to publish', () => {
   const message = event({
-    content: 'Deploy with Authorization: Bearer abcdefghijklmnop and api_key=secret-value-123.',
+    content: [
+      'Deploy with Authorization: Bearer abcdefghijklmnop and api_key=secret-value-123.',
+      'github_pat_SYNTHETIC0123456789ABCDEFG',
+      'card=4111111111111111',
+      'https://operator:private-password@private.example/path',
+    ].join(' '),
   });
   const bundle = compileBuzzEvidenceBundle({ events: [message] }, {
     content_policy: 'bounded',
   });
   const evidence = bundle.events[0];
 
-  assert.match(evidence.content.bounded_content, /\[REDACTED\]/);
-  assert(evidence.content.redaction_count >= 1);
+  assert.match(evidence.content.bounded_content, /\[REDACTED\]|_REDACTED\]/);
+  assert(evidence.content.redaction_count >= 4);
+  assert.doesNotMatch(evidence.content.bounded_content, /github_pat_|4111111111111111|operator:private-password/);
+  assert.equal(evidence.content.policy, 'bounded_best_effort_redaction');
+  assert.equal(evidence.content.raw_content_embedded, true);
+  assert.equal(evidence.content.redaction_complete, false);
+  assert.equal(evidence.content.safe_for_publication, false);
+  assert.equal(evidence.source_integrity.raw_workspace_metadata_embedded, true);
   assert.equal(evidence.source_integrity.exact_content_embedded, false);
+  assert.equal(bundle.privacy.raw_content_embedded, true);
+  assert.equal(bundle.privacy.redaction_assurance, 'best_effort_known_patterns_only');
+  assert.equal(bundle.privacy.safe_for_publication, false);
+  assert(bundle.transaction_assurance_readiness.blockers.includes(
+    'bounded_content_requires_explicit_authority_private_handling_and_publication_review',
+  ));
+});
+
+test('redacts the complete content before applying the bounded-content limit', () => {
+  const token = 'github_pat_SYNTHETIC0123456789ABCDEFG';
+  const message = event({ content: `${'x'.repeat(7_990)} ${token} suffix` });
+  const bundle = compileBuzzEvidenceBundle({ events: [message] }, { content_policy: 'bounded' });
+  const content = bundle.events[0].content;
+
+  assert.equal(content.truncated, true);
+  assert.equal(content.redaction_complete, false);
+  assert.doesNotMatch(content.bounded_content, /github_pat_|SYNTHETIC0123456789ABCDEFG/);
 });
 
 test('the CLI rejects oversized input before parsing it', async () => {
@@ -335,10 +521,8 @@ test('the packed artifact installs and runs the local CLI without a network acti
     await writeFile(join(installerDirectory, 'package.json'), JSON.stringify({ private: true }), 'utf8');
     await writeFile(inputPath, JSON.stringify([event()]), 'utf8');
 
-    const npmCli = process.env.npm_execpath;
-    assert(npmCli, 'npm_execpath must be available when running the package test script');
     const npmFlags = ['--ignore-scripts', '--offline', '--no-audit', '--no-fund'];
-    const pack = spawnSync(process.execPath, [npmCli, 'pack', MODULE_DIR, ...npmFlags], {
+    const pack = runNpm(['pack', MODULE_DIR, ...npmFlags], {
       cwd: directory,
       encoding: 'utf8',
       timeout: 20_000,
@@ -348,7 +532,7 @@ test('the packed artifact installs and runs the local CLI without a network acti
       .find(file => file.endsWith('.tgz'));
     assert(tarball, 'npm pack did not produce a tarball');
 
-    const install = spawnSync(process.execPath, [npmCli, 'install', join(directory, tarball), ...npmFlags], {
+    const install = runNpm(['install', join(directory, tarball), ...npmFlags], {
       cwd: installerDirectory,
       encoding: 'utf8',
       timeout: 20_000,
@@ -400,10 +584,10 @@ test('builds an unsigned proposal-only Transaction Assurance reference', () => {
   const reference = buildBuzzTransactionAssuranceReference({
     transaction_id: 'txn_123',
     buzz_event_id: event().id,
-    evidence_root: ref('b'),
+    evidence_bundle_root: ref('b'),
     mandate_ref: ref('c'),
     transaction_assurance_receipt_ref: ref('d'),
-    states: {
+    claimed_states: {
       authority: 'verified',
       payment: 'final',
       execution: 'completed',
@@ -417,8 +601,28 @@ test('builds an unsigned proposal-only Transaction Assurance reference', () => {
   assert.equal(reference.publication.event_kind_assigned, false);
   assert.equal(reference.publication.signed, false);
   assert.equal(reference.publication.posted, false);
+  assert.equal(reference.claimed_states.payment, 'final');
+  assert.equal(reference.state_claims_verified, false);
   assert.equal(reference.authority.grants_publication, false);
   assert.match(reference.reference_hash, /^sha256:[a-f0-9]{64}$/);
+
+  assert.throws(
+    () => buildBuzzTransactionAssuranceReference({
+      evidence_bundle_root: ref('b'),
+      mandate_ref: ref('c'),
+      transaction_assurance_receipt_ref: ref('d'),
+      states: { payment: 'final' },
+    }),
+    error => error instanceof BuzzEvidenceError && error.code === 'deprecated_transaction_state_shape',
+  );
+  assert.throws(
+    () => buildBuzzTransactionAssuranceReference({
+      evidence_root: ref('b'),
+      mandate_ref: ref('c'),
+      transaction_assurance_receipt_ref: ref('d'),
+    }),
+    error => error instanceof BuzzEvidenceError && error.code === 'deprecated_evidence_root_shape',
+  );
 });
 
 test('the deterministic proposal-only fixture conforms to its declared schema contract', async () => {
@@ -429,10 +633,10 @@ test('the deterministic proposal-only fixture conforms to its declared schema co
   const regenerated = buildBuzzTransactionAssuranceReference({
     transaction_id: fixture.transaction_id,
     buzz_event_id: fixture.buzz_event_id,
-    evidence_root: fixture.evidence_root,
+    evidence_bundle_root: fixture.evidence_bundle_root,
     mandate_ref: fixture.mandate_ref,
     transaction_assurance_receipt_ref: fixture.transaction_assurance_receipt_ref,
-    states: fixture.states,
+    claimed_states: fixture.claimed_states,
   });
   assert.deepEqual(regenerated, fixture);
 });
