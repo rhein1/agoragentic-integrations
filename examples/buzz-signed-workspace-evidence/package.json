@@ -15,12 +15,15 @@
     ".": "./buzz-event-evidence.mjs"
   },
   "files": [
+    "LICENSE",
     "buzz-event-evidence.mjs",
     "cli.mjs",
     "README.md",
     "SKILL.md",
     "listing-candidates.json",
-    "receipt-reference.schema.json"
+    "receipt-reference.schema.json",
+    "receipt-reference.example.json",
+    "upstream-provenance.json"
   ],
   "scripts": {
     "check": "node --check buzz-event-evidence.mjs && node --check cli.mjs && node --check test.mjs",

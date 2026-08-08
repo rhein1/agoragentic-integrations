@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-import { readFile, writeFile } from 'node:fs/promises';
+import { open, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   BuzzEvidenceError,
   compileBuzzEvidenceBundle,
 } from './buzz-event-evidence.mjs';
 
-const MAX_INPUT_BYTES = 4 * 1024 * 1024;
+export const MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 function usage() {
   return `Usage:
@@ -21,7 +22,7 @@ payment, deployment, publication, or trust mutation.
 `;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = [...argv];
   const result = {
     input: null,
@@ -45,22 +46,46 @@ function parseArgs(argv) {
   return result;
 }
 
-try {
-  const args = parseArgs(process.argv.slice(2));
+export async function readBoundedJsonFile(inputPath) {
+  const handle = await open(inputPath, 'r');
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) {
+      throw new BuzzEvidenceError('invalid_input', 'Input must be a regular JSON file.');
+    }
+    if (before.size > MAX_INPUT_BYTES) {
+      throw new BuzzEvidenceError(
+        'input_too_large',
+        `Input JSON exceeds the ${MAX_INPUT_BYTES}-byte CLI limit.`,
+      );
+    }
+
+    // Allocate at most the configured bound plus one sentinel byte. A file that
+    // grows while being read is rejected rather than being read without bound.
+    const bytes = Buffer.alloc(before.size + 1);
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
+    const after = await handle.stat();
+    if (bytesRead > MAX_INPUT_BYTES || bytesRead > before.size || after.size !== before.size) {
+      throw new BuzzEvidenceError(
+        'input_changed_during_read',
+        'Input changed while being read; retry with a stable file.',
+      );
+    }
+    return JSON.parse(bytes.subarray(0, bytesRead).toString('utf8'));
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
   if (args.help) {
     process.stdout.write(usage());
-    process.exit(0);
+    return 0;
   }
 
   const inputPath = resolve(args.input);
-  const bytes = await readFile(inputPath);
-  if (bytes.byteLength > MAX_INPUT_BYTES) {
-    throw new BuzzEvidenceError(
-      'input_too_large',
-      `Input JSON exceeds the ${MAX_INPUT_BYTES}-byte CLI limit.`,
-    );
-  }
-  const parsed = JSON.parse(bytes.toString('utf8'));
+  const parsed = await readBoundedJsonFile(inputPath);
   const events = Array.isArray(parsed) ? parsed : parsed.events;
   const bundle = compileBuzzEvidenceBundle({
     events,
@@ -72,8 +97,13 @@ try {
   const output = `${JSON.stringify(bundle, null, 2)}\n`;
   if (args.out) await writeFile(resolve(args.out), output, 'utf8');
   else process.stdout.write(output);
-} catch (error) {
-  const code = error instanceof BuzzEvidenceError ? error.code : 'cli_error';
-  process.stderr.write(`agoragentic-buzz-evidence: ${code}: ${error.message}\n`);
-  process.exit(code === 'cli_error' ? 2 : 1);
+  return 0;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(error => {
+    const code = error instanceof BuzzEvidenceError ? error.code : 'cli_error';
+    process.stderr.write(`agoragentic-buzz-evidence: ${code}: ${error.message}\n`);
+    process.exitCode = code === 'cli_error' ? 2 : 1;
+  });
 }

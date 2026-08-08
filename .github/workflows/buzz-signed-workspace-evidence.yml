@@ -5,11 +5,17 @@ on:
     branches: [main]
     paths:
       - 'examples/buzz-signed-workspace-evidence/**'
+      - 'README.md'
+      - 'llms.txt'
+      - 'integrations.json'
       - '.github/workflows/buzz-signed-workspace-evidence.yml'
   push:
     branches: [main]
     paths:
       - 'examples/buzz-signed-workspace-evidence/**'
+      - 'README.md'
+      - 'llms.txt'
+      - 'integrations.json'
       - '.github/workflows/buzz-signed-workspace-evidence.yml'
   workflow_dispatch:
 
@@ -41,6 +47,6 @@ jobs:
           npm test
       - name: Parse machine contracts
         run: |
-          node -e "for (const file of ['listing-candidates.json','receipt-reference.schema.json']) JSON.parse(require('node:fs').readFileSync(file, 'utf8'))"
+          node -e "for (const file of ['listing-candidates.json','receipt-reference.schema.json','receipt-reference.example.json','upstream-provenance.json']) JSON.parse(require('node:fs').readFileSync(file, 'utf8'))"
       - name: Package dry run
         run: npm run pack:dry

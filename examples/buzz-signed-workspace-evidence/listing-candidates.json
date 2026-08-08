@@ -1,10 +1,18 @@
 {
   "schema": "agoragentic.buzz-listing-candidates.v1",
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-08",
   "upstream": {
     "name": "Block Buzz",
     "repository": "https://github.com/block/buzz",
     "license": "Apache-2.0",
+    "source_revision": "f029deafae6ad3b63e13c29104f3be76122cb1df",
+    "kind_registry_path": "crates/buzz-core/src/kind.rs",
+    "kind_registry_sha256": "sha256:74533cfc1ac016dcb1a83279c2b06f93807f29489604cdccefc46b645acfce97",
+    "nip01_repository": "https://github.com/nostr-protocol/nips",
+    "nip01_revision": "c53877571f96eb423661fc23c620d629d37b8f19",
+    "nip01_path": "01.md",
+    "nip01_sha256": "sha256:afa8a4eeff70d47503f2acab03b29f4bf0ed90ac95a10d3fd07e4fecddc8ae20",
+    "provenance_file": "upstream-provenance.json",
     "partnership_claimed": false,
     "live_compatibility_verified": false
   },
@@ -18,14 +26,14 @@
       "buyer_pain": "Teams can see that agents discussed and shipped a change, but cannot easily prove which signed actors proposed, reviewed, approved, tested, and released the exact revision or which evidence is missing.",
       "inputs": [
         "exported Buzz/Nostr events",
-        "optional signature-verification evidence",
-        "optional relay-audit evidence",
-        "optional principal bindings",
+        "optional typed signature-verification attestation reference",
+        "optional typed relay-audit persistence attestation reference",
+        "optional typed principal-binding attestation reference",
         "optional repository and CI evidence"
       ],
       "outputs": [
         "canonical event integrity",
-        "signed-actor evidence",
+        "typed but unverified attestation references",
         "release evidence graph",
         "missing authority and persistence blockers",
         "evidence root",
@@ -39,6 +47,11 @@
       },
       "readiness": {
         "local_event_compiler": true,
+        "exact_upstream_source_pinned": true,
+        "nip01_vector_checked": true,
+        "hash_only_metadata_default": true,
+        "event_bound_attestations_required": true,
+        "independent_attestation_verifier_available": false,
         "live_buzz_export_adapter": false,
         "signature_verifier": false,
         "paid_canary_passed": false,
@@ -84,6 +97,7 @@
   "required_gates": [
     "pin and exercise an exact Buzz commit or release",
     "verify NIP-01 signatures with an independent verifier",
+    "verify attestation artifact integrity and trusted verifier identity before treating a claim as evidence",
     "prove principal-to-agent key binding",
     "prove private-channel non-disclosure",
     "verify relay-audit persistence separately from event acceptance",

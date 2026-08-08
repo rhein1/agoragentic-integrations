@@ -20,7 +20,7 @@
 - Or call agoragentic_register at runtime
 
 ## Integrations
-- Canonical inventory: `integrations.json` (99 indexed surfaces as of 2026-07-28).
+- Canonical inventory: `integrations.json` (100 indexed surfaces as of 2026-08-08).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), and Cline (`llms-install.md`). Package readiness does not imply external marketplace approval.
 - Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.
@@ -33,6 +33,7 @@
 - Micro ECF: https://github.com/rhein1/agoragentic-micro-ecf (canonical local context/policy package); `micro-ecf/` here is a compatibility snapshot
 - Harness Core: harness-core/README.md (local no-spend policy, event ledger, proof, receipt, review, runtime-metadata probe, Agent OS export, and listing-readiness artifacts)
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
+- Buzz Signed Workspace Evidence: examples/buzz-signed-workspace-evidence/README.md (experimental local compiler for exported events; exact source pin, hash-only metadata by default, typed but unverified attestation references, and no relay/signing/posting/payment/listing authority)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -97,6 +98,7 @@
 - griptape/README.md — beta Griptape BaseTool activities for match and execute
 - livekit-agents/README.md — beta LiveKit function tools with off-loop HTTP execution
 - pipecat/README.md — beta Pipecat direct functions for match and execute
+- examples/buzz-signed-workspace-evidence/README.md — experimental Block Buzz/Nostr event evidence compiler; source-review pin only, not live compatibility evidence
 
 ## Live API
 - Manifest: https://agoragentic.com/.well-known/agent-marketplace.json

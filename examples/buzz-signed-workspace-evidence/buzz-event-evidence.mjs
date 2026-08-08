@@ -4,6 +4,7 @@ const EVENT_ID_PATTERN = /^[a-f0-9]{64}$/;
 const PUBKEY_PATTERN = /^[a-f0-9]{64}$/;
 const SIGNATURE_PATTERN = /^[a-f0-9]{128}$/;
 const SHA256_REF_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const MAX_NIP01_KIND = 65_535;
 const MAX_EVENTS = 256;
 const MAX_EVENT_WIRE_BYTES = 65_536;
 const MAX_CONTENT_BYTES = 60_000;
@@ -11,6 +12,21 @@ const MAX_TAGS = 256;
 const MAX_TAG_ITEMS = 16;
 const MAX_TAG_ITEM_BYTES = 4_096;
 const MAX_BOUNDED_CONTENT_CHARS = 8_000;
+
+// This deliberately contains only the subset this adapter classifies. The
+// commit and source hash make the mapping reviewable without claiming live
+// relay compatibility or tracking the upstream main branch implicitly.
+export const BUZZ_UPSTREAM_PROVENANCE = Object.freeze({
+  repository: 'https://github.com/block/buzz',
+  commit: 'f029deafae6ad3b63e13c29104f3be76122cb1df',
+  kind_registry_path: 'crates/buzz-core/src/kind.rs',
+  kind_registry_sha256: 'sha256:74533cfc1ac016dcb1a83279c2b06f93807f29489604cdccefc46b645acfce97',
+  nip01_repository: 'https://github.com/nostr-protocol/nips',
+  nip01_commit: 'c53877571f96eb423661fc23c620d629d37b8f19',
+  nip01_path: '01.md',
+  nip01_sha256: 'sha256:afa8a4eeff70d47503f2acab03b29f4bf0ed90ac95a10d3fd07e4fecddc8ae20',
+  provenance_file: 'upstream-provenance.json',
+});
 
 const BUZZ_KINDS = Object.freeze({
   0: 'profile',
@@ -62,34 +78,61 @@ function sha256Hex(value) {
   return sha256(value).slice(7);
 }
 
-function normalizeString(value, fallback = null, maxLength = 2_000) {
-  if (value === undefined || value === null) return fallback;
-  const normalized = String(value).trim();
-  return normalized ? normalized.slice(0, maxLength) : fallback;
+function assertHex(value, pattern, field) {
+  if (typeof value !== 'string' || !pattern.test(value)) {
+    throw new BuzzEvidenceError('invalid_event', `${field} must be lowercase hexadecimal with the required length.`);
+  }
+  return value;
 }
 
-function assertHex(value, pattern, field) {
-  const normalized = String(value || '').toLowerCase();
-  if (!pattern.test(normalized)) {
-    throw new BuzzEvidenceError('invalid_event', `${field} has an invalid shape.`);
+function assertShaRef(value, field) {
+  if (typeof value !== 'string' || !SHA256_REF_PATTERN.test(value)) {
+    throw new BuzzEvidenceError('invalid_reference', `${field} must be a lowercase sha256 reference.`);
+  }
+  return value;
+}
+
+function requireString(value, field, maxLength) {
+  if (typeof value !== 'string') {
+    throw new BuzzEvidenceError('invalid_evidence', `${field} must be a string.`);
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new BuzzEvidenceError('invalid_evidence', `${field} must not be empty.`);
+  }
+  if (utf8Bytes(normalized) > maxLength) {
+    throw new BuzzEvidenceError('evidence_too_large', `${field} exceeds ${maxLength} bytes.`);
   }
   return normalized;
 }
 
-function normalizeKind(value) {
-  const kind = Number(value);
-  if (!Number.isInteger(kind) || kind < 0 || kind > 0xffffffff) {
-    throw new BuzzEvidenceError('invalid_event', 'kind must be an unsigned 32-bit integer.');
+function optionalString(value, field, maxLength) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new BuzzEvidenceError('invalid_input', `${field} must be a string when supplied.`);
   }
-  return kind;
+  if (!value.trim()) return null;
+  if (utf8Bytes(value) > maxLength) {
+    throw new BuzzEvidenceError('input_too_large', `${field} exceeds ${maxLength} bytes.`);
+  }
+  return value;
+}
+
+function normalizeKind(value) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_NIP01_KIND) {
+    throw new BuzzEvidenceError(
+      'invalid_event',
+      `kind must be an unsigned NIP-01 integer between 0 and ${MAX_NIP01_KIND}.`,
+    );
+  }
+  return value;
 }
 
 function normalizeTimestamp(value) {
-  const timestamp = Number(value);
-  if (!Number.isInteger(timestamp) || timestamp < 0 || timestamp > Number.MAX_SAFE_INTEGER) {
-    throw new BuzzEvidenceError('invalid_event', 'created_at must be a non-negative integer.');
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new BuzzEvidenceError('invalid_event', 'created_at must be a non-negative integer Unix timestamp.');
   }
-  return timestamp;
+  return value;
 }
 
 function normalizeTags(tags) {
@@ -164,6 +207,14 @@ function tagsByName(tags, name, maximum = 100) {
     .slice(0, maximum);
 }
 
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function hashedReferences(values) {
+  return values.map(value => sha256(value));
+}
+
 function redactContent(content) {
   let redacted = content;
   let count = 0;
@@ -207,95 +258,156 @@ function contentEvidence(content, policy) {
   };
 }
 
-function normalizeVerification(value) {
-  if (!value || typeof value !== 'object') {
-    return {
-      status: 'not_verified',
-      signature_valid: null,
-      verifier: null,
-      verifier_version: null,
-      evidence_ref: null,
-    };
+function normalizeEvidenceMap(value, field) {
+  if (value === undefined || value === null) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new BuzzEvidenceError('invalid_option', `${field} must be an object keyed by event ID.`);
   }
-  if (value.signature_valid !== true && value.signature_valid !== false) {
-    throw new BuzzEvidenceError(
-      'invalid_verification',
-      'signature verification evidence must set signature_valid to true or false.',
-    );
-  }
-  const evidenceRef = value.evidence_ref === undefined || value.evidence_ref === null
-    ? null
-    : String(value.evidence_ref);
-  if (evidenceRef && !SHA256_REF_PATTERN.test(evidenceRef)) {
-    throw new BuzzEvidenceError(
-      'invalid_verification',
-      'signature verification evidence_ref must be a sha256 reference.',
-    );
-  }
-  return {
-    status: value.signature_valid ? 'verified' : 'invalid',
-    signature_valid: value.signature_valid,
-    verifier: normalizeString(value.verifier, null, 200),
-    verifier_version: normalizeString(value.verifier_version, null, 100),
-    evidence_ref: evidenceRef,
-  };
+  return value;
 }
 
-function normalizePrincipalBinding(value, pubkey) {
-  if (!value || typeof value !== 'object') {
-    return {
-      status: 'unbound',
-      principal_ref: null,
-      agent_ref: null,
-      binding_evidence_ref: null,
-    };
-  }
-  const evidenceRef = value.binding_evidence_ref === undefined || value.binding_evidence_ref === null
-    ? null
-    : String(value.binding_evidence_ref);
-  if (evidenceRef && !SHA256_REF_PATTERN.test(evidenceRef)) {
-    throw new BuzzEvidenceError(
-      'invalid_principal_binding',
-      `principal binding evidence for ${pubkey} must be a sha256 reference.`,
-    );
-  }
-  const principalRef = normalizeString(value.principal_ref, null, 300);
-  if (!principalRef) {
-    throw new BuzzEvidenceError(
-      'invalid_principal_binding',
-      `principal binding for ${pubkey} requires principal_ref.`,
-    );
-  }
-  return {
-    status: 'bound_by_external_evidence',
-    principal_ref: principalRef,
-    agent_ref: normalizeString(value.agent_ref, `nostr:${pubkey}`, 300),
-    binding_evidence_ref: evidenceRef,
-  };
-}
-
-function normalizeAuditEvidence(value) {
-  if (!value || typeof value !== 'object') {
-    return {
-      status: 'not_verified',
-      audit_entry_ref: null,
-      audit_head_ref: null,
-      verifier: null,
-    };
-  }
-  for (const field of ['audit_entry_ref', 'audit_head_ref']) {
-    if (value[field] && !SHA256_REF_PATTERN.test(String(value[field]))) {
+function assertNoDeprecatedEvidenceOptions(options) {
+  for (const field of ['signature_verifications', 'principal_bindings', 'audit_evidence']) {
+    if (hasOwn(options, field) && options[field] !== undefined && options[field] !== null) {
       throw new BuzzEvidenceError(
-        'invalid_audit_evidence',
-        `${field} must be a sha256 reference.`,
+        'deprecated_evidence_shape',
+        `${field} is not accepted. Use typed event-bound attestations instead.`,
       );
     }
   }
+}
+
+function hasOwn(value, field) {
+  return Object.prototype.hasOwnProperty.call(value, field);
+}
+
+function normalizeAttestationBinding(value, context, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new BuzzEvidenceError('invalid_evidence', `${label} must be an object.`);
+  }
+  const eventId = assertHex(value.event_id, EVENT_ID_PATTERN, `${label}.event_id`);
+  const pubkey = assertHex(value.pubkey, PUBKEY_PATTERN, `${label}.pubkey`);
+  const signatureHash = assertShaRef(value.signature_hash, `${label}.signature_hash`);
+  if (eventId !== context.event_id || pubkey !== context.pubkey || signatureHash !== context.signature_hash) {
+    throw new BuzzEvidenceError(
+      'attestation_binding_mismatch',
+      `${label} must bind the exact event ID, pubkey, and signature hash.`,
+    );
+  }
   return {
-    status: value.persisted === true ? 'externally_verified' : 'not_verified',
-    audit_entry_ref: value.audit_entry_ref ? String(value.audit_entry_ref) : null,
-    audit_head_ref: value.audit_head_ref ? String(value.audit_head_ref) : null,
-    verifier: normalizeString(value.verifier, null, 200),
+    event_id: eventId,
+    author_pubkey_hash: sha256(pubkey),
+    signature_hash: signatureHash,
+  };
+}
+
+function normalizeSignatureAttestation(value, context) {
+  if (value === undefined || value === null) {
+    return {
+      status: 'not_verified',
+      signature_valid: null,
+      verification_result_claimed: null,
+      attestation_reference_verified: false,
+      verifier: null,
+      verifier_version: null,
+      evidence_ref: null,
+      claimed_binding: null,
+    };
+  }
+  if (hasOwn(value, 'signature_valid')) {
+    throw new BuzzEvidenceError(
+      'invalid_evidence',
+      'signature_valid is not evidence. Supply verification_result in an event-bound attestation.',
+    );
+  }
+  const binding = normalizeAttestationBinding(value, context, 'signature attestation');
+  if (value.verification_result !== 'valid' && value.verification_result !== 'invalid') {
+    throw new BuzzEvidenceError('invalid_evidence', 'signature attestation verification_result must be valid or invalid.');
+  }
+  return {
+    status: value.verification_result === 'valid'
+      ? 'validity_claimed_by_unverified_attestation_reference'
+      : 'invalidity_claimed_by_unverified_attestation_reference',
+    signature_valid: null,
+    verification_result_claimed: value.verification_result,
+    attestation_reference_verified: false,
+    verifier: requireString(value.verifier, 'signature attestation verifier', 200),
+    verifier_version: requireString(value.verifier_version, 'signature attestation verifier_version', 100),
+    evidence_ref: assertShaRef(value.attestation_ref, 'signature attestation attestation_ref'),
+    claimed_binding: binding,
+  };
+}
+
+function normalizePrincipalAttestation(value, context) {
+  if (value === undefined || value === null) {
+    return {
+      status: 'unbound',
+      binding_verified: false,
+      principal_ref_hash: null,
+      agent_ref_hash: null,
+      evidence_ref: null,
+      claimed_binding: null,
+    };
+  }
+  const binding = normalizeAttestationBinding(value, context, 'principal attestation');
+  return {
+    status: 'binding_claimed_by_unverified_attestation_reference',
+    binding_verified: false,
+    principal_ref_hash: sha256(requireString(value.principal_ref, 'principal attestation principal_ref', 300)),
+    agent_ref_hash: sha256(requireString(value.agent_ref, 'principal attestation agent_ref', 300)),
+    evidence_ref: assertShaRef(value.attestation_ref, 'principal attestation attestation_ref'),
+    claimed_binding: binding,
+  };
+}
+
+function normalizeAuditAttestation(value, context) {
+  if (value === undefined || value === null) {
+    return {
+      status: 'not_verified',
+      persistence_status_claimed: null,
+      attestation_reference_verified: false,
+      audit_entry_ref: null,
+      audit_head_ref: null,
+      verifier: null,
+      verifier_version: null,
+      evidence_ref: null,
+      claimed_binding: null,
+    };
+  }
+  if (hasOwn(value, 'persisted')) {
+    throw new BuzzEvidenceError(
+      'invalid_evidence',
+      'persisted is not evidence. Supply persistence_status in an event-bound attestation.',
+    );
+  }
+  const binding = normalizeAttestationBinding(value, context, 'relay-audit attestation');
+  if (value.persistence_status !== 'persisted' && value.persistence_status !== 'not_persisted') {
+    throw new BuzzEvidenceError('invalid_evidence', 'relay-audit persistence_status must be persisted or not_persisted.');
+  }
+  const auditEntryRef = value.audit_entry_ref === undefined || value.audit_entry_ref === null
+    ? null
+    : assertShaRef(value.audit_entry_ref, 'relay-audit attestation audit_entry_ref');
+  const auditHeadRef = value.audit_head_ref === undefined || value.audit_head_ref === null
+    ? null
+    : assertShaRef(value.audit_head_ref, 'relay-audit attestation audit_head_ref');
+  if (value.persistence_status === 'persisted' && (!auditEntryRef || !auditHeadRef)) {
+    throw new BuzzEvidenceError(
+      'invalid_evidence',
+      'a persisted relay-audit attestation requires audit_entry_ref and audit_head_ref.',
+    );
+  }
+  return {
+    status: value.persistence_status === 'persisted'
+      ? 'persistence_claimed_by_unverified_attestation_reference'
+      : 'non_persistence_claimed_by_unverified_attestation_reference',
+    persistence_status_claimed: value.persistence_status,
+    attestation_reference_verified: false,
+    audit_entry_ref: auditEntryRef,
+    audit_head_ref: auditHeadRef,
+    verifier: requireString(value.verifier, 'relay-audit attestation verifier', 200),
+    verifier_version: requireString(value.verifier_version, 'relay-audit attestation verifier_version', 100),
+    evidence_ref: assertShaRef(value.attestation_ref, 'relay-audit attestation attestation_ref'),
+    claimed_binding: binding,
   };
 }
 
@@ -326,40 +438,45 @@ function normalizeEvent(event, index, options) {
     );
   }
 
-  const verification = normalizeVerification(options.signature_verifications?.[id]);
-  const principalBinding = normalizePrincipalBinding(options.principal_bindings?.[pubkey], pubkey);
-  const auditEvidence = normalizeAuditEvidence(options.audit_evidence?.[id]);
+  const context = {
+    event_id: id,
+    pubkey,
+    signature_hash: sha256(sig),
+  };
+  const signature = normalizeSignatureAttestation(options.signature_attestations[id], context);
+  const principalBinding = normalizePrincipalAttestation(options.principal_attestations[id], context);
+  const auditEvidence = normalizeAuditAttestation(options.audit_attestations[id], context);
   const contentRecord = contentEvidence(content, options.content_policy);
-  const channelRefs = tagsByName(tags, 'h');
-  const eventRefs = tagsByName(tags, 'e');
-  const pubkeyRefs = tagsByName(tags, 'p');
 
   return {
-    schema: 'agoragentic.buzz-event-evidence.v1',
+    schema: 'agoragentic.buzz-event-evidence.v2',
     event_id: id,
     event_hash_ref: `sha256:${id}`,
     event_type: classifyKind(kind),
     kind,
     created_at,
-    author_pubkey: pubkey,
+    author_pubkey_hash: sha256(pubkey),
     signature: {
-      signature_hash: sha256(sig),
-      ...verification,
+      signature_hash: context.signature_hash,
+      ...signature,
     },
     principal_binding: principalBinding,
     source_integrity: {
       canonical_event_id_verified: true,
       raw_event_embedded: false,
       raw_signature_embedded: false,
-      exact_content_embedded: contentRecord.policy === 'bounded_redacted' && contentRecord.redaction_count === 0 && contentRecord.truncated === false,
+      raw_workspace_metadata_embedded: false,
+      exact_content_embedded: contentRecord.policy === 'bounded_redacted'
+        && contentRecord.redaction_count === 0
+        && contentRecord.truncated === false,
     },
     references: {
-      channel_refs: channelRefs,
-      event_refs: eventRefs,
-      pubkey_refs: pubkeyRefs,
-      address_refs: tagsByName(tags, 'a'),
-      repository_refs: tagsByName(tags, 'r'),
-      identifier_refs: tagsByName(tags, 'd'),
+      channel_ref_hashes: hashedReferences(tagsByName(tags, 'h')),
+      event_ref_hashes: hashedReferences(tagsByName(tags, 'e')),
+      pubkey_ref_hashes: hashedReferences(tagsByName(tags, 'p')),
+      address_ref_hashes: hashedReferences(tagsByName(tags, 'a')),
+      repository_ref_hashes: hashedReferences(tagsByName(tags, 'r')),
+      identifier_ref_hashes: hashedReferences(tagsByName(tags, 'd')),
     },
     content: contentRecord,
     relay_audit: auditEvidence,
@@ -375,30 +492,76 @@ function normalizeEvent(event, index, options) {
   };
 }
 
-function unique(values) {
-  return [...new Set(values.filter(Boolean))];
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(item => stableStringify(item)).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+}
+
+function buildSource(input) {
+  const relayUrl = optionalString(input.relay_url, 'relay_url', 2_048);
+  const communityRef = optionalString(input.community_ref, 'community_ref', 300);
+  return {
+    product: 'Block Buzz',
+    repository: BUZZ_UPSTREAM_PROVENANCE.repository,
+    upstream_revision: BUZZ_UPSTREAM_PROVENANCE.commit,
+    kind_registry_ref: BUZZ_UPSTREAM_PROVENANCE.kind_registry_sha256,
+    nip01_revision: BUZZ_UPSTREAM_PROVENANCE.nip01_commit,
+    nip01_ref: BUZZ_UPSTREAM_PROVENANCE.nip01_sha256,
+    provenance_file: BUZZ_UPSTREAM_PROVENANCE.provenance_file,
+    metadata_policy: 'hash_only',
+    relay_url_hash: relayUrl ? sha256(relayUrl) : null,
+    community_ref_hash: communityRef ? sha256(communityRef) : null,
+    raw_source_metadata_embedded: false,
+    partnership_claimed: false,
+    compatibility_verified_against_live_relay: false,
+    attestation_references_independently_verified: false,
+  };
+}
+
+function buildRelationships(events) {
+  return {
+    channel_ref_hashes: unique(events.flatMap(event => event.references.channel_ref_hashes)),
+    event_ref_hashes: unique(events.flatMap(event => event.references.event_ref_hashes)),
+    pubkey_ref_hashes: unique(events.flatMap(event => event.references.pubkey_ref_hashes)),
+    author_pubkey_hashes: unique(events.map(event => event.author_pubkey_hash)),
+  };
 }
 
 function buildBlockers(events) {
   const blockers = ['workspace_membership_is_not_an_economic_mandate'];
   if (events.some(event => event.signature.status === 'not_verified')) {
-    blockers.push('one_or_more_event_signatures_not_verified');
+    blockers.push('one_or_more_event_signatures_not_independently_verified');
   }
-  if (events.some(event => event.signature.status === 'invalid')) {
-    blockers.push('one_or_more_event_signatures_invalid');
+  if (events.some(event => event.signature.attestation_reference_verified === false && event.signature.evidence_ref)) {
+    blockers.push('signature_attestation_references_not_independently_verified');
   }
   if (events.some(event => event.principal_binding.status === 'unbound')) {
-    blockers.push('one_or_more_event_authors_not_bound_to_a_principal');
+    blockers.push('one_or_more_event_authors_not_bound_to_a_principal_by_independent_evidence');
   }
-  if (events.some(event => event.relay_audit.status !== 'externally_verified')) {
-    blockers.push('relay_audit_persistence_not_verified_for_every_event');
+  if (events.some(event => event.principal_binding.binding_verified === false && event.principal_binding.evidence_ref)) {
+    blockers.push('principal_binding_attestation_references_not_independently_verified');
+  }
+  if (events.some(event => event.relay_audit.status === 'not_verified')) {
+    blockers.push('relay_audit_persistence_not_independently_verified_for_every_event');
+  }
+  if (events.some(event => event.relay_audit.attestation_reference_verified === false && event.relay_audit.evidence_ref)) {
+    blockers.push('relay_audit_attestation_references_not_independently_verified');
   }
   blockers.push('principal_mandate_required_before_economic_action');
+  blockers.push('independent_attestation_verifier_and_trust_policy_required');
   blockers.push('external_tool_and_payment_chokepoint_required');
   return blockers;
 }
 
 export function compileBuzzEvidenceBundle(input = {}, options = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new BuzzEvidenceError('invalid_input', 'input must be an object containing events.');
+  }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new BuzzEvidenceError('invalid_option', 'options must be an object.');
+  }
+  assertNoDeprecatedEvidenceOptions(options);
   const events = Array.isArray(input.events) ? input.events : [];
   const maxEvents = Number.isInteger(options.max_events) ? options.max_events : MAX_EVENTS;
   if (maxEvents < 1 || maxEvents > MAX_EVENTS) {
@@ -416,9 +579,9 @@ export function compileBuzzEvidenceBundle(input = {}, options = {}) {
 
   const normalizedOptions = {
     content_policy: options.content_policy || 'hash_only',
-    signature_verifications: options.signature_verifications || {},
-    principal_bindings: options.principal_bindings || {},
-    audit_evidence: options.audit_evidence || {},
+    signature_attestations: normalizeEvidenceMap(options.signature_attestations, 'signature_attestations'),
+    principal_attestations: normalizeEvidenceMap(options.principal_attestations, 'principal_attestations'),
+    audit_attestations: normalizeEvidenceMap(options.audit_attestations, 'audit_attestations'),
   };
   const normalized = events.map((event, index) => normalizeEvent(event, index, normalizedOptions));
   const ids = normalized.map(event => event.event_id);
@@ -429,44 +592,46 @@ export function compileBuzzEvidenceBundle(input = {}, options = {}) {
     left.created_at - right.created_at || left.event_id.localeCompare(right.event_id)
   ));
 
-  const eventRootInput = normalized.map(event => ({
+  const source = buildSource(input);
+  const relationships = buildRelationships(normalized);
+  const eventCommitments = normalized.map(event => ({
     event_id: event.event_id,
-    signature_status: event.signature.status,
-    content_hash: event.content.content_hash,
-    audit_status: event.relay_audit.status,
+    commitment_ref: sha256(stableStringify(event)),
   }));
-  const evidenceRoot = sha256(JSON.stringify(eventRootInput));
+  const evidenceRoot = sha256(stableStringify({
+    schema: 'agoragentic.buzz-evidence-root.v2',
+    source,
+    relationships,
+    event_commitments: eventCommitments,
+  }));
   const blockers = buildBlockers(normalized);
 
   return {
-    schema: 'agoragentic.buzz-evidence-bundle.v1',
+    schema: 'agoragentic.buzz-evidence-bundle.v2',
     bundle_id: `buzz_bundle_${evidenceRoot.slice(7, 19)}`,
-    source: {
-      product: 'Block Buzz',
-      repository: 'https://github.com/block/buzz',
-      relay_url: normalizeString(input.relay_url, null, 2_048),
-      community_ref: normalizeString(input.community_ref, null, 300),
-      partnership_claimed: false,
-      compatibility_verified_against_live_relay: options.live_compatibility_verified === true,
-    },
+    source,
     event_root: evidenceRoot,
+    event_commitments: eventCommitments,
     events: normalized,
-    relationships: {
-      channel_refs: unique(normalized.flatMap(event => event.references.channel_refs)),
-      event_refs: unique(normalized.flatMap(event => event.references.event_refs)),
-      pubkey_refs: unique(normalized.flatMap(event => event.references.pubkey_refs)),
-      authors: unique(normalized.map(event => event.author_pubkey)),
-    },
+    relationships,
     summary: {
       event_count: normalized.length,
       event_types: normalized.reduce((counts, event) => {
         counts[event.event_type] = (counts[event.event_type] || 0) + 1;
         return counts;
       }, {}),
-      signatures_verified: normalized.filter(event => event.signature.status === 'verified').length,
-      signatures_invalid: normalized.filter(event => event.signature.status === 'invalid').length,
-      principals_bound: normalized.filter(event => event.principal_binding.status !== 'unbound').length,
-      audit_entries_verified: normalized.filter(event => event.relay_audit.status === 'externally_verified').length,
+      signature_validity_claims_by_unverified_attestation_reference: normalized.filter(
+        event => event.signature.status === 'validity_claimed_by_unverified_attestation_reference',
+      ).length,
+      signature_invalidity_claims_by_unverified_attestation_reference: normalized.filter(
+        event => event.signature.status === 'invalidity_claimed_by_unverified_attestation_reference',
+      ).length,
+      principal_binding_claims_by_unverified_attestation_reference: normalized.filter(
+        event => event.principal_binding.status === 'binding_claimed_by_unverified_attestation_reference',
+      ).length,
+      relay_persistence_claims_by_unverified_attestation_reference: normalized.filter(
+        event => event.relay_audit.status === 'persistence_claimed_by_unverified_attestation_reference',
+      ).length,
       redactions: normalized.reduce((sum, event) => sum + event.content.redaction_count, 0),
     },
     transaction_assurance_readiness: {
@@ -475,7 +640,7 @@ export function compileBuzzEvidenceBundle(input = {}, options = {}) {
       ready_for_settlement: false,
       ready_for_reconciliation: false,
       blockers,
-      next_safe_action: 'Verify signatures and relay persistence, bind each agent key to a principal, then evaluate an explicit Agoragentic mandate before any external side effect or payment.',
+      next_safe_action: 'Use an independently verified attestation resolver with an explicit trust policy for signature, principal-binding, and relay-persistence evidence, then evaluate an explicit Agoragentic mandate before any external side effect or payment.',
     },
     authority: {
       grants_spend: false,
@@ -490,33 +655,34 @@ export function compileBuzzEvidenceBundle(input = {}, options = {}) {
   };
 }
 
-function assertShaRef(value, field) {
-  if (!SHA256_REF_PATTERN.test(String(value || ''))) {
-    throw new BuzzEvidenceError('invalid_reference', `${field} must be a sha256 reference.`);
-  }
-  return String(value);
+function normalizeState(value, field, fallback) {
+  if (value === undefined || value === null) return fallback;
+  return requireString(value, field, 50);
 }
 
 export function buildBuzzTransactionAssuranceReference(input = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new BuzzEvidenceError('invalid_input', 'input must be an object.');
+  }
   const evidenceRoot = assertShaRef(input.evidence_root, 'evidence_root');
   const receiptRef = assertShaRef(input.transaction_assurance_receipt_ref, 'transaction_assurance_receipt_ref');
   const mandateRef = assertShaRef(input.mandate_ref, 'mandate_ref');
   const reference = {
     schema: 'agoragentic.buzz-transaction-assurance-reference.v1',
-    transaction_id: normalizeString(input.transaction_id, null, 300),
-    buzz_event_id: input.buzz_event_id
-      ? assertHex(input.buzz_event_id, EVENT_ID_PATTERN, 'buzz_event_id')
-      : null,
+    transaction_id: optionalString(input.transaction_id, 'transaction_id', 300),
+    buzz_event_id: input.buzz_event_id === undefined || input.buzz_event_id === null
+      ? null
+      : assertHex(input.buzz_event_id, EVENT_ID_PATTERN, 'buzz_event_id'),
     evidence_root: evidenceRoot,
     mandate_ref: mandateRef,
     transaction_assurance_receipt_ref: receiptRef,
     states: {
-      authority: normalizeString(input.states?.authority, 'unknown', 50),
-      payment: normalizeString(input.states?.payment, 'unknown', 50),
-      execution: normalizeString(input.states?.execution, 'unknown', 50),
-      delivery: normalizeString(input.states?.delivery, 'unknown', 50),
-      outcome: normalizeString(input.states?.outcome, 'unknown', 50),
-      reconciliation: normalizeString(input.states?.reconciliation, 'unknown', 50),
+      authority: normalizeState(input.states?.authority, 'states.authority', 'unknown'),
+      payment: normalizeState(input.states?.payment, 'states.payment', 'unknown'),
+      execution: normalizeState(input.states?.execution, 'states.execution', 'unknown'),
+      delivery: normalizeState(input.states?.delivery, 'states.delivery', 'unknown'),
+      outcome: normalizeState(input.states?.outcome, 'states.outcome', 'unknown'),
+      reconciliation: normalizeState(input.states?.reconciliation, 'states.reconciliation', 'unknown'),
     },
     publication: {
       event_kind_assigned: false,
@@ -540,11 +706,12 @@ export function buildBuzzTransactionAssuranceReference(input = {}) {
   };
   return {
     ...reference,
-    reference_hash: sha256(JSON.stringify(reference)),
+    reference_hash: sha256(stableStringify(reference)),
   };
 }
 
 export const BUZZ_EVIDENCE_CONSTANTS = Object.freeze({
+  MAX_NIP01_KIND,
   MAX_EVENTS,
   MAX_EVENT_WIRE_BYTES,
   MAX_CONTENT_BYTES,
@@ -553,4 +720,5 @@ export const BUZZ_EVIDENCE_CONSTANTS = Object.freeze({
   MAX_TAG_ITEM_BYTES,
   MAX_BOUNDED_CONTENT_CHARS,
   BUZZ_KINDS,
+  BUZZ_UPSTREAM_PROVENANCE,
 });

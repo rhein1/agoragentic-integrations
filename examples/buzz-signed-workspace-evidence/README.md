@@ -2,9 +2,11 @@
 
 > **Use Buzz as the signed human-agent workspace; use Agoragentic as the economic authority, policy, outcome-proof, and reconciliation layer.**
 
-This experimental adapter normalizes signed [Block Buzz](https://github.com/block/buzz) / Nostr events into bounded Agoragentic evidence.
+This experimental adapter normalizes exported [Block Buzz](https://github.com/block/buzz) / Nostr events into bounded Agoragentic evidence.
 
-It does not connect to a relay, verify Schnorr signatures by itself, post to Buzz, operate a wallet, pay, deploy, publish, or mutate trust.
+It does not connect to a relay, verify Schnorr signatures or attestation artifacts/verifier identities, post to Buzz, operate a wallet, pay, deploy, publish, or mutate trust.
+
+It pins its classified kind subset to a reviewed upstream source revision rather than following Buzz `main` implicitly. See [`upstream-provenance.json`](upstream-provenance.json). The default packet is hash-only for workspace metadata as well as content: it never emits raw relay URLs, community references, channel names, repository references, identifiers, or pubkeys. Hash-only output is not a confidentiality boundary: low-entropy workspace references can still be guessed or correlated, so private exports still require authorization and protected storage.
 
 ## Product fit
 
@@ -74,14 +76,13 @@ It then:
 - verifies that `id` matches the canonical NIP-01 serialization;
 - enforces event, content, and tag bounds;
 - classifies common Buzz message, workflow, agent, forum, and Git event kinds;
-- extracts channel, event, pubkey, address, repository, and identifier references;
+- records deterministic hashes for channel, event, pubkey, address, repository, and identifier references;
 - hashes the signature instead of embedding it;
 - hashes content by default;
 - optionally stores bounded, secret-redacted content;
-- accepts explicit external signature-verification evidence;
-- accepts explicit principal-to-agent binding evidence;
-- accepts explicit relay-audit persistence evidence;
-- creates a deterministic bundle root;
+- accepts only typed external attestation references bound to the exact event ID, pubkey, and signature hash;
+- records those claims as unverified references; it never labels a signature, principal binding, or relay persistence as verified without a separate trusted resolver;
+- commits source metadata and every normalized evidence field into a deterministic bundle root;
 - keeps every financial, deployment, publication, memory, and trust authority flag false.
 
 It also defines an unsigned, proposal-only reference that can later link:
@@ -94,6 +95,12 @@ Buzz event
 ```
 
 No Nostr kind is assigned by this adapter. It cannot sign or publish that reference.
+
+## Upstream provenance and compatibility boundary
+
+The current mapping was reviewed against Block/Buzz commit [`f029deafae6ad3b63e13c29104f3be76122cb1df`](https://github.com/block/buzz/tree/f029deafae6ad3b63e13c29104f3be76122cb1df), specifically [`crates/buzz-core/src/kind.rs`](https://github.com/block/buzz/blob/f029deafae6ad3b63e13c29104f3be76122cb1df/crates/buzz-core/src/kind.rs). The NIP-01 wire checks are pinned to [`nostr-protocol/nips` `c53877571f96eb423661fc23c620d629d37b8f19`](https://github.com/nostr-protocol/nips/tree/c53877571f96eb423661fc23c620d629d37b8f19). The provenance record includes source hashes and the exact classified subset.
+
+This is source-review evidence only. It does not establish live relay, CLI, ACP, private-channel, signature-verifier, or audit-export compatibility. Each needs a separately approved no-customer-data canary.
 
 ## Run
 
@@ -132,25 +139,46 @@ const bundle = compileBuzzEvidenceBundle({
   community_ref: 'community:engineering',
 }, {
   content_policy: 'hash_only',
-  signature_verifications: {
+  signature_attestations: {
     [events[0].id]: {
-      signature_valid: true,
+      event_id: events[0].id,
+      pubkey: events[0].pubkey,
+      signature_hash: 'sha256:<hash of this event signature>',
+      verification_result: 'valid',
       verifier: 'your-nostr-verifier',
       verifier_version: '1.0.0',
-      evidence_ref: 'sha256:...'
+      attestation_ref: 'sha256:<external verifier evidence>'
     }
   },
-  principal_bindings: {
-    [events[0].pubkey]: {
+  principal_attestations: {
+    [events[0].id]: {
+      event_id: events[0].id,
+      pubkey: events[0].pubkey,
+      signature_hash: 'sha256:<hash of this event signature>',
       principal_ref: 'principal:org-123',
       agent_ref: 'agent:release-bot',
-      binding_evidence_ref: 'sha256:...'
+      attestation_ref: 'sha256:<principal binding evidence>'
+    }
+  },
+  audit_attestations: {
+    [events[0].id]: {
+      event_id: events[0].id,
+      pubkey: events[0].pubkey,
+      signature_hash: 'sha256:<hash of this event signature>',
+      persistence_status: 'persisted',
+      audit_entry_ref: 'sha256:<audit entry>',
+      audit_head_ref: 'sha256:<audit head>',
+      verifier: 'buzz-audit-export',
+      verifier_version: '1.0.0',
+      attestation_ref: 'sha256:<persistence evidence>'
     }
   }
 });
 ```
 
-Even with signature, principal, and audit evidence, the bundle remains blocked for economic action until an explicit Agoragentic mandate and external enforcement chokepoint exist.
+First create a hash-only packet to obtain the emitted `signature_hash`; an independent verifier or export process can then produce an attestation bound to that exact event. The compiler verifies only that the caller-supplied fields are structurally bound to the event. It does not fetch or authenticate the attestation artifact, validate the verifier identity, or turn a claim into verification. The compiler never accepts a naked `signature_valid`, `persisted`, or principal-binding boolean as verification evidence.
+
+Even with typed signature, principal, and audit attestation references, the bundle remains blocked until an independently verifiable attestation artifact, trusted verifier policy, explicit Agoragentic mandate, and external enforcement chokepoint exist.
 
 ## Audit conclusions
 
@@ -188,7 +216,7 @@ Input:
 Output:
 
 - canonical event-integrity results;
-- actor and principal bindings;
+- typed but unverified actor and principal-binding references;
 - release evidence graph;
 - missing-approval and missing-persistence findings;
 - public-safe evidence bundle;
@@ -214,7 +242,7 @@ After an externally enforced transaction completes, post an owner-authorized, si
 
 1. Local signed-event evidence compiler — this PR.
 2. Exact live Buzz relay and CLI compatibility canary.
-3. Signature verification and relay-audit export adapter.
+3. Signed attestation artifact, trusted verifier policy, signature verification, and relay-audit export adapter.
 4. Buzz ACP/CLI Harness Core bridge.
 5. Signed Release Evidence Compiler free canary.
 6. Agent OS workspace lane with hard external-action chokepoints.
@@ -223,12 +251,12 @@ After an externally enforced transaction completes, post an owner-authorized, si
 
 ## Publication boundary
 
-This package remains private alpha. It does not claim:
+This package remains unpublished alpha. It does not claim:
 
 - a Block or Buzz partnership;
 - live Buzz compatibility;
-- signature verification without supplied verifier evidence;
-- audit persistence without supplied audit evidence;
+- signature verification without independently validated verifier evidence and trust policy;
+- audit persistence without independently validated audit evidence and trust policy;
 - a principal binding merely from a pubkey;
 - an economic mandate from channel membership;
 - MCP v2 compatibility;
@@ -244,8 +272,8 @@ npm test
 npm run pack:dry
 ```
 
-The dedicated workflow runs on Node 20, 22, and 24 with no credentials, network calls, relay writes, or funds.
+The dedicated workflow runs on Node 20, 22, and 24 with no credentials, network calls, relay writes, or funds. It verifies the packed local artifact can install and run the CLI offline, and that it includes this folder's Apache-2.0 [`LICENSE`](LICENSE) and upstream provenance record.
 
 ## License
 
-This adapter is Apache-2.0. Buzz is also Apache-2.0. No Buzz implementation code is copied into this adapter; it consumes the documented NIP-01 event shape and records upstream attribution.
+This adapter is Apache-2.0. Buzz is also Apache-2.0. No Buzz implementation code is copied into this adapter; it consumes the documented NIP-01 event shape and records upstream attribution and source hashes.
