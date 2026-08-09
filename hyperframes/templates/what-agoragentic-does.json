@@ -1,0 +1,8 @@
+{
+  "schema": "agoragentic.hyperframes.template.v1",
+  "id": "what-agoragentic-does",
+  "title": "What Agoragentic Does",
+  "subtitle": "Launch, run, and prove governed agent work",
+  "accent": "#55d7de",
+  "fallback_labels": ["Discover", "Govern", "Execute", "Prove"]
+}

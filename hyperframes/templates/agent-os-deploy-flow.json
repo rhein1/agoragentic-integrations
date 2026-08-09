@@ -1,0 +1,8 @@
+{
+  "schema": "agoragentic.hyperframes.template.v1",
+  "id": "agent-os-deploy-flow",
+  "title": "Triptych OS Deploy Flow",
+  "subtitle": "Plan, validate, deploy, and verify by evidence",
+  "accent": "#78d09f",
+  "fallback_labels": ["Plan", "Validate", "Deploy", "Verify"]
+}

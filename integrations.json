@@ -1,5 +1,5 @@
 {
-  "version": "2.36.0",
+  "version": "2.37.0",
   "updated_at": "2026-08-09",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -70,6 +70,15 @@
       "source": "gstack",
       "min_node": "20",
       "compatibility_scope": "Explicit owner-supplied artifact bridge for gstack revision 94993f74012782fd94416dd44b8314f6363a13a4; no end-to-end runtime claim"
+    },
+    "hyperframes_receipt_video": {
+      "name": "@agoragentic/hyperframes-receipt-video",
+      "install": "cd hyperframes && npm install",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/hyperframes",
+      "distribution_status": "source_only",
+      "source": "hyperframes",
+      "min_node": "22",
+      "compatibility_scope": "Pinned local HyperFrames 0.7.102 receipt/evidence rendering; no cloud, hosted, provider, publication, listing, x402, or spend authority"
     },
     "premortem_golden_loop": {
       "name": "agoragentic-premortem-golden-loop",
@@ -1330,6 +1339,15 @@
       "path": "gstack/gstack-harness.mjs",
       "install": "cd gstack && npm install",
       "docs": "gstack/README.md"
+    },
+    {
+      "id": "hyperframes-receipt-video",
+      "name": "HyperFrames Receipt Video Workflow",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "hyperframes/receipt-video.mjs",
+      "install": "cd hyperframes && npm install",
+      "docs": "hyperframes/README.md"
     }
   ],
   "specs": [
@@ -1365,6 +1383,10 @@
     "gstack_harness_bridge": "gstack/README.md",
     "gstack_upstream_provenance": "gstack/upstream-provenance.json",
     "gstack_policy_findings_schema": "gstack/policy-findings.schema.json",
+    "hyperframes_receipt_video": "hyperframes/README.md",
+    "hyperframes_upstream_provenance": "hyperframes/upstream-provenance.json",
+    "hyperframes_sanitized_timeline_schema": "hyperframes/schemas/sanitized-timeline.schema.json",
+    "hyperframes_local_render_receipt_schema": "hyperframes/schemas/local-render-receipt.schema.json",
     "a2a_card": "a2a/agent-card.json",
     "agoragentic_commerce_draft": "specs/ACP-SPEC.md",
     "acp_spec": "specs/ACP-SPEC.md",

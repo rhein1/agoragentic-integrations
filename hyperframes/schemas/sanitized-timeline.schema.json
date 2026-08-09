@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/blob/main/hyperframes/schemas/sanitized-timeline.schema.json",
+  "title": "Agoragentic sanitized HyperFrames timeline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "template", "source", "title", "summary", "status", "scenes", "evidence", "sanitization", "authority"],
+  "properties": {
+    "schema": { "const": "agoragentic.hyperframes.sanitized-timeline.v1" },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "subtitle", "accent"],
+      "properties": {
+        "id": { "enum": ["what-agoragentic-does", "agent-os-deploy-flow", "pr-release-explainer", "receipt-reconciliation-demo"] },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "ref", "sha256", "bytes", "raw_retained"],
+      "properties": {
+        "schema": { "const": "agoragentic.receipt-evidence.video-source.v1" },
+        "ref": { "type": "string", "pattern": "^local:[^/\\\\]+$" },
+        "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "bytes": { "type": "integer", "minimum": 1, "maximum": 262144 },
+        "raw_retained": { "const": false }
+      }
+    },
+    "title": { "type": "string", "maxLength": 120 },
+    "summary": { "type": "string", "maxLength": 280 },
+    "status": { "type": "string", "maxLength": 40 },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "kind", "label", "detail", "status", "evidence_ref", "start_seconds", "duration_seconds"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "kind": { "enum": ["request", "quote", "policy", "execution", "receipt", "reconciliation", "deploy", "release"] },
+          "label": { "type": "string", "maxLength": 80 },
+          "detail": { "type": "string", "maxLength": 180 },
+          "status": { "type": "string", "maxLength": 40 },
+          "evidence_ref": { "type": "string", "maxLength": 120 },
+          "start_seconds": { "type": "number", "minimum": 0 },
+          "duration_seconds": { "const": 1 }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref", "sha256", "status"],
+        "properties": {
+          "kind": { "type": "string", "maxLength": 40 },
+          "ref": { "type": "string", "maxLength": 120 },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "status": { "type": "string", "maxLength": 40 }
+        }
+      }
+    },
+    "sanitization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowlist_only", "unknown_fields_omitted", "sensitive_fields_omitted", "secret_values_redacted", "private_paths_redacted", "instruction_trap_scan", "raw_prompts_retained", "raw_tool_outputs_retained", "private_owner_context_retained"],
+      "properties": {
+        "allowlist_only": { "const": true },
+        "unknown_fields_omitted": { "type": "integer", "minimum": 0 },
+        "sensitive_fields_omitted": { "type": "integer", "minimum": 0 },
+        "secret_values_redacted": { "type": "integer", "minimum": 0 },
+        "private_paths_redacted": { "type": "integer", "minimum": 0 },
+        "instruction_trap_scan": { "const": "pass" },
+        "raw_prompts_retained": { "const": false },
+        "raw_tool_outputs_retained": { "const": false },
+        "private_owner_context_retained": { "const": false }
+      }
+    },
+    "authority": { "$ref": "#/$defs/authority" }
+  },
+  "$defs": {
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_render", "hosted_deploy", "call_provider", "publish", "publish_listing", "create_x402_route", "spend", "settle", "move_funds", "owner_approval_required_for_external_action"],
+      "properties": {
+        "external_render": { "const": false },
+        "hosted_deploy": { "const": false },
+        "call_provider": { "const": false },
+        "publish": { "const": false },
+        "publish_listing": { "const": false },
+        "create_x402_route": { "const": false },
+        "spend": { "const": false },
+        "settle": { "const": false },
+        "move_funds": { "const": false },
+        "owner_approval_required_for_external_action": { "const": true }
+      }
+    }
+  }
+}

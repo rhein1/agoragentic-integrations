@@ -1,0 +1,8 @@
+{
+  "schema": "agoragentic.hyperframes.template.v1",
+  "id": "receipt-reconciliation-demo",
+  "title": "Receipt and Reconciliation",
+  "subtitle": "A bounded evidence trail from intent to outcome",
+  "accent": "#d889ff",
+  "fallback_labels": ["Quote", "Execute", "Receipt", "Reconcile"]
+}

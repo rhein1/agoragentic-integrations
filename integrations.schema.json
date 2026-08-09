@@ -68,6 +68,9 @@
         "gstack_harness_bridge": {
           "$ref": "#/$defs/package"
         },
+        "hyperframes_receipt_video": {
+          "$ref": "#/$defs/package"
+        },
         "premortem_golden_loop": {
           "$ref": "#/$defs/package"
         },
