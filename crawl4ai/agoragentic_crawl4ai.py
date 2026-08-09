@@ -433,7 +433,7 @@ def _request_once(
             raise AcquisitionError("duplicate Content-Type is not accepted")
         if len(location_values) > 1:
             raise AcquisitionError("duplicate Location is not accepted")
-        if any(value not in {"", "identity"} for value in transfer_encoding_values):
+        if transfer_encoding_values:
             raise AcquisitionError("transfer encoding is not accepted")
         if any(value not in {"", "identity"} for value in content_encoding_values):
             raise AcquisitionError("compressed responses are not accepted")
@@ -529,9 +529,8 @@ class SafeHttpFetcher:
                 if hop >= limits.max_redirects:
                     raise AcquisitionError("redirect limit exceeded")
                 candidate = urljoin(destination.url, location)
-                # This validation happens before the next request, so private and
-                # metadata redirects never reach the requester.
-                self._validate_before_deadline(candidate, deadline)
+                # The next iteration validates and pins this candidate immediately
+                # before it can reach the requester. Avoid resolving it twice.
                 redirects.append(candidate)
                 current = candidate
                 continue
@@ -541,7 +540,8 @@ class SafeHttpFetcher:
             if encoding not in {"", "identity"}:
                 raise AcquisitionError("compressed responses are not accepted")
             content_type = response.headers.get("content-type", "").lower()
-            if not any(content_type.startswith(allowed) for allowed in ALLOWED_CONTENT_TYPES):
+            media_type = content_type.split(";", 1)[0].strip()
+            if media_type not in ALLOWED_CONTENT_TYPES:
                 raise AcquisitionError(f"content type is not accepted: {content_type or 'missing'}")
             if len(response.body) > limits.max_bytes_per_page:
                 raise AcquisitionError("response exceeds max_bytes_per_page")
@@ -699,12 +699,15 @@ def parse_page_structure(html: str, base_url: str) -> dict[str, Any]:
 def _normalize_scan_texts(text: str) -> tuple[str, str]:
     """Normalize common HTML/Unicode obfuscation before policy matching."""
 
-    normalized = unicodedata.normalize("NFKD", text)
+    normalized = text
     for _ in range(4):
         decoded = html_unescape(normalized)
         if decoded == normalized:
             break
         normalized = decoded
+    # Decode first: entities can encode compatibility characters such as the
+    # full-width I in `&#xFF29;gnore`, which must then be collapsed by NFKD.
+    normalized = unicodedata.normalize("NFKD", normalized)
     compact_parts: list[str] = []
     separated_parts: list[str] = []
     for character in normalized:
