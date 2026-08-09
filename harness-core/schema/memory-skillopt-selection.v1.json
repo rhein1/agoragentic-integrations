@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/memory-skillopt-selection.v1.json",
+  "title": "Agoragentic Memory to SkillOpt selection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "memory_project_id", "skillopt_project", "target_skill_path", "tasks"],
+  "properties": {
+    "schema": { "const": "agoragentic.memory-skillopt.selection.v1" },
+    "memory_project_id": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "skillopt_project": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$" },
+    "target_skill_path": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)).*SKILL\\.md$" },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["memory_id", "split", "skill_hint"],
+        "properties": {
+          "memory_id": { "type": "string", "pattern": "^mem_[a-f0-9]{32}$" },
+          "split": { "enum": ["train", "val", "test"] },
+          "skill_hint": { "type": "string", "maxLength": 128, "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$" }
+        }
+      }
+    }
+  }
+}

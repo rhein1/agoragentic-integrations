@@ -71,7 +71,9 @@ try {
   const installedPackageRoot = path.join(consumer, 'node_modules', 'agoragentic-harness-core');
   const installedReadmePath = path.join(installedPackageRoot, 'README.md');
   const installedHeroPath = path.join(installedPackageRoot, 'assets', 'harness-core-product-hero.svg');
+  const installedMemorySkillOptBin = path.join(installedPackageRoot, 'bin', 'agoragentic-memory-skillopt.mjs');
   if (!existsSync(installedHeroPath)) fail('installed package is missing assets/harness-core-product-hero.svg');
+  if (!existsSync(installedMemorySkillOptBin)) fail('installed package is missing the Memory-SkillOpt CLI');
 
   const installedReadme = readFileSync(installedReadmePath, 'utf8');
   const expectedReadmeArtifactTree = [
@@ -117,17 +119,19 @@ try {
       import { createRequire } from 'node:module';
       const runModule = await import('agoragentic-harness-core/kernel/run');
       const registryModule = await import('agoragentic-harness-core/kernel/middleware-registry');
+      const memorySkillOptModule = await import('agoragentic-harness-core/memory-skillopt');
       const require = createRequire(import.meta.url);
       const schemas = ${JSON.stringify(schemaFiles)};
       const resolvedSchemas = schemas.map((schema) => require.resolve('agoragentic-harness-core/schema/' + schema));
       console.log(JSON.stringify({
         run: typeof runModule.executeHarnessRun === 'function',
         registry: typeof registryModule.MiddlewareRegistry === 'function',
+        memorySkillOpt: typeof memorySkillOptModule.buildSkillOptTaskDraft === 'function',
         schemas: resolvedSchemas.length === schemas.length,
       }));
     `,
   ], consumer));
-  if (!importCheck.run || !importCheck.registry || !importCheck.schemas) {
+  if (!importCheck.run || !importCheck.registry || !importCheck.memorySkillOpt || !importCheck.schemas) {
     fail(`installed package subpath import failed: ${JSON.stringify(importCheck)}`);
   }
 

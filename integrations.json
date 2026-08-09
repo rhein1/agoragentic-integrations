@@ -1,5 +1,5 @@
 {
-  "version": "2.39.0",
+  "version": "2.40.0",
   "updated_at": "2026-08-09",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -1448,6 +1448,9 @@
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_canonical_repo": "https://github.com/rhein1/agoragentic-micro-ecf",
     "harness_core": "harness-core/README.md",
+    "harness_core_memory_skillopt": "harness-core/MEMORY_SKILLOPT.md",
+    "harness_core_memory_skillopt_selection_schema": "harness-core/schema/memory-skillopt-selection.v1.json",
+    "harness_core_memory_skillopt_task_draft_schema": "harness-core/schema/memory-skillopt-task-draft.v1.json",
     "premortem_golden_loop": "premortem-golden-loop/README.md",
     "premortem_prompt": "premortem-golden-loop/PROMPT.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",

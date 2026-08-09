@@ -4,6 +4,11 @@ export const HARNESS_EVALUATION_SCHEMA = 'agoragentic.harness.evaluation.v1';
 export const SUPPORTED_IMPECCABLE_VERSION = '3.5.0';
 export const SUPPORTED_IMPECCABLE_REVISION = '5d10bc842cbccd2ae7d3a88296d87d3be0b125b3';
 export const SUPPORTED_SARIF_VERSION = '2.1.0';
+export const SUPPORTED_SKILLOPT_VERSION = '0.2.0';
+export const SUPPORTED_SKILLOPT_REVISION = '47fe269d75d3def79ffd90236261d26d84868ae5';
+
+const SKILLOPT_ACCEPT_ACTIONS = new Set(['accept', 'accept_new_best']);
+const SKILLOPT_REJECT_ACTIONS = new Set(['reject', 'reject_unverified']);
 
 const MAX_FINDINGS = 1000;
 const MAX_TOOLS = 20;
@@ -86,6 +91,69 @@ export function normalizeSarifReport(input, options = {}) {
     source_payload: report,
     findings,
     source_license: options.source_license || null,
+  });
+}
+
+export function normalizeSkillOptSleepReport(input, options = {}) {
+  const report = requireObject(input, 'SkillOpt-Sleep CLI summary');
+  requireBoundedJson(report, 'SkillOpt-Sleep CLI summary');
+  const version = requireExact(
+    options.producer_version,
+    SUPPORTED_SKILLOPT_VERSION,
+    'Unsupported SkillOpt version',
+  );
+  const revision = requireExact(
+    options.source_revision,
+    SUPPORTED_SKILLOPT_REVISION,
+    'Unsupported SkillOpt source revision',
+  );
+  requireBoundedInteger(report.night, 'SkillOpt night');
+  const taskCount = requireBoundedInteger(report.n_tasks, 'SkillOpt task count');
+  requireBoundedInteger(report.n_sessions, 'SkillOpt session count');
+  const acceptedEditCount = requireBoundedInteger(report.n_accepted_edits, 'SkillOpt accepted edit count');
+  requireBoundedInteger(report.n_rejected_edits, 'SkillOpt rejected edit count');
+  const baseline = requireScore(report.baseline, 'SkillOpt baseline score');
+  const candidate = requireScore(report.candidate, 'SkillOpt candidate score');
+  const accepted = requireBoolean(report.accepted, 'SkillOpt accepted');
+  const adopted = requireBoolean(report.adopted, 'SkillOpt adopted');
+  const tasksReviewed = report.tasks_reviewed === true;
+  if (report.tasks_reviewed !== undefined) requireBoolean(report.tasks_reviewed, 'SkillOpt tasks_reviewed');
+  const holdoutReported = report.holdout_leaked !== undefined;
+  const holdoutLeaked = holdoutReported
+    ? requireBoolean(report.holdout_leaked, 'SkillOpt holdout_leaked')
+    : null;
+  const gateAction = safeIdentifier(report.gate_action, 'SkillOpt gate_action');
+  const tasksFileReported = typeof report.tasks_file === 'string' && report.tasks_file.length > 0;
+
+  const findings = [];
+  if (!tasksReviewed) findings.push(skillOptFinding('tasks_not_owner_reviewed', 'high'));
+  if (tasksReviewed && !tasksFileReported) findings.push(skillOptFinding('reviewed_tasks_file_not_reported', 'high'));
+  if (adopted) findings.push(skillOptFinding('automatic_or_prior_adoption_observed', 'critical'));
+  if (taskCount < 2) findings.push(skillOptFinding('insufficient_task_count', 'high'));
+  if (!holdoutReported) findings.push(skillOptFinding('holdout_integrity_not_reported', 'medium'));
+  if (holdoutLeaked === true) findings.push(skillOptFinding('holdout_integrity_leaked', 'critical'));
+  if (candidate < baseline || (accepted && candidate <= baseline)) {
+    findings.push(skillOptFinding('candidate_score_regressed_or_inconsistent', 'high'));
+  }
+  if (accepted && !SKILLOPT_ACCEPT_ACTIONS.has(gateAction)) {
+    findings.push(skillOptFinding('non_gated_or_inconsistent_acceptance', 'high'));
+  }
+  if (!accepted && !SKILLOPT_REJECT_ACTIONS.has(gateAction)) {
+    findings.push(skillOptFinding('unsupported_rejection_action', 'medium'));
+  }
+  if (!accepted && acceptedEditCount > 0) findings.push(skillOptFinding('rejected_candidate_retained_edits', 'high'));
+  if (!accepted) findings.push(skillOptFinding('candidate_not_accepted', 'medium'));
+  if (accepted && acceptedEditCount === 0) findings.push(skillOptFinding('accepted_without_recorded_edit', 'medium'));
+
+  return buildEvaluation({
+    adapter: { name: 'memory-skillopt-report', version: '1' },
+    source_tools: [{ name: 'skillopt', version, revision }],
+    analyzed_revision: options.analyzed_revision,
+    source_ref: options.source_ref,
+    gate: options.gate,
+    source_payload: report,
+    findings,
+    source_license: 'MIT',
   });
 }
 
@@ -228,6 +296,20 @@ function buildEvaluation({
   };
   record.evidence_hash = computeHarnessEvaluationHash(record);
   return verifyHarnessEvaluation(record);
+}
+
+function skillOptFinding(ruleId, severity) {
+  return createFinding({
+    producer_index: 0,
+    rule_id: `skillopt_${ruleId}`,
+    severity,
+    category: 'skill_optimization',
+    advisory: false,
+    suppressed: false,
+    suppression_kind: null,
+    location: { path: null, line: null, column: null },
+    message: ruleId,
+  });
 }
 
 function normalizeImpeccableFinding(input, forcedSuppressed) {
@@ -484,6 +566,37 @@ function boundedInteger(value, label) {
     throw new TypeError(`${label} must be a non-negative bounded integer`);
   }
   return number;
+}
+
+function requireBoundedInteger(value, label) {
+  const result = boundedInteger(value, label);
+  if (result === null) throw new TypeError(`${label} is required`);
+  return result;
+}
+
+function requireScore(value, label) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new TypeError(`${label} must be a finite number from 0 through 1`);
+  }
+  return value;
+}
+
+function requireBoolean(value, label) {
+  if (typeof value !== 'boolean') throw new TypeError(`${label} must be boolean`);
+  return value;
+}
+
+function requireBoundedJson(value, label, maximum = 1024 * 1024) {
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    throw new TypeError(`${label} must be JSON-serializable`);
+  }
+  if (Buffer.byteLength(serialized, 'utf8') > maximum) {
+    throw new RangeError(`${label} exceeds ${maximum} bytes`);
+  }
+  return value;
 }
 
 function requireString(value, label) {

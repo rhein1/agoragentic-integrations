@@ -278,6 +278,12 @@ Harness Core includes optional parsers for pinned Impeccable findings and SARIF 
 
 The parsers do not execute scanners and do not retain raw findings, snippets, messages, absolute paths, prompts, or tool output. Parsing a report does not verify scanner execution, finding accuracy, vulnerability absence, certification, endorsement, deployment safety, or marketplace readiness. See [Quality and security evaluation adapters](EVALUATION_ADAPTERS.md).
 
+### Memory to SkillOpt task drafts
+
+Harness Core can convert an explicit operator-supplied selection of public, evidence-backed Agoragentic Memory claims into an unreviewed SkillOpt task draft. It can also normalize a completed pinned SkillOpt-Sleep `--json` CLI summary into the same hash-bound evaluation evidence used by local receipts.
+
+The bridge does not run SkillOpt, call a provider, mark tasks reviewed, adopt or publish a skill, mutate Memory, or spend. Generated tasks always start with `reviewed: false`, and the pinned SkillOpt backend refuses them until a human reviews and deliberately changes that field. See [Agoragentic Memory to SkillOpt bridge](MEMORY_SKILLOPT.md).
+
 ## Runtime probes
 
 Probe a local runtime contract without invoking its business tool:
@@ -456,7 +462,7 @@ Use `--help` on the relevant command for exact options supported by the installe
 
 ## Source development
 
-The source tree declares the review-gated Harness Core `0.2.1` patch candidate. npm `@latest` currently serves `0.2.0`; publication remains a separate reviewed release action.
+The source tree declares the review-gated Harness Core `0.3.0` candidate. npm `@latest` currently serves `0.2.0`; publication remains a separate reviewed release action.
 
 ```bash
 git clone https://github.com/rhein1/agoragentic-integrations.git
@@ -479,6 +485,7 @@ Harness Core is the public package boundary for:
 - readiness and status artifacts;
 - runtime metadata probes;
 - context references;
+- review-gated Memory task export and specialist-engine evaluation evidence;
 - host/framework adapters;
 - Agent OS preview exports.
 

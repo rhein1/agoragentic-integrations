@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agoragentic.com/schema/memory-skillopt-task-draft.v1.json",
+  "title": "Agoragentic Memory to SkillOpt unreviewed task draft v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "project", "transcript_source", "n_sessions", "target_skill_path", "reviewed", "tasks", "agoragentic_provenance"],
+  "properties": {
+    "format": { "const": "skillopt_sleep.tasks.v1" },
+    "project": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$" },
+    "transcript_source": { "const": "agoragentic-memory-export" },
+    "n_sessions": { "const": 0 },
+    "target_skill_path": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "reviewed": { "const": false },
+    "tasks": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 50,
+      "items": { "$ref": "#/definitions/task" }
+    },
+    "agoragentic_provenance": { "$ref": "#/definitions/provenance" }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "memory_id": { "type": "string", "pattern": "^mem_[a-f0-9]{32}$" },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "project", "intent", "context_excerpt", "system", "attempted_solution", "outcome", "reference_kind", "reference", "judge", "tags", "source_sessions", "split", "origin", "derived_from", "skill_hint"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^memory-[a-f0-9]{32}$" },
+        "project": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$" },
+        "intent": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "context_excerpt": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "system": { "const": "" },
+        "attempted_solution": { "const": "" },
+        "outcome": { "enum": ["success", "fail", "unknown"] },
+        "reference_kind": { "const": "none" },
+        "reference": { "const": "" },
+        "judge": { "type": "object", "maxProperties": 0 },
+        "tags": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string", "maxLength": 128 } },
+        "source_sessions": { "type": "array", "maxItems": 0 },
+        "split": { "enum": ["train", "val", "test"] },
+        "origin": { "const": "real" },
+        "derived_from": { "const": "" },
+        "skill_hint": { "type": "string", "maxLength": 128, "pattern": "^$|^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "selected_memory_claims_hash", "memory_project_hash", "selected_memory_ids", "compatibility", "truth_boundary", "authority_boundary"],
+      "properties": {
+        "schema": { "const": "agoragentic.memory-skillopt.provenance.v1" },
+        "selected_memory_claims_hash": { "$ref": "#/definitions/hash" },
+        "memory_project_hash": { "$ref": "#/definitions/hash" },
+        "selected_memory_ids": { "type": "array", "minItems": 2, "maxItems": 50, "uniqueItems": true, "items": { "$ref": "#/definitions/memory_id" } },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agoragentic_memory_version", "agoragentic_memory_revision", "skillopt_version", "skillopt_revision"],
+          "properties": {
+            "agoragentic_memory_version": { "const": "0.1.0-rc.2" },
+            "agoragentic_memory_revision": { "const": "508ac3667a5ad3f6f5da323d7ddaf5f13384095d" },
+            "skillopt_version": { "const": "0.2.0" },
+            "skillopt_revision": { "const": "47fe269d75d3def79ffd90236261d26d84868ae5" }
+          }
+        },
+        "truth_boundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["memory_export_signature_verified", "source_revision_proven_by_export", "task_text_owner_reviewed", "raw_events_retained", "raw_evidence_retained"],
+          "properties": {
+            "memory_export_signature_verified": { "const": false },
+            "source_revision_proven_by_export": { "const": false },
+            "task_text_owner_reviewed": { "const": false },
+            "raw_events_retained": { "const": false },
+            "raw_evidence_retained": { "const": false }
+          }
+        },
+        "authority_boundary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call_provider", "run_optimization", "adopt_skill", "publish_skill", "spend"],
+          "properties": {
+            "call_provider": { "const": false },
+            "run_optimization": { "const": false },
+            "adopt_skill": { "const": false },
+            "publish_skill": { "const": false },
+            "spend": { "const": false }
+          }
+        }
+      }
+    }
+  }
+}

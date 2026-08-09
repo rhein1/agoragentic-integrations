@@ -57,13 +57,23 @@ export {
   SUPPORTED_IMPECCABLE_REVISION,
   SUPPORTED_IMPECCABLE_VERSION,
   SUPPORTED_SARIF_VERSION,
+  SUPPORTED_SKILLOPT_REVISION,
+  SUPPORTED_SKILLOPT_VERSION,
   attachEvaluationEvidenceToReceipt,
   computeHarnessEvaluationHash,
   normalizeImpeccableFindings,
   normalizeSarifReport,
+  normalizeSkillOptSleepReport,
   summarizeHarnessEvaluations,
   verifyHarnessEvaluation,
 } from './evaluations/index.mjs';
+
+export {
+  MEMORY_SKILLOPT_SELECTION_SCHEMA,
+  SKILLOPT_TASK_FORMAT,
+  buildSkillOptTaskDraft,
+  validateMemorySkillOptSelection,
+} from './memory-skillopt.mjs';
 
 export async function initProject({ dir = process.cwd(), template = 'codebase_maintenance', force = false } = {}) {
   const target = path.resolve(dir);
@@ -300,7 +310,7 @@ export function buildAgentOsExport(project, options = {}) {
     generated_at: generatedAt,
     generated_from: {
       source: 'agoragentic-harness-core',
-      package_version: '0.2.1',
+      package_version: '0.3.0',
       local_only: true,
     },
     schema_artifacts: {
