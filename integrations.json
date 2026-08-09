@@ -1,5 +1,5 @@
 {
-  "version": "2.35.0",
+  "version": "2.35.1",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -374,6 +374,18 @@
       "reason": "Core and evaluator evidence are merged, but an official external protocol adapter must complete conformance and packaging review before public catalog inclusion.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/241",
+      "review_by": "2026-09-08",
+      "published": false,
+      "external_compatibility_verified": false,
+      "ready_for_manifest": false,
+      "authority_granted": false
+    },
+    {
+      "directory": "verifiers-transaction-assurance",
+      "status": "unpublished_alpha",
+      "reason": "Exact Prime Verifiers v0.3.0 package tests pass, but an owner-approved external harness attestation run is still required before public catalog inclusion.",
+      "owner": "repository-maintainers",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/259",
       "review_by": "2026-09-08",
       "published": false,
       "external_compatibility_verified": false,

@@ -13,6 +13,7 @@ const HELD_DIRECTORIES = [
   'agent-payments-assurance-challenge',
   'prime-agent-governance',
   'transaction-assurance',
+  'verifiers-transaction-assurance',
 ];
 const REPRESENTED = (MANIFEST.integrations || [])
   .flatMap((integration) => [integration.path, integration.docs])
@@ -39,9 +40,11 @@ test('current central inventory hold is bounded and valid', () => {
 });
 
 test('expired inventory holds fail closed', () => {
-  const result = validate(MANIFEST, { today: '2026-09-09' });
-  assert.equal(result.heldDirectories.size, 0);
-  assert.ok(result.errors.some((error) => error.includes('expired on 2026-09-08')));
+  const expired = cloneManifest();
+  expired.inventory_holds[0].review_by = '2026-08-07';
+  const result = validate(expired);
+  assert.equal(result.heldDirectories.size, expired.inventory_holds.length - 1);
+  assert.ok(result.errors.some((error) => error.includes('expired on 2026-08-07')));
 });
 
 test('inventory holds cannot delegate ownership or extend beyond 90 days', () => {
