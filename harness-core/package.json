@@ -1,19 +1,21 @@
 {
   "name": "agoragentic-harness-core",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Local no-spend Agent OS Harness Core for Micro ECF policy, first proof, receipts, listing readiness, and Triptych OS preview export.",
   "type": "module",
   "license": "Apache-2.0",
   "bin": {
     "agoragentic-harness": "./bin/agoragentic-harness.mjs",
     "agoragentic-harness-core": "./bin/agoragentic-harness.mjs",
-    "agora-harness": "./bin/agoragentic-harness.mjs"
+    "agora-harness": "./bin/agoragentic-harness.mjs",
+    "agoragentic-memory-skillopt": "./bin/agoragentic-memory-skillopt.mjs"
   },
   "exports": {
     ".": "./src/index.mjs",
     "./adapters": "./src/adapters/index.mjs",
     "./adapters/claude-code": "./src/adapters/claude-code.mjs",
     "./evaluations": "./src/evaluations/index.mjs",
+    "./memory-skillopt": "./src/memory-skillopt.mjs",
     "./kernel/events": "./src/kernel/events.mjs",
     "./kernel/loop": "./src/kernel/loop.mjs",
     "./kernel/middleware-registry": "./src/kernel/middleware-registry.mjs",
@@ -38,6 +40,8 @@
     "./schema/listing-readiness.v1.json": "./schema/listing-readiness.v1.json",
     "./schema/local-proof.v1.json": "./schema/local-proof.v1.json",
     "./schema/local-receipt.v1.json": "./schema/local-receipt.v1.json",
+    "./schema/memory-skillopt-selection.v1.json": "./schema/memory-skillopt-selection.v1.json",
+    "./schema/memory-skillopt-task-draft.v1.json": "./schema/memory-skillopt-task-draft.v1.json",
     "./schema/owner-inbox.v1.json": "./schema/owner-inbox.v1.json",
     "./schema/retry-policy.v1.json": "./schema/retry-policy.v1.json",
     "./schema/review-gates.v1.json": "./schema/review-gates.v1.json",
@@ -54,6 +58,7 @@
     "CHANGELOG.md",
     "EVALUATION_ADAPTERS.md",
     "LICENSE",
+    "MEMORY_SKILLOPT.md",
     "README.md",
     "RELEASE_SCOPE.md",
     "TRUSTED_PUBLISHING.md"
@@ -62,7 +67,7 @@
     "yaml": "^2.5.0"
   },
   "scripts": {
-    "test": "node --test test/cli.test.cjs test/evaluation-adapters.test.mjs",
+    "test": "node --test test/cli.test.cjs test/evaluation-adapters.test.mjs test/memory-skillopt.test.mjs",
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "prepublishOnly": "npm test && npm run pack:smoke"
   },

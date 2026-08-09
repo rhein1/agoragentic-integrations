@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.2.1 - Unreleased
+## 0.3.0 - Unreleased
 
 - Added the packaged Harness Core hero and installed-package README link verification.
 - Narrowed receipt and adapter claims to the configuration/proposal evidence emitted by the package.
+- Added a review-gated Agoragentic Memory to SkillOpt task-draft bridge and bounded SkillOpt report adapter.
 
 ## 0.2.0 - 2026-07-23
 
