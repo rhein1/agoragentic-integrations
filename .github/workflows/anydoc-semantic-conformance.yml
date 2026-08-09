@@ -1,0 +1,116 @@
+name: AnyDoc Semantic Conformance
+
+on:
+  pull_request:
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'ecosystem.json'
+      - 'README.md'
+      - 'SKILL.md'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'scripts/verify-integrations-json.js'
+      - '.github/workflows/anydoc-document-evidence.yml'
+      - '.github/workflows/anydoc-semantic-conformance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/anydoc-document-evidence/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'ecosystem.json'
+      - 'README.md'
+      - 'SKILL.md'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - 'scripts/verify-integrations-json.js'
+      - '.github/workflows/anydoc-document-evidence.yml'
+      - '.github/workflows/anydoc-semantic-conformance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: examples/anydoc-document-evidence
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: examples/anydoc-document-evidence/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - name: Install lockfile-pinned parser and fixture dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm run conformance:install
+      - name: Run syntax, adversarial, and real-package tests
+        run: |
+          npm run check
+          npm run test:adversarial
+          npm run smoke:anydoc
+      - name: Verify canonical machine inventory
+        run: node ../../scripts/verify-integrations-json.js
+      - name: Generate and verify public-safe fixtures
+        run: npm run conformance:generate
+      - name: Run semantic conformance in an OS sandbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_dir="${RUNNER_TEMP}/anydoc-semantic-${{ matrix.node-version }}"
+          mkdir -p "$report_dir"
+          set +e
+          docker run --rm \
+            --network none \
+            --read-only \
+            --memory 768m \
+            --memory-swap 768m \
+            --cpus 1 \
+            --pids-limit 64 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+            --user "$(id -u):$(id -g)" \
+            --env AGORAGENTIC_NO_SPEND=1 \
+            --env AGORAGENTIC_ALLOW_REAL_SPEND=0 \
+            --env AGORAGENTIC_ALLOW_NETWORK_CANARIES=0 \
+            --volume "$PWD:/work:ro" \
+            --volume "$report_dir:/out:rw" \
+            --workdir /work \
+            "node:${{ matrix.node-version }}-bookworm-slim" \
+            node conformance/run-conformance.mjs /out/report.json --require-os-sandbox
+          status=$?
+          set -e
+          if [ -f "$report_dir/report.json" ]; then
+            cp "$report_dir/report.json" conformance/report.json
+          fi
+          exit "$status"
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Install and test the packed artifact
+        run: npm run verify:packed
+      - name: Upload bounded report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: anydoc-semantic-conformance-node-${{ matrix.node-version }}
+          path: examples/anydoc-document-evidence/conformance/report.json
+          if-no-files-found: error
+          retention-days: 30

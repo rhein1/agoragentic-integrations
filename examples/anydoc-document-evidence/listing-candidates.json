@@ -1,6 +1,6 @@
 {
   "schema": "agoragentic.document-evidence-listing-candidates.v1",
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-08",
   "upstream": {
     "name": "Firecrawl AnyDoc",
     "repository": "https://github.com/firecrawl/anydoc",
@@ -20,9 +20,13 @@
         "doc",
         "docx",
         "docm",
+        "pot",
+        "pps",
         "ppt",
         "pptx",
         "pptm",
+        "ppsm",
+        "ppsx",
         "xls",
         "xlsx",
         "xlsm",
@@ -48,15 +52,18 @@
         "default_parser_timeout_ms": 30000,
         "hard_parser_timeout_ms": 120000,
         "default_parser_v8_heap_mb": 256,
-        "hard_parser_v8_heap_mb": 1024
+        "hard_parser_v8_heap_mb": 1024,
+        "hard_native_memory_cap_in_local_adapter": false
       },
       "outputs": [
         "markdown",
         "source_hash",
         "output_hash",
+        "parser_output_hash",
         "evidence_units",
         "evidence_coverage",
         "parse_completeness",
+        "completeness_blockers",
         "semantic_risk",
         "known_limitations",
         "parse_receipt",
@@ -70,6 +77,9 @@
       },
       "readiness": {
         "local_adapter_executable": true,
+        "node_api_network_guard_tested": true,
+        "os_network_sandbox_required_for_no_network_claim": true,
+        "native_syscall_isolation_bundled": false,
         "hosted_route_implemented": false,
         "paid_canary_passed": false,
         "listing_published": false,
@@ -111,6 +121,8 @@
     "enables_spend": false,
     "enables_wallet": false,
     "enables_x402": false,
+    "writes_memory": false,
+    "attaches_context": false,
     "mutates_trust": false
   }
 }

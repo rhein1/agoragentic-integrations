@@ -20,9 +20,16 @@
     "cli.mjs",
     "network-deny.mjs",
     "parser-worker.mjs",
+    "verify-packed.mjs",
     "test.mjs",
     "test-fixtures/fake-anydoc.mjs",
     "smoke-anydoc.mjs",
+    "conformance/README.md",
+    "conformance/cases.json",
+    "conformance/generate-fixtures.py",
+    "conformance/requirements.in",
+    "conformance/requirements.txt",
+    "conformance/run-conformance.mjs",
     "SKILL.md",
     "README.md",
     "listing-candidates.json"
@@ -31,10 +38,14 @@
     "@firecrawl/anydoc": "0.1.7"
   },
   "scripts": {
-    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs",
+    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs && node --check verify-packed.mjs && node --check conformance/run-conformance.mjs",
     "test": "node --test test.mjs",
     "test:adversarial": "node --test test.mjs",
     "smoke:anydoc": "node smoke-anydoc.mjs",
+    "conformance:install": "python -m pip install --disable-pip-version-check --require-hashes -r conformance/requirements.txt",
+    "conformance:generate": "python conformance/generate-fixtures.py",
+    "test:conformance": "node conformance/run-conformance.mjs",
+    "verify:packed": "node verify-packed.mjs",
     "pack:dry": "npm pack --dry-run",
     "prepack": "npm run check"
   },
