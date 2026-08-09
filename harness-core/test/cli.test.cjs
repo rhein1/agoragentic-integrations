@@ -62,7 +62,16 @@ test('Harness Core package exposes local no-spend CLI bins', () => {
   assert.equal(pkg.bin['agora-harness'], './bin/agoragentic-harness.mjs');
   assert.equal(pkg.bin['agoragentic-memory-skillopt'], './bin/agoragentic-memory-skillopt.mjs');
   assert.match(pkg.description, /Local no-spend Agent OS Harness Core/);
-  assert.equal(pkg.repository.directory, 'harness-core');
+  assert.equal(pkg.repository.type, 'git');
+  if (pkg.repository.url === 'git+https://github.com/rhein1/agoragentic-integrations.git') {
+    assert.equal(pkg.repository.directory, 'harness-core');
+  } else {
+    assert.equal(
+      pkg.repository.url,
+      'git+https://github.com/rhein1/agoragentic-harness-core.git',
+    );
+    assert.equal(pkg.repository.directory, undefined);
+  }
 
   const shippedSchemas = fs.readdirSync(path.join(packageRoot, 'schema'))
     .filter((file) => file.endsWith('.json'));

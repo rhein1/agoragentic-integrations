@@ -1,0 +1,5 @@
+node_modules/
+*.tgz
+.agoragentic/
+.DS_Store
+npm-debug.log*
