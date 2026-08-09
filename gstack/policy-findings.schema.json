@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/gstack-policy-findings.v1.json",
+  "title": "Agoragentic gstack Policy Findings v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "status", "source", "evidence", "findings", "authority"],
+  "properties": {
+    "schema": { "const": "agoragentic.gstack-policy-findings.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["pass", "blocked"] },
+    "source": { "type": "object" },
+    "evidence": { "type": "object" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "stage", "message"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "stage": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "detail": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": { "const": false }
+    }
+  }
+}

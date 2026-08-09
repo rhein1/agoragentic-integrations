@@ -1,5 +1,5 @@
 {
-  "version": "2.33.0",
+  "version": "2.34.0",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -61,6 +61,15 @@
       "source": "opencode",
       "min_node": "18",
       "compatibility_scope": "OpenCode 1.18.15 official-source contract fixture only; no end-to-end runtime claim"
+    },
+    "gstack_harness_bridge": {
+      "name": "@agoragentic/gstack-harness-bridge",
+      "install": "cd gstack && npm install",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/gstack",
+      "distribution_status": "source_only",
+      "source": "gstack",
+      "min_node": "20",
+      "compatibility_scope": "Explicit owner-supplied artifact bridge for gstack revision 94993f74012782fd94416dd44b8314f6363a13a4; no end-to-end runtime claim"
     },
     "premortem_golden_loop": {
       "name": "agoragentic-premortem-golden-loop",
@@ -1291,6 +1300,15 @@
       "path": "opencode/src/server.mjs",
       "install": "cd opencode && npm ci",
       "docs": "opencode/README.md"
+    },
+    {
+      "id": "gstack-harness-bridge",
+      "name": "gstack Harness Bridge",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "gstack/gstack-harness.mjs",
+      "install": "cd gstack && npm install",
+      "docs": "gstack/README.md"
     }
   ],
   "specs": [
@@ -1323,6 +1341,9 @@
     "cline_install_guide": "llms-install.md",
     "opencode_harness_plugin": "opencode/README.md",
     "opencode_contract_fixture": "opencode/contracts/opencode-plugin-1.18.15.json",
+    "gstack_harness_bridge": "gstack/README.md",
+    "gstack_upstream_provenance": "gstack/upstream-provenance.json",
+    "gstack_policy_findings_schema": "gstack/policy-findings.schema.json",
     "a2a_card": "a2a/agent-card.json",
     "agoragentic_commerce_draft": "specs/ACP-SPEC.md",
     "acp_spec": "specs/ACP-SPEC.md",
