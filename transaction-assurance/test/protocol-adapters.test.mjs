@@ -8,6 +8,7 @@ import addFormats from 'ajv-formats';
 import {
   bindX402OutcomeEvidence,
   buildTransactionAssuranceEnvelope,
+  computeEnvelopeHash,
   evaluateTransactionAssuranceEnvelope,
   normalizeAp2Authority,
   normalizeCircleWalletPolicyEvidence,
@@ -32,7 +33,12 @@ const normalizedAuthoritySchema = JSON.parse(fs.readFileSync(
   'utf8',
 ));
 
-const ajv = new Ajv2020({ allErrors: true, strict: true, strictSchema: false });
+const ajv = new Ajv2020({
+  allErrors: true,
+  strict: true,
+  strictRequired: false,
+  strictSchema: false,
+});
 addFormats(ajv);
 ajv.addSchema(acpSchema);
 const validateAcpCheckout = ajv.compile({
@@ -40,6 +46,9 @@ const validateAcpCheckout = ajv.compile({
 });
 const validateAcpCheckoutWithOrder = ajv.compile({
   $ref: `${acpSchema.$id}#/$defs/CheckoutSessionWithOrder`,
+});
+const validateAcpCompleteRequest = ajv.compile({
+  $ref: `${acpSchema.$id}#/$defs/CheckoutSessionCompleteRequest`,
 });
 const validateNormalizedAuthority = ajv.compile(normalizedAuthoritySchema);
 
@@ -252,6 +261,11 @@ test('pins and vendored ACP schema are exact and independently reproducible', ()
     true,
     JSON.stringify(validateAcpCheckoutWithOrder.errors),
   );
+  assert.equal(
+    validateAcpCompleteRequest(vectors.fixtures.official_acp.complete_request),
+    true,
+    JSON.stringify(validateAcpCompleteRequest.errors),
+  );
 });
 
 test('AP2 public Intent, Cart, and Payment mandate models normalize at the exact pin', () => {
@@ -271,6 +285,19 @@ test('AP2 public Intent, Cart, and Payment mandate models normalize at the exact
     ),
     /conflicting protocol version/,
   );
+  for (const [fixture, kind] of [
+    ['ap2_open_checkout_vct', 'open_checkout_mandate'],
+    ['ap2_checkout_vct', 'checkout_mandate'],
+    ['ap2_open_payment_vct', 'open_payment_mandate'],
+    ['ap2_payment_vct', 'payment_mandate'],
+  ]) {
+    const normalized = normalizeAp2Authority(
+      clone(vectors.fixtures[fixture]),
+      adapterOptions({ verifier: authorityVerifier() }),
+    );
+    assert.equal(normalized.protocol_binding.artifact_kind, kind);
+    assert.equal(normalized.verification.status, 'verified');
+  }
 });
 
 test('portable JSON cannot forge or preserve a trusted protocol-verifier boundary', () => {
@@ -294,6 +321,40 @@ test('portable JSON cannot forge or preserve a trusted protocol-verifier boundar
   });
   assert.equal(result.decision, 'deny');
   assert.ok(result.blockers.includes('authority_verifier_boundary_not_trusted'));
+  for (const mutate of [
+    (value) => {
+      value.authority.allowed_sellers = ['merchant:other'];
+      value.authority.merchant_binding = 'merchant:other';
+      value.commercial_intent.seller_ref = 'merchant:other';
+    },
+    (value) => {
+      value.authority.max_per_action = '100.00';
+      value.authority.max_daily = '100.00';
+      value.authority.max_total = '100.00';
+    },
+    (value) => {
+      value.authority.source_artifact_hash = 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    },
+  ]) {
+    const mutated = preExecutionEnvelope(normalized);
+    mutate(mutated);
+    mutated.evidence.envelope_hash = computeEnvelopeHash(mutated);
+    const mutationResult = evaluateTransactionAssuranceEnvelope(mutated, {
+      phase: 'pre_execution',
+      now: '2026-08-08T00:03:00Z',
+    });
+    assert.equal(mutationResult.decision, 'deny');
+    assert.ok(mutationResult.blockers.includes('authority_verifier_boundary_not_trusted'));
+  }
+  const mutatedAuthority = normalizeAp2Authority(
+    clone(vectors.fixtures.ap2_payment),
+    adapterOptions({ verifier: authorityVerifier() }),
+  );
+  mutatedAuthority.allowed_sellers = ['merchant:other'];
+  assert.throws(
+    () => preExecutionEnvelope(mutatedAuthority),
+    /no longer match the trusted binding/,
+  );
   assert.throws(
     () => normalizeAp2Authority(
       clone(vectors.fixtures.ap2_payment),
@@ -335,6 +396,17 @@ test('official ACP schema and adapter preserve checkout, order, payment, fulfill
   assert.equal(ready.checkout.payment_handler_ref, 'acp-handler:handler:test');
   assert.equal(ready.checkout.payment_data_hash.startsWith('sha256:'), true);
   assert.equal(ready.outcome.complete_chain_verified, false);
+  assert.equal(Object.hasOwn(vectors.fixtures.official_acp, 'payment_handlers'), false);
+  const invalidInstrument = clone(vectors.fixtures.official_acp);
+  invalidInstrument.complete_request.payment_data.instrument = {};
+  assert.throws(
+    () => normalizeOfficialAcpEvidence(invalidInstrument, adapterOptions({
+      checkoutSessionRef: 'checkout:test',
+      requestId: 'request:test',
+      idempotencyKeyHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })),
+    /does not match ACP/,
+  );
   const completed = normalizeOfficialAcpEvidence(
     clone(vectors.fixtures.official_acp_completed),
     adapterOptions({
@@ -383,6 +455,38 @@ test('x402 parses real v2 extension shapes and binds the complete retry fingerpr
     assert.ok(result.mismatches.includes(code));
     assert.equal(result.safe_to_reuse_payment_identifier, false);
   }
+  const missingVersion = clone(vectors.fixtures.x402);
+  delete missingVersion.sdk_version;
+  assert.throws(
+    () => normalizeX402Evidence(missingVersion, { ...x402Options(), sdkVersion: null }),
+    /SDK version is required/,
+  );
+  const unsupportedReceipt = clone(vectors.fixtures.x402);
+  unsupportedReceipt.responseExtensions['offer-receipt'].info.receipts[0].version = 999;
+  assert.throws(
+    () => normalizeX402Evidence(unsupportedReceipt, x402Options()),
+    /receipt version must be 1/,
+  );
+  const multiple = clone(vectors.fixtures.x402);
+  const secondAcceptance = {
+    scheme: 'exact',
+    network: 'eip155:10',
+    asset: 'USDC',
+    amount: '2.00',
+    payTo: '0x4444444444444444444444444444444444444444',
+  };
+  multiple.paymentRequired.accepts.push(secondAcceptance);
+  multiple.paymentRequired.extensions['offer-receipt'].info.offers.push({
+    version: 1,
+    resourceUrl: 'https://seller.test/tool',
+    ...secondAcceptance,
+    validUntil: '2030-01-01T00:00:00Z',
+    signature: 'synthetic-non-usable-signature-2',
+  });
+  multiple.paymentPayload.accepted = clone(secondAcceptance);
+  const second = normalizeX402Evidence(multiple, { ...x402Options(), acceptIndex: 1 });
+  assert.equal(second.offer.network, 'eip155:10');
+  assert.equal(second.offer.pay_to, '0x4444444444444444444444444444444444444444');
 });
 
 test('Circle and Skyfire extract bounded policy and identity/payment claims without raw credentials', () => {
@@ -398,6 +502,21 @@ test('Circle and Skyfire extract bounded policy and identity/payment claims with
   const unsafeCircle = clone(vectors.fixtures.circle);
   unsafeCircle.private_key = 'not-allowed';
   assert.throws(() => normalizeCircleWalletPolicyEvidence(unsafeCircle, adapterOptions()), /raw credential/);
+  for (const [status, chain] of [['disabled', 'BASE'], ['active', 'not-mainnet']]) {
+    const invalidPolicy = clone(vectors.fixtures.circle);
+    invalidPolicy.policy.status = status;
+    invalidPolicy.wallet.chain = chain;
+    assert.throws(
+      () => normalizeCircleWalletPolicyEvidence(
+        invalidPolicy,
+        adapterOptions({
+          bindings: { ...bindings, currency: 'USDC' },
+          verifier: authorityVerifier(),
+        }),
+      ),
+      status === 'disabled' ? /active live policy/ : /mainnet-only/,
+    );
+  }
 
   const skyfire = normalizeSkyfireKyaPayEvidence(
     clone(vectors.fixtures.skyfire),
@@ -459,7 +578,10 @@ function runVector(vector) {
   }
   if (vector.adapter === 'x402') {
     const verifierStatus = verifierConfig?.status ?? 'verified';
-    const evidence = normalizeX402Evidence(artifact, x402Options(verifierStatus));
+    const evidence = normalizeX402Evidence(artifact, {
+      ...x402Options(verifierStatus),
+      ...vector.options,
+    });
     return {
       evidence,
       binding: bindX402OutcomeEvidence(evidence, x402Binding(vector.binding)),

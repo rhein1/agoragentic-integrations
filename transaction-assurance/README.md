@@ -312,7 +312,7 @@ Supported source pins are exported as `PROTOCOL_ADAPTER_PINS`:
 | --- | --- |
 | Google AP2 | `v0.2.0` / `b4587ac1...` |
 | Visa Trusted Agent Protocol | commit `16d59bdf...` |
-| official OpenAI/Stripe ACP | released schema `2026-04-17` at `7fdd78df...` |
+| official OpenAI/Stripe Agentic Commerce Protocol (ACP) | released schema `2026-04-17` at `7fdd78df...` |
 | x402 offer/receipt + Payment Identifier | `@x402/core` `2.21.0` at `34cb6bd0...` |
 | Circle Agent Stack policy evidence | `circlefin/skills` commit `c7d269a2...` |
 | Skyfire KYA/KYAPay evidence | `skyfire-xyz/kyapay` commit `869a71ae...` |

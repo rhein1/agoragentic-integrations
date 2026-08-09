@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+
 import {
   canonicalize,
   normalizeAuthorityArtifact,
@@ -73,6 +78,22 @@ const X402_SETTLEMENT_STATUSES = new Set([
   'unknown',
 ]);
 const MONEY_PATTERN = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
+const CIRCLE_MAINNET_CHAINS = new Set(['BASE']);
+const ACP_SCHEMA = JSON.parse(fs.readFileSync(
+  new URL('../vendor/acp-2026-04-17/schema.agentic_checkout.json', import.meta.url),
+  'utf8',
+));
+const acpAjv = new Ajv2020({
+  allErrors: true,
+  strict: true,
+  strictRequired: false,
+  strictSchema: false,
+});
+addFormats(acpAjv);
+acpAjv.addSchema(ACP_SCHEMA);
+const validateAcpCompleteRequest = acpAjv.compile({
+  $ref: `${ACP_SCHEMA.$id}#/$defs/CheckoutSessionCompleteRequest`,
+});
 
 function object(value, field) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -175,6 +196,15 @@ function exactVersion(artifact, options, pin, paths = ['protocol_version', 'prot
     throw new TypeError(`unsupported or conflicting protocol version: expected ${pin.version}`);
   }
   return pin.version;
+}
+
+function requireAcpSchema(value, validator, field) {
+  if (validator(value)) return;
+  const details = (validator.errors || [])
+    .slice(0, 8)
+    .map((error) => `${error.instancePath || '/'} ${error.keyword}`)
+    .join(', ');
+  throw new TypeError(`${field} does not match ACP ${PROTOCOL_ADAPTER_PINS.openai_stripe_acp.version}${details ? `: ${details}` : ''}`);
 }
 
 function cleanBindings(input) {
@@ -462,6 +492,7 @@ function authorityFromProtocol({
       trust_mode: 'trusted_callback',
       verifier_ref: evidence.verification.verifierRef,
       binding_hash: bindingHash,
+      artifact_hash: artifactHash,
     });
   }
   return result;
@@ -502,10 +533,10 @@ export function normalizeAp2Authority(artifact, options = {}) {
     'ap2.version',
   ]);
   const kinds = new Map([
-    ['mandate.checkout.open.1', 'open_checkout_mandate'],
-    ['mandate.checkout.1', 'checkout_mandate'],
-    ['mandate.payment.open.1', 'open_payment_mandate'],
-    ['mandate.payment.1', 'payment_mandate'],
+    ['mandate.checkout.open.1', { family: 'open_checkout', kind: 'open_checkout_mandate' }],
+    ['mandate.checkout.1', { family: 'checkout', kind: 'checkout_mandate' }],
+    ['mandate.payment.open.1', { family: 'open_payment', kind: 'open_payment_mandate' }],
+    ['mandate.payment.1', { family: 'payment', kind: 'payment_mandate' }],
   ]);
   const declaredKind = options.artifactKind ?? first(artifact, [
     'artifact_kind',
@@ -513,16 +544,22 @@ export function normalizeAp2Authority(artifact, options = {}) {
     'type',
   ]);
   const vct = first(artifact, ['vct', 'claims.vct']);
-  const artifactKind = vct ? kinds.get(vct) : declaredKind;
+  const mappedKind = vct ? kinds.get(vct) : null;
+  const artifactKind = mappedKind?.kind ?? declaredKind;
+  const family = mappedKind?.family ?? ({
+    IntentMandate: 'legacy_intent',
+    CartMandate: 'legacy_cart',
+    PaymentMandate: 'legacy_payment',
+  })[artifactKind];
   let expiresAt = options.expiresAt;
-  if (artifactKind === 'IntentMandate') {
+  if (family === 'legacy_intent') {
     requiredBoolean(
       artifact.user_cart_confirmation_required,
       'artifact.user_cart_confirmation_required',
     );
     text(artifact.natural_language_description, 'artifact.natural_language_description');
     expiresAt = expiresAt ?? iso(artifact.intent_expiry, 'artifact.intent_expiry');
-  } else if (artifactKind === 'CartMandate') {
+  } else if (family === 'legacy_cart') {
     const contents = object(artifact.contents, 'artifact.contents');
     text(contents.id, 'artifact.contents.id');
     requiredBoolean(
@@ -533,7 +570,7 @@ export function normalizeAp2Authority(artifact, options = {}) {
     paymentItem(paymentRequest.details?.total, 'artifact.contents.payment_request.details.total');
     text(contents.merchant_name, 'artifact.contents.merchant_name');
     expiresAt = expiresAt ?? iso(contents.cart_expiry, 'artifact.contents.cart_expiry');
-  } else if (artifactKind === 'PaymentMandate' || kinds.has(vct)) {
+  } else if (family === 'legacy_payment') {
     const contents = object(
       artifact.payment_mandate_contents ?? artifact.claims ?? artifact,
       'artifact.payment_mandate_contents',
@@ -547,6 +584,36 @@ export function normalizeAp2Authority(artifact, options = {}) {
     object(contents.payment_response ?? artifact.payment_instrument, 'payment_response');
     object(contents.merchant_agent ?? artifact.payee, 'merchant_agent');
     iso(contents.timestamp ?? options.issuedAt, 'payment_mandate_contents.timestamp');
+  } else if (family === 'open_checkout') {
+    if (!Array.isArray(artifact.constraints) || artifact.constraints.length === 0) {
+      throw new TypeError('open checkout mandate constraints must be a non-empty array');
+    }
+    object(artifact.cnf, 'artifact.cnf');
+    if (!artifact.constraints.some((constraint) => constraint?.type === 'checkout.line_items')) {
+      throw new TypeError('open checkout mandate requires checkout.line_items constraints');
+    }
+  } else if (family === 'checkout') {
+    text(artifact.checkout_jwt, 'artifact.checkout_jwt');
+    text(artifact.checkout_hash, 'artifact.checkout_hash');
+  } else if (family === 'open_payment') {
+    if (!Array.isArray(artifact.constraints) || artifact.constraints.length === 0) {
+      throw new TypeError('open payment mandate constraints must be a non-empty array');
+    }
+    object(artifact.cnf, 'artifact.cnf');
+    if (!artifact.constraints.some((constraint) => constraint?.type === 'payment.reference')) {
+      throw new TypeError('open payment mandate requires a payment.reference constraint');
+    }
+  } else if (family === 'payment') {
+    text(artifact.transaction_id, 'artifact.transaction_id');
+    const payee = object(artifact.payee, 'artifact.payee');
+    text(payee.id, 'artifact.payee.id');
+    text(payee.name, 'artifact.payee.name');
+    const amount = object(artifact.payment_amount, 'artifact.payment_amount');
+    requiredInteger(amount.amount, 'artifact.payment_amount.amount');
+    text(amount.currency, 'artifact.payment_amount.currency', { max: 30 });
+    const instrument = object(artifact.payment_instrument, 'artifact.payment_instrument');
+    text(instrument.id, 'artifact.payment_instrument.id');
+    text(instrument.type, 'artifact.payment_instrument.type');
   } else {
     throw new TypeError(`unsupported AP2 mandate type: ${artifactKind || vct || 'missing'}`);
   }
@@ -556,7 +623,7 @@ export function normalizeAp2Authority(artifact, options = {}) {
     protocol: 'google_ap2',
     pin,
     version,
-    artifactKind: artifactKind || kinds.get(vct),
+    artifactKind,
     requiredChecks: [
       'action',
       'amount',
@@ -707,6 +774,13 @@ export function normalizeOfficialAcpEvidence(artifact, options = {}) {
   const completeRequest = artifact.complete_request
     ? object(artifact.complete_request, 'artifact.complete_request')
     : null;
+  if (completeRequest) {
+    requireAcpSchema(
+      completeRequest,
+      validateAcpCompleteRequest,
+      'artifact.complete_request',
+    );
+  }
   const paymentData = completeRequest
     ? object(completeRequest.payment_data, 'artifact.complete_request.payment_data')
     : null;
@@ -717,13 +791,15 @@ export function normalizeOfficialAcpEvidence(artifact, options = {}) {
       'ACP payment_data requires purchase_order_number or handler_id with instrument',
     );
   }
-  const paymentHandlers = artifact.payment_handlers ?? [];
-  if (!Array.isArray(paymentHandlers)) throw new TypeError('artifact.payment_handlers must be an array');
+  const paymentHandlers = checkout.capabilities?.payment?.handlers ?? [];
+  if (!Array.isArray(paymentHandlers)) {
+    throw new TypeError('checkout_session.capabilities.payment.handlers must be an array');
+  }
   const selectedHandler = paymentData?.handler_id
     ? paymentHandlers.find((item) => item?.id === paymentData.handler_id)
     : null;
   if (paymentData?.handler_id && !selectedHandler) {
-    throw new TypeError('ACP payment_data handler_id must match a supplied payment handler');
+    throw new TypeError('ACP payment_data handler_id must match a seller-advertised payment handler');
   }
   if (selectedHandler) {
     for (const field of [
@@ -818,6 +894,9 @@ export function normalizeX402Evidence(artifact, options = {}) {
   const pin = PROTOCOL_ADAPTER_PINS.x402;
   const sdkDeclarations = [options.sdkVersion, options.version, artifact.sdk_version]
     .filter((value) => value !== undefined && value !== null && value !== '');
+  if (sdkDeclarations.length === 0) {
+    throw new TypeError(`x402 SDK version is required: expected ${pin.version}`);
+  }
   if (sdkDeclarations.some((value) => value !== pin.version)) {
     throw new TypeError(`unsupported or conflicting x402 SDK version: expected ${pin.version}`);
   }
@@ -866,7 +945,7 @@ export function normalizeX402Evidence(artifact, options = {}) {
   if (!Array.isArray(offers) || offers.length === 0) {
     throw new TypeError('x402 offer-receipt extension must contain an offer');
   }
-  const offer = object(offers[0], 'offer-receipt offer');
+  const offer = object(offers[acceptIndex], 'offer-receipt offer');
   if (offer.version !== pin.offer_receipt_version) {
     throw new TypeError(`x402 offer version must be ${pin.offer_receipt_version}`);
   }
@@ -922,6 +1001,9 @@ export function normalizeX402Evidence(artifact, options = {}) {
   const receipt = Array.isArray(receipts) && receipts.length > 0
     ? object(receipts[0], 'offer-receipt receipt')
     : null;
+  if (receipt && receipt.version !== pin.offer_receipt_version) {
+    throw new TypeError(`x402 receipt version must be ${pin.offer_receipt_version}`);
+  }
   const receiptRef = receipt ? text(options.receiptRef, 'receiptRef') : null;
   const receiptIssuerRef = receipt ? text(options.receiptIssuerRef, 'receiptIssuerRef') : null;
   const receiptVerifier = receipt ? signedArtifactVerifierEvidence(options.receiptVerifier, {
@@ -931,7 +1013,7 @@ export function normalizeX402Evidence(artifact, options = {}) {
     artifactKind: 'offer-receipt.receipt.v1',
     artifactHash: sha256Ref(receipt),
     bindingHash: sha256Ref({ ...fingerprint, receipt_ref: receiptRef, issuer_ref: receiptIssuerRef }),
-    requiredChecks: ['issuer', 'payment_identifier', 'signature'],
+    requiredChecks: ['issuer', 'payment_identifier', 'signature', 'version'],
   }) : null;
   const lifecycle = artifact.lifecycle ?? {};
   const submissionStatus = enumeration(
@@ -1141,8 +1223,8 @@ export function normalizeCircleWalletPolicyEvidence(artifact, options = {}) {
   const walletRef = text(wallet.id, 'artifact.wallet.id');
   const accountRef = text(wallet.address, 'artifact.wallet.address');
   const agentRef = text(wallet.agent_ref, 'artifact.wallet.agent_ref');
-  const chain = text(wallet.chain, 'artifact.wallet.chain');
-  if (!chain.toLowerCase().includes('mainnet') || policy.network !== 'mainnet') {
+  const chain = text(wallet.chain, 'artifact.wallet.chain').toUpperCase();
+  if (!CIRCLE_MAINNET_CHAINS.has(chain) || policy.network !== 'mainnet') {
     throw new TypeError('Circle wallet-policy evidence must be mainnet-only');
   }
   const policyStatus = enumeration(
@@ -1150,6 +1232,9 @@ export function normalizeCircleWalletPolicyEvidence(artifact, options = {}) {
     'artifact.policy.status',
     new Set(['active', 'disabled', 'draft']),
   );
+  if (policyStatus !== 'active') {
+    throw new TypeError('Circle wallet-policy evidence requires an active live policy');
+  }
   const asset = text(policy.asset, 'artifact.policy.asset', { max: 30 }).toUpperCase();
   for (const field of ['per_transaction', 'daily', 'weekly', 'monthly']) {
     decimal(limits[field], `artifact.policy.limits.${field}`);

@@ -555,7 +555,7 @@ function authorityForEnvelope(normalizedAuthority) {
       'verified protocol authority must remain inside its trusted in-process verifier boundary',
     );
   }
-  return {
+  const authority = {
     source_protocol: normalizedAuthority.source_protocol,
     source_artifact_ref: normalizedAuthority.source_artifact_ref,
     source_artifact_hash: normalizedAuthority.source_artifact_hash,
@@ -588,6 +588,30 @@ function authorityForEnvelope(normalizedAuthority) {
     max_per_action: normalizeMoney(normalizedAuthority.max_per_action, '0'),
     max_daily: normalizeMoney(normalizedAuthority.max_daily, '0'),
     max_total: normalizeMoney(normalizedAuthority.max_total, '0'),
+  };
+  if (trustedBinding
+    && (sha256Ref(authorityBindingPayload(authority)) !== trustedBinding.binding_hash
+      || authority.source_artifact_hash !== trustedBinding.artifact_hash)) {
+    throw new TypeError('verified protocol authority fields no longer match the trusted binding');
+  }
+  return authority;
+}
+
+function authorityBindingPayload(authority) {
+  return {
+    issuer_ref: authority.issuer_ref,
+    principal_ref: authority.principal_ref,
+    agent_ref: authority.agent_ref,
+    audience: authority.audience,
+    merchant_binding: authority.merchant_binding,
+    allowed_actions: authority.allowed_actions,
+    allowed_sellers: authority.allowed_sellers,
+    allowed_categories: authority.allowed_categories,
+    allowed_payment_rails: authority.allowed_payment_rails,
+    currency: authority.currency,
+    max_per_action: authority.max_per_action,
+    max_daily: authority.max_daily,
+    max_total: authority.max_total,
   };
 }
 
@@ -835,6 +859,7 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
       trust_mode: authority.verification_trust_mode,
       verifier_ref: authority.verification_verifier_ref,
       binding_hash: authority.verification_binding_hash,
+      artifact_hash: authority.source_artifact_hash,
     });
   }
   return envelope;
@@ -878,7 +903,9 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     && (!trustedEnvelope
       || trustedEnvelope.trust_mode !== 'trusted_callback'
       || trustedEnvelope.verifier_ref !== authority.verification_verifier_ref
-      || trustedEnvelope.binding_hash !== authority.verification_binding_hash)) {
+      || trustedEnvelope.binding_hash !== authority.verification_binding_hash
+      || trustedEnvelope.artifact_hash !== authority.source_artifact_hash
+      || sha256Ref(authorityBindingPayload(authority)) !== authority.verification_binding_hash)) {
     addUnique(blockers, 'authority_verifier_boundary_not_trusted');
   }
   if (!authority.verification_verifier_ref

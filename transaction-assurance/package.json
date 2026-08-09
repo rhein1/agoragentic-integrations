@@ -35,7 +35,7 @@
     "self-test": "node bin/agora-assure.mjs self-test",
     "pack:dry": "npm pack --dry-run"
   },
-  "devDependencies": {
+  "dependencies": {
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
   },

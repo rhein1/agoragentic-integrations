@@ -15,10 +15,15 @@ function binding(value, field) {
     || !/^sha256:[a-f0-9]{64}$/.test(value.binding_hash)) {
     throw new TypeError(`${field}.binding_hash must be a sha256 reference`);
   }
+  if (typeof value.artifact_hash !== 'string'
+    || !/^sha256:[a-f0-9]{64}$/.test(value.artifact_hash)) {
+    throw new TypeError(`${field}.artifact_hash must be a sha256 reference`);
+  }
   return Object.freeze({
     trust_mode: 'trusted_callback',
     verifier_ref: value.verifier_ref.trim(),
     binding_hash: value.binding_hash,
+    artifact_hash: value.artifact_hash,
   });
 }
 
