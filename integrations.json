@@ -1,5 +1,5 @@
 {
-  "version": "2.34.0",
+  "version": "2.35.0",
   "updated_at": "2026-08-08",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -798,6 +798,15 @@
       "docs": "claude-view/README.md"
     },
     {
+      "id": "crawl4ai",
+      "name": "Governed Crawl4AI Web Evidence",
+      "language": "python",
+      "status": "experimental",
+      "path": "crawl4ai/agoragentic_crawl4ai.py",
+      "install": "python -m pip install -r crawl4ai/requirements.txt",
+      "docs": "crawl4ai/README.md"
+    },
+    {
       "id": "scrumboy",
       "name": "Scrumboy",
       "language": "json",
@@ -1464,6 +1473,9 @@
     "livekit_agents_adapter": "livekit-agents/agoragentic_livekit.py",
     "pipecat": "pipecat/README.md",
     "pipecat_adapter": "pipecat/agoragentic_pipecat.py",
+    "crawl4ai": "crawl4ai/README.md",
+    "crawl4ai_manifest": "crawl4ai/crawl4ai.local-provider.manifest.json",
+    "crawl4ai_upstream_provenance": "crawl4ai/upstream-provenance.json",
     "buzz_signed_workspace_evidence": "examples/buzz-signed-workspace-evidence/README.md",
     "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json",
     "anydoc_document_evidence": "examples/anydoc-document-evidence/README.md",

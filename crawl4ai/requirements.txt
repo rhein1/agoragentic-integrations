@@ -1,0 +1,2 @@
+# Reviewed release: https://github.com/unclecode/crawl4ai/tree/7e801521428ee12509994d39151006f64055ebe3
+Crawl4AI==0.9.2
