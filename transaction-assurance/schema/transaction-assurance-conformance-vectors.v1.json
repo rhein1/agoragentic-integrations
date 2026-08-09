@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/transaction-assurance-conformance-vectors.v1.json",
+  "title": "Transaction Assurance Conformance Vectors v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "suite_version", "base_input", "vectors"],
+  "properties": {
+    "schema": { "const": "agoragentic.transaction-assurance-conformance-vectors.v1" },
+    "suite_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "base_input": { "$ref": "https://agoragentic.com/schema/transaction-assurance-conformance-input.v1.json" },
+    "vectors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "profile", "adapter_id", "source_version", "description", "input_patch", "expected"],
+        "properties": {
+          "id": { "$ref": "#/$defs/token" },
+          "profile": { "$ref": "#/$defs/token" },
+          "adapter_id": { "$ref": "#/$defs/token" },
+          "source_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "description": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "input_patch": { "type": "object" },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["decision", "code"],
+            "properties": {
+              "decision": { "enum": ["pass", "deny", "review"] },
+              "code": { "$ref": "#/$defs/token" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": { "token": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$" } }
+}

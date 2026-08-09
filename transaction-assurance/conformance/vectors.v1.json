@@ -1,0 +1,441 @@
+{
+  "schema": "agoragentic.transaction-assurance-conformance-vectors.v1",
+  "suite_version": "0.1.0-alpha.0",
+  "base_input": {
+    "schema": "agoragentic.transaction-assurance-conformance.v1",
+    "protocol": {
+      "adapter_id": "x402",
+      "source_version": "2.21.0"
+    },
+    "authority": {
+      "verification": "verified",
+      "revocation": "active",
+      "audience_match": true,
+      "agent_match": true,
+      "expired": false
+    },
+    "terms": {
+      "merchant_match": true,
+      "category_match": true,
+      "action_match": true,
+      "rail_match": true,
+      "currency_match": true,
+      "quote_match": true,
+      "terms_match": true
+    },
+    "limits": {
+      "per_action_within_limit": true,
+      "daily_within_limit": true,
+      "total_within_limit": true
+    },
+    "payment": {
+      "identifier_present": true,
+      "identifier_reused": false,
+      "replay_detected": false
+    },
+    "settlement": {
+      "observed": true,
+      "verified": true,
+      "final": true
+    },
+    "execution": {
+      "attempted": true,
+      "succeeded": true,
+      "delivery_observed": true
+    },
+    "outcome": {
+      "validation": "passed"
+    },
+    "reconciliation": {
+      "status": "complete"
+    },
+    "privacy": {
+      "raw_secret_exposed": false,
+      "private_key_exposed": false,
+      "payment_credential_exposed": false,
+      "raw_prompt_exposed": false,
+      "raw_tool_output_exposed": false,
+      "private_owner_data_exposed": false
+    }
+  },
+  "vectors": [
+    {
+      "id": "ap2_complete_chain",
+      "profile": "authority_identity",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Pinned AP2 evidence reaches the complete reference outcome.",
+      "input_patch": {},
+      "expected": { "decision": "pass", "code": "complete_chain_verified" }
+    },
+    {
+      "id": "visa_complete_chain",
+      "profile": "commercial_terms",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "Pinned Visa TAP evidence reaches the complete reference outcome.",
+      "input_patch": {},
+      "expected": { "decision": "pass", "code": "complete_chain_verified" }
+    },
+    {
+      "id": "acp_complete_chain",
+      "profile": "execution_delivery",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Pinned official ACP evidence reaches the complete reference outcome.",
+      "input_patch": {},
+      "expected": { "decision": "pass", "code": "complete_chain_verified" }
+    },
+    {
+      "id": "x402_complete_chain",
+      "profile": "settlement_finality",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Pinned x402 evidence reaches the complete reference outcome.",
+      "input_patch": {},
+      "expected": { "decision": "pass", "code": "complete_chain_verified" }
+    },
+    {
+      "id": "authority_unverified",
+      "profile": "authority_identity",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Unverified authority requires review.",
+      "input_patch": { "authority": { "verification": "unverified" } },
+      "expected": { "decision": "review", "code": "authority_unverified" }
+    },
+    {
+      "id": "authority_unknown",
+      "profile": "authority_identity",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Unknown verification state fails closed to review.",
+      "input_patch": { "authority": { "verification": "unknown" } },
+      "expected": { "decision": "review", "code": "authority_verification_unknown" }
+    },
+    {
+      "id": "authority_revoked",
+      "profile": "authority_identity",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "Revoked authority is denied.",
+      "input_patch": { "authority": { "revocation": "revoked" } },
+      "expected": { "decision": "deny", "code": "authority_revoked" }
+    },
+    {
+      "id": "authority_expired",
+      "profile": "authority_identity",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Expired authority is denied.",
+      "input_patch": { "authority": { "expired": true } },
+      "expected": { "decision": "deny", "code": "authority_expired" }
+    },
+    {
+      "id": "authority_wrong_audience",
+      "profile": "authority_identity",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Wrong audience is denied.",
+      "input_patch": { "authority": { "audience_match": false } },
+      "expected": { "decision": "deny", "code": "authority_wrong_audience" }
+    },
+    {
+      "id": "authority_wrong_agent",
+      "profile": "authority_identity",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Wrong delegated agent is denied.",
+      "input_patch": { "authority": { "agent_match": false } },
+      "expected": { "decision": "deny", "code": "authority_wrong_agent" }
+    },
+    {
+      "id": "unsupported_protocol_version",
+      "profile": "authority_identity",
+      "adapter_id": "x402",
+      "source_version": "2.20.0",
+      "description": "An unpinned protocol version is denied.",
+      "input_patch": {},
+      "expected": { "decision": "deny", "code": "unsupported_protocol_version" }
+    },
+    {
+      "id": "merchant_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "Wrong merchant is denied.",
+      "input_patch": { "terms": { "merchant_match": false } },
+      "expected": { "decision": "deny", "code": "merchant_mismatch" }
+    },
+    {
+      "id": "category_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Wrong category is denied.",
+      "input_patch": { "terms": { "category_match": false } },
+      "expected": { "decision": "deny", "code": "category_mismatch" }
+    },
+    {
+      "id": "action_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Wrong action is denied.",
+      "input_patch": { "terms": { "action_match": false } },
+      "expected": { "decision": "deny", "code": "action_mismatch" }
+    },
+    {
+      "id": "rail_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Wrong payment rail is denied.",
+      "input_patch": { "terms": { "rail_match": false } },
+      "expected": { "decision": "deny", "code": "rail_mismatch" }
+    },
+    {
+      "id": "currency_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Wrong currency is denied.",
+      "input_patch": { "terms": { "currency_match": false } },
+      "expected": { "decision": "deny", "code": "currency_mismatch" }
+    },
+    {
+      "id": "quote_changed",
+      "profile": "commercial_terms",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "A changed quote is denied.",
+      "input_patch": { "terms": { "quote_match": false } },
+      "expected": { "decision": "deny", "code": "quote_changed" }
+    },
+    {
+      "id": "terms_changed",
+      "profile": "commercial_terms",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "Changed commercial terms are denied.",
+      "input_patch": { "terms": { "terms_match": false } },
+      "expected": { "decision": "deny", "code": "terms_changed" }
+    },
+    {
+      "id": "per_action_limit_exceeded",
+      "profile": "commercial_terms",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Per-action budget overflow is denied.",
+      "input_patch": { "limits": { "per_action_within_limit": false } },
+      "expected": { "decision": "deny", "code": "per_action_limit_exceeded" }
+    },
+    {
+      "id": "daily_limit_exceeded",
+      "profile": "commercial_terms",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Daily budget overflow is denied.",
+      "input_patch": { "limits": { "daily_within_limit": false } },
+      "expected": { "decision": "deny", "code": "daily_limit_exceeded" }
+    },
+    {
+      "id": "total_limit_exceeded",
+      "profile": "commercial_terms",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Total budget overflow is denied.",
+      "input_patch": { "limits": { "total_within_limit": false } },
+      "expected": { "decision": "deny", "code": "total_limit_exceeded" }
+    },
+    {
+      "id": "payment_identifier_missing",
+      "profile": "payment_idempotency",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "A missing payment identifier is denied.",
+      "input_patch": { "payment": { "identifier_present": false } },
+      "expected": { "decision": "deny", "code": "payment_identifier_missing" }
+    },
+    {
+      "id": "payment_identifier_reused",
+      "profile": "payment_idempotency",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "A reused payment identifier is denied.",
+      "input_patch": { "payment": { "identifier_reused": true } },
+      "expected": { "decision": "deny", "code": "payment_identifier_reused" }
+    },
+    {
+      "id": "paid_retry_replay",
+      "profile": "payment_idempotency",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "A replayed paid retry is denied.",
+      "input_patch": { "payment": { "replay_detected": true } },
+      "expected": { "decision": "deny", "code": "paid_retry_replay_detected" }
+    },
+    {
+      "id": "payment_not_observed",
+      "profile": "settlement_finality",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Missing payment observation requires review.",
+      "input_patch": { "settlement": { "observed": false } },
+      "expected": { "decision": "review", "code": "payment_not_observed" }
+    },
+    {
+      "id": "delivery_with_unverified_payment",
+      "profile": "settlement_finality",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Delivery cannot compensate for unverified settlement.",
+      "input_patch": { "settlement": { "verified": false } },
+      "expected": { "decision": "deny", "code": "settlement_unverified" }
+    },
+    {
+      "id": "delivery_with_nonfinal_payment",
+      "profile": "settlement_finality",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Delivery with non-final settlement requires review.",
+      "input_patch": { "settlement": { "final": false } },
+      "expected": { "decision": "review", "code": "settlement_not_final" }
+    },
+    {
+      "id": "payment_with_failed_execution",
+      "profile": "execution_delivery",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "A failed execution after payment is denied.",
+      "input_patch": { "execution": { "succeeded": false } },
+      "expected": { "decision": "deny", "code": "execution_failed_after_payment" }
+    },
+    {
+      "id": "payment_without_delivery",
+      "profile": "execution_delivery",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Payment without delivery evidence requires review.",
+      "input_patch": { "execution": { "delivery_observed": false } },
+      "expected": { "decision": "review", "code": "delivery_missing_after_payment" }
+    },
+    {
+      "id": "outcome_not_validated",
+      "profile": "outcome_validation",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "An unchecked output requires review.",
+      "input_patch": { "outcome": { "validation": "not_checked" } },
+      "expected": { "decision": "review", "code": "outcome_not_validated" }
+    },
+    {
+      "id": "wrong_output",
+      "profile": "outcome_validation",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Failed output validation is denied.",
+      "input_patch": { "outcome": { "validation": "failed" } },
+      "expected": { "decision": "deny", "code": "outcome_validation_failed" }
+    },
+    {
+      "id": "partial_fulfillment",
+      "profile": "outcome_validation",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Partial fulfillment requires review.",
+      "input_patch": { "outcome": { "validation": "partial" } },
+      "expected": { "decision": "review", "code": "partial_fulfillment" }
+    },
+    {
+      "id": "refund_pending",
+      "profile": "reconciliation",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "A pending refund requires review.",
+      "input_patch": { "reconciliation": { "status": "refund_pending" } },
+      "expected": { "decision": "review", "code": "refund_pending" }
+    },
+    {
+      "id": "refund_completed",
+      "profile": "reconciliation",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "A completed refund is a reconciled terminal outcome.",
+      "input_patch": { "reconciliation": { "status": "refunded" } },
+      "expected": { "decision": "pass", "code": "reconciled_refunded" }
+    },
+    {
+      "id": "dispute_pending",
+      "profile": "reconciliation",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "A pending dispute requires review.",
+      "input_patch": { "reconciliation": { "status": "dispute_pending" } },
+      "expected": { "decision": "review", "code": "dispute_pending" }
+    },
+    {
+      "id": "dispute_resolved",
+      "profile": "reconciliation",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "A resolved dispute is a reconciled terminal outcome.",
+      "input_patch": { "reconciliation": { "status": "dispute_resolved" } },
+      "expected": { "decision": "pass", "code": "reconciled_dispute_resolved" }
+    },
+    {
+      "id": "raw_secret_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Raw secret exposure is denied.",
+      "input_patch": { "privacy": { "raw_secret_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_raw_secret_exposed" }
+    },
+    {
+      "id": "private_key_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "visa_tap",
+      "source_version": "commit-16d59bdf",
+      "description": "Private-key exposure is denied.",
+      "input_patch": { "privacy": { "private_key_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_private_key_exposed" }
+    },
+    {
+      "id": "payment_credential_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Payment-credential exposure is denied.",
+      "input_patch": { "privacy": { "payment_credential_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_payment_credential_exposed" }
+    },
+    {
+      "id": "raw_prompt_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "x402",
+      "source_version": "2.21.0",
+      "description": "Raw prompt exposure is denied.",
+      "input_patch": { "privacy": { "raw_prompt_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_raw_prompt_exposed" }
+    },
+    {
+      "id": "raw_tool_output_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Raw tool-output exposure is denied.",
+      "input_patch": { "privacy": { "raw_tool_output_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_raw_tool_output_exposed" }
+    },
+    {
+      "id": "private_owner_data_leak",
+      "profile": "privacy_redaction",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Private owner-data exposure is denied.",
+      "input_patch": { "privacy": { "private_owner_data_exposed": true } },
+      "expected": { "decision": "deny", "code": "privacy_private_owner_data_exposed" }
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "agoragentic.transaction-assurance-conformance-manifest.v1",
+  "suite_name": "Agoragentic Transaction Assurance Conformance Suite",
+  "suite_version": "0.1.0-alpha.0",
+  "released_at": "2026-08-09T00:00:00.000Z",
+  "profiles": [
+    "authority_identity",
+    "commercial_terms",
+    "payment_idempotency",
+    "settlement_finality",
+    "execution_delivery",
+    "outcome_validation",
+    "reconciliation",
+    "privacy_redaction"
+  ],
+  "protocol_adapters": [
+    {
+      "id": "google_ap2",
+      "version": "v0.2.0",
+      "revision": "b4587ac1d055888a73b4b21750973cffba961793",
+      "source": "https://github.com/google-agentic-commerce/AP2/tree/v0.2.0"
+    },
+    {
+      "id": "visa_tap",
+      "version": "commit-16d59bdf",
+      "revision": "16d59bdf3f8a542bc538d0962edbb80ea30a02af",
+      "source": "https://github.com/visa/trusted-agent-protocol/tree/16d59bdf3f8a542bc538d0962edbb80ea30a02af"
+    },
+    {
+      "id": "openai_stripe_acp",
+      "version": "2026-04-17",
+      "revision": "7fdd78df677a94dce04c770644b0fbbb1401272b",
+      "source": "https://github.com/agentic-commerce-protocol/agentic-commerce-protocol/tree/7fdd78df677a94dce04c770644b0fbbb1401272b/spec/2026-04-17"
+    },
+    {
+      "id": "x402",
+      "version": "2.21.0",
+      "revision": "34cb6bd04c88f4333f56b9c778d3d35df997379c",
+      "source": "https://github.com/x402-foundation/x402/tree/34cb6bd04c88f4333f56b9c778d3d35df997379c/specs/extensions"
+    }
+  ],
+  "vector_set": "conformance/vectors.v1.json",
+  "claim_boundary": "A pass means only that the named target produced the expected bounded decisions for this suite version and profile. It is not certification, endorsement, legal compliance, fraud prevention, settlement proof, or universal production safety.",
+  "explicit_exclusions": [
+    "certification",
+    "endorsement",
+    "legal_compliance",
+    "live_settlement",
+    "production_compatibility",
+    "universal_safety"
+  ],
+  "network_required": false,
+  "spend_authority": false
+}

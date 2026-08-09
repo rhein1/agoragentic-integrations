@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/transaction-assurance-conformance-input.v1.json",
+  "title": "Transaction Assurance Conformance Input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "protocol", "authority", "terms", "limits", "payment", "settlement", "execution", "outcome", "reconciliation", "privacy"],
+  "properties": {
+    "schema": { "const": "agoragentic.transaction-assurance-conformance.v1" },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_id", "source_version"],
+      "properties": {
+        "adapter_id": { "$ref": "#/$defs/token" },
+        "source_version": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verification", "revocation", "audience_match", "agent_match", "expired"],
+      "properties": {
+        "verification": { "enum": ["verified", "unverified", "unknown"] },
+        "revocation": { "enum": ["active", "revoked", "not_checked", "unknown"] },
+        "audience_match": { "type": "boolean" },
+        "agent_match": { "type": "boolean" },
+        "expired": { "type": "boolean" }
+      }
+    },
+    "terms": { "$ref": "#/$defs/terms" },
+    "limits": { "$ref": "#/$defs/limits" },
+    "payment": { "$ref": "#/$defs/payment" },
+    "settlement": { "$ref": "#/$defs/settlement" },
+    "execution": { "$ref": "#/$defs/execution" },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["validation"],
+      "properties": { "validation": { "enum": ["passed", "failed", "partial", "not_checked"] } }
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "enum": ["complete", "refunded", "refund_pending", "dispute_pending", "dispute_resolved", "none"] } }
+    },
+    "privacy": { "$ref": "#/$defs/privacy" }
+  },
+  "$defs": {
+    "token": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$" },
+    "terms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merchant_match", "category_match", "action_match", "rail_match", "currency_match", "quote_match", "terms_match"],
+      "properties": {
+        "merchant_match": { "type": "boolean" },
+        "category_match": { "type": "boolean" },
+        "action_match": { "type": "boolean" },
+        "rail_match": { "type": "boolean" },
+        "currency_match": { "type": "boolean" },
+        "quote_match": { "type": "boolean" },
+        "terms_match": { "type": "boolean" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_action_within_limit", "daily_within_limit", "total_within_limit"],
+      "properties": {
+        "per_action_within_limit": { "type": "boolean" },
+        "daily_within_limit": { "type": "boolean" },
+        "total_within_limit": { "type": "boolean" }
+      }
+    },
+    "payment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier_present", "identifier_reused", "replay_detected"],
+      "properties": {
+        "identifier_present": { "type": "boolean" },
+        "identifier_reused": { "type": "boolean" },
+        "replay_detected": { "type": "boolean" }
+      }
+    },
+    "settlement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "verified", "final"],
+      "properties": {
+        "observed": { "type": "boolean" },
+        "verified": { "type": "boolean" },
+        "final": { "type": "boolean" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempted", "succeeded", "delivery_observed"],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "succeeded": { "type": "boolean" },
+        "delivery_observed": { "type": "boolean" }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_secret_exposed", "private_key_exposed", "payment_credential_exposed", "raw_prompt_exposed", "raw_tool_output_exposed", "private_owner_data_exposed"],
+      "properties": {
+        "raw_secret_exposed": { "type": "boolean" },
+        "private_key_exposed": { "type": "boolean" },
+        "payment_credential_exposed": { "type": "boolean" },
+        "raw_prompt_exposed": { "type": "boolean" },
+        "raw_tool_output_exposed": { "type": "boolean" },
+        "private_owner_data_exposed": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "version": "2.38.1",
+  "version": "2.39.0",
   "updated_at": "2026-08-09",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -380,7 +380,7 @@
     {
       "directory": "transaction-assurance",
       "status": "unpublished_alpha",
-      "reason": "Version-pinned protocol adapters and internal conformance vectors are implemented, but the vendor-neutral conformance suite and a real external adopter remain required before public catalog inclusion.",
+      "reason": "The source-only vendor-neutral conformance suite, four version-pinned protocol profiles, deterministic runner, reports, receipt verifier, examples, and reusable workflow are implemented. A real external adopter run is still required before public catalog inclusion or any ecosystem-standard claim.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/246",
       "review_by": "2026-09-08",
