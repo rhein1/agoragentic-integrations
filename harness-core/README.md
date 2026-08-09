@@ -2,17 +2,12 @@
 
 ![Harness Core — policy and local proof for a proposed agent action](assets/harness-core-product-hero.svg)
 
-## Put a policy gate and local proof around a proposed agent action.
+## Put a policy gate and a receipt around any agent action.
 
 **Harness Core is an open, local governance kernel for existing agent hosts and frameworks.** The generic `run` command evaluates configuration and policy, records lifecycle events, and emits local proof and receipt artifacts:
 
 ```text
-intent
-→ policy
-→ approval when required
-→ host boundary
-→ configuration and proof references
-→ clearly labeled local receipt
+intent → policy → approval → host tool → evidence → local receipt
 ```
 
 Host execution is outside the generic `run` path. A host may separately integrate Harness middleware around its own action. The packaged Claude Code `PreToolUse` adapter and the repository's experimental OpenCode source plugin can enforce an allow/ask/deny decision before their respective host tool calls. Harness Core does **not** become the agent runtime or grant itself authority to execute tools, spend, deploy, publish, settle, mutate trust, or control a wallet.

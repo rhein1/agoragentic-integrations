@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a reproducible Harness Core defect without secrets or live-spend activity.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, wallet material, private data, or exploit details.
+  - type: input
+    id: version
+    attributes:
+      label: Harness Core version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Reproduction and observed behavior
+      description: Use a local no-spend fixture and include the expected result.
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Safety boundary
+      options:
+        - label: The reproduction makes no provider, production, wallet, payment, or publication call.
+          required: true

@@ -1,0 +1,33 @@
+name: Harness Core CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AGORAGENTIC_NO_SPEND: 1
+  AGORAGENTIC_ALLOW_REAL_SPEND: 0
+  AGORAGENTIC_ALLOW_NETWORK_CANARIES: 0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: node examples/frameworks/validate.mjs
+      - run: npm run pack:smoke
+      - run: npm pack --dry-run --json

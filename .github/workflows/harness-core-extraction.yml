@@ -1,0 +1,53 @@
+name: Harness Core extraction preparation
+
+on:
+  pull_request:
+    paths:
+      - 'harness-core/**'
+      - 'examples/harness-core-frameworks/**'
+      - 'extraction/harness-core/**'
+      - 'scripts/prepare-harness-core-extraction.mjs'
+      - 'scripts/verify-harness-core-extraction.mjs'
+      - 'test/harness-core-extraction.test.mjs'
+      - '.github/workflows/harness-core-extraction.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'harness-core/**'
+      - 'examples/harness-core-frameworks/**'
+      - 'extraction/harness-core/**'
+      - 'scripts/prepare-harness-core-extraction.mjs'
+      - 'scripts/verify-harness-core-extraction.mjs'
+      - 'test/harness-core-extraction.test.mjs'
+      - '.github/workflows/harness-core-extraction.yml'
+
+permissions:
+  contents: read
+
+env:
+  AGORAGENTIC_NO_SPEND: 1
+  AGORAGENTIC_ALLOW_REAL_SPEND: 0
+  AGORAGENTIC_ALLOW_NETWORK_CANARIES: 0
+
+jobs:
+  prepare-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+      - name: Test preparation guards
+        run: node --test test/harness-core-extraction.test.mjs
+      - name: Prepare filtered-history repository locally
+        run: >-
+          node scripts/prepare-harness-core-extraction.mjs
+          --source "$GITHUB_WORKSPACE"
+          --source-ref "$GITHUB_SHA"
+          --output "$RUNNER_TEMP/agoragentic-harness-core"
+      - name: Verify standalone package, history, workflows, and authority boundary
+        run: >-
+          node scripts/verify-harness-core-extraction.mjs
+          --repo "$RUNNER_TEMP/agoragentic-harness-core"

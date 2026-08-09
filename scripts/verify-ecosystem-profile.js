@@ -203,7 +203,7 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
     const harnessHero = fs.readFileSync(harnessHeroPath, 'utf8');
 
     for (const required of [
-      'Put a policy gate and local proof around a proposed agent action.',
+      'Put a policy gate and a receipt around any agent action.',
       'Host execution is outside the generic `run` path',
       'Local receipts are not settlement receipts',
       'Claude Code `PreToolUse`',
