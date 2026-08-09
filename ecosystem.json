@@ -1,7 +1,7 @@
 {
   "$schema": "./ecosystem.schema.json",
   "schema": "agoragentic.ecosystem-profile.v1",
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-09",
   "brand": {
     "name": "Agoragentic",
     "promise": "Bound what autonomous agents may do, record evidence of what they did, and connect governed buyers and sellers.",
@@ -137,7 +137,7 @@
   ],
   "inventory": {
     "integration_manifest": "./integrations.json",
-    "integration_count": 104,
+    "integration_count": 105,
     "count_rule": "integration_count must equal integrations.json.integrations.length",
     "public_copy_rule": "Other repositories should link to this inventory instead of hard-coding the count."
   },

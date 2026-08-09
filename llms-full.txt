@@ -62,7 +62,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 104 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 105 integration surfaces as of 2026-08-09. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
