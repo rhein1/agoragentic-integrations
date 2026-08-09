@@ -9,6 +9,10 @@ opencode/node_modules/
 gstack/node_modules/
 hyperframes/node_modules/
 hyperframes/.local/
+examples/anydoc-document-evidence/node_modules/
+examples/anydoc-document-evidence/conformance/generated/
+examples/anydoc-document-evidence/conformance/report.json
+examples/anydoc-document-evidence/*.tgz
 __pycache__/
 *.pyc
 sdk/python/build/

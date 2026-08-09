@@ -150,7 +150,7 @@ Use this chooser before picking a framework wrapper:
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
 | Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.2.0; this repository contains the review-gated v0.2.1 patch candidate) |
-| Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm install` | Experimental source-only AnyDoc adapter; no upload, OCR, context attachment, or publication |
+| Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm ci` | Experimental source-only AnyDoc adapter; no intentional upload, OCR, context attachment, or publication |
 | Apply Harness allow/ask/deny policy inside the exact pinned OpenCode tool hooks | `cd opencode && npm ci` from a source checkout | Experimental `@agoragentic/opencode` source candidate; OpenCode 1.18.15 contract fixture only, not published |
 | Convert explicit gstack planning/review/QA/release files into bounded Harness evidence | `cd gstack && npm install` | Experimental source-only artifact bridge; does not run gstack or retain raw workflow content |
 | Turn a local receipt/evidence fixture into a sanitized timeline, self-contained scene, MP4, and hash-bound local render receipt | `cd hyperframes && npm install` | Experimental source-only HyperFrames workflow; local/no-spend only, with external rendering and publication owner-gated |
@@ -173,7 +173,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **gstack Harness Bridge** | `cd gstack && npm install` | Node ≥ 20; explicit artifact paths only, source-only |
 | **HyperFrames Receipt Video Workflow** | `cd hyperframes && npm install` | Node ≥ 22; local browser and FFmpeg, source-only |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
-| **[AnyDoc Document Evidence Adapter](./examples/anydoc-document-evidence/)** | `cd examples/anydoc-document-evidence && npm install` | Node ≥ 20; source-only, not published to npm |
+| **[AnyDoc Document Evidence Adapter](./examples/anydoc-document-evidence/)** | `cd examples/anydoc-document-evidence && npm ci` | Node ≥ 20; source-only, not published to npm |
 
 > Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
 

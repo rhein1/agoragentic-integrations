@@ -1,5 +1,6 @@
 import './network-deny.mjs';
 
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { extname } from 'node:path';
 import { networkBoundaryState } from './network-deny.mjs';
@@ -11,6 +12,10 @@ function codedError(code, message) {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function sha256(value) {
+  return `sha256:${createHash('sha256').update(String(value), 'utf8').digest('hex')}`;
 }
 
 function canonicalFormat(value, job) {
@@ -80,11 +85,23 @@ function validateParserModule(anydoc) {
   }
 }
 
+function installedNativeBinding(packageJson) {
+  for (const packageName of Object.keys(packageJson.optionalDependencies || {})) {
+    try {
+      const binding = require(`${packageName}/package.json`);
+      return { package: binding.name, package_version: binding.version };
+    } catch {
+      // Optional native packages for other platforms are expected to be absent.
+    }
+  }
+  return { package: 'bundled_or_unresolved_native_binding', package_version: null };
+}
+
 async function loadParser(job) {
   if (job.parserKind === 'pinned_anydoc') {
     const packageJson = require(`${job.expectedPackage}/package.json`);
-    if (packageJson.version !== job.expectedVersion) {
-      throw codedError('parser_version_mismatch', 'The installed AnyDoc version does not match the adapter pin.');
+    if (packageJson.name !== job.expectedPackage || packageJson.version !== job.expectedVersion) {
+      throw codedError('parser_version_mismatch', 'The installed AnyDoc package does not match the adapter pin.');
     }
     const anydoc = await import(job.expectedPackage);
     validateParserModule(anydoc);
@@ -93,6 +110,7 @@ async function loadParser(job) {
       provenance: {
         package: packageJson.name,
         package_version: packageJson.version,
+        native_binding: installedNativeBinding(packageJson),
         engine: 'firecrawl_anydoc',
         module_kind: 'pinned_dependency',
         attested: true,
@@ -108,6 +126,7 @@ async function loadParser(job) {
     provenance: {
       package: 'custom_parser_module',
       package_version: null,
+      native_binding: null,
       engine: 'custom_parser_module',
       module_kind: 'test_only_custom_module',
       module_reference: job.parserLabel,
@@ -124,21 +143,23 @@ function addNested(queue, value, limit) {
   return true;
 }
 
+function unavailableStructure(status = 'unavailable') {
+  return {
+    status,
+    block_count: 0,
+    table_count: 0,
+    note_count: 0,
+    asset_count: 0,
+    asset_bytes: 0,
+    traversal_truncated: false,
+  };
+}
+
 function inspectDocumentModel(document, limit) {
-  if (!document || !Array.isArray(document.blocks)) {
-    return {
-      status: 'unavailable',
-      block_count: 0,
-      table_count: 0,
-      note_count: 0,
-      asset_count: 0,
-      asset_bytes: 0,
-      traversal_truncated: false,
-    };
-  }
+  if (!document || !Array.isArray(document.blocks)) return unavailableStructure();
 
   const queue = document.blocks.slice(0, limit + 1);
-  let traversalTruncated = document.blocks.length > limit + 1;
+  let traversalTruncated = document.blocks.length > limit;
   let cursor = 0;
   let blockCount = 0;
   let tableCount = 0;
@@ -210,6 +231,14 @@ function boundedString(value, maximum) {
   return value.slice(0, end);
 }
 
+function environmentBoundary() {
+  const keys = Object.keys(process.env).sort();
+  return {
+    inherited_keys: keys,
+    sensitive_key_count: keys.filter((key) => /key|token|secret|password|credential|wallet|cookie|auth/i.test(key)).length,
+  };
+}
+
 async function parse(job) {
   if (!Buffer.isBuffer(job.bytes) || job.bytes.byteLength === 0) {
     throw codedError('invalid_worker_input', 'The parser process requires non-empty document bytes.');
@@ -226,10 +255,10 @@ async function parse(job) {
   let documentModelStatus;
   let documentModelError = null;
   if (resolved.format === 'pdf') {
-    structure = inspectDocumentModel(null, job.maxTraversalBlocks);
+    structure = unavailableStructure();
     documentModelStatus = 'unsupported_for_pdf';
   } else if (!job.inspectStructure) {
-    structure = inspectDocumentModel(null, job.maxTraversalBlocks);
+    structure = unavailableStructure();
     documentModelStatus = 'disabled_by_caller';
   } else {
     try {
@@ -238,10 +267,7 @@ async function parse(job) {
       documentModelStatus = structure.status;
     } catch (error) {
       documentModelError = error?.code ? String(error.code) : 'document_model_failed';
-      structure = {
-        ...inspectDocumentModel(null, job.maxTraversalBlocks),
-        status: 'failed',
-      };
+      structure = unavailableStructure('failed');
       documentModelStatus = 'failed';
     }
   }
@@ -254,17 +280,33 @@ async function parse(job) {
     detected_by: resolved.detected_by,
     markdown: boundedMarkdown,
     original_markdown_chars: markdown.length,
+    original_markdown_hash: sha256(markdown),
     markdown_truncated: boundedMarkdown.length < markdown.length,
     structure,
     document_model_status: documentModelStatus,
     document_model_error: documentModelError,
     provenance,
     network_boundary: networkBoundaryState(),
+    environment_boundary: environmentBoundary(),
     resource_usage: process.resourceUsage(),
   };
 }
 
 function publicError(error) {
+  let current = error;
+  while (current) {
+    if (current.code === 'network_disabled') {
+      return { code: 'network_disabled', cause_code: null };
+    }
+    if (current.code === 'ERR_ACCESS_DENIED') {
+      return {
+        code: 'permission_boundary_violation',
+        cause_code: null,
+        permission: typeof current.permission === 'string' ? current.permission : null,
+      };
+    }
+    current = current.cause;
+  }
   return {
     code: typeof error?.code === 'string' ? error.code : 'parser_worker_failed',
     cause_code: typeof error?.cause?.code === 'string' ? error.cause.code : null,
@@ -273,9 +315,7 @@ function publicError(error) {
 
 function respond(message) {
   if (!process.send) process.exit(1);
-  process.send(message, () => {
-    process.disconnect();
-  });
+  process.send(message, () => process.disconnect());
 }
 
 process.once('message', async (job) => {

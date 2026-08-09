@@ -159,7 +159,8 @@ function assertInventoryCoverage(manifest) {
   for (const entry of packageExamples) {
     const source = `examples/${entry.name}`;
     const prefix = `${source}/`;
-    const packageJson = JSON.parse(fs.readFileSync(path.join(examplesRoot, entry.name, 'package.json'), 'utf8'));
+    const packagePath = path.join(examplesRoot, entry.name, 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
     if (!integrationPaths.some((candidate) => candidate.startsWith(prefix))) {
       fail(`package-bearing example is missing from integrations.json.integrations: ${source}`);
     }
@@ -173,6 +174,20 @@ function assertInventoryCoverage(manifest) {
       }
       if (!['published', 'source_only'].includes(packageEntry.distribution_status)) {
         fail(`canonical package entry must declare distribution_status for ${source}`);
+      }
+      if (packageEntry.distribution_status === 'source_only' && packageJson.private !== true) {
+        fail(`${source}/package.json must remain private while canonical distribution_status is source_only`);
+      }
+      if (source === 'examples/anydoc-document-evidence') {
+        const lockPath = path.join(examplesRoot, entry.name, 'package-lock.json');
+        if (!fs.existsSync(lockPath)) {
+          fail(`${source} is missing its canonical package-lock.json`);
+        } else {
+          const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+          if (lock.packages?.['']?.version !== packageJson.version) {
+            fail(`${source}/package-lock.json root version must match package.json`);
+          }
+        }
       }
     }
   }
@@ -213,8 +228,9 @@ function assertDiscoveryParity(manifest) {
     fail(`llms-full.txt must state the canonical manifest count (${manifest.integrations.length})`);
   }
   if (manifest.discovery?.anydoc_document_evidence !== 'examples/anydoc-document-evidence/README.md'
-    || manifest.discovery?.anydoc_document_evidence_adapter !== 'examples/anydoc-document-evidence/agoragentic-anydoc.mjs') {
-    fail('discovery must expose the AnyDoc package documentation and adapter entrypoint');
+    || manifest.discovery?.anydoc_document_evidence_adapter !== 'examples/anydoc-document-evidence/agoragentic-anydoc.mjs'
+    || manifest.discovery?.anydoc_semantic_conformance !== 'examples/anydoc-document-evidence/conformance/README.md') {
+    fail('discovery must expose the AnyDoc package documentation, adapter, and semantic conformance contract');
   }
   if (/npm publication pending/i.test(llms)) {
     fail('llms.txt must not claim Harness Core npm publication is pending');

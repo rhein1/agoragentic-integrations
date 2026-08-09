@@ -16,7 +16,7 @@
 - HyperFrames receipt video workflow: `cd hyperframes && npm install` from a source checkout (experimental local-only receipt/evidence renderer; deterministic sanitized scenes and hash-bound MP4 receipt, with no external rendering, hosted deployment, provider, publication, listing, x402, or spend authority)
 - Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
-- AnyDoc Document Evidence Adapter: `cd examples/anydoc-document-evidence && npm install` (experimental source-only Node >=20 package; local process-isolated parsing with explicit evidence coverage and completeness blockers)
+- AnyDoc Document Evidence Adapter: `cd examples/anydoc-document-evidence && npm ci` (experimental source-only Node >=20 package; local process-isolated parsing with explicit evidence coverage and completeness blockers)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -41,7 +41,7 @@
 - HyperFrames receipt video workflow: hyperframes/README.md (local deterministic receipt/evidence timeline and MP4 renderer; internal/growth only, external actions owner-gated)
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
 - Buzz Signed Workspace Evidence: examples/buzz-signed-workspace-evidence/README.md (experimental local compiler for exported events; exact source pin, hash-only metadata by default, typed but unverified attestation references, and no relay/signing/posting/payment/listing authority)
-- AnyDoc Document Evidence Adapter: examples/anydoc-document-evidence/README.md (experimental local parser boundary; no upload, OCR fallback, context attachment, publication, or spend)
+- AnyDoc Document Evidence Adapter: examples/anydoc-document-evidence/README.md (experimental local parser boundary; no intentional upload, OCR fallback, context attachment, publication, or spend)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
@@ -114,6 +114,7 @@
 - pipecat/README.md — beta Pipecat direct functions for match and execute
 - examples/buzz-signed-workspace-evidence/README.md — experimental Block Buzz/Nostr event evidence compiler; source-review pin only, not live compatibility evidence
 - examples/anydoc-document-evidence/README.md — source-only AnyDoc package, bounded parser process, evidence coverage, semantic warnings, and completeness-blocked handoff
+- examples/anydoc-document-evidence/conformance/README.md — public-safe semantic fixtures, independently observed sandbox controls, and non-readiness boundaries
 - crawl4ai/README.md — experimental local-only Crawl4AI evidence adapter with per-hop SSRF controls, offline parsing, citations, trap scan, and zero hosted/listing/x402 authority
 - crawl4ai/crawl4ai.local-provider.manifest.json — machine-readable Crawl4AI capabilities, exact upstream pin, hard limits, artifacts, and disabled operational surfaces
 

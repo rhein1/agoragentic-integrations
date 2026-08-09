@@ -20,6 +20,7 @@ const DEFAULT_PARSER_MEMORY_MB = 256;
 const HARD_PARSER_MEMORY_MB = 1_024;
 const MAX_TRAVERSAL_BLOCKS = 100_000;
 const MAX_PARSER_STDERR_BYTES = 64 * 1024;
+const PARSER_TERMINATION_GRACE_MS = 2_000;
 const READ_CHUNK_BYTES = 64 * 1024;
 const WORKER_PATH = fileURLToPath(new URL('./parser-worker.mjs', import.meta.url));
 
@@ -145,7 +146,7 @@ const FORMAT_LIMITATIONS = Object.freeze({
 
 export class AnyDocEvidenceError extends Error {
   constructor(code, message, options = {}) {
-    super(message, options);
+    super(message, options.cause ? { cause: options.cause } : undefined);
     this.name = 'AnyDocEvidenceError';
     this.code = code;
     this.retryable = options.retryable === true;
@@ -299,8 +300,15 @@ function mapWorkerError(error) {
   if (code === 'network_disabled') {
     return new AnyDocEvidenceError(
       'network_boundary_violation',
-      'The parser attempted a network operation and was stopped.',
+      'The parser attempted a Node network operation and was stopped.',
       { causeCode: code },
+    );
+  }
+  if (code === 'permission_boundary_violation') {
+    return new AnyDocEvidenceError(
+      'parser_permission_boundary_violation',
+      'The parser attempted an operation denied by its process permission boundary.',
+      { causeCode: error?.permission || code },
     );
   }
   const known = {
@@ -382,7 +390,7 @@ function permissionExecArgs(readRoots) {
   if (!permissionFlag || !flags.has('--allow-fs-read')) {
     throw new AnyDocEvidenceError(
       'parser_sandbox_unavailable',
-      'This Node.js runtime cannot enforce the parser filesystem boundary.',
+      'This Node.js runtime cannot enforce the parser filesystem and process boundary.',
     );
   }
 
@@ -406,18 +414,21 @@ function sanitizedParserEnvironment() {
 }
 
 function runParserProcess(job, limits, descriptor) {
-  let anydocEntry;
-  try {
-    anydocEntry = require.resolve(ANYDOC_PACKAGE);
-  } catch {
-    throw new AnyDocEvidenceError(
-      'parser_dependency_missing',
-      `Install the pinned ${ANYDOC_PACKAGE}@${ANYDOC_VERSION} dependency before parsing.`,
-    );
+  const readRoots = [dirname(WORKER_PATH)];
+  if (descriptor.kind === 'pinned_anydoc') {
+    let anydocEntry;
+    try {
+      anydocEntry = require.resolve(ANYDOC_PACKAGE);
+    } catch {
+      throw new AnyDocEvidenceError(
+        'parser_dependency_missing',
+        `Install the pinned ${ANYDOC_PACKAGE}@${ANYDOC_VERSION} dependency before parsing.`,
+      );
+    }
+    readRoots.push(findNodeModulesRoot(anydocEntry));
   }
-
-  const readRoots = [dirname(WORKER_PATH), findNodeModulesRoot(anydocEntry)];
   if (descriptor.readRoot) readRoots.push(descriptor.readRoot);
+
   const execArgv = [
     `--max-old-space-size=${limits.parserMemoryMb}`,
     ...permissionExecArgs(readRoots),
@@ -443,102 +454,157 @@ function runParserProcess(job, limits, descriptor) {
     }
 
     let settled = false;
+    let pendingOutcome = null;
+    let deadlineTimer;
+    let terminationTimer;
     let stderrBytes = 0;
 
-    const stop = () => {
+    const disconnect = () => {
       try {
         if (child.connected) child.disconnect();
       } catch {
         // The IPC channel already closed between the state check and disconnect.
       }
+    };
+    const sendKill = () => {
       try {
         if (!child.killed) child.kill('SIGKILL');
       } catch {
         // The process already exited between the state check and termination.
       }
     };
-    const succeed = (value) => {
+    const finish = (outcome) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
-      stop();
+      clearTimeout(deadlineTimer);
+      clearTimeout(terminationTimer);
+      if (!outcome.ok) {
+        rejectPromise(outcome.error);
+        return;
+      }
       resolvePromise({
-        result: value,
+        result: outcome.result,
         boundary: {
           process_isolated: true,
-          killable: true,
+          killable_by_parent: true,
+          termination_confirmed: true,
+          termination_signal: 'SIGKILL',
+          deadline_enforced: true,
           timeout_ms: limits.parserTimeoutMs,
-          max_old_space_mb: limits.parserMemoryMb,
+          v8_heap_limit_mb: limits.parserMemoryMb,
+          native_memory_limit_enforced: false,
           max_input_bytes: limits.maxInputBytes,
           max_markdown_chars: limits.maxMarkdownChars,
           max_traversal_blocks: limits.maxTraversalBlocks,
-          filesystem_policy: 'read_only_allowlist',
+          filesystem_policy: 'node_permission_read_allowlist',
+          filesystem_write_allowed: false,
           child_process_allowed: false,
-          network_policy: 'node_api_deny_guard',
+          worker_threads_allowed: false,
+          network_policy: 'deny',
           network_enforcement: 'node_api_guard',
+          network_verified_absent: false,
           native_syscall_isolation: false,
+          os_sandbox_required_for_native_isolation: true,
         },
       });
     };
-    const fail = (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      stop();
-      rejectPromise(error);
+    const requestTermination = (outcome) => {
+      if (settled || pendingOutcome) return;
+      pendingOutcome = outcome;
+      clearTimeout(deadlineTimer);
+      disconnect();
+      sendKill();
+      terminationTimer = setTimeout(() => {
+        finish({
+          ok: false,
+          error: new AnyDocEvidenceError(
+            'parser_termination_unconfirmed',
+            `The parser did not confirm termination within ${PARSER_TERMINATION_GRACE_MS} ms.`,
+          ),
+        });
+      }, PARSER_TERMINATION_GRACE_MS);
     };
 
-    const timer = setTimeout(() => {
-      fail(new AnyDocEvidenceError(
-        'parser_timeout',
-        `The isolated parser exceeded ${limits.parserTimeoutMs} ms and was terminated.`,
-      ));
+    deadlineTimer = setTimeout(() => {
+      requestTermination({
+        ok: false,
+        error: new AnyDocEvidenceError(
+          'parser_timeout',
+          `The isolated parser exceeded ${limits.parserTimeoutMs} ms and was terminated.`,
+        ),
+      });
     }, limits.parserTimeoutMs);
-    timer.unref?.();
+    deadlineTimer.unref?.();
 
     child.stderr.on('data', (chunk) => {
       stderrBytes += chunk.byteLength;
       if (stderrBytes > MAX_PARSER_STDERR_BYTES) {
-        fail(new AnyDocEvidenceError(
-          'parser_resource_limit',
-          'The isolated parser exceeded its diagnostic output limit.',
-        ));
+        requestTermination({
+          ok: false,
+          error: new AnyDocEvidenceError(
+            'parser_resource_limit',
+            'The isolated parser exceeded its diagnostic output limit.',
+          ),
+        });
       }
     });
     child.once('error', () => {
-      fail(new AnyDocEvidenceError('parser_process_failed', 'The isolated parser process failed to start.'));
+      if (pendingOutcome) return;
+      finish({
+        ok: false,
+        error: new AnyDocEvidenceError('parser_process_failed', 'The isolated parser process failed to start.'),
+      });
     });
     child.once('exit', (code, signal) => {
       if (settled) return;
-      const resourceFailure = signal || code === 134;
-      fail(new AnyDocEvidenceError(
-        resourceFailure ? 'parser_resource_limit' : 'parser_process_failed',
-        resourceFailure
-          ? 'The isolated parser was terminated by its process resource boundary.'
-          : 'The isolated parser exited before returning a result.',
-      ));
+      if (pendingOutcome) {
+        finish(pendingOutcome);
+        return;
+      }
+      const resourceFailure = signal || code === 134 || code === 3221225477;
+      finish({
+        ok: false,
+        error: new AnyDocEvidenceError(
+          resourceFailure ? 'parser_resource_limit' : 'parser_process_failed',
+          resourceFailure
+            ? 'The isolated parser was terminated by its process resource boundary.'
+            : 'The isolated parser exited before returning a result.',
+        ),
+      });
     });
     child.once('message', (message) => {
       if (!message || message.ok !== true) {
-        fail(mapWorkerError(message?.error));
+        requestTermination({ ok: false, error: mapWorkerError(message?.error) });
         return;
       }
-      succeed(message.result);
+      requestTermination({ ok: true, result: message.result });
     });
 
-    child.send({
-      ...job,
-      parserKind: descriptor.kind,
-      parserSpecifier: descriptor.specifier,
-      parserLabel: descriptor.label,
-      expectedPackage: ANYDOC_PACKAGE,
-      expectedVersion: ANYDOC_VERSION,
-      supportedFormats: SUPPORTED_FORMATS,
-      formatAliases: FORMAT_ALIASES,
-      extensionToFormat: EXTENSION_TO_FORMAT,
-    }, (error) => {
-      if (error) fail(new AnyDocEvidenceError('parser_process_failed', 'Parser input transfer failed.'));
-    });
+    try {
+      child.send({
+        ...job,
+        parserKind: descriptor.kind,
+        parserSpecifier: descriptor.specifier,
+        parserLabel: descriptor.label,
+        expectedPackage: ANYDOC_PACKAGE,
+        expectedVersion: ANYDOC_VERSION,
+        supportedFormats: SUPPORTED_FORMATS,
+        formatAliases: FORMAT_ALIASES,
+        extensionToFormat: EXTENSION_TO_FORMAT,
+      }, (error) => {
+        if (error) {
+          requestTermination({
+            ok: false,
+            error: new AnyDocEvidenceError('parser_process_failed', 'Parser input transfer failed.'),
+          });
+        }
+      });
+    } catch {
+      requestTermination({
+        ok: false,
+        error: new AnyDocEvidenceError('parser_process_failed', 'Parser input transfer failed.'),
+      });
+    }
   });
 }
 
@@ -587,6 +653,8 @@ function parseCompleteness(parsed, coverage) {
     blockers.push('document_structure_unavailable');
   }
   if (parsed.structure.traversal_truncated) blockers.push('document_structure_traversal_incomplete');
+  if (parsed.structure.asset_count > 0) blockers.push('embedded_assets_not_in_evidence_packet');
+  if (parsed.structure.note_count > 0) blockers.push('document_notes_require_review');
   if (!parsed.provenance.attested) blockers.push('custom_parser_provenance_unverified');
   return {
     status: blockers.length === 0 ? 'complete' : 'incomplete',
@@ -595,7 +663,16 @@ function parseCompleteness(parsed, coverage) {
   };
 }
 
-function buildReceipt({ sourceHash, outputHash, evidenceUnits, structure, parser, completeness, coverage }) {
+function buildReceipt({
+  sourceHash,
+  outputHash,
+  parserOutputHash,
+  evidenceUnits,
+  structure,
+  parser,
+  completeness,
+  coverage,
+}) {
   return {
     schema: 'agoragentic.parse-receipt.v1',
     receipt_type: 'document_parse_receipt',
@@ -606,6 +683,7 @@ function buildReceipt({ sourceHash, outputHash, evidenceUnits, structure, parser
     parser_version: parser.package_version,
     parser_mode: parser.attested ? 'isolated_local_fast_path' : 'isolated_custom_test_module',
     source_hashes: [sourceHash],
+    parser_output_hash: parserOutputHash,
     output_hash: outputHash,
     evidence_unit_count: evidenceUnits.length,
     evidence_coverage: coverage,
@@ -666,7 +744,7 @@ export async function convertBytesToEvidence(input = {}, options = {}) {
   const parserTimeoutMs = boundedInteger(
     options.parserTimeoutMs,
     DEFAULT_PARSER_TIMEOUT_MS,
-    1,
+    50,
     HARD_PARSER_TIMEOUT_MS,
     'parserTimeoutMs',
   );
@@ -744,6 +822,7 @@ export async function convertBytesToEvidence(input = {}, options = {}) {
   const receipt = buildReceipt({
     sourceHash,
     outputHash,
+    parserOutputHash: parsed.original_markdown_hash,
     evidenceUnits,
     structure: parsed.structure,
     parser: parsed.provenance,
@@ -769,12 +848,16 @@ export async function convertBytesToEvidence(input = {}, options = {}) {
         status: parsed.network_boundary.attempts > 0 ? 'attempt_blocked' : 'not_observed',
         verified_absent: false,
         attempted_node_api_calls: parsed.network_boundary.attempts,
-        observation_scope: 'node_network_apis_only',
+        last_attempted_api: parsed.network_boundary.last_api,
+        observation_scope: parsed.network_boundary.observation_scope,
+        native_syscalls_observed: false,
+        verification_requirement: 'Run under an independently enforced OS network sandbox before claiming no network.',
       },
       ocr_used: parsed.provenance.attested ? false : 'unknown',
       parser_executed_by_adapter: true,
       document_model_status: parsed.document_model_status,
       document_model_error: parsed.document_model_error,
+      environment_boundary: parsed.environment_boundary,
       resource_usage: parsed.resource_usage,
     },
     source: {
@@ -791,6 +874,7 @@ export async function convertBytesToEvidence(input = {}, options = {}) {
       markdown: parsed.markdown,
       markdown_chars: parsed.markdown.length,
       original_markdown_chars: parsed.original_markdown_chars,
+      parser_output_hash: parsed.original_markdown_hash,
       output_hash: outputHash,
       truncated: truncationReasons.length > 0,
       truncation_reasons: truncationReasons,
@@ -867,11 +951,16 @@ async function readFileBounded(filePath, maxInputBytes) {
       causeCode: error?.code || null,
     });
   } finally {
-    await handle?.close();
+    try {
+      await handle?.close();
+    } catch {
+      // The read result or original read error remains authoritative.
+    }
   }
 }
 
 export async function convertFileToEvidence(filePath, options = {}) {
+  const normalizedPath = filePath instanceof URL ? fileURLToPath(filePath) : String(filePath);
   const maxInputBytes = boundedInteger(
     options.maxInputBytes,
     DEFAULT_MAX_INPUT_BYTES,
@@ -879,10 +968,10 @@ export async function convertFileToEvidence(filePath, options = {}) {
     HARD_MAX_INPUT_BYTES,
     'maxInputBytes',
   );
-  const bytes = await readFileBounded(filePath, maxInputBytes);
+  const bytes = await readFileBounded(normalizedPath, maxInputBytes);
   return convertBytesToEvidence({
     bytes,
-    filename: options.filename || basename(filePath),
+    filename: options.filename || basename(normalizedPath),
     format: options.format,
   }, options);
 }

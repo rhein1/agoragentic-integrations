@@ -1,5 +1,5 @@
 {
-  "version": "2.37.0",
+  "version": "2.38.0",
   "updated_at": "2026-08-09",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -96,7 +96,7 @@
     },
     "anydoc_document_evidence": {
       "name": "@agoragentic/anydoc-document-evidence",
-      "install": "cd examples/anydoc-document-evidence && npm install",
+      "install": "cd examples/anydoc-document-evidence && npm ci",
       "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/examples/anydoc-document-evidence",
       "distribution_status": "source_only",
       "source": "examples/anydoc-document-evidence",
@@ -1319,7 +1319,7 @@
       "language": "javascript",
       "status": "experimental",
       "path": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
-      "install": "cd examples/anydoc-document-evidence && npm install",
+      "install": "cd examples/anydoc-document-evidence && npm ci",
       "docs": "examples/anydoc-document-evidence/README.md"
     },
     {
@@ -1513,6 +1513,7 @@
     "buzz_signed_workspace_evidence": "examples/buzz-signed-workspace-evidence/README.md",
     "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json",
     "anydoc_document_evidence": "examples/anydoc-document-evidence/README.md",
-    "anydoc_document_evidence_adapter": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs"
+    "anydoc_document_evidence_adapter": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
+    "anydoc_semantic_conformance": "examples/anydoc-document-evidence/conformance/README.md"
   }
 }

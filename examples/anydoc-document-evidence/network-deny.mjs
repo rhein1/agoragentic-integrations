@@ -31,17 +31,21 @@ function replace(target, key, api) {
   }
 }
 
-for (const key of ['request', 'get']) replace(http, key, `http.${key}`);
-for (const key of ['request', 'get']) replace(https, key, `https.${key}`);
+for (const key of ['request', 'get', 'createServer']) replace(http, key, `http.${key}`);
+for (const key of ['request', 'get', 'createServer']) replace(https, key, `https.${key}`);
 replace(http.Agent?.prototype, 'createConnection', 'http.Agent.createConnection');
 replace(https.Agent?.prototype, 'createConnection', 'https.Agent.createConnection');
-replace(http2, 'connect', 'http2.connect');
+for (const key of ['connect', 'createServer', 'createSecureServer']) replace(http2, key, `http2.${key}`);
 
-for (const key of ['connect', 'createConnection']) replace(net, key, `net.${key}`);
+for (const key of ['connect', 'createConnection', 'createServer']) replace(net, key, `net.${key}`);
 replace(net.Socket?.prototype, 'connect', 'net.Socket.connect');
+replace(net.Server?.prototype, 'listen', 'net.Server.listen');
 replace(tls, 'connect', 'tls.connect');
+replace(tls, 'createServer', 'tls.createServer');
+replace(tls.TLSSocket?.prototype, 'connect', 'tls.TLSSocket.connect');
 
 replace(dgram, 'createSocket', 'dgram.createSocket');
+replace(dgram.Socket?.prototype, 'bind', 'dgram.Socket.bind');
 replace(dgram.Socket?.prototype, 'connect', 'dgram.Socket.connect');
 replace(dgram.Socket?.prototype, 'send', 'dgram.Socket.send');
 
@@ -65,5 +69,10 @@ for (const key of ['fetch', 'WebSocket', 'EventSource']) {
 syncBuiltinESMExports();
 
 export function networkBoundaryState() {
-  return { ...state };
+  return {
+    attempts: state.attempts,
+    last_api: state.last_api,
+    observation_scope: 'node_builtin_and_global_network_apis',
+    native_syscalls_observed: false,
+  };
 }
