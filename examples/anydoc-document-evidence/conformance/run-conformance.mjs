@@ -37,7 +37,7 @@ const PINNED_FIXTURE_DEPENDENCIES = Object.freeze({
   'et-xmlfile': '2.0.0',
   lxml: '6.1.1',
   openpyxl: '3.1.5',
-  Pillow: '11.3.0',
+  Pillow: '12.3.0',
   'python-docx': '1.2.0',
   'python-pptx': '1.0.2',
   reportlab: '4.4.3',
