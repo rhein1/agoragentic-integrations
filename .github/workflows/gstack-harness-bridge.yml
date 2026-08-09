@@ -43,3 +43,4 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm install --no-audit --no-fund
       - run: npm test
+      - run: npm run test:core-compat

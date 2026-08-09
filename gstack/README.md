@@ -46,6 +46,12 @@ The bridge retains, per supplied artifact:
 
 It does **not** retain raw workflow content, extract a success claim from the content, or infer that gstack actually ran. A `proposal_ready` listing-readiness artifact means only that the supplied local evidence bundle and Harness project passed these local gates. It still requires owner review and does not publish anything.
 
+## Harness Core compatibility evidence
+
+The published npm `latest` line remains Harness Core `0.2.0`; the source tree's review-gated `0.3.0` candidate is verified separately. `npm run test:core-compat` packs the sibling `../harness-core` source into a temporary tarball, installs that tarball in a temporary consumer while resolving its declared package dependencies, and runs the bridge fixture suite against it. The targeted regression checks the generated Harness provenance is exactly `0.3.0` and keeps the zero-spend, no-gstack-execution, no-hosted-billing, and no-marketplace-publication boundaries intact.
+
+This is local package compatibility evidence only. It does not publish Harness Core, change the bridge's published dependency line, execute gstack, call a provider, deploy a runtime, or grant any hosted authority.
+
 ## Authority boundary
 
 The bridge has no tool to:
@@ -65,9 +71,10 @@ Harness receipts remain clearly labeled local/no-spend receipts. They are not se
 ```bash
 npm run check
 npm test
+npm run test:core-compat
 ```
 
-The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, and the documented CLI command.
+The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, the documented CLI command, and a packed local Harness Core `0.3.0` compatibility regression. The repository CI executes that regression on Node 20, 22, and 24.
 
 ## License
 

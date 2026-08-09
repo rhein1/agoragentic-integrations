@@ -18,6 +18,7 @@ const fixtureArtifacts = Object.freeze({
   release: path.join(root, 'fixtures', 'artifacts', 'release.md'),
 });
 const createdAt = '2026-08-08T00:00:00.000Z';
+const expectedHarnessCoreVersion = process.env.AGORAGENTIC_HARNESS_CORE_EXPECTED_VERSION?.trim() || null;
 
 async function tempRoot() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'agoragentic-gstack-'));
@@ -74,6 +75,31 @@ test('explicit fixture artifacts produce existing Harness artifact families with
   assert.equal(serialized.includes('Implement a local parser'), false);
   assert.equal(serialized.includes(path.dirname(fixtureProject)), false);
 });
+
+if (expectedHarnessCoreVersion) {
+  test(`packed Harness Core ${expectedHarnessCoreVersion} preserves local provenance and no-spend boundaries`, async t => {
+    const temp = await tempRoot();
+    t.after(() => fs.rm(temp, { recursive: true, force: true }));
+    const out = path.join(temp, 'core-compatibility');
+    const result = await compileGstackArtifacts({
+      projectDir: fixtureProject,
+      outDir: out,
+      artifacts: fixtureArtifacts,
+      createdAt,
+    });
+
+    assert.equal(result.ok, true);
+    const packet = await readOutput(out, 'agent-os-harness.json');
+    const receipt = await readOutput(out, 'local-receipt.json');
+    assert.equal(packet.generated_from?.source, 'agoragentic-harness-core');
+    assert.equal(packet.generated_from?.package_version, expectedHarnessCoreVersion);
+    assert.equal(packet.generated_from?.local_only, true);
+    assert.equal(packet.public_boundary?.hosted_billing, false);
+    assert.equal(packet.public_boundary?.marketplace_publication, false);
+    assert.equal(receipt.spend.amount_usdc, 0);
+    assert.equal(receipt.receipt_boundary.gstack_executed, false);
+  });
+}
 
 test('a missing stage writes BLOCKED evidence and omits the Agent OS export', async t => {
   const temp = await tempRoot();
