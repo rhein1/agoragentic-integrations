@@ -58,9 +58,10 @@ export function mapOpenCodeToolCall(input = {}, output = {}) {
   };
 }
 
-export function evaluateOpenCodeAction(policy = {}, action = {}) {
+export function evaluateOpenCodeAction(policy = {}, action = {}, { platform = process.platform } = {}) {
   const evaluation = evaluateClaudeCodeAction(policy, action);
   const reasons = [...evaluation.reasons];
+  const blockedPatchTarget = matchingBlockedPatchTarget(policy, action, platform);
   if (action.target_parse_error) {
     reasons.push({
       code: action.target_parse_error,
@@ -68,19 +69,27 @@ export function evaluateOpenCodeAction(policy = {}, action = {}) {
       detail: 'apply_patch target extraction failed closed',
     });
   }
+  if (blockedPatchTarget && !reasons.some((reason) => reason.code === 'blocked_path')) {
+    reasons.push({
+      code: 'blocked_path',
+      level: 'deny',
+      detail: blockedPatchTarget.target,
+    });
+  }
+  const forcedDeny = Boolean(action.target_parse_error || blockedPatchTarget);
   return {
     ...evaluation,
     schema: OPENCODE_DECISION_SCHEMA,
     host: 'opencode',
     tool_name: action.tool_name,
-    decision: action.target_parse_error ? 'deny' : evaluation.decision,
-    risk: action.target_parse_error ? 'high' : evaluation.risk,
+    decision: forcedDeny ? 'deny' : evaluation.decision,
+    risk: forcedDeny ? 'high' : evaluation.risk,
     reasons,
   };
 }
 
-export function decideOpenCodeToolCall(policy, input, output) {
-  return evaluateOpenCodeAction(policy, mapOpenCodeToolCall(input, output));
+export function decideOpenCodeToolCall(policy, input, output, options) {
+  return evaluateOpenCodeAction(policy, mapOpenCodeToolCall(input, output), options);
 }
 
 function canonicalHarnessToolName(toolName) {
@@ -169,4 +178,32 @@ function normalizePatchTarget(value) {
   const normalized = target.replace(/\\/g, '/').replace(/^\.\//, '');
   if (!normalized || normalized.split('/').some((part) => !part || part === '.' || part === '..')) return null;
   return normalized;
+}
+
+function matchingBlockedPatchTarget(policy, action, platform) {
+  if (String(action?.tool_name || '').toLowerCase() !== 'apply_patch') return null;
+  const blockedPaths = policy?.tool_policy?.blocked_paths || policy?.guard_policy?.blocked_paths || [];
+  if (!Array.isArray(blockedPaths) || !Array.isArray(action?.targets)) return null;
+  const windowsPaths = platform === 'win32';
+  for (const target of action.targets) {
+    const normalizedTarget = canonicalPatchPolicyPath(target, { windowsPaths });
+    if (!normalizedTarget) continue;
+    for (const blockedPath of blockedPaths) {
+      const normalizedBlockedPath = canonicalPatchPolicyPath(blockedPath, { windowsPaths });
+      if (normalizedBlockedPath && normalizedTarget.includes(normalizedBlockedPath)) {
+        return { target, blocked_path: blockedPath };
+      }
+    }
+  }
+  return null;
+}
+
+function canonicalPatchPolicyPath(value, { windowsPaths } = {}) {
+  const raw = String(value || '').trim();
+  if (!raw || /[\0\r\n]/.test(raw)) return null;
+  const separatorNormalized = windowsPaths ? raw.replace(/\\/g, '/') : raw;
+  const normalized = separatorNormalized
+    .replace(/^(?:\.\/)+/, '')
+    .replace(/\/{2,}/g, '/');
+  return windowsPaths ? normalized.toLocaleLowerCase('en-US') : normalized;
 }

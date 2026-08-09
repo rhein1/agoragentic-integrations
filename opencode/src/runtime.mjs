@@ -474,14 +474,38 @@ export function createOpenCodeHooks({
     consumed_at,
   }) {
     const refPath = approvalRefPath(action_fingerprint);
+    const approvalBinding = createApprovalBinding({
+      run_id,
+      action,
+      action_fingerprint,
+      policy_hash,
+      input_evidence,
+    });
     const existingRef = await readJsonIfExists(refPath);
     if (existingRef && !existingRef.consumed_at) {
       if (!APPROVAL_ID_PATTERN.test(String(existingRef.approval_id || ''))) {
         throw governanceBlock('approval_ref_invalid', 'deny', 'The local approval reference is invalid.');
       }
+      if (!approvalReferenceMatchesCurrentAction(existingRef, {
+        action_fingerprint,
+        approval_binding: approvalBinding,
+      })) {
+        throw governanceBlock('approval_binding_invalid', 'deny', 'The local approval reference does not bind to this tool action.');
+      }
       const existing = await showApproval(root, existingRef.approval_id);
       if (!existing?.request) {
         throw governanceBlock('approval_state_missing', 'deny', 'The referenced local approval packet is missing.');
+      }
+      if (!approvalRequestMatchesCurrentAction(existing.request, {
+        approval_id: existingRef.approval_id,
+        run_id,
+        action,
+        action_fingerprint,
+        policy_hash,
+        input_evidence,
+        approval_binding: approvalBinding,
+      })) {
+        throw governanceBlock('approval_binding_invalid', 'deny', 'The referenced local approval packet does not bind to this tool action.');
       }
       const state = approvalState(existingRef.approval_id, existing);
       if (state.status === 'approved') {
@@ -505,6 +529,7 @@ export function createOpenCodeHooks({
       input_evidence,
       policy_hash,
       reason_codes,
+      approval_binding: approvalBinding,
     });
   }
 
@@ -569,6 +594,7 @@ export function createOpenCodeHooks({
     input_evidence,
     policy_hash,
     reason_codes,
+    approval_binding,
   }) {
     const request = await createApprovalRequest({
       dir: root,
@@ -581,6 +607,7 @@ export function createOpenCodeHooks({
         action_fingerprint,
         policy_hash,
         input_evidence,
+        approval_binding,
         raw_input_persisted: false,
       },
       risk_class: evaluation.risk,
@@ -596,6 +623,7 @@ export function createOpenCodeHooks({
       action_fingerprint,
       approval_id: request.approval_id,
       approval_ref: approvalRequestRef(request.approval_id),
+      approval_binding,
       raw_input_persisted: false,
       authority_boundary: authorityBoundary(),
     };
@@ -899,12 +927,106 @@ function approvalClaimPath(refPath, approvalId) {
   return `${refPath}.${approvalId}.claim`;
 }
 
+function createApprovalBinding({ run_id, action, action_fingerprint, policy_hash, input_evidence }) {
+  const evidenceShape = approvalEvidenceShape(input_evidence);
+  return {
+    schema: 'agoragentic.harness.opencode-approval-binding.v1',
+    action_fingerprint_ref: opaqueBindingRef('opencode_approval_action', action_fingerprint),
+    policy_hash_ref: opaqueBindingRef('opencode_approval_policy', policy_hash),
+    input_evidence_ref: opaqueBindingRef('opencode_approval_input', evidenceShape),
+    binding_ref: opaqueBindingRef('opencode_approval_binding', {
+      run_id,
+      tool_name: String(action?.tool_name || ''),
+      capability: action?.capability || null,
+      side_effect_class: action?.side_effect_class || null,
+      action_fingerprint,
+      policy_hash,
+      input_evidence: evidenceShape,
+    }),
+  };
+}
+
+function opaqueBindingRef(prefix, value) {
+  // Harness Core redacts complete SHA-256 strings in approval packets. A
+  // 128-bit deterministic reference retains an exact equality invariant over
+  // the raw action/policy/input values without persisting those values.
+  return `${prefix}_${stableHash(value).slice(7, 39)}`;
+}
+
+function approvalEvidenceShape(evidence = {}) {
+  return {
+    hash: evidence.hash || null,
+    hash_complete: evidence.hash_complete === true,
+    serialized_bytes: evidence.serialized_bytes ?? null,
+    value_type: evidence.value_type ?? null,
+    field_count: evidence.field_count ?? null,
+    storage: evidence.storage || null,
+    raw_value_persisted: evidence.raw_value_persisted === true,
+  };
+}
+
+function approvalReferenceMatchesCurrentAction(reference, expected) {
+  return Boolean(
+    reference?.schema === OPENCODE_APPROVAL_REF_SCHEMA
+    && reference.action_fingerprint === expected.action_fingerprint
+    && reference.approval_ref === approvalRequestRef(reference.approval_id)
+    && reference.raw_input_persisted === false
+    && sameApprovalBinding(reference.approval_binding, expected.approval_binding),
+  );
+}
+
+function approvalRequestMatchesCurrentAction(request, expected) {
+  const requestedAction = request?.requested_action;
+  return Boolean(
+    request?.schema === 'agoragentic.harness.approval-request.v1'
+    && request.approval_id === expected.approval_id
+    && request.run_id === expected.run_id
+    && requestedAction?.host === 'opencode'
+    && requestedAction.tool_name === sanitizeText(expected.action.tool_name, { maxLength: 120 })
+    && requestedAction.capability === expected.action.capability
+    && requestedAction.side_effect_class === expected.action.side_effect_class
+    // The visible fields are sanitized by Harness Core; the binding below is
+    // the exact raw-value comparison for these same fingerprints.
+    && requestedAction.action_fingerprint === sanitizeText(expected.action_fingerprint)
+    && requestedAction.policy_hash === sanitizeText(expected.policy_hash)
+    && sanitizedApprovalEvidenceMatches(requestedAction.input_evidence, expected.input_evidence)
+    && requestedAction.raw_input_persisted === false
+    && sameApprovalBinding(requestedAction.approval_binding, expected.approval_binding),
+  );
+}
+
+function sanitizedApprovalEvidenceMatches(actual, expected) {
+  const expectedShape = approvalEvidenceShape(expected);
+  return Boolean(
+    actual
+    && actual.hash === sanitizeText(expectedShape.hash)
+    && actual.hash_complete === expectedShape.hash_complete
+    && actual.serialized_bytes === expectedShape.serialized_bytes
+    && actual.value_type === expectedShape.value_type
+    && actual.field_count === expectedShape.field_count
+    && actual.storage === expectedShape.storage
+    && actual.raw_value_persisted === false,
+  );
+}
+
+function sameApprovalBinding(actual, expected) {
+  return Boolean(
+    actual?.schema === expected?.schema
+    && actual.action_fingerprint_ref === expected.action_fingerprint_ref
+    && actual.policy_hash_ref === expected.policy_hash_ref
+    && actual.input_evidence_ref === expected.input_evidence_ref
+    && actual.binding_ref === expected.binding_ref,
+  );
+}
+
 function sameApprovalReference(current, expected) {
   return Boolean(
     current
     && !current.consumed_at
     && current.approval_id === expected.approval_id
-    && current.action_fingerprint === expected.action_fingerprint,
+    && current.action_fingerprint === expected.action_fingerprint
+    && current.approval_ref === expected.approval_ref
+    && sameApprovalBinding(current.approval_binding, expected.approval_binding),
   );
 }
 

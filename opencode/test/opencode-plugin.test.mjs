@@ -240,6 +240,62 @@ test('changed after-hook arguments emit blocked mismatch evidence instead of a s
   );
 });
 
+test('an approved action cannot be injected into a different action reference', async () => {
+  const directory = await tempDir();
+  const hooks = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: {
+      now_ms: fixedClock([
+        1_700_000_127_000,
+        1_700_000_127_100,
+        1_700_000_127_200,
+        1_700_000_127_300,
+      ]),
+    },
+  });
+  const benignInput = hookInput('write', 'session-cross-binding', 'call-benign');
+  const dangerousInput = hookInput('webfetch', 'session-cross-binding', 'call-dangerous');
+  const benignArgs = { filePath: 'benign.txt', content: 'bounded' };
+  const dangerousArgs = { url: 'https://example.invalid/dangerous' };
+
+  const benignApproval = await requestApproval(hooks, benignInput, benignArgs);
+  const dangerousApproval = await requestApproval(hooks, dangerousInput, dangerousArgs);
+  await decideApproval({
+    dir: directory,
+    approval_id: benignApproval.approval_id,
+    decision: 'approve',
+    note: 'owner-reviewed benign write only',
+  });
+
+  const benignRefPath = await approvalRefPathForApproval(directory, benignApproval.approval_id);
+  const dangerousRefPath = await approvalRefPathForApproval(directory, dangerousApproval.approval_id);
+  const benignRef = JSON.parse(await fs.readFile(benignRefPath, 'utf8'));
+  const dangerousRef = JSON.parse(await fs.readFile(dangerousRefPath, 'utf8'));
+  assert.notEqual(benignRef.action_fingerprint, dangerousRef.action_fingerprint);
+  assert.notEqual(benignRef.approval_binding.binding_ref, dangerousRef.approval_binding.binding_ref);
+
+  // Preserve the current action fingerprint and ref binding while injecting a
+  // different approved packet. The underlying packet must still reject it.
+  await fs.writeFile(dangerousRefPath, `${JSON.stringify({
+    ...dangerousRef,
+    approval_id: benignRef.approval_id,
+    approval_ref: benignRef.approval_ref,
+  }, null, 2)}\n`, 'utf8');
+  await assert.rejects(
+    hooks['tool.execute.before'](dangerousInput, { args: dangerousArgs }),
+    (error) => error instanceof OpenCodeGovernanceBlock && error.code === 'approval_binding_invalid',
+  );
+
+  // Rewriting the mutable reference fields together also fails before the
+  // approved packet can be claimed.
+  await fs.writeFile(dangerousRefPath, `${JSON.stringify(benignRef, null, 2)}\n`, 'utf8');
+  await assert.rejects(
+    hooks['tool.execute.before'](dangerousInput, { args: dangerousArgs }),
+    (error) => error instanceof OpenCodeGovernanceBlock && error.code === 'approval_binding_invalid',
+  );
+});
+
 test('apply_patch inspects every target and fails closed when targets cannot be parsed', async () => {
   const patch = [
     '*** Begin Patch',
@@ -274,6 +330,26 @@ test('apply_patch inspects every target and fails closed when targets cannot be 
   );
   assert.equal(malformed.decision, 'deny');
   assert.ok(malformed.reasons.some((reason) => reason.code === 'apply_patch_targets_unparseable'));
+});
+
+test('Windows matches every parsed apply_patch target case-insensitively without widening POSIX matching', () => {
+  const patch = [
+    '*** Begin Patch',
+    '*** Update File: PRIVATE\\BLOCKED.MD',
+    '@@',
+    '-old',
+    '+new',
+    '*** End Patch',
+  ].join('\n');
+  const policy = { tool_policy: { blocked_paths: ['private\\blocked.md'] } };
+  const input = hookInput('apply_patch', 'session-case', 'call-case');
+  const win32 = decideOpenCodeToolCall(policy, input, { args: { patch } }, { platform: 'win32' });
+  assert.equal(win32.decision, 'deny');
+  assert.ok(win32.reasons.some((reason) => reason.code === 'blocked_path'));
+
+  const linux = decideOpenCodeToolCall(policy, input, { args: { patch } }, { platform: 'linux' });
+  assert.equal(linux.decision, 'ask');
+  assert.equal(linux.reasons.some((reason) => reason.code === 'blocked_path'), false);
 });
 
 test('underscored MCP money tool names are tokenized and denied before execution', async () => {
@@ -536,6 +612,31 @@ function runHarnessCli(harnessCli, args) {
   });
   assert.equal(result.error, undefined, result.error?.message);
   return result;
+}
+
+async function requestApproval(hooks, input, args) {
+  let requested;
+  try {
+    await hooks['tool.execute.before'](input, { args });
+    assert.fail('the action should require approval before execution');
+  } catch (error) {
+    requested = error;
+  }
+  assert.ok(requested instanceof OpenCodeGovernanceBlock);
+  assert.equal(requested.code, 'approval_required');
+  return requested;
+}
+
+async function approvalRefPathForApproval(directory, approvalId) {
+  const root = path.join(directory, '.agoragentic', 'opencode', 'approval-refs');
+  const files = (await listFiles(root)).filter((file) => file.endsWith('.json'));
+  const matches = [];
+  for (const file of files) {
+    const candidate = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (candidate.approval_id === approvalId && !candidate.consumed_at) matches.push(file);
+  }
+  assert.equal(matches.length, 1, `expected one approval ref for ${approvalId}, found ${matches.length}`);
+  return matches[0];
 }
 
 async function tempDir() {
