@@ -36,7 +36,7 @@ Wallets, payment protocols, card networks, identity systems, and marketplaces ea
 
 ## Status
 
-This is an unpublished alpha implementation on a review branch.
+This is a source-visible, unpublished alpha implementation.
 
 - package: `@agoragentic/transaction-assurance`
 - version: `0.2.0-alpha.0`
@@ -46,8 +46,50 @@ This is an unpublished alpha implementation on a review branch.
 - external cryptographic verifiers: trusted in-process callback interface implemented; verifier implementations remain external
 - hosted Agoragentic execution changes: none
 - marketplace catalog entry: intentionally deferred
+- vendor-neutral conformance suite: implemented as an offline source-only alpha
+- external adopter evidence: not yet obtained
 
 `package.json` remains `private: true` until review, conformance fixtures, provenance, and release ownership are complete.
+
+## Vendor-neutral conformance suite
+
+The package includes an offline deterministic suite covering eight profiles:
+
+1. authority and identity;
+2. commercial terms and quote binding;
+3. payment identifier and idempotency;
+4. settlement evidence and finality;
+5. execution and delivery evidence;
+6. outcome validation;
+7. refund, dispute, and reconciliation;
+8. privacy and redaction.
+
+Run the bundled reference evaluator:
+
+```bash
+npm run conformance
+```
+
+Run a local target module and write JSON, JUnit, and a bounded receipt:
+
+```bash
+node bin/run-conformance.mjs \
+  --target-module examples/conformance-targets/x402-resource-server.mjs \
+  --target-name my-x402-server \
+  --target-version 1.0.0 \
+  --target-commit abc123 \
+  --json artifacts/report.json \
+  --junit artifacts/junit.xml \
+  --receipt artifacts/receipt.json
+
+node bin/verify-conformance-receipt.mjs \
+  artifacts/report.json \
+  artifacts/receipt.json
+```
+
+The runner itself makes no network calls and grants no authority. A target module is caller-supplied code and runs with the caller's process permissions; review it before execution. The bundled examples are reference contract fixtures, not external adoption evidence.
+
+See [CONFORMANCE.md](CONFORMANCE.md) for the target-module contract, reusable workflow, version-pinned protocol profiles, and exact claim boundary. See [CONTRIBUTING_CONFORMANCE.md](CONTRIBUTING_CONFORMANCE.md) before proposing a fixture or adapter.
 
 ## Five-minute local proof
 

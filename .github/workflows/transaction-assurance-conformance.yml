@@ -1,0 +1,116 @@
+name: Transaction Assurance Conformance
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'transaction-assurance/**'
+      - '.github/workflows/transaction-assurance-conformance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'transaction-assurance/**'
+      - '.github/workflows/transaction-assurance-conformance.yml'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      suite-ref:
+        description: Immutable agoragentic-integrations commit containing the suite
+        required: true
+        type: string
+      target-module:
+        description: Caller-repository path exporting evaluateTransactionAssuranceVector
+        required: true
+        type: string
+      target-name:
+        required: true
+        type: string
+      target-version:
+        required: true
+        type: string
+      target-commit:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    defaults:
+      run:
+        working-directory: transaction-assurance
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: transaction-assurance/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+      - run: npm run conformance
+      - run: npm run pack:dry
+
+  external-target:
+    if: github.event_name == 'workflow_call'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out caller target
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: target
+      - name: Check out pinned suite
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: rhein1/agoragentic-integrations
+          ref: ${{ inputs.suite-ref }}
+          path: suite
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: suite/transaction-assurance/package-lock.json
+      - name: Install locked suite dependencies
+        working-directory: suite/transaction-assurance
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate immutable suite and target paths
+        env:
+          SUITE_REF: ${{ inputs.suite-ref }}
+          TARGET_MODULE: ${{ inputs.target-module }}
+        run: |
+          node -e "const path=require('node:path'); const ref=process.env.SUITE_REF; if(!/^[0-9a-f]{40}$/.test(ref)) throw new Error('suite-ref must be a 40-character commit'); const root=path.resolve('target'); const target=path.resolve(root, process.env.TARGET_MODULE); if(target !== root && !target.startsWith(root + path.sep)) throw new Error('target-module must remain inside the caller checkout');"
+      - name: Run target conformance
+        env:
+          TARGET_MODULE: ${{ inputs.target-module }}
+          TARGET_NAME: ${{ inputs.target-name }}
+          TARGET_VERSION: ${{ inputs.target-version }}
+          TARGET_COMMIT: ${{ inputs.target-commit }}
+        run: |
+          node suite/transaction-assurance/bin/run-conformance.mjs \
+            --target-module "$GITHUB_WORKSPACE/target/$TARGET_MODULE" \
+            --target-name "$TARGET_NAME" \
+            --target-version "$TARGET_VERSION" \
+            --target-commit "$TARGET_COMMIT" \
+            --json artifacts/report.json \
+            --junit artifacts/junit.xml \
+            --receipt artifacts/receipt.json
+          node suite/transaction-assurance/bin/verify-conformance-receipt.mjs \
+            artifacts/report.json artifacts/receipt.json
+      - name: Upload bounded conformance artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: transaction-assurance-conformance
+          path: artifacts/
+          if-no-files-found: error
