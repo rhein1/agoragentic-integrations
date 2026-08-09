@@ -1,6 +1,6 @@
 {
   "name": "@agoragentic/transaction-assurance",
-  "version": "0.1.0-alpha.0",
+  "version": "0.2.0-alpha.0",
   "description": "Local cross-protocol authority normalization and outcome-assurance envelopes for autonomous agent transactions.",
   "type": "module",
   "license": "Apache-2.0",
@@ -13,6 +13,7 @@
   },
   "exports": {
     ".": "./src/index.mjs",
+    "./protocol-adapters": "./src/protocol-adapters.mjs",
     "./evaluation-evidence": "./src/evaluation-evidence.mjs",
     "./toploc-evidence": "./src/toploc-evidence.mjs"
   },
@@ -20,6 +21,7 @@
     "bin/",
     "src/",
     "schema/",
+    "vendor/",
     "examples/",
     "SKILL.md",
     "README.md",
@@ -29,9 +31,13 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/index.mjs && node --check src/evaluation-evidence.mjs && node --check src/toploc-evidence.mjs && node --check bin/agora-assure.mjs",
+    "check": "node --check src/index.mjs && node --check src/protocol-adapters.mjs && node --check src/evaluation-evidence.mjs && node --check src/toploc-evidence.mjs && node --check bin/agora-assure.mjs && node --check examples/x402-generic-middleware.mjs",
     "self-test": "node bin/agora-assure.mjs self-test",
     "pack:dry": "npm pack --dry-run"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
   },
   "keywords": [
     "ai-agents",

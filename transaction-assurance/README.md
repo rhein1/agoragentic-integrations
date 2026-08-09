@@ -39,11 +39,11 @@ Wallets, payment protocols, card networks, identity systems, and marketplaces ea
 This is an unpublished alpha implementation on a review branch.
 
 - package: `@agoragentic/transaction-assurance`
-- version: `0.1.0-alpha.0`
+- version: `0.2.0-alpha.0`
 - network calls: none
 - spend authority: none
 - protocol recognition: implemented
-- external cryptographic verifiers: not yet implemented
+- external cryptographic verifiers: trusted in-process callback interface implemented; verifier implementations remain external
 - hosted Agoragentic execution changes: none
 - marketplace catalog entry: intentionally deferred
 
@@ -291,9 +291,42 @@ A hash can still reveal equality and may be sensitive when computed over a small
 
 ## Protocol adapters
 
-The initial implementation performs conservative structural recognition and generic field normalization. It does not yet implement cryptographic verification for AP2, TAP, official ACP, x402 signed artifacts, Circle, Skyfire, or Verifiable Intent.
+Version-specific, no-network adapters are available from the package root or the `./protocol-adapters` export:
 
-A production adapter must:
+```javascript
+import {
+  normalizeAp2Authority,
+  normalizeVisaTapEvidence,
+  normalizeOfficialAcpEvidence,
+  normalizeX402Evidence,
+  bindX402OutcomeEvidence,
+  normalizeCircleWalletPolicyEvidence,
+  normalizeSkyfireKyaPayEvidence,
+  normalizeMastercardVerifiableIntentEvidence,
+} from '@agoragentic/transaction-assurance/protocol-adapters';
+```
+
+Supported source pins are exported as `PROTOCOL_ADAPTER_PINS`:
+
+| Adapter | Supported public source |
+| --- | --- |
+| Google AP2 | `v0.2.0` / `b4587ac1...` |
+| Visa Trusted Agent Protocol | commit `16d59bdf...` |
+| official OpenAI/Stripe ACP | released schema `2026-04-17` at `7fdd78df...` |
+| x402 offer/receipt + Payment Identifier | `@x402/core` `2.21.0` at `34cb6bd0...` |
+| Circle Agent Stack policy evidence | `circlefin/skills` commit `c7d269a2...` |
+| Skyfire KYA/KYAPay evidence | `skyfire-xyz/kyapay` commit `869a71ae...` |
+| Mastercard Verifiable Intent | public-materials snapshot `2026-08-08`; no immutable public schema, so verifier promotion is rejected and private-network compatibility is unknown |
+
+The adapters do not verify signatures themselves. A separately controlled verifier must be supplied as a trusted in-process callback. The callback returns a strict `agoragentic.protocol-verifier-evidence.v1` record that binds the exact protocol version, source artifact hash, normalized binding hash, durable evidence references, timestamp, revocation result, and every protocol-specific check. The library also binds the verified result to that callback through a non-serializable process-local trust boundary. A caller cannot turn parsing into `verified` by supplying JSON or setting a status string, and a serialize/deserialize round trip deliberately loses verified authority. Mismatched hashes, missing checks, false checks under a `verified` claim, unknown versions, inactive revocation, and missing callback provenance all fail closed.
+
+x402 signed-offer, signed-receipt, and settlement callbacks return the narrower `agoragentic.signed-artifact-verifier-evidence.v1` record. Each result binds the exact artifact hash and a purpose-specific binding hash. Challenge observation, payment submission, payment observation, verified settlement, final settlement, receipt verification, external verification, and delivered outcome remain separate states. `bindX402OutcomeEvidence()` reports external verification as `not_checked` unless a future separately reviewed adapter establishes it; settlement or receipt evidence never implies delivery. The included `examples/x402-generic-middleware.mjs` demonstrates a no-network middleware assessment that never sends or retries payment and never marks delivery verified.
+
+Adapter outputs retain only bounded public references, hashes, statuses, and binding metadata. Raw signatures, delegated-payment payloads, wallet credentials, KYA tokens, payment containers, private keys, and checkout bodies are never copied into the normalized result.
+
+These adapters do **not** claim Google, Visa, OpenAI, Stripe, x402 Foundation, Circle, Skyfire, or Mastercard endorsement or universal production compatibility. Merchant-declared ACP fulfillment remains distinct from independently verified delivery, and an x402 signed receipt or final settlement remains distinct from delivered outcome evidence. The Mastercard export is deliberately reference-only until an immutable public Verifiable Intent schema exists.
+
+A production verifier must:
 
 1. pin the exact protocol and schema version;
 2. preserve a source reference and stable artifact hash;
@@ -301,6 +334,29 @@ A production adapter must:
 4. expose unsupported checks as `unverified`, `not_checked`, or `unknown`;
 5. include deterministic positive and negative conformance vectors;
 6. avoid partnership or endorsement claims without evidence.
+
+Deterministic, license-attributed adapter vectors live in `test/fixtures/protocol-adapter-vectors.v1.json` and run on Node 20, 22, and 24. They cover unsupported versions, wrong audience/merchant/purpose, expiry, replay, changed cart/terms, payment-identifier mismatch, payment without delivery, wallet-policy scope failures, and privacy exclusions.
+
+### AP2 field map
+
+| AP2 evidence | Normalized field |
+| --- | --- |
+| artifact reference and canonical content | `source_artifact_ref`, `source_artifact_hash` |
+| mandate family (`vct`) | `protocol_binding.artifact_kind` |
+| mandate issuer and principal | `issuer_ref`, `principal_ref` |
+| delegated agent and audience | `agent_ref`, `audience` |
+| payee / merchant constraint | `merchant_binding`, `allowed_sellers` |
+| action and category constraints | `allowed_actions`, `allowed_categories` |
+| payment rail, amount, and currency limits | `allowed_payment_rails`, `max_per_action`, `max_daily`, `max_total`, `currency` |
+| issue and expiry timestamps | `issued_at`, `expires_at` |
+| external signature and revocation checks | `verification`, `revocation_status`, `revocation_check`, `protocol_binding.verifier_*` |
+| fields not supported by the pinned adapter | `normalization_warnings`, `protocol_binding.unsupported_fields` |
+
+AP2 Intent, Cart, and Payment Mandate families are preserved as AP2 vocabulary in `protocol_binding.artifact_kind`; normalization does not replace or re-issue those mandates. The pre-execution evaluator permits the normalized authority only when the external verifier proves the exact signature, revocation, audience, merchant, amount, action, and terms bindings.
+
+### Official ACP state boundary
+
+The adapter accepts only checkout statuses enumerated by the pinned `2026-04-17` schema. `completed`, `complete_in_progress`, and `in_progress` become merchant-declared payment states; no checkout status becomes independently verified delivery or reconciliation. Fulfillment and refund inputs remain explicitly merchant-declared references, and `complete_chain_verified` remains false.
 
 ## Relation to Agoragentic Interchange
 

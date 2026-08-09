@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
 
+import {
+  bindTrustedEnvelope,
+  trustedAuthorityBinding,
+  trustedEnvelopeBinding,
+} from './trusted-verifier-boundary.mjs';
+
 export const AUTHORITY_PROTOCOLS = Object.freeze([
   'agoragentic_mandate',
   'google_ap2',
@@ -73,6 +79,13 @@ const RECONCILIATION_STATUSES = Object.freeze([
   'unknown',
 ]);
 const MONEY_PATTERN = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
+const TRUSTED_CALLBACK_PROTOCOLS = new Set([
+  'google_ap2',
+  'visa_tap',
+  'openai_stripe_acp',
+  'circle_agent_wallet_policy',
+  'skyfire_kyapay',
+]);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -528,6 +541,20 @@ function authorityForEnvelope(normalizedAuthority) {
     || normalizedAuthority.schema !== 'agoragentic.normalized-authority.v1') {
     throw new TypeError('normalizedAuthority must be produced by normalizeAuthorityArtifact');
   }
+  const verificationStatus = normalizeEnum(
+    normalizedAuthority.verification?.status,
+    VERIFICATION_STATUSES,
+    'unverified',
+    'authority.verification_status',
+  );
+  const trustedBinding = trustedAuthorityBinding(normalizedAuthority);
+  if (verificationStatus === 'verified'
+    && TRUSTED_CALLBACK_PROTOCOLS.has(normalizedAuthority.source_protocol)
+    && !trustedBinding) {
+    throw new TypeError(
+      'verified protocol authority must remain inside its trusted in-process verifier boundary',
+    );
+  }
   return {
     source_protocol: normalizedAuthority.source_protocol,
     source_artifact_ref: normalizedAuthority.source_artifact_ref,
@@ -535,15 +562,12 @@ function authorityForEnvelope(normalizedAuthority) {
     issuer_ref: normalizedAuthority.issuer_ref,
     principal_ref: normalizeString(normalizedAuthority.principal_ref),
     agent_ref: normalizeString(normalizedAuthority.agent_ref),
-    verification_status: normalizeEnum(
-      normalizedAuthority.verification?.status,
-      VERIFICATION_STATUSES,
-      'unverified',
-      'authority.verification_status',
-    ),
+    verification_status: verificationStatus,
     verification_verifier_ref: normalizeString(normalizedAuthority.verification?.verifier_ref),
     verification_evidence_ref: normalizeString(normalizedAuthority.verification?.evidence_ref),
     verification_checked_at: normalizeDate(normalizedAuthority.verification?.checked_at),
+    verification_trust_mode: trustedBinding?.trust_mode || 'none',
+    verification_binding_hash: trustedBinding?.binding_hash || null,
     issued_at: normalizedAuthority.issued_at,
     expires_at: normalizedAuthority.expires_at,
     revocation_status: normalizeEnum(
@@ -806,6 +830,13 @@ export function buildTransactionAssuranceEnvelope(input = {}) {
   }
   envelope.state = derivedState;
   envelope.evidence.envelope_hash = computeEnvelopeHash(envelope);
+  if (authority.verification_trust_mode === 'trusted_callback') {
+    bindTrustedEnvelope(envelope, {
+      trust_mode: authority.verification_trust_mode,
+      verifier_ref: authority.verification_verifier_ref,
+      binding_hash: authority.verification_binding_hash,
+    });
+  }
   return envelope;
 }
 
@@ -839,8 +870,17 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
   const execution = envelope.execution || {};
   const outcome = envelope.outcome || {};
   const reconciliation = envelope.reconciliation || {};
+  const trustedEnvelope = trustedEnvelopeBinding(envelope);
 
   if (authority.verification_status !== 'verified') addUnique(blockers, 'authority_not_verified');
+  if (authority.verification_status === 'verified'
+    && TRUSTED_CALLBACK_PROTOCOLS.has(authority.source_protocol)
+    && (!trustedEnvelope
+      || trustedEnvelope.trust_mode !== 'trusted_callback'
+      || trustedEnvelope.verifier_ref !== authority.verification_verifier_ref
+      || trustedEnvelope.binding_hash !== authority.verification_binding_hash)) {
+    addUnique(blockers, 'authority_verifier_boundary_not_trusted');
+  }
   if (!authority.verification_verifier_ref
     || !authority.verification_evidence_ref
     || !authority.verification_checked_at) addUnique(blockers, 'authority_verification_evidence_missing');
@@ -917,6 +957,7 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
 
   const hardDenyCodes = new Set([
     'authority_not_verified',
+    'authority_verifier_boundary_not_trusted',
     'authority_verification_evidence_missing',
     'authority_revoked',
     'authority_expired',
@@ -983,3 +1024,15 @@ export function evaluateTransactionAssuranceEnvelope(envelope, options = {}) {
     authority_flags: evaluationAuthorityFlags(),
   };
 }
+
+export {
+  PROTOCOL_ADAPTER_PINS,
+  bindX402OutcomeEvidence,
+  normalizeAp2Authority,
+  normalizeCircleWalletPolicyEvidence,
+  normalizeMastercardVerifiableIntentEvidence,
+  normalizeOfficialAcpEvidence,
+  normalizeSkyfireKyaPayEvidence,
+  normalizeVisaTapEvidence,
+  normalizeX402Evidence,
+} from './protocol-adapters.mjs';

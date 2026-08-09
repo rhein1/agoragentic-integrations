@@ -35,6 +35,11 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: transaction-assurance/package-lock.json
+      - name: Install locked test dependencies
+        working-directory: transaction-assurance
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Parse package JSON and schemas
         working-directory: transaction-assurance
         run: |
@@ -43,6 +48,8 @@ jobs:
             'schema/normalized-authority.v1.json',
             'schema/transaction-assurance-evaluation.v1.json',
             'schema/transaction-evaluation-evidence.v1.json',
+            'test/fixtures/protocol-adapter-vectors.v1.json',
+            'vendor/acp-2026-04-17/schema.agentic_checkout.json',
             'examples/native-mandate.json',
             'examples/authority-request-input.json'
           ]) { JSON.parse(require('node:fs').readFileSync(file, 'utf8')); console.log('parsed', file); }"
