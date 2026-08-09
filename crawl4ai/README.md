@@ -25,13 +25,21 @@ library HTTP transport:
    verification;
 4. revalidates and repins every redirect before another request;
 5. accepts only uncompressed HTML/XHTML/plain-text responses within explicit
-   page, depth, byte, time, redirect, output, and sequential-concurrency limits.
+   page, depth, byte, redirect, output, and sequential-concurrency limits, with
+   one absolute deadline across each request and redirect chain, and rejects
+   transfer encodings or duplicate framing/content headers that would make the
+   cited body ambiguous;
+6. narrows each fetch to the remaining aggregate-byte budget before acquisition
+   and binds each citation to the requested URL, redirect chain, and content
+   hash rather than only the final URL.
 
 The reviewed Crawl4AI release receives only already-fetched HTML through its
 offline LXML scraping and Markdown generation strategies. Browser automation,
 JavaScript, cookies, persistent sessions, forms, images, and subresource fetches
 are disabled by construction. Retrieved bytes are treated as untrusted data and
-must pass the content-trap scan before cleaned artifacts are written.
+must pass a normalized content-trap scan (HTML entities, Unicode normalization,
+and invisible/combining-character removal) before parsing; the final rendered
+Markdown is scanned again before any cleaned artifacts are written.
 
 Fixture mode bypasses DNS and sockets entirely and is the required no-spend
 canary. Output is written to a new isolated directory through a temporary
@@ -75,9 +83,9 @@ python crawl4ai/agoragentic_crawl4ai.py \
 ```
 
 Defaults are four pages, depth zero, 500 KB per page, 2 MB total input, ten
-seconds per request, two redirects, and concurrency one. Hard ceilings are
-documented in `crawl4ai.local-provider.manifest.json` and cannot be raised from
-the CLI.
+seconds per fetch including redirects, two redirects, and concurrency one. Hard
+ceilings are documented in `crawl4ai.local-provider.manifest.json` and cannot
+be raised from the CLI.
 
 ## Evidence artifacts
 
@@ -105,9 +113,10 @@ python crawl4ai/provider.test.py -v
 ```
 
 The focused suite covers the SSRF matrix, mixed DNS answers, redirect
-revalidation, response and output limits, fixture path containment, all three
-capabilities, citation/source mapping, trap-scan fail-closed behavior, and the
-disabled hosted/listing/x402 boundaries.
+revalidation, absolute request deadlines, page/aggregate response limits,
+quoted charset decoding, fixture path containment, all three capabilities,
+collision-safe citation/source mapping, entity/renderer trap-scan fail-closed
+behavior, and the disabled hosted/listing/x402 boundaries.
 
 ## Upstream attribution
 
