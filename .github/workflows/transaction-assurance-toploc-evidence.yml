@@ -35,6 +35,11 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: transaction-assurance/package-lock.json
+      - name: Install locked test dependencies
+        working-directory: transaction-assurance
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Parse package JSON and TOPLOC schema
         working-directory: transaction-assurance
         run: |
