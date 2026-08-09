@@ -1,0 +1,48 @@
+name: HyperFrames Receipt Video
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'hyperframes/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - '.github/workflows/hyperframes-receipt-video.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'hyperframes/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - '.github/workflows/hyperframes-receipt-video.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: '1'
+      DO_NOT_TRACK: '1'
+      HYPERFRAMES_NO_TELEMETRY: '1'
+      HYPERFRAMES_NO_UPDATE_CHECK: '1'
+      HYPERFRAMES_NO_AUTO_INSTALL: '1'
+      HYPERFRAMES_SKIP_SKILLS: '1'
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    defaults:
+      run:
+        working-directory: hyperframes
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - run: ffmpeg -version
+      - run: google-chrome --version
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test

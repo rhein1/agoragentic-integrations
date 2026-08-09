@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/blob/main/hyperframes/schemas/local-render-receipt.schema.json",
+  "title": "Agoragentic local HyperFrames render receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "created_at", "source_receipt_sha256", "sanitized_timeline_sha256", "scene_html_sha256", "renderer", "output", "safety", "authority"],
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "prepared" } } },
+      "then": { "properties": { "output": { "type": "null" } } },
+      "else": { "properties": { "output": { "$ref": "#/$defs/output" } } }
+    }
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.hyperframes.local-render-receipt.v1" },
+    "status": { "enum": ["prepared", "completed"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "source_receipt_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "sanitized_timeline_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "scene_html_sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "upstream_revision", "mode", "telemetry_disabled", "update_checks_disabled"],
+      "properties": {
+        "name": { "const": "hyperframes" },
+        "version": { "const": "0.7.102" },
+        "upstream_revision": { "const": "9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb" },
+        "mode": { "const": "local_cli" },
+        "telemetry_disabled": { "const": true },
+        "update_checks_disabled": { "const": true }
+      }
+    },
+    "output": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/output" }] },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic_timeline", "self_contained_html", "raw_source_retained", "raw_prompts_retained", "raw_tool_outputs_retained", "private_owner_context_retained", "inherited_secret_environment", "source_receipt_mutated"],
+      "properties": {
+        "deterministic_timeline": { "const": true },
+        "self_contained_html": { "const": true },
+        "raw_source_retained": { "const": false },
+        "raw_prompts_retained": { "const": false },
+        "raw_tool_outputs_retained": { "const": false },
+        "private_owner_context_retained": { "const": false },
+        "inherited_secret_environment": { "const": false },
+        "source_receipt_mutated": { "const": false }
+      }
+    },
+    "authority": { "$ref": "#/$defs/authority" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "media_type", "bytes", "sha256"],
+      "properties": {
+        "path": { "const": "receipt-video.mp4" },
+        "media_type": { "const": "video/mp4" },
+        "bytes": { "type": "integer", "minimum": 16 },
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_render", "hosted_deploy", "call_provider", "publish", "publish_listing", "create_x402_route", "spend", "settle", "move_funds", "owner_approval_required_for_external_action"],
+      "properties": {
+        "external_render": { "const": false },
+        "hosted_deploy": { "const": false },
+        "call_provider": { "const": false },
+        "publish": { "const": false },
+        "publish_listing": { "const": false },
+        "create_x402_route": { "const": false },
+        "spend": { "const": false },
+        "settle": { "const": false },
+        "move_funds": { "const": false },
+        "owner_approval_required_for_external_action": { "const": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "agoragentic.upstream-provenance.v1",
+  "name": "HyperFrames",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "revision": "9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb",
+  "package": "hyperframes@0.7.102",
+  "license": "Apache-2.0",
+  "reviewed_surface": [
+    "README.md",
+    "packages/cli/package.json",
+    "packages/cli/src/commands/render.ts",
+    "packages/cli/src/browser/manager.ts",
+    "packages/cli/src/telemetry/policy.ts",
+    "packages/cli/src/utils/updateCheck.ts"
+  ],
+  "compatibility_scope": "Pinned local render CLI with self-contained generated HTML and no cloud command",
+  "copied_upstream_code": false,
+  "partnership_claimed": false,
+  "hosted_rendering_enabled": false,
+  "provider_calls_enabled": false,
+  "publication_enabled": false,
+  "spend_enabled": false
+}

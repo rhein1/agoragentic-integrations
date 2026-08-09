@@ -1,0 +1,8 @@
+{
+  "schema": "agoragentic.hyperframes.template.v1",
+  "id": "pr-release-explainer",
+  "title": "PR and Release Evidence",
+  "subtitle": "Separate reviewed code from deployed behavior",
+  "accent": "#ffb45e",
+  "fallback_labels": ["Change", "Review", "Release", "Verify"]
+}

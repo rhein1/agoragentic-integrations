@@ -1,0 +1,51 @@
+{
+  "schema": "agoragentic.receipt-evidence.video-source.v1",
+  "receipt_id": "fixture_receipt_reconciliation_001",
+  "title": "Governed text summary",
+  "summary": "A local fixture showing policy, execution, receipt, and reconciliation evidence.",
+  "status": "reconciled",
+  "created_at": "2026-08-08T00:00:00.000Z",
+  "completed_at": "2026-08-08T00:00:04.000Z",
+  "events": [
+    {
+      "kind": "policy",
+      "label": "Policy checked",
+      "detail": "A bounded read-only action was allowed.",
+      "at": "2026-08-08T00:00:00.000Z",
+      "status": "passed",
+      "evidence_ref": "evidence:policy:001"
+    },
+    {
+      "kind": "execution",
+      "label": "Work completed",
+      "detail": "The fixture action completed without external calls.",
+      "at": "2026-08-08T00:00:01.000Z",
+      "status": "completed",
+      "evidence_ref": "evidence:execution:001"
+    },
+    {
+      "kind": "receipt",
+      "label": "Receipt recorded",
+      "detail": "Evidence hashes were bound to the local result.",
+      "at": "2026-08-08T00:00:02.000Z",
+      "status": "verified",
+      "evidence_ref": "evidence:receipt:001"
+    },
+    {
+      "kind": "reconciliation",
+      "label": "Outcome reconciled",
+      "detail": "Declared intent and observed outcome matched.",
+      "at": "2026-08-08T00:00:03.000Z",
+      "status": "reconciled",
+      "evidence_ref": "evidence:reconciliation:001"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "local-proof",
+      "ref": "evidence:receipt:001",
+      "sha256": "sha256:28fe729895e9ef6a7ec664b105518ca6a2b264a99f454857a93d36c0e20dc3f8",
+      "status": "verified"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@agoragentic/hyperframes-receipt-video",
+  "version": "0.1.0-alpha.0",
+  "description": "Local, no-spend receipt and evidence to HyperFrames video workflow with bounded provenance.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "agoragentic-hyperframes-receipt-video": "./cli.mjs"
+  },
+  "exports": {
+    ".": "./receipt-video.mjs"
+  },
+  "dependencies": {
+    "hyperframes": "0.7.102"
+  },
+  "scripts": {
+    "check": "node --check receipt-video.mjs && node --check cli.mjs && node --check test.mjs",
+    "test": "node --test test.mjs",
+    "pretest": "npm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "hyperframes"
+  },
+  "keywords": [
+    "hyperframes",
+    "receipts",
+    "evidence",
+    "video",
+    "provenance",
+    "no-spend"
+  ]
+}

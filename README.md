@@ -153,6 +153,7 @@ Use this chooser before picking a framework wrapper:
 | Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm install` | Experimental source-only AnyDoc adapter; no upload, OCR, context attachment, or publication |
 | Apply Harness allow/ask/deny policy inside the exact pinned OpenCode tool hooks | `cd opencode && npm ci` from a source checkout | Experimental `@agoragentic/opencode` source candidate; OpenCode 1.18.15 contract fixture only, not published |
 | Convert explicit gstack planning/review/QA/release files into bounded Harness evidence | `cd gstack && npm install` | Experimental source-only artifact bridge; does not run gstack or retain raw workflow content |
+| Turn a local receipt/evidence fixture into a sanitized timeline, self-contained scene, MP4, and hash-bound local render receipt | `cd hyperframes && npm install` | Experimental source-only HyperFrames workflow; local/no-spend only, with external rendering and publication owner-gated |
 | Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
 | Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
@@ -170,6 +171,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **OpenCode Harness Plugin** | `cd opencode && npm ci` | Node ≥ 18; exact OpenCode 1.18.15 contract fixture only |
 | **gstack Harness Bridge** | `cd gstack && npm install` | Node ≥ 20; explicit artifact paths only, source-only |
+| **HyperFrames Receipt Video Workflow** | `cd hyperframes && npm install` | Node ≥ 22; local browser and FFmpeg, source-only |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
 | **[AnyDoc Document Evidence Adapter](./examples/anydoc-document-evidence/)** | `cd examples/anydoc-document-evidence && npm install` | Node ≥ 20; source-only, not published to npm |
 
@@ -215,6 +217,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
 | [**OpenCode Harness Plugin**](opencode/) | Javascript | Experimental | `opencode/src/server.mjs` | [README](opencode/README.md) |
 | [**gstack Harness Bridge**](gstack/) | Javascript | Experimental | `gstack/gstack-harness.mjs` | [README](gstack/README.md) |
+| [**HyperFrames Receipt Video Workflow**](hyperframes/) | Javascript | Experimental | `hyperframes/receipt-video.mjs` | [README](hyperframes/README.md) |
 | [**Premortem Golden Loop Agent**](premortem-golden-loop/) | Javascript | Beta | `premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | [README](premortem-golden-loop/README.md) |
 | [**Langflow**](langflow/) | Python | Experimental | `langflow/README.md` | [README](langflow/README.md) |
 | [**Browser Use**](browser-use/) | Python | Experimental | `browser-use/README.md` | [README](browser-use/README.md) |
@@ -489,6 +492,10 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | OpenCode pinned contract fixture | [`opencode/contracts/opencode-plugin-1.18.15.json`](./opencode/contracts/opencode-plugin-1.18.15.json) |
 | gstack Harness bridge | [`gstack/README.md`](./gstack/README.md) |
 | gstack upstream provenance | [`gstack/upstream-provenance.json`](./gstack/upstream-provenance.json) |
+| HyperFrames receipt video workflow | [`hyperframes/README.md`](./hyperframes/README.md) |
+| HyperFrames upstream provenance | [`hyperframes/upstream-provenance.json`](./hyperframes/upstream-provenance.json) |
+| HyperFrames sanitized timeline schema | [`hyperframes/schemas/sanitized-timeline.schema.json`](./hyperframes/schemas/sanitized-timeline.schema.json) |
+| HyperFrames local render receipt schema | [`hyperframes/schemas/local-render-receipt.schema.json`](./hyperframes/schemas/local-render-receipt.schema.json) |
 | Micro ECF | [`micro-ecf/README.md`](./micro-ecf/README.md) |
 | Micro ECF Syrin guide | [`micro-ecf/SYRIN_USER_GUIDE.md`](./micro-ecf/SYRIN_USER_GUIDE.md) |
 | Micro ECF post-install | [`micro-ecf/POST_INSTALL.md`](./micro-ecf/POST_INSTALL.md) |
