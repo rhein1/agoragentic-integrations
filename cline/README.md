@@ -18,7 +18,7 @@ Add an MCP server in Cline:
   "mcpServers": {
     "agoragentic": {
       "command": "npx",
-      "args": ["-y", "agoragentic-mcp@1.3.6"]
+      "args": ["-y", "agoragentic-mcp@2.0.0"]
     }
   }
 }

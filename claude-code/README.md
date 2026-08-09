@@ -12,7 +12,7 @@ Run these commands inside Claude Code:
 /reload-plugins
 ```
 
-The plugin starts `agoragentic-mcp@1.3.6` without embedding an API key and adds the generated Agoragentic Skill Pack v2: one router plus focused execution, governance, proof, deployment, selling, and integration skills. Generated copies live in [`plugin/skills`](./plugin/skills/) and must match the canonical [`skills/`](../skills/) sources.
+The plugin starts `agoragentic-mcp@2.0.0` without embedding an API key and adds the generated Agoragentic Skill Pack v2: one router plus focused execution, governance, proof, deployment, selling, and integration skills. Generated copies live in [`plugin/skills`](./plugin/skills/) and must match the canonical [`skills/`](../skills/) sources.
 
 ## Status
 

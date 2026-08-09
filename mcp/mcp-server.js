@@ -5,8 +5,21 @@ const readline = require('readline');
 const crypto = require('crypto');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
-const REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || 'https://agoragentic.com/api/mcp';
-const AGORAGENTIC_BASE = process.env.AGORAGENTIC_BASE_URL || 'https://agoragentic.com';
+const DEFAULT_REMOTE_MCP_URL = 'https://agoragentic.com/api/mcp';
+const REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || DEFAULT_REMOTE_MCP_URL;
+const EXPLICIT_AGORAGENTIC_BASE = process.env.AGORAGENTIC_BASE_URL || '';
+
+function fallbackBaseForRemote(remoteMcpUrl) {
+    if (EXPLICIT_AGORAGENTIC_BASE) return EXPLICIT_AGORAGENTIC_BASE;
+    try {
+        return new URL(remoteMcpUrl).origin;
+    } catch {
+        return '';
+    }
+}
+
+const AGORAGENTIC_BASE = fallbackBaseForRemote(REMOTE_MCP_URL);
+const MCP_V2_PROTOCOL_VERSION = '2026-07-28';
 const RAW_API_KEY = process.env.AGORAGENTIC_API_KEY || '';
 const PLACEHOLDER_API_KEYS = new Set([
     'amk_glama_test_placeholder',
@@ -69,6 +82,14 @@ function buildJsonContent(data) {
 }
 
 async function apiCall(method, path, body) {
+    if (!AGORAGENTIC_BASE) {
+        return {
+            ok: false,
+            error: 'invalid_fallback_base',
+            message: 'Set a valid AGORAGENTIC_MCP_URL or explicit AGORAGENTIC_BASE_URL before using local fallback tools.',
+        };
+    }
+
     const headers = {
         'Content-Type': 'application/json',
         'User-Agent': `agoragentic-mcp/${PACKAGE_VERSION}`,
@@ -108,7 +129,7 @@ function requireApiKey() {
     return buildJsonContent({
         ok: false,
         error: 'missing_api_key',
-        message: 'Set AGORAGENTIC_API_KEY for authenticated Router / Marketplace execution tools. Use agoragentic_register to create a key.',
+        message: 'Set AGORAGENTIC_API_KEY before starting the relay for authenticated Router / Marketplace execution tools. Use agoragentic_register to create a key, then configure it in your own secret store.',
     });
 }
 
@@ -278,6 +299,32 @@ function mergeFallbackTools(remoteTools = []) {
     return merged;
 }
 
+function createRemoteToolDirectory(client) {
+    let remoteToolNames = null;
+
+    async function list(params = {}) {
+        const result = await client.listTools(params);
+        const isAggregateRequest = params?.cursor === undefined;
+        if (isAggregateRequest) {
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+        }
+        return {
+            ...result,
+            tools: isAggregateRequest ? mergeFallbackTools(result.tools) : result.tools,
+        };
+    }
+
+    async function has(name) {
+        if (!remoteToolNames) {
+            const result = await client.listTools();
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+        }
+        return remoteToolNames.has(name);
+    }
+
+    return { has, list };
+}
+
 const FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList().map((tool) => tool.name));
 
 async function executeFallbackTool(name, args = {}) {
@@ -363,26 +410,35 @@ async function executeFallbackTool(name, args = {}) {
     });
 }
 
-function buildRemoteTransport() {
-    const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
-    const headers = {};
-    if (API_KEY) {
-        headers.Authorization = `Bearer ${API_KEY}`;
-    }
-
-    return new StreamableHTTPClientTransport(new URL(REMOTE_MCP_URL), {
+function buildRemoteTransport(apiKeyRef, remoteUrl = REMOTE_MCP_URL) {
+    const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/client');
+    return new StreamableHTTPClientTransport(new URL(remoteUrl), {
+        // The v2 transport calls this function before every HTTP request. This
+        // is intentionally a process-local credential reference, never a
+        // remote session credential or a mutation of process.env.
+        authProvider: {
+            token: async () => apiKeyRef.value || undefined,
+        },
+        onInsufficientScope: 'throw',
         requestInit: {
-            headers,
+            headers: {
+                'User-Agent': `agoragentic-mcp/${PACKAGE_VERSION}`,
+            },
         },
     });
 }
 
-async function connectRemoteClient() {
-    const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
-    const transport = buildRemoteTransport();
+async function connectRemoteClient({ remoteUrl = REMOTE_MCP_URL, apiKey = API_KEY } = {}) {
+    const { Client } = require('@modelcontextprotocol/client');
+    const apiKeyRef = { value: apiKey };
+    const transport = buildRemoteTransport(apiKeyRef, remoteUrl);
     const client = new Client(
         { name: 'agoragentic-mcp', version: PACKAGE_VERSION },
-        { capabilities: { tools: {}, resources: {}, prompts: {} } }
+        {
+            versionNegotiation: {
+                mode: { pin: MCP_V2_PROTOCOL_VERSION },
+            },
+        }
     );
 
     client.onerror = (error) => {
@@ -391,8 +447,41 @@ async function connectRemoteClient() {
         console.error(`[agoragentic-mcp] remote client error: ${message}`);
     };
 
-    await client.connect(transport);
-    return { client, transport };
+    try {
+        await client.connect(transport);
+        if (
+            client.getProtocolEra() !== 'modern'
+            || client.getNegotiatedProtocolVersion() !== MCP_V2_PROTOCOL_VERSION
+            || transport.sessionId !== undefined
+        ) {
+            throw new Error(`Hosted MCP did not establish a stateless ${MCP_V2_PROTOCOL_VERSION} connection.`);
+        }
+
+        // A successful discovery response alone does not prove that this is a
+        // usable relay target. Verify the first read-only protocol method now
+        // so a malformed or incompatible endpoint selects bounded fallback
+        // before the local host begins sending tool calls.
+        await client.listTools();
+        return { client, transport };
+    } catch (error) {
+        try {
+            await client.close();
+        } catch {
+            // Preserve the original connection failure for the fallback path.
+        }
+        throw error;
+    }
+}
+
+async function closeRemoteSession(remoteSession) {
+    if (!remoteSession) return;
+    try {
+        // A pinned v2 connection is stateless; closing the client tears down
+        // the transport without sending the legacy session DELETE lifecycle.
+        await remoteSession.client.close();
+    } catch {
+        // Ignore remote close failures during local shutdown.
+    }
 }
 
 async function runMcpRelay() {
@@ -422,31 +511,14 @@ async function runMcpRelay() {
 
     if (remoteSession) {
         const { client } = remoteSession;
-        let remoteToolNames = null;
-
-        async function listRemoteTools(params = {}) {
-            const result = await client.listTools(params);
-            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
-            return result;
-        }
-
-        async function hasRemoteTool(name) {
-            if (!remoteToolNames) {
-                await listRemoteTools();
-            }
-            return remoteToolNames.has(name);
-        }
+        const remoteTools = createRemoteToolDirectory(client);
 
         server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-            const result = await listRemoteTools(request.params);
-            return {
-                ...result,
-                tools: mergeFallbackTools(result.tools),
-            };
+            return remoteTools.list(request.params);
         });
 
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await hasRemoteTool(request.params.name))) {
+            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await remoteTools.has(request.params.name))) {
                 return executeFallbackTool(request.params.name, request.params.arguments || {});
             }
             return client.callTool(request.params);
@@ -498,18 +570,7 @@ async function runMcpRelay() {
 
     const shutdown = async (signal) => {
         console.error(`[agoragentic-mcp] shutting down on ${signal}`);
-        if (remoteSession) {
-            try {
-                await remoteSession.transport.terminateSession();
-            } catch {
-                // Ignore session teardown failures during local shutdown.
-            }
-            try {
-                await remoteSession.transport.close();
-            } catch {
-                // Ignore transport close failures during local shutdown.
-            }
-        }
+        await closeRemoteSession(remoteSession);
         process.exit(0);
     };
 
@@ -627,16 +688,7 @@ async function runAcpAdapter() {
 
     async function shutdownRemote() {
         if (!remoteSession) return;
-        try {
-            await remoteSession.transport.terminateSession();
-        } catch {
-            // Ignore session teardown failures during local shutdown.
-        }
-        try {
-            await remoteSession.transport.close();
-        } catch {
-            // Ignore transport close failures during local shutdown.
-        }
+        await closeRemoteSession(remoteSession);
         remoteSession = null;
     }
 
@@ -714,8 +766,8 @@ async function runAcpAdapter() {
             } else if (request.method === 'tools/list') {
                 writeResponse(buildAcpResponse(id, { tools: ACP_TOOLS }));
             } else if (request.method === 'tools/call') {
-                const { client } = await getRemoteSession();
-                const result = await client.callTool(request.params || {});
+                const session = await getRemoteSession();
+                const result = await session.client.callTool(request.params || {});
                 writeResponse(buildAcpResponse(id, result));
             } else if (request.method === 'shutdown') {
                 await shutdownRemote();
@@ -755,6 +807,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+    MCP_V2_PROTOCOL_VERSION,
     buildFallbackToolList,
+    closeRemoteSession,
+    connectRemoteClient,
+    createRemoteToolDirectory,
     executeFallbackTool,
 };

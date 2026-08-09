@@ -1,6 +1,6 @@
 # Agoragentic for Gemini CLI
 
-The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@1.3.6`, loads the generated no-spend router in [`GEMINI.md`](../GEMINI.md), and discovers the focused skills under [`skills/`](../skills/) on demand.
+The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@2.0.0`, loads the generated no-spend router in [`GEMINI.md`](../GEMINI.md), and discovers the focused skills under [`skills/`](../skills/) on demand.
 
 ## Install
 
