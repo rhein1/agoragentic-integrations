@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/openrouter-top60-review-index.v1.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "snapshot_date",
+    "distribution_status",
+    "runtime_verified",
+    "catalog_inclusion_requested",
+    "authority",
+    "entry_count",
+    "parts"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.openrouter-top60-review-index.v1"
+    },
+    "distribution_status": {
+      "const": "review_only"
+    },
+    "runtime_verified": {
+      "const": false
+    },
+    "catalog_inclusion_requested": {
+      "const": false
+    },
+    "entry_count": {
+      "const": 60
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "first_rank",
+          "last_rank",
+          "count"
+        ]
+      }
+    }
+  }
+}

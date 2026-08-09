@@ -1,0 +1,52 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "needs_verification",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 32,
+      "name": "Zazen (Freebuff fork)",
+      "slug": "zazen-freebuff-fork",
+      "direction": "possible_framework_fork",
+      "action": "Do not reuse the Codebuff adapter until the fork and SDK compatibility are independently verified.",
+      "sources": [
+        "https://freebuff.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 49,
+      "name": "Pocket AI",
+      "slug": "pocket-ai",
+      "direction": "unknown",
+      "action": "BLOCKED pending exact vendor URL and public developer documentation.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 53,
+      "name": "Orchid",
+      "slug": "orchid",
+      "direction": "unknown",
+      "action": "BLOCKED pending a working product URL and developer docs.",
+      "sources": [
+        "https://app.orchid.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 60,
+      "name": "JobLeads LLM",
+      "slug": "jobleads-llm",
+      "direction": "unknown",
+      "action": "BLOCKED pending exact vendor identity and public developer documentation.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    }
+  ]
+}

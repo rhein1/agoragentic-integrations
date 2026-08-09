@@ -1,0 +1,142 @@
+[
+  {
+    "rank": 1,
+    "name": "Hermes Agent",
+    "slug": "hermes-agent",
+    "tokens": "33T",
+    "status": "covered_existing",
+    "direction": "inbound_host",
+    "surface": "existing Hermes Agent bridge",
+    "action": "Retain the existing adapter; add it to the cross-ecosystem compatibility map rather than creating a duplicate.",
+    "artifact": "decisions/covered-existing.json",
+    "sources": [
+      "https://github.com/NousResearch/hermes-agent"
+    ]
+  },
+  {
+    "rank": 2,
+    "name": "Claude Code",
+    "slug": "claude-code",
+    "tokens": "7.53T",
+    "status": "covered_existing",
+    "direction": "inbound_host",
+    "surface": "Claude Code plugin + MCP",
+    "action": "Retain existing plugin; cross-link OpenRouter model routing and the official OpenRouter skill.",
+    "artifact": "decisions/covered-existing.json",
+    "sources": [
+      "https://docs.anthropic.com/en/docs/claude-code/mcp",
+      "https://openrouter.ai/docs/guides/coding-agents/claude-code-integration"
+    ]
+  },
+  {
+    "rank": 3,
+    "name": "Kilo Code",
+    "slug": "kilo-code",
+    "tokens": "7.33T",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "remote MCP host",
+    "action": "Install the public/no-spend remote MCP config; use the local relay for authenticated tools.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://kilo.ai/docs/features/mcp"
+    ]
+  },
+  {
+    "rank": 4,
+    "name": "OpenClaw",
+    "slug": "openclaw",
+    "tokens": "4.47T",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "MCP and ACP host",
+    "action": "Add Agoragentic as a streamable-HTTP MCP server; keep authenticated execution approval-gated.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://docs.openclaw.ai/mcp"
+    ]
+  },
+  {
+    "rank": 5,
+    "name": "Cline",
+    "slug": "cline",
+    "tokens": "3.55T",
+    "status": "covered_existing",
+    "direction": "inbound_host",
+    "surface": "Cline MCP host",
+    "action": "Retain current package; add compatibility reference only.",
+    "artifact": "decisions/covered-existing.json",
+    "sources": [
+      "https://docs.cline.bot/mcp/configuring-mcp-servers"
+    ]
+  },
+  {
+    "rank": 6,
+    "name": "pi",
+    "slug": "pi",
+    "tokens": "2.61T",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "pi through pi-mcp-adapter",
+    "action": "Install `pi-mcp-adapter` and load the local Agoragentic relay.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://github.com/badlogic/pi-mono",
+      "https://github.com/nicobailon/pi-mcp-adapter"
+    ]
+  },
+  {
+    "rank": 7,
+    "name": "Descript",
+    "slug": "descript",
+    "tokens": "1.76T",
+    "status": "composition_recipe",
+    "direction": "outbound_mcp_service",
+    "surface": "Descript remote OAuth MCP",
+    "action": "Compose Descript and Agoragentic in a shared MCP host; do not mislabel Descript as an agent framework.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://api.descript.com/v2/mcp"
+    ]
+  },
+  {
+    "rank": 8,
+    "name": "Command Code",
+    "slug": "command-code",
+    "tokens": "1.62T",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "Command Code MCP host",
+    "action": "Register the hosted MCP endpoint with `cmd mcp add`; public tools work without a key.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://commandcode.ai"
+    ]
+  },
+  {
+    "rank": 9,
+    "name": "Hello Minds, powered by Ethoswarm",
+    "slug": "hello-minds-powered-by-ethoswarm",
+    "tokens": "1.26T",
+    "status": "vendor_intake",
+    "direction": "proprietary_agent_platform",
+    "surface": "builder API/tool platform",
+    "action": "Use the generated vendor intake to request a supported custom-tool or MCP registration contract.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": [
+      "https://www.hellominds.ai/"
+    ]
+  },
+  {
+    "rank": 10,
+    "name": "ISEKAI ZERO",
+    "slug": "isekai-zero",
+    "tokens": "988B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "consumer roleplay app",
+    "action": "BLOCKED until a public plugin, MCP, tool, or API surface is documented.",
+    "artifact": "decisions/blocked.json",
+    "sources": []
+  }
+]

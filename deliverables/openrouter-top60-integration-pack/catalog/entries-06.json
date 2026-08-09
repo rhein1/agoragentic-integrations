@@ -1,0 +1,142 @@
+[
+  {
+    "rank": 51,
+    "name": "GitLawb",
+    "slug": "gitlawb",
+    "tokens": "116B",
+    "status": "composition_recipe",
+    "direction": "outbound_mcp_and_api",
+    "surface": "decentralized Git MCP/REST/GraphQL node",
+    "action": "Compose a GitLawb node as a separate evidence/tool source; pin node identity and trust policy.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://gitlawb.com/"
+    ]
+  },
+  {
+    "rank": 52,
+    "name": "ppq.ai",
+    "slug": "ppq-ai",
+    "tokens": "115B",
+    "status": "provider_recipe",
+    "direction": "model_gateway",
+    "surface": "OpenAI-compatible inference API",
+    "action": "Use as an outbound model/provider rail with explicit budget and data-policy controls.",
+    "artifact": "decisions/provider-recipes.json",
+    "sources": [
+      "https://ppq.ai/"
+    ]
+  },
+  {
+    "rank": 53,
+    "name": "Orchid",
+    "slug": "orchid",
+    "tokens": "111B",
+    "status": "needs_verification",
+    "direction": "unknown",
+    "surface": "unverified application",
+    "action": "BLOCKED pending a working product URL and developer docs.",
+    "artifact": "decisions/needs-verification.json",
+    "sources": [
+      "https://app.orchid.ai/"
+    ]
+  },
+  {
+    "rank": 54,
+    "name": "Sirius AI Multilingual Data Pipeline",
+    "slug": "sirius-ai-multilingual-data-pipeline",
+    "tokens": "106B",
+    "status": "vendor_intake",
+    "direction": "data_pipeline",
+    "surface": "multilingual data pipeline",
+    "action": "Request an API, job schema, data-retention policy, and callback/receipt contract.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": [
+      "https://siriusec.com/"
+    ]
+  },
+  {
+    "rank": 55,
+    "name": "Landingsite",
+    "slug": "landingsite",
+    "tokens": "105B",
+    "status": "vendor_intake",
+    "direction": "website_builder",
+    "surface": "proprietary website builder",
+    "action": "Request a documented plugin/API surface before implementation.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": [
+      "https://app.landingsite.ai/"
+    ]
+  },
+  {
+    "rank": 56,
+    "name": "ChainPatrol",
+    "slug": "chainpatrol",
+    "tokens": "101B",
+    "status": "composition_recipe",
+    "direction": "security_api",
+    "surface": "threat-intelligence/security API",
+    "action": "Model ChainPatrol as a seller capability or pre-execution security check once API credentials and exact endpoint contracts are verified.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://chainpatrol.com/",
+      "https://github.com/chainpatrol/docs"
+    ]
+  },
+  {
+    "rank": 57,
+    "name": "Letaido",
+    "slug": "letaido",
+    "tokens": "98.5B",
+    "status": "vendor_intake",
+    "direction": "marketing_connector",
+    "surface": "Ahrefs-oriented marketing agent",
+    "action": "Use vendor intake for connector scopes, job submission, callback, and proof semantics.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": [
+      "https://letaido.com/"
+    ]
+  },
+  {
+    "rank": 58,
+    "name": "Oration AI",
+    "slug": "oration-ai",
+    "tokens": "87.6B",
+    "status": "direct_adapter",
+    "direction": "outbound_conversation_api",
+    "surface": "Oration AI REST API",
+    "action": "Use the included fail-closed adapter: reads are enabled; conversation creation requires both explicit code-level approval and an environment gate.",
+    "artifact": "adapters/oration-client.mjs",
+    "sources": [
+      "https://docs.oration.ai/api-reference/introduction",
+      "https://docs.oration.ai/api-reference/endpoint/conversations/post"
+    ]
+  },
+  {
+    "rank": 59,
+    "name": "mimocode",
+    "slug": "mimocode",
+    "tokens": "86.7B",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "MiMoCode MCP host",
+    "action": "Install the local Agoragentic relay under the exact `mcp` configuration key.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://github.com/XiaomiMiMo/MiMo-Code"
+    ]
+  },
+  {
+    "rank": 60,
+    "name": "JobLeads LLM",
+    "slug": "jobleads-llm",
+    "tokens": "84.4B",
+    "status": "needs_verification",
+    "direction": "unknown",
+    "surface": "job-search consumer app",
+    "action": "BLOCKED pending exact vendor identity and public developer documentation.",
+    "artifact": "decisions/needs-verification.json",
+    "sources": []
+  }
+]
