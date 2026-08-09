@@ -7,8 +7,8 @@ import re
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
-from hmac import compare_digest, digest
 from hashlib import sha256
+from hmac import compare_digest, digest
 from pathlib import Path
 from typing import Any
 
