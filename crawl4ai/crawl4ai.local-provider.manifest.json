@@ -1,0 +1,64 @@
+{
+  "schema": "agoragentic.local-provider-manifest.v1",
+  "id": "crawl4ai-local-provider",
+  "name": "Governed Crawl4AI Web Evidence",
+  "status": "experimental",
+  "runtime": "python>=3.10",
+  "entrypoint": "crawl4ai/agoragentic_crawl4ai.py",
+  "capabilities": [
+    "cited_web_research",
+    "website_to_context_packet",
+    "structured_page_extract"
+  ],
+  "upstream": {
+    "repository": "https://github.com/unclecode/crawl4ai",
+    "release": "v0.9.2",
+    "version": "0.9.2",
+    "commit": "7e801521428ee12509994d39151006f64055ebe3",
+    "license": "Apache-2.0",
+    "provenance": "crawl4ai/upstream-provenance.json"
+  },
+  "security": {
+    "crawl4ai_network_access": false,
+    "destination_public_ip_required": true,
+    "all_dns_answers_must_be_public": true,
+    "destination_ip_pinned_per_request": true,
+    "redirects_revalidated": true,
+    "javascript_enabled": false,
+    "cookies_enabled": false,
+    "persistent_sessions_enabled": false,
+    "content_trap_scan_required": true,
+    "isolated_output_required": true,
+    "limits": {
+      "max_pages": 8,
+      "max_depth": 1,
+      "max_bytes_per_page": 1000000,
+      "max_total_bytes": 4000000,
+      "max_timeout_seconds": 30,
+      "max_redirects": 3,
+      "max_concurrency": 1,
+      "max_output_bytes": 6000000
+    }
+  },
+  "artifacts": [
+    "clean-markdown.md",
+    "citation-map.json",
+    "source-manifest.json",
+    "trap-scan.json",
+    "structured-pages.json",
+    "context-packet.json",
+    "local-receipt.json"
+  ],
+  "boundaries": {
+    "fixture_mode_network_calls": 0,
+    "hosted_provider_enabled": false,
+    "hosted_auth_configured": false,
+    "marketplace_listing_enabled": false,
+    "public_api_enabled": false,
+    "x402_enabled": false,
+    "payment_enabled": false,
+    "provider_execution_enabled": false,
+    "change_monitor_enabled": false
+  },
+  "future_hosted_boundary": "Any future hosted surface requires separate authentication, policy, deployment, listing, and payment review."
+}

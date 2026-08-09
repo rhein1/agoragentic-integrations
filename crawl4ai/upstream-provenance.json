@@ -1,0 +1,22 @@
+{
+  "schema": "agoragentic.upstream-provenance.v1",
+  "integration": "crawl4ai-local-provider",
+  "reviewed_at": "2026-08-08",
+  "upstream": {
+    "name": "Crawl4AI",
+    "repository": "https://github.com/unclecode/crawl4ai",
+    "release": "v0.9.2",
+    "version": "0.9.2",
+    "commit": "7e801521428ee12509994d39151006f64055ebe3",
+    "package": "https://pypi.org/project/Crawl4AI/0.9.2/",
+    "license": "Apache-2.0"
+  },
+  "reviewed_surfaces": [
+    "pyproject.toml",
+    "LICENSE",
+    "crawl4ai/content_scraping_strategy.py",
+    "crawl4ai/markdown_generation_strategy.py"
+  ],
+  "compatibility_claim": "Exact-release offline fixture compatibility only; no hosted-provider or live-site compatibility claim.",
+  "network_boundary": "Crawl4AI receives already-fetched HTML and is never granted transport authority."
+}

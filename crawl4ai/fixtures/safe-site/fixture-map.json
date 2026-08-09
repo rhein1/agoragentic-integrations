@@ -1,0 +1,22 @@
+{
+  "seed_urls": [
+    "https://research.example.test/"
+  ],
+  "pages": {
+    "https://research.example.test/": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "file": "index.html"
+    },
+    "https://research.example.test/details": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "file": "details.html"
+    },
+    "https://research.example.test/trap": {
+      "status": 200,
+      "content_type": "text/html; charset=utf-8",
+      "file": "trap.html"
+    }
+  }
+}

@@ -61,7 +61,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 103 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 104 integration surfaces as of 2026-08-08. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -144,6 +144,7 @@ The canonical inventory is `integrations.json` and contains 103 integration surf
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
 | RepoBrain Local Provider | repobrain/repobrain.retrieve_context.manifest.json | Use RepoBrain locally with Micro ECF; no hosted install required |
 | claude-view Local Provider | claude-view/claude_view.get_live_summary.manifest.json | Run claude-view locally; no hosted endpoint required |
+| Governed Crawl4AI Web Evidence | crawl4ai/crawl4ai.local-provider.manifest.json | Exact-pinned local public-web acquisition with offline Crawl4AI parsing; hosted/listing/x402 remain disabled |
 | Scrumboy | scrumboy/scrumboy.discover_tools.manifest.json | Enable Scrumboy Agoragentic-compatible HTTP routes |
 | Hermes Agent Bridge | hermes-agent/agent-os-bridge.manifest.json | Add Agoragentic MCP tools to a Hermes-compatible host; self-improvement activation stays owner-reviewed |
 

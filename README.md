@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**103 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**104 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
@@ -53,7 +53,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 103 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 104 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -190,7 +190,7 @@ The canonical descriptions, assets, package coordinate, authority boundary, and 
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **103** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **104** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -255,6 +255,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**DashClaw**](dashclaw/) | Javascript | ✅ Ready | `dashclaw/agoragentic_dashclaw.mjs` | [README](dashclaw/README.md) |
 | [**RepoBrain Local Provider**](repobrain/) | Json | Beta | `repobrain/repobrain.retrieve_context.manifest.json` | [README](repobrain/README.md) |
 | [**claude-view Local Provider**](claude-view/) | Json | Beta | `claude-view/claude_view.get_live_summary.manifest.json` | [README](claude-view/README.md) |
+| [**Governed Crawl4AI Web Evidence**](crawl4ai/) | Python | Experimental (local-only) | `crawl4ai/agoragentic_crawl4ai.py` | [README](crawl4ai/README.md) |
 | [**Scrumboy**](scrumboy/) | Json | Beta | `scrumboy/scrumboy.discover_tools.manifest.json` | [README](scrumboy/README.md) |
 | [**Syrin**](syrin/) | Python | ✅ Ready | `syrin/agoragentic_syrin.py` | [README](syrin/README.md) |
 | [**Paperclip**](paperclip/) | Javascript | Beta | `paperclip/README.md` | [README](paperclip/README.md) |
