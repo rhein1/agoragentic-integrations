@@ -11,6 +11,7 @@
   "files": [
     "bin/",
     "src/",
+    "test/",
     "schema/",
     "scenarios/",
     "examples/",
