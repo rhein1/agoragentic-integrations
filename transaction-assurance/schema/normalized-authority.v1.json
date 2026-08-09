@@ -106,6 +106,55 @@
       ]
     },
     "normalization_warnings": { "$ref": "#/$defs/stringList" },
+    "protocol_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_revision",
+        "artifact_kind",
+        "binding_hash",
+        "verifier_checks",
+        "verifier_trust_mode",
+        "verifier_ref",
+        "protocol_evidence",
+        "unsupported_fields",
+        "raw_signature_material_embedded",
+        "raw_payment_material_embedded"
+      ],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "source_revision": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "artifact_kind": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "binding_hash": { "$ref": "#/$defs/sha256" },
+        "verifier_checks": { "$ref": "#/$defs/stringList" },
+        "verifier_trust_mode": { "enum": ["none", "trusted_callback"] },
+        "verifier_ref": { "$ref": "#/$defs/nullableRef" },
+        "protocol_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "subject_ref",
+            "counterparty_ref",
+            "asset_ref",
+            "scope_ref",
+            "policy_state",
+            "environment"
+          ],
+          "properties": {
+            "subject_ref": { "$ref": "#/$defs/nullableRef" },
+            "counterparty_ref": { "$ref": "#/$defs/nullableRef" },
+            "asset_ref": { "$ref": "#/$defs/nullableRef" },
+            "scope_ref": { "$ref": "#/$defs/nullableRef" },
+            "policy_state": { "$ref": "#/$defs/nullableRef" },
+            "environment": { "$ref": "#/$defs/nullableRef" }
+          }
+        },
+        "unsupported_fields": { "$ref": "#/$defs/stringList" },
+        "raw_signature_material_embedded": { "const": false },
+        "raw_payment_material_embedded": { "const": false }
+      }
+    },
     "authority_flags": {
       "type": "object",
       "additionalProperties": false,
