@@ -34,7 +34,7 @@ The before hook maps `{ tool, sessionID, callID }` plus mutable `output.args` in
 
 The after hook does not persist `title`, `output`, metadata values, tool arguments, session IDs, or call IDs. It stores only hashes, byte counts, value types, field counts, redacted stable references, duration, and explicit authority boundaries. An after hook without a matching governed before hook emits a blocked `ungoverned_after_without_before` receipt and disables further calls in that plugin instance; it never creates a successful receipt.
 
-OpenCode `1.18.15` declares no tool-error after hook. If the host tool itself throws, the before event remains but this plugin cannot truthfully emit a successful completion receipt. Missing after evidence therefore remains unknown rather than being reconstructed.
+OpenCode `1.18.15` declares no tool-error after hook. If the host tool itself throws, the before event remains but this plugin cannot truthfully emit a successful completion receipt. Missing after evidence therefore remains unknown rather than being reconstructed. Pending governed calls are bounded and expire locally; expiry never implies a successful completion, and a later unmatched after hook is recorded as blocked evidence.
 
 ## Local artifacts
 
@@ -47,6 +47,7 @@ Artifacts stay under the project directory:
 │   └── approval_<id>.decision.json
 └── opencode/
     ├── approval-refs/action_<id>.json
+    ├── approval-refs/action_<id>.consumed_<id>.json
     └── runs/opencode_run_<id>/
         ├── events.jsonl
         ├── receipts/local_receipt_<id>.json
@@ -94,13 +95,16 @@ The `memory_handoff: "local_ref"` option writes a refs-and-hashes-only local han
 
 ## Approval and retry
 
-For `ask`, inspect the path in the thrown error and decide locally with the installed Harness Core dependency:
+For `ask`, inspect the path in the thrown error and decide locally with the installed Harness Core dependency. From this repository root, use the dependency installed by `cd opencode && npm ci` and explicitly point it at the OpenCode project directory:
 
 ```bash
-npx --no-install agoragentic-harness-core approvals show approval_<id>
-npx --no-install agoragentic-harness-core approvals decide approval_<id> \
+node ./opencode/node_modules/agoragentic-harness-core/bin/agoragentic-harness.mjs \
+  approvals show approval_<id> --dir "$PWD"
+node ./opencode/node_modules/agoragentic-harness-core/bin/agoragentic-harness.mjs \
+  approvals decide approval_<id> \
   --decision approve \
-  --note "owner-reviewed local retry"
+  --note "owner-reviewed local retry" \
+  --dir "$PWD"
 ```
 
 Retry the same tool action after approval. The approval lookup binds the hashed session reference, tool name, input hash, and policy hash, and the before hook consumes it for one retry attempt. A later identical action requires a fresh approval; changed input or policy also produces a different packet. Approving the local packet only removes this plugin's own `ask` block for that attempt; OpenCode permissions and every external authority boundary still apply.
