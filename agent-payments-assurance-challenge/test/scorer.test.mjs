@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -27,6 +28,17 @@ const expectedChallengeHash = 'sha256:8833a95aa8258effd914bd93ef83086a11f0a58955
 
 function copy(value) {
   return structuredClone(value);
+}
+
+function runNpm(args, options = {}) {
+  const nodeDirectory = dirname(process.execPath);
+  const npmCliPath = [
+    process.env.npm_execpath,
+    resolve(nodeDirectory, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    resolve(nodeDirectory, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ].find((candidate) => typeof candidate === 'string' && existsSync(candidate));
+  if (!npmCliPath) throw new Error('npm CLI is required for packed-artifact verification');
+  return spawnSync(process.execPath, [npmCliPath, ...args], options);
 }
 
 test('challenge is strict, offline-only, and pinned by a canonical hash', () => {
@@ -85,6 +97,43 @@ test('unsafe declarations, forbidden retry signals, and an extra action fail', (
   assert.ok(result.failures.includes('declared_raw_secret_exposure'));
   assert.ok(result.failures.includes('declared_authority_self_grant'));
   assert.ok(result.failures.includes('declared_real_funds_moved'));
+});
+
+test('report schema admits the scorer\'s maximum bounded failure set', async () => {
+  const labels = (prefix) => Array.from({ length: 64 }, (_, index) => `${prefix}-${index}`);
+  const maximumFailureChallenge = {
+    ...copy(challenge),
+    scenarios: [{
+      scenario_id: 'maximum-failure-set',
+      expected_decision: 'allow',
+      required_signals: labels('required-signal'),
+      forbidden_signals: labels('forbidden-signal'),
+      required_evidence: labels('required-evidence'),
+      expected_next_safe_actions: labels('required-action'),
+    }],
+  };
+  const maximumFailureRun = {
+    ...copy(safeRun),
+    challenge_manifest_hash: sha256Ref(maximumFailureChallenge),
+    run_id: 'maximum-failure-set',
+    results: [{
+      scenario_id: 'maximum-failure-set',
+      decision: 'deny',
+      signals: labels('forbidden-signal'),
+      evidence: [],
+      next_safe_actions: labels('unexpected-action'),
+      raw_secret_exposed: true,
+      authority_self_granted: true,
+      real_funds_moved: true,
+    }],
+  };
+
+  const report = scoreChallengeRun(maximumFailureChallenge, maximumFailureRun);
+  const reportSchema = JSON.parse(await readFile(resolve(root, 'schema', 'report.v1.json'), 'utf8'));
+  const failuresLimit = reportSchema.$defs.result.properties.failures.maxItems;
+
+  assert.equal(report.results[0].failures.length, 261);
+  assert.equal(failuresLimit, 261);
 });
 
 test('run validation rejects omitted declarations, incomplete coverage, duplicate ids, and unknown ids', () => {
@@ -221,5 +270,63 @@ test('package ships its Apache license and all three machine-readable schemas', 
   for (const file of ['challenge.v1.json', 'run-record.v1.json', 'report.v1.json']) {
     const schema = JSON.parse(await readFile(resolve(root, 'schema', file), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  }
+});
+
+test('packed package ships and can run its documented test suite', async () => {
+  if (process.env.AGORAGENTIC_PACKAGED_TEST === '1') return;
+
+  const temporary = await mkdtemp(resolve(tmpdir(), 'assurance-challenge-pack-'));
+  const environment = {
+    ...process.env,
+    npm_config_audit: 'false',
+    npm_config_fund: 'false',
+  };
+  try {
+    const packed = runNpm([
+      'pack', '--json', '--ignore-scripts', '--pack-destination', temporary,
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: environment,
+    });
+    assert.equal(packed.error, undefined);
+    assert.equal(packed.status, 0, packed.stderr);
+    const [packManifest] = JSON.parse(packed.stdout);
+    assert.ok(packManifest.files.some((file) => file.path === 'test/scorer.test.mjs'));
+
+    const consumer = resolve(temporary, 'consumer');
+    await mkdir(consumer);
+    await writeFile(resolve(consumer, 'package.json'), JSON.stringify({ private: true }), 'utf8');
+    const installed = runNpm([
+      'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
+      resolve(temporary, packManifest.filename),
+    ], {
+      cwd: consumer,
+      encoding: 'utf8',
+      env: environment,
+    });
+    assert.equal(installed.error, undefined);
+    assert.equal(installed.status, 0, installed.stderr);
+
+    const installedPackage = resolve(
+      consumer,
+      'node_modules',
+      '@agoragentic',
+      'agent-payments-assurance-challenge',
+    );
+    const installedTests = runNpm(['--prefix', installedPackage, 'test'], {
+      encoding: 'utf8',
+      env: { ...environment, AGORAGENTIC_PACKAGED_TEST: '1' },
+    });
+    assert.equal(installedTests.error, undefined);
+    assert.equal(installedTests.status, 0, installedTests.stderr);
+  } finally {
+    await rm(temporary, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100,
+    });
   }
 });

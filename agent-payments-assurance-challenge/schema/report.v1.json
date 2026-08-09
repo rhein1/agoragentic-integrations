@@ -128,7 +128,7 @@
         "passed": { "type": "boolean" },
         "failures": {
           "type": "array",
-          "maxItems": 256,
+          "maxItems": 261,
           "uniqueItems": true,
           "items": {
             "type": "string",
