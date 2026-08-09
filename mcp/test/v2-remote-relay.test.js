@@ -26,6 +26,7 @@ const {
     MCP_V2_PROTOCOL_VERSION,
     closeRemoteSession,
     connectRemoteClient,
+    createRemoteToolDirectory,
 } = require('../mcp-server.js');
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
@@ -298,6 +299,40 @@ test('does not retain a registration-returned key for later stateless requests',
         await closeRemoteSession(remoteSession);
         await fixture.close();
     }
+});
+
+test('keeps fallback identity separate from explicit remote pagination', async () => {
+    const calls = [];
+    const client = {
+        async listTools(params = {}) {
+            calls.push(params);
+            if (params.cursor === 'page-2') {
+                return { tools: [{ name: 'remote_page_two' }] };
+            }
+            return {
+                tools: [
+                    { name: 'remote_page_one' },
+                    { name: 'agoragentic_register' },
+                    { name: 'remote_page_two' },
+                ],
+            };
+        },
+    };
+    const directory = createRemoteToolDirectory(client);
+
+    const page = await directory.list({ cursor: 'page-2' });
+    assert.deepEqual(page.tools.map((tool) => tool.name), ['remote_page_two']);
+    assert.equal(await directory.has('agoragentic_register'), true);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1], {});
+
+    await directory.list({ cursor: 'page-2' });
+    assert.equal(await directory.has('agoragentic_register'), true);
+    assert.equal(calls.length, 3);
+
+    const aggregate = await directory.list();
+    assert.ok(aggregate.tools.some((tool) => tool.name === 'agoragentic_search'));
+    assert.equal(aggregate.tools.filter((tool) => tool.name === 'agoragentic_register').length, 1);
 });
 
 test('derives fallback tools from a custom MCP origin instead of forwarding its key elsewhere', async () => {

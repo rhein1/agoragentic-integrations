@@ -18,10 +18,18 @@ const MCP_V2_PROTOCOL_VERSION = '2026-07-28';
 const PACKED_FIXTURE_API_KEY = 'amk_packed_fixture_key';
 
 const npmCli = process.env.npm_execpath;
-const npmCommand = npmCli ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCommand = npmCli
+    ? process.execPath
+    : process.platform === 'win32'
+        ? process.env.ComSpec || 'cmd.exe'
+        : 'npm';
 
 function runNpm(args, options = {}) {
-    const commandArgs = npmCli ? [npmCli, ...args] : args;
+    const commandArgs = npmCli
+        ? [npmCli, ...args]
+        : process.platform === 'win32'
+            ? ['/d', '/s', '/c', 'npm.cmd', ...args]
+            : args;
     return execFileSync(npmCommand, commandArgs, {
         encoding: 'utf8',
         stdio: options.capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',

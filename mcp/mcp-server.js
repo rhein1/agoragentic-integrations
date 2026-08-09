@@ -299,6 +299,32 @@ function mergeFallbackTools(remoteTools = []) {
     return merged;
 }
 
+function createRemoteToolDirectory(client) {
+    let remoteToolNames = null;
+
+    async function list(params = {}) {
+        const result = await client.listTools(params);
+        const isAggregateRequest = params?.cursor === undefined;
+        if (isAggregateRequest) {
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+        }
+        return {
+            ...result,
+            tools: isAggregateRequest ? mergeFallbackTools(result.tools) : result.tools,
+        };
+    }
+
+    async function has(name) {
+        if (!remoteToolNames) {
+            const result = await client.listTools();
+            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
+        }
+        return remoteToolNames.has(name);
+    }
+
+    return { has, list };
+}
+
 const FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList().map((tool) => tool.name));
 
 async function executeFallbackTool(name, args = {}) {
@@ -485,31 +511,14 @@ async function runMcpRelay() {
 
     if (remoteSession) {
         const { client } = remoteSession;
-        let remoteToolNames = null;
-
-        async function listRemoteTools(params = {}) {
-            const result = await client.listTools(params);
-            remoteToolNames = new Set((result.tools || []).map((tool) => tool.name));
-            return result;
-        }
-
-        async function hasRemoteTool(name) {
-            if (!remoteToolNames) {
-                await listRemoteTools();
-            }
-            return remoteToolNames.has(name);
-        }
+        const remoteTools = createRemoteToolDirectory(client);
 
         server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-            const result = await listRemoteTools(request.params);
-            return {
-                ...result,
-                tools: mergeFallbackTools(result.tools),
-            };
+            return remoteTools.list(request.params);
         });
 
         server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await hasRemoteTool(request.params.name))) {
+            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await remoteTools.has(request.params.name))) {
                 return executeFallbackTool(request.params.name, request.params.arguments || {});
             }
             return client.callTool(request.params);
@@ -802,5 +811,6 @@ module.exports = {
     buildFallbackToolList,
     closeRemoteSession,
     connectRemoteClient,
+    createRemoteToolDirectory,
     executeFallbackTool,
 };
