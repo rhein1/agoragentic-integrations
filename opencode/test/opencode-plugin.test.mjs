@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,8 @@ import { decideApproval } from 'agoragentic-harness-core';
 import {
   OpenCodeGovernanceBlock,
   createOpenCodeHooks,
+  decideOpenCodeToolCall,
+  mapOpenCodeToolCall,
 } from '../src/index.mjs';
 import * as serverModule from '../src/server.mjs';
 
@@ -193,6 +196,237 @@ test('ask writes one bounded packet, blocks, and an approved retry can complete'
   assert.match(artifactText, /"memory_write_performed": false/);
 });
 
+test('changed after-hook arguments emit blocked mismatch evidence instead of a success receipt', async () => {
+  const directory = await tempDir();
+  const hooks = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: { now_ms: fixedClock([1_700_000_125_000, 1_700_000_125_300]) },
+  });
+  const input = hookInput('read', 'session-binding', 'call-binding');
+  const governedArgs = { filePath: 'README.md' };
+  const executedArgs = { filePath: 'private/changed-after-before.md' };
+
+  await hooks['tool.execute.before'](input, { args: governedArgs });
+  await hooks['tool.execute.after'](
+    { ...input, args: executedArgs },
+    { title: 'Read', output: 'bounded output only' },
+  );
+
+  const receipt = await onlyReceipt(
+    directory,
+    (candidate) => candidate.outcome_status === 'governance_binding_mismatch',
+  );
+  assert.equal(receipt.status, 'blocked');
+  assert.equal(receipt.evidence.governance_binding.valid, false);
+  assert.equal(receipt.evidence.governance_binding.tool_name_matches_governed_before, true);
+  assert.notEqual(
+    receipt.evidence.governance_binding.governed_input_hash,
+    receipt.evidence.governance_binding.executed_input_hash,
+  );
+  assert.ok(receipt.evidence.reason_codes.includes('arguments_changed_after_governance'));
+  assertSchemaValid(receipt);
+  assert.doesNotMatch(
+    await readAllText(path.join(directory, '.agoragentic')),
+    /private\/changed-after-before\.md/,
+  );
+
+  await assert.rejects(
+    hooks['tool.execute.before'](
+      hookInput('read', 'session-binding-next', 'call-binding-next'),
+      { args: { filePath: 'README.md' } },
+    ),
+    (error) => error instanceof OpenCodeGovernanceBlock && error.code === 'evidence_unavailable',
+  );
+});
+
+test('apply_patch inspects every target and fails closed when targets cannot be parsed', async () => {
+  const patch = [
+    '*** Begin Patch',
+    '*** Update File: public/safe.md',
+    '@@',
+    '-old',
+    '+new',
+    '*** Update File: private/blocked.md',
+    '@@',
+    '-old',
+    '+new',
+    '*** End Patch',
+  ].join('\n');
+  const action = mapOpenCodeToolCall(
+    hookInput('apply_patch', 'session-patch', 'call-patch'),
+    { args: { patch } },
+  );
+  assert.deepEqual(action.targets, ['public/safe.md', 'private/blocked.md']);
+  assert.equal(action.target, 'public/safe.md\nprivate/blocked.md');
+  const decision = decideOpenCodeToolCall(
+    { tool_policy: { blocked_paths: ['private/blocked.md'] } },
+    hookInput('apply_patch', 'session-patch', 'call-patch'),
+    { args: { patch } },
+  );
+  assert.equal(decision.decision, 'deny');
+  assert.ok(decision.reasons.some((reason) => reason.code === 'blocked_path'));
+
+  const malformed = decideOpenCodeToolCall(
+    {},
+    hookInput('apply_patch', 'session-patch-malformed', 'call-patch-malformed'),
+    { args: { patch: 'not an apply_patch directive' } },
+  );
+  assert.equal(malformed.decision, 'deny');
+  assert.ok(malformed.reasons.some((reason) => reason.code === 'apply_patch_targets_unparseable'));
+});
+
+test('underscored MCP money tool names are tokenized and denied before execution', async () => {
+  const directory = await tempDir();
+  const hooks = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: { now_ms: fixedClock([1_700_000_130_000]) },
+  });
+  const input = hookInput('mcp__wallet__transfer', 'session-mcp-money', 'call-mcp-money');
+  const decision = decideOpenCodeToolCall({}, input, { args: {} });
+  assert.equal(decision.decision, 'deny');
+  assert.ok(decision.reasons.some((reason) => reason.code === 'spend_or_publish_action'));
+
+  await assert.rejects(
+    hooks['tool.execute.before'](input, { args: {} }),
+    (error) => error instanceof OpenCodeGovernanceBlock && error.code === 'policy_denied',
+  );
+});
+
+test('two plugin instances cannot consume one approval twice', async () => {
+  const directory = await tempDir();
+  const input = hookInput('write', 'session-approval-race', 'call-approval-race');
+  const args = { filePath: 'one-shot.txt', content: 'bounded' };
+  const seed = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: { now_ms: fixedClock([1_700_000_135_000]) },
+  });
+
+  let requested;
+  try {
+    await seed['tool.execute.before'](input, { args });
+    assert.fail('write should require approval before execution');
+  } catch (error) {
+    requested = error;
+  }
+  assert.ok(requested instanceof OpenCodeGovernanceBlock);
+  assert.equal(requested.code, 'approval_required');
+  await decideApproval({
+    dir: directory,
+    approval_id: requested.approval_id,
+    decision: 'approve',
+    note: 'owner-reviewed one-shot retry',
+  });
+
+  let arrivals = 0;
+  let releaseClaims;
+  const claimsReleased = new Promise((resolve) => { releaseClaims = resolve; });
+  const waitForBothClaims = async () => {
+    arrivals += 1;
+    if (arrivals === 2) releaseClaims();
+    await claimsReleased;
+  };
+  const first = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: {
+      now_ms: fixedClock([1_700_000_135_100]),
+      before_approval_claim: waitForBothClaims,
+    },
+  });
+  const second = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: {
+      now_ms: fixedClock([1_700_000_135_100]),
+      before_approval_claim: waitForBothClaims,
+    },
+  });
+
+  const attempts = await Promise.allSettled([
+    first['tool.execute.before'](input, { args }),
+    second['tool.execute.before'](input, { args }),
+  ]);
+  assert.equal(attempts.filter((result) => result.status === 'fulfilled').length, 1);
+  const rejected = attempts.find((result) => result.status === 'rejected');
+  assert.ok(rejected?.reason instanceof OpenCodeGovernanceBlock);
+  assert.equal(rejected.reason.code, 'approval_consumed');
+
+  const approvalRefFiles = (await listFiles(path.join(directory, '.agoragentic', 'opencode', 'approval-refs')))
+    .map((file) => path.basename(file));
+  assert.equal(approvalRefFiles.filter((name) => /\.consumed_[a-f0-9]{12}\.json$/.test(name)).length, 1);
+});
+
+test('pending governed before records are bounded and expire without implying completion', async () => {
+  const directory = await tempDir();
+  const hooks = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: {
+      now_ms: fixedClock([0, 1, 2, 20]),
+      pending_call_limit: 2,
+      pending_call_ttl_ms: 10,
+    },
+  });
+
+  await hooks['tool.execute.before'](hookInput('read', 'session-pending', 'call-one'), { args: { filePath: 'one.md' } });
+  await hooks['tool.execute.before'](hookInput('read', 'session-pending', 'call-two'), { args: { filePath: 'two.md' } });
+  await assert.rejects(
+    hooks['tool.execute.before'](hookInput('read', 'session-pending', 'call-three'), { args: { filePath: 'three.md' } }),
+    (error) => error instanceof OpenCodeGovernanceBlock && error.code === 'pending_completion_evidence_limit',
+  );
+
+  await hooks['tool.execute.before'](hookInput('read', 'session-pending', 'call-after-expiry'), { args: { filePath: 'after-expiry.md' } });
+});
+
+test('the installed Harness CLI shows and decides an OpenCode approval in the explicit project directory', async () => {
+  const directory = await tempDir();
+  const hooks = createOpenCodeHooks({
+    directory,
+    policy: {},
+    internals: { now_ms: fixedClock([1_700_000_140_000, 1_700_000_140_100]) },
+  });
+  const input = hookInput('write', 'session-cli', 'call-cli');
+  const args = { filePath: 'cli-approved.txt', content: 'bounded' };
+
+  let requested;
+  try {
+    await hooks['tool.execute.before'](input, { args });
+    assert.fail('write should require approval before execution');
+  } catch (error) {
+    requested = error;
+  }
+  assert.ok(requested instanceof OpenCodeGovernanceBlock);
+  assert.equal(requested.code, 'approval_required');
+
+  const harnessCli = path.join(
+    packageRoot,
+    'node_modules',
+    'agoragentic-harness-core',
+    'bin',
+    'agoragentic-harness.mjs',
+  );
+  const show = runHarnessCli(harnessCli, ['approvals', 'show', requested.approval_id, '--dir', directory]);
+  assert.equal(show.status, 0, show.stderr);
+  assert.equal(JSON.parse(show.stdout).approval.request.approval_id, requested.approval_id);
+
+  const decide = runHarnessCli(harnessCli, [
+    'approvals',
+    'decide',
+    requested.approval_id,
+    '--decision',
+    'approve',
+    '--note',
+    'owner-reviewed CLI retry',
+    '--dir',
+    directory,
+  ]);
+  assert.equal(decide.status, 0, decide.stderr);
+  await hooks['tool.execute.before'](input, { args });
+});
+
 test('an after hook without a matching governed before hook blocks evidence and future calls', async () => {
   const directory = await tempDir();
   const hooks = createOpenCodeHooks({
@@ -293,6 +527,15 @@ function fixedClock(values) {
   const remaining = [...values];
   const fallback = remaining.at(-1) ?? 0;
   return () => remaining.shift() ?? fallback;
+}
+
+function runHarnessCli(harnessCli, args) {
+  const result = spawnSync(process.execPath, [harnessCli, ...args], {
+    cwd: packageRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(result.error, undefined, result.error?.message);
+  return result;
 }
 
 async function tempDir() {
