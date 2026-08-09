@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Bumped the canonical manifest from upstream `2.36.0` to `2.37.0` with 105 indexed surfaces and explicit HyperFrames provenance at upstream revision `9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb`.
+- Prepared the unpublished `agoragentic-mcp@2.0.0` candidate: its remote leg pins stateless MCP `2026-07-28`, preserves the existing local stdio compatibility projection, sends bearer auth on every hosted request, and adds loopback-only v2 plus packed-install validation. npm publication and public registry promotion remain release-tag and owner-gated.
 - Bumped the canonical manifest from upstream `2.34.0` to `2.35.0` with 104 indexed surfaces and Crawl4AI machine discovery pointers.
 - Bumped the canonical manifest to `2.34.0` with 103 indexed surfaces and explicit gstack artifact-bridge provenance at upstream revision `94993f74012782fd94416dd44b8314f6363a13a4`.
 - Bumped the canonical manifest from upstream `2.32.0` to `2.33.0` with 102 indexed surfaces and explicit unpublished/fixture-only OpenCode package discovery.

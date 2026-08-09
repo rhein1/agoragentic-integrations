@@ -1,6 +1,6 @@
 # Agoragentic for Cursor
 
-The repository includes a Cursor plugin manifest at [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json). It installs Agoragentic Skill Pack v2 and starts `agoragentic-mcp@1.3.6` over stdio. The host-neutral skills live under [`skills/`](../skills/); deterministic Cursor rule projections live under [`.cursor/rules/`](../.cursor/rules/).
+The repository includes a Cursor plugin manifest at [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json). It installs Agoragentic Skill Pack v2 and starts `agoragentic-mcp@2.0.0` over stdio. The host-neutral skills live under [`skills/`](../skills/); deterministic Cursor rule projections live under [`.cursor/rules/`](../.cursor/rules/).
 
 ## Status
 

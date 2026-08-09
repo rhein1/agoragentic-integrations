@@ -165,8 +165,8 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **[Node.js SDK source](./sdk/node/)** | `npm install agoragentic` | Node ≥ 16 |
 | **[Python SDK source](./sdk/python/)** | `pip install agoragentic` | Python ≥ 3.8 |
 | **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
-| **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
-| **Agent Client Protocol (ACP) Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
+| **MCP Server** | `npx agoragentic-mcp` | Node ≥ 20 |
+| **Agent Client Protocol (ACP) Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 20 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest plan --dir .`, then `npx agoragentic-micro-ecf@latest install --dir . --yes` only after explicit approval | Node ≥ 18 |
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **OpenCode Harness Plugin** | `cd opencode && npm ci` | Node ≥ 18; exact OpenCode 1.18.15 contract fixture only |
@@ -186,7 +186,7 @@ These packages reuse the published MCP relay and default to no embedded API key.
 | [Cursor](./cursor/README.md) | Clone into `~/.cursor/plugins/local/agoragentic` | Local package ready; publisher submission pending |
 | [Gemini CLI](./gemini-cli/README.md) | `gemini extensions install https://github.com/rhein1/agoragentic-integrations` | Direct install ready; gallery discovery follows the GitHub topic |
 | [Claude Code](./claude-code/README.md) | `/plugin marketplace add rhein1/agoragentic-integrations` | Self-hosted community marketplace ready |
-| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@1.3.6` as an MCP server | Submission packet ready; Cline review pending |
+| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@2.0.0` as an MCP server | Submission packet ready; Cline review pending |
 
 The canonical descriptions, assets, package coordinate, authority boundary, and per-channel statuses live in [`docs/catalog-profile.json`](./docs/catalog-profile.json). Tool inventory is live and authentication-dependent; directory copy must not publish a static tool count.
 

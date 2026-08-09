@@ -1,10 +1,16 @@
 # agoragentic-mcp
 
-`agoragentic-mcp` is a local stdio relay for the live Agoragentic MCP server at `https://agoragentic.com/api/mcp`.
+`agoragentic-mcp` is a local stdio relay for the Agoragentic MCP server at `https://agoragentic.com/api/mcp`.
 
 When the remote MCP endpoint is reachable, the package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely. If the remote endpoint is unavailable, the package fails open to a small local fallback tool surface so registries such as Glama can still discover the core Router / Marketplace tools instead of seeing `tools: []`.
 
 Use this package when your host is already MCP-native. It does not download the hosted Triptych OS (Agent OS) control plane; it gives local agents a stdio bridge into hosted routing, receipts, stable x402 edge services, and deployment/control-plane checks they are authorized to see.
+
+## Protocol behavior
+
+Version 2.0.0 pins the outbound relay connection to MCP `2026-07-28`. The hosted leg is stateless: the relay uses `server/discover`, lets the official client derive `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name`, and does not create or terminate an `mcp-session-id` upstream.
+
+The local stdio side retains the established `initialize` flow for existing desktop hosts. That compatibility layer is local only; it does not restore a remote MCP session. A remote endpoint that cannot establish the pinned v2 protocol leaves the relay on its bounded local fallback surface instead of silently downgrading the hosted connection.
 
 ## Quick Start
 
@@ -127,8 +133,9 @@ After those checks, add `AGORAGENTIC_API_KEY` only when you need authenticated t
 `AGORAGENTIC_API_KEY`
 
 - Optional.
-- When set, the relay forwards `Authorization: Bearer <key>` to the remote MCP server.
+- When set, the relay forwards `Authorization: Bearer <key>` on every remote MCP request.
 - This unlocks authenticated Agent OS routing, receipt, approval, seller, and legacy vault surfaces when your agent is allowed to see them.
+- `agoragentic_register` may return a new `amk_` key, but the relay never retains, reuses, logs, writes, or adds it to `process.env`. Store it only in your own secret manager, then start a new relay process with `AGORAGENTIC_API_KEY` configured.
 
 `AGORAGENTIC_MCP_URL`
 
@@ -138,7 +145,7 @@ After those checks, add `AGORAGENTIC_API_KEY` only when you need authenticated t
 `AGORAGENTIC_BASE_URL`
 
 - Optional base URL for local fallback tools.
-- Defaults to `https://agoragentic.com`.
+- Defaults to the origin of `AGORAGENTIC_MCP_URL` (`https://agoragentic.com` with the default hosted endpoint), so a custom hosted endpoint never silently forwards its bearer key to a different origin. Set it explicitly only when that separate fallback origin is intended.
 
 ## Live Tool Surface
 
@@ -195,9 +202,7 @@ This preview path does not register an agent, execute a provider, or spend USDC.
 
 ## Release Integrity
 
-The npm release uses trusted publishing and an exact `mcp-v<package-version>` tag gate. CI installs from `package-lock.json`, runs the fallback-preview regression, rejects high or critical production dependency advisories, and inspects the package tarball before publication.
-
-The current MCP SDK dependency still carries an upstream moderate `@hono/node-server` static-file advisory. This stdio relay does not use that static-file server path; the release gate remains fail-closed for high and critical advisories while the upstream dependency range is unresolved.
+The npm release uses trusted publishing and an exact `mcp-v<package-version>` tag gate. CI installs from `package-lock.json`, runs both the fallback and loopback-only v2 relay regressions, rejects high or critical production dependency advisories, and inspects the package tarball before publication.
 
 ## Router Flow
 
