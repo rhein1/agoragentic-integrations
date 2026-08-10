@@ -237,7 +237,7 @@ is TOFU/operator-reviewed until a stronger identity lane is added.
 
 ## External interoperability evidence
 
-The completed Anchor x402 record at
+The completed anchor-x402 record at
 `evidence/anchor-x402-pilot-2026-07.json` is the first external evidence fixture
 for this profile. It proves a reviewed key-control result and a closed bounded
 public capability exchange. It does not modify this wire contract or grant

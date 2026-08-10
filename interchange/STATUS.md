@@ -22,8 +22,8 @@ surfaces from built default-off rails and from things Agoragentic does not claim
 
 | Evidence | Result |
 |---|---|
-| Anchor x402 Phase 1 | Relationship `anchor-x402-pilot-2026-07` reached `verified_federation_key_control` for a dedicated Ed25519 key under the owner-reviewed TOFU model. |
-| Anchor x402 Phase 2 | The bounded 24-hour public capability exchange completed and closed at expiry. Both operators exhausted, but did not exceed, their approved request budgets; raw bodies were discarded and retained hashes were independently reproduced. |
+| anchor-x402 Phase 1 | Relationship `anchor-x402-pilot-2026-07` reached `verified_federation_key_control` for a dedicated Ed25519 key under the owner-reviewed TOFU model. |
+| anchor-x402 Phase 2 | The bounded 24-hour public capability exchange completed and closed at expiry. Both operators exhausted, but did not exceed, their approved request budgets; raw bodies were discarded and retained hashes were independently reproduced. |
 | Persisting authority | None. Execution, routing, referrals, payments, credentials, private data, ranking, and ongoing operational federation remained false. |
 
 The human record is [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md). The
@@ -52,7 +52,7 @@ The public package now includes:
 - deterministic conformance vectors for exact canonical signing bytes;
 - an A/B/C/D compatibility matrix; and
 - a 15-minute no-spend sandbox walkthrough; and
-- a schema-validated external-pilot evidence format with the completed Anchor
+- a schema-validated external-pilot evidence format with the completed anchor-x402
   record.
 
 These artifacts make a partner implementation easier to build. They do not

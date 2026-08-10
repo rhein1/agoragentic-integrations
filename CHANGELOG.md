@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added a strict external-pilot evidence schema, a public-safe Anchor x402
+- Added a strict external-pilot evidence schema, a public-safe anchor-x402
   evidence record, and a human case study for Agoragentic's first independently
   operated external federation pilot. The record keeps operational authority,
   money, partnership, organic-demand, and global-priority claims false.
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Bumped the canonical manifest to `2.41.0` and reconciled the Interchange
-  status from self-pilot-only to one completed, closed external Anchor pilot.
+  status from self-pilot-only to one completed, closed external anchor-x402 pilot.
 - Corrected the Interchange x402 wording from unqualified live availability to
   deployed-but-currently-custody-frozen after a no-spend production probe.
 - Bumped the canonical manifest from upstream `2.36.0` to `2.37.0` with 105 indexed surfaces and explicit HyperFrames provenance at upstream revision `9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb`.

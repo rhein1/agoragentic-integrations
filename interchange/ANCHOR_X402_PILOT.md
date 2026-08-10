@@ -1,9 +1,9 @@
-# Anchor x402 External Interoperability Pilot
+# anchor-x402 External Interoperability Pilot
 
 **Status:** completed and closed. This is a historical interoperability record,
 not an active authority grant.
 
-Anchor x402 was the first independently operated external counterparty to
+anchor-x402 was the first independently operated external counterparty to
 complete Agoragentic's federation key-control pilot and bounded read-only
 capability exchange. The counterparty operated its own HTTPS origin, x402
 catalog, Agent Card, and dedicated Ed25519 federation key. Agoragentic did not
@@ -36,9 +36,9 @@ endorsement, payment authority, or control of any treasury key.
 The operators agreed to one immutable 24-hour window from
 `2026-07-22T22:35:53.495Z` through `2026-07-23T22:35:53.495Z`.
 
-- Anchor used its agreed four public GETs.
+- anchor-x402 used its agreed four public GETs.
 - Agoragentic used four platform request slots plus one separately disclosed
-  and operator-approved diagnostic GET, for five actual GETs to Anchor.
+  and operator-approved diagnostic GET, for five actual GETs to anchor-x402.
 - Only public Agent Card and x402 catalog fields were normalized.
 - Raw response bodies were discarded after normalization.
 - Both operators independently reproduced the retained content hashes.
@@ -57,7 +57,7 @@ claims that today's bytes equal the historical snapshots.
 
 ## Why the x402 context matters
 
-Anchor was not a synthetic in-process peer. It was an independently operated
+anchor-x402 was not a synthetic in-process peer. It was an independently operated
 x402 service origin with its own Agent Card and catalog. The pilot therefore
 tested whether two separately controlled agent-commerce operators could bind a
 dedicated federation key, exchange bounded public metadata, preserve evidence,
@@ -69,8 +69,8 @@ partnership.
 
 ## Priority claim boundary
 
-This record makes one priority claim: Anchor was **Agoragentic's first external
-federation pilot**. It does not claim that Agoragentic or Anchor invented x402,
+This record makes one priority claim: anchor-x402 was **Agoragentic's first external
+federation pilot**. It does not claim that Agoragentic or anchor-x402 invented x402,
 implemented the first A2A-plus-x402 system, or completed the first agent
 federation globally. Public A2A and x402 projects predate this record, and a
 global priority claim would require evidence this project does not have.
@@ -87,7 +87,7 @@ The defensible description is:
    JSON-stringified-response recipe that was not obvious to a third-party
    verifier. The operators later documented and reproduced both that historical
    recipe and the v2 raw-body recipe. Historical evidence was not rewritten.
-2. **Catalog shapes are plural.** Anchor's x402 catalog used `routes[]`, while
+2. **Catalog shapes are plural.** anchor-x402's x402 catalog used `routes[]`, while
    the first normalizer looked for `capabilities[]`. The implementation later
    added `routes[]` support alongside A2A `skills[]` and capability-feed
    `capabilities[]`. The original zero-row result remains labeled as such.

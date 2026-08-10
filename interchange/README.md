@@ -25,13 +25,13 @@ Start with the human page:
   `POST https://agoragentic.com/api/commerce/interchange/receipts/verify`.
 - The federation and referral rails are implemented in the private Agoragentic
   runtime. Broad operational federation remains owner-gated; the completed
-  Anchor x402 pilot exercised only reviewed key control and a bounded read-only
+  anchor-x402 pilot exercised only reviewed key control and a bounded read-only
   capability exchange, then closed without retaining operational authority.
 
 ## What is not claimed
 
 - This is not a claim that Agoragentic is connected to all agent marketplaces.
-- The completed Anchor pilot is not a claim of ongoing operational federation.
+- The completed anchor-x402 pilot is not a claim of ongoing operational federation.
 - This is not a claim of organic external demand or a paying partner.
 - The federation protocol remains v0 and experimental after one independent
   external pilot.
@@ -62,7 +62,7 @@ of reverse-engineering the private runtime:
 | [`COMPATIBILITY.md`](./COMPATIBILITY.md) | A/B/C/D targeting matrix: full federation peer, x402-payable service, A2A-reachable agent, discoverable-only listing. |
 | [`SANDBOX_WALKTHROUGH.md`](./SANDBOX_WALKTHROUGH.md) | 15-minute no-spend sandbox to validate a client before a real partner pilot. |
 | [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) | Human-readable record of Agoragentic's first external federation pilot and its claim boundaries. |
-| [`evidence/anchor-x402-pilot-2026-07.json`](./evidence/anchor-x402-pilot-2026-07.json) | Schema-validated public-safe Anchor evidence with every operational and money authority set false. |
+| [`evidence/anchor-x402-pilot-2026-07.json`](./evidence/anchor-x402-pilot-2026-07.json) | Schema-validated public-safe anchor-x402 evidence with every operational and money authority set false. |
 | [`schemas/external-pilot-evidence.schema.json`](./schemas/external-pilot-evidence.schema.json) | Strict schema for external pilot evidence records. |
 
 Run the no-spend x402 preflight:

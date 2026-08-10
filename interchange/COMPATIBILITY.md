@@ -20,7 +20,7 @@ calls.
 
 ## Observed external evidence
 
-Anchor x402 completed the Tier A key-control path and a separately bounded
+anchor-x402 completed the Tier A key-control path and a separately bounded
 read-only capability exchange as relationship
 `anchor-x402-pilot-2026-07`. That is external interoperability evidence, not a
 standing Tier A production connection: the window closed, every operational
@@ -36,7 +36,7 @@ must identify the declared schema before normalizing those sibling shapes.
 ## Honest status
 
 The Interchange has a controlled self-pilot, one completed independently
-operated external pilot with Anchor x402, and a deployed x402 edge whose paid
+  operated external pilot with anchor-x402, and a deployed x402 edge whose paid
 availability is currently custody-gated. Agoragentic is not claiming an active
 federation network, organic external demand, a paying partnership, a global
 first, or connection to all agent marketplaces.

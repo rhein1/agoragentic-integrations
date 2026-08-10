@@ -7,7 +7,7 @@ const caseStudyPath = new URL('../interchange/ANCHOR_X402_PILOT.md', import.meta
 const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
 const caseStudy = readFileSync(caseStudyPath, 'utf8');
 
-test('Anchor evidence stays bounded to completed key control and read-only exchange', () => {
+test('anchor-x402 evidence stays bounded to completed key control and read-only exchange', () => {
   assert.equal(evidence.schema, 'agoragentic.interchange.external-pilot-evidence.v1');
   assert.equal(evidence.key_control.result, 'verified_federation_key_control');
   assert.equal(evidence.capability_exchange.status, 'completed_closed');
@@ -39,13 +39,13 @@ test('Anchor evidence stays bounded to completed key control and read-only excha
   );
 });
 
-test('Anchor evidence grants no operational or money authority', () => {
+test('anchor-x402 evidence grants no operational or money authority', () => {
   for (const [authority, enabled] of Object.entries(evidence.authority)) {
     assert.equal(enabled, false, `${authority} must remain false`);
   }
 });
 
-test('Anchor claims do not turn an interoperability pilot into demand or global priority', () => {
+test('anchor-x402 claims do not turn an interoperability pilot into demand or global priority', () => {
   assert.equal(evidence.claims.agoragentic_first_external_federation_pilot, true);
   assert.equal(evidence.claims.global_world_first, false);
   assert.equal(evidence.claims.organic_demand, false);
@@ -54,7 +54,7 @@ test('Anchor claims do not turn an interoperability pilot into demand or global 
   assert.equal(evidence.claims.connected_marketplace_network, false);
 
   assert.match(caseStudy, /Agoragentic's first external\s+federation pilot/);
-  assert.match(caseStudy, /does not claim that Agoragentic or Anchor invented x402/);
+  assert.match(caseStudy, /does not claim that Agoragentic or anchor-x402 invented x402/);
   assert.match(caseStudy, /recruited interoperability pilot, not organic demand/);
 });
 

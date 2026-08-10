@@ -4,7 +4,7 @@
   "recorded_on": "2026-08-09",
   "pilot_id": "anchor-x402-pilot-2026-07",
   "counterparty": {
-    "display_name": "Anchor x402",
+    "display_name": "anchor-x402",
     "origin": "https://anchor-x402.com",
     "agent_card_url": "https://anchor-x402.com/.well-known/agent-card.json",
     "x402_catalog_url": "https://anchor-x402.com/.well-known/x402.json",
