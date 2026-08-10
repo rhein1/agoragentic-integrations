@@ -1,7 +1,7 @@
 {
   "name": "@agoragentic/prime-agent",
-  "version": "0.1.0-alpha.0",
-  "description": "Bounded Prime Agent policy, principal-authority, evidence, and local receipt extension.",
+  "version": "0.1.0-alpha.1",
+  "description": "Bounded Prime Agent governance plus Agent OS runtime-plan compatibility and evidence validation.",
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
@@ -20,16 +20,19 @@
     ]
   },
   "exports": {
-    ".": "./index.mjs"
+    ".": "./index.mjs",
+    "./runtime-contract": "./runtime-contract.mjs"
   },
   "files": [
     "index.mjs",
+    "runtime-contract.mjs",
     "SKILL.md",
     "README.md",
+    "RUNTIME_INTEGRATION.md",
     "examples/"
   ],
   "scripts": {
-    "check": "node --check index.mjs && node --check test/extension.test.mjs",
+    "check": "node --check index.mjs && node --check runtime-contract.mjs && node --check test/extension.test.mjs && node --check test/runtime-contract.test.mjs",
     "test": "node --test test/*.test.mjs",
     "pack:dry": "npm pack --dry-run"
   }
