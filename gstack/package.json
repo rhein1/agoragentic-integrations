@@ -18,8 +18,9 @@
     "agoragentic-harness-core": "0.2.0"
   },
   "scripts": {
-    "check": "node --check gstack-harness.mjs && node --check cli.mjs && node --check test.mjs",
+    "check": "node --check gstack-harness.mjs && node --check cli.mjs && node --check test.mjs && node --check scripts/test-harness-core-compat.mjs",
     "test": "node --test test.mjs",
+    "test:core-compat": "node scripts/test-harness-core-compat.mjs",
     "pretest": "npm run check"
   },
   "repository": {

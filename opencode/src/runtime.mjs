@@ -24,6 +24,8 @@ export const OPENCODE_HANDOFF_SCHEMA = 'agoragentic.harness.opencode-memory-hand
 const PLUGIN_NAME = '@agoragentic/opencode';
 const APPROVAL_ID_PATTERN = /^approval_[a-f0-9]{12}$/;
 const MAX_REASON_CODES = 16;
+const DEFAULT_PENDING_CALL_LIMIT = 256;
+const DEFAULT_PENDING_CALL_TTL_MS = 5 * 60 * 1000;
 
 export class OpenCodeGovernanceBlock extends Error {
   constructor(message, { code, decision, approval_id = null, receipt_ref = null } = {}) {
@@ -51,6 +53,11 @@ export function createOpenCodeHooks({
   const logger = internals.logger && typeof internals.logger.error === 'function'
     ? internals.logger
     : console;
+  const pendingCallLimit = positiveInteger(internals.pending_call_limit, DEFAULT_PENDING_CALL_LIMIT);
+  const pendingCallTtlMs = positiveInteger(internals.pending_call_ttl_ms, DEFAULT_PENDING_CALL_TTL_MS);
+  const beforeApprovalClaim = typeof internals.before_approval_claim === 'function'
+    ? internals.before_approval_claim
+    : null;
   const calls = new Map();
   const sequences = new Map();
   let queue = Promise.resolve();
@@ -60,6 +67,15 @@ export function createOpenCodeHooks({
     const result = queue.then(operation, operation);
     queue = result.then(() => undefined, () => undefined);
     return result;
+  }
+
+  function prunePendingCalls(now) {
+    for (const [callRef, candidate] of calls) {
+      const startedMs = Number(candidate?.started_ms);
+      if (!Number.isFinite(startedMs) || now - startedMs >= pendingCallTtlMs) {
+        calls.delete(callRef);
+      }
+    }
   }
 
   async function beforeTool(input, output) {
@@ -97,6 +113,14 @@ export function createOpenCodeHooks({
   async function handleBefore(input = {}, output = {}) {
     assertHookIdentity(input);
     const startedMs = readClock(nowMs);
+    prunePendingCalls(startedMs);
+    if (calls.size >= pendingCallLimit) {
+      throw governanceBlock(
+        'pending_completion_evidence_limit',
+        'deny',
+        'Too many governed tool calls are awaiting OpenCode completion evidence; new tool calls remain blocked until the host reports completion or pending evidence expires.',
+      );
+    }
     const loadedPolicy = await loadPolicy();
     const action = mapOpenCodeToolCall(input, output);
     const evaluation = evaluateOpenCodeAction(loadedPolicy, action);
@@ -131,6 +155,7 @@ export function createOpenCodeHooks({
       if (approvalState.status === 'approved') enforcementDecision = 'allow_after_local_approval';
       else if (approvalState.status === 'rejected') enforcementDecision = 'deny_after_local_rejection';
       else if (approvalState.status === 'edited') enforcementDecision = 'approval_edit_required';
+      else if (approvalState.status === 'consumed') enforcementDecision = 'approval_consumed';
       else enforcementDecision = 'approval_required';
     }
 
@@ -195,6 +220,7 @@ export function createOpenCodeHooks({
         enforcement_decision: enforcementDecision,
         reason_codes: reasonCodes,
         action_fingerprint: actionFingerprint,
+        policy_hash: policyHash,
         input_evidence: inputEvidence,
         approval_refs: approvalState?.refs || [],
         before_event_id: beforeEvent.event_id,
@@ -207,6 +233,7 @@ export function createOpenCodeHooks({
     const outcomeStatus = enforcementDecision === 'approval_required' ? 'approval_required'
       : enforcementDecision === 'approval_edit_required' ? 'approval_edit_required'
         : enforcementDecision === 'deny_after_local_rejection' ? 'approval_rejected'
+          : enforcementDecision === 'approval_consumed' ? 'approval_consumed'
           : 'denied';
     const { receipt_ref: receiptRef } = await writeReceipt({
       run_id: runId,
@@ -263,6 +290,17 @@ export function createOpenCodeHooks({
         },
       );
     }
+    if (enforcementDecision === 'approval_consumed') {
+      throw new OpenCodeGovernanceBlock(
+        '[agoragentic/opencode] The matching local approval was already consumed by another tool attempt; this call remains blocked and requires a fresh owner approval.',
+        {
+          code: 'approval_consumed',
+          decision: 'ask',
+          approval_id: approvalState.approval_id,
+          receipt_ref: receiptRef,
+        },
+      );
+    }
     throw new OpenCodeGovernanceBlock(
       `[agoragentic/opencode] Tool execution denied before execution (${reasonCodes.join(', ') || 'policy_denied'}).`,
       { code: 'policy_denied', decision: 'deny', receipt_ref: receiptRef },
@@ -278,24 +316,56 @@ export function createOpenCodeHooks({
     const previous = calls.get(callRef);
     const governed = Boolean(previous);
     const action = mapOpenCodeToolCall(input, { args: input.args ?? {} });
-    const inputEvidence = previous?.input_evidence || boundedEvidence(input.args ?? {});
+    const executedInputEvidence = boundedEvidence(input.args ?? {});
+    const governedToolName = previous?.tool_name || null;
+    const toolMatches = !governed || governedToolName === sanitizeText(action.tool_name, { maxLength: 120 });
+    const inputMatches = !governed || sameBoundedEvidence(previous.input_evidence, executedInputEvidence);
+    const governanceBindingValid = governed && toolMatches && inputMatches;
+    const bindingMismatch = governed && !governanceBindingValid;
+    const inputEvidence = bindingMismatch
+      ? executedInputEvidence
+      : previous?.input_evidence || executedInputEvidence;
     const outputEvidence = boundedEvidence(output);
     const ledgerRef = previous?.ledger_ref || relativePath(root, ledgerPath(runId));
     const durationObserved = Boolean(previous);
     const durationMs = previous ? Math.max(0, endedMs - previous.started_ms) : 0;
-    const actionFingerprint = previous?.action_fingerprint || stableHash({
+    const actionFingerprint = bindingMismatch
+      ? stableHash({
+        host: 'opencode',
+        session_ref: identity.session_ref,
+        tool_name: action.tool_name,
+        executed_input_hash: executedInputEvidence.hash,
+        governed_action_fingerprint: previous.action_fingerprint,
+      })
+      : previous?.action_fingerprint || stableHash({
       host: 'opencode',
       session_ref: identity.session_ref,
       tool_name: action.tool_name,
       input_hash: inputEvidence.hash,
     });
+    const outcomeStatus = !governed
+      ? 'ungoverned_after_without_before'
+      : bindingMismatch ? 'governance_binding_mismatch'
+        : 'succeeded';
+    const reasonCodes = bindingMismatch
+      ? unique([
+        ...previous.reason_codes,
+        !toolMatches ? 'tool_changed_after_governance' : null,
+        !inputMatches ? 'arguments_changed_after_governance' : null,
+      ])
+      : previous?.reason_codes || [];
+    const enforcementDecision = bindingMismatch
+      ? 'governance_binding_mismatch'
+      : previous?.enforcement_decision || 'unknown';
     const afterEvent = createHarnessEvent({
       run_id: runId,
       type: 'after_tool',
-      severity: governed ? 'info' : 'blocked',
-      summary: governed
-        ? 'OpenCode tool completion recorded as bounded hash-and-shape evidence.'
-        : 'OpenCode tool completion arrived without a matching governed before hook; no successful receipt is claimed.',
+      severity: governanceBindingValid ? 'info' : 'blocked',
+      summary: !governed
+        ? 'OpenCode tool completion arrived without a matching governed before hook; no successful receipt is claimed.'
+        : bindingMismatch
+          ? 'OpenCode tool arguments or identity changed after governance; the completion is recorded only as blocked mismatch evidence.'
+          : 'OpenCode tool completion recorded as bounded hash-and-shape evidence.',
       created_at: toIso(endedMs),
       sequence: nextSequence(runId),
       data: {
@@ -306,10 +376,13 @@ export function createOpenCodeHooks({
         tool_name: previous?.tool_name || sanitizeText(action.tool_name, { maxLength: 120 }),
         capability: previous?.capability || action.capability,
         side_effect_class: previous?.side_effect_class || action.side_effect_class,
-        outcome_status: governed ? 'succeeded' : 'ungoverned_after_without_before',
+        outcome_status: outcomeStatus,
         duration_ms: durationMs,
         duration_observed: durationObserved,
         input_evidence: inputEvidence,
+        governed_input_evidence: bindingMismatch ? previous.input_evidence : null,
+        governance_binding_valid: governanceBindingValid,
+        tool_name_matches_governed_before: toolMatches,
         output_evidence: outputEvidence,
         action_fingerprint: actionFingerprint,
         approval_refs: previous?.approval_refs || [],
@@ -324,10 +397,13 @@ export function createOpenCodeHooks({
       capability: previous?.capability || action.capability,
       side_effect_class: previous?.side_effect_class || action.side_effect_class,
       policy_decision: previous?.policy_decision || 'unknown',
-      enforcement_decision: previous?.enforcement_decision || 'unknown',
-      reason_codes: previous?.reason_codes || [],
+      enforcement_decision: enforcementDecision,
+      reason_codes: reasonCodes,
       action_fingerprint: actionFingerprint,
       input_evidence: inputEvidence,
+      governed_input_evidence: bindingMismatch ? previous.input_evidence : null,
+      governance_binding_valid: governed ? governanceBindingValid : null,
+      tool_name_matches_governed_before: governed ? toolMatches : null,
       output_evidence: outputEvidence,
       approval_refs: previous?.approval_refs || [],
       proof_event: afterEvent,
@@ -335,10 +411,11 @@ export function createOpenCodeHooks({
       created_ms: endedMs,
       duration_ms: durationMs,
       duration_observed: durationObserved,
-      outcome_status: governed ? 'succeeded' : 'ungoverned_after_without_before',
-      passed: governed,
+      outcome_status: outcomeStatus,
+      passed: governanceBindingValid,
     });
-    if (!governed) {
+    if (!governed || bindingMismatch) {
+      calls.delete(callRef);
       evidenceFailure = true;
       return;
     }
@@ -397,22 +474,48 @@ export function createOpenCodeHooks({
     consumed_at,
   }) {
     const refPath = approvalRefPath(action_fingerprint);
+    const approvalBinding = createApprovalBinding({
+      run_id,
+      action,
+      action_fingerprint,
+      policy_hash,
+      input_evidence,
+    });
     const existingRef = await readJsonIfExists(refPath);
     if (existingRef && !existingRef.consumed_at) {
       if (!APPROVAL_ID_PATTERN.test(String(existingRef.approval_id || ''))) {
         throw governanceBlock('approval_ref_invalid', 'deny', 'The local approval reference is invalid.');
       }
+      if (!approvalReferenceMatchesCurrentAction(existingRef, {
+        action_fingerprint,
+        approval_binding: approvalBinding,
+      })) {
+        throw governanceBlock('approval_binding_invalid', 'deny', 'The local approval reference does not bind to this tool action.');
+      }
       const existing = await showApproval(root, existingRef.approval_id);
       if (!existing?.request) {
         throw governanceBlock('approval_state_missing', 'deny', 'The referenced local approval packet is missing.');
       }
+      if (!approvalRequestMatchesCurrentAction(existing.request, {
+        approval_id: existingRef.approval_id,
+        run_id,
+        action,
+        action_fingerprint,
+        policy_hash,
+        input_evidence,
+        approval_binding: approvalBinding,
+      })) {
+        throw governanceBlock('approval_binding_invalid', 'deny', 'The referenced local approval packet does not bind to this tool action.');
+      }
       const state = approvalState(existingRef.approval_id, existing);
       if (state.status === 'approved') {
-        await writeJson(refPath, {
-          ...existingRef,
+        const claimed = await claimApprovedApproval({
+          ref_path: refPath,
+          existing_ref: existingRef,
+          call_ref,
           consumed_at,
-          consumed_for_call_ref: call_ref,
         });
+        if (!claimed) return { ...state, status: 'consumed' };
       }
       return state;
     }
@@ -426,7 +529,60 @@ export function createOpenCodeHooks({
       input_evidence,
       policy_hash,
       reason_codes,
+      approval_binding: approvalBinding,
     });
+  }
+
+  async function claimApprovedApproval({ ref_path, existing_ref, call_ref, consumed_at }) {
+    if (beforeApprovalClaim) {
+      await beforeApprovalClaim({
+        action_ref: relativePath(root, ref_path),
+        call_ref,
+      });
+    }
+    const claimPath = approvalClaimPath(ref_path, existing_ref.approval_id);
+    let claimHandle;
+    try {
+      // `wx` creates this approval-specific claim exactly once. Unlike a
+      // rename-to-the-same-destination race, it is exclusive on both Windows
+      // and POSIX filesystems before either instance can allow execution.
+      claimHandle = await fs.open(claimPath, 'wx');
+    } catch (error) {
+      if (error?.code === 'EEXIST') return false;
+      throw error;
+    }
+    try {
+      await claimHandle.writeFile(`${JSON.stringify({
+        schema: 'agoragentic.harness.opencode-approval-claim.v1',
+        approval_id: existing_ref.approval_id,
+        claimed_for_call_ref: call_ref,
+        claimed_at: consumed_at,
+      })}\n`, 'utf8');
+    } finally {
+      await claimHandle.close();
+    }
+
+    const currentRef = await readJsonIfExists(ref_path);
+    if (!sameApprovalReference(currentRef, existing_ref)) return false;
+
+    const consumedPath = consumedApprovalRefPath(
+      ref_path,
+      existing_ref.approval_id,
+      call_ref,
+      consumed_at,
+    );
+    try {
+      await fs.rename(ref_path, consumedPath);
+    } catch (error) {
+      if (error?.code === 'ENOENT' || error?.code === 'EEXIST') return false;
+      throw error;
+    }
+    await writeJson(consumedPath, {
+      ...existing_ref,
+      consumed_at,
+      consumed_for_call_ref: call_ref,
+    });
+    return true;
   }
 
   async function createApprovalPacket({
@@ -438,6 +594,7 @@ export function createOpenCodeHooks({
     input_evidence,
     policy_hash,
     reason_codes,
+    approval_binding,
   }) {
     const request = await createApprovalRequest({
       dir: root,
@@ -450,6 +607,7 @@ export function createOpenCodeHooks({
         action_fingerprint,
         policy_hash,
         input_evidence,
+        approval_binding,
         raw_input_persisted: false,
       },
       risk_class: evaluation.risk,
@@ -465,6 +623,7 @@ export function createOpenCodeHooks({
       action_fingerprint,
       approval_id: request.approval_id,
       approval_ref: approvalRequestRef(request.approval_id),
+      approval_binding,
       raw_input_persisted: false,
       authority_boundary: authorityBoundary(),
     };
@@ -562,6 +721,17 @@ export function createOpenCodeHooks({
       raw_tool_input_persisted: false,
       raw_tool_output_persisted: false,
     };
+    if (typeof input.governance_binding_valid === 'boolean') {
+      const governanceBinding = {
+        valid: input.governance_binding_valid,
+        tool_name_matches_governed_before: input.tool_name_matches_governed_before,
+        governed_input_hash: input.governed_input_evidence?.hash || input.input_evidence.hash,
+        executed_input_hash: input.input_evidence.hash,
+        raw_input_persisted: false,
+      };
+      receipt.governance_binding = governanceBinding;
+      receipt.evidence.governance_binding = governanceBinding;
+    }
     receipt.receipt_boundary = {
       ...receipt.receipt_boundary,
       certification_created: false,
@@ -711,6 +881,21 @@ function readClock(nowMs) {
   return Number.isFinite(value) ? value : Date.now();
 }
 
+function sameBoundedEvidence(expected, actual) {
+  return Boolean(
+    expected?.hash_complete
+    && actual?.hash_complete
+    && expected.hash
+    && actual.hash
+    && expected.hash === actual.hash,
+  );
+}
+
+function positiveInteger(value, fallback) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : fallback;
+}
+
 function toIso(milliseconds) {
   return new Date(milliseconds).toISOString();
 }
@@ -736,6 +921,119 @@ function approvalRequestRef(approvalId) {
 
 function approvalDecisionRef(approvalId) {
   return `.agoragentic/approvals/${approvalId}.decision.json`;
+}
+
+function approvalClaimPath(refPath, approvalId) {
+  return `${refPath}.${approvalId}.claim`;
+}
+
+function createApprovalBinding({ run_id, action, action_fingerprint, policy_hash, input_evidence }) {
+  const evidenceShape = approvalEvidenceShape(input_evidence);
+  return {
+    schema: 'agoragentic.harness.opencode-approval-binding.v1',
+    action_fingerprint_ref: opaqueBindingRef('opencode_approval_action', action_fingerprint),
+    policy_hash_ref: opaqueBindingRef('opencode_approval_policy', policy_hash),
+    input_evidence_ref: opaqueBindingRef('opencode_approval_input', evidenceShape),
+    binding_ref: opaqueBindingRef('opencode_approval_binding', {
+      run_id,
+      tool_name: String(action?.tool_name || ''),
+      capability: action?.capability || null,
+      side_effect_class: action?.side_effect_class || null,
+      action_fingerprint,
+      policy_hash,
+      input_evidence: evidenceShape,
+    }),
+  };
+}
+
+function opaqueBindingRef(prefix, value) {
+  // Harness Core redacts complete SHA-256 strings in approval packets. A
+  // 128-bit deterministic reference retains an exact equality invariant over
+  // the raw action/policy/input values without persisting those values.
+  return `${prefix}_${stableHash(value).slice(7, 39)}`;
+}
+
+function approvalEvidenceShape(evidence = {}) {
+  return {
+    hash: evidence.hash || null,
+    hash_complete: evidence.hash_complete === true,
+    serialized_bytes: evidence.serialized_bytes ?? null,
+    value_type: evidence.value_type ?? null,
+    field_count: evidence.field_count ?? null,
+    storage: evidence.storage || null,
+    raw_value_persisted: evidence.raw_value_persisted === true,
+  };
+}
+
+function approvalReferenceMatchesCurrentAction(reference, expected) {
+  return Boolean(
+    reference?.schema === OPENCODE_APPROVAL_REF_SCHEMA
+    && reference.action_fingerprint === expected.action_fingerprint
+    && reference.approval_ref === approvalRequestRef(reference.approval_id)
+    && reference.raw_input_persisted === false
+    && sameApprovalBinding(reference.approval_binding, expected.approval_binding),
+  );
+}
+
+function approvalRequestMatchesCurrentAction(request, expected) {
+  const requestedAction = request?.requested_action;
+  return Boolean(
+    request?.schema === 'agoragentic.harness.approval-request.v1'
+    && request.approval_id === expected.approval_id
+    && request.run_id === expected.run_id
+    && requestedAction?.host === 'opencode'
+    && requestedAction.tool_name === sanitizeText(expected.action.tool_name, { maxLength: 120 })
+    && requestedAction.capability === expected.action.capability
+    && requestedAction.side_effect_class === expected.action.side_effect_class
+    // The visible fields are sanitized by Harness Core; the binding below is
+    // the exact raw-value comparison for these same fingerprints.
+    && requestedAction.action_fingerprint === sanitizeText(expected.action_fingerprint)
+    && requestedAction.policy_hash === sanitizeText(expected.policy_hash)
+    && sanitizedApprovalEvidenceMatches(requestedAction.input_evidence, expected.input_evidence)
+    && requestedAction.raw_input_persisted === false
+    && sameApprovalBinding(requestedAction.approval_binding, expected.approval_binding),
+  );
+}
+
+function sanitizedApprovalEvidenceMatches(actual, expected) {
+  const expectedShape = approvalEvidenceShape(expected);
+  return Boolean(
+    actual
+    && actual.hash === sanitizeText(expectedShape.hash)
+    && actual.hash_complete === expectedShape.hash_complete
+    && actual.serialized_bytes === expectedShape.serialized_bytes
+    && actual.value_type === expectedShape.value_type
+    && actual.field_count === expectedShape.field_count
+    && actual.storage === expectedShape.storage
+    && actual.raw_value_persisted === false,
+  );
+}
+
+function sameApprovalBinding(actual, expected) {
+  return Boolean(
+    actual?.schema === expected?.schema
+    && actual.action_fingerprint_ref === expected.action_fingerprint_ref
+    && actual.policy_hash_ref === expected.policy_hash_ref
+    && actual.input_evidence_ref === expected.input_evidence_ref
+    && actual.binding_ref === expected.binding_ref,
+  );
+}
+
+function sameApprovalReference(current, expected) {
+  return Boolean(
+    current
+    && !current.consumed_at
+    && current.approval_id === expected.approval_id
+    && current.action_fingerprint === expected.action_fingerprint
+    && current.approval_ref === expected.approval_ref
+    && sameApprovalBinding(current.approval_binding, expected.approval_binding),
+  );
+}
+
+function consumedApprovalRefPath(refPath, approvalId, callRef, consumedAt) {
+  const basename = path.basename(refPath, '.json');
+  const consumedId = stableId('consumed', `${approvalId}:${callRef}:${consumedAt}`);
+  return path.join(path.dirname(refPath), `${basename}.${consumedId}.json`);
 }
 
 function relativePath(root, filePath) {
