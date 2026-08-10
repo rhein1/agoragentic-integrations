@@ -52,6 +52,11 @@ def relative_path(source: Path, target: str, root: Path) -> Path:
     return (source.parent / clean_target(target)).resolve()
 
 
+def example_command_path(token: str, root: Path) -> Path:
+    """Resolve bare examples/... command operands from the repository root."""
+    return (root / clean_target(token)).resolve()
+
+
 def display_path(path: Path, root: Path) -> str:
     try:
         return path.relative_to(root).as_posix()
@@ -87,7 +92,6 @@ def scan_file(path: Path, root: Path, findings: List[Finding]) -> None:
     except UnicodeDecodeError:
         return
 
-    seen = {}
     for line_number, line in enumerate(text.splitlines(), 1):
         links = list(LINK_RE.finditer(line))
         for match in links:
@@ -99,17 +103,6 @@ def scan_file(path: Path, root: Path, findings: List[Finding]) -> None:
                 continue
             resolved = relative_path(path, target, root)
             normalized = display_path(resolved, root)
-            if normalized in seen:
-                add_finding(
-                    findings,
-                    "duplicate_navigation_reference",
-                    path,
-                    line_number,
-                    "duplicate relative target: " + normalized,
-                    root,
-                )
-            else:
-                seen[normalized] = line_number
 
             if not resolved.exists():
                 code = (
@@ -121,7 +114,7 @@ def scan_file(path: Path, root: Path, findings: List[Finding]) -> None:
 
         for match in PATH_RE.finditer(line):
             token = match.group(1)
-            resolved = relative_path(path, token, root)
+            resolved = example_command_path(token, root)
             if resolved.exists():
                 continue
             if is_example_entrypoint(resolved, root):
@@ -171,12 +164,25 @@ def run_self_test() -> None:
             {"missing_example_entrypoint"},
         ),
         (
-            "duplicate navigation reference",
+            "repeated navigation links are allowed",
             {
                 "README.md": "[one](docs/guide.md)\n[two](docs/guide.md)\n",
                 "docs/guide.md": "# Guide\n",
             },
-            {"duplicate_navigation_reference"},
+            set(),
+        ),
+        (
+            "root-relative command entrypoint",
+            {
+                "docs/README.md": "python examples/demo/run.py\n",
+                "examples/demo/run.py": "print('ok')\n",
+            },
+            set(),
+        ),
+        (
+            "missing root-relative command entrypoint",
+            {"docs/README.md": "node examples/demo/missing.mjs\n"},
+            {"missing_example_entrypoint"},
         ),
         (
             "external links ignored",
