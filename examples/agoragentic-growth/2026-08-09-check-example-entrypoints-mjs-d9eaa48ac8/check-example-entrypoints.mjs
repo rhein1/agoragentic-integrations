@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,6 +7,9 @@ import { fileURLToPath } from "node:url";
 const TEXT_EXTENSIONS = new Set([".md", ".markdown"]);
 const CODE_EXTENSIONS = new Set([".js", ".mjs"]);
 const SKIP_DIRECTORIES = new Set([".git", "node_modules", "dist", "build"]);
+const REFERENCE_DEFINITION_RE = /^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))/gm;
+const REFERENCE_USAGE_RE = /(?<!!)\[([A-Za-z0-9][A-Za-z0-9 .:_-]*)\]\[([A-Za-z0-9 .:_-]*)\]/g;
+const DOCUMENTED_COMMAND_RE = /\bnode\s+((?:\.{0,2}[/\\])?examples[/\\][^\s`'"<>]+\.(?:mjs|js))/g;
 
 function walk(root) {
   const files = [];
@@ -47,64 +51,82 @@ function checkLinks(root) {
   for (const file of walk(root)) {
     if (!TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) continue;
     const source = fs.readFileSync(file, "utf8");
+    const references = new Map();
+    const markdownLines = [];
+    let inFence = false;
+    for (const line of source.split("\n")) {
+      if (/^\s*```/.test(line)) inFence = !inFence;
+      if (!inFence) markdownLines.push(line);
+    }
+    const markdownSource = markdownLines.join("\n");
+    let definition;
+    while ((definition = REFERENCE_DEFINITION_RE.exec(markdownSource))) {
+      references.set(definition[1].trim().toLowerCase(),
+        definition[2] ?? definition[3]);
+    }
+    const inspectTarget = (rawTarget, detail = rawTarget) => {
+      const target = relativeTarget(file, rawTarget);
+      if (!target) return;
+      if (target.invalidEncoding) {
+        findings.push(finding("invalid_link_encoding", file, detail));
+      } else if (!target.startsWith(path.resolve(root) + path.sep) &&
+          target !== path.resolve(root)) {
+        findings.push(finding("link_escapes_root", file, detail));
+      } else if (!fs.existsSync(target)) {
+        findings.push(finding("missing_relative_link", file, detail));
+      }
+    };
     const pattern = /!?\[[^\]]*]\(\s*([^) \t]+|<[^>]+>)/g;
     let match;
-    while ((match = pattern.exec(source))) {
-      const target = relativeTarget(file, match[1]);
-      if (!target) continue;
-      if (target.invalidEncoding) {
-        findings.push(finding("invalid_link_encoding", file, match[1]));
-        continue;
-      }
-      if (!target.startsWith(path.resolve(root) + path.sep) &&
-          target !== path.resolve(root)) {
-        findings.push(finding("link_escapes_root", file, match[1]));
-      } else if (!fs.existsSync(target)) {
-        findings.push(finding("missing_relative_link", file, match[1]));
+    while ((match = pattern.exec(markdownSource))) {
+      inspectTarget(match[1]);
+    }
+    while ((match = REFERENCE_USAGE_RE.exec(markdownSource))) {
+      const label = (match[2] || match[1]).trim().toLowerCase();
+      const target = references.get(label);
+      if (target === undefined) {
+        findings.push(finding("missing_reference_definition", file, label));
+      } else {
+        inspectTarget(target, target);
       }
     }
   }
   return findings;
 }
 
-function looksLikeEntrypoint(source, file) {
-  const name = path.basename(file).toLowerCase();
-  return /(?:example|demo|diagnostic|smoke|entry|index)/.test(name) ||
-    /\bprocess\.argv\b/.test(source) ||
-    /\bfunction\s+main\s*\(/.test(source) ||
-    /\bconst\s+main\s*=/.test(source);
-}
-
-function hasMainFunction(source) {
-  return /\b(?:async\s+)?function\s+main\s*\(\s*\)/.test(source) ||
-    /\bconst\s+main\s*=\s*(?:async\s*)?\(\s*\)\s*=>/.test(source) ||
-    /\bconst\s+main\s*=\s*(?:async\s*)?function\b/.test(source);
-}
-
-function hasWindowsSafeGuard(source) {
-  const argv = /process\.argv\s*\[\s*1\s*]/;
-  const moduleUrl = /import\.meta\.url/;
-  const fileUrl = /fileURLToPath\s*\(\s*import\.meta\.url\s*\)/;
-  return argv.test(source) && moduleUrl.test(source) &&
-    (fileUrl.test(source) || /pathToFileURL/.test(source));
-}
-
-function checkEntrypoints(root) {
+function checkJavaScriptSyntax(root) {
   const findings = [];
   const examplesRoot = path.join(root, "examples");
   if (!fs.existsSync(examplesRoot)) return findings;
   for (const file of walk(examplesRoot)) {
     if (!CODE_EXTENSIONS.has(path.extname(file))) continue;
-    const source = fs.readFileSync(file, "utf8");
-    if (!looksLikeEntrypoint(source, file)) continue;
-    if (!hasMainFunction(source)) {
-      findings.push(finding("entrypoint_missing_main", file,
-        "detected as an entrypoint but no main() function was found"));
-      continue;
+    const result = spawnSync(process.execPath, ["--check", file], { encoding: "utf8" });
+    if (result.status !== 0) {
+      const detail = (result.stderr || "node --check failed").split("\n").at(-2) ||
+        "node --check failed";
+      findings.push(finding("invalid_javascript_syntax", file, detail.trim()));
     }
-    if (!hasWindowsSafeGuard(source)) {
-      findings.push(finding("entrypoint_missing_main_guard", file,
-        "main() is not protected by a fileURLToPath(import.meta.url) guard"));
+  }
+  return findings;
+}
+
+function checkDocumentedCommands(root) {
+  const findings = [];
+  const examplesRoot = path.join(root, "examples") + path.sep;
+  for (const file of walk(root)) {
+    if (!TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) continue;
+    if (file !== path.join(root, "README.md") && !file.startsWith(examplesRoot)) continue;
+    const source = fs.readFileSync(file, "utf8");
+    let match;
+    while ((match = DOCUMENTED_COMMAND_RE.exec(source))) {
+      const raw = match[1].replace(/\\/g, "/");
+      const fromRoot = path.resolve(root, raw.replace(/^\.\//, ""));
+      const fromGuide = path.resolve(path.dirname(file), raw);
+      const withinRoot = (candidate) => candidate.startsWith(path.resolve(root) + path.sep);
+      if ((!withinRoot(fromRoot) || !fs.existsSync(fromRoot)) &&
+          (!withinRoot(fromGuide) || !fs.existsSync(fromGuide))) {
+        findings.push(finding("missing_documented_entrypoint", file, raw));
+      }
     }
   }
   return findings;
@@ -115,7 +137,7 @@ function relativeName(root, file) {
 }
 
 function check(root) {
-  return [...checkLinks(root), ...checkEntrypoints(root)];
+  return [...checkLinks(root), ...checkDocumentedCommands(root), ...checkJavaScriptSyntax(root)];
 }
 
 function printFindings(root, findings) {
@@ -140,13 +162,11 @@ function writeFixture(root, files) {
 function runSelfTest() {
   const cases = [
     {
-      name: "valid links and guarded entrypoint",
+      name: "valid links and JavaScript",
       files: {
         "README.md": "[run](examples/demo.entry.mjs)\n",
         "examples/demo.entry.mjs":
-          "import { fileURLToPath } from 'node:url';\n" +
-          "function main() { return 0; }\n" +
-          "if (process.argv[1] === fileURLToPath(import.meta.url)) main();\n",
+          "export function main() { return 0; }\n",
       },
       expected: [],
     },
@@ -161,19 +181,18 @@ function runSelfTest() {
       expected: [],
     },
     {
-      name: "entrypoint needs a guard",
+      name: "invalid JavaScript is rejected",
       files: {
-        "examples/demo.mjs": "function main() { return 0; }\nmain();\n",
+        "examples/demo.mjs": "const = ;\n",
       },
-      expected: ["entrypoint_missing_main_guard"],
+      expected: ["invalid_javascript_syntax"],
     },
     {
-      name: "entrypoint needs main",
+      name: "undefined and collapsed references are rejected",
       files: {
-        "examples/smoke.mjs":
-          "if (process.argv[1] === import.meta.url) console.log('x');\n",
+        "README.md": "[missing][nope] [collapsed][]\n",
       },
-      expected: ["entrypoint_missing_main"],
+      expected: ["missing_reference_definition", "missing_reference_definition"],
     },
     {
       name: "encoded local link resolves",
@@ -182,6 +201,11 @@ function runSelfTest() {
         "docs/my guide.md": "# Guide\n",
       },
       expected: [],
+    },
+    {
+      name: "missing documented command target",
+      files: { "README.md": "```sh\nnode examples/missing.mjs\n```\n" },
+      expected: ["missing_documented_entrypoint"],
     },
   ];
 
