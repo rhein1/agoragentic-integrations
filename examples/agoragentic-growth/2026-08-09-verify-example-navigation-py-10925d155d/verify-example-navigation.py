@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -27,8 +29,11 @@ ENTRYPOINT_NAMES = frozenset(
 )
 GUIDE_NAMES = frozenset({"README.md", "GUIDE.md", "CONTRIBUTING.md"})
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+['\"][^'\"]*['\"])?\)")
+REFERENCE_DEFINITION_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))", re.MULTILINE)
+REFERENCE_USAGE_RE = re.compile(r"(?<!!)\[([^\]]+)\]\[([^\]]*)\]")
+COMMAND_RE = re.compile(r"\bnode\s+((?:\.{0,2}/)?examples/[^\s`'\"<>]+\.(?:mjs|js))")
 IMPORT_RE = re.compile(
-    r"""(?:from\s*|import\s*\(\s*)["'](\.{1,2}/[^"']+)["']"""
+    r"""(?:from\s+["'](\.{1,2}/[^"']+)["']|import\s+["'](\.{1,2}/[^"']+)["']|import\s*\(\s*["'](\.{1,2}/[^"']+)["'])"""
 )
 
 
@@ -62,15 +67,38 @@ def resolve_markdown_target(source: Path, target: str) -> Path:
 
 
 def markdown_targets(path: Path) -> Iterable[Tuple[str, int]]:
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    text = path.read_text(encoding="utf-8")
+    definitions = {
+        match.group(1).strip().lower(): match.group(2) or match.group(3)
+        for match in REFERENCE_DEFINITION_RE.finditer(text)
+    }
+    for number, line in enumerate(text.splitlines(), 1):
         for match in LINK_RE.finditer(line):
             yield match.group(1), number
+        for match in REFERENCE_USAGE_RE.finditer(line):
+            label = (match.group(2) or match.group(1)).strip().lower()
+            target = definitions.get(label)
+            if target is not None:
+                yield target, number
+
+
+def undefined_reference_targets(path: Path) -> Iterable[Tuple[str, int]]:
+    text = path.read_text(encoding="utf-8")
+    definitions = {
+        match.group(1).strip().lower()
+        for match in REFERENCE_DEFINITION_RE.finditer(text)
+    }
+    for number, line in enumerate(text.splitlines(), 1):
+        for match in REFERENCE_USAGE_RE.finditer(line):
+            label = (match.group(2) or match.group(1)).strip().lower()
+            if label not in definitions:
+                yield label, number
 
 
 def static_relative_imports(path: Path) -> Iterable[Tuple[str, int]]:
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         for match in IMPORT_RE.finditer(line):
-            yield match.group(1), number
+            yield next(group for group in match.groups() if group is not None), number
 
 
 def import_resolves(source: Path, specifier: str) -> bool:
@@ -82,8 +110,11 @@ def import_resolves(source: Path, specifier: str) -> bool:
 
 
 def find_entrypoints(root: Path) -> List[Path]:
+    examples = root / "examples"
+    if not examples.is_dir():
+        return []
     paths = [
-        path for path in root.rglob("*")
+        path for path in examples.rglob("*")
         if path.is_file()
         and path.name in ENTRYPOINT_NAMES
         and ".git" not in path.parts
@@ -93,8 +124,11 @@ def find_entrypoints(root: Path) -> List[Path]:
 
 
 def find_guides(root: Path) -> List[Path]:
+    examples = root / "examples"
+    if not examples.is_dir():
+        return []
     paths = [
-        path for path in root.rglob("*")
+        path for path in examples.rglob("*")
         if path.is_file()
         and path.name in GUIDE_NAMES
         and ".git" not in path.parts
@@ -123,11 +157,19 @@ def check_entrypoints(root: Path) -> List[Finding]:
 def check_navigation(root: Path) -> List[Finding]:
     findings: List[Finding] = []
     for guide in find_guides(root):
+        for label, line in undefined_reference_targets(guide):
+            findings.append(
+                Finding("missing_reference_definition", guide,
+                        f"line {line} references [{label}]")
+            )
         for target, line in markdown_targets(guide):
             if not is_local_target(target):
                 continue
             resolved = resolve_markdown_target(guide, target)
-            if not resolved.is_file():
+            if not resolved.is_relative_to(root.resolve()):
+                findings.append(Finding("navigation_escapes_root", guide,
+                                        f"line {line} references {target}"))
+            elif not resolved.exists():
                 findings.append(
                     Finding(
                         "missing_local_navigation",
@@ -138,10 +180,44 @@ def check_navigation(root: Path) -> List[Finding]:
     return findings
 
 
+def check_documented_commands(root: Path) -> List[Finding]:
+    findings: List[Finding] = []
+    for guide in find_guides(root):
+        for line, text in enumerate(guide.read_text(encoding="utf-8").splitlines(), 1):
+            for match in COMMAND_RE.finditer(text):
+                target = (root / match.group(1).removeprefix("./")).resolve()
+                if not target.is_relative_to(root.resolve()) or not target.is_file():
+                    findings.append(
+                        Finding("missing_documented_entrypoint", guide,
+                                f"line {line} references {match.group(1)}")
+                    )
+    return findings
+
+
+def check_javascript_syntax(root: Path) -> List[Finding]:
+    node = shutil.which("node")
+    if node is None:
+        return []
+    findings: List[Finding] = []
+    examples = root / "examples"
+    if not examples.is_dir():
+        return findings
+    for path in sorted(examples.rglob("*")):
+        if not path.is_file() or path.suffix not in {".js", ".mjs"}:
+            continue
+        result = subprocess.run([node, "--check", str(path)], capture_output=True,
+                                text=True, check=False)
+        if result.returncode:
+            findings.append(Finding("invalid_javascript_syntax", path,
+                                    "node --check failed"))
+    return findings
+
+
 def inspect(root: Path) -> List[Finding]:
     if not root.is_dir():
         return [Finding("missing_root", root, "repository root is not a directory")]
-    return check_entrypoints(root) + check_navigation(root)
+    return (check_entrypoints(root) + check_navigation(root) +
+            check_documented_commands(root) + check_javascript_syntax(root))
 
 
 def run_self_test() -> None:
@@ -184,6 +260,27 @@ def run_self_test() -> None:
                 expected.add("missing_local_navigation")
             if codes != expected:
                 raise AssertionError(f"{name}: expected {expected}, got {codes}")
+    with tempfile.TemporaryDirectory(prefix="example-navigation-") as raw:
+        root = Path(raw)
+        write = root / "examples" / "reference" / "README.md"
+        write.parent.mkdir(parents=True)
+        write.write_text("[missing][nope] [collapsed][]\n", encoding="utf-8")
+        if {item.code for item in inspect(root)} != {"missing_reference_definition"}:
+            raise AssertionError("undefined references must be reported")
+    with tempfile.TemporaryDirectory(prefix="example-navigation-") as raw:
+        root = Path(raw)
+        entry = root / "examples" / "invalid" / "main.mjs"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("const = ;\n", encoding="utf-8")
+        if {item.code for item in inspect(root)} != {"invalid_javascript_syntax"}:
+            raise AssertionError("invalid JavaScript must be reported")
+    with tempfile.TemporaryDirectory(prefix="example-navigation-") as raw:
+        root = Path(raw)
+        guide = root / "examples" / "commands" / "README.md"
+        guide.parent.mkdir(parents=True)
+        guide.write_text("node examples/missing.mjs\n", encoding="utf-8")
+        if {item.code for item in inspect(root)} != {"missing_documented_entrypoint"}:
+            raise AssertionError("missing documented commands must be reported")
     print("fixture self-tests: passed")
 
 
@@ -209,6 +306,7 @@ def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
     if args.self_test:
         run_self_test()
+        return 0
     root = Path(args.root).expanduser().resolve()
     findings = inspect(root)
     if findings:
