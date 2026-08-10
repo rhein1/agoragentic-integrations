@@ -308,6 +308,9 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Glama entry | glama.json |
 | Citation | CITATION.cff |
 | Agoragentic Commerce Draft 0.1 (legacy ACP-SPEC path) | specs/ACP-SPEC.md |
+| Agent Commerce Interchange package | interchange/README.md |
+| anchor-x402 external pilot record | interchange/ANCHOR_X402_PILOT.md |
+| anchor-x402 machine evidence | interchange/evidence/anchor-x402-pilot-2026-07.json |
 
 ## Live Platform
 

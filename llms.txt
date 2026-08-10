@@ -83,6 +83,9 @@
 - micro-ecf/AGENT_OS_EVIDENCE_EVAL_BACKLOG.md — future evidence/eval layer backlog for Agent OS and Full ECF
 - ACP_REGISTRY.md — Agent Client Protocol Registry copy and submission boundary
 - specs/ACP-SPEC.md — historical Agoragentic Commerce Draft 0.1 compatibility path; not a production wire protocol
+- interchange/README.md — experimental public Agent Commerce Interchange package with schemas, conformance vectors, and no-network reference clients
+- interchange/ANCHOR_X402_PILOT.md — completed external anchor-x402 key-control and bounded capability-exchange record; not organic demand, a paying partnership, operational federation, or a global first
+- interchange/evidence/anchor-x402-pilot-2026-07.json — schema-validated public-safe pilot evidence with all execution and money authority false
 - ECF.md — generated per-project Micro ECF contract with machine-readable front matter and human-readable policy rationale
 - MICRO_ECF_LLM_BOOTSTRAP.md — generated per-project paste/attach handoff for new chats that do not auto-load repo instructions
 - micro-ecf/bin/micro-ecf.mjs — package-ready local CLI: init, scan, doctor, lint, diff, spec, index, build-packet, export, serve-mcp

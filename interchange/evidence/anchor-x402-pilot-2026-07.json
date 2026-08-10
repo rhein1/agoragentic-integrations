@@ -1,0 +1,70 @@
+{
+  "schema": "agoragentic.interchange.external-pilot-evidence.v1",
+  "version": "1.0.0",
+  "recorded_on": "2026-08-09",
+  "pilot_id": "anchor-x402-pilot-2026-07",
+  "counterparty": {
+    "display_name": "anchor-x402",
+    "origin": "https://anchor-x402.com",
+    "agent_card_url": "https://anchor-x402.com/.well-known/agent-card.json",
+    "x402_catalog_url": "https://anchor-x402.com/.well-known/x402.json",
+    "control_evidence": "owner_reviewed_origin_and_dedicated_key_control_not_legal_identity"
+  },
+  "key_control": {
+    "status": "completed",
+    "result": "verified_federation_key_control",
+    "key_id": "anchor-pilot-2026-01",
+    "key_algorithm": "ed25519",
+    "key_fingerprint": "sha256:207d6f543f8d918f9fe7563c5d788d741382c3eed50abbcafb04a0c80c11d212",
+    "trust_model": "key_control_tofu_not_identity"
+  },
+  "capability_exchange": {
+    "status": "completed_closed",
+    "canary_id": "fedcapcan_d651944368001a22e8e2c35c",
+    "started_at": "2026-07-22T22:35:53.495Z",
+    "ended_at": "2026-07-23T22:35:53.495Z",
+    "counterparty_get_limit": 4,
+    "counterparty_gets_used": 4,
+    "platform_request_slot_limit": 4,
+    "platform_request_slots_used": 4,
+    "separately_approved_diagnostic_gets": 1,
+    "total_platform_gets_to_counterparty": 5,
+    "public_fields_only": true,
+    "raw_response_bodies_retained": false,
+    "hashes_reproduced_by_both_operators": true,
+    "closed_at_immutable_expiry": true
+  },
+  "authority": {
+    "execution": false,
+    "routing": false,
+    "referrals": false,
+    "payments": false,
+    "credentials": false,
+    "private_data": false,
+    "ranking": false,
+    "trust_promotion_beyond_key_control": false,
+    "ongoing_operational_federation": false
+  },
+  "claims": {
+    "agoragentic_first_external_federation_pilot": true,
+    "global_world_first": false,
+    "organic_demand": false,
+    "paying_partner": false,
+    "partnership": false,
+    "connected_marketplace_network": false
+  },
+  "findings": [
+    {
+      "id": "versioned-agent-card-hash-recipes",
+      "status": "closed",
+      "summary": "The operators documented and independently reproduced the historical JSON-stringified-response recipe and the v2 raw-body recipe instead of leaving an unverifiable hash commitment.",
+      "historical_evidence_rewritten": false
+    },
+    {
+      "id": "x402-catalog-shape-pluralism",
+      "status": "fixed_after_pilot",
+      "summary": "The pilot exposed that x402 catalogs commonly use routes[] while the first normalizer expected capabilities[]. The compatibility path later added routes[] support; the original zero-row normalization result remains historical evidence and was not rewritten.",
+      "historical_evidence_rewritten": false
+    }
+  ]
+}

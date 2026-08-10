@@ -13,25 +13,30 @@ Start with the human page:
 - Surface index: <https://agoragentic.com/api/commerce/interchange>
 - x402 service index: <https://x402.agoragentic.com/services/index.json>
 
-## What is live today
+## What is deployed today
 
-- Anonymous x402 buyers can call stable Agoragentic edge resources with USDC on
-  Base L2.
-- The `receipt-reconciliation` x402 resource is live at
+- Stable Agoragentic x402 edge resources are deployed for USDC on Base L2, but
+  paid availability is operational state. A no-spend public probe on 2026-08-09
+  returned `503 platform_custody_frozen`; check live discovery before presenting
+  a payable path as available.
+- The deployed `receipt-reconciliation` resource is
   `https://x402.agoragentic.com/v1/receipt-reconciliation`.
 - Public receipt verification is live and read-only at
   `POST https://agoragentic.com/api/commerce/interchange/receipts/verify`.
 - The federation and referral rails are implemented in the private Agoragentic
-  runtime, but they are default-off and require a consenting partner and owner
-  activation before any real counterparty uses them.
+  runtime. Broad operational federation remains owner-gated; the completed
+  anchor-x402 pilot exercised only reviewed key control and a bounded read-only
+  capability exchange, then closed without retaining operational authority.
 
 ## What is not claimed
 
 - This is not a claim that Agoragentic is connected to all agent marketplaces.
-- This is not a claim of live external federation with a real partner.
+- The completed anchor-x402 pilot is not a claim of ongoing operational federation.
 - This is not a claim of organic external demand or a paying partner.
-- The federation protocol is v0 and experimental until a real partner pilot is
-  activated.
+- The federation protocol remains v0 and experimental after one independent
+  external pilot.
+- This is not a global priority claim for x402, A2A-plus-x402, or agent
+  federation.
 
 ## Examples
 
@@ -39,7 +44,7 @@ All examples are Node 18+ and safe by default.
 
 | Example | What it does | Spend? |
 |---|---|---|
-| [`examples/x402-receipt-reconciliation`](./examples/x402-receipt-reconciliation/) | Gets the unpaid 402 challenge from the live receipt-reconciliation edge URL and prints the payment requirements. | No |
+| [`examples/x402-receipt-reconciliation`](./examples/x402-receipt-reconciliation/) | Probes the deployed receipt-reconciliation edge without paying; prints the 402 requirements when available or the explicit availability error when paused. | No |
 | [`examples/verify-receipt`](./examples/verify-receipt/) | Calls the public receipt verifier with a supplied receipt id or JSON, or a demo missing id. | No |
 | [`examples/federation-handshake-simulated`](./examples/federation-handshake-simulated/) | Simulates the post-pin Ed25519 signing contract locally. | No |
 
@@ -56,6 +61,9 @@ of reverse-engineering the private runtime:
 | [`clients/`](./clients/) | No-network JavaScript and Python reference helpers for canonicalization, `hashRef`, Agent Card shape, and challenge hash construction. |
 | [`COMPATIBILITY.md`](./COMPATIBILITY.md) | A/B/C/D targeting matrix: full federation peer, x402-payable service, A2A-reachable agent, discoverable-only listing. |
 | [`SANDBOX_WALKTHROUGH.md`](./SANDBOX_WALKTHROUGH.md) | 15-minute no-spend sandbox to validate a client before a real partner pilot. |
+| [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) | Human-readable record of Agoragentic's first external federation pilot and its claim boundaries. |
+| [`evidence/anchor-x402-pilot-2026-07.json`](./evidence/anchor-x402-pilot-2026-07.json) | Schema-validated public-safe anchor-x402 evidence with every operational and money authority set false. |
+| [`schemas/external-pilot-evidence.schema.json`](./schemas/external-pilot-evidence.schema.json) | Strict schema for external pilot evidence records. |
 
 Run the no-spend x402 preflight:
 
@@ -93,9 +101,12 @@ python interchange/clients/python/interchange_client.py --self-test
    discoverable-only listing.
 4. Run [`SANDBOX_WALKTHROUGH.md`](./SANDBOX_WALKTHROUGH.md) and the conformance
    vectors before attempting a live pilot.
-5. Use the examples to verify your client can read the live x402 challenge,
-   verify receipts, and sign the local canonical message.
-6. For a real federation pilot, coordinate with the Agoragentic owner. A first
+5. Read [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) to see what one
+   external pilot proved, what it did not prove, and which compatibility gaps
+   it exposed.
+6. Use the examples to inspect current x402 availability, read a challenge when
+   the route is payable, verify receipts, and sign the local canonical message.
+7. For a real federation pilot, coordinate with the Agoragentic owner. A first
    pin is TOFU/operator-reviewed key control, not independent identity proof.
 
 ## Safety model

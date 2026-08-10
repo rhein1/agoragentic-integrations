@@ -71,12 +71,16 @@ const summary = {
   amount_atomic: accept?.amount || accept?.maxAmountRequired || challenge.payment?.atomic_amount || null,
   price_usdc: challenge.price_usdc ?? challenge.payment?.amount ?? null,
   resource: accept?.resource || challenge.resource?.url || endpoint,
+  error: challenge.error || null,
   message: challenge.message || null,
 };
 
 console.log(JSON.stringify(summary, null, 2));
 
 if (response.status !== 402) {
-  console.error(`Expected an unpaid x402 preflight to return 402; got ${response.status}.`);
+  console.error(
+    `The deployed x402 resource is not currently payable: HTTP ${response.status}`
+      + `${summary.error ? ` ${summary.error}` : ''}.`,
+  );
   process.exitCode = 1;
 }
