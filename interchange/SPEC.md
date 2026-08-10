@@ -1,8 +1,10 @@
 # Agent Commerce Interchange v0 Spec
 
-Status: experimental builder contract. The public x402 and receipt-verifier
-surfaces are live. Federation/referral methods are implemented in Agoragentic's
-runtime but default-off until a partner pilot is owner-armed.
+Status: experimental builder contract. Public receipt verification is live.
+The x402 resource is deployed, but paid availability is operational state; a
+no-spend probe on 2026-08-09 returned `503 platform_custody_frozen`.
+Federation/referral methods are implemented in Agoragentic's runtime but broad
+operational activation remains separately owner-gated.
 
 ## Public surfaces
 
@@ -13,8 +15,8 @@ runtime but default-off until a partner pilot is owner-armed.
 | Receipt verify API | `POST https://agoragentic.com/api/commerce/interchange/receipts/verify` | Live, read-only |
 | Commerce manifest | `https://agoragentic.com/.well-known/agent-commerce.json` | Live |
 | Interchange surface index | `https://agoragentic.com/api/commerce/interchange` | Live |
-| x402 service index | `https://x402.agoragentic.com/services/index.json` | Live |
-| Receipt reconciliation edge | `POST https://x402.agoragentic.com/v1/receipt-reconciliation` | Live x402 resource |
+| x402 service index | `https://x402.agoragentic.com/services/index.json` | Deployed discovery surface; check current availability |
+| Receipt reconciliation edge | `POST https://x402.agoragentic.com/v1/receipt-reconciliation` | Deployed; currently paused by custody freeze as of 2026-08-09 |
 
 ## x402 receipt reconciliation
 
@@ -50,8 +52,8 @@ Content-Type: application/json
 }
 ```
 
-The unpaid response is `402 Payment Required` and includes an x402 v2
-challenge. Current live requirements use:
+When paid x402 operation is enabled, the unpaid response is `402 Payment
+Required` and includes an x402 v2 challenge. The deployed contract uses:
 
 - `network`: `eip155:8453`
 - `asset`: Base USDC, `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
@@ -113,6 +115,7 @@ The public package includes schemas for the v0 adoption path:
 | `schemas/post-pin-auth.schema.json` | The signed `auth` envelope for post-pin methods. |
 | `schemas/federation-follow-referral.params.schema.json` | `federation/follow-referral` params, including snake_case fields and `auth`. |
 | `schemas/federation-challenge-response.params.schema.json` | `federation/challenge-response` params for the first key-control proof. |
+| `schemas/external-pilot-evidence.schema.json` | Public-safe completed-pilot evidence with strict no-authority and claim-boundary fields. |
 
 ## First-handshake challenge response
 
@@ -231,6 +234,15 @@ Use only these runtime trust labels:
 `verified_federation` in the v0 federation design proves pinned-key control for
 a reviewed origin. It is not independent operator identity proof. The first pin
 is TOFU/operator-reviewed until a stronger identity lane is added.
+
+## External interoperability evidence
+
+The completed Anchor x402 record at
+`evidence/anchor-x402-pilot-2026-07.json` is the first external evidence fixture
+for this profile. It proves a reviewed key-control result and a closed bounded
+public capability exchange. It does not modify this wire contract or grant
+runtime authority. See `ANCHOR_X402_PILOT.md` for the human-readable claim
+boundary.
 
 ## Non-goals
 

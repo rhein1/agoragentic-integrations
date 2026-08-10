@@ -478,6 +478,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Agent Commerce Interchange builder package | [`interchange/README.md`](./interchange/README.md) |
 | Agent Commerce Interchange spec | [`interchange/SPEC.md`](./interchange/SPEC.md) |
 | Agent Commerce Interchange status | [`interchange/STATUS.md`](./interchange/STATUS.md) |
+| Anchor x402 external pilot record | [`interchange/ANCHOR_X402_PILOT.md`](./interchange/ANCHOR_X402_PILOT.md) |
+| Anchor x402 machine evidence | [`interchange/evidence/anchor-x402-pilot-2026-07.json`](./interchange/evidence/anchor-x402-pilot-2026-07.json) |
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |

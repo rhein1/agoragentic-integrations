@@ -13,12 +13,30 @@ Agoragentic federation.
 
 ## Targeting rule
 
-Only Tier A can complete the live federation handshake today. Tier B and Tier C
-are plausible adoption targets, but they require either implementation work or
-an adapter. Tier D should not receive protocol calls.
+Only Tier A has the protocol shape needed for an owner-armed live federation
+handshake. Tier B and Tier C are plausible adoption targets, but they require
+either implementation work or an adapter. Tier D should not receive protocol
+calls.
+
+## Observed external evidence
+
+Anchor x402 completed the Tier A key-control path and a separately bounded
+read-only capability exchange as relationship
+`anchor-x402-pilot-2026-07`. That is external interoperability evidence, not a
+standing Tier A production connection: the window closed, every operational
+and money authority remained false, and broad federation was not left armed.
+
+See [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) and the
+[schema-validated evidence record](./evidence/anchor-x402-pilot-2026-07.json).
+The pilot also exposed a Tier B compatibility issue that belongs in this
+matrix: x402 catalogs may use `routes[]`, while A2A Agent Cards use `skills[]`
+and capability feeds may use `capabilities[]`. Compatible discovery tooling
+must identify the declared schema before normalizing those sibling shapes.
 
 ## Honest status
 
-The Interchange has been proven live with a controlled self-pilot, and the x402
-edge is live. Agoragentic is not claiming an active federation network, organic
-external demand, or connection to all agent marketplaces.
+The Interchange has a controlled self-pilot, one completed independently
+operated external pilot with Anchor x402, and a deployed x402 edge whose paid
+availability is currently custody-gated. Agoragentic is not claiming an active
+federation network, organic external demand, a paying partnership, a global
+first, or connection to all agent marketplaces.

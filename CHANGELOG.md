@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a strict external-pilot evidence schema, a public-safe Anchor x402
+  evidence record, and a human case study for Agoragentic's first independently
+  operated external federation pilot. The record keeps operational authority,
+  money, partnership, organic-demand, and global-priority claims false.
 - Added an exact-pinned public-OSS Crawl4AI local provider for cited web research, Micro ECF context packets, and structured page extraction. Crawl4AI parses already-fetched HTML offline; fixture canaries use no network, and hosted, listing, x402, payment, provider-execution, and change-monitor surfaces remain disabled.
 - Added the experimental source-only HyperFrames receipt-video workflow with deterministic sanitized timeline/HTML fixtures, a pinned local MP4 renderer, hash-bound provenance receipts, secret/private-content redaction, instruction-trap rejection, and no external rendering, hosted deployment, provider, publication, listing, x402, or spend authority.
 - Added the experimental source-only gstack Harness bridge for four explicit owner-supplied planning/review/QA/release artifacts, emitting hash-and-shape-only local proof, receipt, policy findings, listing readiness, and Agent OS preview artifacts without running gstack or gaining network, deployment, publication, provider, or money authority.
@@ -22,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.41.0` and reconciled the Interchange
+  status from self-pilot-only to one completed, closed external Anchor pilot.
+- Corrected the Interchange x402 wording from unqualified live availability to
+  deployed-but-currently-custody-frozen after a no-spend production probe.
 - Bumped the canonical manifest from upstream `2.36.0` to `2.37.0` with 105 indexed surfaces and explicit HyperFrames provenance at upstream revision `9ec9e3a711531b3d45c30a1e2c3006df97dbe5cb`.
 - Prepared the unpublished `agoragentic-mcp@2.0.0` candidate: its remote leg pins stateless MCP `2026-07-28`, preserves the existing local stdio compatibility projection, sends bearer auth on every hosted request, and adds loopback-only v2 plus packed-install validation. npm publication and public registry promotion remain release-tag and owner-gated.
 - Bumped the canonical manifest from upstream `2.34.0` to `2.35.0` with 104 indexed surfaces and Crawl4AI machine discovery pointers.

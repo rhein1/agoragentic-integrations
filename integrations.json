@@ -1,5 +1,5 @@
 {
-  "version": "2.40.0",
+  "version": "2.41.0",
   "updated_at": "2026-08-09",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -1432,6 +1432,9 @@
     "interchange_reference_clients": "interchange/clients/README.md",
     "interchange_js_reference_client": "interchange/clients/js/interchange-client.mjs",
     "interchange_python_reference_client": "interchange/clients/python/interchange_client.py",
+    "interchange_anchor_x402_pilot": "interchange/ANCHOR_X402_PILOT.md",
+    "interchange_anchor_x402_evidence": "interchange/evidence/anchor-x402-pilot-2026-07.json",
+    "interchange_external_pilot_evidence_schema": "interchange/schemas/external-pilot-evidence.schema.json",
     "interchange_agent_card_extension_schema": "interchange/schemas/agent-card-federation-extension.schema.json",
     "interchange_post_pin_auth_schema": "interchange/schemas/post-pin-auth.schema.json",
     "interchange_follow_referral_params_schema": "interchange/schemas/federation-follow-referral.params.schema.json",

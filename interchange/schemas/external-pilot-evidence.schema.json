@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rhein1/agoragentic-integrations/interchange/schemas/external-pilot-evidence.schema.json",
+  "title": "Agoragentic Interchange External Pilot Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "recorded_on",
+    "pilot_id",
+    "counterparty",
+    "key_control",
+    "capability_exchange",
+    "authority",
+    "claims",
+    "findings"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.interchange.external-pilot-evidence.v1"
+    },
+    "version": {
+      "const": "1.0.0"
+    },
+    "recorded_on": {
+      "type": "string",
+      "format": "date"
+    },
+    "pilot_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "display_name",
+        "origin",
+        "agent_card_url",
+        "x402_catalog_url",
+        "control_evidence"
+      ],
+      "properties": {
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "origin": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "agent_card_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "x402_catalog_url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "control_evidence": {
+          "const": "owner_reviewed_origin_and_dedicated_key_control_not_legal_identity"
+        }
+      }
+    },
+    "key_control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "result",
+        "key_id",
+        "key_algorithm",
+        "key_fingerprint",
+        "trust_model"
+      ],
+      "properties": {
+        "status": { "const": "completed" },
+        "result": { "const": "verified_federation_key_control" },
+        "key_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "key_algorithm": { "const": "ed25519" },
+        "key_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "trust_model": { "const": "key_control_tofu_not_identity" }
+      }
+    },
+    "capability_exchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "canary_id",
+        "started_at",
+        "ended_at",
+        "counterparty_get_limit",
+        "counterparty_gets_used",
+        "platform_request_slot_limit",
+        "platform_request_slots_used",
+        "separately_approved_diagnostic_gets",
+        "total_platform_gets_to_counterparty",
+        "public_fields_only",
+        "raw_response_bodies_retained",
+        "hashes_reproduced_by_both_operators",
+        "closed_at_immutable_expiry"
+      ],
+      "properties": {
+        "status": { "const": "completed_closed" },
+        "canary_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "ended_at": { "type": "string", "format": "date-time" },
+        "counterparty_get_limit": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "counterparty_gets_used": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "platform_request_slot_limit": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "platform_request_slots_used": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "separately_approved_diagnostic_gets": { "type": "integer", "minimum": 0, "maximum": 5 },
+        "total_platform_gets_to_counterparty": { "type": "integer", "minimum": 0, "maximum": 25 },
+        "public_fields_only": { "const": true },
+        "raw_response_bodies_retained": { "const": false },
+        "hashes_reproduced_by_both_operators": { "const": true },
+        "closed_at_immutable_expiry": { "const": true }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution",
+        "routing",
+        "referrals",
+        "payments",
+        "credentials",
+        "private_data",
+        "ranking",
+        "trust_promotion_beyond_key_control",
+        "ongoing_operational_federation"
+      ],
+      "properties": {
+        "execution": { "const": false },
+        "routing": { "const": false },
+        "referrals": { "const": false },
+        "payments": { "const": false },
+        "credentials": { "const": false },
+        "private_data": { "const": false },
+        "ranking": { "const": false },
+        "trust_promotion_beyond_key_control": { "const": false },
+        "ongoing_operational_federation": { "const": false }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agoragentic_first_external_federation_pilot",
+        "global_world_first",
+        "organic_demand",
+        "paying_partner",
+        "partnership",
+        "connected_marketplace_network"
+      ],
+      "properties": {
+        "agoragentic_first_external_federation_pilot": { "const": true },
+        "global_world_first": { "const": false },
+        "organic_demand": { "const": false },
+        "paying_partner": { "const": false },
+        "partnership": { "const": false },
+        "connected_marketplace_network": { "const": false }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "summary", "historical_evidence_rewritten"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "status": { "enum": ["closed", "fixed_after_pilot", "open"] },
+          "summary": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "historical_evidence_rewritten": { "const": false }
+        }
+      }
+    }
+  }
+}

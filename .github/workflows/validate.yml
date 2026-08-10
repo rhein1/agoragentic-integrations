@@ -29,6 +29,7 @@ on:
       - 'sdk/**'
       - 'coinbase-agentic-wallets/**'
       - 'x402/**'
+      - 'interchange/**'
       - 'crawl4ai/**'
       - 'zoneless/**'
       - 'scripts/**'
@@ -167,6 +168,11 @@ jobs:
 
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
+
+      - name: Validate Interchange external pilot evidence
+        run: |
+          ajv validate -s interchange/schemas/external-pilot-evidence.schema.json -d interchange/evidence/anchor-x402-pilot-2026-07.json --all-errors --spec=draft2020 -c ajv-formats
+          node --test test/interchange-external-pilot-evidence.test.mjs
 
       - name: Validate ecosystem.json against schema
         run: ajv validate -s ecosystem.schema.json -d ecosystem.json --all-errors --spec=draft2020 -c ajv-formats
