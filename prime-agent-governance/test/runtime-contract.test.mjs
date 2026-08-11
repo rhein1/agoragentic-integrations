@@ -126,6 +126,18 @@ function evidenceFromPlan(plan) {
   return { ...evidenceBody, evidence_hash: hashValue(evidenceBody) };
 }
 
+function rehashEvidence(evidence, overrides = {}) {
+  const body = { ...evidence, ...overrides };
+  delete body.evidence_hash;
+  return { ...body, evidence_hash: hashValue(body) };
+}
+
+function rehashPlan(plan, overrides = {}) {
+  const body = { ...plan, ...overrides };
+  delete body.plan_hash;
+  return { ...body, plan_hash: hashValue(body) };
+}
+
 test('builds the exact closed Agent OS request used by the runtime lane', () => {
   const result = buildPrimeAgentRuntimeRequest(request());
   assert.equal(result.schema, 'agoragentic.agent-os.prime-agent-runtime-request.v1');
@@ -206,6 +218,59 @@ test('validates public-safe evidence only when it binds the same plan and zero-a
   const tamperedValidation = validatePrimeAgentRuntimeEvidence(tampered, plan);
   assert.equal(tamperedValidation.valid, false);
   assert.ok(tamperedValidation.blockers.includes('evidence_boundary_broken'));
+});
+
+test('recomputed hashes cannot legitimize undeclared secret, authority, settlement, or wallet evidence', () => {
+  const runtimeRequest = buildPrimeAgentRuntimeRequest(request());
+  const plan = planFromRequest(runtimeRequest);
+  const evidence = evidenceFromPlan(plan);
+  const adversarialFields = [
+    ['api_key', 'sk-abcdefghijklmnop'],
+    ['authority', { payment_allowed: true }],
+    ['settlement_receipt', { status: 'settled' }],
+    ['wallet', '0x0000000000000000000000000000000000000000'],
+  ];
+  for (const [field, value] of adversarialFields) {
+    const adversarial = rehashEvidence(evidence, { [field]: value });
+    const validation = validatePrimeAgentRuntimeEvidence(adversarial, plan);
+    assert.equal(validation.valid, false, field);
+    assert.ok(validation.blockers.includes('evidence_contract_not_closed'), field);
+    assert.equal(buildPrimeAgentCompatibilityPacket({ plan, evidence: adversarial }).status, 'blocked', field);
+  }
+});
+
+test('evidence fields are bound to the exact validated plan even after hash recomputation', () => {
+  const runtimeRequest = buildPrimeAgentRuntimeRequest(request());
+  const plan = planFromRequest(runtimeRequest);
+  const evidence = evidenceFromPlan(plan);
+  const cases = [
+    ['adapter_id', 'other-adapter', 'evidence_adapter_contract_mismatch'],
+    ['decision', 'review_required', 'evidence_decision_mismatch'],
+    ['review_reason_count', 1, 'evidence_counts_mismatch'],
+    ['command_hash', `sha256:${'4'.repeat(64)}`, 'evidence_command_hash_mismatch'],
+    ['policy_ref_hash', `sha256:${'5'.repeat(64)}`, 'evidence_policy_hash_mismatch'],
+    ['sandbox_profile_ref_hash', `sha256:${'6'.repeat(64)}`, 'evidence_sandbox_hash_mismatch'],
+    ['runtime_image_digest', `sha256:${'7'.repeat(64)}`, 'evidence_runtime_image_mismatch'],
+    ['governance_extension_integrity', `sha256:${'8'.repeat(64)}`, 'evidence_governance_extension_mismatch'],
+  ];
+  for (const [field, value, blocker] of cases) {
+    const adversarial = rehashEvidence(evidence, { [field]: value });
+    const validation = validatePrimeAgentRuntimeEvidence(adversarial, plan);
+    assert.equal(validation.valid, false, field);
+    assert.ok(validation.blockers.includes(blocker), field);
+  }
+});
+
+test('recomputed plan hashes cannot legitimize undeclared or nested contract fields', () => {
+  const runtimeRequest = buildPrimeAgentRuntimeRequest(request());
+  const plan = planFromRequest(runtimeRequest);
+  const topLevel = rehashPlan(plan, { provider_secret: 'sk-abcdefghijklmnop' });
+  const nested = rehashPlan(plan, { rpc_contract: { ...plan.rpc_contract, payment_allowed: false } });
+  for (const adversarial of [topLevel, nested]) {
+    const validation = validatePrimeAgentRuntimePlan(adversarial);
+    assert.equal(validation.valid, false);
+    assert.ok(validation.blockers.includes('plan_contract_not_closed'));
+  }
 });
 
 test('compatibility packet binds package, host, plan, and evidence while remaining non-executing', () => {

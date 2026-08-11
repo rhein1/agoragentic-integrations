@@ -93,7 +93,7 @@ if (!evidenceValidation.valid) throw new Error(evidenceValidation.blockers.join(
 const compatibility = buildPrimeAgentCompatibilityPacket({ plan, evidence });
 ```
 
-`contract_compatible` means the source package, host pin, plan hash, and zero-action evidence agree. It does not mean a Prime Agent process ran or that production compatibility was verified.
+`contract_compatible` means the source package, host pin, closed plan shape, plan hash, and closed zero-action evidence agree. Undeclared credential, authority, payment, settlement, wallet, or provider-output fields block compatibility even when a caller recomputes the object hash. It does not mean a Prime Agent process ran or that production compatibility was verified.
 
 See [RUNTIME_INTEGRATION.md](RUNTIME_INTEGRATION.md) for the full contract and activation gates.
 

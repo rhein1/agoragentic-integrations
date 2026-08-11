@@ -99,6 +99,71 @@ const AUTHORITY_FLAG_KEYS = Object.freeze([
   'publication_allowed',
   'trust_mutation_allowed',
 ]);
+const PLAN_KEYS = Object.freeze(new Set([
+  'schema',
+  'adapter_id',
+  'adapter_version',
+  'runtime_provider',
+  'runtime_mode',
+  'runtime_status',
+  'host_contract',
+  'request',
+  'command_preview',
+  'rpc_contract',
+  'hard_enforcement_required',
+  'integration_refs',
+  'decision',
+  'review_reasons',
+  'launch_allowed',
+  'no_spawn',
+  'no_network',
+  'no_spend',
+  'authority_flags',
+  'plan_hash',
+]));
+const RPC_CONTRACT_KEYS = Object.freeze(new Set([
+  'framing',
+  'stdin_stdout_only',
+  'diagnostics_on_stderr',
+  'shell',
+  'process_spawned',
+  'session_dir_is_private_mount',
+  'required_commands',
+]));
+const INTEGRATION_REF_KEYS = Object.freeze(new Set([
+  'governance_extension',
+  'governance_extension_integrity',
+  'mcp_profile',
+  'harness_policy',
+  'authority',
+  'credential_profile',
+  'runtime_image',
+  'runtime_image_digest',
+  'transaction_assurance',
+]));
+const EVIDENCE_KEYS = Object.freeze(new Set([
+  'schema',
+  'adapter_id',
+  'adapter_version',
+  'host_contract_hash',
+  'plan_hash',
+  'evaluation_hash',
+  'decision',
+  'blocker_count',
+  'review_reason_count',
+  'command_hash',
+  'policy_ref_hash',
+  'sandbox_profile_ref_hash',
+  'runtime_image_digest',
+  'governance_extension_integrity',
+  'runtime_executed',
+  'process_spawned',
+  'network_used',
+  'spend_occurred',
+  'authority_granted',
+  'public_safe',
+  'evidence_hash',
+]));
 
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -273,6 +338,16 @@ export function validatePrimeAgentRuntimePlan(plan) {
   if (!isObject(plan) || plan.schema !== PRIME_AGENT_RUNTIME_PLAN_SCHEMA) {
     blockers.push('plan_schema_invalid');
   }
+  if (isObject(plan)) {
+    try {
+      assertAllowedKeys(plan, PLAN_KEYS, 'runtime plan');
+      assertAllowedKeys(plan.rpc_contract, RPC_CONTRACT_KEYS, 'runtime plan rpc_contract');
+      assertAllowedKeys(plan.integration_refs, INTEGRATION_REF_KEYS, 'runtime plan integration_refs');
+      assertNoSecretValues(plan);
+    } catch {
+      blockers.push('plan_contract_not_closed');
+    }
+  }
   const expectedPlanHash = isObject(plan) ? hashValue(removeHash(plan, 'plan_hash')) : null;
   if (!isObject(plan) || !SHA256_REF_PATTERN.test(String(plan.plan_hash || '')) || plan.plan_hash !== expectedPlanHash) {
     blockers.push('plan_hash_mismatch');
@@ -370,6 +445,14 @@ export function validatePrimeAgentRuntimeEvidence(evidence, plan) {
   if (!isObject(evidence) || evidence.schema !== PRIME_AGENT_RUNTIME_EVIDENCE_SCHEMA) {
     blockers.push('evidence_schema_invalid');
   }
+  if (isObject(evidence)) {
+    try {
+      assertAllowedKeys(evidence, EVIDENCE_KEYS, 'runtime evidence');
+      assertNoSecretValues(evidence);
+    } catch {
+      blockers.push('evidence_contract_not_closed');
+    }
+  }
   const expectedEvidenceHash = isObject(evidence) ? hashValue(removeHash(evidence, 'evidence_hash')) : null;
   if (
     !isObject(evidence)
@@ -379,8 +462,37 @@ export function validatePrimeAgentRuntimeEvidence(evidence, plan) {
     blockers.push('evidence_hash_mismatch');
   }
   if (evidence?.plan_hash !== plan?.plan_hash) blockers.push('evidence_plan_hash_mismatch');
+  if (
+    evidence?.adapter_id !== PRIME_AGENT_RUNTIME_ADAPTER_ID
+    || evidence?.adapter_version !== PRIME_AGENT_RUNTIME_ADAPTER_VERSION
+  ) {
+    blockers.push('evidence_adapter_contract_mismatch');
+  }
   if (evidence?.host_contract_hash !== PRIME_AGENT_HOST_CONTRACT.contract_hash) {
     blockers.push('evidence_host_contract_mismatch');
+  }
+  if (!SHA256_REF_PATTERN.test(String(evidence?.evaluation_hash || ''))) {
+    blockers.push('evidence_evaluation_hash_invalid');
+  }
+  if (evidence?.decision !== plan?.decision) blockers.push('evidence_decision_mismatch');
+  if (
+    evidence?.blocker_count !== 0
+    || evidence?.review_reason_count !== (Array.isArray(plan?.review_reasons) ? plan.review_reasons.length : -1)
+  ) {
+    blockers.push('evidence_counts_mismatch');
+  }
+  if (evidence?.command_hash !== hashValue(plan?.command_preview)) blockers.push('evidence_command_hash_mismatch');
+  if (evidence?.policy_ref_hash !== hashValue(plan?.request?.harness_policy_ref)) {
+    blockers.push('evidence_policy_hash_mismatch');
+  }
+  if (evidence?.sandbox_profile_ref_hash !== hashValue(plan?.request?.sandbox_profile_ref)) {
+    blockers.push('evidence_sandbox_hash_mismatch');
+  }
+  if (evidence?.runtime_image_digest !== plan?.request?.runtime_image_digest) {
+    blockers.push('evidence_runtime_image_mismatch');
+  }
+  if (evidence?.governance_extension_integrity !== plan?.request?.extension_integrity_ref) {
+    blockers.push('evidence_governance_extension_mismatch');
   }
   if (
     evidence?.runtime_executed !== false

@@ -61,10 +61,14 @@ Unknown fields, secret-like values, public exposure, paid activation fields, ove
 
 `validatePrimeAgentRuntimeEvidence()` independently checks:
 
-- evidence schema and hash;
+- the exact closed evidence field set, secret-like value rejection, and evidence hash;
+- exact adapter identity, decision, blocker count, and review-reason count;
 - binding to the same plan hash and host pin;
+- command, Harness policy, sandbox profile, runtime image, and governance-extension hashes against the validated plan;
 - explicit false execution, process, network, spend, and authority claims;
 - public-safe status.
+
+Recomputing `evidence_hash` cannot legitimize an added credential, authority grant, payment or settlement claim, wallet field, unrestricted provider output, or any other undeclared field. The plan validator applies the same closed-shape and secret-like-value checks to the plan, RPC contract, and integration references.
 
 `buildPrimeAgentCompatibilityPacket()` combines those validations with the package descriptor. It always keeps `runtime_verified:false`, `runtime_executed:false`, `authority_granted:false`, and `partnership_claimed:false`.
 
