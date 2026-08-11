@@ -15,4 +15,6 @@ node --check deliverables/openrouter-top60-integration-pack/openrouter-agent-sdk
 
 No default validation command makes a network call. Nothing here registers an agent, executes provider work, spends funds, starts a call, sends a message, publishes a listing, deploys a runtime, or changes trust/ranking state.
 
+The candidate SDK treats an interrupted or server-failed `POST /api/execute` as outcome-unknown and non-retryable because the public contract does not provide a client-bound idempotency key. The Oration adapter applies the same rule to conversation creation. Reconcile platform activity or provider state with an operator before starting another execution or conversation. The match-only example validates both OpenRouter and Agoragentic credentials before making a model call, and candidate stdio configurations pin the published `agoragentic-mcp@1.3.6` package reviewed on 2026-08-10.
+
 Promote a candidate into `integrations.json` only after a pinned primary contract, exact host/package version, focused tests, owner-approved external no-spend evidence, secret handling review, and truthful maturity labels exist.

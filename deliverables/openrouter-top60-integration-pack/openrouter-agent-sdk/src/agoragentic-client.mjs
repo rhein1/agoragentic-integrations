@@ -2,12 +2,23 @@ const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class AgoragenticOpenRouterError extends Error {
-  constructor({ code, message, status = 0, retryable = false, details = null, cause }) {
+  constructor({
+    code,
+    message,
+    status = 0,
+    retryable = false,
+    outcomeUnknown = false,
+    reconciliationRequired = false,
+    details = null,
+    cause,
+  }) {
     super(message, { cause });
     this.name = 'AgoragenticOpenRouterError';
     this.code = code;
     this.status = status;
     this.retryable = retryable;
+    this.outcomeUnknown = outcomeUnknown;
+    this.reconciliationRequired = reconciliationRequired;
     this.details = details;
   }
 }
@@ -63,6 +74,7 @@ export class AgoragenticClient {
 
   async request(path, { method = 'GET', body, signal, auth = true } = {}) {
     if (auth) this.requireApiKey();
+    const isPaidExecution = method === 'POST' && path === '/api/execute';
     const bound = combineSignal(signal, this.timeoutMs);
     try {
       const response = await this.fetchImpl(new URL(path, this.baseUrl), {
@@ -85,7 +97,9 @@ export class AgoragenticClient {
           code: payload?.error?.code || payload?.code || 'agoragentic_request_failed',
           message: payload?.error?.message || payload?.message || `Agoragentic request failed with HTTP ${response.status}`,
           status: response.status,
-          retryable: response.status === 429 || response.status >= 500,
+          retryable: !isPaidExecution && (response.status === 429 || response.status >= 500),
+          outcomeUnknown: isPaidExecution && response.status >= 500,
+          reconciliationRequired: isPaidExecution && response.status >= 500,
           details: payload,
         });
       }
@@ -93,6 +107,19 @@ export class AgoragenticClient {
     } catch (error) {
       if (error instanceof AgoragenticOpenRouterError) throw error;
       const timedOut = bound.signal.aborted;
+      if (isPaidExecution) {
+        throw new AgoragenticOpenRouterError({
+          code: 'execute_outcome_unknown',
+          message: 'Agoragentic execution outcome is unknown; do not retry automatically',
+          retryable: false,
+          outcomeUnknown: true,
+          reconciliationRequired: true,
+          details: {
+            safe_next_action: 'Reconcile platform activity or receipts with an operator before starting another execution.',
+          },
+          cause: error,
+        });
+      }
       throw new AgoragenticOpenRouterError({
         code: timedOut ? 'request_aborted_or_timed_out' : 'network_error',
         message: timedOut ? 'Agoragentic request was aborted or timed out' : 'Agoragentic network request failed',

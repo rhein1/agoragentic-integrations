@@ -22,6 +22,8 @@ for(const entry of entries){
 }
 for(let rank=1;rank<=60;rank++) if(!ranks.has(rank)) fail(`missing rank ${rank}`);
 const hosts=await readJson('host-configs.json'); if(hosts.hosts?.length!==12) fail('host-configs must contain 12 candidates');
+const hostConfigText=JSON.stringify(hosts);
+for(const match of hostConfigText.matchAll(/agoragentic-mcp@([^"\\\s]+)/g)) if(match[1]!=='1.3.6') fail(`host-configs contains unpublished or unreviewed agoragentic-mcp pin ${match[1]}`);
 const decisionFiles={covered_existing:'decisions/covered-existing.json',composition_recipe:'decisions/composition-recipes.json',provider_recipe:'decisions/provider-recipes.json',plugin_scaffold:'decisions/plugin-scaffolds.json',vendor_intake:'decisions/vendor-intakes.json',blocked_no_public_surface:'decisions/blocked.json',deprecated:'decisions/deprecated.json',needs_verification:'decisions/needs-verification.json'};
 const expected={covered_existing:5,composition_recipe:9,provider_recipe:4,plugin_scaffold:4,vendor_intake:8,blocked_no_public_surface:10,deprecated:2,needs_verification:4};
 for(const [group,rel] of Object.entries(decisionFiles)){const packet=await readJson(rel);if(packet.group!==group||packet.runtime_verified!==false||packet.authority_granted!==false) fail(`${rel} boundary invalid`);if(packet.items?.length!==expected[group]) fail(`${group} expected ${expected[group]}, got ${packet.items?.length}`)}

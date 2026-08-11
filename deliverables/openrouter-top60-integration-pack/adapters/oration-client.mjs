@@ -1,8 +1,8 @@
 const DEFAULT_BASE_URL = 'https://www.oration.ai/api/v2/';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1']);
 export class OrationClientError extends Error {
-  constructor({ code, message, status = 0, retryable = false, details = null, cause }) {
-    super(message, { cause }); this.name = 'OrationClientError'; this.code = code; this.status = status; this.retryable = retryable; this.details = details;
+  constructor({ code, message, status = 0, retryable = false, outcomeUnknown = false, reconciliationRequired = false, details = null, cause }) {
+    super(message, { cause }); this.name = 'OrationClientError'; this.code = code; this.status = status; this.retryable = retryable; this.outcomeUnknown = outcomeUnknown; this.reconciliationRequired = reconciliationRequired; this.details = details;
   }
 }
 export class OrationClient {
@@ -22,13 +22,15 @@ export class OrationClient {
     return { 'x-api-key': this.apiKey, 'x-workspace-id': this.workspaceId };
   }
   async request(path, { method = 'GET', body } = {}) {
+    const isConversationCreation = method === 'POST' && path === 'conversations';
     try {
       const response = await this.fetchImpl(new URL(path, this.baseUrl), { method, headers: { Accept: 'application/json', ...this.authHeaders(), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new OrationClientError({ code: payload?.code || 'oration_request_failed', message: payload?.message || `Oration request failed with HTTP ${response.status}`, status: response.status, retryable: response.status === 429 || response.status >= 500, details: payload });
+      if (!response.ok) throw new OrationClientError({ code: payload?.code || 'oration_request_failed', message: payload?.message || `Oration request failed with HTTP ${response.status}`, status: response.status, retryable: !isConversationCreation && (response.status === 429 || response.status >= 500), outcomeUnknown: isConversationCreation && response.status >= 500, reconciliationRequired: isConversationCreation && response.status >= 500, details: payload });
       return payload;
     } catch (error) {
       if (error instanceof OrationClientError) throw error;
+      if (isConversationCreation) throw new OrationClientError({ code: 'conversation_creation_outcome_unknown', message: 'Oration conversation creation outcome is unknown; do not retry automatically', retryable: false, outcomeUnknown: true, reconciliationRequired: true, cause: error });
       throw new OrationClientError({ code: 'network_error', message: 'Oration network request failed', retryable: true, cause: error });
     }
   }

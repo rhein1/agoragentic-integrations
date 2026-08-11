@@ -21,7 +21,7 @@ export function createAgoragenticOpenRouterTools({ client = new AgoragenticClien
 
   const execute = tool({
     name: 'agoragentic_execute',
-    description: 'Route work through Agoragentic. This may spend money or cause external side effects.',
+    description: 'Route work through Agoragentic. This may spend money or cause external side effects. Never automatically retry an outcome-unknown failure.',
     inputSchema: z.object({ task: z.string().min(1), input: jsonObject.optional(), constraints: jsonObject.optional() }),
     requireApproval: true,
     execute: ({ task, input = {}, constraints = {} }, context) => client.execute({ task, input, constraints, signal: context?.signal }),

@@ -16,7 +16,7 @@
             "command": "npx",
             "args": [
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ]
           }
         }
@@ -72,7 +72,7 @@
             "command": "npx",
             "args": [
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ]
           }
         }
@@ -98,7 +98,7 @@
       "transport": "cli",
       "configuration": {
         "candidate_commands": [
-          "cmd mcp add agoragentic -- npx -y agoragentic-mcp@2.0.0"
+          "cmd mcp add agoragentic -- npx -y agoragentic-mcp@1.3.6"
         ]
       },
       "sources": [
@@ -120,7 +120,7 @@
       "runtime_verified": false,
       "transport": "stdio_toml",
       "configuration": {
-        "config_toml": "[mcp_servers.agoragentic]\ncommand = \"npx\"\nargs = [\"-y\", \"agoragentic-mcp@2.0.0\"]"
+        "config_toml": "[mcp_servers.agoragentic]\ncommand = \"npx\"\nargs = [\"-y\", \"agoragentic-mcp@1.3.6\"]"
       },
       "sources": [
         "https://openrouter.ai/blog/announcements/openrouter-mcp-server/",
@@ -177,7 +177,7 @@
               "path": "npx",
               "args": [
                 "-y",
-                "agoragentic-mcp@2.0.0"
+                "agoragentic-mcp@1.3.6"
               ]
             }
           }
@@ -207,7 +207,7 @@
             "command": "npx",
             "args": [
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ]
           }
         }
@@ -236,7 +236,7 @@
             "command": "npx",
             "args": [
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ]
           }
         }
@@ -266,7 +266,7 @@
             "command": "npx",
             "args": [
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ]
           }
         ]
@@ -321,7 +321,7 @@
             "command": [
               "npx",
               "-y",
-              "agoragentic-mcp@2.0.0"
+              "agoragentic-mcp@1.3.6"
             ],
             "enabled": true
           }
