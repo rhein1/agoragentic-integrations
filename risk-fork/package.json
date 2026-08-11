@@ -1,0 +1,72 @@
+{
+  "name": "@agoragentic/risk-fork",
+  "version": "0.1.0-alpha.0",
+  "description": "Provider-neutral fork-before-risk contracts, deterministic controls, and local reference tooling for agent execution.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./canonical": "./src/canonical.mjs",
+    "./child-operation": "./src/child-operation.mjs",
+    "./contracts": "./src/contracts.mjs",
+    "./classifier": "./src/risk-classifier.mjs",
+    "./lifecycle": "./src/lifecycle.mjs",
+    "./provider": "./src/provider.mjs",
+    "./taint-gate": "./src/taint-gate.mjs",
+    "./clean-commit": "./src/clean-commit.mjs",
+    "./controller": "./src/controller.mjs",
+    "./interception": "./src/interception.mjs",
+    "./receipt": "./src/receipt.mjs",
+    "./adapters/local-reference": "./src/adapters/local-reference.mjs",
+    "./adapters/e2b": "./src/adapters/e2b.mjs",
+    "./schema/*": "./schema/*"
+  },
+  "files": [
+    "src/",
+    "schema/",
+    "examples/",
+    "README.md",
+    "SECURITY_MODEL.md",
+    "PROVIDER_COMPARISON.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "self-test": "node examples/local-reference.mjs",
+    "benchmark:local": "node scripts/benchmark-local.mjs",
+    "pack:dry": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
+  "peerDependencies": {
+    "e2b": ">=2.38.3 <3"
+  },
+  "peerDependenciesMeta": {
+    "e2b": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "ai-agents",
+    "mcp",
+    "sandbox",
+    "fork",
+    "security",
+    "transaction-assurance"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "risk-fork"
+  },
+  "bugs": {
+    "url": "https://github.com/rhein1/agoragentic-integrations/issues"
+  }
+}

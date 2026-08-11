@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-authorization-claim.v1.json",
+  "title": "Agoragentic Risk Fork Authorization Claim V1",
+  "description": "A durable atomic one-use authorization claim record. Identifiers and claim tokens are stored only as hashes.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "authorization_id_hash", "binding_hash", "claim_token_hash", "status", "claimed_at", "completed_at", "result_hash"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.authorization-claim.v1" },
+    "authorization_id_hash": { "$ref": "#/$defs/sha256" }, "binding_hash": { "$ref": "#/$defs/sha256" },
+    "claim_token_hash": { "$ref": "#/$defs/sha256" }, "status": { "enum": ["claimed", "completed"] },
+    "claimed_at": { "$ref": "#/$defs/date" }, "completed_at": { "$ref": "#/$defs/nullableDate" },
+    "result_hash": { "$ref": "#/$defs/nullableSha256" }
+  },
+  "oneOf": [
+    { "properties": { "status": { "const": "claimed" }, "completed_at": { "type": "null" }, "result_hash": { "type": "null" } }, "required": ["status", "completed_at", "result_hash"] },
+    { "properties": { "status": { "const": "completed" }, "completed_at": { "$ref": "#/$defs/date" }, "result_hash": { "$ref": "#/$defs/sha256" } }, "required": ["status", "completed_at", "result_hash"] }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "nullableDate": { "oneOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] }
+  }
+}

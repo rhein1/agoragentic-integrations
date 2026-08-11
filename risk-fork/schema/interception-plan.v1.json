@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-interception-plan.v1.json",
+  "title": "Agoragentic Risk Fork MCP Interception Plan V1",
+  "description": "A pre-contact or pre-execution host directive. The plan grants no authority and does not claim host enforcement occurred.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "directive", "enforcement_point", "required_host_capabilities", "risk_decision", "authority_flags", "plan_hash"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.interception-plan.v1" },
+    "directive": { "enum": ["DENY", "ALLOW_DIRECT", "OWNER_POLICY_DECIDES_FORK", "BLOCK_DIRECT_ROUTE_TO_RISK_FORK", "BLOCK_DIRECT_PREPARE_ONLY"] },
+    "enforcement_point": { "enum": ["none", "before_remote_connect", "before_execution"] },
+    "required_host_capabilities": {
+      "type": "array", "maxItems": 2, "uniqueItems": true,
+      "items": { "enum": ["can_block_before_remote_connect", "can_route_complete_remote_session", "can_block_before_tool_execution", "can_route_tool_execution"] }
+    },
+    "risk_decision": { "$ref": "https://agoragentic.com/schema/risk-fork-risk-decision.v1.json" },
+    "authority_flags": {
+      "type": "object", "additionalProperties": false,
+      "required": ["plan_grants_authority", "host_enforcement_proven", "remote_connection_started", "tool_execution_started"],
+      "properties": {
+        "plan_grants_authority": { "const": false }, "host_enforcement_proven": { "const": false },
+        "remote_connection_started": { "const": false }, "tool_execution_started": { "const": false }
+      }
+    },
+    "plan_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

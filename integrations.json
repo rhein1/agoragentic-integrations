@@ -1,6 +1,6 @@
 {
-  "version": "2.41.0",
-  "updated_at": "2026-08-09",
+  "version": "2.42.0",
+  "updated_at": "2026-08-11",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -101,6 +101,16 @@
       "distribution_status": "source_only",
       "source": "examples/anydoc-document-evidence",
       "min_node": "20"
+    },
+    "risk_fork": {
+      "name": "@agoragentic/risk-fork",
+      "version": "0.1.0-alpha.0",
+      "install": "cd risk-fork && npm ci",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork",
+      "distribution_status": "source_only",
+      "source": "risk-fork",
+      "min_node": "20",
+      "compatibility_scope": "Source-only alpha with a tested local reference protocol and mock-tested E2B adapter; no live provider, containment, authority, spend, deployment, publication, or package-registry claim"
     }
   },
   "env_vars": {
@@ -1348,6 +1358,16 @@
       "path": "hyperframes/receipt-video.mjs",
       "install": "cd hyperframes && npm install",
       "docs": "hyperframes/README.md"
+    },
+    {
+      "id": "risk-fork",
+      "name": "Risk Fork",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "risk-fork/src/index.mjs",
+      "install": "cd risk-fork && npm ci",
+      "docs": "risk-fork/README.md",
+      "compatibility_scope": "Source-only alpha with a tested local reference protocol and mock-tested E2B adapter; no live provider, containment, authority, spend, deployment, publication, or package-registry claim"
     }
   ],
   "specs": [
@@ -1387,6 +1407,9 @@
     "hyperframes_upstream_provenance": "hyperframes/upstream-provenance.json",
     "hyperframes_sanitized_timeline_schema": "hyperframes/schemas/sanitized-timeline.schema.json",
     "hyperframes_local_render_receipt_schema": "hyperframes/schemas/local-render-receipt.schema.json",
+    "risk_fork": "risk-fork/README.md",
+    "risk_fork_security_model": "risk-fork/SECURITY_MODEL.md",
+    "risk_fork_provider_comparison": "risk-fork/PROVIDER_COMPARISON.md",
     "a2a_card": "a2a/agent-card.json",
     "agoragentic_commerce_draft": "specs/ACP-SPEC.md",
     "acp_spec": "specs/ACP-SPEC.md",

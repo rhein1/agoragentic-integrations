@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-execution-binding.v1.json",
+  "title": "Agoragentic Risk Fork Execution Binding V1",
+  "description": "An exact-action binding to separately verified one-use authority. The binding itself grants no authority.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "principal_ref", "fork_agent_id", "session_id", "action_operation", "mcp", "provider_ref", "target_ref", "commercial", "governance", "validity", "nonce", "one_use_authorization_id", "audience", "authorization_ref", "authorization_hash", "binding_hash", "authority_flags"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.execution-binding.v1" },
+    "principal_ref": { "$ref": "#/$defs/ref" }, "fork_agent_id": { "$ref": "#/$defs/ref" }, "session_id": { "$ref": "#/$defs/ref" },
+    "action_operation": { "$ref": "#/$defs/actionOperation" },
+    "mcp": {
+      "type": "object", "additionalProperties": false,
+      "required": ["server_ref", "server_origin", "method", "tool_name", "effective_arguments_hash"],
+      "properties": {
+        "server_ref": { "$ref": "#/$defs/ref" }, "server_origin": { "$ref": "#/$defs/httpEndpoint" },
+        "method": { "$ref": "#/$defs/mcpPhase" }, "tool_name": { "$ref": "#/$defs/nullableRef" },
+        "effective_arguments_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "provider_ref": { "$ref": "#/$defs/ref" }, "target_ref": { "$ref": "#/$defs/nullableRef" },
+    "commercial": {
+      "type": "object", "additionalProperties": false,
+      "required": ["amount", "currency", "payment_rail"],
+      "properties": {
+        "amount": { "oneOf": [{ "type": "string", "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$", "maxLength": 100 }, { "type": "null" }] },
+        "currency": { "oneOf": [{ "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,11}$", "maxLength": 30 }, { "type": "null" }] },
+        "payment_rail": { "$ref": "#/$defs/nullableRef" }
+      },
+      "oneOf": [
+        { "properties": { "amount": { "type": "null" }, "currency": { "type": "null" }, "payment_rail": { "type": "null" } } },
+        { "properties": { "amount": { "type": "string" }, "currency": { "type": "string" }, "payment_rail": { "$ref": "#/$defs/ref" } } }
+      ]
+    },
+    "governance": {
+      "type": "object", "additionalProperties": false, "required": ["policy_version", "mandate_version"],
+      "properties": { "policy_version": { "$ref": "#/$defs/ref" }, "mandate_version": { "$ref": "#/$defs/nullableRef" } }
+    },
+    "validity": {
+      "type": "object", "additionalProperties": false, "required": ["issued_at", "not_before", "expires_at"],
+      "properties": { "issued_at": { "$ref": "#/$defs/date" }, "not_before": { "$ref": "#/$defs/date" }, "expires_at": { "$ref": "#/$defs/date" } }
+    },
+    "nonce": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 500 }] },
+    "one_use_authorization_id": { "$ref": "#/$defs/ref" }, "audience": { "$ref": "#/$defs/ref" },
+    "authorization_ref": { "$ref": "#/$defs/ref" }, "authorization_hash": { "$ref": "#/$defs/sha256" },
+    "binding_hash": { "$ref": "#/$defs/sha256" },
+    "authority_flags": {
+      "type": "object", "additionalProperties": false,
+      "required": ["binding_grants_authority", "signature_verified", "one_use_consumed"],
+      "properties": { "binding_grants_authority": { "const": false }, "signature_verified": { "const": false }, "one_use_consumed": { "const": false } }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "\\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "nullableRef": { "oneOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "httpEndpoint": { "type": "string", "format": "uri", "pattern": "^https?://(?![^/?#]*@)[^?#]+$", "maxLength": 4096 },
+    "mcpPhase": { "enum": ["initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call"] },
+    "actionOperation": { "enum": ["mcp_tool_call", "payment", "send", "publish", "deploy", "database_mutation", "trust_mutation", "git_push"] }
+  }
+}

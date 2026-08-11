@@ -1,0 +1,60 @@
+name: Risk Fork
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'risk-fork/**'
+      - 'transaction-assurance/**'
+      - '.github/workflows/risk-fork.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'risk-fork/**'
+      - 'transaction-assurance/**'
+      - '.github/workflows/risk-fork.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+        package:
+          - transaction-assurance
+          - risk-fork
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - name: Install locked test dependencies
+        working-directory: ${{ matrix.package }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Syntax and contract checks
+        working-directory: ${{ matrix.package }}
+        run: npm run check
+      - name: Deterministic tests
+        working-directory: ${{ matrix.package }}
+        run: npm test
+      - name: No-network self-test
+        working-directory: ${{ matrix.package }}
+        run: npm run self-test
+      - name: Package dry run
+        working-directory: ${{ matrix.package }}
+        run: npm run pack:dry
