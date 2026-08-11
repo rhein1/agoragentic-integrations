@@ -41,6 +41,16 @@ Reference modules are included for:
 
 They demonstrate the interface only. Their passing results are not third-party evidence.
 
+## External-adopter starter packs
+
+The [`anchor-x402` starter pack](./examples/external-adopters/anchor-x402/README.md)
+provides a clean-room normalized-policy target and an offline runner that binds
+both the suite and target to exact Git commits. Agoragentic authored the starter;
+it is not external evidence until the independent operator reviews and commits
+the target in its own repository, runs it, and publishes the bounded artifacts
+plus actionable observations. The pack makes no network, payment, signature,
+live-settlement, or production-compatibility claim.
+
 ## Reports and receipts
 
 The JSON report contains every bounded result and hashes of the manifest, vector set, and materialized inputs. JUnit output has stable names and zero timing noise. The receipt binds:
