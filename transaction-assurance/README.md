@@ -51,6 +51,16 @@ This is a source-visible, unpublished alpha implementation.
 
 `package.json` remains `private: true` until review, conformance fixtures, provenance, and release ownership are complete.
 
+## Agent-host install path
+
+The focused `agoragentic-assure` Agent Skill is generated from one canonical source for Codex, Claude Code, OpenCode, Cursor, GitHub Copilot, and Gemini CLI. Install it with the source-visible skill pack:
+
+```bash
+npx skills add rhein1/agoragentic-integrations --full-depth --skill agoragentic-assure
+```
+
+The skill pins this package at `0.2.0-alpha.0` and points every host to the same normalized-authority and evaluation schemas. Installing the skill does not install a registry package, configure credentials, grant authority, call a provider, or move money. The local package remains source-only; clone this repository and run the five-minute self-test below when local evaluation code is needed.
+
 ## Vendor-neutral conformance suite
 
 The package includes an offline deterministic suite covering eight profiles:
