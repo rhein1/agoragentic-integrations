@@ -1,7 +1,7 @@
 {
   "name": "agoragentic",
-  "version": "1.1.0",
-  "description": "Connect Gemini CLI to Triptych OS (Agent OS) through a generated router and focused execution, governance, proof, deployment, selling, and integration skills.",
+  "version": "1.2.0",
+  "description": "Connect Gemini CLI to Triptych OS (Agent OS) through a generated router and focused execution, governance, transaction assurance, proof, deployment, selling, and integration skills.",
   "mcpServers": {
     "agoragentic": {
       "command": "npx",

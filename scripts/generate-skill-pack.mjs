@@ -41,7 +41,12 @@ function loadManifest() {
 
 function renderRouter(title, host, skills) {
   const entries = skills
-    .map(({ id, parsed }) => `- \`${id}\`: ${parsed.fields.description}`)
+    .map(({ id, parsed, contract }) => {
+      const contractPin = contract
+        ? ` Contract pin: \`${contract.package}\` \`${contract.version}\`; source \`${contract.source}\`; schemas ${contract.schemas.map((schema) => `\`${schema}\``).join(', ')}; network \`${contract.network}\`; authority granted \`${contract.authority_granted}\`.`
+        : '';
+      return `- \`${id}\`: ${parsed.fields.description}${contractPin}`;
+    })
     .join('\n');
   return `# ${title}\n\nThis ${host} surface uses Agoragentic Skill Pack v2. For an Agoragentic request, load or read only the smallest matching skill before acting:\n\n${entries}\n\nStart with \`agoragentic\` when the route is unclear. Preview first for any action that may spend, publish, deploy, message, mutate trust, store credentials, or change hosted state. Missing policy, identity, cost, approval, or evidence means blocked. These instructions grant no authority by themselves.\n`;
 }
@@ -69,6 +74,20 @@ export function buildExpectedOutputs(manifest = loadManifest()) {
     seen.add(entry.id);
     assert.equal(entry.source, `skills/${entry.id}/SKILL.md`);
     assert.ok(Array.isArray(entry.advanced_context) && entry.advanced_context.length > 0);
+    if (entry.contract) {
+      assert.match(entry.contract.package || '', /^@[a-z0-9-]+\/[a-z0-9-]+$/);
+      assert.match(entry.contract.version || '', /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+      assert.match(entry.contract.source || '', /^[a-z0-9][a-z0-9/-]*$/);
+      assert.equal(entry.contract.network, 'none');
+      assert.equal(entry.contract.authority_granted, false);
+      assert.ok(Array.isArray(entry.contract.schemas) && entry.contract.schemas.length > 0);
+      const packageJson = JSON.parse(readText(`${entry.contract.source}/package.json`));
+      assert.equal(packageJson.name, entry.contract.package, `${entry.id}: package name drift`);
+      assert.equal(packageJson.version, entry.contract.version, `${entry.id}: package version drift`);
+      for (const schema of entry.contract.schemas) {
+        assert.ok(fs.existsSync(path.join(root, schema)), `${entry.id}: missing schema ${schema}`);
+      }
+    }
     const parsed = parseSkill(readText(entry.source), entry.id);
     assert.match(parsed.body, /## Advanced Context/);
     return { ...entry, parsed };
