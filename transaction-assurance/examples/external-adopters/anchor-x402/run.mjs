@@ -27,17 +27,17 @@ function git(args, cwd) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim();
 }
 
-function assertTrackedAndClean(repositoryRoot, files) {
+function assertTrackedAndClean(repositoryRoot, files, label) {
   for (const filename of files) {
     const relative = path.relative(repositoryRoot, filename);
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error('adopter pack files must remain inside the target repository');
+      throw new Error(`${label} files must remain inside their repository`);
     }
     git(['ls-files', '--error-unmatch', '--', relative], repositoryRoot);
   }
   const relativeFiles = files.map((filename) => path.relative(repositoryRoot, filename));
   const dirty = git(['status', '--porcelain=v1', '--', ...relativeFiles], repositoryRoot);
-  if (dirty) throw new Error('adopter pack files must be committed and clean before the evidence run');
+  if (dirty) throw new Error(`${label} files must be committed and clean before the evidence run`);
 }
 
 function sha256Bytes(value) {
@@ -71,6 +71,18 @@ async function main() {
   if (actualSuiteCommit !== suiteCommit) {
     throw new Error(`suite checkout mismatch: expected ${suiteCommit}, found ${actualSuiteCommit}`);
   }
+  const suiteRepositoryRoot = git(['rev-parse', '--show-toplevel'], suiteRoot);
+  assertTrackedAndClean(suiteRepositoryRoot, [
+    path.join(suiteRoot, 'src', 'conformance.mjs'),
+    path.join(suiteRoot, 'src', 'index.mjs'),
+    path.join(suiteRoot, 'src', 'protocol-adapters.mjs'),
+    path.join(suiteRoot, 'src', 'trusted-verifier-boundary.mjs'),
+    path.join(suiteRoot, 'vendor', 'acp-2026-04-17', 'schema.agentic_checkout.json'),
+    path.join(suiteRoot, 'conformance', 'manifest.v1.json'),
+    path.join(suiteRoot, 'conformance', 'vectors.v1.json'),
+    path.join(suiteRoot, 'package.json'),
+    path.join(suiteRoot, 'package-lock.json'),
+  ], 'suite evidence');
 
   const targetRoot = git(['rev-parse', '--show-toplevel'], packDirectory);
   const targetCommit = git(['rev-parse', 'HEAD'], targetRoot);
@@ -78,7 +90,7 @@ async function main() {
 
   const profilePath = path.join(packDirectory, 'profile.v1.json');
   const targetPath = path.join(packDirectory, 'target.mjs');
-  assertTrackedAndClean(targetRoot, [scriptPath, profilePath, targetPath]);
+  assertTrackedAndClean(targetRoot, [scriptPath, profilePath, targetPath], 'adopter pack');
   const targetModule = await import(pathToFileURL(targetPath).href);
   if (typeof targetModule.evaluateTransactionAssuranceVector !== 'function') {
     throw new Error('target.mjs must export evaluateTransactionAssuranceVector');

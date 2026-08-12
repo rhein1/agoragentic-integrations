@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,6 +127,49 @@ test('portable runner binds clean target and suite commits and emits verifiable 
     await assert.rejects(
       execFileAsync(process.execPath, [...args, '--output-dir', path.join('..', 'outside')], { cwd: targetRoot }),
       /--output-dir must remain inside the target repository/,
+    );
+
+    const dirtySuiteRepository = path.join(temp, 'dirty-suite');
+    const dirtySuiteRoot = path.join(dirtySuiteRepository, 'transaction-assurance');
+    const dirtySuiteFiles = [
+      'src/conformance.mjs',
+      'src/index.mjs',
+      'src/protocol-adapters.mjs',
+      'src/trusted-verifier-boundary.mjs',
+      'vendor/acp-2026-04-17/schema.agentic_checkout.json',
+      'conformance/manifest.v1.json',
+      'conformance/vectors.v1.json',
+      'package.json',
+      'package-lock.json',
+    ];
+    for (const relative of dirtySuiteFiles) {
+      const filename = path.join(dirtySuiteRoot, relative);
+      await mkdir(path.dirname(filename), { recursive: true });
+      await writeFile(filename, relative.endsWith('.json') ? '{}\n' : '// fixture\n', 'utf8');
+    }
+    await execFileAsync('git', ['init'], { cwd: dirtySuiteRepository });
+    await execFileAsync('git', ['config', 'user.name', 'Conformance Test'], { cwd: dirtySuiteRepository });
+    await execFileAsync('git', ['config', 'user.email', 'conformance@example.invalid'], { cwd: dirtySuiteRepository });
+    await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], { cwd: dirtySuiteRepository });
+    await execFileAsync('git', ['add', '.'], { cwd: dirtySuiteRepository });
+    await execFileAsync('git', ['commit', '-m', 'test: add suite fixture'], { cwd: dirtySuiteRepository });
+    const dirtySuiteCommit = (
+      await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: dirtySuiteRepository })
+    ).stdout.trim();
+    await writeFile(
+      path.join(dirtySuiteRoot, 'src', 'conformance.mjs'),
+      '// locally modified evaluator\n',
+      'utf8',
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        runner,
+        '--suite-root',
+        dirtySuiteRoot,
+        '--suite-commit',
+        dirtySuiteCommit,
+      ], { cwd: targetRoot }),
+      /suite evidence files must be committed and clean before the evidence run/,
     );
   } finally {
     await rm(temp, { recursive: true, force: true });

@@ -38,8 +38,9 @@ implements each wire protocol.
    operator's implementation.
 3. Commit the reviewed files. The runner refuses dirty or untracked pack files.
 4. Check out `rhein1/agoragentic-integrations` at the exact suite commit supplied
-   by Agoragentic. Source retrieval is preparation; the conformance run itself
-   is offline.
+   by Agoragentic and leave the suite evaluator, manifest, vectors, package
+   metadata, and transitive source inputs tracked and clean. Source retrieval is
+   preparation; the conformance run itself is offline.
 5. From the operator repository, run one command:
 
 ```text
