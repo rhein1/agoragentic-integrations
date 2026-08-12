@@ -8,6 +8,19 @@ const DISCOVERY_FAILURES = new Set([
   "discovery_malformed",
 ]);
 
+const BUYER_FAILURES = new Set([
+  "cancelled",
+  "error",
+  "failed",
+  "failure",
+  "network_error",
+  "timeout",
+  "unavailable",
+]);
+
+const BUYER_SUCCESS = new Set(["completed", "ok", "succeeded", "success"]);
+const BUYER_UNCHECKED = new Set(["not_checked", "not_run", "pending", "unchecked"]);
+
 const SECRET_KEY = /(?:key|token|secret|password|cookie|credential|signature)/i;
 
 function cleanText(value) {
@@ -37,11 +50,20 @@ function safeDetails(value) {
 
 function normalizeEvent(event = {}) {
   return {
-    surface: event.surface === "buyer" ? "buyer" : "discovery",
+    surface: event.surface === "buyer" || event.surface === "discovery"
+      ? event.surface
+      : "unknown",
     state: cleanText(event.state || event.code || "unknown").toLowerCase(),
     status: Number.isInteger(event.status) ? event.status : null,
     details: safeDetails(event.details),
   };
+}
+
+function latestEvent(items, surface) {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (items[index].surface === surface) return items[index];
+  }
+  return undefined;
 }
 
 function discoveryAvailable(event) {
@@ -52,10 +74,17 @@ function discoveryAvailable(event) {
   return item.state === "available" || item.status === 200;
 }
 
+function buyerSucceeded(event) {
+  const item = normalizeEvent(event);
+  if (item.surface !== "buyer" || BUYER_FAILURES.has(item.state)) return false;
+  if (item.status !== null) return item.status >= 200 && item.status < 300;
+  return BUYER_SUCCESS.has(item.state);
+}
+
 function diagnose(events) {
   const items = Array.isArray(events) ? events.map(normalizeEvent) : [];
-  const discovery = items.find((item) => item.surface === "discovery");
-  const buyer = items.find((item) => item.surface === "buyer");
+  const discovery = latestEvent(items, "discovery");
+  const buyer = latestEvent(items, "buyer");
 
   if (!discovery) {
     return {
@@ -82,13 +111,22 @@ function diagnose(events) {
   if (!buyer) {
     return {
       category: "discovery_ready_buyer_unchecked",
-      ready: true,
+      ready: false,
       message: "Public discovery is available. Run the buyer request with the documented path and inspect only its status and safe error text.",
       evidence: { discovery: "available", buyer: "missing" },
     };
   }
 
-  if (buyer.state === "failed" || (buyer.status !== null && buyer.status >= 400)) {
+  if (BUYER_UNCHECKED.has(buyer.state)) {
+    return {
+      category: "discovery_ready_buyer_unchecked",
+      ready: false,
+      message: "Public discovery is available, but the buyer request has not completed. Run the documented buyer request before claiming end-to-end readiness.",
+      evidence: { discovery: "available", buyer: buyer.state },
+    };
+  }
+
+  if (!buyerSucceeded(buyer)) {
     return {
       category: "buyer_flow_failure",
       ready: false,
@@ -177,7 +215,7 @@ function testReadyWithoutBuyer() {
   ]);
 
   assert.equal(result.category, "discovery_ready_buyer_unchecked");
-  assert.equal(result.ready, true);
+  assert.equal(result.ready, false);
   assert.match(result.message, /buyer request/i);
 }
 
@@ -191,12 +229,71 @@ function testSuccessfulRun() {
   assert.equal(result.ready, true);
 }
 
+function testBuyerFailureStatesFailClosed() {
+  for (const state of ["timeout", "network_error", "unavailable"]) {
+    const result = publicRouteReadiness([
+      { surface: "discovery", state: "available", status: 200 },
+      { surface: "buyer", state },
+    ]);
+    assert.equal(result.category, "buyer_flow_failure");
+    assert.equal(result.ready, false);
+  }
+}
+
+function testUncheckedBuyerDoesNotClaimCompletion() {
+  const result = publicRouteReadiness([
+    { surface: "discovery", state: "available", status: 200 },
+    { surface: "buyer", state: "not_run" },
+  ]);
+
+  assert.equal(result.category, "discovery_ready_buyer_unchecked");
+  assert.equal(result.ready, false);
+  assert.match(result.message, /has not completed/i);
+}
+
+function testUnknownBuyerFailsClosed() {
+  const result = publicRouteReadiness([
+    { surface: "discovery", state: "available", status: 200 },
+    { surface: "buyer", state: "unknown" },
+  ]);
+
+  assert.equal(result.category, "buyer_flow_failure");
+  assert.equal(result.ready, false);
+}
+
+function testUnknownSurfaceCannotBecomeDiscovery() {
+  const result = publicRouteReadiness([
+    { surface: "discoveri", state: "available", status: 200 },
+    { surface: "buyer", state: "completed", status: 200 },
+  ]);
+
+  assert.equal(result.category, "discovery_unavailable");
+  assert.equal(result.ready, false);
+}
+
+function testLatestSurfaceEventWins() {
+  const result = publicRouteReadiness([
+    { surface: "discovery", state: "available", status: 200 },
+    { surface: "discovery", state: "discovery_timeout", status: 504 },
+    { surface: "buyer", state: "completed", status: 200 },
+  ]);
+
+  assert.equal(result.category, "discovery_unavailable");
+  assert.equal(result.ready, false);
+  assert.equal(result.evidence.discovery, "discovery_timeout");
+}
+
 function runSelfTest() {
   testRedaction();
   testUnavailableDiscovery();
   testMissingDiscovery();
   testReadyWithoutBuyer();
   testSuccessfulRun();
+  testBuyerFailureStatesFailClosed();
+  testUncheckedBuyerDoesNotClaimCompletion();
+  testUnknownBuyerFailsClosed();
+  testUnknownSurfaceCannotBecomeDiscovery();
+  testLatestSurfaceEventWins();
   console.log("public-route-readiness self-test passed");
   console.log("AGOS_RUNTIME_OK");
 }
