@@ -84,6 +84,12 @@ function stampPng(buffer, metadata) {
   return Buffer.concat(output);
 }
 
+export function hashCanonicalSvgSource(source) {
+  const bytes = Buffer.isBuffer(source) ? source : Buffer.from(source, "utf8");
+  const canonicalBytes = Buffer.from(bytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+  return crypto.createHash("sha256").update(canonicalBytes).digest("hex");
+}
+
 function canonicalState(root) {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, "integrations.json"), "utf8"));
   assert(Array.isArray(manifest.integrations), "integrations.json must contain integrations[]");
@@ -93,7 +99,7 @@ function canonicalState(root) {
   const svgText = svg.toString("utf8");
   assert.match(svgText, /<svg\b[^>]*\bwidth="1280"[^>]*\bheight="640"/, "social banner SVG must be 1280x640");
   assert.match(svgText, /agoragentic-integrations-background\.png/, "social banner SVG must retain the canonical background asset");
-  const sourceHash = crypto.createHash("sha256").update(svg).digest("hex");
+  const sourceHash = hashCanonicalSvgSource(svg);
   return { count, svgPath, sourceHash, pngPath: path.join(root, PNG_RELATIVE_PATH) };
 }
 
