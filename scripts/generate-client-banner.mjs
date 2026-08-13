@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SVG_RELATIVE_PATH = "assets/agoragentic-agent-commerce-banner.svg";
+const SVG_RELATIVE_PATH = "assets/agoragentic-integrations-social.svg";
 const PNG_RELATIVE_PATH = "assets/agoragentic-integrations-social.png";
 const COUNT_KEY = "agoragentic.integration_count";
 const SOURCE_HASH_KEY = "agoragentic.source_svg_sha256";
@@ -89,16 +89,16 @@ function canonicalState(root) {
   assert(Array.isArray(manifest.integrations), "integrations.json must contain integrations[]");
   const count = manifest.integrations.length;
   const svgPath = path.join(root, SVG_RELATIVE_PATH);
-  const currentSvg = fs.readFileSync(svgPath, "utf8");
-  assert.match(currentSvg, /\d+ public surfaces/, "social banner SVG must contain the public-surface count marker");
-  const svg = currentSvg.replace(/\d+ public surfaces/, `${count} public surfaces`);
+  const svg = fs.readFileSync(svgPath);
+  const svgText = svg.toString("utf8");
+  assert.match(svgText, /<svg\b[^>]*\bwidth="1280"[^>]*\bheight="640"/, "social banner SVG must be 1280x640");
+  assert.match(svgText, /agoragentic-integrations-background\.png/, "social banner SVG must retain the canonical background asset");
   const sourceHash = crypto.createHash("sha256").update(svg).digest("hex");
-  return { count, currentSvg, svg, sourceHash, svgPath, pngPath: path.join(root, PNG_RELATIVE_PATH) };
+  return { count, svgPath, sourceHash, pngPath: path.join(root, PNG_RELATIVE_PATH) };
 }
 
 export function verifyClientBanner(root = REPO_ROOT) {
   const state = canonicalState(root);
-  assert.equal(state.currentSvg, state.svg, "social banner SVG count is not synchronized with integrations.json");
   const chunks = parsePng(fs.readFileSync(state.pngPath));
   const metadata = Object.fromEntries(chunks.map(textEntry).filter(Boolean));
   assert.equal(metadata[COUNT_KEY], String(state.count), "rendered social banner count metadata is stale");
@@ -125,20 +125,18 @@ async function loadSharp() {
 async function writeClientBanner(root = REPO_ROOT) {
   const state = canonicalState(root);
   const sharp = await loadSharp();
-  const rendered = await sharp(Buffer.from(state.svg, "utf8")).png().toBuffer();
+  // Render from the file path so the SVG's relative background-image reference
+  // resolves against the checked-in assets directory.
+  const rendered = await sharp(state.svgPath).png().toBuffer();
   const stamped = stampPng(rendered, {
     [COUNT_KEY]: String(state.count),
     [SOURCE_HASH_KEY]: state.sourceHash,
   });
-  const temporarySvg = `${state.svgPath}.${process.pid}.tmp`;
   const temporaryPng = `${state.pngPath}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(temporarySvg, state.svg, "utf8");
     fs.writeFileSync(temporaryPng, stamped);
-    fs.renameSync(temporarySvg, state.svgPath);
     fs.renameSync(temporaryPng, state.pngPath);
   } finally {
-    fs.rmSync(temporarySvg, { force: true });
     fs.rmSync(temporaryPng, { force: true });
   }
   return verifyClientBanner(root);

@@ -238,12 +238,6 @@ for (const id of expectedClientIds) {
   assert.ok(manifest.integrations.some((entry) => entry.id === id), `missing integration: ${id}`);
 }
 
-const bannerSource = readText('assets/agoragentic-agent-commerce-banner.svg');
-assert.match(
-  bannerSource,
-  new RegExp(`${manifest.integrations.length} public surfaces`),
-  'social banner source must match the canonical integration count',
-);
 verifyClientBanner(root);
 
 console.log('client-native distribution surfaces verified');

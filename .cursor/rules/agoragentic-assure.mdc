@@ -1,0 +1,68 @@
+---
+description: "Prepare and evaluate an autonomous agent transaction without self-granting authority or moving money. Use for bounded authority requests, pre-execution checks, payment and delivery evidence, safe retry decisions, outcome verification, and reconciliation."
+globs:
+alwaysApply: false
+---
+
+
+# Agoragentic Transaction Assurance
+
+Use the source-only `@agoragentic/transaction-assurance` package when an agent must bind principal authority, seller terms, payment evidence, execution, delivered outcome, and reconciliation.
+
+## Contract Pin
+
+- package: `@agoragentic/transaction-assurance`
+- version: `0.2.0-alpha.0`
+- source: `transaction-assurance`
+- authority schema: `transaction-assurance/schema/normalized-authority.v1.json`
+- evaluation schema: `transaction-assurance/schema/transaction-assurance-evaluation.v1.json`
+- network calls: none
+- authority granted by installation or evaluation: false
+
+The package is unpublished source-only alpha software. Do not substitute an npm registry package or claim registry availability.
+
+## Install And Prove Locally
+
+After approval to add local source files and dependencies:
+
+```bash
+git clone --depth 1 https://github.com/rhein1/agoragentic-integrations.git
+cd agoragentic-integrations/transaction-assurance
+npm ci
+npm run self-test
+```
+
+The self-test is local and no-spend. It requires no wallet, API key, payment method, provider call, or hosted authority.
+
+## Workflow
+
+1. Inspect the authority artifact and current rail/platform availability.
+2. Detect the protocol family without treating recognition as verification.
+3. Normalize the artifact conservatively; missing verifier evidence remains `unverified`.
+4. Prepare a proposal-only authority request for the principal.
+5. Build and evaluate a pre-execution envelope.
+6. Stop when authority, identity, terms, amount, rail, expiry, revocation, or replay evidence is missing.
+7. Execute only through a separately authorized host or rail; this skill never executes or pays.
+8. Bind returned payment, execution, outcome, and reconciliation evidence, then evaluate post-execution.
+
+## Owner Handoff
+
+The approval packet must state the purpose, exact actions, seller/category/rail/currency scope, per-action/daily/total limits, expiry, revocation behavior, data shared, expected evidence, reconciliation path, wallet requirement, risks, blocked actions, and approve/edit/reject choices. It must not contain secrets or raw private payloads.
+
+An agent may prepare this packet. It may not approve itself, broaden scope, raise a budget, invent verifier evidence, retry an ambiguous paid action blindly, or claim a complete chain while evidence is missing.
+
+## Required Result
+
+Report protocol verification, authority, terms, payment, execution, outcome, outcome verification, reconciliation, blockers, unknowns, and the next safe action. Always state:
+
+```text
+Authority granted by this report: false
+```
+
+## Advanced Context
+
+- package and API: <https://github.com/rhein1/agoragentic-integrations/tree/main/transaction-assurance>
+- transaction setup: <https://agoragentic.com/agent-setup.md>
+- agent bootstrap: <https://agoragentic.com/agent-bootstrap.json>
+- x402 evidence: <https://github.com/rhein1/agoragentic-integrations/tree/main/x402>
+- hosted Interchange: <https://github.com/rhein1/agoragentic-integrations/tree/main/interchange>

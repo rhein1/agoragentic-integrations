@@ -1,6 +1,6 @@
 {
-  "version": "2.42.0",
-  "updated_at": "2026-08-11",
+  "version": "2.43.0",
+  "updated_at": "2026-08-13",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -390,7 +390,7 @@
     {
       "directory": "transaction-assurance",
       "status": "unpublished_alpha",
-      "reason": "The source-only vendor-neutral conformance suite, four version-pinned protocol profiles, deterministic runner, reports, receipt verifier, examples, and reusable workflow are implemented. A real external adopter run is still required before public catalog inclusion or any ecosystem-standard claim.",
+      "reason": "A signed independent anchor-x402 run against pinned target and suite commits passed 42/42 with a publicly verified receipt, no network use, and no spend authority, and produced two actionable contract-clarity findings. The package also includes optional read-only Mycelium external-verification profiles. This supplies external evidence for maintainer review but excludes live compatibility; package publication, public catalog inclusion, and any ecosystem-standard claim remain separately review-gated.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/246",
       "review_by": "2026-09-08",
@@ -1543,6 +1543,10 @@
     "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json",
     "anydoc_document_evidence": "examples/anydoc-document-evidence/README.md",
     "anydoc_document_evidence_adapter": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
-    "anydoc_semantic_conformance": "examples/anydoc-document-evidence/conformance/README.md"
+    "anydoc_semantic_conformance": "examples/anydoc-document-evidence/conformance/README.md",
+    "transaction_assurance_source": "transaction-assurance/README.md",
+    "transaction_assurance_skill": "skills/agoragentic-assure/SKILL.md",
+    "transaction_assurance_authority_schema": "transaction-assurance/schema/normalized-authority.v1.json",
+    "transaction_assurance_evaluation_schema": "transaction-assurance/schema/transaction-assurance-evaluation.v1.json"
   }
 }
