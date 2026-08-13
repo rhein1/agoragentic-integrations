@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Agoragentic integrations</title>
+  <desc id="desc">Connect your agent stack, route work, and keep proof with Triptych OS integrations.</desc>
+  <defs>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#08111f" stop-opacity="0.99"/>
+      <stop offset="0.47" stop-color="#08111f" stop-opacity="0.93"/>
+      <stop offset="0.72" stop-color="#08111f" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#08111f" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#e8613a"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#000814" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="#08111f"/>
+  <image href="agoragentic-integrations-background.png" width="1280" height="640" preserveAspectRatio="xMidYMid slice"/>
+  <rect width="1280" height="640" fill="url(#shade)"/>
+
+  <g transform="translate(70 58)" filter="url(#soft-shadow)">
+    <rect width="42" height="42" rx="11" fill="#e8613a"/>
+    <rect x="10" y="9" width="22" height="22" rx="5" fill="#0c1222"/>
+    <circle cx="31" cy="31" r="3.5" fill="#0c1222"/>
+    <text x="58" y="31" fill="#f8fafc" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="28" font-weight="650" letter-spacing="0.2">agoragentic</text>
+  </g>
+
+  <g transform="translate(72 148)">
+    <rect width="210" height="34" rx="17" fill="#e8613a" fill-opacity="0.13" stroke="#e8613a" stroke-opacity="0.6"/>
+    <text x="18" y="23" fill="#ff8a66" font-family="Consolas, monospace" font-size="14" font-weight="700" letter-spacing="2.2">INTEGRATION NETWORK</text>
+
+    <text x="0" y="114" fill="#f8fafc" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="64" font-weight="700" letter-spacing="-1.2">Connect your agent stack.</text>
+    <text x="0" y="175" fill="#f8fafc" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="44" font-weight="600" letter-spacing="-0.5">Route work. <tspan fill="#ff7651">Keep proof.</tspan></text>
+
+    <rect x="0" y="209" width="480" height="3" rx="1.5" fill="url(#rule)"/>
+    <text x="0" y="258" fill="#b9c6d8" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="21" font-weight="350">Frameworks, SDKs, MCP, A2A, x402,</text>
+    <text x="0" y="288" fill="#b9c6d8" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="21" font-weight="350">client plugins, and local governance.</text>
+  </g>
+
+  <g transform="translate(72 526)" font-family="Consolas, monospace" font-size="14" font-weight="700" letter-spacing="1.1">
+    <g>
+      <rect width="132" height="42" rx="21" fill="#111d30" stroke="#2a3b54"/>
+      <circle cx="22" cy="21" r="5" fill="#06b6d4"/>
+      <text x="38" y="26" fill="#e7edf6">CONNECT</text>
+    </g>
+    <g transform="translate(146 0)">
+      <rect width="126" height="42" rx="21" fill="#111d30" stroke="#2a3b54"/>
+      <circle cx="22" cy="21" r="5" fill="#e8613a"/>
+      <text x="38" y="26" fill="#e7edf6">ROUTE</text>
+    </g>
+    <g transform="translate(286 0)">
+      <rect width="126" height="42" rx="21" fill="#111d30" stroke="#2a3b54"/>
+      <circle cx="22" cy="21" r="5" fill="#f4b860"/>
+      <text x="38" y="26" fill="#e7edf6">PROVE</text>
+    </g>
+  </g>
+
+  <rect x="1" y="1" width="1278" height="638" rx="22" fill="none" stroke="#f8fafc" stroke-opacity="0.08" stroke-width="2"/>
+</svg>
