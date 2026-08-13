@@ -7,6 +7,14 @@ evidence until the anchor-x402 operator reviews it, commits it in an
 operator-controlled repository, runs it there against an immutable suite
 commit, and publishes the bounded artifacts plus actionable observations.
 
+That independent run is now published at target commit
+[`13d6d70bb69cac2993753a22d423870bdfebe9a5`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter/commit/13d6d70bb69cac2993753a22d423870bdfebe9a5)
+with artifacts committed separately at
+[`49634dd327eed9d3e03b5a51f510d15f04794c8a`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter/commit/49634dd327eed9d3e03b5a51f510d15f04794c8a).
+The receipt verifies against suite commit `607b3dddbc441fe52554b8842b9065e60131ae3b`
+with 42 passed and 0 failed. This is offline conformance evidence, not live
+compatibility, certification, endorsement, or a partnership claim.
+
 No source was copied from `chico10117/basepay-readiness-service`; its public
 repository exposed no license when this starter was authored on 2026-08-11.
 This pack does not call that service or any anchor-x402 endpoint.
@@ -29,6 +37,29 @@ and privacy decisions. It intentionally does not:
 The protocol IDs in the normalized inputs identify the suite's pinned source
 vocabulary. Accepting those normalized inputs does not claim that anchor-x402
 implements each wire protocol.
+
+## Decision semantics
+
+`pass` means the vector reached the clean terminal state required by its named
+profile. The result code remains authoritative:
+
+- `complete_chain_verified` means the paid execution and delivered outcome were
+  verified through complete reconciliation;
+- `reconciled_refunded` means payment was cleanly reversed; and
+- `reconciled_dispute_resolved` means the dispute reached an explicit terminal
+  resolution.
+
+The last two do not claim that the buyer received the originally purchased
+outcome. Pending refunds, pending disputes, and incomplete reconciliation remain
+`review`.
+
+The starter still requires exact pinned versions for a `pass`. A recognized,
+well-formed newer version returns `review` only when it remains in the target's
+bounded compatibility line (same x402 major, same pre-1 AP2 minor, or a later
+dated ACP schema). Older versions, incompatible semver lines, opaque commit-pin
+drift, malformed versions, and unknown adapters remain `deny`. A newer-version
+review never overrides an independently detected authority, terms, limit,
+payment, execution, outcome, privacy, or reconciliation denial.
 
 ## Independent run
 
