@@ -11,6 +11,7 @@ import {
   requireEnum,
   requireExternalEndpoint,
   requireIsoDate,
+  requireMcpMethodName,
   requireOpaqueRef,
   requireSha256Ref,
   requireString,
@@ -18,7 +19,7 @@ import {
   uniqueStrings,
 } from './util.mjs';
 
-const SNAPSHOT_MODES = Object.freeze(['none', 'filesystem', 'filesystem_and_memory']);
+const SNAPSHOT_MODES = Object.freeze(['none', 'filesystem']);
 const VERIFICATION_STATES = Object.freeze(['not_checked', 'verified', 'failed', 'unknown']);
 const MAX_CAPSULE_BYTES = 64 * 1024;
 
@@ -134,6 +135,88 @@ function normalizeExecutionAuthorization(value = {}) {
   return normalized;
 }
 
+function normalizeMcpMethod(methodValue, rawMethodValue, field) {
+  const method = requireEnum(methodValue, MCP_PHASES, `${field}.method`);
+  const rawMethod = rawMethodValue == null
+    ? null
+    : requireMcpMethodName(rawMethodValue, `${field}.raw_method`);
+  if (method === 'UNKNOWN' && rawMethod === null) {
+    throw new TypeError(`${field}.raw_method is required when method is UNKNOWN`);
+  }
+  if (method !== 'UNKNOWN' && rawMethod !== null) {
+    throw new TypeError(`${field}.raw_method is permitted only when method is UNKNOWN`);
+  }
+  return { method, raw_method: rawMethod };
+}
+
+function defaultGovernanceRef(kind, hash) {
+  return `${kind}:${requireSha256Ref(hash, `${kind} hash`).slice(7, 31)}`;
+}
+
+function normalizeGovernance(value = {}) {
+  assertAllowedKeys(value, [
+    'policy_ref',
+    'policy_version',
+    'policy_hash',
+    'mandate_ref',
+    'mandate_version',
+    'mandate_hash',
+    'budget_policy_ref',
+    'budget_version',
+    'budget_hash',
+    'epoch',
+  ], 'governance');
+  const policyHash = requireSha256Ref(value.policy_hash, 'governance.policy_hash');
+  const mandateHash = normalizeHashRef(
+    value.mandate_hash,
+    'governance.mandate_hash',
+    { required: false },
+  );
+  const budgetHash = normalizeHashRef(
+    value.budget_hash,
+    'governance.budget_hash',
+    { required: false },
+  );
+  const normalized = {
+    policy_ref: value.policy_ref == null
+      ? defaultGovernanceRef('policy', policyHash)
+      : requireOpaqueRef(value.policy_ref, 'governance.policy_ref'),
+    policy_version: requireOpaqueRef(value.policy_version, 'governance.policy_version'),
+    policy_hash: policyHash,
+    mandate_ref: value.mandate_ref == null
+      ? (mandateHash == null ? null : defaultGovernanceRef('mandate', mandateHash))
+      : requireOpaqueRef(value.mandate_ref, 'governance.mandate_ref'),
+    mandate_version: value.mandate_version == null
+      ? null
+      : requireOpaqueRef(value.mandate_version, 'governance.mandate_version'),
+    mandate_hash: mandateHash,
+    budget_policy_ref: value.budget_policy_ref == null
+      ? (budgetHash == null ? null : defaultGovernanceRef('budget-policy', budgetHash))
+      : requireOpaqueRef(value.budget_policy_ref, 'governance.budget_policy_ref'),
+    budget_version: value.budget_version == null
+      ? null
+      : requireOpaqueRef(value.budget_version, 'governance.budget_version'),
+    budget_hash: budgetHash,
+    epoch: value.epoch == null
+      ? `governance:${sha256Ref({
+        policy_hash: policyHash,
+        mandate_hash: mandateHash,
+        budget_hash: budgetHash,
+      }).slice(7, 31)}`
+      : requireOpaqueRef(value.epoch, 'governance.epoch'),
+  };
+  for (const [label, refValue, versionValue, hashValue] of [
+    ['governance mandate', normalized.mandate_ref, normalized.mandate_version, normalized.mandate_hash],
+    ['governance budget policy', normalized.budget_policy_ref, normalized.budget_version, normalized.budget_hash],
+  ]) {
+    const present = [refValue, versionValue, hashValue].map((item) => item !== null);
+    if (!present.every((item) => item === present[0])) {
+      throw new TypeError(`${label} reference, version, and hash must be supplied together`);
+    }
+  }
+  return normalized;
+}
+
 export function createSavepointCapsule(input = {}) {
   assertAllowedKeys(input, [
     'capsule_id',
@@ -172,22 +255,21 @@ export function createSavepointCapsule(input = {}) {
     'task_graph_hash',
   ], 'checkpoint');
   assertAllowedKeys(input.workspace, ['snapshot_ref', 'digest'], 'workspace');
-  assertAllowedKeys(input.governance, [
-    'policy_version',
-    'policy_hash',
-    'mandate_version',
-    'mandate_hash',
-    'budget_version',
-    'budget_hash',
-  ], 'governance');
   assertAllowedKeys(input.proposed_interaction, [
     'mcp_server_ref',
     'mcp_server_origin',
     'mcp_method',
+    'raw_method',
     'tool_name',
     'effective_arguments_hash',
     'target_ref',
   ], 'proposed_interaction');
+
+  const proposedMcpMethod = normalizeMcpMethod(
+    input.proposed_interaction.mcp_method,
+    input.proposed_interaction.raw_method,
+    'proposed_interaction',
+  );
 
   const createdAt = requireIsoDate(input.created_at ?? new Date(), 'created_at');
   const expiresAt = requireIsoDate(input.expires_at, 'expires_at');
@@ -239,18 +321,7 @@ export function createSavepointCapsule(input = {}) {
       snapshot_ref: requireOpaqueRef(input.workspace.snapshot_ref, 'workspace.snapshot_ref'),
       digest: requireSha256Ref(input.workspace.digest, 'workspace.digest'),
     },
-    governance: {
-      policy_version: requireOpaqueRef(input.governance.policy_version, 'governance.policy_version'),
-      policy_hash: requireSha256Ref(input.governance.policy_hash, 'governance.policy_hash'),
-      mandate_version: input.governance.mandate_version == null
-        ? null
-        : requireOpaqueRef(input.governance.mandate_version, 'governance.mandate_version'),
-      mandate_hash: normalizeHashRef(input.governance.mandate_hash, 'governance.mandate_hash', { required: false }),
-      budget_version: input.governance.budget_version == null
-        ? null
-        : requireOpaqueRef(input.governance.budget_version, 'governance.budget_version'),
-      budget_hash: normalizeHashRef(input.governance.budget_hash, 'governance.budget_hash', { required: false }),
-    },
+    governance: normalizeGovernance(input.governance),
     receipt_chain_head: requireSha256Ref(input.receipt_chain_head, 'receipt_chain_head'),
     proposed_interaction: {
       mcp_server_ref: requireOpaqueRef(
@@ -261,11 +332,8 @@ export function createSavepointCapsule(input = {}) {
         input.proposed_interaction.mcp_server_origin,
         'proposed_interaction.mcp_server_origin',
       ),
-      mcp_method: requireEnum(
-        input.proposed_interaction.mcp_method,
-        MCP_PHASES,
-        'proposed_interaction.mcp_method',
-      ),
+      mcp_method: proposedMcpMethod.method,
+      raw_method: proposedMcpMethod.raw_method,
       tool_name: input.proposed_interaction.tool_name == null
         ? null
         : requireOpaqueRef(input.proposed_interaction.tool_name, 'proposed_interaction.tool_name'),
@@ -308,8 +376,6 @@ export function createSavepointCapsule(input = {}) {
   }
   for (const [label, refValue, hashValue] of [
     ['parent lineage', capsule.parent.lineage_ref, capsule.parent.lineage_hash],
-    ['governance mandate', capsule.governance.mandate_version, capsule.governance.mandate_hash],
-    ['governance budget', capsule.governance.budget_version, capsule.governance.budget_hash],
   ]) {
     if ((refValue === null) !== (hashValue === null)) {
       throw new TypeError(`${label} reference and hash must be supplied together`);
@@ -467,6 +533,7 @@ export function buildExecutionBinding(input = {}) {
     'mcp_server_ref',
     'mcp_server_origin',
     'mcp_method',
+    'raw_method',
     'tool_name',
     'effective_arguments',
     'effective_arguments_hash',
@@ -475,8 +542,16 @@ export function buildExecutionBinding(input = {}) {
     'amount',
     'currency',
     'payment_rail',
+    'policy_ref',
     'policy_version',
+    'policy_hash',
+    'mandate_ref',
     'mandate_version',
+    'mandate_hash',
+    'budget_policy_ref',
+    'budget_version',
+    'budget_hash',
+    'governance_epoch',
     'issued_at',
     'not_before',
     'expires_at',
@@ -498,6 +573,11 @@ export function buildExecutionBinding(input = {}) {
   if (Date.parse(notBefore) < Date.parse(issuedAt) || Date.parse(expiresAt) <= Date.parse(notBefore)) {
     throw new TypeError('Execution binding validity window is invalid');
   }
+  const bindingMcpMethod = normalizeMcpMethod(
+    input.mcp_method,
+    input.raw_method,
+    'execution binding.mcp',
+  );
   const binding = {
     schema: 'agoragentic.risk-fork.execution-binding.v1',
     principal_ref: requireOpaqueRef(input.principal_ref, 'principal_ref'),
@@ -511,7 +591,8 @@ export function buildExecutionBinding(input = {}) {
     mcp: {
       server_ref: requireOpaqueRef(input.mcp_server_ref, 'mcp_server_ref'),
       server_origin: requireExternalEndpoint(input.mcp_server_origin, 'mcp_server_origin'),
-      method: requireEnum(input.mcp_method, MCP_PHASES, 'mcp_method'),
+      method: bindingMcpMethod.method,
+      raw_method: bindingMcpMethod.raw_method,
       tool_name: input.tool_name == null ? null : requireOpaqueRef(input.tool_name, 'tool_name'),
       effective_arguments_hash: input.effective_arguments_hash
         ? requireSha256Ref(input.effective_arguments_hash, 'effective_arguments_hash')
@@ -526,12 +607,18 @@ export function buildExecutionBinding(input = {}) {
         ? null
         : requireOpaqueRef(input.payment_rail, 'payment_rail', { maxLength: 100 }),
     },
-    governance: {
-      policy_version: requireOpaqueRef(input.policy_version, 'policy_version'),
-      mandate_version: input.mandate_version == null
-        ? null
-        : requireOpaqueRef(input.mandate_version, 'mandate_version'),
-    },
+    governance: normalizeGovernance({
+      policy_ref: input.policy_ref,
+      policy_version: input.policy_version,
+      policy_hash: input.policy_hash,
+      mandate_ref: input.mandate_ref,
+      mandate_version: input.mandate_version,
+      mandate_hash: input.mandate_hash,
+      budget_policy_ref: input.budget_policy_ref,
+      budget_version: input.budget_version,
+      budget_hash: input.budget_hash,
+      epoch: input.governance_epoch,
+    }),
     validity: {
       issued_at: issuedAt,
       not_before: notBefore,
@@ -597,6 +684,7 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
     'server_ref',
     'server_origin',
     'method',
+    'raw_method',
     'tool_name',
     'effective_arguments_hash',
   ], 'execution binding.mcp');
@@ -607,7 +695,18 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
   );
   assertAllowedKeys(
     binding.governance,
-    ['policy_version', 'mandate_version'],
+    [
+      'policy_ref',
+      'policy_version',
+      'policy_hash',
+      'mandate_ref',
+      'mandate_version',
+      'mandate_hash',
+      'budget_policy_ref',
+      'budget_version',
+      'budget_hash',
+      'epoch',
+    ],
     'execution binding.governance',
   );
   assertAllowedKeys(
@@ -630,6 +729,7 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
     mcp_server_ref: binding.mcp.server_ref,
     mcp_server_origin: binding.mcp.server_origin,
     mcp_method: binding.mcp.method,
+    raw_method: binding.mcp.raw_method,
     tool_name: binding.mcp.tool_name,
     effective_arguments_hash: binding.mcp.effective_arguments_hash,
     provider_ref: binding.provider_ref,
@@ -637,8 +737,16 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
     amount: binding.commercial.amount,
     currency: binding.commercial.currency,
     payment_rail: binding.commercial.payment_rail,
+    policy_ref: binding.governance.policy_ref,
     policy_version: binding.governance.policy_version,
+    policy_hash: binding.governance.policy_hash,
+    mandate_ref: binding.governance.mandate_ref,
     mandate_version: binding.governance.mandate_version,
+    mandate_hash: binding.governance.mandate_hash,
+    budget_policy_ref: binding.governance.budget_policy_ref,
+    budget_version: binding.governance.budget_version,
+    budget_hash: binding.governance.budget_hash,
+    governance_epoch: binding.governance.epoch,
     issued_at: binding.validity.issued_at,
     not_before: binding.validity.not_before,
     expires_at: binding.validity.expires_at,
@@ -662,6 +770,7 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
     mcp_server_ref: binding.mcp.server_ref,
     mcp_server_origin: binding.mcp.server_origin,
     mcp_method: binding.mcp.method,
+    raw_method: binding.mcp.raw_method,
     tool_name: binding.mcp.tool_name,
     effective_arguments_hash: binding.mcp.effective_arguments_hash,
     provider_ref: binding.provider_ref,
@@ -669,8 +778,16 @@ export function verifyExecutionBinding(binding, expected = {}, options = {}) {
     amount: binding.commercial.amount,
     currency: binding.commercial.currency,
     payment_rail: binding.commercial.payment_rail,
+    policy_ref: binding.governance.policy_ref,
     policy_version: binding.governance.policy_version,
+    policy_hash: binding.governance.policy_hash,
+    mandate_ref: binding.governance.mandate_ref,
     mandate_version: binding.governance.mandate_version,
+    mandate_hash: binding.governance.mandate_hash,
+    budget_policy_ref: binding.governance.budget_policy_ref,
+    budget_version: binding.governance.budget_version,
+    budget_hash: binding.governance.budget_hash,
+    governance_epoch: binding.governance.epoch,
     audience: binding.audience,
     one_use_authorization_id: binding.one_use_authorization_id,
     authorization_ref: binding.authorization_ref,

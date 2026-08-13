@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { sha256Ref } from '../src/canonical.mjs';
 import {
   RiskForkMcpBoundary,
   assertHostCanEnforce,
   createMcpInterceptionPlan,
 } from '../src/interception.mjs';
+import { createTrustedMcpServerVerifier } from '../src/risk-classifier.mjs';
 
 const PRE_CALL_PHASES = Object.freeze([
   'initialize',
@@ -41,6 +43,35 @@ const TOOL_EXECUTION_CAPABILITIES = Object.freeze([
   'can_route_tool_execution',
 ]);
 
+const TRUST_EVALUATED_AT = '2030-01-01T00:10:00.000Z';
+const TRUST_REGISTRY_VERSION = 'interception-trust-registry-v1';
+const TRUST_ATTESTOR_REF = 'attestor:interception-tests';
+
+const trustedServerVerifier = createTrustedMcpServerVerifier((request) => ({
+  schema: 'agoragentic.risk-fork.trusted-mcp-server-verification.v1',
+  status: 'verified',
+  request_hash: sha256Ref(request),
+  evidence_ref: 'trusted-boundary:interception-test',
+  evidence_hash: sha256Ref({ request, verifier: 'interception-test' }),
+}));
+
+function serverAttestation() {
+  const statement = {
+    schema: 'agoragentic.risk-fork.mcp-server-attestation.v1',
+    status: 'verified',
+    server_ref: 'server:interception-test',
+    server_origin: 'https://mcp.example.invalid/',
+    attestor_ref: TRUST_ATTESTOR_REF,
+    evidence_hash: sha256Ref('interception-trust-evidence'),
+    issued_at: '2030-01-01T00:00:00.000Z',
+    expires_at: '2030-01-01T01:00:00.000Z',
+    trust_registry_version: TRUST_REGISTRY_VERSION,
+    signature_ref: 'signature:interception-trust',
+    signature_hash: sha256Ref('interception-trust-signature'),
+  };
+  return { ...statement, attestation_hash: sha256Ref(statement) };
+}
+
 function riskInput({ phase, trust = 'verified', capabilities = NO_CAPABILITIES }) {
   return {
     request_id: `request:${trust}:${phase}`,
@@ -48,6 +79,7 @@ function riskInput({ phase, trust = 'verified', capabilities = NO_CAPABILITIES }
     mcp_server_ref: 'server:interception-test',
     mcp_server_origin: 'https://mcp.example.invalid/',
     mcp_server_trust: trust,
+    ...(trust === 'verified' ? { mcp_server_attestation: serverAttestation() } : {}),
     ...(phase === 'tools/call' ? { tool_name: 'example_tool' } : {}),
     tool_annotations: {
       readOnlyHint: true,
@@ -56,6 +88,14 @@ function riskInput({ phase, trust = 'verified', capabilities = NO_CAPABILITIES }
       openWorldHint: false,
     },
     capabilities: { ...capabilities },
+    ...(trust === 'verified' ? {
+      owner_policy: {
+        trusted_server_refs: ['server:interception-test'],
+        trusted_attestor_refs: [TRUST_ATTESTOR_REF],
+        trusted_attestation_hashes: [serverAttestation().attestation_hash],
+        trust_registry_version: TRUST_REGISTRY_VERSION,
+      },
+    } : {}),
   };
 }
 
@@ -152,6 +192,8 @@ test('HIGH tools/call routes exactly once through the controller', async () => {
         return { prepared_ref: 'prepared:high-tool-call' };
       },
     },
+    trustedServerVerifier,
+    clock: () => new Date(TRUST_EVALUATED_AT),
   });
 
   const result = await boundary.route({
@@ -192,6 +234,8 @@ test('fully enumerated verified no-capability LOW tools/call stays direct withou
         return value.remote_execution();
       },
     },
+    trustedServerVerifier,
+    clock: () => new Date(TRUST_EVALUATED_AT),
   });
 
   const result = await boundary.route({

@@ -11,6 +11,8 @@ Risk Fork limits what an untrusted or high-risk interaction can carry back into 
 
 The design does not make arbitrary agent code safe, prove a provider trustworthy, or eliminate the need for authoritative policy, credential, payment, deployment, and audit systems.
 
+**Current deployment boundary:** production readiness is blocked. The local adapter is a protocol/reference implementation rather than an isolation boundary, the E2B adapter refuses its allocation and execution entrypoints, hosted MCP/Harness interception is not enabled, and no live Agoragentic traffic is protected by this package.
+
 ## Trust boundaries
 
 ```mermaid
@@ -37,7 +39,7 @@ The capsule is capped at 64 KiB. It contains versioned hashes and opaque referen
 
 It intentionally excludes raw prompts, conversations, memory contents, workspace contents, credentials, tokens, wallet material, and execution grants. Reference values must not be disguised secrets or private absolute paths. The capsule hash provides integrity, not authenticity or authority.
 
-A provider runtime snapshot is a separate and more dangerous data plane. A memory-bearing snapshot is permitted only when an independent, clean-side authority-sanitization verifier produces a hash-bound `verified` attestation before snapshot creation. A self-assertion from the child or provider is insufficient.
+A provider runtime snapshot is a separate and more dangerous data plane. The public v1 capsule contract permits only `none` or a verified `filesystem` mode; process-memory/runtime snapshots are rejected even if they carry a purported sanitization attestation. The included E2B adapter refuses the reviewed full-snapshot path. Any future cloud implementation must import a sanitized filesystem-only export bound to an immutable manifest and an independent clean-side attestation; a self-assertion from the child or provider is insufficient. The local adapter's verifier callback demonstrates the reference contract only and is not cloud-containment evidence.
 
 ### Tainted fork
 
@@ -60,12 +62,13 @@ The gate rejects authority-shaped fields, secret patterns, prompt-injection patt
 Commit runs outside the tainted child. Before any accepted mutation, the clean side must verify:
 
 1. artifact integrity and tainted-source provenance;
-2. exact current parent-state hash against the savepoint expectation;
+2. exact authoritative current parent-state head against the savepoint expectation;
 3. verified fork destruction evidence;
 4. approval for the exact artifact hash from a trusted verifier;
-5. current policy, mandate, provider, target, amount/currency/rail, arguments, audience, and validity as applicable;
-6. for typed-result and workspace-diff commits, an atomic one-use claim for the exact artifact;
-7. for consequential actions, an external authorization that is active, unexpired, unrevoked, exact-bound, and atomically claimable once.
+5. current policy, mandate, and budget references, versions, hashes, and governance epoch, plus provider, target, amount/currency/rail, arguments, audience, and validity as applicable;
+6. current commit policy, including path/deletion rules and any required tests; child test claims are non-authoritative, so required tests need clean re-execution or a trusted external attestation bound to the exact artifact, diff, and current policy;
+7. for every commit type, the concrete file parent transaction compares and reserves the expected head, reads persisted current governance, reserves the exact one-use approval, and holds the same per-parent lock through the accepted mutation; arbitrary callback and duck-typed transaction authorities are rejected;
+8. for consequential actions, an external authorization whose trusted signature/integrity/exact-binding verifier runs while the concrete file authorization transaction—the sole local revocation/use authority—holds its lock through atomic consumption and execution, nested in the fixed parent-to-authorization lock order.
 
 The child cannot manufacture approval by placing fields such as `approved`, `authorization`, `signature`, `private_key`, `messages`, or `memory_update` in its output.
 
@@ -73,9 +76,9 @@ The child cannot manufacture approval by placing fields such as `approved`, `aut
 
 Payments, deployments, publication, outbound communication, database mutation, and trust/reputation mutation are `IRREVERSIBLE` even when a tool claims to be read-only or idempotent.
 
-The fork may simulate, price, validate, construct payloads, and emit an action proposal. It must not perform the real effect or receive the execution binding. The clean controller attaches that binding only after the child is established. The exact real action is performed by a clean executor only after revalidation. The artifact claim—and, for an action, the one-use authorization—is atomically taken before invoking the mutating acceptor/executor. If execution or claim completion fails after a claim, the state becomes **ambiguous**: the implementation forbids automatic retry because the effect may already have happened.
+The fork may simulate, price, validate, construct payloads, and emit an action proposal. It must not perform the real effect or receive the execution binding. The clean controller attaches that binding only after the child is established. The exact real action is performed by a clean executor only after revalidation. The included concrete file parent transaction owns the parent head, current-governance record, and exact one-use approval under one per-parent lock; its private runner invokes and awaits the accepted effect before releasing that lock. There is no public raw commit method or arbitrary host callback authority. For a consequential action, trusted signature/integrity/exact-binding verification, local revocation/use state, authorization consumption, and execution share the nested concrete file authorization transaction. If either transaction cannot establish finalization, the state becomes **ambiguous**: the implementation forbids automatic retry because the effect may already have happened.
 
-The file-backed claim store is a local reference for exclusive creation semantics. It is not a production distributed transaction system. Multi-host deployments require a durable shared store with atomic compare-and-set/unique constraints, crash recovery, retention, and operator-visible ambiguous states.
+The file-backed parent-head and authorization transaction stores provide local protocol/reference durability and exclusive creation semantics. They are not a production distributed transaction system or an authority service. Multi-host deployments require a durable shared transaction authority with atomic compare-and-set/unique constraints, crash recovery, retention, and operator-visible ambiguous states.
 
 ## Lifecycle and destruction
 
@@ -89,6 +92,7 @@ Clean commit requires verified fork destruction evidence. Savepoint destruction 
 
 MCP can deliver instruction-bearing content before `tools/call`. Therefore the classifier covers:
 
+- `server/discover`
 - `initialize`
 - `tools/list`
 - `resources/list`
@@ -96,23 +100,27 @@ MCP can deliver instruction-bearing content before `tools/call`. Therefore the c
 - `prompts/list`
 - `prompts/get`
 - `tools/call`
+- `UNKNOWN`, which preserves the bounded raw method and classifies `HIGH`
 
-An unknown or untrusted server must be isolated before connecting or accepting content. Merely wrapping the eventual tool invocation is too late. The library contract does not by itself prove that a particular MCP host, relay, or harness has wired every phase; that requires integration-specific tests and runtime evidence.
+An unknown or untrusted server must be isolated before connecting or accepting content. Merely wrapping the eventual tool invocation is too late. The repository includes a real loopback ordering test for an explicitly injected planner before `server/discover`, but that injection seam is disabled by default and existing runtime callers omit it. The library contract and test do not prove hosted enforcement. No production MCP host, relay, or Harness path is currently wired to Risk Fork.
 
 ## Threats and controls
 
 | Threat | Required control | Residual risk |
 | --- | --- | --- |
-| Snapshot clones credentials or approvals | External authority-sanitization attestation; no authority-bearing snapshot | Provider or sanitizer defect; hidden process state |
+| Snapshot or import carries credentials, approvals, or runtime state | E2B secure entrypoints fail closed today; any future filesystem-only export requires an immutable manifest and independent hash-bound attestation; the local callback is reference-only | No cloud safeguard is qualified; a future provider or sanitizer defect could still miss authority-bearing state |
 | Parent and child identities collide | CSPRNG-generated child identity/session/nonce/entropy namespace | Weak host entropy or compromised runtime |
-| Prompt injection arrives during MCP discovery | Classify and isolate before initialize/list/read/get | Host integration may omit a phase unless separately verified |
+| Prompt injection arrives during MCP discovery | Classify and isolate before server/discover and initialize/list/read/get | The injection seam is disabled by default; hosted integration is not wired |
 | Child smuggles secrets or authority in output | Strict shape checks, forbidden keys, bounded recursive scan | Pattern scans cannot detect every encoding or semantic secret |
 | Workspace diff escapes root | Relative-path normalization, ADS/traversal checks, allowlist, symlink/hardlink/special-file rejection in local adapter | Platform-specific filesystem behavior; production adapters need equivalent checks |
-| Parent changes after fork | Exact parent-state hash rechecked at commit | External systems may change outside the represented digest |
-| Authorization replay or race | Exact binding plus atomic one-use claim before execute | Local file store is single-filesystem reference only |
+| Child claims required tests passed | Treat child evidence as non-authoritative; require clean re-execution or a trusted external attestation exact-bound under the parent-head lock | The injected verifier remains a trusted clean-side boundary |
+| Parent or governance changes after fork | Exact parent head plus trusted current-governance and commit-policy revalidation while the parent-head lock is held | External systems may change outside the represented digest or resolver authority |
+| Authorization replay, revocation, or race | File transaction is the sole local revocation/use authority; trusted signature/integrity/exact-binding verification and refreshed governance run while its lock is held before consume-and-execute | Local file store is single-filesystem reference only; the integrity verifier is not a second revocation authority |
 | External executor succeeds but acknowledgement fails | Ambiguous terminal error; no automatic retry | Manual reconciliation is required |
 | Delete request is mistaken for destruction | Independent verification and explicit unknown state | Provider APIs may not expose strong physical-erasure proof |
 | Receipt is mistaken for authority | Authority flags false; hashes/refs only; external verifier required | Downstream consumers may ignore semantics |
+
+The repository's adapter-conformance worker completion protocol is deterministic rather than grace-based: a worker sends a request-correlated result, waits for the exact coordinator ACK, and only then disconnects with the result exit code; the coordinator requires ACK delivery completion and a consistent exit before accepting that evidence. This closes the audited IPC ordering race but does not qualify any adapter as a containment boundary.
 
 ## Local reference adapter
 
@@ -122,13 +130,13 @@ It is **not a sandbox**. It does not use a VM, container, restricted OS token, s
 
 ## E2B adapter boundary
 
-The E2B path is designed around snapshot creation followed by `Sandbox.create(snapshotId, options)`, rather than a one-call fork, so deny-network and kill/no-auto-resume lifecycle options can be requested before the child starts. It requires an injected authority-free source verifier and performs a fresh bootstrap inside the child.
+The reviewed E2B snapshot path cannot demonstrate a sanitized filesystem-only birth that excludes dangerous environment state, credential files, processes, sockets, entropy/nonce state, and persistent writable mounts. The adapter therefore exposes no usable cloud execution path. Its `createSavepoint`, `createFork`, and `executeInFork` entrypoints fail with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before source verification callbacks, SDK loading, or provider I/O. Its production-relevant capability flags are false or unverified.
 
-Only injected/mock conformance is authorized in this repository task. No API credential was read, no billable sandbox was created, and no live destruction, egress, latency, persistence, or isolation property was verified. Treat the adapter as unqualified for production until an owner authorizes a bounded live canary and the resulting evidence is reviewed.
+The unreachable reference path documents a possible snapshot-then-create composition, but it is not an implemented security guarantee and must not be described as a mock-qualified containment adapter. No API credential was read, no billable sandbox was created, and no live destruction, egress, latency, persistence, or isolation property was verified. A future E2B implementation remains blocked on a demonstrably sanitized filesystem-only boot profile followed by separately authorized live containment qualification.
 
 ## Privacy and receipt minimization
 
-Risk Fork receipts may include IDs, hashes, opaque references, statuses, bounded measurements, validation evidence references, Transaction Assurance evidence references, and lifecycle-derived timestamps. Construction cross-binds the capsule parent, fresh fork identity, deterministic risk decision, provider/fork, exact artifact, destruction evidence, and any authorization reference/hash. Verification reconstructs the entire closed receipt before checking its hash. Receipts must exclude raw prompts, conversations, tool output, memory contents, credentials, provider tokens, and absolute local paths.
+Risk Fork receipts may include IDs, hashes, opaque references, statuses, bounded measurements, validation evidence references, Transaction Assurance evidence references, and lifecycle-derived timestamps. Construction cross-binds the capsule parent, fresh fork identity, deterministic risk decision, provider/fork, exact artifact, destruction evidence, and any authorization reference/hash. `verifyRiskForkReceiptStructure()` reconstructs the entire closed receipt before checking its hash, but deliberately makes no provenance claim. The authoritative `verifyRiskForkReceipt()` requires the exact full risk decision out of band, replays deterministic decision verification, and exact-binds the receipt's level, action, decision hash, and policy status. A decision containing recorded trusted-server verification also requires the original live trusted-verifier boundary; its serializable record is not reusable authority. Receipts must exclude raw prompts, conversations, tool output, memory contents, credentials, provider tokens, and absolute local paths.
 
 Transaction Assurance provides canonical evidence plumbing. Its presence does not prove approval, execution authorization, settlement, certification, or provider destruction. The Risk Fork receipt explicitly marks settlement and certification false unless a separate authoritative system supplies and verifies those facts outside this package.
 
@@ -140,13 +148,16 @@ The public/source package may include generic contracts, classifier logic, valid
 
 Commercial and private runtime concerns remain outside this directory: tenant credentials, billing/provider accounts, production MCP routing, authoritative policy and mandate services, signing/wallet custody, paid settlement, private connectors, Full ECF internals, customer evidence, operator access artifacts, and hosted deployment configuration. Evidence from those systems can be referenced by digest; it must not be copied into OSS receipts, fixtures, or logs.
 
+Open production blockers are [#301 (hosted MCP interception)](https://github.com/rhein1/agoragentic-integrations/issues/301), [#302 (sanitized E2B boot and live qualification)](https://github.com/rhein1/agoragentic-integrations/issues/302), and [#303 (distributed parent-head and authorization transactions)](https://github.com/rhein1/agoragentic-integrations/issues/303). PR #298 must remain draft and blocked while those boundaries remain unresolved.
+
 ## Security claims deliberately not made
 
 - No formal verification or security certification.
 - No claim that the local adapter contains arbitrary code or blocks network traffic.
-- No live E2B qualification or provider SLA claim.
+- No usable or live-qualified E2B containment path; allocation and execution fail with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE`.
 - No performance, latency, availability, or provider-cost claim.
 - No claim that deletion equals cryptographic erasure.
 - No claim that Transaction Assurance evidence authorizes or settles an action.
 - No claim that a local passing test means hosted interception is enabled.
+- No claim that Risk Fork currently protects live Agoragentic MCP or Harness traffic.
 - No claim that either included adapter satisfies idle-TTL production qualification; both are rejected by the production controller gate.

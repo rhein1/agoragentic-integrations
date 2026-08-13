@@ -189,6 +189,7 @@ jobs:
       - name: Verify client-native distribution surfaces
         run: |
           node scripts/generate-skill-pack.mjs --check
+          node scripts/generate-client-banner.mjs --check
           node --test test/skill-pack-generation.test.mjs
           node scripts/verify-client-distribution.mjs
 
@@ -345,7 +346,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
-        run: node --test test/adapter-conformance-agent.test.mjs
+        run: |
+          node --test test/adapter-conformance-agent.test.mjs
+          node --test test/adapter-conformance-worker-order.test.mjs
       - name: Test framework adapter contracts
         run: |
           node --test test/framework-adapter-contracts.test.mjs

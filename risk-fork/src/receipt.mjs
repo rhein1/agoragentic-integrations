@@ -25,6 +25,7 @@ import {
   deepFreeze,
   requireEnum,
   requireIsoDate,
+  requireMcpMethodName,
   requireOpaqueRef,
   requireSha256Ref,
   safeEqual,
@@ -69,6 +70,32 @@ const TIMESTAMP_FIELDS = Object.freeze([
 ]);
 
 const RISK_ACTION_VALUES = Object.freeze([...Object.values(RISK_ACTIONS), 'DENY']);
+
+const RECEIPT_STATE_RESOURCE_PAIRS = Object.freeze({
+  NOT_CREATED: Object.freeze([
+    'REQUESTED', 'SAVEPOINTING', 'SAVEPOINT_READY', 'SAVEPOINT_FAILED',
+    'FORK_STARTING', 'FORK_FAILED', 'ABORTING', 'ABORTED',
+  ]),
+  ACTIVE: Object.freeze([
+    'FORK_STARTING', 'FORK_READY', 'FORK_FAILED', 'EXECUTING', 'TAINTED',
+    'EXECUTION_FAILED', 'VALIDATING', 'COMMIT_READY', 'VALIDATION_FAILED',
+    'ABORTING', 'ABORTED',
+  ]),
+  SUSPENDED: Object.freeze([
+    'FORK_READY', 'FORK_FAILED', 'EXECUTING', 'TAINTED', 'EXECUTION_FAILED',
+    'VALIDATING', 'COMMIT_READY', 'VALIDATION_FAILED', 'ABORTING', 'ABORTED',
+  ]),
+  DESTROY_REQUESTED: Object.freeze([
+    'PRECOMMIT_DESTROYING', 'ABORTING', 'ABORTED', 'DESTROYING',
+  ]),
+  DESTROY_UNKNOWN: Object.freeze([
+    'DESTRUCTION_UNKNOWN', 'DESTRUCTION_FAILED', 'DESTROYING',
+  ]),
+  DESTROYED: Object.freeze([
+    'CLEAN_COMMIT_READY', 'COMMITTING', 'COMMITTED', 'COMMIT_FAILED',
+    'COMMIT_AMBIGUOUS', 'ABORTING', 'ABORTED', 'DESTROYING', 'DESTROYED',
+  ]),
+});
 
 function canonicalMatch(value, normalized, field) {
   if (canonicalize(value) !== canonicalize(normalized)) {
@@ -176,12 +203,13 @@ function normalizeDestructionEvidence(value) {
   };
 }
 
-function assertDecisionMatchesCapsule(decision, capsule) {
-  verifyRiskDecision(decision);
+function assertDecisionMatchesCapsule(decision, capsule, verificationOptions = {}) {
+  verifyRiskDecision(decision, verificationOptions);
   const observed = decision.normalized_input;
   const proposed = capsule.proposed_interaction;
   const comparisons = {
     mcp_phase: proposed.mcp_method,
+    raw_method: proposed.raw_method,
     mcp_server_ref: proposed.mcp_server_ref,
     mcp_server_origin: proposed.mcp_server_origin,
     tool_name: proposed.tool_name,
@@ -218,6 +246,7 @@ function assertArtifactCoherence({ artifact, capsule, lifecycle, identity, provi
       mcp_server_ref: capsule.proposed_interaction.mcp_server_ref,
       mcp_server_origin: capsule.proposed_interaction.mcp_server_origin,
       mcp_method: capsule.proposed_interaction.mcp_method,
+      raw_method: capsule.proposed_interaction.raw_method,
       tool_name: capsule.proposed_interaction.tool_name,
       effective_arguments_hash: capsule.proposed_interaction.effective_arguments_hash,
       provider_ref: providerRef,
@@ -299,11 +328,12 @@ function normalizeInteractionSummary(value) {
     'mcp_server_ref',
     'mcp_server_origin_hash',
     'mcp_method',
+    'raw_method',
     'tool_name',
     'effective_arguments_hash',
     'action_operation',
   ], 'receipt.interaction');
-  return {
+  const normalized = {
     mcp_server_ref: requireOpaqueRef(
       value.mcp_server_ref,
       'receipt.interaction.mcp_server_ref',
@@ -313,6 +343,9 @@ function normalizeInteractionSummary(value) {
       'receipt.interaction.mcp_server_origin_hash',
     ),
     mcp_method: requireEnum(value.mcp_method, MCP_PHASES, 'receipt.interaction.mcp_method'),
+    raw_method: value.raw_method == null
+      ? null
+      : requireMcpMethodName(value.raw_method, 'receipt.interaction.raw_method'),
     tool_name: nullableOpaqueRef(value.tool_name, 'receipt.interaction.tool_name'),
     effective_arguments_hash: requireSha256Ref(
       value.effective_arguments_hash,
@@ -326,6 +359,13 @@ function normalizeInteractionSummary(value) {
         'receipt.interaction.action_operation',
       ),
   };
+  if (normalized.mcp_method === 'UNKNOWN' && normalized.raw_method === null) {
+    throw new Error('Receipt interaction raw_method is required for UNKNOWN');
+  }
+  if (normalized.mcp_method !== 'UNKNOWN' && normalized.raw_method !== null) {
+    throw new Error('Receipt interaction raw_method is permitted only for UNKNOWN');
+  }
+  return normalized;
 }
 
 function normalizeRiskSummary(value) {
@@ -354,10 +394,21 @@ function normalizeRiskSummary(value) {
 function normalizeLifecycleSummary(value) {
   assertAllowedKeys(
     value,
-    ['state', 'fork_resource_state', 'chain_head', 'event_count'],
+    [
+      'state',
+      'fork_resource_state',
+      'chain_head',
+      'event_count',
+      'commit_evidence_ref',
+      'commit_evidence_hash',
+      'destruction_evidence_ref',
+      'destruction_evidence_hash',
+      'destruction_provider_ref',
+      'destruction_fork_ref_hash',
+    ],
     'receipt.lifecycle',
   );
-  return {
+  const normalized = {
     state: requireEnum(value.state, RUN_STATES, 'receipt.lifecycle.state'),
     fork_resource_state: requireEnum(
       value.fork_resource_state,
@@ -369,7 +420,49 @@ function normalizeLifecycleSummary(value) {
       min: 1,
       max: 10_000,
     }),
+    commit_evidence_ref: nullableOpaqueRef(
+      value.commit_evidence_ref,
+      'receipt.lifecycle.commit_evidence_ref',
+    ),
+    commit_evidence_hash: nullableSha256Ref(
+      value.commit_evidence_hash,
+      'receipt.lifecycle.commit_evidence_hash',
+    ),
+    destruction_evidence_ref: nullableOpaqueRef(
+      value.destruction_evidence_ref,
+      'receipt.lifecycle.destruction_evidence_ref',
+    ),
+    destruction_evidence_hash: nullableSha256Ref(
+      value.destruction_evidence_hash,
+      'receipt.lifecycle.destruction_evidence_hash',
+    ),
+    destruction_provider_ref: nullableOpaqueRef(
+      value.destruction_provider_ref,
+      'receipt.lifecycle.destruction_provider_ref',
+    ),
+    destruction_fork_ref_hash: nullableSha256Ref(
+      value.destruction_fork_ref_hash,
+      'receipt.lifecycle.destruction_fork_ref_hash',
+    ),
   };
+  if ((normalized.commit_evidence_ref === null)
+    !== (normalized.commit_evidence_hash === null)) {
+    throw new Error('Receipt lifecycle commit evidence ref and hash must be supplied together');
+  }
+  if ((normalized.destruction_evidence_ref === null)
+    !== (normalized.destruction_evidence_hash === null)) {
+    throw new Error('Receipt lifecycle destruction evidence ref and hash must be supplied together');
+  }
+  const destructionBindingNulls = [
+    normalized.destruction_evidence_ref,
+    normalized.destruction_evidence_hash,
+    normalized.destruction_provider_ref,
+    normalized.destruction_fork_ref_hash,
+  ].map((item) => item === null);
+  if (!destructionBindingNulls.every((item) => item === destructionBindingNulls[0])) {
+    throw new Error('Receipt lifecycle destruction binding must be supplied as one closed record');
+  }
+  return normalized;
 }
 
 function normalizeCommitSummary(value) {
@@ -582,21 +675,81 @@ function normalizeReceiptRecord(receipt) {
     && (hasExecutionStartedAt || normalized.taint.result_digest !== null)) {
     throw new Error('Receipt execution evidence lacks a matching success or failure claim');
   }
+  const allowedResourceStates = RECEIPT_STATE_RESOURCE_PAIRS[
+    normalized.lifecycle.fork_resource_state
+  ];
+  if (!allowedResourceStates?.includes(normalized.lifecycle.state)) {
+    throw new Error('Receipt lifecycle and fork resource state are incompatible');
+  }
+  const resourceDestroyed = normalized.lifecycle.fork_resource_state === 'DESTROYED';
+  const destructionVerified = normalized.claims.destruction.status === 'verified';
+  if (resourceDestroyed !== destructionVerified) {
+    throw new Error('Destroyed resource state and verified destruction claim must agree');
+  }
+  const hasDestructionBinding = normalized.lifecycle.destruction_evidence_ref !== null
+    || normalized.lifecycle.destruction_evidence_hash !== null
+    || normalized.lifecycle.destruction_provider_ref !== null
+    || normalized.lifecycle.destruction_fork_ref_hash !== null;
+  if (resourceDestroyed !== hasDestructionBinding) {
+    throw new Error('Destruction evidence bindings must exist exactly for a destroyed resource');
+  }
+  if (resourceDestroyed !== (normalized.timestamps.destruction_verified_at !== null)) {
+    throw new Error('Destruction verification timestamp must agree with destroyed resource state');
+  }
   if (normalized.claims.destruction.status === 'verified') {
     if (normalized.lifecycle.fork_resource_state !== 'DESTROYED'
       || normalized.timestamps.destruction_requested_at === null
       || normalized.timestamps.destruction_verified_at === null) {
       throw new Error('Verified destruction claim lacks a destroyed lifecycle and timestamps');
     }
+    if (normalized.lifecycle.destruction_evidence_ref === null
+      || normalized.lifecycle.destruction_evidence_hash === null
+      || normalized.claims.destruction.evidence_ref
+        !== normalized.lifecycle.destruction_evidence_ref
+      || !safeEqual(
+        normalized.claims.destruction.evidence_hash,
+        normalized.lifecycle.destruction_evidence_hash,
+      )) {
+      throw new Error('Receipt destruction claim does not match the exact lifecycle event');
+    }
+  }
+  if (normalized.lifecycle.fork_resource_state === 'DESTROYED'
+    && (normalized.lifecycle.destruction_evidence_ref === null
+      || normalized.lifecycle.destruction_evidence_hash === null
+      || normalized.lifecycle.destruction_provider_ref === null
+      || normalized.lifecycle.destruction_fork_ref_hash === null)) {
+    throw new Error('Destroyed receipt lifecycle lacks exact destruction event evidence');
+  }
+  if (normalized.lifecycle.fork_resource_state === 'DESTROYED'
+    && (normalized.lifecycle.destruction_provider_ref !== normalized.fork.provider_ref
+      || !safeEqual(
+        normalized.lifecycle.destruction_fork_ref_hash,
+        normalized.fork.fork_ref_hash,
+      ))) {
+    throw new Error('Receipt destruction evidence belongs to a different fork or provider');
   }
   if (normalized.claims.credential_revocation.status === 'verified'
     && normalized.timestamps.credential_revoked_at === null) {
     throw new Error('Verified credential revocation claim lacks its timestamp');
   }
-  if (normalized.lifecycle.state === 'COMMITTED'
-    && (normalized.timestamps.committed_at === null
-      || normalized.commit?.accepted_digest === null)) {
-    throw new Error('Committed receipt lacks its commit timestamp or accepted digest');
+  const lifecycleCommitted = normalized.lifecycle.state === 'COMMITTED';
+  const hasCommittedAt = normalized.timestamps.committed_at !== null;
+  const hasAcceptedDigest = normalized.commit?.accepted_digest != null;
+  const hasCommitEvidence = normalized.lifecycle.commit_evidence_ref !== null
+    && normalized.lifecycle.commit_evidence_hash !== null;
+  if (lifecycleCommitted !== hasCommittedAt
+    || lifecycleCommitted !== hasAcceptedDigest
+    || lifecycleCommitted !== hasCommitEvidence) {
+    throw new Error(
+      'Receipt accepted digest, commit timestamp, lifecycle evidence, and COMMITTED state must agree',
+    );
+  }
+  if (lifecycleCommitted
+    && !safeEqual(
+      normalized.commit.accepted_digest,
+      normalized.lifecycle.commit_evidence_hash,
+    )) {
+    throw new Error('Receipt accepted digest does not match the exact COMMITTED lifecycle event');
   }
   const requestedAt = Date.parse(normalized.timestamps.requested_at);
   if (!Number.isFinite(requestedAt)) throw new Error('Receipt lacks its request timestamp');
@@ -617,7 +770,12 @@ function normalizeReceiptRecord(receipt) {
   return normalized;
 }
 
-export function createRiskForkReceipt(input = {}) {
+export function createRiskForkReceipt(input = {}, options = {}) {
+  assertAllowedKeys(
+    options,
+    ['trusted_server_verifier'],
+    'Risk Fork receipt creation options',
+  );
   assertAllowedKeys(input, [
     'receipt_id',
     'created_at',
@@ -649,7 +807,7 @@ export function createRiskForkReceipt(input = {}) {
   verifySavepointCapsule(input.capsule, { now: createdAt, allowExpired: true });
   verifyLifecycle(input.lifecycle);
   assertFreshForkIdentity(input.fork_identity);
-  assertDecisionMatchesCapsule(input.risk_decision, input.capsule);
+  assertDecisionMatchesCapsule(input.risk_decision, input.capsule, options);
   if (input.fork_identity.parent_agent_id !== input.capsule.parent.agent_id
     || input.fork_identity.parent_session_id !== input.capsule.parent.session_id) {
     throw new Error('Receipt fork identity does not descend from the Savepoint Capsule parent');
@@ -712,7 +870,9 @@ export function createRiskForkReceipt(input = {}) {
     'accepted_commit_digest',
   );
   if (committedEvent) {
-    if (!input.commit_artifact || !committedEvent.evidence?.hash) {
+    if (!input.commit_artifact
+      || !committedEvent.evidence?.ref
+      || !committedEvent.evidence?.hash) {
       throw new Error('Committed lifecycle lacks its artifact or result evidence');
     }
     if (acceptedCommitDigest !== null
@@ -725,6 +885,7 @@ export function createRiskForkReceipt(input = {}) {
   }
   const destructionClaim = normalizeClaim(input.destruction_claim, 'destruction_claim');
   let destructionEvidence = null;
+  let destructionEvent = null;
   if (input.lifecycle.fork_resource_state === 'DESTROYED'
     || destructionClaim.status === 'verified') {
     destructionEvidence = normalizeDestructionEvidence(input.destruction_evidence);
@@ -736,12 +897,16 @@ export function createRiskForkReceipt(input = {}) {
       || destructionClaim.evidence_hash !== destructionEvidence.evidence_hash) {
       throw new Error('Receipt destruction claim is not bound to the exact fork and provider');
     }
-    const destructionEvent = input.lifecycle.events.find((event) => (
+    destructionEvent = input.lifecycle.events.find((event) => (
       ['CLEAN_COMMIT_READY', 'DESTROYED'].includes(event.to)
       && event.evidence.status === 'verified'
     ));
     if (!destructionEvent) {
       throw new Error('Receipt lifecycle has no verified destruction event');
+    }
+    if (destructionEvent.evidence.ref !== destructionEvidence.evidence_ref
+      || !safeEqual(destructionEvent.evidence.hash, destructionEvidence.evidence_hash)) {
+      throw new Error('Receipt destruction claim does not match the exact lifecycle event');
     }
   }
   const derivedAuthorization = binding
@@ -792,6 +957,7 @@ export function createRiskForkReceipt(input = {}) {
       mcp_server_ref: input.capsule.proposed_interaction.mcp_server_ref,
       mcp_server_origin_hash: sha256Ref(input.capsule.proposed_interaction.mcp_server_origin),
       mcp_method: input.capsule.proposed_interaction.mcp_method,
+      raw_method: input.capsule.proposed_interaction.raw_method,
       tool_name: input.capsule.proposed_interaction.tool_name,
       effective_arguments_hash: input.capsule.proposed_interaction.effective_arguments_hash,
       action_operation: binding?.action_operation ?? null,
@@ -807,6 +973,14 @@ export function createRiskForkReceipt(input = {}) {
       fork_resource_state: input.lifecycle.fork_resource_state,
       chain_head: input.lifecycle.chain_head,
       event_count: input.lifecycle.events.length,
+      commit_evidence_ref: committedEvent?.evidence?.ref ?? null,
+      commit_evidence_hash: committedEvent?.evidence?.hash ?? null,
+      destruction_evidence_ref: destructionEvent?.evidence?.ref ?? null,
+      destruction_evidence_hash: destructionEvent?.evidence?.hash ?? null,
+      destruction_provider_ref: destructionEvidence?.provider_ref ?? null,
+      destruction_fork_ref_hash: destructionEvidence
+        ? sha256Ref(destructionEvidence.fork_ref)
+        : null,
     },
     claims: {
       savepoint: normalizeClaim(input.savepoint_claim, 'savepoint_claim'),
@@ -869,11 +1043,53 @@ export function createRiskForkReceipt(input = {}) {
     receipt.receipt_id = `rfr_${identitySeed.slice(7, 23)}`;
   }
   receipt.receipt_hash = sha256Ref({ ...receipt, receipt_hash: null });
-  verifyRiskForkReceipt(receipt);
+  verifyRiskForkReceipt(receipt, {
+    risk_decision: input.risk_decision,
+    ...(Object.hasOwn(options, 'trusted_server_verifier')
+      ? { trusted_server_verifier: options.trusted_server_verifier }
+      : {}),
+  });
   return deepFreeze(receipt);
 }
 
-export function verifyRiskForkReceipt(receipt) {
+export function verifyRiskForkReceiptStructure(receipt) {
   normalizeReceiptRecord(receipt);
+  return true;
+}
+
+export function verifyRiskForkReceipt(receipt, options = {}) {
+  assertAllowedKeys(
+    options,
+    ['risk_decision', 'trusted_server_verifier'],
+    'Risk Fork receipt verification options',
+  );
+  const hasRiskDecision = Object.hasOwn(options, 'risk_decision');
+  const hasTrustedServerVerifier = Object.hasOwn(options, 'trusted_server_verifier');
+  if (!hasRiskDecision) {
+    throw new TypeError(
+      'Authoritative receipt verification requires the exact full risk decision '
+        + '(risk_decision is required)',
+    );
+  }
+  const normalized = normalizeReceiptRecord(receipt);
+  assertCanonicalJson(options.risk_decision);
+  assertPlainObject(options.risk_decision, 'risk_decision');
+  const recordedTrustVerification = options.risk_decision?.classifier
+    ?.trusted_server_verification;
+  if (recordedTrustVerification != null && !hasTrustedServerVerifier) {
+    throw new TypeError(
+      'A risk decision with recorded trusted-server verification requires '
+        + 'the original live trusted_server_verifier',
+    );
+  }
+  verifyRiskDecision(options.risk_decision, hasTrustedServerVerifier
+    ? { trusted_server_verifier: options.trusted_server_verifier }
+    : {});
+  canonicalMatch(normalized.risk, {
+    level: options.risk_decision.level,
+    action: options.risk_decision.action,
+    decision_hash: options.risk_decision.decision_hash,
+    policy_decision: options.risk_decision.blocked ? 'deny' : 'allow_with_boundary',
+  }, 'Receipt risk summary and exact verified risk decision');
   return true;
 }

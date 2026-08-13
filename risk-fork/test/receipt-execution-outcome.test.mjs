@@ -6,6 +6,7 @@ import { createLifecycle, transitionLifecycle } from '../src/lifecycle.mjs';
 import {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
+  verifyRiskForkReceiptStructure,
 } from '../src/receipt.mjs';
 import { classifyRisk } from '../src/risk-classifier.mjs';
 import {
@@ -117,6 +118,15 @@ function claim(name, status, outcome) {
 function failedReceiptInput(overrides = {}) {
   const capsule = overrides.capsule ?? makeCapsule();
   const lifecycle = overrides.lifecycle ?? failedExecutionLifecycle();
+  const destructionEvent = lifecycle.events.find((event) => event.to === 'DESTROYED');
+  assert.ok(destructionEvent?.evidence?.ref);
+  assert.ok(destructionEvent?.evidence?.hash);
+  const destructionClaim = {
+    status: 'verified',
+    outcome: 'success',
+    evidence_ref: destructionEvent.evidence.ref,
+    evidence_hash: destructionEvent.evidence.hash,
+  };
   return {
     created_at: NOW,
     capsule,
@@ -136,13 +146,13 @@ function failedReceiptInput(overrides = {}) {
       evidence_ref: null,
       evidence_hash: null,
     },
-    destruction_claim: claim('destruction', 'verified', 'success'),
+    destruction_claim: destructionClaim,
     destruction_evidence: {
       status: 'verified',
       provider_ref: 'provider:reference',
       fork_ref: 'fork:failed-execution',
-      evidence_ref: 'claim:destruction',
-      evidence_hash: hash('claim:destruction'),
+      evidence_ref: destructionClaim.evidence_ref,
+      evidence_hash: destructionClaim.evidence_hash,
     },
     transaction_assurance_evidence_refs: [],
     measurements: {},
@@ -174,13 +184,16 @@ test('receipt construction rejects a successful execution claim for EXECUTION_FA
 });
 
 test('receipt construction accepts an honestly failed execution without a result digest', () => {
-  const receipt = createRiskForkReceipt(failedReceiptInput());
+  const input = failedReceiptInput();
+  const receipt = createRiskForkReceipt(input);
 
   assert.equal(receipt.lifecycle.state, 'DESTROYED');
   assert.equal(receipt.claims.execution.status, 'failed');
   assert.equal(receipt.claims.execution.outcome, 'failure');
   assert.equal(receipt.taint.result_digest, null);
-  assert.equal(verifyRiskForkReceipt(receipt), true);
+  assert.equal(verifyRiskForkReceipt(receipt, {
+    risk_decision: input.risk_decision,
+  }), true);
 });
 
 test('receipt verification rejects rehashed execution-outcome contradictions', async (t) => {
@@ -192,7 +205,7 @@ test('receipt verification rejects rehashed execution-outcome contradictions', a
     tampered.claims.execution.outcome = 'success';
 
     assert.throws(
-      () => verifyRiskForkReceipt(correctlyRehash(tampered)),
+      () => verifyRiskForkReceiptStructure(correctlyRehash(tampered)),
       /execution|result digest|failed|lifecycle/i,
     );
   });
@@ -202,7 +215,7 @@ test('receipt verification rejects rehashed execution-outcome contradictions', a
     tampered.taint.result_digest = hash('execution-failed');
 
     assert.throws(
-      () => verifyRiskForkReceipt(correctlyRehash(tampered)),
+      () => verifyRiskForkReceiptStructure(correctlyRehash(tampered)),
       /execution|result digest|failed|lifecycle/i,
     );
   });

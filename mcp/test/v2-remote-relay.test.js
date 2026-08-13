@@ -34,7 +34,7 @@ const RELAY_ENTRYPOINT = path.join(PACKAGE_ROOT, 'mcp-server.js');
 const FIXTURE_API_KEY = 'amk_loopback_fixture_key';
 const REGISTERED_FIXTURE_API_KEY = 'amk_loopback_registered_key';
 
-function createFixtureServer() {
+function createFixtureServer({ onRequest, onResponse } = {}) {
     const requests = [];
     const handler = createMcpHandler(async () => {
         const server = new McpServer({ name: 'agoragentic-mcp-loopback', version: '1.0.0' });
@@ -104,7 +104,10 @@ function createFixtureServer() {
         req.on('end', () => {
             const raw = Buffer.concat(chunks).toString('utf8');
             const body = JSON.parse(raw);
-            requests.push({ httpMethod: req.method, headers: { ...req.headers }, body });
+            const request = { httpMethod: req.method, headers: { ...req.headers }, body };
+            requests.push(request);
+            onRequest?.(request);
+            res.once('finish', () => onResponse?.(request));
             nodeHandler(req, res, body);
         });
     });
@@ -268,6 +271,69 @@ test('pins the remote MCP client to stateless 2026-07-28 and sends bearer auth p
             assert.equal(request.headers.authorization, `Bearer ${FIXTURE_API_KEY}`);
         }
     } finally {
+        await closeRemoteSession(remoteSession);
+        await fixture.close();
+    }
+});
+
+test('awaits injected Risk Fork planning before real server/discover I/O and response acceptance', async () => {
+    const events = [];
+    const fixture = createFixtureServer({
+        onRequest(request) {
+            if (request.body.method === 'server/discover') events.push('server:discover-received');
+        },
+        onResponse(request) {
+            if (request.body.method === 'server/discover') events.push('server:discover-response-finished');
+        },
+    });
+    const url = await fixture.listen();
+    let releasePlanner;
+    let markPlannerStarted;
+    let remoteSession;
+    const plannerGate = new Promise((resolve) => {
+        releasePlanner = resolve;
+    });
+    const plannerStarted = new Promise((resolve) => {
+        markPlannerStarted = resolve;
+    });
+    let planningInput;
+
+    const connection = connectRemoteClient({
+        remoteUrl: url,
+        apiKey: '',
+        riskForkPlanner: async (input) => {
+            planningInput = input;
+            events.push('planner:started');
+            markPlannerStarted();
+            await plannerGate;
+            events.push('planner:completed');
+        },
+    });
+
+    try {
+        await plannerStarted;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        assert.deepEqual(events, ['planner:started']);
+        assert.deepEqual(planningInput, {
+            surface: 'MCP',
+            phase: 'server/discover',
+            mcp_server_ref: new URL(url).href,
+            mcp_server_origin: new URL(url).origin,
+        });
+
+        releasePlanner();
+        remoteSession = await connection;
+        events.push(`client:accepted-${remoteSession.client.getNegotiatedProtocolVersion()}`);
+
+        assert.deepEqual(events, [
+            'planner:started',
+            'planner:completed',
+            'server:discover-received',
+            'server:discover-response-finished',
+            `client:accepted-${MCP_V2_PROTOCOL_VERSION}`,
+        ]);
+    } finally {
+        releasePlanner();
         await closeRemoteSession(remoteSession);
         await fixture.close();
     }

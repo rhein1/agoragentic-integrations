@@ -4,7 +4,7 @@ This comparison records the v1 adapter decision. It is a design-time assessment,
 
 ## Decision
 
-E2B is the first cloud adapter target because its documented snapshot and sandbox-create surfaces allow the implementation to separate:
+E2B remains the first cloud adapter research target because its documented snapshot and sandbox-create surfaces suggest a composition that could separate:
 
 1. authority-free source verification;
 2. snapshot creation;
@@ -12,15 +12,15 @@ E2B is the first cloud adapter target because its documented snapshot and sandbo
 4. fresh identity/entropy bootstrap;
 5. execution, evidence collection, kill, absence verification, and snapshot cleanup.
 
-The adapter deliberately uses **snapshot then create**, not the direct fork convenience endpoint. In the API surface reviewed for v1, the direct fork request did not expose the same network and lifecycle settings needed before child startup.
+The original reference path used **snapshot then create**, not the direct fork convenience endpoint. In the API surface reviewed for v1, however, a full sandbox snapshot did not provide evidence that the restored child excludes dangerous environment state, credential files, processes, sockets, entropy/nonce state, and persistent writable mounts. Requesting network and lifecycle options at child creation is necessary but does not close that inherited-state boundary.
 
-This is only an implementation selection. The E2B adapter remains mock/injected-conformance-only until an owner authorizes a bounded credentialed canary. A source implementation is not live proof of network denial, isolation, persistence behavior, deletion, latency, or cost. The reviewed implementation has hard-TTL and per-execution timeout mechanics but no verified idle-TTL primitive, so it declares `supports_idle_ttl: false` and cannot pass Risk Fork's production-mode gate.
+The current adapter is therefore a **fail-closed safety stub**, not a mock-qualified cloud implementation. `createSavepoint`, `createFork`, and `executeInFork` refuse with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK or provider I/O. Its production-relevant capability flags are false or unverified, and it cannot pass Risk Fork's production-mode gate. No live network denial, isolation, persistence, deletion, latency, idle TTL, or cost property has been qualified. The secure boot and live-qualification work is tracked in [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302).
 
 ## Matrix
 
 | Candidate | Relevant documented primitive | Birth-time restriction assessment | v1 adapter status | Conclusion |
 | --- | --- | --- | --- | --- |
-| **E2B** | [Snapshots](https://docs.e2b.dev/sandbox/snapshots), [create sandbox](https://docs.e2b.dev/api-reference/sandboxes/create-sandbox), [fork sandbox](https://docs.e2b.dev/api-reference/sandboxes/fork-sandbox), [delete sandbox](https://docs.e2b.dev/api-reference/sandboxes/delete-sandbox) | Snapshot followed by create is the selected path for requesting blocked internet and kill/no-auto-resume lifecycle before child work | Source implementation present; injected/mock validation only; live credentialed validation blocked by authorization | **Selected first**, subject to live qualification |
+| **E2B** | [Snapshots](https://docs.e2b.dev/sandbox/snapshots), [create sandbox](https://docs.e2b.dev/api-reference/sandboxes/create-sandbox), [fork sandbox](https://docs.e2b.dev/api-reference/sandboxes/fork-sandbox), [delete sandbox](https://docs.e2b.dev/api-reference/sandboxes/delete-sandbox) | Snapshot followed by create can request restrictions at birth, but the reviewed path does not prove a sanitized filesystem-only restore without inherited authority/process/runtime state | Fail-closed safety stub; allocation and execution unavailable; no live credentialed validation | **Research target only**; blocked on a secure snapshot profile and live qualification |
 | **Daytona** | [Persistence](https://www.daytona.io/docs/en/persistence/), [network limits](https://www.daytona.io/docs/en/network-limits/) | Workspace persistence/forking is relevant, but the reviewed TypeScript fork path did not establish that network and TTL restrictions are inherited atomically before child startup | Research only; no adapter | Revisit after provider evidence closes the birth-time control window |
 | **AWS Lambda MicroVM / Firecracker** | [Lambda MicroVM lifecycle](https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html), [Lambda MicroVM launch](https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html), [Firecracker snapshot support](https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md) | Strong low-level isolation/snapshot primitives exist, but there is no reviewed turnkey arbitrary running-agent fork API matching this package contract | Research only; no adapter | Possible infrastructure substrate, not a v1 adapter |
 | **Local reference** | Repository implementation only | Closed operation vocabulary and minimal environment; no VM/container/firewall or kernel egress control | Implemented and locally testable | Protocol/conformance demonstration only |
@@ -49,12 +49,13 @@ Cost qualification needs an owner-approved live account, quoted/current provider
 
 ## E2B implementation constraints
 
-The v1 E2B implementation must remain fail closed:
+The current v1 adapter fails closed unconditionally at savepoint allocation, child allocation, and execution. Any future usable E2B path must also:
 
 - accept an injected SDK/client rather than reading or persisting credentials itself;
-- require a trusted clean-side source-sanitization verifier before snapshot creation;
+- require a trusted clean-side source-sanitization verifier before creating any reusable boot artifact;
 - reject memory-bearing source state without a verified, hash-bound sanitation attestation;
-- create the child from the snapshot with internet disabled and lifecycle configured before startup;
+- import only a demonstrably sanitized filesystem payload, never a memory/process/runtime snapshot;
+- create the child with internet disabled, zero persistent mounts, and lifecycle configured before startup;
 - remain production-ineligible while idle-TTL enforcement is absent or unverified;
 - run a fixed controller-supplied bootstrap, never a child-supplied shell command;
 - pass bounded job data through a fixed file/transport contract;
@@ -64,7 +65,7 @@ The v1 E2B implementation must remain fail closed:
 - return `unknown` rather than fabricate evidence when the SDK/provider cannot establish a fact;
 - never emit API keys, environment secrets, raw provider logs, or private workspace paths.
 
-Mock conformance can verify call ordering, exact option construction, argument bounds, redaction, failure handling, and no-auto-retry behavior. It cannot verify E2B's live enforcement or infrastructure behavior.
+The current conformance suite verifies that unavailable entrypoints refuse before source-verifier, SDK, or provider calls and that authority-bearing operations still hit the shared authority validator. That proves refusal behavior only. It does not verify E2B option construction, snapshot sanitation, containment, destruction, or any infrastructure behavior.
 
 ## Rejected shortcuts
 
@@ -77,4 +78,4 @@ Mock conformance can verify call ordering, exact option construction, argument b
 
 ## Next live gate
 
-A future owner-authorized canary should use a new, capped provider project with no production secrets and a synthetic workspace. It should test snapshot sanitation, first-instruction egress denial, identity freshness, TTL, process termination, fork absence, snapshot absence, sanitized receipts, and cleanup after injected failures. Until that evidence exists and is reviewed, status remains **implementation present, live validation blocked**.
+A future implementation must first close [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302) with a sanitized filesystem-only boot profile that cannot restore environment variables, credential files, process-level tokens, random/nonce state, sockets, or persistent writable mounts. Only after that code and its offline tests are independently reviewed should an owner consider a bounded live canary in a new, capped provider project with no production secrets and a synthetic workspace. That canary would need to test first-instruction egress denial, identity freshness, TTL, process termination, fork absence, snapshot absence, sanitized receipts, and cleanup after injected failures. Until both gates pass, status remains **secure profile unavailable; live containment qualification not run**.

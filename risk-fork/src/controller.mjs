@@ -69,6 +69,7 @@ function assertCapsuleMatchesDecision(capsule, decision) {
   const observed = decision.normalized_input;
   const comparisons = [
     ['mcp_phase', observed.mcp_phase, proposed.mcp_method],
+    ['raw_method', observed.raw_method, proposed.raw_method],
     ['mcp_server_ref', observed.mcp_server_ref, proposed.mcp_server_ref],
     ['mcp_server_origin', observed.mcp_server_origin, proposed.mcp_server_origin],
     ['tool_name', observed.tool_name, proposed.tool_name],
@@ -80,15 +81,26 @@ function assertCapsuleMatchesDecision(capsule, decision) {
 
 function expectedBindingForCapsule(capsule, value = {}) {
   assertPlainObject(value, 'expected_binding');
-  for (const field of ['policy_version', 'mandate_version']) {
-    if (Object.hasOwn(value, field) && value[field] !== capsule.governance[field]) {
+  const capsuleGovernance = {
+    policy_ref: capsule.governance.policy_ref,
+    policy_version: capsule.governance.policy_version,
+    policy_hash: capsule.governance.policy_hash,
+    mandate_ref: capsule.governance.mandate_ref,
+    mandate_version: capsule.governance.mandate_version,
+    mandate_hash: capsule.governance.mandate_hash,
+    budget_policy_ref: capsule.governance.budget_policy_ref,
+    budget_version: capsule.governance.budget_version,
+    budget_hash: capsule.governance.budget_hash,
+    governance_epoch: capsule.governance.epoch,
+  };
+  for (const [field, expected] of Object.entries(capsuleGovernance)) {
+    if (Object.hasOwn(value, field) && value[field] !== expected) {
       throw new Error(`Expected binding governance differs from the Savepoint Capsule: ${field}`);
     }
   }
   return {
     ...cloneJson(value),
-    policy_version: capsule.governance.policy_version,
-    mandate_version: capsule.governance.mandate_version,
+    ...capsuleGovernance,
   };
 }
 
@@ -218,11 +230,13 @@ export class RiskForkController {
       'mode',
       'clock',
       'verifyProviderProfile',
+      'trustedServerVerifier',
     ], 'Risk Fork controller options');
     this.provider = assertRiskForkProvider(options.provider);
     this.mode = requireEnum(options.mode ?? 'demonstration', CONTROLLER_MODES, 'controller mode');
     this.clock = options.clock ?? (() => new Date());
     this.verifyProviderProfile = options.verifyProviderProfile ?? null;
+    this.trustedServerVerifier = options.trustedServerVerifier ?? null;
   }
 
   async #assertProviderAllowed(decision) {
@@ -346,7 +360,10 @@ export class RiskForkController {
     assertPlainObject(input.risk_input, 'risk_input');
     assertPlainObject(input.savepoint_input ?? {}, 'savepoint_input');
     const operation = validateChildOperation(input.operation);
-    const decision = classifyRisk(input.risk_input);
+    const decision = classifyRisk(input.risk_input, {
+      trusted_server_verifier: this.trustedServerVerifier,
+      clock: this.clock,
+    });
     if (decision.blocked) {
       return deepFreeze({ mode: 'denied', risk_decision: decision, authority_granted: false });
     }
@@ -491,6 +508,7 @@ export class RiskForkController {
           mcp_server_ref: input.capsule.proposed_interaction.mcp_server_ref,
           mcp_server_origin: input.capsule.proposed_interaction.mcp_server_origin,
           mcp_method: input.capsule.proposed_interaction.mcp_method,
+          raw_method: input.capsule.proposed_interaction.raw_method,
           tool_name: input.capsule.proposed_interaction.tool_name,
           effective_arguments_hash: input.capsule.proposed_interaction.effective_arguments_hash,
           provider_ref: this.provider.id,
@@ -593,22 +611,23 @@ export class RiskForkController {
           'savepoint destruction evidence_hash',
         ),
       });
+      const cleanupLifecycleEvidence = {
+        status: 'verified',
+        ref: `cleanup:${combinedCleanupHash.slice(7, 31)}`,
+        hash: combinedCleanupHash,
+        detail: 'fork_and_savepoint_absence_verified',
+      };
       lifecycle = advance(lifecycle, 'CLEAN_COMMIT_READY', {
         at: requireIsoDate(this.clock(), 'clock result'),
         fork_resource_state: 'DESTROYED',
-        evidence: {
-          status: 'verified',
-          ref: `cleanup:${combinedCleanupHash.slice(7, 31)}`,
-          hash: combinedCleanupHash,
-          detail: 'fork_and_savepoint_absence_verified',
-        },
+        evidence: cleanupLifecycleEvidence,
       });
       const destructionEvidence = {
         status: 'verified',
         provider_ref: this.provider.id,
         fork_ref: forkRef,
-        evidence_ref: requireOpaqueRef(forkClaim.evidence_ref, 'fork destruction evidence_ref'),
-        evidence_hash: requireSha256Ref(forkClaim.evidence_hash, 'fork destruction evidence_hash'),
+        evidence_ref: cleanupLifecycleEvidence.ref,
+        evidence_hash: cleanupLifecycleEvidence.hash,
       };
       return deepFreeze({
         mode: 'prepared_for_clean_commit',
@@ -747,7 +766,8 @@ export class RiskForkController {
         lifecycle,
         artifact: prepared.artifact,
         destruction_evidence: prepared.destruction_evidence,
-        now: requireIsoDate(this.clock(), 'clock result'),
+      }, {
+        clock: this.clock,
       });
       lifecycle = advance(lifecycle, 'COMMITTED', {
         at: requireIsoDate(this.clock(), 'clock result'),

@@ -32,6 +32,7 @@
     "README.md",
     "SECURITY_MODEL.md",
     "PROVIDER_COMPARISON.md",
+    "ADVERSARIAL_REMEDIATION.md",
     "LICENSE"
   ],
   "scripts": {

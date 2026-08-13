@@ -428,7 +428,11 @@ function buildRemoteTransport(apiKeyRef, remoteUrl = REMOTE_MCP_URL) {
     });
 }
 
-async function connectRemoteClient({ remoteUrl = REMOTE_MCP_URL, apiKey = API_KEY } = {}) {
+async function connectRemoteClient({
+    remoteUrl = REMOTE_MCP_URL,
+    apiKey = API_KEY,
+    riskForkPlanner,
+} = {}) {
     const { Client } = require('@modelcontextprotocol/client');
     const apiKeyRef = { value: apiKey };
     const transport = buildRemoteTransport(apiKeyRef, remoteUrl);
@@ -448,6 +452,23 @@ async function connectRemoteClient({ remoteUrl = REMOTE_MCP_URL, apiKey = API_KE
     };
 
     try {
+        if (riskForkPlanner !== undefined) {
+            if (typeof riskForkPlanner !== 'function') {
+                throw new TypeError('riskForkPlanner must be a function when provided');
+            }
+
+            const planningTarget = new URL(remoteUrl);
+            // Disabled-by-default dependency-injection seam for the loopback
+            // ordering proof. Production relay paths do not inject a planner,
+            // enable one by environment, or claim hosted Risk Fork routing.
+            await riskForkPlanner(Object.freeze({
+                surface: 'MCP',
+                phase: 'server/discover',
+                mcp_server_ref: planningTarget.href,
+                mcp_server_origin: planningTarget.origin,
+            }));
+        }
+
         await client.connect(transport);
         if (
             client.getProtocolEra() !== 'modern'

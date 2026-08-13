@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
+import { verifyClientBanner } from './generate-client-banner.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function readText(relativePath) {
@@ -242,5 +244,6 @@ assert.match(
   new RegExp(`${manifest.integrations.length} public surfaces`),
   'social banner source must match the canonical integration count',
 );
+verifyClientBanner(root);
 
 console.log('client-native distribution surfaces verified');

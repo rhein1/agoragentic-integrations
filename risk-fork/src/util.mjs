@@ -102,6 +102,17 @@ export function requireEnum(value, allowed, field) {
   return value;
 }
 
+export function requireMcpMethodName(value, field = 'MCP method') {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`${field} must be a non-empty string`);
+  }
+  if (value.length > 300) throw new TypeError(`${field} exceeds 300 characters`);
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw new TypeError(`${field} contains a forbidden control character`);
+  }
+  return value;
+}
+
 export function uniqueStrings(value, field, { maxItems = 100, maxLength = 4096 } = {}) {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new TypeError(`${field} must be an array`);

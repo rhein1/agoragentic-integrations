@@ -7,13 +7,19 @@ import test from 'node:test';
 import { LocalReferenceRiskForkAdapter, inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import {
   CommitAmbiguousError,
-  FileAuthorizationClaimStore,
-  commitPreparedArtifact,
+  FileExecutionAuthorizationTransaction,
+  FileParentHeadTransaction,
+  commitPreparedArtifact as commitPreparedArtifactImpl,
+  deriveParentAuthorityRef,
 } from '../src/clean-commit.mjs';
 import { RiskForkController } from '../src/controller.mjs';
 import { transitionLifecycle } from '../src/lifecycle.mjs';
 import { RiskForkProvider } from '../src/provider.mjs';
-import { createRiskForkReceipt, verifyRiskForkReceipt } from '../src/receipt.mjs';
+import {
+  createRiskForkReceipt,
+  verifyRiskForkReceipt,
+  verifyRiskForkReceiptStructure,
+} from '../src/receipt.mjs';
 import { classifyRisk } from '../src/risk-classifier.mjs';
 import { validateCommitCandidate } from '../src/taint-gate.mjs';
 import {
@@ -27,16 +33,25 @@ import {
   makePreparedLifecycle,
 } from './helpers.mjs';
 
+function commitPreparedArtifact(input, options = {}) {
+  return commitPreparedArtifactImpl(input, { clock: () => NOW, ...options });
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 function exactApproval(request) {
   return {
+    schema: 'agoragentic.risk-fork.clean-commit-approval-verification.v1',
     status: 'verified',
+    request_hash: request.request_hash,
     artifact_hash: request.artifact_hash,
     capsule_hash: request.capsule_hash,
     parent_state_hash: request.parent_state_hash,
+    governance_hash: request.governance_hash,
+    governance_evidence_ref: request.governance_evidence_ref,
+    governance_evidence_hash: request.governance_evidence_hash,
     evidence_ref: 'approval:evidence',
     evidence_hash: hash('approval-evidence'),
   };
@@ -44,10 +59,16 @@ function exactApproval(request) {
 
 function exactExecutionAuthorization(request) {
   return {
+    schema: 'agoragentic.risk-fork.execution-authorization-integrity-verification.v1',
     status: 'verified',
-    revocation_status: 'active',
+    request_hash: request.request_hash,
+    authorization_ref: request.authorization_ref,
+    authorization_hash: request.authorization_hash,
     authorization_id: request.authorization_id,
     binding_hash: request.binding_hash,
+    signature_status: 'verified',
+    integrity_status: 'verified',
+    exact_binding_status: 'verified',
     evidence_ref: 'authorization:evidence',
     evidence_hash: hash('authorization-evidence'),
   };
@@ -111,9 +132,97 @@ function destructionEvidence(forkRef, providerRef = 'provider:1') {
     status: 'verified',
     provider_ref: providerRef,
     fork_ref: forkRef,
-    evidence_ref: 'destruction:evidence',
-    evidence_hash: hash('destruction:evidence'),
+    evidence_ref: 'cleanup:verified',
+    evidence_hash: hash('cleanup'),
   };
+}
+
+function currentGovernance(capsule, commitPolicy = {}) {
+  return {
+    policy: {
+      ref: capsule.governance.policy_ref,
+      version: capsule.governance.policy_version,
+      hash: capsule.governance.policy_hash,
+    },
+    mandate: {
+      ref: capsule.governance.mandate_ref,
+      version: capsule.governance.mandate_version,
+      hash: capsule.governance.mandate_hash,
+    },
+    budget_policy: {
+      ref: capsule.governance.budget_policy_ref,
+      version: capsule.governance.budget_version,
+      hash: capsule.governance.budget_hash,
+      usage_hash: hash('budget-usage:current'),
+      available_amount: '100.00',
+      currency: 'USDC',
+      payment_rail: 'x402:base',
+    },
+    epoch: capsule.governance.epoch,
+    commit_policy: {
+      typed_result_schema_hash: capsule.authorized_result_schema_hash,
+      ...commitPolicy,
+    },
+    evidence_ref: 'governance:current-evidence',
+    evidence_hash: hash('governance:current-evidence'),
+  };
+}
+
+async function provisionCommitAuthorities({
+  directory,
+  capsule,
+  artifact,
+  governance,
+  binding = null,
+  parentHeadHash = capsule.parent.state_hash,
+  verifyAuthorizationIntegrity = exactExecutionAuthorization,
+}) {
+  const parentRef = deriveParentAuthorityRef({
+    agent_id: capsule.parent.agent_id,
+    session_id: capsule.parent.session_id,
+  });
+  const parentStateTransaction = await new FileParentHeadTransaction({
+    directory: path.join(directory, 'parent-authority'),
+    clock: () => new Date(NOW),
+  }).initialize();
+  await parentStateTransaction.seedParentHead({
+    parentRef,
+    headHash: parentHeadHash,
+  });
+  await parentStateTransaction.setCurrentGovernance({
+    parent_ref: parentRef,
+    governance,
+  });
+  await parentStateTransaction.registerCommitApproval({
+    parent_ref: parentRef,
+    artifact_hash: artifact.artifact_hash,
+    capsule_hash: capsule.capsule_hash,
+    parent_state_hash: parentHeadHash,
+    commit_type: artifact.commit_type,
+    governance_hash: hash(governance),
+    evidence_ref: 'approval:evidence',
+    evidence_hash: hash('approval-evidence'),
+  });
+
+  let executionAuthorizationTransaction = null;
+  if (binding) {
+    executionAuthorizationTransaction = await new FileExecutionAuthorizationTransaction({
+      directory: path.join(directory, 'execution-authority'),
+      clock: () => new Date(NOW),
+      verifyAuthorizationIntegrity,
+    }).initialize();
+    await executionAuthorizationTransaction.registerExecutionAuthorization({
+      authorization_id: binding.one_use_authorization_id,
+      authorization_ref: binding.authorization_ref,
+      authorization_hash: binding.authorization_hash,
+      binding_hash: binding.binding_hash,
+      expires_at: binding.validity.expires_at,
+      evidence_ref: 'authorization:evidence',
+      evidence_hash: hash('authorization-evidence'),
+    });
+  }
+
+  return { parentRef, parentStateTransaction, executionAuthorizationTransaction };
 }
 
 test('taint gate rejects malicious paths, secrets, and raw authority fields', async (t) => {
@@ -236,34 +345,6 @@ test('consequential proposal operation is part of the exact authorized action', 
   );
 });
 
-test('file authorization claims are atomic under concurrency and cannot be replayed', async () => {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-claims-test-'));
-  try {
-    const store = await new FileAuthorizationClaimStore({
-      directory: path.join(temporary, 'claims'),
-      clock: () => new Date(NOW),
-    }).initialize();
-    const request = {
-      authorizationId: 'authorization:concurrent-1',
-      bindingHash: hash('binding:concurrent-1'),
-    };
-    const claims = await Promise.all([store.claim(request), store.claim(request)]);
-    assert.deepEqual(
-      claims.map((claim) => claim.status).sort(),
-      ['already_claimed', 'claimed'],
-    );
-    const winner = claims.find((claim) => claim.status === 'claimed');
-    await store.complete({
-      ...request,
-      claimToken: winner.claim_token,
-      resultHash: hash('result:concurrent-1'),
-    });
-    assert.equal((await store.claim(request)).status, 'consumed');
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
-  }
-});
-
 test('an executor failure after one-use claim is ambiguous and cannot be retried', async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-ambiguous-test-'));
   try {
@@ -274,10 +355,14 @@ test('an executor failure after one-use claim is ambiguous and cannot be retried
       payment_rail: 'x402:base',
     });
     const lifecycle = advanceToCommitting(makePreparedLifecycle(fixture.artifact.artifact_hash));
-    const store = await new FileAuthorizationClaimStore({
-      directory: path.join(temporary, 'claims'),
-      clock: () => new Date(NOW),
-    }).initialize();
+    const governance = currentGovernance(fixture.capsule);
+    const authority = await provisionCommitAuthorities({
+      directory: temporary,
+      capsule: fixture.capsule,
+      artifact: fixture.artifact,
+      governance,
+      binding: fixture.binding,
+    });
     let executions = 0;
     const input = {
       capsule: fixture.capsule,
@@ -286,19 +371,14 @@ test('an executor failure after one-use claim is ambiguous and cannot be retried
       artifact: fixture.artifact,
       destruction_evidence: destructionEvidence(fixture.forkRef),
       expected_parent_state_hash: fixture.capsule.parent.state_hash,
-      current_parent_state_hash: fixture.capsule.parent.state_hash,
+      parentStateTransaction: authority.parentStateTransaction,
+      resolveCurrentGovernance: async () => governance,
       verifyCommitApproval: async (request) => exactApproval(request),
-      verifyExecutionAuthorization: async (request) => exactExecutionAuthorization(request),
-      authorizationClaimStore: store,
-      expected_binding: {
-        policy_version: fixture.capsule.governance.policy_version,
-        mandate_version: fixture.capsule.governance.mandate_version,
-      },
+      executionAuthorizationTransaction: authority.executionAuthorizationTransaction,
       executeAction: async () => {
         executions += 1;
         throw new Error('provider response was lost');
       },
-      now: NOW,
     };
 
     await assert.rejects(
@@ -306,12 +386,17 @@ test('an executor failure after one-use claim is ambiguous and cannot be retried
       (error) => error instanceof CommitAmbiguousError
         && error.code === 'RISK_FORK_COMMIT_AMBIGUOUS',
     );
-    await assert.rejects(commitPreparedArtifact(input), /already_claimed/);
+    const parentAfterFailure = await authority.parentStateTransaction.getParentHead(
+      authority.parentRef,
+    );
+    assert.equal(parentAfterFailure.status, 'ambiguous');
+    await assert.rejects(
+      commitPreparedArtifact(input),
+      (error) => error instanceof CommitAmbiguousError,
+    );
     assert.equal(executions, 1);
-    const record = await store.get(fixture.binding.one_use_authorization_id);
-    assert.equal(record.status, 'claimed');
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 25 });
   }
 });
 
@@ -319,116 +404,128 @@ test('governance drift blocks consequential commit before approval or authority 
   for (const field of ['policy_version', 'mandate_version']) {
     for (const driftSource of ['binding', 'current trusted input']) {
       await t.test(`${field} in ${driftSource}`, async () => {
-        const capsule = makeCapsule();
-        const identity = makeForkIdentity(capsule);
-        const binding = makeBinding({
-          capsule,
-          identity,
-          ...(driftSource === 'binding' ? { [field]: `${field}:drifted` } : {}),
-        });
-        const fixture = makeProposalFixture({ capsule, identity, binding });
-        const lifecycle = advanceToCommitting(makePreparedLifecycle(fixture.artifact.artifact_hash));
-        const expectedBinding = {
-          policy_version: capsule.governance.policy_version,
-          mandate_version: capsule.governance.mandate_version,
-        };
-        if (driftSource === 'current trusted input') {
-          expectedBinding[field] = `${field}:drifted`;
-        }
-        let approvals = 0;
-        let authorizationVerifications = 0;
-        let claims = 0;
-        let executions = 0;
-
-        await assert.rejects(
-          commitPreparedArtifact({
+        const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-governance-drift-'));
+        try {
+          const capsule = makeCapsule();
+          const identity = makeForkIdentity(capsule);
+          const binding = makeBinding({
             capsule,
-            fork_identity: identity,
-            lifecycle,
+            identity,
+            ...(driftSource === 'binding' ? { [field]: `${field}:drifted` } : {}),
+          });
+          const fixture = makeProposalFixture({ capsule, identity, binding });
+          const lifecycle = advanceToCommitting(makePreparedLifecycle(fixture.artifact.artifact_hash));
+          const governance = currentGovernance(capsule);
+          if (driftSource === 'current trusted input') {
+            const section = field === 'policy_version' ? 'policy' : 'mandate';
+            governance[section] = { ...governance[section], version: `${field}:drifted` };
+          }
+          let approvals = 0;
+          let authorizationConsumptions = 0;
+          let executions = 0;
+          const authority = await provisionCommitAuthorities({
+            directory: temporary,
+            capsule,
             artifact: fixture.artifact,
-            destruction_evidence: destructionEvidence(fixture.forkRef),
-            expected_parent_state_hash: capsule.parent.state_hash,
-            current_parent_state_hash: capsule.parent.state_hash,
-            expected_binding: expectedBinding,
-            verifyCommitApproval: async (request) => {
-              approvals += 1;
-              return exactApproval(request);
-            },
-            verifyExecutionAuthorization: async (request) => {
-              authorizationVerifications += 1;
+            governance,
+            binding,
+            verifyAuthorizationIntegrity: async (request) => {
+              authorizationConsumptions += 1;
               return exactExecutionAuthorization(request);
             },
-            authorizationClaimStore: {
-              async claim() {
-                claims += 1;
-                return { status: 'claimed', claim_token: 'must-not-be-used' };
+          });
+
+          await assert.rejects(
+            commitPreparedArtifact({
+              capsule,
+              fork_identity: identity,
+              lifecycle,
+              artifact: fixture.artifact,
+              destruction_evidence: destructionEvidence(fixture.forkRef),
+              expected_parent_state_hash: capsule.parent.state_hash,
+              parentStateTransaction: authority.parentStateTransaction,
+              resolveCurrentGovernance: async () => governance,
+              verifyCommitApproval: async (request) => {
+                approvals += 1;
+                return exactApproval(request);
               },
-              async complete() {
-                throw new Error('must not complete a drifted authorization');
+              executionAuthorizationTransaction: authority.executionAuthorizationTransaction,
+              executeAction: async () => {
+                executions += 1;
+                return { accepted: true };
               },
-            },
-            executeAction: async () => {
-              executions += 1;
-              return { accepted: true };
-            },
-            now: NOW,
-          }),
-          driftSource === 'binding'
-            ? new RegExp(`Execution binding mismatch: ${field}`)
-            : new RegExp(`Current trusted ${field} differs from the Savepoint Capsule`),
-        );
-        assert.equal(approvals, 0);
-        assert.equal(authorizationVerifications, 0);
-        assert.equal(claims, 0);
-        assert.equal(executions, 0);
+            }),
+            driftSource === 'binding'
+              ? new RegExp(`Execution binding mismatch: ${field}`)
+              : /Current (?:policy|mandate) version differs from the Savepoint Capsule/,
+          );
+          assert.equal(approvals, 0);
+          assert.equal(authorizationConsumptions, 0);
+          assert.equal(executions, 0);
+        } finally {
+          await rm(temporary, { recursive: true, force: true });
+        }
       });
     }
   }
 });
 
-test('parent state drift blocks clean commit before approval or mutation', async () => {
-  const schema = closedResultSchema();
-  const capsule = makeCapsule({ result_schema: schema });
-  const identity = makeForkIdentity(capsule);
-  const forkRef = 'fork:typed-result-1';
-  const artifact = validateCommitCandidate({
-    candidate: {
-      type: 'TYPED_RESULT',
-      payload: { answer: 'safe' },
-      payload_schema: schema,
-    },
-    source_fork_id: forkRef,
-    policy: { typed_result_schema_hash: capsule.authorized_result_schema_hash },
-    validated_at: NOW,
-  });
-  const lifecycle = advanceToCommitting(makePreparedLifecycle(artifact.artifact_hash));
-  let approvals = 0;
-  let acceptances = 0;
-  await assert.rejects(
-    commitPreparedArtifact({
+test('authoritative parent state drift blocks clean commit before mutation', async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-parent-drift-'));
+  try {
+    const schema = closedResultSchema();
+    const capsule = makeCapsule({ result_schema: schema });
+    const identity = makeForkIdentity(capsule);
+    const forkRef = 'fork:typed-result-1';
+    const artifact = validateCommitCandidate({
+      candidate: {
+        type: 'TYPED_RESULT',
+        payload: { answer: 'safe' },
+        payload_schema: schema,
+      },
+      source_fork_id: forkRef,
+      policy: { typed_result_schema_hash: capsule.authorized_result_schema_hash },
+      validated_at: NOW,
+    });
+    const lifecycle = advanceToCommitting(makePreparedLifecycle(artifact.artifact_hash));
+    const governance = currentGovernance(capsule);
+    const authority = await provisionCommitAuthorities({
+      directory: temporary,
       capsule,
-      fork_identity: identity,
-      lifecycle,
       artifact,
-      destruction_evidence: destructionEvidence(forkRef),
-      expected_parent_state_hash: capsule.parent.state_hash,
-      current_parent_state_hash: hash('parent-state-drifted'),
-      verifyCommitApproval: async (request) => {
-        approvals += 1;
-        return exactApproval(request);
-      },
-      acceptTypedResult: async () => {
-        acceptances += 1;
-      },
-      now: NOW,
-    }),
-    /Parent state changed after savepoint/,
-  );
-  assert.equal(approvals, 0);
-  assert.equal(acceptances, 0);
+      governance,
+      parentHeadHash: hash('parent-state-drifted'),
+    });
+    let approvals = 0;
+    let acceptances = 0;
+    await assert.rejects(
+      commitPreparedArtifact({
+        capsule,
+        fork_identity: identity,
+        lifecycle,
+        artifact,
+        destruction_evidence: destructionEvidence(forkRef),
+        expected_parent_state_hash: capsule.parent.state_hash,
+        parentStateTransaction: authority.parentStateTransaction,
+        resolveCurrentGovernance: async () => governance,
+        verifyCommitApproval: async (request) => {
+          approvals += 1;
+          return exactApproval(request);
+        },
+        acceptTypedResult: async () => {
+          acceptances += 1;
+        },
+      }),
+      (error) => error?.code === 'PARENT_HEAD_STALE',
+    );
+    assert.equal(approvals, 1);
+    assert.equal(acceptances, 0);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
 });
 
-test('typed-result commit claims allow exactly one concurrent acceptor call', async () => {
+test('authoritative parent transaction allows exactly one concurrent typed-result acceptor call', async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-typed-claim-test-'));
   try {
     const schema = closedResultSchema();
@@ -449,10 +546,13 @@ test('typed-result commit claims allow exactly one concurrent acceptor call', as
       validated_at: NOW,
     });
     const lifecycle = advanceToCommitting(makePreparedLifecycle(artifact.artifact_hash));
-    const store = await new FileAuthorizationClaimStore({
-      directory: path.join(temporary, 'claims'),
-      clock: () => new Date(NOW),
-    }).initialize();
+    const governance = currentGovernance(capsule);
+    const authority = await provisionCommitAuthorities({
+      directory: temporary,
+      capsule,
+      artifact,
+      governance,
+    });
     let acceptorCalls = 0;
     let releaseAcceptor;
     let markAcceptorEntered;
@@ -465,35 +565,35 @@ test('typed-result commit claims allow exactly one concurrent acceptor call', as
       artifact,
       destruction_evidence: destructionEvidence(forkRef),
       expected_parent_state_hash: capsule.parent.state_hash,
-      current_parent_state_hash: capsule.parent.state_hash,
+      parentStateTransaction: authority.parentStateTransaction,
+      resolveCurrentGovernance: async () => governance,
       verifyCommitApproval: async (request) => exactApproval(request),
-      commitClaimStore: store,
       acceptTypedResult: async (payload) => {
         acceptorCalls += 1;
         markAcceptorEntered();
         await acceptorGate;
         return { accepted: payload.answer };
       },
-      now: NOW,
     };
 
     const winner = commitPreparedArtifact(input);
     await acceptorEntered;
     const duplicate = commitPreparedArtifact(input);
-    let duplicateError;
-    try {
-      duplicateError = await duplicate.then(() => null, (error) => error);
-      assert.match(duplicateError?.message ?? '', /Artifact commit is (?:already_claimed|consumed)/);
-      assert.equal(acceptorCalls, 1);
-    } finally {
-      releaseAcceptor();
-    }
-    const committed = await winner;
+    releaseAcceptor();
+    const [committed, duplicateError] = await Promise.all([
+      winner,
+      duplicate.then(() => null, (error) => error),
+    ]);
+    assert.ok(
+      ['RISK_FORK_COMMIT_AMBIGUOUS', 'PARENT_HEAD_STALE'].includes(duplicateError?.code),
+      `unexpected concurrent loser code: ${duplicateError?.code}`,
+    );
+    assert.equal(acceptorCalls, 1);
     assert.equal(committed.status, 'committed');
-    assert.equal(committed.commit_claim.status, 'consumed');
+    assert.equal(committed.parent_transaction.status, 'committed');
     assert.equal(acceptorCalls, 1);
   } finally {
-    await rm(temporary, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 25 });
   }
 });
 
@@ -916,21 +1016,58 @@ test('controller prepares irreversible work only, destroys the fork, then clean-
       'verify-savepoint-destroyed',
     ]);
 
-    const store = await new FileAuthorizationClaimStore({
-      directory: path.join(temporary, 'claims'),
-      clock: () => new Date(NOW),
-    }).initialize();
+    const executionEvent = prepared.lifecycle.events.find((event) => event.to === 'TAINTED');
+    assert.ok(executionEvent?.evidence?.hash);
+    const preparedReceipt = createRiskForkReceipt({
+      created_at: NOW,
+      capsule: prepared.capsule,
+      risk_decision: prepared.risk_decision,
+      lifecycle: prepared.lifecycle,
+      fork_identity: prepared.fork_identity,
+      fork_ref: prepared.artifact.source_fork_id,
+      provider_ref: prepared.provider.ref,
+      provider_capabilities_hash: prepared.provider.capabilities_hash,
+      savepoint_claim: receiptClaim('verified', 'success', 'controller-savepoint'),
+      fork_start_claim: receiptClaim('observed', 'success', 'controller-fork-start'),
+      execution_claim: receiptClaim('observed', 'success', 'controller-execution'),
+      result_digest: executionEvent.evidence.hash,
+      commit_artifact: prepared.artifact,
+      accepted_commit_digest: null,
+      validation_evidence_refs: ['validation:controller-prepared-artifact'],
+      credential_revocation_claim: receiptClaim(
+        'not_applicable',
+        'not_applicable',
+        'controller-revocation',
+      ),
+      destruction_claim: {
+        status: 'verified',
+        outcome: 'success',
+        evidence_ref: prepared.destruction_evidence.evidence_ref,
+        evidence_hash: prepared.destruction_evidence.evidence_hash,
+      },
+      destruction_evidence: prepared.destruction_evidence,
+      transaction_assurance_evidence_refs: [],
+      measurements: {},
+    });
+    assert.equal(verifyRiskForkReceipt(preparedReceipt, {
+      risk_decision: prepared.risk_decision,
+    }), true);
+
     let cleanExecutions = 0;
+    const governance = currentGovernance(capsule);
+    const authority = await provisionCommitAuthorities({
+      directory: path.join(temporary, 'clean-commit-authority'),
+      capsule,
+      artifact: prepared.artifact,
+      governance,
+      binding: prepared.artifact.body.execution_binding,
+    });
     const committed = await controller.commit(prepared, {
       expected_parent_state_hash: capsule.parent.state_hash,
-      current_parent_state_hash: capsule.parent.state_hash,
+      parentStateTransaction: authority.parentStateTransaction,
+      resolveCurrentGovernance: async () => governance,
       verifyCommitApproval: async (request) => exactApproval(request),
-      verifyExecutionAuthorization: async (request) => exactExecutionAuthorization(request),
-      authorizationClaimStore: store,
-      expected_binding: {
-        policy_version: capsule.governance.policy_version,
-        mandate_version: capsule.governance.mandate_version,
-      },
+      executionAuthorizationTransaction: authority.executionAuthorizationTransaction,
       executeAction: async () => {
         provider.events.push('clean-execute-action');
         cleanExecutions += 1;
@@ -1008,7 +1145,12 @@ function makeTypedReceiptFixture(forkRef) {
         'not_applicable',
         'revocation',
       ),
-      destruction_claim: receiptClaim('verified', 'success', 'destruction'),
+      destruction_claim: {
+        status: 'verified',
+        outcome: 'success',
+        evidence_ref: 'cleanup:verified',
+        evidence_hash: hash('cleanup'),
+      },
       destruction_evidence: destructionEvidence(artifact.source_fork_id),
       transaction_assurance_evidence_refs: ['ta:evidence'],
       measurements: { total_ms: 10, file_count: 0 },
@@ -1019,7 +1161,9 @@ function makeTypedReceiptFixture(forkRef) {
 test('receipts exclude raw private context and detect ordinary tampering', () => {
   const { capsule, input } = makeTypedReceiptFixture('fork:receipt-1');
   const receipt = createRiskForkReceipt(input);
-  assert.equal(verifyRiskForkReceipt(receipt), true);
+  assert.equal(verifyRiskForkReceipt(receipt, {
+    risk_decision: input.risk_decision,
+  }), true);
   const serialized = JSON.stringify(receipt);
   assert.doesNotMatch(serialized, new RegExp(capsule.parent.agent_id));
   assert.doesNotMatch(serialized, new RegExp(capsule.parent.session_id));
@@ -1029,7 +1173,7 @@ test('receipts exclude raw private context and detect ordinary tampering', () =>
 
   const tampered = clone(receipt);
   tampered.measurements.total_ms += 1;
-  assert.throws(() => verifyRiskForkReceipt(tampered), /receipt hash mismatch/);
+  assert.throws(() => verifyRiskForkReceiptStructure(tampered), /receipt hash mismatch/);
 });
 
 test('receipt creation cross-binds execution and accepted commit digests', () => {
@@ -1083,7 +1227,7 @@ test('receipt verification reasserts every privacy and no-authority invariant', 
     invalid.privacy.raw_prompt_excluded = false;
     invalid.receipt_hash = hash({ ...invalid, receipt_hash: null });
     assert.throws(
-      () => verifyRiskForkReceipt(invalid),
+      () => verifyRiskForkReceiptStructure(invalid),
       /security invariants|privacy|authority/,
     );
   });
@@ -1092,7 +1236,7 @@ test('receipt verification reasserts every privacy and no-authority invariant', 
     invalid.authority_flags.can_spend = true;
     invalid.receipt_hash = hash({ ...invalid, receipt_hash: null });
     assert.throws(
-      () => verifyRiskForkReceipt(invalid),
+      () => verifyRiskForkReceiptStructure(invalid),
       /security invariants|privacy|authority/,
     );
   });

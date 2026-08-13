@@ -18,6 +18,7 @@ export {
 } from './contracts.mjs';
 export {
   classifyRisk,
+  createTrustedMcpServerVerifier,
   riskDecisionCanonicalBytes,
   verifyRiskDecision,
 } from './risk-classifier.mjs';
@@ -36,13 +37,16 @@ export {
 } from './provider.mjs';
 export {
   scanTaintedValue,
+  revalidateCommitArtifact,
   validateCommitCandidate,
   verifyCommitArtifact,
 } from './taint-gate.mjs';
 export {
   CommitAmbiguousError,
-  FileAuthorizationClaimStore,
+  FileExecutionAuthorizationTransaction,
+  FileParentHeadTransaction,
   commitPreparedArtifact,
+  deriveParentAuthorityRef,
 } from './clean-commit.mjs';
 export {
   RiskForkController,
@@ -58,6 +62,7 @@ export {
 export {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
+  verifyRiskForkReceiptStructure,
 } from './receipt.mjs';
 export {
   LocalReferenceRiskForkAdapter,

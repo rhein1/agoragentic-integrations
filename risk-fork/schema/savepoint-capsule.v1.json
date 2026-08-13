@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agoragentic.com/schema/risk-fork-savepoint-capsule.v1.json",
   "title": "Agoragentic Risk Fork Savepoint Capsule V1",
-  "description": "A bounded, reference-and-hash-only parent-state capsule. It contains no raw prompts, memory, workspace content, credentials, wallet material, or execution authority.",
+  "description": "A bounded, reference-and-hash-only parent-state capsule. It contains no raw prompts, memory, workspace content, credentials, wallet material, execution authority, or process-memory runtime snapshot.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "capsule_id", "created_at", "expires_at", "parent", "agent_configuration", "checkpoint", "memory_roots", "workspace", "governance", "receipt_chain_head", "proposed_interaction", "execution_authorization", "authorized_result_schema_hash", "allowed_commit_types", "runtime_snapshot", "content_boundaries", "capsule_hash"],
@@ -58,23 +58,24 @@
     },
     "governance": {
       "type": "object", "additionalProperties": false,
-      "required": ["policy_version", "policy_hash", "mandate_version", "mandate_hash", "budget_version", "budget_hash"],
+      "required": ["policy_ref", "policy_version", "policy_hash", "mandate_ref", "mandate_version", "mandate_hash", "budget_policy_ref", "budget_version", "budget_hash", "epoch"],
       "properties": {
-        "policy_version": { "$ref": "#/$defs/ref" }, "policy_hash": { "$ref": "#/$defs/sha256" },
-        "mandate_version": { "$ref": "#/$defs/nullableRef" }, "mandate_hash": { "$ref": "#/$defs/nullableSha256" },
-        "budget_version": { "$ref": "#/$defs/nullableRef" }, "budget_hash": { "$ref": "#/$defs/nullableSha256" }
+        "policy_ref": { "$ref": "#/$defs/ref" }, "policy_version": { "$ref": "#/$defs/ref" }, "policy_hash": { "$ref": "#/$defs/sha256" },
+        "mandate_ref": { "$ref": "#/$defs/nullableRef" }, "mandate_version": { "$ref": "#/$defs/nullableRef" }, "mandate_hash": { "$ref": "#/$defs/nullableSha256" },
+        "budget_policy_ref": { "$ref": "#/$defs/nullableRef" }, "budget_version": { "$ref": "#/$defs/nullableRef" }, "budget_hash": { "$ref": "#/$defs/nullableSha256" },
+        "epoch": { "$ref": "#/$defs/ref" }
       },
       "allOf": [
         {
           "oneOf": [
-            { "properties": { "mandate_version": { "type": "null" }, "mandate_hash": { "type": "null" } }, "required": ["mandate_version", "mandate_hash"] },
-            { "properties": { "mandate_version": { "$ref": "#/$defs/ref" }, "mandate_hash": { "$ref": "#/$defs/sha256" } }, "required": ["mandate_version", "mandate_hash"] }
+            { "properties": { "mandate_ref": { "type": "null" }, "mandate_version": { "type": "null" }, "mandate_hash": { "type": "null" } }, "required": ["mandate_ref", "mandate_version", "mandate_hash"] },
+            { "properties": { "mandate_ref": { "$ref": "#/$defs/ref" }, "mandate_version": { "$ref": "#/$defs/ref" }, "mandate_hash": { "$ref": "#/$defs/sha256" } }, "required": ["mandate_ref", "mandate_version", "mandate_hash"] }
           ]
         },
         {
           "oneOf": [
-            { "properties": { "budget_version": { "type": "null" }, "budget_hash": { "type": "null" } }, "required": ["budget_version", "budget_hash"] },
-            { "properties": { "budget_version": { "$ref": "#/$defs/ref" }, "budget_hash": { "$ref": "#/$defs/sha256" } }, "required": ["budget_version", "budget_hash"] }
+            { "properties": { "budget_policy_ref": { "type": "null" }, "budget_version": { "type": "null" }, "budget_hash": { "type": "null" } }, "required": ["budget_policy_ref", "budget_version", "budget_hash"] },
+            { "properties": { "budget_policy_ref": { "$ref": "#/$defs/ref" }, "budget_version": { "$ref": "#/$defs/ref" }, "budget_hash": { "$ref": "#/$defs/sha256" } }, "required": ["budget_policy_ref", "budget_version", "budget_hash"] }
           ]
         }
       ]
@@ -82,12 +83,18 @@
     "receipt_chain_head": { "$ref": "#/$defs/sha256" },
     "proposed_interaction": {
       "type": "object", "additionalProperties": false,
-      "required": ["mcp_server_ref", "mcp_server_origin", "mcp_method", "tool_name", "effective_arguments_hash", "target_ref"],
+      "required": ["mcp_server_ref", "mcp_server_origin", "mcp_method", "raw_method", "tool_name", "effective_arguments_hash", "target_ref"],
       "properties": {
         "mcp_server_ref": { "$ref": "#/$defs/ref" }, "mcp_server_origin": { "$ref": "#/$defs/httpEndpoint" },
-        "mcp_method": { "$ref": "#/$defs/mcpPhase" }, "tool_name": { "$ref": "#/$defs/nullableRef" },
+        "mcp_method": { "$ref": "#/$defs/mcpPhase" }, "raw_method": { "$ref": "#/$defs/nullableMcpRawMethod" },
+        "tool_name": { "$ref": "#/$defs/nullableRef" },
         "effective_arguments_hash": { "$ref": "#/$defs/sha256" }, "target_ref": { "$ref": "#/$defs/nullableRef" }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "mcp_method": { "const": "UNKNOWN" } }, "required": ["mcp_method"] },
+        "then": { "properties": { "raw_method": { "$ref": "#/$defs/mcpRawMethod" } } },
+        "else": { "properties": { "raw_method": { "type": "null" } } }
+      }]
     },
     "execution_authorization": {
       "type": "object", "additionalProperties": false, "required": ["ref", "hash"],
@@ -106,7 +113,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["mode", "provider_ref", "snapshot_ref", "snapshot_hash", "sanitization_attestation_ref", "sanitization_attestation_hash", "verification_status"],
       "properties": {
-        "mode": { "enum": ["none", "filesystem", "filesystem_and_memory"] },
+        "mode": { "enum": ["none", "filesystem"] },
         "provider_ref": { "$ref": "#/$defs/nullableRef" }, "snapshot_ref": { "$ref": "#/$defs/nullableRef" },
         "snapshot_hash": { "$ref": "#/$defs/nullableSha256" }, "sanitization_attestation_ref": { "$ref": "#/$defs/nullableRef" },
         "sanitization_attestation_hash": { "$ref": "#/$defs/nullableSha256" },
@@ -114,7 +121,7 @@
       },
       "allOf": [
         { "if": { "properties": { "mode": { "const": "none" } }, "required": ["mode"] }, "then": { "properties": { "provider_ref": { "type": "null" }, "snapshot_ref": { "type": "null" }, "snapshot_hash": { "type": "null" }, "sanitization_attestation_ref": { "type": "null" }, "sanitization_attestation_hash": { "type": "null" }, "verification_status": { "const": "not_checked" } } } },
-        { "if": { "properties": { "mode": { "enum": ["filesystem", "filesystem_and_memory"] } }, "required": ["mode"] }, "then": { "properties": { "provider_ref": { "$ref": "#/$defs/ref" }, "snapshot_ref": { "$ref": "#/$defs/ref" }, "snapshot_hash": { "$ref": "#/$defs/sha256" }, "sanitization_attestation_ref": { "$ref": "#/$defs/ref" }, "sanitization_attestation_hash": { "$ref": "#/$defs/sha256" }, "verification_status": { "const": "verified" } } } }
+        { "if": { "properties": { "mode": { "const": "filesystem" } }, "required": ["mode"] }, "then": { "properties": { "provider_ref": { "$ref": "#/$defs/ref" }, "snapshot_ref": { "$ref": "#/$defs/ref" }, "snapshot_hash": { "$ref": "#/$defs/sha256" }, "sanitization_attestation_ref": { "$ref": "#/$defs/ref" }, "sanitization_attestation_hash": { "$ref": "#/$defs/sha256" }, "verification_status": { "const": "verified" } } } }
       ]
     },
     "content_boundaries": {
@@ -134,11 +141,13 @@
     "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
     "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "\\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
     "ref200": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 200 }] },
+    "mcpRawMethod": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]+$" },
     "nullableRef": { "oneOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] },
+    "nullableMcpRawMethod": { "oneOf": [{ "$ref": "#/$defs/mcpRawMethod" }, { "type": "null" }] },
     "ref100": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 100 }] },
     "nullableRef100": { "oneOf": [{ "$ref": "#/$defs/ref100" }, { "type": "null" }] },
     "date": { "type": "string", "format": "date-time", "maxLength": 64 },
     "httpEndpoint": { "type": "string", "format": "uri", "pattern": "^https?://(?![^/?#]*@)[^?#]+$", "maxLength": 4096 },
-    "mcpPhase": { "enum": ["initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call"] }
+    "mcpPhase": { "enum": ["server/discover", "initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call", "UNKNOWN"] }
   }
 }

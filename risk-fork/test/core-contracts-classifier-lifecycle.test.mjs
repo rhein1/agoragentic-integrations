@@ -21,15 +21,62 @@ import {
   transitionLifecycle,
   verifyLifecycle,
 } from '../src/lifecycle.mjs';
-import { createRiskForkReceipt, verifyRiskForkReceipt } from '../src/receipt.mjs';
-import { classifyRisk, riskDecisionCanonicalBytes } from '../src/risk-classifier.mjs';
+import {
+  createRiskForkReceipt,
+  verifyRiskForkReceiptStructure,
+} from '../src/receipt.mjs';
+import {
+  classifyRisk,
+  createTrustedMcpServerVerifier,
+  riskDecisionCanonicalBytes,
+} from '../src/risk-classifier.mjs';
 import { validateCommitCandidate } from '../src/taint-gate.mjs';
 
 const NOW = new Date('2030-01-01T00:00:00.000Z');
 const LATER = '2030-01-01T01:00:00.000Z';
+const TRUST_EVALUATED_AT = new Date('2030-01-01T00:10:00.000Z');
 
 function hash(value) {
   return sha256Ref(value);
+}
+
+const trustedServerVerifier = createTrustedMcpServerVerifier((request) => ({
+  schema: 'agoragentic.risk-fork.trusted-mcp-server-verification.v1',
+  status: 'verified',
+  request_hash: hash(request),
+  evidence_ref: 'trusted-boundary:core-classifier-tests',
+  evidence_hash: hash({ request, verifier: 'core-classifier-tests' }),
+}));
+
+function exactTrustedServerInput(serverRef, serverOrigin) {
+  const trustRegistryVersion = 'core-test-trust-registry-v1';
+  const attestorRef = 'attestor:core-tests';
+  const statement = {
+    schema: 'agoragentic.risk-fork.mcp-server-attestation.v1',
+    status: 'verified',
+    server_ref: serverRef,
+    server_origin: serverOrigin,
+    attestor_ref: attestorRef,
+    evidence_hash: hash('core-test-trust-evidence'),
+    issued_at: '2030-01-01T00:00:00.000Z',
+    expires_at: '2030-01-01T01:00:00.000Z',
+    trust_registry_version: trustRegistryVersion,
+    signature_ref: 'signature:core-test-trust',
+    signature_hash: hash('core-test-trust-signature'),
+  };
+  const attestation = {
+    ...statement,
+    attestation_hash: hash(statement),
+  };
+  return {
+    mcp_server_attestation: attestation,
+    owner_policy: {
+      trusted_server_refs: [serverRef],
+      trusted_attestor_refs: [attestorRef],
+      trusted_attestation_hashes: [attestation.attestation_hash],
+      trust_registry_version: trustRegistryVersion,
+    },
+  };
 }
 
 function makeCapsule(overrides = {}) {
@@ -391,6 +438,23 @@ test('Savepoint Capsule creation rejects malformed boundaries and unverifiable r
   );
 });
 
+test('Savepoint Capsule v1 rejects verified filesystem-and-memory runtime snapshots', () => {
+  assert.throws(
+    () => makeCapsule({
+      runtime_snapshot: {
+        mode: 'filesystem_and_memory',
+        provider_ref: 'provider:memory-snapshot',
+        snapshot_ref: 'snapshot:memory-bearing',
+        snapshot_hash: hash('memory-bearing-snapshot'),
+        sanitization_attestation_ref: 'attestation:memory-snapshot',
+        sanitization_attestation_hash: hash('memory-snapshot-attestation'),
+        verification_status: 'verified',
+      },
+    }),
+    /runtime_snapshot\.mode|filesystem_and_memory|snapshot mode/i,
+  );
+});
+
 test('Savepoint Capsule verification rejects noncanonical hidden fields', () => {
   const capsule = clone(makeCapsule());
   Object.defineProperty(capsule, 'unbound_hidden_value', {
@@ -431,7 +495,7 @@ test('risk classification is deterministic across input property ordering', () =
       filesystem_read: true,
       network_access: true,
     },
-  });
+  }, { clock: () => NOW });
   const right = classifyRisk({
     capabilities: {
       network_access: true,
@@ -448,7 +512,7 @@ test('risk classification is deterministic across input property ordering', () =
     mcp_server_ref: 'server:1',
     mcp_phase: 'tools/call',
     request_id: 'request:1',
-  });
+  }, { clock: () => NOW });
 
   assert.equal(left.level, 'HIGH');
   assert.equal(left.decision_hash, right.decision_hash);
@@ -590,7 +654,14 @@ test('absent or incomplete capability metadata defaults conservatively to HIGH',
     unknown_or_unclassified: false,
   };
   assert.equal(
-    classifyRisk({ ...common, capabilities: completeSafeCapabilities }).level,
+    classifyRisk({
+      ...common,
+      ...exactTrustedServerInput(common.mcp_server_ref, common.mcp_server_origin),
+      capabilities: completeSafeCapabilities,
+    }, {
+      trusted_server_verifier: trustedServerVerifier,
+      clock: () => TRUST_EVALUATED_AT,
+    }).level,
     'LOW',
   );
 });
@@ -601,7 +672,7 @@ test('receipt verification rejects rehashed secret-shaped claim detail', () => {
   receipt.receipt_hash = hash({ ...receipt, receipt_hash: null });
 
   assert.throws(
-    () => verifyRiskForkReceipt(receipt),
+    () => verifyRiskForkReceiptStructure(receipt),
     /secret|privacy|canonical closed contract/i,
   );
 });
@@ -612,7 +683,7 @@ test('receipt verification rejects a rehashed receipt missing the capsule hash',
   receipt.receipt_hash = hash({ ...receipt, receipt_hash: null });
 
   assert.throws(
-    () => verifyRiskForkReceipt(receipt),
+    () => verifyRiskForkReceiptStructure(receipt),
     /capsule_hash|savepoint|canonical closed contract/i,
   );
 });
@@ -638,8 +709,16 @@ test('a child action proposal stays authority-free while the clean side attaches
     effective_arguments: { value: 1 },
     provider_ref: 'provider:1',
     target_ref: capsule.proposed_interaction.target_ref,
+    policy_ref: capsule.governance.policy_ref,
     policy_version: capsule.governance.policy_version,
+    policy_hash: capsule.governance.policy_hash,
+    mandate_ref: capsule.governance.mandate_ref,
     mandate_version: capsule.governance.mandate_version,
+    mandate_hash: capsule.governance.mandate_hash,
+    budget_policy_ref: capsule.governance.budget_policy_ref,
+    budget_version: capsule.governance.budget_version,
+    budget_hash: capsule.governance.budget_hash,
+    governance_epoch: capsule.governance.epoch,
     issued_at: NOW,
     not_before: NOW,
     expires_at: LATER,

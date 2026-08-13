@@ -10,8 +10,9 @@ import addFormats from 'ajv-formats';
 
 import { LocalReferenceRiskForkAdapter } from '../src/adapters/local-reference.mjs';
 import {
-  FileAuthorizationClaimStore,
+  FileParentHeadTransaction,
   commitPreparedArtifact,
+  deriveParentAuthorityRef,
 } from '../src/clean-commit.mjs';
 import { networkPolicy } from '../src/contracts.mjs';
 import { createMcpInterceptionPlan } from '../src/interception.mjs';
@@ -32,7 +33,6 @@ import {
 const SCHEMA_DIRECTORY = fileURLToPath(new URL('../schema/', import.meta.url));
 const SCHEMA_ID_BASE = 'https://agoragentic.com/schema/';
 const EXPECTED_SCHEMA_FILES = Object.freeze([
-  'authorization-claim.v1.json',
   'clean-commit-result.v1.json',
   'commit-artifact.v1.json',
   'execution-binding.v1.json',
@@ -98,6 +98,64 @@ function evidenceClaim(name) {
   };
 }
 
+function currentGovernance(capsule, commitPolicy = {}) {
+  return {
+    policy: {
+      ref: capsule.governance.policy_ref,
+      version: capsule.governance.policy_version,
+      hash: capsule.governance.policy_hash,
+    },
+    mandate: {
+      ref: capsule.governance.mandate_ref,
+      version: capsule.governance.mandate_version,
+      hash: capsule.governance.mandate_hash,
+    },
+    budget_policy: {
+      ref: capsule.governance.budget_policy_ref,
+      version: capsule.governance.budget_version,
+      hash: capsule.governance.budget_hash,
+      usage_hash: hash('schema-budget-usage'),
+      available_amount: '100.00',
+      currency: 'USDC',
+      payment_rail: 'x402:base',
+    },
+    epoch: capsule.governance.epoch,
+    commit_policy: commitPolicy,
+    evidence_ref: 'governance:schema-evidence',
+    evidence_hash: hash('governance:schema-evidence'),
+  };
+}
+
+async function provisionTypedCommitAuthority({ directory, capsule, artifact, governance }) {
+  const parentRef = deriveParentAuthorityRef({
+    agent_id: capsule.parent.agent_id,
+    session_id: capsule.parent.session_id,
+  });
+  const parentStateTransaction = await new FileParentHeadTransaction({
+    directory,
+    clock: () => new Date(NOW),
+  }).initialize();
+  await parentStateTransaction.seedParentHead({
+    parentRef,
+    headHash: capsule.parent.state_hash,
+  });
+  await parentStateTransaction.setCurrentGovernance({
+    parent_ref: parentRef,
+    governance,
+  });
+  await parentStateTransaction.registerCommitApproval({
+    parent_ref: parentRef,
+    artifact_hash: artifact.artifact_hash,
+    capsule_hash: capsule.capsule_hash,
+    parent_state_hash: capsule.parent.state_hash,
+    commit_type: artifact.commit_type,
+    governance_hash: hash(governance),
+    evidence_ref: 'approval:verified',
+    evidence_hash: hash('approval'),
+  });
+  return parentStateTransaction;
+}
+
 function makeRiskInput() {
   return {
     request_id: 'request:schema-contracts',
@@ -156,7 +214,17 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
     validated_at: NOW,
   });
   const actionLifecycle = makePreparedLifecycle(actionArtifact.artifact_hash);
-  const actionDestructionClaim = evidenceClaim('destruction');
+  const actionDestructionEvent = actionLifecycle.events.find(
+    (event) => event.to === 'CLEAN_COMMIT_READY',
+  );
+  assert.ok(actionDestructionEvent?.evidence?.ref);
+  assert.ok(actionDestructionEvent?.evidence?.hash);
+  const actionDestructionClaim = {
+    status: 'verified',
+    outcome: 'success',
+    evidence_ref: actionDestructionEvent.evidence.ref,
+    evidence_hash: actionDestructionEvent.evidence.hash,
+  };
   const receipt = createRiskForkReceipt({
     created_at: NOW,
     capsule,
@@ -190,61 +258,50 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
   });
 
   const typedLifecycle = makePreparedLifecycle(typedArtifact.artifact_hash);
-  const commitClaimStore = {
-    async claim() {
-      return { status: 'claimed', claim_token: 'schema-test-claim-token' };
-    },
-    async complete() {
-      return { status: 'completed' };
-    },
-  };
-  const cleanCommitResult = await commitPreparedArtifact({
-    capsule,
-    fork_identity: identity,
-    lifecycle: advanceToCommitting(typedLifecycle),
-    artifact: typedArtifact,
-    destruction_evidence: {
-      status: 'verified',
-      provider_ref: 'provider:1',
-      fork_ref: typedArtifact.source_fork_id,
-      evidence_ref: 'cleanup:verified',
-      evidence_hash: hash('cleanup'),
-    },
-    expected_parent_state_hash: capsule.parent.state_hash,
-    current_parent_state_hash: capsule.parent.state_hash,
-    verifyCommitApproval: async (request) => ({
-      status: 'verified',
-      artifact_hash: request.artifact_hash,
-      capsule_hash: request.capsule_hash,
-      parent_state_hash: request.parent_state_hash,
-      evidence_ref: 'approval:verified',
-      evidence_hash: hash('approval'),
-    }),
-    commitClaimStore,
-    acceptTypedResult: async (payload) => ({ accepted: payload.answer }),
-    now: NOW,
+  const governance = currentGovernance(capsule, {
+    typed_result_schema_hash: capsule.authorized_result_schema_hash,
   });
-
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-schema-'));
-  let authorizationClaim;
-  let completedAuthorizationClaim;
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-schema-authority-'));
+  let cleanCommitResult;
   try {
-    const claimStore = await new FileAuthorizationClaimStore({
-      directory: path.join(temporaryRoot, 'claims'),
-      clock: () => NOW,
-    }).initialize();
-    authorizationClaim = await claimStore.claim({
-      authorizationId: binding.one_use_authorization_id,
-      bindingHash: binding.binding_hash,
+    const parentStateTransaction = await provisionTypedCommitAuthority({
+      directory: path.join(temporary, 'parent-authority'),
+      capsule,
+      artifact: typedArtifact,
+      governance,
     });
-    completedAuthorizationClaim = await claimStore.complete({
-      authorizationId: binding.one_use_authorization_id,
-      bindingHash: binding.binding_hash,
-      claimToken: authorizationClaim.claim_token,
-      resultHash: hash('clean-result'),
-    });
+    cleanCommitResult = await commitPreparedArtifact({
+      capsule,
+      fork_identity: identity,
+      lifecycle: advanceToCommitting(typedLifecycle),
+      artifact: typedArtifact,
+      destruction_evidence: {
+        status: 'verified',
+        provider_ref: 'provider:1',
+        fork_ref: typedArtifact.source_fork_id,
+        evidence_ref: 'cleanup:verified',
+        evidence_hash: hash('cleanup'),
+      },
+      expected_parent_state_hash: capsule.parent.state_hash,
+      parentStateTransaction,
+      resolveCurrentGovernance: async () => governance,
+      verifyCommitApproval: async (request) => ({
+        schema: 'agoragentic.risk-fork.clean-commit-approval-verification.v1',
+        status: 'verified',
+        request_hash: request.request_hash,
+        artifact_hash: request.artifact_hash,
+        capsule_hash: request.capsule_hash,
+        parent_state_hash: request.parent_state_hash,
+        governance_hash: request.governance_hash,
+        governance_evidence_ref: request.governance_evidence_ref,
+        governance_evidence_hash: request.governance_evidence_hash,
+        evidence_ref: 'approval:verified',
+        evidence_hash: hash('approval'),
+      }),
+      acceptTypedResult: async (payload) => ({ accepted: payload.answer }),
+    }, { clock: () => NOW });
   } finally {
-    await rm(temporaryRoot, { recursive: true, force: true });
+    await rm(temporary, { recursive: true, force: true });
   }
 
   const artifacts = [
@@ -258,14 +315,22 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
     ['lifecycle.v1.json', actionLifecycle],
     ['commit-artifact.v1.json', typedArtifact, 'typed commit artifact'],
     ['commit-artifact.v1.json', actionArtifact, 'consequential action artifact'],
-    ['authorization-claim.v1.json', authorizationClaim.record, 'claimed authorization'],
-    ['authorization-claim.v1.json', completedAuthorizationClaim, 'completed authorization'],
     ['clean-commit-result.v1.json', cleanCommitResult],
     ['receipt.v1.json', receipt],
   ];
   for (const [name, value, label] of artifacts) {
     assertSchemaAccepts(ajv, name, value, label);
   }
+  assert.equal(cleanCommitResult.final_commit_authority.status, 'verified');
+  assert.equal(cleanCommitResult.final_commit_authority.atomicity_status, 'verified');
+  const missingFinalAuthority = clone(cleanCommitResult);
+  delete missingFinalAuthority.final_commit_authority;
+  assertSchemaRejects(
+    ajv,
+    'clean-commit-result.v1.json',
+    missingFinalAuthority,
+    'clean commit result without atomic final-authority evidence',
+  );
   assert.equal(receipt.interaction.action_operation, 'mcp_tool_call');
 });
 
@@ -292,8 +357,18 @@ test('schemas reject boundary weakening and contract drift', async () => {
     validated_at: NOW,
   });
   const decision = classifyRisk(makeRiskInput());
-  const negativeDestructionClaim = evidenceClaim('destruction');
   const negativeLifecycle = makePreparedLifecycle(actionArtifact.artifact_hash);
+  const negativeDestructionEvent = negativeLifecycle.events.find(
+    (event) => event.to === 'CLEAN_COMMIT_READY',
+  );
+  assert.ok(negativeDestructionEvent?.evidence?.ref);
+  assert.ok(negativeDestructionEvent?.evidence?.hash);
+  const negativeDestructionClaim = {
+    status: 'verified',
+    outcome: 'success',
+    evidence_ref: negativeDestructionEvent.evidence.ref,
+    evidence_hash: negativeDestructionEvent.evidence.hash,
+  };
   const receipt = createRiskForkReceipt({
     created_at: NOW,
     capsule,
@@ -369,6 +444,23 @@ test('schemas reject boundary weakening and contract drift', async () => {
     'capsule self-verifying an absent runtime snapshot',
   );
 
+  const memoryBearingSnapshot = clone(capsule);
+  memoryBearingSnapshot.runtime_snapshot = {
+    mode: 'filesystem_and_memory',
+    provider_ref: 'provider:memory-snapshot',
+    snapshot_ref: 'snapshot:memory-bearing',
+    snapshot_hash: hash('memory-bearing-snapshot'),
+    sanitization_attestation_ref: 'attestation:memory-snapshot',
+    sanitization_attestation_hash: hash('memory-snapshot-attestation'),
+    verification_status: 'verified',
+  };
+  assertSchemaRejects(
+    ajv,
+    'savepoint-capsule.v1.json',
+    memoryBearingSnapshot,
+    'capsule carrying a process-memory runtime snapshot',
+  );
+
   for (const secret of ['api_key=abcdefghijklmnop', 'sk-abcdefghijklmnop']) {
     const capsuleSecretKind = clone(capsule);
     capsuleSecretKind.memory_roots = [{
@@ -411,6 +503,20 @@ test('schemas reject boundary weakening and contract drift', async () => {
     missingOperation,
     'execution binding without action_operation',
   );
+
+  for (const [field, hashField] of [
+    ['mandate_ref', 'mandate_hash'],
+    ['budget_policy_ref', 'budget_hash'],
+  ]) {
+    const halfBoundGovernance = clone(binding);
+    halfBoundGovernance.governance[hashField] = null;
+    assertSchemaRejects(
+      ajv,
+      'execution-binding.v1.json',
+      halfBoundGovernance,
+      `execution binding with unmatched ${field}/${hashField}`,
+    );
+  }
 
   assertSchemaRejects(
     ajv,

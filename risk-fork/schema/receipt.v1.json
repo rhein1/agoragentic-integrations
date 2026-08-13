@@ -29,13 +29,19 @@
     },
     "interaction": {
       "type": "object", "additionalProperties": false,
-      "required": ["action_operation", "mcp_server_ref", "mcp_server_origin_hash", "mcp_method", "tool_name", "effective_arguments_hash"],
+      "required": ["action_operation", "mcp_server_ref", "mcp_server_origin_hash", "mcp_method", "raw_method", "tool_name", "effective_arguments_hash"],
       "properties": {
         "action_operation": { "$ref": "#/$defs/nullableActionOperation" },
         "mcp_server_ref": { "$ref": "#/$defs/ref" }, "mcp_server_origin_hash": { "$ref": "#/$defs/sha256" },
-        "mcp_method": { "$ref": "#/$defs/mcpPhase" }, "tool_name": { "$ref": "#/$defs/nullableRef" },
+        "mcp_method": { "$ref": "#/$defs/mcpPhase" }, "raw_method": { "$ref": "#/$defs/nullableMcpRawMethod" },
+        "tool_name": { "$ref": "#/$defs/nullableRef" },
         "effective_arguments_hash": { "$ref": "#/$defs/sha256" }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "mcp_method": { "const": "UNKNOWN" } }, "required": ["mcp_method"] },
+        "then": { "properties": { "raw_method": { "$ref": "#/$defs/mcpRawMethod" } } },
+        "else": { "properties": { "raw_method": { "type": "null" } } }
+      }]
     },
     "risk": {
       "type": "object", "additionalProperties": false,
@@ -48,11 +54,40 @@
     },
     "lifecycle": {
       "type": "object", "additionalProperties": false,
-      "required": ["state", "fork_resource_state", "chain_head", "event_count"],
+      "required": ["state", "fork_resource_state", "chain_head", "event_count", "commit_evidence_ref", "commit_evidence_hash", "destruction_evidence_ref", "destruction_evidence_hash", "destruction_provider_ref", "destruction_fork_ref_hash"],
       "properties": {
         "state": { "$ref": "#/$defs/runState" }, "fork_resource_state": { "$ref": "#/$defs/resourceState" },
-        "chain_head": { "$ref": "#/$defs/sha256" }, "event_count": { "type": "integer", "minimum": 1, "maximum": 10000 }
-      }
+        "chain_head": { "$ref": "#/$defs/sha256" }, "event_count": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "commit_evidence_ref": { "$ref": "#/$defs/nullableRef" }, "commit_evidence_hash": { "$ref": "#/$defs/nullableSha256" },
+        "destruction_evidence_ref": { "$ref": "#/$defs/nullableRef" }, "destruction_evidence_hash": { "$ref": "#/$defs/nullableSha256" },
+        "destruction_provider_ref": { "$ref": "#/$defs/nullableRef" }, "destruction_fork_ref_hash": { "$ref": "#/$defs/nullableSha256" }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            { "properties": { "commit_evidence_ref": { "type": "null" }, "commit_evidence_hash": { "type": "null" } }, "required": ["commit_evidence_ref", "commit_evidence_hash"] },
+            { "properties": { "commit_evidence_ref": { "$ref": "#/$defs/ref" }, "commit_evidence_hash": { "$ref": "#/$defs/sha256" } }, "required": ["commit_evidence_ref", "commit_evidence_hash"] }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "destruction_evidence_ref": { "type": "null" }, "destruction_evidence_hash": { "type": "null" },
+                "destruction_provider_ref": { "type": "null" }, "destruction_fork_ref_hash": { "type": "null" }
+              },
+              "required": ["destruction_evidence_ref", "destruction_evidence_hash", "destruction_provider_ref", "destruction_fork_ref_hash"]
+            },
+            {
+              "properties": {
+                "destruction_evidence_ref": { "$ref": "#/$defs/ref" }, "destruction_evidence_hash": { "$ref": "#/$defs/sha256" },
+                "destruction_provider_ref": { "$ref": "#/$defs/ref" }, "destruction_fork_ref_hash": { "$ref": "#/$defs/sha256" }
+              },
+              "required": ["destruction_evidence_ref", "destruction_evidence_hash", "destruction_provider_ref", "destruction_fork_ref_hash"]
+            }
+          ]
+        }
+      ]
     },
     "claims": {
       "type": "object", "additionalProperties": false,
@@ -227,25 +262,150 @@
         "properties": { "lifecycle": { "type": "object", "required": ["state"], "properties": { "state": { "const": "COMMITTED" } } } }
       },
       "then": {
-        "type": "object", "required": ["commit", "timestamps"],
+        "type": "object", "required": ["commit", "timestamps", "lifecycle"],
         "properties": {
           "commit": { "type": "object", "required": ["accepted_digest"], "properties": { "accepted_digest": { "$ref": "#/$defs/sha256" } } },
-          "timestamps": { "type": "object", "required": ["committed_at"], "properties": { "committed_at": { "$ref": "#/$defs/date" } } }
+          "timestamps": { "type": "object", "required": ["committed_at"], "properties": { "committed_at": { "$ref": "#/$defs/date" } } },
+          "lifecycle": {
+            "type": "object", "required": ["commit_evidence_ref", "commit_evidence_hash"],
+            "properties": { "commit_evidence_ref": { "$ref": "#/$defs/ref" }, "commit_evidence_hash": { "$ref": "#/$defs/sha256" } }
+          }
+        }
+      },
+      "else": {
+        "type": "object", "required": ["commit", "timestamps", "lifecycle"],
+        "properties": {
+          "commit": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "object", "required": ["accepted_digest"], "properties": { "accepted_digest": { "type": "null" } } }
+            ]
+          },
+          "timestamps": { "type": "object", "required": ["committed_at"], "properties": { "committed_at": { "type": "null" } } },
+          "lifecycle": {
+            "type": "object", "required": ["commit_evidence_ref", "commit_evidence_hash"],
+            "properties": { "commit_evidence_ref": { "type": "null" }, "commit_evidence_hash": { "type": "null" } }
+          }
+        }
+      }
+    },
+    {
+      "oneOf": [
+        { "$ref": "#/$defs/notCreatedLifecycle" },
+        { "$ref": "#/$defs/activeLifecycle" },
+        { "$ref": "#/$defs/suspendedLifecycle" },
+        { "$ref": "#/$defs/destroyRequestedLifecycle" },
+        { "$ref": "#/$defs/destroyUnknownLifecycle" },
+        { "$ref": "#/$defs/destroyedLifecycle" }
+      ]
+    },
+    {
+      "if": {
+        "type": "object", "required": ["lifecycle"],
+        "properties": { "lifecycle": { "type": "object", "required": ["fork_resource_state"], "properties": { "fork_resource_state": { "const": "DESTROYED" } } } }
+      },
+      "then": {
+        "type": "object", "required": ["claims", "lifecycle", "timestamps"],
+        "properties": {
+          "claims": {
+            "type": "object", "required": ["destruction"],
+            "properties": {
+              "destruction": {
+                "type": "object", "required": ["status", "outcome", "evidence_ref", "evidence_hash"],
+                "properties": {
+                  "status": { "const": "verified" }, "outcome": { "const": "success" },
+                  "evidence_ref": { "$ref": "#/$defs/ref" }, "evidence_hash": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            }
+          },
+          "lifecycle": {
+            "type": "object", "required": ["destruction_evidence_ref", "destruction_evidence_hash", "destruction_provider_ref", "destruction_fork_ref_hash"],
+            "properties": {
+              "destruction_evidence_ref": { "$ref": "#/$defs/ref" }, "destruction_evidence_hash": { "$ref": "#/$defs/sha256" },
+              "destruction_provider_ref": { "$ref": "#/$defs/ref" }, "destruction_fork_ref_hash": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          "timestamps": {
+            "type": "object", "required": ["destruction_requested_at", "destruction_verified_at"],
+            "properties": { "destruction_requested_at": { "$ref": "#/$defs/date" }, "destruction_verified_at": { "$ref": "#/$defs/date" } }
+          }
+        }
+      },
+      "else": {
+        "type": "object", "required": ["claims", "lifecycle", "timestamps"],
+        "properties": {
+          "claims": {
+            "type": "object", "required": ["destruction"],
+            "properties": { "destruction": { "type": "object", "required": ["status"], "properties": { "status": { "enum": ["requested", "observed", "failed", "unknown", "not_applicable"] } } } }
+          },
+          "lifecycle": {
+            "type": "object", "required": ["destruction_evidence_ref", "destruction_evidence_hash", "destruction_provider_ref", "destruction_fork_ref_hash"],
+            "properties": {
+              "destruction_evidence_ref": { "type": "null" }, "destruction_evidence_hash": { "type": "null" },
+              "destruction_provider_ref": { "type": "null" }, "destruction_fork_ref_hash": { "type": "null" }
+            }
+          },
+          "timestamps": { "type": "object", "required": ["destruction_verified_at"], "properties": { "destruction_verified_at": { "type": "null" } } }
         }
       }
     }
   ],
   "$defs": {
+    "notCreatedLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "NOT_CREATED" },
+        "state": { "enum": ["REQUESTED", "SAVEPOINTING", "SAVEPOINT_READY", "SAVEPOINT_FAILED", "FORK_STARTING", "FORK_FAILED", "ABORTING", "ABORTED"] }
+      } } }
+    },
+    "activeLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "ACTIVE" },
+        "state": { "enum": ["FORK_STARTING", "FORK_READY", "FORK_FAILED", "EXECUTING", "TAINTED", "EXECUTION_FAILED", "VALIDATING", "COMMIT_READY", "VALIDATION_FAILED", "ABORTING", "ABORTED"] }
+      } } }
+    },
+    "suspendedLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "SUSPENDED" },
+        "state": { "enum": ["FORK_READY", "FORK_FAILED", "EXECUTING", "TAINTED", "EXECUTION_FAILED", "VALIDATING", "COMMIT_READY", "VALIDATION_FAILED", "ABORTING", "ABORTED"] }
+      } } }
+    },
+    "destroyRequestedLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "DESTROY_REQUESTED" },
+        "state": { "enum": ["PRECOMMIT_DESTROYING", "ABORTING", "ABORTED", "DESTROYING"] }
+      } } }
+    },
+    "destroyUnknownLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "DESTROY_UNKNOWN" },
+        "state": { "enum": ["DESTRUCTION_UNKNOWN", "DESTRUCTION_FAILED", "DESTROYING"] }
+      } } }
+    },
+    "destroyedLifecycle": {
+      "type": "object", "required": ["lifecycle"],
+      "properties": { "lifecycle": { "type": "object", "required": ["state", "fork_resource_state"], "properties": {
+        "fork_resource_state": { "const": "DESTROYED" },
+        "state": { "enum": ["CLEAN_COMMIT_READY", "COMMITTING", "COMMITTED", "COMMIT_FAILED", "COMMIT_AMBIGUOUS", "ABORTING", "ABORTED", "DESTROYING", "DESTROYED"] }
+      } } }
+    },
     "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
     "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "\\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
     "nullableRef": { "oneOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] },
+    "mcpRawMethod": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]+$" },
+    "nullableMcpRawMethod": { "oneOf": [{ "$ref": "#/$defs/mcpRawMethod" }, { "type": "null" }] },
     "ref200": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 200 }] },
     "refList": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/ref" } },
     "date": { "type": "string", "format": "date-time", "maxLength": 64 },
     "nullableDate": { "oneOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
     "nonNegativeInteger": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
-    "mcpPhase": { "enum": ["initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call"] },
+    "mcpPhase": { "enum": ["server/discover", "initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call", "UNKNOWN"] },
     "commitType": { "enum": ["TYPED_RESULT", "WORKSPACE_DIFF", "CONSEQUENTIAL_ACTION_PROPOSAL"] },
     "actionOperation": { "enum": ["mcp_tool_call", "payment", "send", "publish", "deploy", "database_mutation", "trust_mutation", "git_push"] },
     "nullableActionOperation": { "oneOf": [{ "$ref": "#/$defs/actionOperation" }, { "type": "null" }] },

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sha256Ref } from '../canonical.mjs';
+import { validateChildOperation } from '../child-operation.mjs';
 import {
   assertFreshForkIdentity,
   networkPolicy,
@@ -31,6 +32,22 @@ const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const MAX_JSON_NODES = 20_000;
 const MAX_JSON_DEPTH = 50;
 const MAX_SNAPSHOT_PAGES = 100;
+
+export const E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE =
+  'E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE';
+
+function secureSnapshotProfileUnavailable(operation) {
+  const error = new Error(
+    'E2B secure Risk Fork snapshot profile is unavailable; the adapter is fail-closed',
+  );
+  error.name = 'E2BSecureSnapshotProfileUnavailableError';
+  error.code = E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE;
+  error.operation = operation;
+  error.provider = 'e2b-snapshot-v1';
+  error.retryable = false;
+  error.production_qualified = false;
+  return error;
+}
 
 const SECRET_KEY_PATTERN = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|private[_-]?key|seed[_-]?phrase|wallet)/i;
 const SECRET_VALUE_PATTERNS = Object.freeze([
@@ -311,23 +328,23 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     super({
       id: 'e2b-snapshot-v1',
       capabilities: {
-        supports_memory_snapshot: true,
-        supports_filesystem_snapshot: true,
-        supports_live_fork: true,
-        supports_network_policy: true,
+        supports_memory_snapshot: false,
+        supports_filesystem_snapshot: false,
+        supports_live_fork: false,
+        supports_network_policy: false,
         supports_egress_allowlist: false,
         supports_runtime_attestation: false,
-        supports_suspend_resume: true,
-        supports_verified_destruction: true,
-        supports_hard_ttl: true,
+        supports_suspend_resume: false,
+        supports_verified_destruction: false,
+        supports_hard_ttl: false,
         supports_idle_ttl: false,
-        supports_max_execution_time: true,
+        supports_max_execution_time: false,
         supports_automatic_credential_expiry: false,
-        child_credentials_mode: 'prohibited',
-        isolation_class: 'e2b_provider_isolation_claim_live_validation_pending',
-        adapter_implementation: 'complete',
-        mock_conformance: 'passed',
-        credentialed_provider_validation: 'blocked',
+        child_credentials_mode: 'unknown',
+        isolation_class: 'secure_snapshot_profile_unavailable',
+        adapter_implementation: 'blocked_secure_profile_unavailable',
+        mock_conformance: 'fail_closed_only',
+        credentialed_provider_validation: 'not_run',
         containment_claim: 'not_verified',
       },
     });
@@ -428,6 +445,13 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
   }
 
   async createSavepoint(input = {}) {
+    // The pinned SDK path cannot prove a sanitized filesystem-only birth.
+    // Keep the former mock-qualified implementation below as reference
+    // evidence, but make the public entrypoint unconditionally fail closed
+    // before validation, attestation callbacks, SDK loading, or provider I/O.
+    throw secureSnapshotProfileUnavailable('createSavepoint');
+
+    /* c8 ignore start -- unreachable reference path while the secure profile is unavailable */
     assertAllowedKeys(input, ['capsule', 'source_sandbox_id'], 'E2B createSavepoint input');
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     const sourceSandboxId = requireString(
@@ -528,9 +552,15 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       snapshot_integrity_status: 'unknown',
       evidence_status: 'observed',
     });
+    /* c8 ignore stop */
   }
 
   async createFork(input = {}) {
+    // No provider snapshot may be restored until a sanitized filesystem-only
+    // profile and closed post-boot evidence are independently qualified.
+    throw secureSnapshotProfileUnavailable('createFork');
+
+    /* c8 ignore start -- unreachable reference path while the secure profile is unavailable */
     assertAllowedKeys(
       input,
       ['savepoint_ref', 'fork_identity', 'network_policy', 'ttl_ms'],
@@ -670,6 +700,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       }
       throw error;
     }
+    /* c8 ignore stop */
   }
 
   async getForkStatus(input = {}) {
@@ -724,6 +755,15 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
   }
 
   async executeInFork(input = {}) {
+    // Preserve the shared authority-free operation boundary even while the
+    // provider is disabled. Authority-bearing input is rejected for its real
+    // defect before the adapter returns the secure-profile refusal.
+    if (input && typeof input === 'object' && Object.hasOwn(input, 'operation')) {
+      validateChildOperation(input.operation, 'operation');
+    }
+    throw secureSnapshotProfileUnavailable('executeInFork');
+
+    /* c8 ignore start -- unreachable reference path while the secure profile is unavailable */
     assertAllowedKeys(
       input,
       ['fork_ref', 'operation', 'execution_mode', 'timeout_ms', 'scoped_credentials'],
@@ -818,6 +858,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       record.status = 'failed';
       throw error;
     }
+    /* c8 ignore stop */
   }
 
   async collectEvidence(input = {}) {

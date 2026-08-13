@@ -8,6 +8,7 @@ export const RISK_ACTIONS = Object.freeze({
 });
 
 export const MCP_PHASES = Object.freeze([
+  'server/discover',
   'initialize',
   'tools/list',
   'resources/list',
@@ -15,6 +16,7 @@ export const MCP_PHASES = Object.freeze([
   'prompts/list',
   'prompts/get',
   'tools/call',
+  'UNKNOWN',
 ]);
 
 export const RUN_STATES = Object.freeze([

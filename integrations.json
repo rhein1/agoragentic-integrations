@@ -110,7 +110,7 @@
       "distribution_status": "source_only",
       "source": "risk-fork",
       "min_node": "20",
-      "compatibility_scope": "Source-only alpha with a tested local reference protocol and mock-tested E2B adapter; no live provider, containment, authority, spend, deployment, publication, or package-registry claim"
+      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; E2B allocation and execution fail closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE and are not live-qualified; hosted MCP interception is not production-wired; production readiness is blocked; no live traffic, provider, containment, authority, spend, deployment, publication, or package-registry claim is made"
     }
   },
   "env_vars": {
@@ -1367,7 +1367,7 @@
       "path": "risk-fork/src/index.mjs",
       "install": "cd risk-fork && npm ci",
       "docs": "risk-fork/README.md",
-      "compatibility_scope": "Source-only alpha with a tested local reference protocol and mock-tested E2B adapter; no live provider, containment, authority, spend, deployment, publication, or package-registry claim"
+      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; E2B allocation and execution fail closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE and are not live-qualified; hosted MCP interception is not production-wired; production readiness is blocked; no live traffic, provider, containment, authority, spend, deployment, publication, or package-registry claim is made"
     }
   ],
   "specs": [

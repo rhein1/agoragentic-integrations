@@ -17,10 +17,14 @@ function requiredHostCapabilities(decision) {
   return [];
 }
 
-export function createMcpInterceptionPlan(input = {}) {
-  assertAllowedKeys(input, ['risk_input'], 'MCP interception input');
+export function createMcpInterceptionPlan(input = {}, options = {}) {
+  assertAllowedKeys(input, ['risk_input', 'trusted_server_verifier'], 'MCP interception input');
+  assertAllowedKeys(options, ['clock'], 'MCP interception options');
   assertPlainObject(input.risk_input, 'risk_input');
-  const decision = classifyRisk(input.risk_input);
+  const decision = classifyRisk(input.risk_input, {
+    trusted_server_verifier: input.trusted_server_verifier ?? null,
+    clock: options.clock,
+  });
   let directive;
   if (decision.blocked) directive = 'DENY';
   else if (decision.level === 'LOW') directive = 'ALLOW_DIRECT';
@@ -60,18 +64,34 @@ export function assertHostCanEnforce(plan, hostCapabilities = {}) {
 }
 
 export class RiskForkMcpBoundary {
-  constructor({ controller, hostCapabilities }) {
+  constructor({
+    controller,
+    hostCapabilities,
+    trustedServerVerifier = null,
+    clock = () => new Date(),
+  }) {
     if (!controller || typeof controller.prepare !== 'function') {
       throw new TypeError('RiskForkMcpBoundary requires a Risk Fork controller');
     }
     assertPlainObject(hostCapabilities, 'hostCapabilities');
     this.controller = controller;
     this.hostCapabilities = { ...hostCapabilities };
+    this.trustedServerVerifier = trustedServerVerifier;
+    if (typeof clock !== 'function') {
+      throw new TypeError('RiskForkMcpBoundary clock must be a synchronous function');
+    }
+    this.clock = clock;
   }
 
   async route(input = {}) {
     assertAllowedKeys(input, ['risk_input', 'prepare_input'], 'MCP boundary route input');
-    const plan = createMcpInterceptionPlan({ risk_input: input.risk_input });
+    const plan = createMcpInterceptionPlan(
+      {
+        risk_input: input.risk_input,
+        trusted_server_verifier: this.trustedServerVerifier,
+      },
+      { clock: this.clock },
+    );
     assertHostCanEnforce(plan, this.hostCapabilities);
     if (['DENY', 'ALLOW_DIRECT', 'OWNER_POLICY_DECIDES_FORK'].includes(plan.directive)) {
       return deepFreeze({
