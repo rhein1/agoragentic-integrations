@@ -42,7 +42,7 @@ Additional failing-first regressions captured during the independent remediation
 
 ## Validation status
 
-The final remediation surface contains **195 Risk Fork tests**. On the exact local checkout, `npm test` passed 195/195, `npm run check` checked 20 JavaScript files, `npm run self-test` completed with `prepared_not_committed`, `credentials_used:false`, and `network_used:false`, and `npm run pack:dry` succeeded. Pushed-head GitHub CI is **not recorded here yet** and remains pending. These green results do not erase the failing-before evidence above or establish production readiness.
+The final remediation surface contains **195 Risk Fork tests**. On the exact local checkout, `npm test` passed 195/195, `npm run check` checked 20 JavaScript files, `npm run self-test` completed with `prepared_not_committed`, `credentials_used:false`, and `network_used:false`, and `npm run pack:dry` succeeded. Pushed-head CI is authoritative only for the exact commit shown on PR #298 and must be checked there. These green results do not erase the failing-before evidence above or establish production readiness.
 
 ## Required follow-ups
 

@@ -28,7 +28,7 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. Provider 
 | Production readiness | **Blocked** | Neither adapter is an approved production isolation boundary, hosted interception is not enabled, and no live traffic is protected |
 | Performance and provider cost | Local reference benchmark available | Measures only local protocol mechanics; live MCP/cloud latency, containment, and provider cost remain unmeasured |
 
-The remediated Risk Fork test surface contains 195 tests. On the final local checkout, all 195 passed together with the syntax check, no-network/no-spend self-test, and package dry-run. Pushed-head CI remains unverified until the branch is pushed; local green results do not establish production readiness.
+The remediated Risk Fork test surface contains 195 tests. On the final local checkout, all 195 passed together with the syntax check, no-network/no-spend self-test, and package dry-run. Pushed-head CI is authoritative only for the exact commit shown on PR #298 and must be checked there; local green results do not establish production readiness.
 
 Run the repository checks for the exact checkout before relying on a source surface:
 
