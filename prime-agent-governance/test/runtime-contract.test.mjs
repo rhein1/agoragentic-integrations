@@ -81,9 +81,11 @@ function planFromRequest(runtimeRequest) {
     decision: 'preview_ready',
     review_reasons: [],
     launch_allowed: false,
+    runtime_executed: false,
     no_spawn: true,
     no_network: true,
     no_spend: true,
+    authority_granted: false,
     authority_flags: {
       adapter_grants_authority: false,
       process_spawn_allowed: false,
@@ -175,6 +177,12 @@ test('validates a hash-bound Agent OS runtime plan without claiming runtime veri
   assert.equal(validation.valid, true);
   assert.deepEqual(validation.blockers, []);
   assert.equal(validation.plan_hash, plan.plan_hash);
+  assert.equal(plan.launch_allowed, false);
+  assert.equal(plan.runtime_executed, false);
+  assert.equal(plan.no_spawn, true);
+  assert.equal(plan.no_network, true);
+  assert.equal(plan.no_spend, true);
+  assert.equal(plan.authority_granted, false);
   assert.equal(validation.runtime_verified, false);
   assert.equal(validation.runtime_executed, false);
 });
@@ -191,6 +199,8 @@ test('blocks stale hashes, host drift, command drift, request drift, and authori
     rpc_contract: { ...plan.rpc_contract, framing: 'not-jsonl' },
     hard_enforcement_required: plan.hard_enforcement_required.slice(1),
     integration_refs: { ...plan.integration_refs, mcp_profile: 'mcp-profile:other' },
+    runtime_executed: true,
+    authority_granted: true,
   };
   const validation = validatePrimeAgentRuntimePlan(tampered);
   assert.equal(validation.valid, false);
@@ -202,6 +212,14 @@ test('blocks stale hashes, host drift, command drift, request drift, and authori
   assert.ok(validation.blockers.includes('hard_enforcement_contract_mismatch'));
   assert.ok(validation.blockers.includes('integration_reference_mismatch'));
   assert.ok(validation.blockers.includes('receipt_requirement_missing'));
+  assert.ok(validation.blockers.includes('execution_boundary_broken'));
+
+  const missingBoundaryFields = { ...plan };
+  delete missingBoundaryFields.runtime_executed;
+  delete missingBoundaryFields.authority_granted;
+  const missingBoundaryValidation = validatePrimeAgentRuntimePlan(rehashPlan(missingBoundaryFields));
+  assert.equal(missingBoundaryValidation.valid, false);
+  assert.ok(missingBoundaryValidation.blockers.includes('execution_boundary_broken'));
 });
 
 test('validates public-safe evidence only when it binds the same plan and zero-action boundary', () => {

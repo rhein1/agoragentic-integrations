@@ -115,9 +115,11 @@ const PLAN_KEYS = Object.freeze(new Set([
   'decision',
   'review_reasons',
   'launch_allowed',
+  'runtime_executed',
   'no_spawn',
   'no_network',
   'no_spend',
+  'authority_granted',
   'authority_flags',
   'plan_hash',
 ]));
@@ -387,9 +389,11 @@ export function validatePrimeAgentRuntimePlan(plan) {
   }
   if (
     plan?.launch_allowed !== false
+    || plan?.runtime_executed !== false
     || plan?.no_spawn !== true
     || plan?.no_network !== true
     || plan?.no_spend !== true
+    || plan?.authority_granted !== false
   ) {
     blockers.push('execution_boundary_broken');
   }

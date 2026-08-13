@@ -93,9 +93,9 @@ if (!evidenceValidation.valid) throw new Error(evidenceValidation.blockers.join(
 const compatibility = buildPrimeAgentCompatibilityPacket({ plan, evidence });
 ```
 
-`contract_compatible` means the source package, host pin, closed plan shape, plan hash, and closed zero-action evidence agree. Undeclared credential, authority, payment, settlement, wallet, or provider-output fields block compatibility even when a caller recomputes the object hash. It does not mean a Prime Agent process ran or that production compatibility was verified.
+`contract_compatible` means the source package, host pin, closed plan shape, plan hash, and closed zero-action evidence agree. The plan must retain `launch_allowed:false`, `runtime_executed:false`, `no_spawn:true`, `no_network:true`, `no_spend:true`, and `authority_granted:false`. Undeclared credential, authority, payment, settlement, wallet, or provider-output fields block compatibility even when a caller recomputes the object hash. It does not mean a Prime Agent process ran or that production compatibility was verified.
 
-See [RUNTIME_INTEGRATION.md](RUNTIME_INTEGRATION.md) for the full contract and activation gates.
+See [RUNTIME_INTEGRATION.md](RUNTIME_INTEGRATION.md) for the full contract, activation gates, and exact evidence checklist for a separately authorized future restricted Linux executor.
 
 ## Prime Agent v0.7.1 contract
 
