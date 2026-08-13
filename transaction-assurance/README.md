@@ -44,6 +44,7 @@ This is a source-visible, unpublished alpha implementation.
 - spend authority: none
 - protocol recognition: implemented
 - external cryptographic verifiers: trusted in-process callback interface implemented; verifier implementations remain external
+- optional external anchor verification: Mycelium action-reference v1 and AnchorRegistry v1 read-only profiles implemented; no writer or hosted dependency
 - hosted Agoragentic execution changes: none
 - marketplace catalog entry: intentionally deferred
 - vendor-neutral conformance suite: implemented as an offline source-only alpha
@@ -145,6 +146,11 @@ import {
   canonicalize,
   computeEnvelopeHash,
   sha256Ref,
+  normalizeExternalActionReference,
+  verifyExternalActionReferencePreimage,
+  normalizeAnchorEvidence,
+  verifyAnchorEvidence,
+  bindExternalVerification,
 } from '@agoragentic/transaction-assurance';
 ```
 
@@ -396,6 +402,14 @@ A production verifier must:
 6. avoid partnership or endorsement claims without evidence.
 
 Deterministic, license-attributed adapter vectors live in `test/fixtures/protocol-adapter-vectors.v1.json` and run on Node 20, 22, and 24. They cover unsupported versions, wrong audience/merchant/purpose, expiry, replay, changed cart/terms, payment-identifier mismatch, payment without delivery, wallet-policy scope failures, and privacy exclusions.
+
+## Optional Mycelium external verification
+
+The `./external-verification-adapters` export adds one exact Mycelium action-reference v1 profile and one read-only AnchorRegistry v1 profile. The adapter recomputes the pinned JCS/SHA-256 preimage locally and interprets raw public-chain facts returned by a trusted synchronous callback. It verifies allowlisted chain and registry identity, pinned runtime code, receipt success, target and calldata, event reference, exact block/log binding, and a 12-confirmation floor.
+
+The adapter never calls an RPC endpoint or hosted Argentum service, submits an anchor, moves money, executes a provider, or grants authority. A checked anchor proves only reference anchoring, public block timestamp, and event inclusion. It does not prove principal authority, execution correctness, delivery, settlement, or single execution. Binding adds a sibling `external_action_refs` record and separate `external_verification` state without reinterpreting any existing `authenticated_action_ref`.
+
+See [docs/MYCELIUM_EXTERNAL_VERIFICATION.md](docs/MYCELIUM_EXTERNAL_VERIFICATION.md) for immutable source pins, callback contract, fixtures, limitations, and attribution.
 
 ### AP2 field map
 

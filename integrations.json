@@ -380,7 +380,7 @@
     {
       "directory": "transaction-assurance",
       "status": "unpublished_alpha",
-      "reason": "A signed independent anchor-x402 run against pinned target and suite commits passed 42/42 with a publicly verified receipt, no network use, and no spend authority, and produced two actionable contract-clarity findings. This supplies the external evidence needed for maintainer review but excludes live compatibility; package publication, public catalog inclusion, and any ecosystem-standard claim remain separately review-gated.",
+      "reason": "A signed independent anchor-x402 run against pinned target and suite commits passed 42/42 with a publicly verified receipt, no network use, and no spend authority, and produced two actionable contract-clarity findings. The package also includes optional read-only Mycelium external-verification profiles. This supplies external evidence for maintainer review but excludes live compatibility; package publication, public catalog inclusion, and any ecosystem-standard claim remain separately review-gated.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/246",
       "review_by": "2026-09-08",
