@@ -44,6 +44,51 @@ test('anchor-x402 clean-room target satisfies the bounded normalized contract', 
   });
 });
 
+test('anchor-x402 target reviews only recognizable forward-compatible version drift', () => {
+  const evaluateVersion = (adapterId, sourceVersion) => {
+    const input = structuredClone(vectorSet.base_input);
+    input.protocol = { adapter_id: adapterId, source_version: sourceVersion };
+    return evaluateTransactionAssuranceVector({ input });
+  };
+
+  assert.deepEqual(evaluateVersion('x402', '2.22.0'), {
+    decision: 'review',
+    code: 'newer_protocol_version_review_required',
+  });
+  assert.deepEqual(evaluateVersion('x402', '2.20.0'), {
+    decision: 'deny',
+    code: 'unsupported_protocol_version',
+  });
+  assert.deepEqual(evaluateVersion('x402', '3.0.0'), {
+    decision: 'deny',
+    code: 'unsupported_protocol_version',
+  });
+  assert.deepEqual(evaluateVersion('google_ap2', 'v0.2.1'), {
+    decision: 'review',
+    code: 'newer_protocol_version_review_required',
+  });
+  assert.deepEqual(evaluateVersion('google_ap2', 'v0.3.0'), {
+    decision: 'deny',
+    code: 'unsupported_protocol_version',
+  });
+  assert.deepEqual(evaluateVersion('openai_stripe_acp', '2026-05-01'), {
+    decision: 'review',
+    code: 'newer_protocol_version_review_required',
+  });
+  assert.deepEqual(evaluateVersion('visa_tap', 'commit-newer'), {
+    decision: 'deny',
+    code: 'unsupported_protocol_version',
+  });
+
+  const revokedNewerVersion = structuredClone(vectorSet.base_input);
+  revokedNewerVersion.protocol = { adapter_id: 'x402', source_version: '2.22.0' };
+  revokedNewerVersion.authority.revocation = 'revoked';
+  assert.deepEqual(evaluateTransactionAssuranceVector({ input: revokedNewerVersion }), {
+    decision: 'deny',
+    code: 'authority_revoked',
+  });
+});
+
 test('anchor-x402 target has no circular reference, network, secret, or expected-answer dependency', async () => {
   const source = await readFile(path.join(packRoot, 'target.mjs'), 'utf8');
   for (const forbidden of [

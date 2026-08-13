@@ -1,6 +1,6 @@
 {
-  "version": "2.42.0",
-  "updated_at": "2026-08-11",
+  "version": "2.42.1",
+  "updated_at": "2026-08-12",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -380,7 +380,7 @@
     {
       "directory": "transaction-assurance",
       "status": "unpublished_alpha",
-      "reason": "The source-only vendor-neutral conformance suite, four version-pinned protocol profiles, deterministic runner, reports, receipt verifier, examples, and reusable workflow are implemented. A real external adopter run is still required before public catalog inclusion or any ecosystem-standard claim.",
+      "reason": "A signed independent anchor-x402 run against pinned target and suite commits passed 42/42 with a publicly verified receipt, no network use, and no spend authority, and produced two actionable contract-clarity findings. This supplies the external evidence needed for maintainer review but excludes live compatibility; package publication, public catalog inclusion, and any ecosystem-standard claim remain separately review-gated.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/246",
       "review_by": "2026-09-08",
