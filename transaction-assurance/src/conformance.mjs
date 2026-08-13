@@ -116,20 +116,25 @@ export function validateConformanceInput(input) {
   text(input.protocol.source_version, 'input.protocol.source_version', { max: 128 });
 
   exactKeys(input.authority, [
+    'present',
     'verification',
     'revocation',
+    'principal_match',
     'audience_match',
     'agent_match',
     'expired',
   ], 'input.authority');
+  bool(input.authority.present, 'input.authority.present');
   enumeration(input.authority.verification, 'input.authority.verification', VERIFICATION_STATES);
   enumeration(input.authority.revocation, 'input.authority.revocation', REVOCATION_STATES);
+  bool(input.authority.principal_match, 'input.authority.principal_match');
   bool(input.authority.audience_match, 'input.authority.audience_match');
   bool(input.authority.agent_match, 'input.authority.agent_match');
   bool(input.authority.expired, 'input.authority.expired');
 
   validateBooleanRecord(input.terms, [
     'merchant_match',
+    'seller_match',
     'category_match',
     'action_match',
     'rail_match',
@@ -146,6 +151,7 @@ export function validateConformanceInput(input) {
     'identifier_present',
     'identifier_reused',
     'replay_detected',
+    'evidence_replayed',
   ], 'input.payment');
   validateBooleanRecord(input.settlement, ['observed', 'verified', 'final'], 'input.settlement');
   validateBooleanRecord(input.execution, ['attempted', 'succeeded', 'delivery_observed'], 'input.execution');
@@ -277,16 +283,19 @@ export function evaluateReferenceVector(input) {
   const pin = PROTOCOL_ADAPTER_PINS[input.protocol.adapter_id];
   if (!pin || input.protocol.source_version !== pin.version) return result('deny', 'unsupported_protocol_version');
 
+  if (!input.authority.present) return result('deny', 'authority_absent');
   if (input.authority.verification === 'unknown') return result('review', 'authority_verification_unknown');
   if (input.authority.verification !== 'verified') return result('review', 'authority_unverified');
   if (input.authority.revocation === 'revoked') return result('deny', 'authority_revoked');
   if (input.authority.revocation !== 'active') return result('review', 'authority_revocation_unknown');
   if (input.authority.expired) return result('deny', 'authority_expired');
+  if (!input.authority.principal_match) return result('deny', 'authority_wrong_principal');
   if (!input.authority.audience_match) return result('deny', 'authority_wrong_audience');
   if (!input.authority.agent_match) return result('deny', 'authority_wrong_agent');
 
   for (const [field, code] of [
     ['merchant_match', 'merchant_mismatch'],
+    ['seller_match', 'seller_mismatch'],
     ['category_match', 'category_mismatch'],
     ['action_match', 'action_mismatch'],
     ['rail_match', 'rail_mismatch'],
@@ -307,6 +316,7 @@ export function evaluateReferenceVector(input) {
   if (!input.payment.identifier_present) return result('deny', 'payment_identifier_missing');
   if (input.payment.identifier_reused) return result('deny', 'payment_identifier_reused');
   if (input.payment.replay_detected) return result('deny', 'paid_retry_replay_detected');
+  if (input.payment.evidence_replayed) return result('deny', 'evidence_replayed');
   if (!input.settlement.observed) return result('review', 'payment_not_observed');
   if (!input.settlement.verified) return result('deny', 'settlement_unverified');
   if (!input.settlement.final) return result('review', 'settlement_not_final');

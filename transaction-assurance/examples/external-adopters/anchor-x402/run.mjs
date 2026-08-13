@@ -113,6 +113,10 @@ async function main() {
   if (profile.operator_review_required !== true) {
     throw new Error('profile.operator_review_required must remain true');
   }
+  if (profile.evidence_class !== 'starter_self_test'
+    || profile.self_test_satisfies_external_adopter_gate !== false) {
+    throw new Error('starter profile must not satisfy the independent external-adopter gate');
+  }
 
   const conformanceUrl = pathToFileURL(path.join(suiteRoot, 'src', 'conformance.mjs')).href;
   const {
@@ -152,6 +156,9 @@ async function main() {
     target_version: profile.profile_version,
     operator_display_name: profile.operator_display_name,
     operator_origin: profile.operator_origin,
+    evidence_class: profile.evidence_class,
+    independent_adopter_run: false,
+    self_test_satisfies_external_adopter_gate: false,
     profile_hash: sha256Bytes(profileRaw),
     runner_source_hash: sha256Bytes(await readFile(scriptPath)),
     target_source_hash: sha256Bytes(await readFile(targetPath)),
@@ -160,6 +167,15 @@ async function main() {
     network_used_by_suite: false,
     spend_authority_granted: false,
     operator_review_required: true,
+    actionable_observation_template: {
+      summary: null,
+      affected_profile: null,
+      affected_vector_ids: [],
+      reproduction: null,
+      expected_contract: null,
+      observed_contract: null,
+      public_evidence_refs: [],
+    },
     claim_boundary: manifest.claim_boundary,
   };
 
@@ -178,6 +194,9 @@ async function main() {
     output_directory: outputDirectory,
     network_used_by_suite: false,
     spend_authority_granted: false,
+    evidence_class: profile.evidence_class,
+    independent_adopter_run: false,
+    external_adopter_gate_satisfied: false,
   })}\n`);
   process.exitCode = report.all_passed ? 0 : 1;
 }

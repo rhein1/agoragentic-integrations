@@ -1,6 +1,6 @@
 {
   "schema": "agoragentic.transaction-assurance-conformance-vectors.v1",
-  "suite_version": "0.1.0-alpha.0",
+  "suite_version": "0.2.0-alpha.0",
   "base_input": {
     "schema": "agoragentic.transaction-assurance-conformance.v1",
     "protocol": {
@@ -8,14 +8,17 @@
       "source_version": "2.21.0"
     },
     "authority": {
+      "present": true,
       "verification": "verified",
       "revocation": "active",
+      "principal_match": true,
       "audience_match": true,
       "agent_match": true,
       "expired": false
     },
     "terms": {
       "merchant_match": true,
+      "seller_match": true,
       "category_match": true,
       "action_match": true,
       "rail_match": true,
@@ -31,7 +34,8 @@
     "payment": {
       "identifier_present": true,
       "identifier_reused": false,
-      "replay_detected": false
+      "replay_detected": false,
+      "evidence_replayed": false
     },
     "settlement": {
       "observed": true,
@@ -96,6 +100,15 @@
       "expected": { "decision": "pass", "code": "complete_chain_verified" }
     },
     {
+      "id": "authority_absent",
+      "profile": "authority_identity",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "An absent authority artifact is denied rather than treated as an empty grant.",
+      "input_patch": { "authority": { "present": false } },
+      "expected": { "decision": "deny", "code": "authority_absent" }
+    },
+    {
       "id": "authority_unverified",
       "profile": "authority_identity",
       "adapter_id": "google_ap2",
@@ -132,6 +145,15 @@
       "expected": { "decision": "deny", "code": "authority_expired" }
     },
     {
+      "id": "authority_wrong_principal",
+      "profile": "authority_identity",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "Authority bound to a different principal is denied.",
+      "input_patch": { "authority": { "principal_match": false } },
+      "expected": { "decision": "deny", "code": "authority_wrong_principal" }
+    },
+    {
       "id": "authority_wrong_audience",
       "profile": "authority_identity",
       "adapter_id": "x402",
@@ -166,6 +188,15 @@
       "description": "Wrong merchant is denied.",
       "input_patch": { "terms": { "merchant_match": false } },
       "expected": { "decision": "deny", "code": "merchant_mismatch" }
+    },
+    {
+      "id": "seller_mismatch",
+      "profile": "commercial_terms",
+      "adapter_id": "openai_stripe_acp",
+      "source_version": "2026-04-17",
+      "description": "A seller that differs from the approved counterparty is denied independently of merchant identity.",
+      "input_patch": { "terms": { "seller_match": false } },
+      "expected": { "decision": "deny", "code": "seller_mismatch" }
     },
     {
       "id": "category_mismatch",
@@ -276,6 +307,15 @@
       "expected": { "decision": "deny", "code": "paid_retry_replay_detected" }
     },
     {
+      "id": "evidence_replayed",
+      "profile": "payment_idempotency",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "Evidence replay is denied independently of payment-identifier and paid-retry reuse.",
+      "input_patch": { "payment": { "evidence_replayed": true } },
+      "expected": { "decision": "deny", "code": "evidence_replayed" }
+    },
+    {
       "id": "payment_not_observed",
       "profile": "settlement_finality",
       "adapter_id": "x402",
@@ -346,6 +386,15 @@
       "description": "Partial fulfillment requires review.",
       "input_patch": { "outcome": { "validation": "partial" } },
       "expected": { "decision": "review", "code": "partial_fulfillment" }
+    },
+    {
+      "id": "reconciliation_required",
+      "profile": "reconciliation",
+      "adapter_id": "google_ap2",
+      "source_version": "v0.2.0",
+      "description": "An otherwise complete transaction without reconciliation evidence remains under review.",
+      "input_patch": { "reconciliation": { "status": "none" } },
+      "expected": { "decision": "review", "code": "reconciliation_incomplete" }
     },
     {
       "id": "refund_pending",

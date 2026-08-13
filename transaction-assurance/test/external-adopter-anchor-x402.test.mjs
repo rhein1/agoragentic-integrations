@@ -29,7 +29,7 @@ test('anchor-x402 clean-room target satisfies the bounded normalized contract', 
     evaluate: evaluateTransactionAssuranceVector,
     target: { name: 'anchor-x402-test', version: '0.1.0', commit: 'fixture' },
   });
-  assert.equal(report.total, 42);
+  assert.equal(report.total, 47);
   assert.equal(report.failed, 0);
   assert.equal(report.all_passed, true);
   assert.deepEqual(evaluateTransactionAssuranceVector(), {
@@ -114,12 +114,41 @@ test('anchor-x402 target has no circular reference, network, secret, or expected
     'certification_claimed',
   ]) assert.equal(profile[field], false, field);
   assert.equal(profile.operator_review_required, true);
+  assert.equal(profile.evidence_class, 'starter_self_test');
+  assert.equal(profile.self_test_satisfies_external_adopter_gate, false);
 });
 
 test('portable runner binds clean target and suite commits and emits verifiable artifacts', async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'anchor-x402-adopter-'));
   const targetRoot = path.join(temp, 'target');
   try {
+    const cleanSuiteRepository = path.join(temp, 'clean-suite');
+    const cleanSuiteRoot = path.join(cleanSuiteRepository, 'transaction-assurance');
+    const suiteEvidenceFiles = [
+      'src/conformance.mjs',
+      'src/index.mjs',
+      'src/protocol-adapters.mjs',
+      'src/trusted-verifier-boundary.mjs',
+      'vendor/acp-2026-04-17/schema.agentic_checkout.json',
+      'conformance/manifest.v1.json',
+      'conformance/vectors.v1.json',
+      'package.json',
+      'package-lock.json',
+    ];
+    await cp(packageRoot, cleanSuiteRoot, {
+      recursive: true,
+      filter: (source) => !source.split(path.sep).includes('node_modules'),
+    });
+    await execFileAsync('git', ['init'], { cwd: cleanSuiteRepository });
+    await execFileAsync('git', ['config', 'user.name', 'Conformance Test'], { cwd: cleanSuiteRepository });
+    await execFileAsync('git', ['config', 'user.email', 'conformance@example.invalid'], { cwd: cleanSuiteRepository });
+    await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], { cwd: cleanSuiteRepository });
+    await execFileAsync('git', ['add', '.'], { cwd: cleanSuiteRepository });
+    await execFileAsync('git', ['commit', '-m', 'test: add clean suite fixture'], { cwd: cleanSuiteRepository });
+    const packageNodeModules = path.join(packageRoot, 'node_modules');
+    const cleanSuiteNodeModules = path.join(cleanSuiteRoot, 'node_modules');
+    await cp(packageNodeModules, cleanSuiteNodeModules, { recursive: true });
+
     const copiedPack = path.join(targetRoot, 'tools', 'anchor-x402');
     await mkdir(copiedPack, { recursive: true });
     for (const filename of ['profile.v1.json', 'run.mjs', 'target.mjs']) {
@@ -132,14 +161,19 @@ test('portable runner binds clean target and suite commits and emits verifiable 
     await execFileAsync('git', ['add', 'tools/anchor-x402'], { cwd: targetRoot });
     await execFileAsync('git', ['commit', '-m', 'test: add adopter pack'], { cwd: targetRoot });
 
-    const suiteCommit = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repositoryRoot })).stdout.trim();
+    const suiteCommit = (
+      await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: cleanSuiteRepository })
+    ).stdout.trim();
     const runner = path.join(copiedPack, 'run.mjs');
-    const args = [runner, '--suite-root', packageRoot, '--suite-commit', suiteCommit];
+    const args = [runner, '--suite-root', cleanSuiteRoot, '--suite-commit', suiteCommit];
     const first = await execFileAsync(process.execPath, args, { cwd: targetRoot });
     const firstSummary = JSON.parse(first.stdout);
     assert.equal(firstSummary.status, 'passed');
-    assert.equal(firstSummary.total, 42);
+    assert.equal(firstSummary.total, 47);
     assert.equal(firstSummary.failed, 0);
+    assert.equal(firstSummary.evidence_class, 'starter_self_test');
+    assert.equal(firstSummary.independent_adopter_run, false);
+    assert.equal(firstSummary.external_adopter_gate_satisfied, false);
 
     const output = path.join(targetRoot, 'artifacts', 'agoragentic-transaction-assurance');
     const report = await readJson(path.join(output, 'report.json'));
@@ -149,6 +183,10 @@ test('portable runner binds clean target and suite commits and emits verifiable 
     assert.equal(context.target_commit, report.target.commit);
     assert.equal(context.network_used_by_suite, false);
     assert.equal(context.spend_authority_granted, false);
+    assert.equal(context.evidence_class, 'starter_self_test');
+    assert.equal(context.independent_adopter_run, false);
+    assert.equal(context.self_test_satisfies_external_adopter_gate, false);
+    assert.deepEqual(context.actionable_observation_template.affected_vector_ids, []);
     assert.match(context.runner_source_hash, /^sha256:[0-9a-f]{64}$/);
     assert.match(context.target_source_hash, /^sha256:[0-9a-f]{64}$/);
     assert.deepEqual(verifyConformanceReceipt({ manifest, vectorSet, report, receipt }), {
@@ -176,18 +214,7 @@ test('portable runner binds clean target and suite commits and emits verifiable 
 
     const dirtySuiteRepository = path.join(temp, 'dirty-suite');
     const dirtySuiteRoot = path.join(dirtySuiteRepository, 'transaction-assurance');
-    const dirtySuiteFiles = [
-      'src/conformance.mjs',
-      'src/index.mjs',
-      'src/protocol-adapters.mjs',
-      'src/trusted-verifier-boundary.mjs',
-      'vendor/acp-2026-04-17/schema.agentic_checkout.json',
-      'conformance/manifest.v1.json',
-      'conformance/vectors.v1.json',
-      'package.json',
-      'package-lock.json',
-    ];
-    for (const relative of dirtySuiteFiles) {
+    for (const relative of suiteEvidenceFiles) {
       const filename = path.join(dirtySuiteRoot, relative);
       await mkdir(path.dirname(filename), { recursive: true });
       await writeFile(filename, relative.endsWith('.json') ? '{}\n' : '// fixture\n', 'utf8');

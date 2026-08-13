@@ -59,7 +59,7 @@ the target in its own repository, runs it, and publishes the bounded artifacts
 plus actionable observations. The pack makes no network, payment, signature,
 live-settlement, or production-compatibility claim.
 
-The first independent run is published in the
+The first independent run for historical suite `0.1.0-alpha.0` is published in the
 [`hypeprinter007-stack/anchor-x402-agoragentic-adopter`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter)
 repository. Its signed target commit is
 `13d6d70bb69cac2993753a22d423870bdfebe9a5`; artifacts are committed at
@@ -68,6 +68,13 @@ repository. Its signed target commit is
 failed, a publicly verifiable receipt, no suite network use, and no spend
 authority. Its two actionable contract-clarity observations are recorded in
 [PR #297](https://github.com/rhein1/agoragentic-integrations/pull/297#issuecomment-5270120165).
+
+That evidence does not cover later vector versions. Current-source starter
+output is always labeled `starter_self_test` with
+`independent_adopter_run: false` and `external_adopter_gate_satisfied: false`.
+Passing it proves deterministic starter behavior only. Fresh evidence for suite
+`0.2.0-alpha.0` must be produced and published by an independent operator from
+an operator-controlled repository, then reviewed separately.
 
 ## Reports and receipts
 
