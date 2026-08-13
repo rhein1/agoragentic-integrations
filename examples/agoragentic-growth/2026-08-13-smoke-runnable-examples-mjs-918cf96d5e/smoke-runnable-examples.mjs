@@ -1,7 +1,9 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const DEFAULT_ROOT = path.resolve(new URL("..", import.meta.url).pathname, "..");
+const DEFAULT_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const README_NAMES = new Set(["README.md", "readme.md"]);
 const SOURCE_EXTENSIONS = new Set([".mjs", ".js", ".cjs", ".py"]);
 const COMMAND_RE =
@@ -13,7 +15,7 @@ function usage() {
     "",
     "Checks documented local example entrypoints without starting them.",
     "It resolves node/python commands in README files below examples/",
-    "and reports missing, escaping, duplicated, or empty entrypoint files.",
+    "and reports missing, escaping, or empty entrypoint files.",
   ].join("\n");
 }
 
@@ -70,15 +72,44 @@ function extractCommands(markdown) {
 }
 
 function resolveDocumentedPath(root, document, token) {
-  const documentDirectory = path.dirname(document);
-  const candidate = token.startsWith("examples/")
-    ? path.resolve(root, token)
-    : path.resolve(documentDirectory, token);
+  const examplesRoot = path.join(root, "examples");
+  const candidates = [];
+  if (token.startsWith("examples/")) {
+    candidates.push(path.resolve(root, token));
+  } else {
+    let directory = path.dirname(document);
+    while (isInside(examplesRoot, directory)) {
+      candidates.push(path.resolve(directory, token));
+      if (directory === examplesRoot) break;
+      directory = path.dirname(directory);
+    }
+  }
+  const candidate = candidates.find((item) => documentedPathExists(item)) || candidates[0];
   return {
     candidate,
     relative: path.relative(root, candidate) || ".",
     valid: isInside(root, candidate),
   };
+}
+
+function globPattern(name) {
+  const escaped = name.replace(/[.+^${}()|\\]/g, "\\$&");
+  return new RegExp(`^${escaped.replace(/\*/g, ".*").replace(/\?/g, ".")}$`);
+}
+
+function matchingFiles(candidate) {
+  const name = path.basename(candidate);
+  if (!name.includes("*") && !name.includes("?")) return [candidate];
+  const directory = path.dirname(candidate);
+  if (!fs.existsSync(directory)) return [];
+  const pattern = globPattern(name);
+  return fs.readdirSync(directory)
+    .filter((entry) => pattern.test(entry))
+    .map((entry) => path.join(directory, entry));
+}
+
+function documentedPathExists(candidate) {
+  return matchingFiles(candidate).some((item) => fs.existsSync(item));
 }
 
 function finding(code, document, detail) {
@@ -94,36 +125,39 @@ function inspectEntry(root, document, token) {
       `${token} resolves outside ${root}`,
     );
   }
-  if (!fs.existsSync(resolved.candidate)) {
+  const candidates = matchingFiles(resolved.candidate);
+  if (candidates.length === 0 || !candidates.some((item) => fs.existsSync(item))) {
     return finding(
       "missing_entrypoint",
       document,
       `${token} resolves to ${resolved.relative}, but that file does not exist`,
     );
   }
-  let stat;
-  try {
-    stat = fs.statSync(resolved.candidate);
-  } catch (error) {
-    return finding(
-      "unreadable_entrypoint",
-      document,
-      `${resolved.relative} could not be inspected: ${error.message}`,
-    );
-  }
-  if (!stat.isFile()) {
-    return finding(
-      "entrypoint_not_file",
-      document,
-      `${resolved.relative} is not a regular file`,
-    );
-  }
-  if (stat.size === 0) {
-    return finding(
-      "empty_entrypoint",
-      document,
-      `${resolved.relative} is empty`,
-    );
+  for (const candidate of candidates) {
+    let stat;
+    try {
+      stat = fs.statSync(candidate);
+    } catch (error) {
+      return finding(
+        "unreadable_entrypoint",
+        document,
+        `${path.relative(root, candidate)} could not be inspected: ${error.message}`,
+      );
+    }
+    if (!stat.isFile()) {
+      return finding(
+        "entrypoint_not_file",
+        document,
+        `${path.relative(root, candidate)} is not a regular file`,
+      );
+    }
+    if (stat.size === 0) {
+      return finding(
+        "empty_entrypoint",
+        document,
+        `${path.relative(root, candidate)} is empty`,
+      );
+    }
   }
   return null;
 }
@@ -145,16 +179,7 @@ function collectFindings(root) {
     }
     for (const token of extractCommands(markdown)) {
       const key = `${document}\0${token}`;
-      if (entries.has(key)) {
-        findings.push(
-          finding(
-            "duplicate_entrypoint",
-            document,
-            `documented more than once: ${token}`,
-          ),
-        );
-        continue;
-      }
+      if (entries.has(key)) continue;
       entries.set(key, true);
       const result = inspectEntry(root, document, token);
       if (result) findings.push(result);
@@ -251,7 +276,31 @@ function selfTest() {
       );
     }
   }
-  console.log("Self-test cases passed: 6");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agos-entrypoint-smoke-"));
+  try {
+    const nested = path.join(root, "examples", "demo", "conformance");
+    const tests = path.join(root, "examples", "demo", "test");
+    fs.mkdirSync(nested, { recursive: true });
+    fs.mkdirSync(tests, { recursive: true });
+    fs.writeFileSync(path.join(nested, "run.mjs"), "console.log('ok');\n", "utf8");
+    fs.writeFileSync(path.join(tests, "run.test.mjs"), "export {};\n", "utf8");
+    fs.writeFileSync(
+      path.join(nested, "README.md"),
+      [
+        "`node conformance/run.mjs`",
+        "`node conformance/run.mjs`",
+        "`node examples/demo/test/*.test.mjs`",
+      ].join("\n"),
+      "utf8",
+    );
+    const fixture = collectFindings(root);
+    if (fixture.findings.length !== 0 || fixture.entries.size !== 2) {
+      throw new Error(`filesystem fixture failed: ${JSON.stringify(fixture.findings)}`);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  console.log("Self-test cases passed: 7");
   console.log("AGOS_RUNTIME_OK");
 }
 
