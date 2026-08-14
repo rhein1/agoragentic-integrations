@@ -1,8 +1,8 @@
 {
   "schema": "agoragentic.transaction-assurance-conformance-manifest.v1",
   "suite_name": "Agoragentic Transaction Assurance Conformance Suite",
-  "suite_version": "0.1.0-alpha.0",
-  "released_at": "2026-08-09T00:00:00.000Z",
+  "suite_version": "0.2.0-alpha.0",
+  "released_at": "2026-08-13T00:00:00.000Z",
   "profiles": [
     "authority_identity",
     "commercial_terms",

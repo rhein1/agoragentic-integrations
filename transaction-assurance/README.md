@@ -48,7 +48,7 @@ This is a source-visible, unpublished alpha implementation.
 - hosted Agoragentic execution changes: none
 - marketplace catalog entry: intentionally deferred
 - vendor-neutral conformance suite: implemented as an offline source-only alpha
-- external adopter evidence: one independent offline run at pinned target and suite commits; 42/42 with a verified receipt, no network, and no spend authority
+- external adopter evidence: one independent offline run against historical suite `0.1.0-alpha.0` at pinned target and suite commits; 42/42 with a verified receipt, no network, and no spend authority; current suite `0.2.0-alpha.0` requires fresh independent artifacts
 
 `package.json` remains `private: true` until review, conformance fixtures, provenance, and release ownership are complete.
 
@@ -100,13 +100,15 @@ node bin/verify-conformance-receipt.mjs \
 
 The runner itself makes no network calls and grants no authority. A target module is caller-supplied code and runs with the caller's process permissions; review it before execution. The bundled examples are reference contract fixtures, not external adoption evidence.
 
-The first independent adopter evidence is published by `anchor-x402` at target
+The first independent adopter evidence for historical suite `0.1.0-alpha.0` is published by `anchor-x402` at target
 commit `13d6d70bb69cac2993753a22d423870bdfebe9a5`, with artifacts committed at
 `49634dd327eed9d3e03b5a51f510d15f04794c8a` and bound to suite commit
 `607b3dddbc441fe52554b8842b9065e60131ae3b`. The public verifier reports the
 receipt as valid. This is bounded offline conformance evidence only; it does not
 establish live settlement, production compatibility, certification,
-endorsement, or partnership.
+endorsement, or partnership, and it does not automatically cover the expanded
+`0.2.0-alpha.0` vector set. The current starter is labeled
+`starter_self_test`; its own passing output cannot satisfy the external gate.
 
 See [CONFORMANCE.md](CONFORMANCE.md) for the target-module contract, reusable workflow, version-pinned protocol profiles, and exact claim boundary. See [CONTRIBUTING_CONFORMANCE.md](CONTRIBUTING_CONFORMANCE.md) before proposing a fixture or adapter.
 
