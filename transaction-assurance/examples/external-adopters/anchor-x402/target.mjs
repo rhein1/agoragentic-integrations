@@ -4,6 +4,7 @@ const PROTOCOL_PINS = Object.freeze({
   visa_tap: Object.freeze({ version: 'commit-16d59bdf', comparison: 'opaque' }),
   x402: Object.freeze({ version: '2.21.0', comparison: 'semver_major' }),
 });
+const CONFORMANCE_SCHEMA = 'agoragentic.transaction-assurance-conformance.v2';
 
 function result(decision, code) {
   return Object.freeze({ decision, code });
@@ -11,7 +12,8 @@ function result(decision, code) {
 
 function hasNormalizedSections(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
-  return [
+  if (input.schema !== CONFORMANCE_SCHEMA) return false;
+  const sectionsPresent = [
     'protocol',
     'authority',
     'terms',
@@ -23,6 +25,7 @@ function hasNormalizedSections(input) {
     'reconciliation',
     'privacy',
   ].every((field) => input[field] && typeof input[field] === 'object' && !Array.isArray(input[field]));
+  return sectionsPresent && typeof input.payment.evidence_replayed === 'boolean';
 }
 
 function parseSemver(value) {
@@ -80,6 +83,7 @@ export function evaluateTransactionAssuranceVector({ input } = {}) {
   );
   if (protocolVersionDecision?.decision === 'deny') return protocolVersionDecision;
 
+  if (!input.authority.present) return result('deny', 'authority_absent');
   if (input.authority.verification === 'unknown') {
     return result('review', 'authority_verification_unknown');
   }
@@ -87,11 +91,13 @@ export function evaluateTransactionAssuranceVector({ input } = {}) {
   if (input.authority.revocation === 'revoked') return result('deny', 'authority_revoked');
   if (input.authority.revocation !== 'active') return result('review', 'authority_revocation_unknown');
   if (input.authority.expired) return result('deny', 'authority_expired');
+  if (!input.authority.principal_match) return result('deny', 'authority_wrong_principal');
   if (!input.authority.audience_match) return result('deny', 'authority_wrong_audience');
   if (!input.authority.agent_match) return result('deny', 'authority_wrong_agent');
 
   for (const [field, code] of [
     ['merchant_match', 'merchant_mismatch'],
+    ['seller_match', 'seller_mismatch'],
     ['category_match', 'category_mismatch'],
     ['action_match', 'action_mismatch'],
     ['rail_match', 'rail_mismatch'],
@@ -113,6 +119,7 @@ export function evaluateTransactionAssuranceVector({ input } = {}) {
   if (!input.payment.identifier_present) return result('deny', 'payment_identifier_missing');
   if (input.payment.identifier_reused) return result('deny', 'payment_identifier_reused');
   if (input.payment.replay_detected) return result('deny', 'paid_retry_replay_detected');
+  if (input.payment.evidence_replayed) return result('deny', 'evidence_replayed');
   if (!input.settlement.observed) return result('review', 'payment_not_observed');
   if (!input.settlement.verified) return result('deny', 'settlement_unverified');
   if (!input.settlement.final) return result('review', 'settlement_not_final');

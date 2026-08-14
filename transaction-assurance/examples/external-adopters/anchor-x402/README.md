@@ -7,12 +7,22 @@ evidence until the anchor-x402 operator reviews it, commits it in an
 operator-controlled repository, runs it there against an immutable suite
 commit, and publishes the bounded artifacts plus actionable observations.
 
+The checked-in profile is machine-labeled `starter_self_test`. Every artifact
+it produces retains `independent_adopter_run: false` and
+`external_adopter_gate_satisfied: false`. Copying or passing this starter in an
+Agoragentic-controlled checkout therefore cannot satisfy the external gate.
+Only separately received, independently generated artifacts can be reviewed
+and classified as an `independent_adopter_run`; this runner never promotes its
+own output to that class.
+
 That independent run is now published at target commit
 [`13d6d70bb69cac2993753a22d423870bdfebe9a5`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter/commit/13d6d70bb69cac2993753a22d423870bdfebe9a5)
 with artifacts committed separately at
 [`49634dd327eed9d3e03b5a51f510d15f04794c8a`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter/commit/49634dd327eed9d3e03b5a51f510d15f04794c8a).
-The receipt verifies against suite commit `607b3dddbc441fe52554b8842b9065e60131ae3b`
-with 42 passed and 0 failed. This is offline conformance evidence, not live
+The receipt verifies against historical suite commit `607b3dddbc441fe52554b8842b9065e60131ae3b`
+with 42 passed and 0 failed. That historical evidence is bound to suite
+`0.1.0-alpha.0`; it does not automatically cover the expanded `0.2.0-alpha.0`
+vector set in current source. This is offline conformance evidence, not live
 compatibility, certification, endorsement, or a partnership claim.
 
 No source was copied from `chico10117/basepay-readiness-service`; its public
@@ -91,6 +101,11 @@ The operator should review the files for public safety, verify the receipt with
 the public verifier, and publish the exact target commit, counts, report and
 receipt hashes, and at least one actionable observation. A passing run is not
 certification, endorsement, live-settlement proof, or production validation.
+
+Use the `actionable_observation_template` embedded in `adopter-context.json`.
+Each observation must identify the affected profile and vector IDs, a bounded
+reproduction, expected versus observed contract behavior, and only public-safe
+evidence references. Empty observations are not independent adoption evidence.
 
 ## Reusable workflow
 
