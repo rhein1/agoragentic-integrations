@@ -8,7 +8,9 @@ import {
   verifyExecutionBinding,
   verifySavepointCapsule,
 } from './contracts.mjs';
+import { DistributedAuthorityAmbiguousError } from './distributed-authority.mjs';
 import { verifyLifecycle } from './lifecycle.mjs';
+import { isPostgresDistributedCommitAuthority } from './adapters/postgres-authority.mjs';
 import {
   revalidateCommitArtifact,
   verifyCommitArtifact,
@@ -20,6 +22,7 @@ import {
   cloneJson,
   deepFreeze,
   optionalString,
+  requireEnum,
   requireIsoDate,
   requireOpaqueRef,
   requireSha256Ref,
@@ -2036,8 +2039,94 @@ function normalizeParentTransaction(value, expectedHead, expectedResult) {
   };
 }
 
+function normalizeDistributedParentTransaction(value, expectedHead) {
+  assertPlainObject(value, 'distributed parent transaction result');
+  if (value.schema !== 'agoragentic.risk-fork.distributed-operation.v1'
+    || value.status !== 'committed'
+    || !safeEqual(value.previous_head_hash, expectedHead)
+    || !safeEqual(value.result_hash, sha256Ref(value.result ?? null))) {
+    throw new Error('Distributed authority did not return the exact committed parent transaction');
+  }
+  return {
+    previous_head_hash: requireSha256Ref(value.previous_head_hash, 'previous_head_hash'),
+    next_head_hash: requireSha256Ref(value.next_head_hash, 'next_head_hash'),
+    result: cloneJson(value.result ?? null),
+    result_hash: requireSha256Ref(value.result_hash, 'result_hash'),
+    transaction_ref: requireOpaqueRef(value.operation_ref, 'operation_ref'),
+    transaction_hash: requireSha256Ref(value.transaction_hash, 'transaction_hash'),
+    prepared_at: requireIsoDate(value.prepared_at, 'prepared_at'),
+    completed_at: requireIsoDate(value.completed_at, 'completed_at'),
+    authority_request_hash: requireSha256Ref(
+      value.authority_request_hash,
+      'authority_request_hash',
+    ),
+    governance_hash: requireSha256Ref(value.governance_hash, 'governance_hash'),
+    approval_evidence_ref: requireOpaqueRef(
+      value.approval_evidence_ref,
+      'approval_evidence_ref',
+    ),
+    approval_evidence_hash: requireSha256Ref(
+      value.approval_evidence_hash,
+      'approval_evidence_hash',
+    ),
+    authorization_id: value.authorization_id == null
+      ? null
+      : requireOpaqueRef(value.authorization_id, 'authorization_id'),
+    authorization_binding_hash: value.authorization_binding_hash == null
+      ? null
+      : requireSha256Ref(value.authorization_binding_hash, 'authorization_binding_hash'),
+    idempotent: value.idempotent === true,
+  };
+}
+
+function createDistributedFinalAuthorityProof({ operation, authorityRequest, governance, approval }) {
+  if (!safeEqual(operation.authority_request_hash, authorityRequest.request_hash)
+    || !safeEqual(operation.governance_hash, sha256Ref(governance))
+    || operation.approval_evidence_ref !== approval.evidence_ref
+    || !safeEqual(operation.approval_evidence_hash, approval.evidence_hash)) {
+    throw new Error('Distributed operation receipt does not bind the final clean authority request');
+  }
+  const evidenceRef = operation.transaction_ref;
+  const evidenceHash = operation.transaction_hash;
+  const linearizationHash = sha256Ref({
+    request_hash: authorityRequest.request_hash,
+    linearized_at: operation.prepared_at,
+    linearization_ref: operation.transaction_ref,
+    governance_hash: operation.governance_hash,
+    approval_evidence_ref: approval.evidence_ref,
+    approval_evidence_hash: approval.evidence_hash,
+    authority_evidence_ref: evidenceRef,
+    authority_evidence_hash: evidenceHash,
+  });
+  return {
+    schema: 'agoragentic.risk-fork.final-commit-authority-verification.v1',
+    status: 'verified',
+    atomicity_status: 'verified',
+    request_hash: authorityRequest.request_hash,
+    linearized_at: operation.prepared_at,
+    linearization_ref: operation.transaction_ref,
+    linearization_hash: linearizationHash,
+    governance: cloneJson(governance),
+    governance_hash: operation.governance_hash,
+    approval: {
+      schema: 'agoragentic.risk-fork.final-commit-approval.v1',
+      status: 'verified',
+      authority_request_hash: authorityRequest.request_hash,
+      artifact_hash: authorityRequest.artifact_hash,
+      capsule_hash: authorityRequest.capsule_hash,
+      parent_state_hash: authorityRequest.parent_state_hash,
+      governance_hash: operation.governance_hash,
+      evidence_ref: approval.evidence_ref,
+      evidence_hash: approval.evidence_hash,
+    },
+    authorization_binding_hash: authorityRequest.authorization_binding_hash,
+    evidence_ref: evidenceRef,
+    evidence_hash: evidenceHash,
+  };
+}
+
 export async function commitPreparedArtifact(input = {}, options = {}) {
-  assertAllowedKeys(options, ['clock'], 'clean commit options');
+  assertAllowedKeys(options, ['clock', 'mode'], 'clean commit options');
   if (options.clock !== undefined && typeof options.clock !== 'function') {
     throw new TypeError('clean commit clock must be a function when supplied');
   }
@@ -2051,6 +2140,8 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     'verifyCommitApproval',
     'parentStateTransaction',
     'executionAuthorizationTransaction',
+    'distributedCommitAuthority',
+    'distributedClaimantRef',
     'resolveCurrentGovernance',
     'verifyTestEvidence',
     'acceptTypedResult',
@@ -2058,6 +2149,11 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     'executeAction',
   ], 'clean commit input');
   const clock = options.clock ?? (() => new Date());
+  const mode = requireEnum(
+    options.mode ?? 'demonstration',
+    ['demonstration', 'production'],
+    'clean commit mode',
+  );
   const now = requireIsoDate(clock(), 'clean commit clock result');
   verifySavepointCapsule(input.capsule, { now });
   assertFreshForkIdentity(input.fork_identity);
@@ -2095,11 +2191,46 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     throw new Error('Expected parent state is not bound to the Savepoint Capsule');
   }
   const parentTransaction = FILE_PARENT_HEAD_TRANSACTIONS.get(input.parentStateTransaction);
-  if (!parentTransaction) {
+  const distributedAuthority = isPostgresDistributedCommitAuthority(
+    input.distributedCommitAuthority,
+  ) ? input.distributedCommitAuthority : null;
+  if (input.distributedCommitAuthority != null && !distributedAuthority) {
     throw codedTransactionError(
-      'An exact concrete file parent-head and commit-authority transaction is required',
-      'FILE_PARENT_AUTHORITY_REQUIRED',
+      'An exact concrete PostgresDistributedCommitAuthority is required',
+      'POSTGRES_DISTRIBUTED_AUTHORITY_REQUIRED',
       { capsule_hash: input.capsule?.capsule_hash ?? null },
+    );
+  }
+  if (parentTransaction && distributedAuthority) {
+    throw codedTransactionError(
+      'File and PostgreSQL commit authorities are mutually exclusive',
+      'COMMIT_AUTHORITY_MUTUALLY_EXCLUSIVE',
+      { capsule_hash: input.capsule?.capsule_hash ?? null },
+    );
+  }
+  if (mode === 'production' && parentTransaction) {
+    throw codedTransactionError(
+      'Production clean commit requires the PostgreSQL distributed authority',
+      'PRODUCTION_DISTRIBUTED_AUTHORITY_REQUIRED',
+      { capsule_hash: input.capsule?.capsule_hash ?? null },
+    );
+  }
+  if (!parentTransaction && !distributedAuthority) {
+    throw codedTransactionError(
+      mode === 'production'
+        ? 'Production clean commit requires the PostgreSQL distributed authority'
+        : 'An exact concrete file parent-head and commit-authority transaction is required',
+      mode === 'production'
+        ? 'PRODUCTION_DISTRIBUTED_AUTHORITY_REQUIRED'
+        : 'FILE_PARENT_AUTHORITY_REQUIRED',
+      { capsule_hash: input.capsule?.capsule_hash ?? null },
+    );
+  }
+  if (distributedAuthority && input.executionAuthorizationTransaction != null) {
+    throw codedTransactionError(
+      'File and PostgreSQL commit authorities are mutually exclusive',
+      'COMMIT_AUTHORITY_MUTUALLY_EXCLUSIVE',
+      { artifact_hash: input.artifact?.artifact_hash ?? null },
     );
   }
   const destruction = verifyDestructionEvidence(input.destruction_evidence);
@@ -2141,6 +2272,7 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     throw new Error('A clean action executor is required');
   }
   if (artifact.commit_type === 'CONSEQUENTIAL_ACTION_PROPOSAL'
+    && !distributedAuthority
     && !FILE_EXECUTION_AUTHORIZATION_TRANSACTIONS.has(
       input.executionAuthorizationTransaction,
     )) {
@@ -2163,7 +2295,7 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     session_id: capsule.parent.session_id,
   });
   let authorityRequest;
-  const finalizeAuthority = (proof, observedAt) => {
+  const finalizeAuthority = (proof, observedAt, { revalidate = true } = {}) => {
     const finalAuthority = verifyAtomicFinalCommitAuthority({
       result: proof,
       request: authorityRequest,
@@ -2173,26 +2305,28 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
       observedAt,
     });
     const mutationGateNow = finalAuthority.observed_at;
-    verifySavepointCapsule(capsule, { now: mutationGateNow });
-    if (artifact.commit_type === 'CONSEQUENTIAL_ACTION_PROPOSAL') {
-      verifyConsequentialBinding({
-        artifact,
-        capsule,
-        forkIdentity: input.fork_identity,
-        destruction,
-        governance: finalAuthority.governance,
+    if (revalidate) {
+      verifySavepointCapsule(capsule, { now: mutationGateNow });
+      if (artifact.commit_type === 'CONSEQUENTIAL_ACTION_PROPOSAL') {
+        verifyConsequentialBinding({
+          artifact,
+          capsule,
+          forkIdentity: input.fork_identity,
+          destruction,
+          governance: finalAuthority.governance,
+          now: mutationGateNow,
+        });
+      }
+      revalidateCommitArtifact(artifact, {
+        policy: finalAuthority.governance.commit_policy,
+        expected_binding: expectedBinding,
+        required_test_verification: requiredTestVerification,
         now: mutationGateNow,
       });
-    }
-    revalidateCommitArtifact(artifact, {
-      policy: finalAuthority.governance.commit_policy,
-      expected_binding: expectedBinding,
-      required_test_verification: requiredTestVerification,
-      now: mutationGateNow,
-    });
-    if (artifact.commit_type === 'TYPED_RESULT'
-      && !safeEqual(artifact.body.payload_schema_hash, capsule.authorized_result_schema_hash)) {
-      throw new Error('Typed result schema is not authorized by the Savepoint Capsule');
+      if (artifact.commit_type === 'TYPED_RESULT'
+        && !safeEqual(artifact.body.payload_schema_hash, capsule.authorized_result_schema_hash)) {
+        throw new Error('Typed result schema is not authorized by the Savepoint Capsule');
+      }
     }
     mutationGovernance = finalAuthority.governance;
     mutationApproval = finalAuthority.approval;
@@ -2210,6 +2344,239 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     mutationNow = mutationGateNow;
     return finalAuthority;
   };
+
+  if (distributedAuthority) {
+    const claimantRef = requireOpaqueRef(
+      input.distributedClaimantRef,
+      'distributedClaimantRef',
+    );
+    authorityRequest = createFinalCommitAuthorityRequest({
+      artifact,
+      capsule,
+      parentStateHash: expectedParentStateHash,
+      candidateGovernance: governance,
+      preflightApproval: approval,
+      requiredTestVerification: null,
+      requestedAt: artifact.validated_at,
+    });
+    const binding = artifact.commit_type === 'CONSEQUENTIAL_ACTION_PROPOSAL'
+      ? artifact.body.execution_binding
+      : null;
+    const distributedRequest = {
+      parent_ref: parentRef,
+      expected_parent_head_hash: expectedParentStateHash,
+      artifact_hash: artifact.artifact_hash,
+      capsule_hash: capsule.capsule_hash,
+      capsule_expires_at: capsule.expires_at,
+      commit_type: artifact.commit_type,
+      governance_hash: sha256Ref(governance),
+      approval_evidence_ref: approval.evidence_ref,
+      approval_evidence_hash: approval.evidence_hash,
+      authority_request_hash: authorityRequest.request_hash,
+      authorization: binding == null ? null : {
+        authorization_id: binding.one_use_authorization_id,
+        authorization_ref: binding.authorization_ref,
+        authorization_hash: binding.authorization_hash,
+        binding_hash: binding.binding_hash,
+        binding: cloneJson(binding),
+        governance_evidence_ref: governance.evidence_ref,
+        governance_evidence_hash: governance.evidence_hash,
+      },
+    };
+    let distributedOperation;
+    try {
+      distributedOperation = await distributedAuthority.runCommit(distributedRequest, {
+        claimant_ref: claimantRef,
+        verifyUnderReservation: async (gate) => {
+          assertPlainObject(gate, 'distributed final gate request');
+          assertAllowedKeys(gate, [
+            'schema',
+            'request_hash',
+            'authority_request_hash',
+            'parent_ref',
+            'expected_parent_head_hash',
+            'artifact_hash',
+            'capsule_hash',
+            'governance',
+            'governance_hash',
+            'approval_evidence_ref',
+            'approval_evidence_hash',
+            'authorization_binding_hash',
+            'observed_at',
+          ], 'distributed final gate request');
+          const gateNow = requireIsoDate(gate.observed_at, 'distributed final gate observed_at');
+          const gateGovernance = normalizeCurrentGovernance(gate.governance);
+          const exactGate = gate.schema === 'agoragentic.risk-fork.distributed-final-gate-request.v1'
+            && safeEqual(gate.authority_request_hash, authorityRequest.request_hash)
+            && gate.parent_ref === parentRef
+            && safeEqual(gate.expected_parent_head_hash, expectedParentStateHash)
+            && safeEqual(gate.artifact_hash, artifact.artifact_hash)
+            && safeEqual(gate.capsule_hash, capsule.capsule_hash)
+            && safeEqual(gate.governance_hash, sha256Ref(gateGovernance))
+            && safeEqual(gate.governance_hash, sha256Ref(governance))
+            && gate.approval_evidence_ref === approval.evidence_ref
+            && safeEqual(gate.approval_evidence_hash, approval.evidence_hash)
+            && (binding == null
+              ? gate.authorization_binding_hash === null
+              : safeEqual(gate.authorization_binding_hash, binding.binding_hash));
+          if (!exactGate) {
+            throw codedTransactionError(
+              'Distributed final gate differs from the exact clean commit request',
+              'DISTRIBUTED_FINAL_GATE_BINDING_MISMATCH',
+              { artifact_hash: artifact.artifact_hash },
+            );
+          }
+          assertGovernanceCurrent(capsule, gateGovernance);
+          if (gateGovernance.evidence_ref !== governance.evidence_ref
+            || !safeEqual(gateGovernance.evidence_hash, governance.evidence_hash)) {
+            throw codedTransactionError(
+              'Advisory governance evidence differs from the distributed authority',
+              'GOVERNANCE_EVIDENCE_STALE',
+              { artifact_hash: artifact.artifact_hash },
+            );
+          }
+          verifySavepointCapsule(capsule, { now: gateNow });
+          if (binding) {
+            verifyConsequentialBinding({
+              artifact,
+              capsule,
+              forkIdentity: input.fork_identity,
+              destruction,
+              governance: gateGovernance,
+              now: gateNow,
+            });
+          }
+          if (artifact.commit_type === 'WORKSPACE_DIFF'
+            && Array.isArray(gateGovernance.commit_policy.required_tests)
+            && gateGovernance.commit_policy.required_tests.length > 0) {
+            requiredTestVerification = await verifyWorkspaceRequiredTests(artifact, {
+              policy: gateGovernance.commit_policy,
+              verifyTestEvidence: input.verifyTestEvidence,
+              now: gateNow,
+            });
+          }
+          revalidateCommitArtifact(artifact, {
+            policy: gateGovernance.commit_policy,
+            expected_binding: expectedBinding,
+            required_test_verification: requiredTestVerification,
+            now: gateNow,
+          });
+          if (artifact.commit_type === 'TYPED_RESULT'
+            && !safeEqual(artifact.body.payload_schema_hash, capsule.authorized_result_schema_hash)) {
+            throw new Error('Typed result schema is not authorized by the Savepoint Capsule');
+          }
+          return {
+            schema: 'agoragentic.risk-fork.distributed-final-gate-verification.v1',
+            status: 'verified',
+            request_hash: requireSha256Ref(gate.request_hash, 'distributed request_hash'),
+            authority_request_hash: authorityRequest.request_hash,
+            governance_hash: gate.governance_hash,
+          };
+        },
+        performEffect: async (effect) => {
+          const effectContext = {
+            effect_key: requireOpaqueRef(effect.effect_key, 'distributed effect_key'),
+            idempotency_key: requireOpaqueRef(
+              effect.idempotency_key,
+              'distributed idempotency_key',
+            ),
+            operation_ref: requireOpaqueRef(effect.operation_ref, 'distributed operation_ref'),
+            authority_request_hash: authorityRequest.request_hash,
+            automatic_retry_allowed: false,
+          };
+          if (artifact.commit_type === 'TYPED_RESULT') {
+            return input.acceptTypedResult(cloneJson(artifact.body.payload), effectContext);
+          }
+          if (artifact.commit_type === 'WORKSPACE_DIFF') {
+            return input.applyWorkspaceDiff(cloneJson(artifact.body.files), effectContext);
+          }
+          return input.executeAction(cloneJson(artifact.body.action), {
+            binding: cloneJson(binding),
+            governance_evidence_ref: governance.evidence_ref,
+            ...effectContext,
+          });
+        },
+      });
+    } catch (error) {
+      if (error instanceof DistributedAuthorityAmbiguousError) {
+        throw new CommitAmbiguousError(
+          'Distributed commit effect is unresolved; automatic retry is forbidden',
+          cloneJson(error.evidence ?? {}),
+        );
+      }
+      throw error;
+    }
+    let parent;
+    try {
+      parent = normalizeDistributedParentTransaction(
+        distributedOperation,
+        expectedParentStateHash,
+      );
+      const proof = createDistributedFinalAuthorityProof({
+        operation: parent,
+        authorityRequest,
+        governance,
+        approval,
+      });
+      finalizeAuthority(proof, parent.prepared_at, { revalidate: false });
+      mutationNow = parent.completed_at;
+    } catch (error) {
+      throw new CommitAmbiguousError(
+        'Distributed mutation committed but its authoritative receipt was invalid; automatic retry is forbidden',
+        {
+          artifact_hash: artifact.artifact_hash,
+          cause: String(error?.message ?? error).slice(0, 1000),
+        },
+      );
+    }
+    if (binding) {
+      if (parent.authorization_id !== binding.one_use_authorization_id
+        || !safeEqual(parent.authorization_binding_hash, binding.binding_hash)) {
+        throw new CommitAmbiguousError(
+          'Distributed authorization consumption receipt did not bind the exact action',
+          { artifact_hash: artifact.artifact_hash },
+        );
+      }
+      authorization = {
+        status: 'verified_and_consumed',
+        authorization_id: binding.one_use_authorization_id,
+        binding_hash: binding.binding_hash,
+        evidence_ref: parent.transaction_ref,
+        evidence_hash: parent.transaction_hash,
+      };
+    }
+    return {
+      schema: 'agoragentic.risk-fork.clean-commit-result.v1',
+      status: 'committed',
+      committed_at: mutationNow,
+      commit_type: artifact.commit_type,
+      artifact_hash: artifact.artifact_hash,
+      previous_parent_state_hash: parent.previous_head_hash,
+      parent_state_hash: parent.next_head_hash,
+      result_hash: parent.result_hash,
+      result: parent.result,
+      authority_backend: 'postgres_distributed',
+      parent_transaction: {
+        status: 'committed',
+        transaction_ref: parent.transaction_ref,
+        transaction_hash: parent.transaction_hash,
+      },
+      current_governance: {
+        status: 'verified',
+        epoch: mutationGovernance.epoch,
+        evidence_ref: mutationGovernance.evidence_ref,
+        evidence_hash: mutationGovernance.evidence_hash,
+      },
+      final_commit_authority: finalCommitAuthority,
+      clean_approval: mutationApproval,
+      execution_authorization: authorization,
+      destruction,
+      authority_flags: {
+        result_grants_authority: false,
+        automatic_retry_allowed: false,
+      },
+    };
+  }
 
   const parentResult = await parentTransaction.runCommit({
     parent_ref: parentRef,
@@ -2314,6 +2681,7 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     parent_state_hash: parent.next_head_hash,
     result_hash: parent.result_hash,
     result: parent.result,
+    authority_backend: 'file_reference',
     parent_transaction: {
       status: 'committed',
       transaction_ref: parent.transaction_ref,

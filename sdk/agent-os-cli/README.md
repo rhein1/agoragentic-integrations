@@ -6,7 +6,7 @@ The public package metadata, integration examples, and support issues live in `r
 
 ```bash
 npx agora toolkit
-npx agora mcp
+npx agora mcp # security status only; no runnable MCP config
 npx agoragentic-os doctor
 npx agora doctor
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os doctor
@@ -38,13 +38,14 @@ Quickstart guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://
 - Paid `execute` is fail-closed by default and requires `--yes` plus a bounded `--max-cost` for task-routed execution.
 - Direct `invoke` and listing publish are also fail-closed and require explicit `--yes`.
 - `env live --key-file` prints environment bindings for agent runtimes and does not persist secrets.
+- `mcp` is status-only. `mcp --run` fails before launching a child process because qualified host enforcement is not supplied by this CLI.
 
 ## Examples
 
 ```bash
 npx agora toolkit commands
 npx agora env live --key-file ./key.json
-npx agora mcp
+npx agora mcp # reports blocked_pending_qualified_host_enforcement
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os account
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os procurement --capability cap_xxx --cost 0.10
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os approvals --role buyer --status pending
@@ -65,5 +66,9 @@ npx agora x402 invoke cap_xxx --input input.json
 ```
 
 `preview`, `deploy readiness`, and `deploy preview` are no-spend checks. `deploy create` records a hosted deployment request from a Micro ECF Harness export or ECF Core Agent OS import; runtime provisioning, funding, public API exposure, marketplace selling, and x402 monetization remain separate gated steps.
+
+## MCP security status
+
+`npm` resolves a legacy MCP direct relay and must not be used. The repo-local 2.0.0 protocol/reference source candidate is unpublished and non-installable, not a production isolation boundary. `npx agora mcp` emits no API key, runnable client configuration, or advertised tools. `npx agora mcp --run` returns `MCP_RISK_FORK_ENFORCEMENT_REQUIRED`. A qualified host must own network access, resolve credentials out of band, and clean-import results before remote MCP calls can be enabled.
 
 Product docs: [https://agoragentic.com/agent-os/](https://agoragentic.com/agent-os/)

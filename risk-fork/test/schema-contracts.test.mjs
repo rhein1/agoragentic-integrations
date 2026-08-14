@@ -35,6 +35,8 @@ const SCHEMA_ID_BASE = 'https://agoragentic.com/schema/';
 const EXPECTED_SCHEMA_FILES = Object.freeze([
   'clean-commit-result.v1.json',
   'commit-artifact.v1.json',
+  'distributed-authority-operation.v1.json',
+  'distributed-authority-reconciliation.v1.json',
   'execution-binding.v1.json',
   'fork-identity.v1.json',
   'interception-plan.v1.json',
@@ -172,6 +174,84 @@ function makeRiskInput() {
 test('all public Risk Fork schemas compile under strict AJV 2020', async () => {
   const ajv = await loadSchemaRegistry();
   assert.equal(Object.keys(ajv.schemas).length >= EXPECTED_SCHEMA_FILES.length, true);
+});
+
+test('distributed operation and reconciliation schemas preserve effect fencing semantics', async () => {
+  const ajv = await loadSchemaRegistry();
+  const operation = {
+    schema: 'agoragentic.risk-fork.distributed-operation.v1',
+    operation_ref: 'distributed-operation:schema-test',
+    request_hash: hash('distributed-request'),
+    authority_request_hash: hash('authority-request'),
+    status: 'ambiguous',
+    commit_type: 'TYPED_RESULT',
+    parent_ref: 'parent:schema-test',
+    approval_key: hash('approval-key'),
+    authorization_id: null,
+    previous_head_hash: hash('previous-head'),
+    next_head_hash: null,
+    artifact_hash: hash('artifact'),
+    capsule_hash: hash('capsule'),
+    governance_hash: hash('governance'),
+    governance_evidence_hash: hash('governance-evidence'),
+    approval_evidence_ref: 'approval:schema-test',
+    approval_evidence_hash: hash('approval-evidence'),
+    authorization_binding_hash: null,
+    capsule_expires_at: '2099-01-01T00:00:00.000Z',
+    effect_key: 'risk-fork-effect:schema-test',
+    claimant_ref: 'claimant:schema-test',
+    result: null,
+    result_hash: null,
+    transaction_hash: null,
+    failure_code: 'EFFECT_CALLBACK_FAILED',
+    failure_message: 'effect_callback_failed_after_durable_claim',
+    resolution: null,
+    resolution_evidence_ref: null,
+    resolution_evidence_hash: null,
+    version: 3,
+    prepared_at: NOW.toISOString(),
+    effect_started_at: NOW.toISOString(),
+    completed_at: null,
+    updated_at: NOW.toISOString(),
+    idempotent: false,
+    authority_flags: {
+      operation_grants_authority: false,
+      automatic_effect_retry_allowed: false,
+      reconciliation_requires_trusted_verification: true,
+    },
+  };
+  assertSchemaAccepts(ajv, 'distributed-authority-operation.v1.json', operation);
+  const retryable = clone(operation);
+  retryable.authority_flags.automatic_effect_retry_allowed = true;
+  assertSchemaRejects(
+    ajv,
+    'distributed-authority-operation.v1.json',
+    retryable,
+    'distributed operation claiming automatic effect retry',
+  );
+
+  const reconciliation = {
+    operation_ref: operation.operation_ref,
+    expected_version: operation.version,
+    resolution: 'effect_succeeded',
+    requested_by: 'operator:schema-test',
+    outcome_evidence_ref: 'outcome:schema-test',
+    outcome_evidence_hash: hash('outcome-evidence'),
+    result: { accepted: true },
+  };
+  assertSchemaAccepts(
+    ajv,
+    'distributed-authority-reconciliation.v1.json',
+    reconciliation,
+  );
+  const unproven = clone(reconciliation);
+  delete unproven.result;
+  assertSchemaRejects(
+    ajv,
+    'distributed-authority-reconciliation.v1.json',
+    unproven,
+    'effect_succeeded reconciliation without exact result',
+  );
 });
 
 test('schemas accept representative source-generated Risk Fork artifacts', async () => {

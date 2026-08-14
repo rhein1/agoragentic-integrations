@@ -18,16 +18,20 @@
     "./provider": "./src/provider.mjs",
     "./taint-gate": "./src/taint-gate.mjs",
     "./clean-commit": "./src/clean-commit.mjs",
+    "./distributed-authority": "./src/distributed-authority.mjs",
     "./controller": "./src/controller.mjs",
     "./interception": "./src/interception.mjs",
     "./receipt": "./src/receipt.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",
     "./adapters/e2b": "./src/adapters/e2b.mjs",
+    "./adapters/postgres-authority": "./src/adapters/postgres-authority.mjs",
+    "./migrations/*": "./migrations/*",
     "./schema/*": "./schema/*"
   },
   "files": [
     "src/",
     "schema/",
+    "migrations/",
     "examples/",
     "README.md",
     "SECURITY_MODEL.md",
@@ -37,6 +41,7 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs",
     "check": "node scripts/check.mjs",
     "self-test": "node examples/local-reference.mjs",
     "benchmark:local": "node scripts/benchmark-local.mjs",
@@ -44,7 +49,8 @@
   },
   "dependencies": {
     "ajv": "8.20.0",
-    "ajv-formats": "3.0.1"
+    "ajv-formats": "3.0.1",
+    "pg": "8.16.3"
   },
   "peerDependencies": {
     "e2b": ">=2.38.3 <3"

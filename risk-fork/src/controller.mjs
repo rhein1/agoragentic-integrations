@@ -18,6 +18,7 @@ import {
   verifyLifecycle,
 } from './lifecycle.mjs';
 import { assertRiskForkProvider } from './provider.mjs';
+import { isPostgresDistributedCommitAuthority } from './adapters/postgres-authority.mjs';
 import { classifyRisk } from './risk-classifier.mjs';
 import { validateCommitCandidate, verifyCommitArtifact } from './taint-gate.mjs';
 import {
@@ -34,6 +35,7 @@ import {
 } from './util.mjs';
 
 const CONTROLLER_MODES = Object.freeze(['demonstration', 'production']);
+const CONTROLLER_DISTRIBUTED_AUTHORITIES = new WeakMap();
 
 function elapsedMs(started) {
   return Math.max(0, Math.round(performance.now() - started));
@@ -231,12 +233,33 @@ export class RiskForkController {
       'clock',
       'verifyProviderProfile',
       'trustedServerVerifier',
+      'distributedCommitAuthority',
+      'distributedClaimantRef',
     ], 'Risk Fork controller options');
     this.provider = assertRiskForkProvider(options.provider);
-    this.mode = requireEnum(options.mode ?? 'demonstration', CONTROLLER_MODES, 'controller mode');
+    Object.defineProperty(this, 'mode', {
+      value: requireEnum(options.mode ?? 'demonstration', CONTROLLER_MODES, 'controller mode'),
+      enumerable: true,
+      writable: false,
+      configurable: false,
+    });
     this.clock = options.clock ?? (() => new Date());
     this.verifyProviderProfile = options.verifyProviderProfile ?? null;
     this.trustedServerVerifier = options.trustedServerVerifier ?? null;
+    if (options.distributedCommitAuthority != null
+      && !isPostgresDistributedCommitAuthority(options.distributedCommitAuthority)) {
+      throw new TypeError('An exact concrete PostgresDistributedCommitAuthority is required');
+    }
+    if ((options.distributedCommitAuthority == null)
+      !== (options.distributedClaimantRef == null)) {
+      throw new TypeError('Distributed authority and claimant ref must be configured together');
+    }
+    CONTROLLER_DISTRIBUTED_AUTHORITIES.set(this, Object.freeze({
+      authority: options.distributedCommitAuthority ?? null,
+      claimantRef: options.distributedClaimantRef == null
+        ? null
+        : requireOpaqueRef(options.distributedClaimantRef, 'distributedClaimantRef'),
+    }));
   }
 
   async #assertProviderAllowed(decision) {
@@ -752,12 +775,17 @@ export class RiskForkController {
   async commit(prepared, cleanCommitInput = {}) {
     assertPreparedForCleanCommit(prepared);
     assertPlainObject(cleanCommitInput, 'cleanCommitInput');
+    if (Object.hasOwn(cleanCommitInput, 'distributedCommitAuthority')
+      || Object.hasOwn(cleanCommitInput, 'distributedClaimantRef')) {
+      throw new TypeError('Distributed authority is trusted controller construction state');
+    }
     let lifecycle = advance(prepared.lifecycle, 'COMMITTING', {
       at: requireIsoDate(this.clock(), 'clock result'),
       evidence: lifecycleEvidence('clean_commit_started', 'observed', {
         artifact_hash: prepared.artifact.artifact_hash,
       }),
     });
+    const distributed = CONTROLLER_DISTRIBUTED_AUTHORITIES.get(this);
     try {
       const result = await commitPreparedArtifact({
         ...cleanCommitInput,
@@ -766,8 +794,15 @@ export class RiskForkController {
         lifecycle,
         artifact: prepared.artifact,
         destruction_evidence: prepared.destruction_evidence,
+        ...(distributed.authority
+          ? {
+              distributedCommitAuthority: distributed.authority,
+              distributedClaimantRef: distributed.claimantRef,
+            }
+          : {}),
       }, {
         clock: this.clock,
+        mode: this.mode,
       });
       lifecycle = advance(lifecycle, 'COMMITTED', {
         at: requireIsoDate(this.clock(), 'clock result'),

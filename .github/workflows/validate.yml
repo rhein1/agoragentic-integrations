@@ -22,6 +22,9 @@ on:
       - 'assets/**'
       - 'acp/**'
       - 'mcp/**'
+      - 'deepagents/**'
+      - 'langchain/**'
+      - 'glama.json'
       - 'micro-ecf/**'
       - 'harness-core/**'
       - 'agent-payments-assurance-challenge/**'
@@ -89,6 +92,9 @@ jobs:
           npm audit --audit-level=moderate
           npm run verify:packed-install
           npm pack --dry-run
+
+      - name: Reject direct MCP bypass and unsafe release resolution
+        run: node --test test/mcp-direct-bypass.test.mjs
 
       - name: Validate Micro ECF package
         working-directory: micro-ecf

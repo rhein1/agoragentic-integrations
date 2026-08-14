@@ -11,7 +11,6 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
 const agoragentic = require('./index');
 const toolkit = require('./agent-toolkit');
 const x402Guard = require('./x402-guard');
@@ -19,6 +18,7 @@ const x402Guard = require('./x402-guard');
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const PAID_EXECUTION_HELP = 'Paid execution is disabled by default. Add --yes (or --execute) and an explicit --max-cost for task-routed execution.';
 const GATEWAY_AGENT_HEADER = 'X-Agoragentic-Gateway-Agent';
+const MCP_ENFORCEMENT_REQUIRED = 'MCP_RISK_FORK_ENFORCEMENT_REQUIRED: direct MCP launch is disabled until a qualified host enforcement boundary owns transport, resolves credentials out of band, and returns clean-imported results.';
 
 // ── Auto-Signing Helpers ─────────────────────────────────
 
@@ -197,7 +197,8 @@ Usage:
   agora toolkit [commands|mcp|skills|exports|json]
   agora env live --key-file ./key.json
   agora env sandbox
-  agora mcp [--run]
+  agora mcp                 Print the fail-closed MCP security status
+  agora mcp --run           Refused: qualified host enforcement is required
   agora quickstart --name my-agent [--type buyer|seller|both]
   agora match --task summarize [--max-cost 0.10]
   agoragentic-os account
@@ -257,7 +258,7 @@ Safety:
 async function runCli(argv = process.argv.slice(2), env = process.env, io = defaultIo(), runtime = {}) {
     const parsed = parseArgs(argv);
     const command = parsed.positionals[0];
-    const spawnProcess = runtime.spawn || spawn;
+    void runtime;
 
     if (!command || parsed.flags.help || command === 'help' || command === '--help' || command === '-h') {
         io.stdout.write(usage());
@@ -280,9 +281,9 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
                 break;
             case 'mcp':
                 if (parsed.flags.run) {
-                    return runMcpServer({ env, io, spawnProcess });
+                    throw userError(MCP_ENFORCEMENT_REQUIRED);
                 }
-                result = await commandMcp(parsed.flags, env);
+                result = await commandMcp();
                 break;
             case 'quickstart':
                 result = await commandQuickstart(parsed.flags, { baseUrl });
@@ -522,44 +523,18 @@ async function commandEnv(positionals, flags, env, { baseUrl }) {
     };
 }
 
-async function commandMcp(flags, env) {
+async function commandMcp() {
     const spec = toolkit.getAgentToolkitSpec();
-    const config = {
-        mcpServers: {
-            agoragentic: {
-                command: 'npx',
-                args: ['-y', 'agoragentic-mcp'],
-                env: {
-                    AGORAGENTIC_API_KEY: env.AGORAGENTIC_API_KEY || 'amk_your_key_here',
-                },
-            },
-        },
-    };
-
     return {
+        operational: false,
+        status: 'blocked_pending_qualified_host_enforcement',
+        error: MCP_ENFORCEMENT_REQUIRED,
         transport: spec.package.mcp_transport,
-        install: spec.package.mcp_command,
-        config,
-        tools: spec.mcp_tools.map((tool) => tool.name),
+        install: null,
+        config: null,
+        tools: [],
+        protocol_reference_command: spec.package.mcp_protocol_command,
     };
-}
-
-function runMcpServer({ env, io, spawnProcess }) {
-    return new Promise((resolve) => {
-        const child = spawnProcess('npx', ['-y', 'agoragentic-mcp'], {
-            stdio: ['inherit', 'inherit', 'inherit'],
-            env: { ...process.env, ...env },
-            shell: process.platform === 'win32',
-        });
-
-        child.on('error', (err) => {
-            io.stderr.write(`[agora mcp] failed to launch agoragentic-mcp: ${err.message}\n`);
-            resolve(1);
-        });
-        child.on('exit', (code, signal) => {
-            resolve(code === null ? (signal ? 1 : 0) : code);
-        });
-    });
 }
 
 async function commandQuickstart(flags, { baseUrl }) {

@@ -49,6 +49,13 @@ export {
   deriveParentAuthorityRef,
 } from './clean-commit.mjs';
 export {
+  DISTRIBUTED_OPERATION_STATES,
+  DISTRIBUTED_RECONCILIATION_RESOLUTIONS,
+  DISTRIBUTED_UNRESOLVED_STATES,
+  DistributedAuthorityAmbiguousError,
+  DistributedAuthorityError,
+} from './distributed-authority.mjs';
+export {
   RiskForkController,
   RiskForkCommitError,
   RiskForkPreparationError,
@@ -72,3 +79,7 @@ export {
   E2BRiskForkAdapter,
   E2B_RISK_FORK_PATHS,
 } from './adapters/e2b.mjs';
+export {
+  PostgresDistributedCommitAuthority,
+  isPostgresDistributedCommitAuthority,
+} from './adapters/postgres-authority.mjs';

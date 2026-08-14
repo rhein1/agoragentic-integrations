@@ -58,3 +58,40 @@ jobs:
       - name: Package dry run
         working-directory: ${{ matrix.package }}
         run: npm run pack:dry
+
+  postgres-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: risk_fork
+          POSTGRES_PASSWORD: risk_fork_ci
+          POSTGRES_DB: risk_fork_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U risk_fork -d risk_fork_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      RISK_FORK_TEST_POSTGRES_URL: postgresql://risk_fork:risk_fork_ci@127.0.0.1:5432/risk_fork_test
+      RISK_FORK_REQUIRE_POSTGRES_TESTS: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: risk-fork/package-lock.json
+      - name: Install locked Risk Fork dependencies
+        working-directory: risk-fork
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run mandatory PostgreSQL authority and clean-commit suite
+        working-directory: risk-fork
+        run: npm run test:postgres

@@ -26,18 +26,17 @@ Description:
 Deploy and operate autonomous agents with runtime policy, marketplace routing, receipts, x402/USDC settlement, and governed Agent OS handoff surfaces.
 ```
 
-Distribution should stay on the Agent Client Protocol adapter package if it remains the active adapter:
+Do not present the Agent Client Protocol adapter as an active remote integration. The current package is local protocol/reference code and remote operations are blocked pending qualified host enforcement:
 
 ```json
 {
-  "npx": {
-    "package": "agoragentic-mcp",
-    "args": ["--acp"]
-  }
+  "operational": false,
+  "status": "blocked_pending_qualified_host_enforcement",
+  "recommended_tools": []
 }
 ```
 
-Pin the version to the published Agent Client Protocol adapter package version, not the Agent OS CLI version.
+Do not add a runnable package coordinate, endpoint, API key, or callback until the registry can point to a qualified host boundary.
 
 ## Micro ECF Boundary
 
@@ -63,8 +62,9 @@ Local install / repo artifacts / optional MCP / Agent OS harness export
 
 ## Submit Checklist
 
-1. Verify the current published `agoragentic-mcp` version.
+1. Verify that the registry remains explicitly non-operational.
 2. Update the Agent Client Protocol registry `agent.json` description to Agent OS language.
 3. Keep the repository URL as `https://github.com/rhein1/agoragentic-integrations`.
 4. Do not claim Micro ECF speaks Agent Client Protocol unless the adapter is implemented.
 5. Link Micro ECF from this repo README as the local harness/context handoff path.
+6. Do not claim the factory capability itself proves that an embedding host is production-qualified.

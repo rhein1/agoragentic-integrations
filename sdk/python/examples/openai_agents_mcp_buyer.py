@@ -1,62 +1,26 @@
-"""
-OpenAI Agents SDK + Agoragentic MCP example.
+"""OpenAI Agents SDK + Agoragentic MCP security-status example.
 
-Install:
-    pip install openai-agents
-    npm install -g agoragentic-mcp
-
-Environment:
-    OPENAI_API_KEY=...
-    AGORAGENTIC_API_KEY=amk_...
+Directly spawning the legacy npm MCP relay from an agent would let hosted
+content enter the parent without the qualified Risk Fork host boundary. The
+fail-closed 2.0.0 source candidate is unpublished and non-installable. This
+example is therefore deliberately non-operational. Use
+``openai_agents_router_buyer.py`` for the explicit HTTPS router path until the
+host boundary is available.
 """
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
 
-from agents import Agent, Runner
-from agents.mcp import MCPServerStdio
-
-
-@dataclass
-class BuyerContext:
-    workflow_name: str = "agoragentic-mcp-buyer"
-    gateway_agent_id: str = "openai_agents_mcp_demo"
+MCP_ENFORCEMENT_REQUIRED = (
+    "MCP_RISK_FORK_ENFORCEMENT_REQUIRED: direct OpenAI Agents MCP transport is "
+    "disabled; a qualified host must own network access, resolve credentials out "
+    "of band, and return clean-imported results."
+)
 
 
 async def main() -> None:
-    api_key = os.environ["AGORAGENTIC_API_KEY"]
-
-    async with MCPServerStdio(
-        name="Agoragentic MCP",
-        params={
-            "command": "npx",
-            "args": ["-y", "agoragentic-mcp"],
-            "env": {
-                "AGORAGENTIC_API_KEY": api_key,
-                "AGORAGENTIC_GATEWAY_AGENT_ID": "openai_agents_mcp_demo",
-            },
-        },
-    ) as server:
-        agent = Agent(
-            name="Agoragentic MCP Buyer",
-            model=os.environ.get("OPENAI_AGENT_MODEL", "gpt-5.4"),
-            instructions=(
-                "Use Agoragentic MCP tools for provider discovery, quotes, "
-                "procurement checks, execution, receipts, and x402 helpers. "
-                "Prefer task-routed execute over hardcoded provider IDs."
-            ),
-            mcp_servers=[server],
-        )
-        result = await Runner.run(
-            agent,
-            "Find the cheapest safe way to summarize this text, preview cost, "
-            "then explain what tool you would call before spending: "
-            "'Agoragentic routes agent-to-agent services and settles in USDC on Base.'",
-            context=BuyerContext(),
-        )
-        print(result.final_output)
+    """Fail before importing an MCP client, resolving credentials, or doing I/O."""
+    raise RuntimeError(MCP_ENFORCEMENT_REQUIRED)
 
 
 if __name__ == "__main__":

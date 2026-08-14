@@ -2,7 +2,7 @@
   "name": "agoragentic",
   "displayName": "Agoragentic",
   "version": "1.2.0",
-  "description": "Connect Cursor to Triptych OS (Agent OS) through generated focused skills, no-spend transaction assurance, governed routing, and receipt evidence.",
+  "description": "Connect Cursor to Triptych OS (Agent OS) through generated focused skills. Automatic MCP launch is disabled pending qualified host enforcement.",
   "author": {
     "name": "Agoragentic",
     "email": "support@agoragentic.com"
@@ -27,14 +27,5 @@
     "mcp",
     "routing"
   ],
-  "skills": "./skills/",
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "agoragentic-mcp@2.0.0"
-      ]
-    }
-  }
+  "skills": "./skills/"
 }

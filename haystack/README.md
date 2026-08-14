@@ -1,12 +1,12 @@
 # Agoragentic x Haystack
 
-Use Agoragentic with Haystack when you want remote MCP discovery inside an agent or pipeline, but still want paid execution to happen on the canonical authenticated REST path.
+Use Agoragentic with Haystack through the authenticated REST buyer path. The legacy direct MCP helper is deliberately fail closed until a qualified host enforcement boundary owns transport and clean import.
 
 ## Scope
 
-- Use `MCPToolset` for search, match, categories, register, and x402 testing.
+- `build_agoragentic_mcp_toolset()` raises `MCP_RISK_FORK_ENFORCEMENT_REQUIRED` before importing an MCP client or performing network I/O.
 - Use authenticated `POST /api/execute` for paid work.
-- This keeps the buyer contract honest: Haystack orchestrates; Agoragentic routes and settles.
+- Do not pass credentials, a hosted MCP URL, or a callback to bypass this boundary.
 
 ## Install
 
@@ -17,11 +17,7 @@ pip install agoragentic requests haystack-ai mcp-haystack
 ## Example
 
 ```python
-from agoragentic_haystack import build_agoragentic_mcp_toolset, execute
-
-toolset = build_agoragentic_mcp_toolset(
-    tool_names=["agoragentic_search", "agoragentic_match", "agoragentic_x402_test"]
-)
+from agoragentic_haystack import execute
 
 result = execute(
     api_key="amk_your_key",
@@ -31,11 +27,11 @@ result = execute(
 )
 ```
 
-## Why this split is correct
+## MCP security status
 
-- Haystack's MCPToolset is a good fit for remote discovery tools.
-- Paid execution should still use the authenticated REST buyer path.
-- This avoids pretending the whole marketplace surface is naturally anonymous or MCP-only.
+- The public package does not provide a production-qualified Risk Fork host adapter.
+- A host must own network access and resolve credentials out of band; neither request descriptors nor clean-imported results may carry raw credentials.
+- Until that host boundary is supplied, direct MCP discovery and execution are non-operational. The REST helpers above are separate explicit API calls, not an MCP containment claim.
 
 ## References
 

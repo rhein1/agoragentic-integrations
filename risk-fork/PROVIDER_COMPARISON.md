@@ -4,23 +4,23 @@ This comparison records the v1 adapter decision. It is a design-time assessment,
 
 ## Decision
 
-E2B remains the first cloud adapter research target because its documented snapshot and sandbox-create surfaces suggest a composition that could separate:
+E2B remains the first cloud adapter research target because its documented sandbox-create surface supports a clean-template composition that can separate:
 
 1. authority-free source verification;
-2. snapshot creation;
-3. child creation from that snapshot with network and lifecycle options requested at birth;
+2. creation of an immutable, manifest-bound sanitized workspace export;
+3. child creation from a pinned reviewed template with network and lifecycle options requested at birth;
 4. fresh identity/entropy bootstrap;
-5. execution, evidence collection, kill, absence verification, and snapshot cleanup.
+5. bounded workspace upload, execution, evidence collection, kill, absence verification, and export cleanup.
 
 The original reference path used **snapshot then create**, not the direct fork convenience endpoint. In the API surface reviewed for v1, however, a full sandbox snapshot did not provide evidence that the restored child excludes dangerous environment state, credential files, processes, sockets, entropy/nonce state, and persistent writable mounts. Requesting network and lifecycle options at child creation is necessary but does not close that inherited-state boundary.
 
-The current adapter is therefore a **fail-closed safety stub**, not a mock-qualified cloud implementation. `createSavepoint`, `createFork`, and `executeInFork` refuse with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK or provider I/O. Its production-relevant capability flags are false or unverified, and it cannot pass Risk Fork's production-mode gate. No live network denial, isolation, persistence, deletion, latency, idle TTL, or cost property has been qualified. The secure boot and live-qualification work is tracked in [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302).
+The current adapter therefore has two explicit modes. Without a configured clean-template profile, `createSavepoint`, `createFork`, and `executeInFork` refuse with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK or provider I/O. With that profile, the adapter has an offline/mock-tested path for sanitized exact-byte export, pinned-template birth, closed create options, bounded result import, kill/absence checks, and durable cleanup reconciliation. That path never snapshots or forks a live source sandbox, but it is not live containment qualification. Its production-relevant containment and idle-TTL capabilities remain false or unverified, and it cannot pass Risk Fork's production-mode gate. No live first-instruction or IPv6 network denial, isolation, inherited-state absence, persistence, deletion, latency, idle TTL, or cost property has been qualified. The live-qualification work is tracked in [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302).
 
 ## Matrix
 
 | Candidate | Relevant documented primitive | Birth-time restriction assessment | v1 adapter status | Conclusion |
 | --- | --- | --- | --- | --- |
-| **E2B** | [Snapshots](https://docs.e2b.dev/sandbox/snapshots), [create sandbox](https://docs.e2b.dev/api-reference/sandboxes/create-sandbox), [fork sandbox](https://docs.e2b.dev/api-reference/sandboxes/fork-sandbox), [delete sandbox](https://docs.e2b.dev/api-reference/sandboxes/delete-sandbox) | Snapshot followed by create can request restrictions at birth, but the reviewed path does not prove a sanitized filesystem-only restore without inherited authority/process/runtime state | Fail-closed safety stub; allocation and execution unavailable; no live credentialed validation | **Research target only**; blocked on a secure snapshot profile and live qualification |
+| **E2B** | [create sandbox](https://docs.e2b.dev/api-reference/sandboxes/create-sandbox), [delete sandbox](https://docs.e2b.dev/api-reference/sandboxes/delete-sandbox), plus rejected [snapshot](https://docs.e2b.dev/sandbox/snapshots) and [fork](https://docs.e2b.dev/api-reference/sandboxes/fork-sandbox) paths | The configured path creates from a pinned template and uploads only a sanitized manifest-bound workspace; it does not restore a live source snapshot. Requested birth restrictions and provider state echoes are offline/mock-tested, not live containment evidence | Unconfigured mode refuses before provider I/O; configured clean-template path implemented and offline/mock-tested; no live credentialed validation | **Research target only**; implementation exists, but production remains blocked on live containment and lifecycle qualification |
 | **Daytona** | [Persistence](https://www.daytona.io/docs/en/persistence/), [network limits](https://www.daytona.io/docs/en/network-limits/) | Workspace persistence/forking is relevant, but the reviewed TypeScript fork path did not establish that network and TTL restrictions are inherited atomically before child startup | Research only; no adapter | Revisit after provider evidence closes the birth-time control window |
 | **AWS Lambda MicroVM / Firecracker** | [Lambda MicroVM lifecycle](https://docs.aws.amazon.com/lambda/latest/dg/microvms-how-it-works.html), [Lambda MicroVM launch](https://docs.aws.amazon.com/lambda/latest/dg/microvms-launching.html), [Firecracker snapshot support](https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md) | Strong low-level isolation/snapshot primitives exist, but there is no reviewed turnkey arbitrary running-agent fork API matching this package contract | Research only; no adapter | Possible infrastructure substrate, not a v1 adapter |
 | **Local reference** | Repository implementation only | Closed operation vocabulary and minimal environment; no VM/container/firewall or kernel egress control | Implemented and locally testable | Protocol/conformance demonstration only |
@@ -49,23 +49,22 @@ Cost qualification needs an owner-approved live account, quoted/current provider
 
 ## E2B implementation constraints
 
-The current v1 adapter fails closed unconditionally at savepoint allocation, child allocation, and execution. Any future usable E2B path must also:
+The current v1 adapter fails closed at savepoint allocation, child allocation, and execution unless an explicit clean-template profile and its clean-side verifier/journal dependencies are configured. The configured offline/mock-tested path:
 
 - accept an injected SDK/client rather than reading or persisting credentials itself;
-- require a trusted clean-side source-sanitization verifier before creating any reusable boot artifact;
-- reject memory-bearing source state without a verified, hash-bound sanitation attestation;
-- import only a demonstrably sanitized filesystem payload, never a memory/process/runtime snapshot;
-- create the child with internet disabled, zero persistent mounts, and lifecycle configured before startup;
-- remain production-ineligible while idle-TTL enforcement is absent or unverified;
-- run a fixed controller-supplied bootstrap, never a child-supplied shell command;
-- pass bounded job data through a fixed file/transport contract;
-- treat child result/evidence files as tainted input;
-- kill first, then independently verify absence;
-- delete the snapshot/template separately and verify that absence;
-- return `unknown` rather than fabricate evidence when the SDK/provider cannot establish a fact;
-- never emit API keys, environment secrets, raw provider logs, or private workspace paths.
+- requires a trusted clean-side source-sanitization verifier before creating any provider resource;
+- rejects memory-bearing source state and exports exact staged bytes through a hash-bound manifest instead of snapshotting live runtime state;
+- creates the child from a pinned template with internet disabled, zero persistent mounts, empty environment/IAM inputs, and kill lifecycle requested before startup;
+- remains production-ineligible while idle-TTL enforcement and live containment are absent or unverified;
+- runs fixed controller-supplied bootstrap commands rather than child-supplied shell commands;
+- passes bounded job data through a fixed file/transport contract and streams imported results under byte and time limits;
+- treats child result/evidence files as tainted input;
+- records allocation intent durably before provider creation, kills first, and independently verifies absence;
+- tracks export and sandbox cleanup separately and poisons further allocation while either state is unresolved;
+- returns `unknown` rather than fabricating evidence when the SDK/provider cannot establish a fact; and
+- rejects credential-shaped source material and never emits matched secret bytes, raw provider logs, or private workspace paths.
 
-The current conformance suite verifies that unavailable entrypoints refuse before source-verifier, SDK, or provider calls and that authority-bearing operations still hit the shared authority validator. That proves refusal behavior only. It does not verify E2B option construction, snapshot sanitation, containment, destruction, or any infrastructure behavior.
+The current conformance suite verifies unconfigured refusal, configured request construction, sanitizer/manifest binding, exact-byte upload, bounded result import, stale/wrong-result rejection, cleanup poisoning, and restart reconciliation using offline fakes. Those tests prove orchestration and fail-closed semantics only. They do not prove E2B isolation, first-instruction or IPv6 egress denial, inherited-state absence, real provider destruction, idle TTL, latency, or cost.
 
 ## Rejected shortcuts
 
@@ -78,4 +77,4 @@ The current conformance suite verifies that unavailable entrypoints refuse befor
 
 ## Next live gate
 
-A future implementation must first close [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302) with a sanitized filesystem-only boot profile that cannot restore environment variables, credential files, process-level tokens, random/nonce state, sockets, or persistent writable mounts. Only after that code and its offline tests are independently reviewed should an owner consider a bounded live canary in a new, capped provider project with no production secrets and a synthetic workspace. That canary would need to test first-instruction egress denial, identity freshness, TTL, process termination, fork absence, snapshot absence, sanitized receipts, and cleanup after injected failures. Until both gates pass, status remains **secure profile unavailable; live containment qualification not run**.
+The configured sanitized clean-template profile and its offline tests are implemented, but [issue #302](https://github.com/rhein1/agoragentic-integrations/issues/302) remains open until an owner authorizes a bounded live canary in a new, capped provider project with no production secrets and a synthetic workspace. That canary must test first-instruction IPv4 and IPv6 egress denial, identity freshness, absence of inherited environment/process/socket/mount state, hard and idle TTL behavior, process termination, sandbox absence, sanitized receipts, cleanup/reconciliation after injected failures, latency, and capped cost. Until that gate passes, status remains **configured profile offline/mock-tested; live containment qualification not run; production blocked**.

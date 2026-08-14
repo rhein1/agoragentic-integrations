@@ -1,6 +1,6 @@
 {
-  "version": "2.43.0",
-  "updated_at": "2026-08-13",
+  "version": "2.44.0",
+  "updated_at": "2026-08-14",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -12,9 +12,12 @@
     },
     "npm": {
       "name": "agoragentic-mcp",
-      "install": "npx agoragentic-mcp",
-      "registry": "https://www.npmjs.com/package/agoragentic-mcp",
-      "min_node": "20"
+      "install": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/mcp",
+      "distribution_status": "source_only",
+      "source": "mcp",
+      "min_node": "20",
+      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate. The npm registry resolves a legacy direct relay and must not be used. Owned metadata only by default; remote discovery and tools require a separately qualified host enforcement boundary"
     },
     "node_sdk": {
       "name": "agoragentic",
@@ -30,15 +33,21 @@
     },
     "mcp": {
       "name": "agoragentic-mcp",
-      "install": "npx agoragentic-mcp",
-      "registry": "https://www.npmjs.com/package/agoragentic-mcp",
-      "min_node": "20"
+      "install": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/mcp",
+      "distribution_status": "source_only",
+      "source": "mcp",
+      "min_node": "20",
+      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate only; remote calls fail closed and AGORAGENTIC_API_KEY is neither consumed nor forwarded"
     },
     "agent_client_protocol": {
       "name": "agoragentic-mcp",
-      "install": "npx agoragentic-mcp --acp",
-      "registry": "https://www.npmjs.com/package/agoragentic-mcp",
-      "min_node": "20"
+      "install": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/mcp",
+      "distribution_status": "source_only",
+      "source": "mcp",
+      "min_node": "20",
+      "compatibility_scope": "Unpublished, non-installable Agent Client Protocol source mode; local owned metadata only, with remote tools blocked pending qualified host enforcement"
     },
     "micro_ecf": {
       "name": "agoragentic-micro-ecf",
@@ -110,7 +119,7 @@
       "distribution_status": "source_only",
       "source": "risk-fork",
       "min_node": "20",
-      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; E2B allocation and execution fail closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE and are not live-qualified; hosted MCP interception is not production-wired; production readiness is blocked; no live traffic, provider, containment, authority, spend, deployment, publication, or package-registry claim is made"
+      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; unconfigured E2B allocation/execution fails closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE, while the configured strict clean-template path has offline/mock evidence for sanitized immutable export, authority-free verification, exact birth/result binding, bounded streaming, and durable cleanup only; credentialed provider containment, first-instruction/IPv6 egress, inherited-state exclusion, verified idle TTL, latency, and cost remain unqualified; hosted MCP interception is not production-wired; PostgreSQL authority is source/single-server tested but not deployed or managed-qualified; production readiness is blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
     }
   },
   "env_vars": {
@@ -446,7 +455,7 @@
       "language": "json",
       "status": "beta",
       "path": "hermes-agent/agent-os-bridge.manifest.json",
-      "install": "Add npx agoragentic-mcp to a Hermes-compatible MCP host; live execution and self-improvement activation remain owner-gated",
+      "install": "Protocol/reference manifest only; remote Agoragentic MCP is disabled pending qualified host enforcement",
       "docs": "hermes-agent/README.md"
     },
     {
@@ -483,7 +492,8 @@
       "status": "beta",
       "path": "deepagents/README.md",
       "install": "pip install deepagents agoragentic",
-      "docs": "deepagents/README.md"
+      "docs": "deepagents/README.md",
+      "compatibility_scope": "Supported through direct SDK/REST tools only; the raw DeepAgents MCP path is hard-disabled before optional imports or transport I/O"
     },
     {
       "id": "clawteam",
@@ -589,19 +599,21 @@
       "id": "mcp",
       "name": "MCP (Claude, VS Code, Cursor)",
       "language": "javascript",
-      "status": "ready",
+      "status": "experimental",
       "path": "mcp/mcp-server.js",
-      "install": "npx agoragentic-mcp",
-      "docs": "mcp/README.md"
+      "install": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "docs": "mcp/README.md",
+      "compatibility_scope": "Unpublished, non-installable source candidate with owned local metadata plus a tested fail-closed host-enforcement contract; no qualified hosted enforcement, credential transport, live isolation, or production MCP traffic claim"
     },
     {
       "id": "agent-client-protocol",
       "name": "Agent Client Protocol",
       "language": "javascript",
-      "status": "ready",
+      "status": "experimental",
       "path": "acp/agent.json",
-      "install": "npx agoragentic-mcp --acp",
-      "docs": "acp/README.md"
+      "install": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "docs": "acp/README.md",
+      "compatibility_scope": "Unpublished, non-installable source mode with owned local Agent Client Protocol metadata and zero-I/O rejection of unqualified remote tools; not a live relay"
     },
     {
       "id": "autogen",
@@ -796,9 +808,9 @@
       "id": "oh-my-claudecode",
       "name": "oh-my-claudecode (Multi-Agent)",
       "language": "javascript",
-      "status": "ready",
+      "status": "experimental",
       "path": "oh-my-claudecode/README.md",
-      "install": "npx agoragentic-mcp",
+      "install": "Remote Agoragentic MCP disabled pending qualified host enforcement",
       "docs": "oh-my-claudecode/README.md"
     },
     {
@@ -949,9 +961,9 @@
       "id": "zapier-mcp",
       "name": "Zapier MCP",
       "language": "json",
-      "status": "beta",
+      "status": "experimental",
       "path": "zapier-mcp/agoragentic-zapier-mcp.example.json",
-      "install": "Configure Zapier MCP plus npx agoragentic-mcp in your MCP client",
+      "install": "Reference manifest only; Agoragentic remote MCP disabled pending qualified host enforcement",
       "docs": "zapier-mcp/README.md"
     },
     {
@@ -1282,36 +1294,36 @@
       "id": "cursor-plugin",
       "name": "Cursor Plugin",
       "language": "json",
-      "status": "beta",
+      "status": "experimental",
       "path": "cursor/README.md",
-      "install": "git clone https://github.com/rhein1/agoragentic-integrations ~/.cursor/plugins/local/agoragentic",
+      "install": "Inspect source metadata only; remote Agoragentic MCP disabled",
       "docs": "cursor/README.md"
     },
     {
       "id": "gemini-cli-extension",
       "name": "Gemini CLI Extension",
       "language": "json",
-      "status": "ready",
+      "status": "experimental",
       "path": "gemini-cli/README.md",
-      "install": "gemini extensions install https://github.com/rhein1/agoragentic-integrations",
+      "install": "Inspect source metadata only; remote Agoragentic MCP disabled",
       "docs": "gemini-cli/README.md"
     },
     {
       "id": "claude-code-plugin",
       "name": "Claude Code Plugin",
       "language": "json",
-      "status": "ready",
+      "status": "experimental",
       "path": "claude-code/README.md",
-      "install": "/plugin marketplace add rhein1/agoragentic-integrations; /plugin install agoragentic@agoragentic-integrations",
+      "install": "Inspect source metadata only; remote Agoragentic MCP disabled",
       "docs": "claude-code/README.md"
     },
     {
       "id": "cline-mcp",
       "name": "Cline MCP Package",
       "language": "json",
-      "status": "beta",
+      "status": "experimental",
       "path": "cline/README.md",
-      "install": "npx -y agoragentic-mcp@2.0.0",
+      "install": "Do not install as a live relay; protocol/reference metadata only",
       "docs": "cline/README.md"
     },
     {
@@ -1367,7 +1379,7 @@
       "path": "risk-fork/src/index.mjs",
       "install": "cd risk-fork && npm ci",
       "docs": "risk-fork/README.md",
-      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; E2B allocation and execution fail closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE and are not live-qualified; hosted MCP interception is not production-wired; production readiness is blocked; no live traffic, provider, containment, authority, spend, deployment, publication, or package-registry claim is made"
+      "compatibility_scope": "Source-only alpha: the tested local adapter is a protocol reference, not isolation; unconfigured E2B allocation/execution fails closed with E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE, while the configured strict clean-template path has offline/mock evidence for sanitized immutable export, authority-free verification, exact birth/result binding, bounded streaming, and durable cleanup only; credentialed provider containment, first-instruction/IPv6 egress, inherited-state exclusion, verified idle TTL, latency, and cost remain unqualified; hosted MCP interception is not production-wired; PostgreSQL authority is source/single-server tested but not deployed or managed-qualified; production readiness is blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
     }
   ],
   "specs": [

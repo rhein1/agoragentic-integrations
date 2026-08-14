@@ -13,7 +13,6 @@ body:
       label: Integration
       description: Select the adapter or client path you tested.
       options:
-        - MCP
         - Claude Code Plugin
         - Gemini CLI Extension
         - LangChain
@@ -47,8 +46,8 @@ body:
     id: adapter_version
     attributes:
       label: Agoragentic version
-      description: Provide the repository commit, npm package version, or Python package version used.
-      placeholder: "Example: repository commit abc1234 or agoragentic-mcp 1.3.6"
+      description: Provide the repository commit or supported SDK/package version used. MCP runtime reports are excluded while qualified host enforcement is blocked.
+      placeholder: "Example: repository commit abc1234 or agoragentic 2.1.0"
     validations:
       required: true
 
