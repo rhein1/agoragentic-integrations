@@ -4,6 +4,7 @@ const PROTOCOL_PINS = Object.freeze({
   visa_tap: Object.freeze({ version: 'commit-16d59bdf', comparison: 'opaque' }),
   x402: Object.freeze({ version: '2.21.0', comparison: 'semver_major' }),
 });
+const CONFORMANCE_SCHEMA = 'agoragentic.transaction-assurance-conformance.v2';
 
 function result(decision, code) {
   return Object.freeze({ decision, code });
@@ -11,7 +12,8 @@ function result(decision, code) {
 
 function hasNormalizedSections(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
-  return [
+  if (input.schema !== CONFORMANCE_SCHEMA) return false;
+  const sectionsPresent = [
     'protocol',
     'authority',
     'terms',
@@ -23,6 +25,7 @@ function hasNormalizedSections(input) {
     'reconciliation',
     'privacy',
   ].every((field) => input[field] && typeof input[field] === 'object' && !Array.isArray(input[field]));
+  return sectionsPresent && typeof input.payment.evidence_replayed === 'boolean';
 }
 
 function parseSemver(value) {

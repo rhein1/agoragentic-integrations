@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agoragentic.com/schema/transaction-assurance-conformance-input.v1.json",
-  "title": "Transaction Assurance Conformance Input v1",
+  "$id": "https://agoragentic.com/schema/transaction-assurance-conformance-input.v2.json",
+  "title": "Transaction Assurance Conformance Input v2",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "protocol", "authority", "terms", "limits", "payment", "settlement", "execution", "outcome", "reconciliation", "privacy"],
   "properties": {
-    "schema": { "const": "agoragentic.transaction-assurance-conformance.v1" },
+    "schema": { "const": "agoragentic.transaction-assurance-conformance.v2" },
     "protocol": {
       "type": "object",
       "additionalProperties": false,
@@ -19,10 +19,12 @@
     "authority": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["verification", "revocation", "audience_match", "agent_match", "expired"],
+      "required": ["present", "verification", "revocation", "principal_match", "audience_match", "agent_match", "expired"],
       "properties": {
+        "present": { "type": "boolean" },
         "verification": { "enum": ["verified", "unverified", "unknown"] },
         "revocation": { "enum": ["active", "revoked", "not_checked", "unknown"] },
+        "principal_match": { "type": "boolean" },
         "audience_match": { "type": "boolean" },
         "agent_match": { "type": "boolean" },
         "expired": { "type": "boolean" }
@@ -52,9 +54,10 @@
     "terms": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["merchant_match", "category_match", "action_match", "rail_match", "currency_match", "quote_match", "terms_match"],
+      "required": ["merchant_match", "seller_match", "category_match", "action_match", "rail_match", "currency_match", "quote_match", "terms_match"],
       "properties": {
         "merchant_match": { "type": "boolean" },
+        "seller_match": { "type": "boolean" },
         "category_match": { "type": "boolean" },
         "action_match": { "type": "boolean" },
         "rail_match": { "type": "boolean" },
@@ -76,11 +79,12 @@
     "payment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["identifier_present", "identifier_reused", "replay_detected"],
+      "required": ["identifier_present", "identifier_reused", "replay_detected", "evidence_replayed"],
       "properties": {
         "identifier_present": { "type": "boolean" },
         "identifier_reused": { "type": "boolean" },
-        "replay_detected": { "type": "boolean" }
+        "replay_detected": { "type": "boolean" },
+        "evidence_replayed": { "type": "boolean" }
       }
     },
     "settlement": {

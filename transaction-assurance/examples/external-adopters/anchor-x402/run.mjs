@@ -80,6 +80,8 @@ async function main() {
     path.join(suiteRoot, 'vendor', 'acp-2026-04-17', 'schema.agentic_checkout.json'),
     path.join(suiteRoot, 'conformance', 'manifest.v1.json'),
     path.join(suiteRoot, 'conformance', 'vectors.v1.json'),
+    path.join(suiteRoot, 'schema', 'transaction-assurance-conformance-input.v1.json'),
+    path.join(suiteRoot, 'schema', 'transaction-assurance-conformance-input.v2.json'),
     path.join(suiteRoot, 'package.json'),
     path.join(suiteRoot, 'package-lock.json'),
   ], 'suite evidence');
@@ -159,6 +161,7 @@ async function main() {
     evidence_class: profile.evidence_class,
     independent_adopter_run: false,
     self_test_satisfies_external_adopter_gate: false,
+    external_adopter_gate_satisfied: false,
     profile_hash: sha256Bytes(profileRaw),
     runner_source_hash: sha256Bytes(await readFile(scriptPath)),
     target_source_hash: sha256Bytes(await readFile(targetPath)),

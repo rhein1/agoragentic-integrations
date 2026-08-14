@@ -29,10 +29,16 @@ test('anchor-x402 clean-room target satisfies the bounded normalized contract', 
     evaluate: evaluateTransactionAssuranceVector,
     target: { name: 'anchor-x402-test', version: '0.1.0', commit: 'fixture' },
   });
-  assert.equal(report.total, 47);
+  assert.equal(report.total, 49);
   assert.equal(report.failed, 0);
   assert.equal(report.all_passed, true);
   assert.deepEqual(evaluateTransactionAssuranceVector(), {
+    decision: 'deny',
+    code: 'malformed_normalized_input',
+  });
+  const missingReplayEvidence = structuredClone(vectorSet.base_input);
+  delete missingReplayEvidence.payment.evidence_replayed;
+  assert.deepEqual(evaluateTransactionAssuranceVector({ input: missingReplayEvidence }), {
     decision: 'deny',
     code: 'malformed_normalized_input',
   });
@@ -132,6 +138,8 @@ test('portable runner binds clean target and suite commits and emits verifiable 
       'vendor/acp-2026-04-17/schema.agentic_checkout.json',
       'conformance/manifest.v1.json',
       'conformance/vectors.v1.json',
+      'schema/transaction-assurance-conformance-input.v1.json',
+      'schema/transaction-assurance-conformance-input.v2.json',
       'package.json',
       'package-lock.json',
     ];
@@ -169,7 +177,7 @@ test('portable runner binds clean target and suite commits and emits verifiable 
     const first = await execFileAsync(process.execPath, args, { cwd: targetRoot });
     const firstSummary = JSON.parse(first.stdout);
     assert.equal(firstSummary.status, 'passed');
-    assert.equal(firstSummary.total, 47);
+    assert.equal(firstSummary.total, 49);
     assert.equal(firstSummary.failed, 0);
     assert.equal(firstSummary.evidence_class, 'starter_self_test');
     assert.equal(firstSummary.independent_adopter_run, false);
@@ -186,6 +194,7 @@ test('portable runner binds clean target and suite commits and emits verifiable 
     assert.equal(context.evidence_class, 'starter_self_test');
     assert.equal(context.independent_adopter_run, false);
     assert.equal(context.self_test_satisfies_external_adopter_gate, false);
+    assert.equal(context.external_adopter_gate_satisfied, false);
     assert.deepEqual(context.actionable_observation_template.affected_vector_ids, []);
     assert.match(context.runner_source_hash, /^sha256:[0-9a-f]{64}$/);
     assert.match(context.target_source_hash, /^sha256:[0-9a-f]{64}$/);

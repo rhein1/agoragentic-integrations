@@ -4,7 +4,7 @@ The Transaction Assurance conformance suite is an offline, deterministic test co
 
 ## What it evaluates
 
-The language-neutral vector input records bounded booleans and states for authority, terms, limits, payment identity, settlement, execution, outcome validation, reconciliation, and privacy. It intentionally cannot carry prompts, tool output, credentials, private keys, payment payloads, or private owner data.
+The language-neutral vector input records bounded booleans and states for authority, terms, limits, payment identity, settlement, execution, outcome validation, reconciliation, and privacy. Current suite `0.2.0-alpha.0` materializes the strict `agoragentic.transaction-assurance-conformance.v2` input. The original v1 field shape remains valid for historical callers and its missing v2-only checks receive legacy-compatible defaults; the four expanded checks are never added to v1 in place. It intentionally cannot carry prompts, tool output, credentials, private keys, payment payloads, or private owner data.
 
 The manifest pins four existing protocol adapters:
 

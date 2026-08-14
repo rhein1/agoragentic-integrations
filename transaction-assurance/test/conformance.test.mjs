@@ -31,30 +31,51 @@ const vectorSet = await readJson(new URL('conformance/vectors.v1.json', root));
 test('machine contracts and bundled vectors validate strictly', async () => {
   const schemaFiles = [
     'transaction-assurance-conformance-input.v1.json',
+    'transaction-assurance-conformance-input.v2.json',
     'transaction-assurance-conformance-manifest.v1.json',
     'transaction-assurance-conformance-vectors.v1.json',
     'transaction-assurance-conformance-report.v1.json',
     'transaction-assurance-conformance-receipt.v1.json',
   ];
   const schemas = await Promise.all(schemaFiles.map((file) => readJson(new URL(`schema/${file}`, root))));
+  const [inputV1Schema, inputV2Schema, manifestSchema, vectorsSchema, reportSchema, receiptSchema] = schemas;
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   addFormats(ajv);
   for (const schema of schemas) ajv.addSchema(schema);
-  assert.equal(ajv.validate(schemas[1].$id, manifest), true, JSON.stringify(ajv.errors));
-  assert.equal(ajv.validate(schemas[2].$id, vectorSet), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(manifestSchema.$id, manifest), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(vectorsSchema.$id, vectorSet), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(inputV2Schema.$id, vectorSet.base_input), true, JSON.stringify(ajv.errors));
   const generatedReport = await runConformanceSuite({
     manifest,
     vectorSet,
     target: { name: 'schema-target', version: '1', commit: 'fixture' },
   });
   const generatedReceipt = buildConformanceReceipt({ manifest, vectorSet, report: generatedReport });
-  assert.equal(ajv.validate(schemas[3].$id, generatedReport), true, JSON.stringify(ajv.errors));
-  assert.equal(ajv.validate(schemas[4].$id, generatedReceipt), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(reportSchema.$id, generatedReport), true, JSON.stringify(ajv.errors));
+  assert.equal(ajv.validate(receiptSchema.$id, generatedReceipt), true, JSON.stringify(ajv.errors));
   assert.doesNotThrow(() => validateConformanceManifest(manifest));
   assert.doesNotThrow(() => validateConformanceVectorSet(vectorSet, manifest));
   const poisoned = structuredClone(vectorSet.base_input);
   poisoned.raw_payload = 'not allowed';
   assert.throws(() => validateConformanceInput(poisoned), /must contain exactly/);
+
+  const legacyV1 = structuredClone(vectorSet.base_input);
+  legacyV1.schema = 'agoragentic.transaction-assurance-conformance.v1';
+  delete legacyV1.authority.present;
+  delete legacyV1.authority.principal_match;
+  delete legacyV1.terms.seller_match;
+  delete legacyV1.payment.evidence_replayed;
+  assert.equal(ajv.validate(inputV1Schema.$id, legacyV1), true, JSON.stringify(ajv.errors));
+  assert.doesNotThrow(() => validateConformanceInput(legacyV1));
+  assert.deepEqual(evaluateReferenceVector(legacyV1), {
+    decision: 'pass',
+    code: 'complete_chain_verified',
+  });
+
+  const incompleteV2 = structuredClone(vectorSet.base_input);
+  delete incompleteV2.payment.evidence_replayed;
+  assert.equal(ajv.validate(inputV2Schema.$id, incompleteV2), false);
+  assert.throws(() => validateConformanceInput(incompleteV2), /input\.payment must contain exactly/);
 });
 
 test('reference suite covers every required profile and negative decision', async () => {
@@ -114,6 +135,7 @@ test('reference suite covers every required profile and negative decision', asyn
     'privacy_raw_tool_output_exposed',
     'privacy_private_owner_data_exposed',
     'unsupported_protocol_version',
+    'newer_protocol_version_review_required',
     'authority_verification_unknown',
   ]) assert.equal(codes.has(code), true, `missing ${code}`);
 });

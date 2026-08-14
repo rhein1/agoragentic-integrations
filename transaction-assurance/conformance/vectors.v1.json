@@ -2,7 +2,7 @@
   "schema": "agoragentic.transaction-assurance-conformance-vectors.v1",
   "suite_version": "0.2.0-alpha.0",
   "base_input": {
-    "schema": "agoragentic.transaction-assurance-conformance.v1",
+    "schema": "agoragentic.transaction-assurance-conformance.v2",
     "protocol": {
       "adapter_id": "x402",
       "source_version": "2.21.0"
@@ -179,6 +179,24 @@
       "description": "An unpinned protocol version is denied.",
       "input_patch": {},
       "expected": { "decision": "deny", "code": "unsupported_protocol_version" }
+    },
+    {
+      "id": "newer_protocol_version_review_required",
+      "profile": "authority_identity",
+      "adapter_id": "x402",
+      "source_version": "2.22.0",
+      "description": "A recognizable newer x402 version requires review when the remaining evidence is clean.",
+      "input_patch": {},
+      "expected": { "decision": "review", "code": "newer_protocol_version_review_required" }
+    },
+    {
+      "id": "newer_protocol_version_deny_precedence",
+      "profile": "authority_identity",
+      "adapter_id": "x402",
+      "source_version": "2.22.0",
+      "description": "An independent authority denial takes precedence over review for a recognizable newer protocol version.",
+      "input_patch": { "authority": { "revocation": "revoked" } },
+      "expected": { "decision": "deny", "code": "authority_revoked" }
     },
     {
       "id": "merchant_mismatch",
