@@ -39,6 +39,11 @@ const SECRET_ASSIGNMENT_PATTERN = new RegExp(
   'gi',
 );
 const MIN_SECRET_ASSIGNMENT_BYTES = 8;
+const MAX_WORKSPACE_ENTRIES = 200_000;
+const MAX_WORKSPACE_DEPTH = 512;
+const MAX_CLEANUP_ENTRIES = MAX_WORKSPACE_ENTRIES + 2;
+const MAX_CLEANUP_DEPTH = MAX_WORKSPACE_DEPTH + 1;
+const MAX_CLEANUP_MANIFEST_BYTES = 64 * 1024 * 1024;
 
 function containsSecretAssignment(exactBytesText) {
   SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
@@ -74,6 +79,15 @@ async function pathExists(target) {
     return true;
   } catch (error) {
     if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function lstatIfPresent(target, options) {
+  try {
+    return await lstat(target, options);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
     throw error;
   }
 }
@@ -154,8 +168,12 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
   const records = [];
   const seenCaseFolded = new Map();
   let totalBytes = 0;
+  let totalEntries = 0;
 
-  async function visit(directory, prefix = '', rawPrefix = '') {
+  async function visit(directory, prefix = '', rawPrefix = '', depth = 0) {
+    if (depth > MAX_WORKSPACE_DEPTH) {
+      throw new Error('Workspace exceeds its directory depth allowance');
+    }
     const directoryBefore = await lstat(directory, { bigint: true });
     if (directoryBefore.isSymbolicLink() || !directoryBefore.isDirectory()) {
       throw new Error(`Workspace directory changed type: ${prefix || '.'}`);
@@ -165,6 +183,10 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
+      totalEntries += 1;
+      if (totalEntries > MAX_WORKSPACE_ENTRIES) {
+        throw new Error('Workspace exceeds its bounded filesystem entry allowance');
+      }
       const rawRelative = rawPrefix ? `${rawPrefix}/${entry.name}` : entry.name;
       const relative = normalizeRelativePath(
         rawRelative,
@@ -185,7 +207,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
       const info = await lstat(absolute, { bigint: true });
       if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
       if (info.isDirectory()) {
-        await visit(absolute, relative, rawRelative);
+        await visit(absolute, relative, rawRelative, depth + 1);
         continue;
       }
       if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
@@ -256,15 +278,275 @@ async function makeTreeReadOnly(directory) {
   await chmod(directory, 0o500);
 }
 
-async function makeTreeWritable(directory) {
-  if (!(await pathExists(directory))) return;
-  await chmod(directory, 0o700).catch(() => {});
-  const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+function assertStableCleanupIdentity(before, after, field) {
+  if (JSON.stringify(stableIdentity(before)) !== JSON.stringify(stableIdentity(after))) {
+    throw new Error(`${field} changed during immutable export cleanup`);
+  }
+}
+
+async function makeOwnedDirectoryWritable(directory, before) {
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const directoryOnly = Number.isInteger(constants.O_DIRECTORY) ? constants.O_DIRECTORY : 0;
+  if (process.platform !== 'win32' && directoryOnly !== 0) {
+    let handle;
+    try {
+      handle = await open(directory, constants.O_RDONLY | noFollow | directoryOnly);
+      const opened = await handle.stat({ bigint: true });
+      if (!opened.isDirectory()) {
+        throw new Error('Immutable workspace export cleanup directory changed type');
+      }
+      assertStableCleanupIdentity(before, opened, 'Immutable workspace export cleanup directory');
+      await handle.chmod(0o700);
+      const writable = await handle.stat({ bigint: true });
+      assertStableCleanupIdentity(opened, writable, 'Immutable workspace export cleanup directory');
+      return writable;
+    } finally {
+      await handle?.close().catch(() => {});
+    }
+  }
+  // Windows does not expose POSIX directory mode semantics. The path remains
+  // inside the clean-host-owned export root and is identity-checked both before
+  // and immediately after this compatibility chmod.
+  await chmod(directory, 0o700);
+  const writable = await lstat(directory, { bigint: true });
+  if (writable.isSymbolicLink() || !writable.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup directory changed type');
+  }
+  assertStableCleanupIdentity(before, writable, 'Immutable workspace export cleanup directory');
+  return writable;
+}
+
+async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0) {
+  if (depth > MAX_CLEANUP_DEPTH) {
+    throw new Error('Immutable workspace export cleanup exceeds its depth bound');
+  }
+  const before = await lstat(directory, { bigint: true });
+  if (before.isSymbolicLink() || !before.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup refuses a substituted directory');
+  }
+  const beforeReal = await realpath(directory);
+  assertWithinRealRoot(rootReal, beforeReal, 'Immutable workspace export cleanup directory');
+  const entries = await readdir(directory, { withFileTypes: true });
+  state.entries += entries.length;
+  if (state.entries > MAX_CLEANUP_ENTRIES) {
+    throw new Error('Immutable workspace export cleanup exceeds its entry bound');
+  }
   for (const entry of entries) {
     const target = path.join(directory, entry.name);
-    if (entry.isDirectory()) await makeTreeWritable(target);
-    else await chmod(target, 0o600).catch(() => {});
+    const info = await lstat(target, { bigint: true });
+    if (info.isSymbolicLink()) {
+      throw new Error('Immutable workspace export cleanup refuses symlinks');
+    }
+    if (info.isDirectory()) {
+      await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
+      continue;
+    }
+    if (!info.isFile()) {
+      throw new Error('Immutable workspace export cleanup refuses special filesystem entries');
+    }
+    if (info.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses hard-linked files');
+    }
+    const fileReal = await realpath(target);
+    assertWithinRealRoot(rootReal, fileReal, 'Immutable workspace export cleanup file');
+    const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+    let handle;
+    try {
+      handle = await open(target, constants.O_RDONLY | noFollow);
+      const opened = await handle.stat({ bigint: true });
+      if (!opened.isFile() || opened.nlink > 1n) {
+        throw new Error('Immutable workspace export cleanup refuses a changed or hard-linked file');
+      }
+      assertStableCleanupIdentity(info, opened, 'Immutable workspace export cleanup file');
+    } finally {
+      await handle?.close().catch(() => {});
+    }
+    const current = await lstat(target, { bigint: true });
+    if (current.isSymbolicLink() || !current.isFile() || current.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses a changed or hard-linked file path');
+    }
+    assertStableCleanupIdentity(info, current, 'Immutable workspace export cleanup file path');
+    const currentReal = await realpath(target);
+    assertWithinRealRoot(rootReal, currentReal, 'Immutable workspace export cleanup file');
+    if (currentReal !== fileReal) {
+      throw new Error('Immutable workspace export cleanup file target changed');
+    }
   }
+  const after = await lstat(directory, { bigint: true });
+  if (after.isSymbolicLink() || !after.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup directory path changed type');
+  }
+  assertStableCleanupIdentity(before, after, 'Immutable workspace export cleanup directory path');
+  const afterReal = await realpath(directory);
+  assertWithinRealRoot(rootReal, afterReal, 'Immutable workspace export cleanup directory');
+  if (afterReal !== beforeReal) {
+    throw new Error('Immutable workspace export cleanup directory target changed');
+  }
+}
+
+async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
+  if (depth > MAX_CLEANUP_DEPTH) {
+    throw new Error('Immutable workspace export cleanup exceeds its depth bound');
+  }
+  const before = await lstat(directory, { bigint: true });
+  if (before.isSymbolicLink() || !before.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup refuses a substituted directory');
+  }
+  const beforeReal = await realpath(directory);
+  assertWithinRealRoot(rootReal, beforeReal, 'Immutable workspace export cleanup directory');
+  await makeOwnedDirectoryWritable(directory, before);
+
+  const entries = await readdir(directory, { withFileTypes: true });
+  state.entries += entries.length;
+  if (state.entries > MAX_CLEANUP_ENTRIES) {
+    throw new Error('Immutable workspace export cleanup exceeds its entry bound');
+  }
+  for (const entry of entries) {
+    const target = path.join(directory, entry.name);
+    const info = await lstat(target, { bigint: true });
+    if (info.isSymbolicLink()) {
+      throw new Error('Immutable workspace export cleanup refuses symlinks');
+    }
+    if (info.isDirectory()) {
+      await makeOwnedTreeWritable(target, rootReal, state, depth + 1);
+      continue;
+    }
+    if (!info.isFile()) {
+      throw new Error('Immutable workspace export cleanup refuses special filesystem entries');
+    }
+    if (info.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses hard-linked files');
+    }
+    const fileReal = await realpath(target);
+    assertWithinRealRoot(rootReal, fileReal, 'Immutable workspace export cleanup file');
+    const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+    let handle;
+    try {
+      handle = await open(target, constants.O_RDONLY | noFollow);
+      const openedFile = await handle.stat({ bigint: true });
+      if (!openedFile.isFile()) {
+        throw new Error('Immutable workspace export cleanup file changed type');
+      }
+      if (openedFile.nlink > 1n) {
+        throw new Error('Immutable workspace export cleanup refuses hard-linked files');
+      }
+      assertStableCleanupIdentity(info, openedFile, 'Immutable workspace export cleanup file');
+      await handle.chmod(0o600);
+      const writableFile = await handle.stat({ bigint: true });
+      if (writableFile.nlink > 1n) {
+        throw new Error('Immutable workspace export cleanup refuses hard-linked files');
+      }
+      assertStableCleanupIdentity(openedFile, writableFile, 'Immutable workspace export cleanup file');
+    } finally {
+      await handle?.close().catch(() => {});
+    }
+    const current = await lstat(target, { bigint: true });
+    if (current.isSymbolicLink() || !current.isFile()) {
+      throw new Error('Immutable workspace export cleanup file path changed type');
+    }
+    if (current.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses hard-linked files');
+    }
+    assertStableCleanupIdentity(info, current, 'Immutable workspace export cleanup file path');
+    const currentReal = await realpath(target);
+    assertWithinRealRoot(rootReal, currentReal, 'Immutable workspace export cleanup file');
+    if (currentReal !== fileReal) {
+      throw new Error('Immutable workspace export cleanup file target changed');
+    }
+  }
+
+  const after = await lstat(directory, { bigint: true });
+  if (after.isSymbolicLink() || !after.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup directory path changed type');
+  }
+  assertStableCleanupIdentity(before, after, 'Immutable workspace export cleanup directory path');
+  const afterReal = await realpath(directory);
+  assertWithinRealRoot(rootReal, afterReal, 'Immutable workspace export cleanup directory');
+  if (afterReal !== beforeReal) {
+    throw new Error('Immutable workspace export cleanup directory target changed');
+  }
+}
+
+async function validateOwnedCleanupManifest(target, exportId) {
+  const manifestPath = path.join(target, 'manifest.json');
+  const before = await lstat(manifestPath, { bigint: true });
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw new Error('Immutable workspace export cleanup manifest is not a regular file');
+  }
+  if (before.nlink > 1n) {
+    throw new Error('Immutable workspace export cleanup refuses a hard-linked manifest');
+  }
+  if (before.size > BigInt(MAX_CLEANUP_MANIFEST_BYTES)) {
+    throw new Error('Immutable workspace export cleanup manifest exceeds its byte bound');
+  }
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  let handle;
+  try {
+    handle = await open(manifestPath, constants.O_RDONLY | noFollow);
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile()) {
+      throw new Error('Immutable workspace export cleanup manifest changed type');
+    }
+    if (opened.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses a hard-linked manifest');
+    }
+    assertStableCleanupIdentity(before, opened, 'Immutable workspace export cleanup manifest');
+    const bytes = await handle.readFile();
+    if (bytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
+      throw new Error('Immutable workspace export cleanup manifest exceeds its byte bound');
+    }
+    const after = await handle.stat({ bigint: true });
+    if (after.nlink > 1n) {
+      throw new Error('Immutable workspace export cleanup refuses a hard-linked manifest');
+    }
+    assertStableCleanupIdentity(opened, after, 'Immutable workspace export cleanup manifest');
+    validateManifest(JSON.parse(bytes.toString('utf8')), { exportId });
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function removeOwnedExportTree({ root, target, exportId, requireManifest }) {
+  const rootInfo = await lstatIfPresent(root, { bigint: true });
+  if (!rootInfo) {
+    if (await lstatIfPresent(target, { bigint: true })) {
+      throw new Error('Immutable workspace export cleanup target exists without its root');
+    }
+    return false;
+  }
+  if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup root is not a real directory');
+  }
+  const targetBefore = await lstatIfPresent(target, { bigint: true });
+  if (!targetBefore) return false;
+  if (targetBefore.isSymbolicLink() || !targetBefore.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup refuses a substituted target');
+  }
+  const rootReal = await realpath(root);
+  const targetReal = await realpath(target);
+  const rootAfterRealpath = await lstat(root, { bigint: true });
+  const targetAfterRealpath = await lstat(target, { bigint: true });
+  assertStableCleanupIdentity(rootInfo, rootAfterRealpath, 'Immutable workspace export cleanup root');
+  assertStableCleanupIdentity(targetBefore, targetAfterRealpath, 'Immutable workspace export cleanup target');
+  assertWithinRealRoot(rootReal, targetReal, 'Immutable workspace export cleanup target');
+  if (targetReal === rootReal) {
+    throw new Error('Immutable workspace export cleanup refuses its configured root');
+  }
+  if (requireManifest) await validateOwnedCleanupManifest(target, exportId);
+  await validateOwnedTreeForCleanup(target, rootReal, { entries: 0 });
+  await makeOwnedTreeWritable(target, rootReal, { entries: 0 });
+  const targetAfter = await lstat(target, { bigint: true });
+  if (targetAfter.isSymbolicLink() || !targetAfter.isDirectory()) {
+    throw new Error('Immutable workspace export cleanup target changed type');
+  }
+  assertStableCleanupIdentity(targetBefore, targetAfter, 'Immutable workspace export cleanup target');
+  const targetRealAfter = await realpath(target);
+  assertWithinRealRoot(rootReal, targetRealAfter, 'Immutable workspace export cleanup target');
+  if (targetRealAfter !== targetReal) {
+    throw new Error('Immutable workspace export cleanup target changed');
+  }
+  await rm(target, { recursive: true, force: false });
+  return true;
 }
 
 function buildManifest(exportId, snapshot) {
@@ -380,7 +662,11 @@ export async function createImmutableWorkspaceExport(input = {}) {
     // handles. From this point onward, neither verification nor upload reopens
     // mutable source paths; both operate on this exact staged copy.
     const manifest = buildManifest(exportId, copied);
-    await writeExclusive(path.join(target, 'manifest.json'), `${canonicalize(manifest)}\n`);
+    const manifestBytes = Buffer.from(`${canonicalize(manifest)}\n`, 'utf8');
+    if (manifestBytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
+      throw new Error('Workspace export manifest exceeds its bounded cleanup allowance');
+    }
+    await writeExclusive(path.join(target, 'manifest.json'), manifestBytes);
     await makeTreeReadOnly(target);
     return deepFreeze({
       export_id: exportId,
@@ -395,8 +681,12 @@ export async function createImmutableWorkspaceExport(input = {}) {
     });
   } catch (error) {
     if (targetCreated) {
-      await makeTreeWritable(target).catch(() => {});
-      await rm(target, { recursive: true, force: true }).catch(() => {});
+      await removeOwnedExportTree({
+        root,
+        target,
+        exportId,
+        requireManifest: false,
+      }).catch(() => {});
     }
     throw error;
   }
@@ -435,15 +725,36 @@ export async function readImmutableWorkspaceExport(input = {}) {
 }
 
 export async function destroyImmutableWorkspaceExport(input = {}) {
-  const { target } = ownedExportPath(input.export_root, input.export_id);
-  await makeTreeWritable(target);
-  await rm(target, { recursive: true, force: true });
+  const exportId = requireExportId(input.export_id);
+  const { root, target } = ownedExportPath(input.export_root, exportId);
+  await removeOwnedExportTree({ root, target, exportId, requireManifest: true });
   return { status: 'destroy_requested_observed' };
 }
 
 export async function verifyImmutableWorkspaceExportDestroyed(input = {}) {
-  const { target } = ownedExportPath(input.export_root, input.export_id);
-  return !(await pathExists(target));
+  const exportId = requireExportId(input.export_id);
+  const { root, target } = ownedExportPath(input.export_root, exportId);
+  const rootInfo = await lstatIfPresent(root, { bigint: true });
+  if (!rootInfo) return true;
+  if (rootInfo.isSymbolicLink() || !rootInfo.isDirectory()) {
+    throw new Error('Immutable workspace export absence check root is not a real directory');
+  }
+  const targetInfo = await lstatIfPresent(target, { bigint: true });
+  if (!targetInfo) return true;
+  if (targetInfo.isSymbolicLink() || !targetInfo.isDirectory()) {
+    throw new Error('Immutable workspace export absence check refuses a substituted target');
+  }
+  const rootReal = await realpath(root);
+  const targetReal = await realpath(target);
+  const rootAfter = await lstat(root, { bigint: true });
+  const targetAfter = await lstat(target, { bigint: true });
+  assertStableCleanupIdentity(rootInfo, rootAfter, 'Immutable workspace export absence check root');
+  assertStableCleanupIdentity(targetInfo, targetAfter, 'Immutable workspace export absence check target');
+  assertWithinRealRoot(rootReal, targetReal, 'Immutable workspace export absence check target');
+  if (targetReal === rootReal) {
+    throw new Error('Immutable workspace export absence check refuses its configured root');
+  }
+  return false;
 }
 
 export const E2B_IMMUTABLE_WORKSPACE_EXPORT_SCHEMA = EXPORT_SCHEMA;

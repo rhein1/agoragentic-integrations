@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
+  chmod,
   link,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -16,6 +18,11 @@ import test from 'node:test';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import { E2BRiskForkAdapter, E2B_RISK_FORK_PATHS } from '../src/adapters/e2b.mjs';
+import {
+  destroyImmutableWorkspaceExport,
+  verifyImmutableWorkspaceExportDestroyed,
+  workspaceExportPath,
+} from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import { NOW, hash, makeCapsule, makeForkIdentity } from './helpers.mjs';
 
@@ -278,7 +285,15 @@ async function fixture(t, mockOptions = {}) {
     trustedRunnerArtifactHash: RUNNER_HASH,
     clock: () => new Date(NOW),
   });
-  t.after(async () => rm(root, { recursive: true, force: true }));
+  t.after(async () => {
+    for (const record of adapter.savepoints.values()) {
+      await destroyImmutableWorkspaceExport({
+        export_root: exportsDirectory,
+        export_id: record.export_record.export_id,
+      });
+    }
+    await rm(root, { recursive: true, force: true });
+  });
   return { root, source, exportsDirectory, journalDirectory, capsule, mock, adapter };
 }
 
@@ -956,4 +971,185 @@ test('sanitized export rejects special filesystem entries before provider alloca
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('exact managed cleanup removes an immutable nested export without weakening it early', async (t) => {
+  const value = await fixture(t);
+  const savepoint = await value.adapter.createSavepoint({
+    capsule: value.capsule,
+    source_workspace: value.source,
+  });
+  const record = value.adapter.savepoints.get(savepoint.savepoint_ref);
+  const exportId = record.export_record.export_id;
+  const exportDirectory = workspaceExportPath(value.exportsDirectory, exportId);
+  const payloadDirectory = path.join(exportDirectory, 'payload');
+  const manifestPath = path.join(exportDirectory, 'manifest.json');
+
+  if (process.platform !== 'win32') {
+    assert.equal(Number((await lstat(exportDirectory)).mode) & 0o777, 0o500);
+    assert.equal(Number((await lstat(payloadDirectory)).mode) & 0o777, 0o500);
+    assert.equal(Number((await lstat(manifestPath)).mode) & 0o777, 0o400);
+  }
+
+  await destroyImmutableWorkspaceExport({
+    export_root: value.exportsDirectory,
+    export_id: exportId,
+  });
+  assert.equal(await verifyImmutableWorkspaceExportDestroyed({
+    export_root: value.exportsDirectory,
+    export_id: exportId,
+  }), true);
+  assert.deepEqual(await readdir(value.exportsDirectory), []);
+});
+
+test('managed cleanup refuses in-tree symlinks and preserves the outside sentinel', async (t) => {
+  const value = await fixture(t);
+  const savepoint = await value.adapter.createSavepoint({
+    capsule: value.capsule,
+    source_workspace: value.source,
+  });
+  const record = value.adapter.savepoints.get(savepoint.savepoint_ref);
+  const exportId = record.export_record.export_id;
+  const exportDirectory = workspaceExportPath(value.exportsDirectory, exportId);
+  const payloadDirectory = path.join(exportDirectory, 'payload');
+  const outside = path.join(value.root, 'outside-cleanup-sentinel');
+  const sentinel = path.join(outside, 'sentinel.txt');
+  const substitutedEntry = path.join(payloadDirectory, 'substituted-directory');
+  await mkdir(outside);
+  await writeFile(sentinel, 'must survive cleanup refusal\n');
+  await chmod(exportDirectory, 0o700);
+  await chmod(payloadDirectory, 0o700);
+  await symlink(outside, substitutedEntry, process.platform === 'win32' ? 'junction' : 'dir');
+  await chmod(payloadDirectory, 0o500);
+  await chmod(exportDirectory, 0o500);
+
+  await assert.rejects(
+    destroyImmutableWorkspaceExport({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /refuses symlinks/i,
+  );
+  assert.equal(await readFile(sentinel, 'utf8'), 'must survive cleanup refusal\n');
+  if (process.platform !== 'win32') {
+    assert.equal(Number((await lstat(exportDirectory)).mode) & 0o777, 0o500);
+    assert.equal(Number((await lstat(payloadDirectory)).mode) & 0o777, 0o500);
+  }
+
+  await chmod(exportDirectory, 0o700);
+  await chmod(payloadDirectory, 0o700);
+  await rm(substitutedEntry, { force: true });
+  await destroyImmutableWorkspaceExport({
+    export_root: value.exportsDirectory,
+    export_id: exportId,
+  });
+});
+
+test('managed cleanup refuses hard links without changing the outside inode', async (t) => {
+  const value = await fixture(t);
+  const savepoint = await value.adapter.createSavepoint({
+    capsule: value.capsule,
+    source_workspace: value.source,
+  });
+  const record = value.adapter.savepoints.get(savepoint.savepoint_ref);
+  const exportId = record.export_record.export_id;
+  const exportDirectory = workspaceExportPath(value.exportsDirectory, exportId);
+  const payloadDirectory = path.join(exportDirectory, 'payload');
+  const outside = path.join(value.root, 'outside-hard-link-sentinel.txt');
+  const injectedLink = path.join(payloadDirectory, 'injected-hard-link.txt');
+  await writeFile(outside, 'outside hard-link inode remains unchanged\n');
+  const outsideBefore = await lstat(outside);
+  await chmod(exportDirectory, 0o700);
+  await chmod(payloadDirectory, 0o700);
+  await link(outside, injectedLink);
+  await chmod(payloadDirectory, 0o500);
+  await chmod(exportDirectory, 0o500);
+
+  await assert.rejects(
+    destroyImmutableWorkspaceExport({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /refuses hard-linked files/i,
+  );
+  const outsideAfter = await lstat(outside);
+  assert.equal(await readFile(outside, 'utf8'), 'outside hard-link inode remains unchanged\n');
+  if (process.platform !== 'win32') {
+    assert.equal(Number(outsideAfter.mode) & 0o777, Number(outsideBefore.mode) & 0o777);
+    assert.equal(Number((await lstat(exportDirectory)).mode) & 0o777, 0o500);
+    assert.equal(Number((await lstat(payloadDirectory)).mode) & 0o777, 0o500);
+  }
+
+  await chmod(exportDirectory, 0o700);
+  await chmod(payloadDirectory, 0o700);
+  await rm(injectedLink, { force: true });
+  await destroyImmutableWorkspaceExport({
+    export_root: value.exportsDirectory,
+    export_id: exportId,
+  });
+});
+
+test('managed cleanup refuses substituted targets, roots, and escaping export ids', async (t) => {
+  const value = await fixture(t);
+  const savepoint = await value.adapter.createSavepoint({
+    capsule: value.capsule,
+    source_workspace: value.source,
+  });
+  const record = value.adapter.savepoints.get(savepoint.savepoint_ref);
+  const exportId = record.export_record.export_id;
+  const exportDirectory = workspaceExportPath(value.exportsDirectory, exportId);
+  const outside = path.join(value.root, 'outside-cleanup-target');
+  const sentinel = path.join(outside, 'sentinel.txt');
+  await mkdir(outside);
+  await writeFile(sentinel, 'outside target remains intact\n');
+
+  await destroyImmutableWorkspaceExport({
+    export_root: value.exportsDirectory,
+    export_id: exportId,
+  });
+  await symlink(outside, exportDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(
+    destroyImmutableWorkspaceExport({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /substituted target/i,
+  );
+  await assert.rejects(
+    verifyImmutableWorkspaceExportDestroyed({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /substituted target/i,
+  );
+  assert.equal(await readFile(sentinel, 'utf8'), 'outside target remains intact\n');
+  await rm(exportDirectory, { force: true });
+
+  await rm(value.exportsDirectory, { recursive: true, force: true });
+  await symlink(outside, value.exportsDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(
+    destroyImmutableWorkspaceExport({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /cleanup root is not a real directory/i,
+  );
+  await assert.rejects(
+    verifyImmutableWorkspaceExportDestroyed({
+      export_root: value.exportsDirectory,
+      export_id: exportId,
+    }),
+    /absence check root is not a real directory/i,
+  );
+  assert.equal(await readFile(sentinel, 'utf8'), 'outside target remains intact\n');
+  await rm(value.exportsDirectory, { force: true });
+  await mkdir(value.exportsDirectory);
+
+  await assert.rejects(
+    destroyImmutableWorkspaceExport({
+      export_root: value.exportsDirectory,
+      export_id: '../outside-cleanup-target',
+    }),
+    /letters, numbers, underscore, or dash/i,
+  );
 });
