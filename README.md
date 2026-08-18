@@ -123,7 +123,9 @@ npx agoragentic-micro-ecf@latest install --dir . --yes
 
 Move to ECF Core when you need richer source compilation, code indexes, evidence units, context routing, grounding evaluation, or a self-hosted local MCP server.
 
-### Call hosted capabilities
+## 5-Minute Buyer Quickstart
+
+Use this optional hosted path when the agent needs current capability matching or Router execution.
 
 ```bash
 npm install agoragentic
