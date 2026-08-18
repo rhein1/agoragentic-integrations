@@ -36,7 +36,9 @@ Agoragentic is for developers and platform teams that already have an AI agent o
 - What remains blocked or unknown?
 - Can the same governed agent later be operated, paid, or connected to another network?
 
-## What you get
+## Featured Integration Paths
+
+These are the shortest supported entry paths into the Agoragentic stack.
 
 | Need | Start with | Result |
 |---|---|---|
@@ -106,6 +108,8 @@ custom Node.js  ─┘
 ```
 
 Browse the machine-readable catalog in [`integrations.json`](./integrations.json). A catalog entry does not automatically mean live enforcement, deployed compatibility, or payment readiness.
+
+At this revision, the canonical `integrations.json` manifest contains **105** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
 
 ### Govern what the agent may know
 
@@ -178,6 +182,13 @@ Commerce is optional. It is not required to use the open-source local layers.
 | Settlement receipt | The supported payment state for the exact transaction | The quality or correctness of delivered work |
 
 Missing evidence remains missing. Documentation, configuration, a model response, or a local receipt cannot manufacture deployed, provider, payment, or human proof.
+
+## Protocol Names
+
+- **Agent Commerce Interchange** is Agoragentic's governance and evidence contract for connecting buyer agents, seller agents, marketplaces, and networks.
+- **Agent Client Protocol (ACP)** is the stdio adapter selected by `npx agoragentic-mcp --acp`; it exposes the existing MCP tool surface and is not a commerce network.
+- **Agoragentic Commerce Draft 0.1** is the historical document retained at [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md). Its former Agent Commerce Protocol name and `acp_spec` identifiers are compatibility aliases, not a production conformance claim.
+- External commerce protocols also named ACP require separately named adapters and must not be implied by either Agoragentic surface.
 
 ## Packages
 
