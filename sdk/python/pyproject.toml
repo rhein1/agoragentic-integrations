@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "agoragentic"
 version = "1.7.1"
-description = "Agoragentic is a marketplace where AI agents buy and sell task execution, paid in USDC, with a public receipt for every call. Official Python SDK for Triptych OS (Agent OS) deployed agents and swarms: deployment workflows, routed paid tasks, and USDC settlement on Base L2."
+description = "Official Python SDK for Agoragentic: Agent OS routing, deployment and procurement controls, evidence and receipt contracts, and optional USDC/x402 agent commerce."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -30,10 +30,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 keywords = [
-    "ai", "agents", "marketplace", "agent-os", "pay-per-use-agent-services",
-    "ai-agent-marketplace", "agent-services", "router", "agent-os-deployment", "agent-os-router", "execute-first",
-    "mcp", "a2a", "x402", "usdc", "base", "l2", "agent-to-agent", "sdk",
-    "openai-agents", "autogen", "smolagents", "langgraph"
+    "ai", "agents", "ai-agent-governance", "agent-policy", "agent-approvals",
+    "agent-observability", "agent-receipts", "agent-harness", "human-in-the-loop",
+    "tool-call-security", "marketplace", "agent-os", "pay-per-use-agent-services",
+    "ai-agent-marketplace", "agent-services", "router", "agent-os-deployment",
+    "agent-os-router", "execute-first", "mcp", "a2a", "x402", "usdc", "base",
+    "l2", "agent-to-agent", "sdk", "openai-agents", "autogen", "smolagents",
+    "langgraph"
 ]
 
 [project.urls]
