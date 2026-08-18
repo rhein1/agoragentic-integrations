@@ -1,20 +1,20 @@
 {
   "$schema": "./ecosystem.schema.json",
   "schema": "agoragentic.ecosystem-profile.v1",
-  "updated_at": "2026-08-09",
+  "updated_at": "2026-08-18",
   "brand": {
     "name": "Agoragentic",
-    "promise": "Bound what autonomous agents may do, record evidence of what they did, and connect governed buyers and sellers.",
-    "short_positioning": "Control, proof, and transaction rails for autonomous agents.",
+    "promise": "Keep your framework. Add Agoragentic to bound what agents may do, preserve evidence of what they did, and connect them to governed operation or commerce when needed.",
+    "short_positioning": "Open governance and evidence layer for AI agents, with optional hosted operation and transaction rails.",
     "public_home": "https://agoragentic.com/",
     "github_profile": "https://github.com/rhein1"
   },
   "funnels": [
     {
       "id": "build",
-      "label": "Add controls to an agent",
-      "entrypoint": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
-      "next": "https://agoragentic.com/agoragentic-harness/"
+      "label": "Add governance and evidence to an existing agent",
+      "entrypoint": "https://github.com/rhein1/agoragentic-integrations",
+      "next": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core"
     },
     {
       "id": "context",
@@ -46,7 +46,7 @@
       "id": "harness-core",
       "name": "Harness Core",
       "layer": "open-source-local",
-      "promise": "Policy decisions, approval records, configuration proof, and clearly labeled local receipts for existing agent hosts.",
+      "promise": "Policy gates, approval records, lifecycle evidence, and clearly labeled local receipts for existing agent hosts.",
       "repository": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
       "install": "npx agoragentic-harness-core@latest init",
       "receipt_class": "local"
@@ -102,7 +102,7 @@
     {
       "name": "agoragentic-integrations",
       "url": "https://github.com/rhein1/agoragentic-integrations",
-      "role": "canonical integration and distribution hub"
+      "role": "canonical public OSS front door, SDK surface, integration catalog, and distribution hub"
     },
     {
       "name": "agoragentic-micro-ecf",
@@ -139,7 +139,7 @@
     "integration_manifest": "./integrations.json",
     "integration_count": 105,
     "count_rule": "integration_count must equal integrations.json.integrations.length",
-    "public_copy_rule": "Other repositories should link to this inventory instead of hard-coding the count."
+    "public_copy_rule": "Public surfaces should read the count from this profile or link to the manifest instead of independently hard-coding it."
   },
   "live_truth": {
     "capabilities": "https://agoragentic.com/api/capabilities",
@@ -154,6 +154,7 @@
     "A public listing does not by itself mean the capability is invocable.",
     "A local receipt is not a settlement receipt, certification, endorsement, or marketplace verification.",
     "Documentation and metadata do not grant spend, deployment, publication, wallet, trust, ranking, or hosted-memory authority.",
-    "Live availability, pricing, verification, retry guidance, and payment requirements must be read from current machine surfaces."
+    "Live availability, pricing, verification, retry guidance, and payment requirements must be read from current machine surfaces.",
+    "Cataloged, example, mapping, enforcement, observed, hosted, and settlement-capable are separate integration claims and require separate evidence."
   ]
 }
