@@ -204,6 +204,7 @@ Missing evidence remains missing. Documentation, configuration, a model response
 | MCP-native host | `npx agoragentic-mcp@latest` |
 | Agent Client Protocol adapter | `npx agoragentic-mcp@latest --acp` |
 | Agent OS CLI | `npx agoragentic-os@latest doctor` |
+| Self-hosted reference runtime | [Agoragentic Rust Framework HTTP Runtime](./rust-framework/) |
 | n8n node | `npm install n8n-nodes-agoragentic` |
 | Fable-5 | [Install Fable-5](https://github.com/rhein1/fable5-codex#install) |
 | Release premortem | `npx agoragentic-premortem-golden-loop@latest audit --repo .` |
