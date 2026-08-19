@@ -1,0 +1,18 @@
+{
+  "schema": "agoragentic.integration-provenance.v1",
+  "integration": "google-sam",
+  "upstream": {
+    "repository": "https://github.com/google/sam",
+    "revision": "b42aaaf2d7f9ec450ab15e97bf704a21539de0e3",
+    "license": "Apache-2.0"
+  },
+  "prepared_at": "2026-08-19",
+  "compatibility_scope": "Offline-tested client and normalizer for the documented sam-node Streamable HTTP MCP tools: get_mesh_info, discover_remote_services, find_remote_tools, and describe_remote_tool. call_remote_tool is intentionally absent from this slice.",
+  "authority": {
+    "network_calls_during_tests": false,
+    "provider_calls_during_tests": false,
+    "wallet_or_payment_access": false,
+    "marketplace_publication": false,
+    "remote_provider_invocation": false
+  }
+}

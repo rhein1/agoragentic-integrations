@@ -1,0 +1,17 @@
+{
+  "name": "@agoragentic/interchange-sam-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fail-closed SAM discovery and metadata normalization for Agoragentic Interchange.",
+  "scripts": {
+    "check": "node --check normalize.mjs && node --check client.mjs",
+    "test": "node --test normalize.test.mjs client.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0"
+  }
+}

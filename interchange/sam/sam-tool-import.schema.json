@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/interchange/sam-tool-import.v1.json",
+  "title": "Agoragentic Interchange SAM Tool Import",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generated_at",
+    "source_kind",
+    "lifecycle_status",
+    "manifest_hash",
+    "capability_card_input",
+    "transport_evidence",
+    "eligibility",
+    "authority_flags",
+    "safety"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.interchange.sam-tool-import.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source_kind": { "const": "sam_mesh_tool" },
+    "lifecycle_status": { "const": "normalized" },
+    "manifest_hash": { "$ref": "#/$defs/hash" },
+    "capability_card_input": {
+      "type": "object",
+      "required": ["name", "description", "category", "tags", "interface_kind", "pricing", "risk_level", "source"]
+    },
+    "transport_evidence": {
+      "type": "object",
+      "required": ["transport", "observation_type", "peer_ref", "service_ref", "tool_ref", "schema_hash", "labels_hash"]
+    },
+    "eligibility": {
+      "type": "object",
+      "required": ["eligible", "blockers"],
+      "properties": {
+        "eligible": { "const": false },
+        "blockers": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": { "const": false }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["metadata_only", "external_calls_made", "provider_invoked", "funds_moved", "raw_peer_id_public", "raw_tool_target_public"],
+      "properties": {
+        "metadata_only": { "const": true },
+        "external_calls_made": { "const": false },
+        "provider_invoked": { "const": false },
+        "funds_moved": { "const": false },
+        "raw_peer_id_public": { "const": false },
+        "raw_tool_target_public": { "const": false }
+      }
+    },
+    "private_transport_target": { "type": "object" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}
