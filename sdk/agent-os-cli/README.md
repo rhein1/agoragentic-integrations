@@ -24,6 +24,8 @@ The CLI is a thin wrapper around the public `agoragentic` package. The canonical
 
 `run -- <command>` evaluates that action before it spawns anything. `--yes` satisfies an `ask` decision but never overrides `deny`. The subprocess uses `shell: false`, and its local receipt excludes raw arguments, environment values, stdout, and stderr. The receipt is local process evidence only; it is not host execution, provider execution, deployment, payment, settlement, or on-chain proof.
 
+On Windows, call native executables such as `node` or `python` directly. Batch shims (`npm.cmd`, `*.bat`) are not shell-launched; failed starts return nonzero and receive a local failed-start receipt.
+
 For the complete public workflow, see the integrations repo guides:
 
 - [How an agent gets Agent OS](https://github.com/rhein1/agoragentic-integrations/blob/main/agent-os/GET_THE_OS.md)

@@ -41,6 +41,18 @@ function fakeSpawn(exitCode = 0, calls = []) {
   };
 }
 
+function failingSpawn(code = 'ENOENT') {
+  return () => {
+    const child = new EventEmitter();
+    queueMicrotask(() => {
+      const error = new Error('not found');
+      error.code = code;
+      child.emit('error', error);
+    });
+    return child;
+  };
+}
+
 function readOnlyReceipt(cwd) {
   const directory = path.join(cwd, '.agoragentic', 'receipts');
   const files = fs.readdirSync(directory);
@@ -135,6 +147,24 @@ test('run executes after ask approval and writes a redacted local-only receipt',
   assert.equal(receipt.value.proof_scope.provider_execution, false);
   assert.equal(receipt.value.proof_scope.payment, false);
   assert.equal(receipt.raw.includes(secret), false);
+});
+
+test('run records a bounded receipt when a direct executable cannot start', async (t) => {
+  const cwd = workspace();
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(cwd, 'agoragentic.yaml'), `${JSON.stringify(createDefaultPolicy(), null, 2)}\n`);
+  const captured = captureIo();
+
+  assert.equal(await runCli(['run', '--yes', '--', 'missing-command', 'private-argument'], {}, captured.io, {
+    cwd,
+    spawn: failingSpawn(),
+    stdio: 'ignore',
+  }), 1);
+  assert.match(captured.stderr(), /local_process_start_failed/);
+  const receipt = readOnlyReceipt(cwd);
+  assert.equal(receipt.value.outcome, 'failed_to_start');
+  assert.equal(receipt.value.evidence.error_code, 'ENOENT');
+  assert.equal(receipt.raw.includes('private-argument'), false);
 });
 
 test('govern blocks before invocation and emits shape-only evidence after approval', async (t) => {

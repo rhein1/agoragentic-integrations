@@ -77,6 +77,8 @@ npx agoragentic run --yes -- node ./scripts/offline-check.mjs
 
 `run` uses a direct subprocess boundary with `shell: false`. A policy `deny` can never be overridden by `--yes`. Local receipts contain the executable basename, argument count, command-shape digest, timing, exit status, and policy decision; they do not store raw arguments, environment values, stdout, or stderr. These receipts prove only the local boundary. They are not host, provider, deployment, payment, settlement, or on-chain proof.
 
+On Windows, invoke a native executable such as `node` or `python` directly. Batch shims such as `npm.cmd` and `*.bat` are intentionally not launched because doing so would require a command shell; a failed start is recorded as local evidence and returns nonzero.
+
 For an in-process JavaScript tool, use the same evaluator:
 
 ```javascript
