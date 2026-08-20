@@ -8,6 +8,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(root, 'integrations.json');
 const outputPath = path.join(root, 'docs', 'INTEGRATION_CAPABILITY_STATUS.md');
 
+function normalizeLineEndings(text) {
+  return text.replaceAll('\r\n', '\n');
+}
+
 function cell(value) {
   return String(value ?? 'none').replaceAll('|', '\\|').replaceAll(/\r?\n/g, ' ');
 }
@@ -88,7 +92,8 @@ export function renderCapabilityStatus(manifest) {
 
 export function verifyCapabilityStatus({ manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')), expected = fs.readFileSync(outputPath, 'utf8') } = {}) {
   const generated = renderCapabilityStatus(manifest);
-  return { ok: generated === expected, generated, expected };
+  const normalizedExpected = normalizeLineEndings(expected);
+  return { ok: generated === normalizedExpected, generated, expected: normalizedExpected };
 }
 
 function main() {
@@ -100,8 +105,7 @@ function main() {
     return;
   }
   if (process.argv.includes('--check')) {
-    const expected = fs.readFileSync(outputPath, 'utf8');
-    if (generated !== expected) {
+    if (!verifyCapabilityStatus({ manifest }).ok) {
       console.error('Integration capability status is stale. Run: node scripts/generate-integration-capability-status.mjs --write');
       process.exitCode = 1;
       return;

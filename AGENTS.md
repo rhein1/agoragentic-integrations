@@ -18,6 +18,9 @@ Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local c
 ```
 integrations.json          ← machine-readable index (start here)
 integrations.schema.json   ← JSON Schema for the index
+docs/INTEGRATION_CAPABILITY_STATUS.md ← generated evidence-level status
+docs/repository-rename-preflight.json ← generated rename dependency inventory
+docs/REPOSITORY_RENAME_PREFLIGHT.md   ← no-authority rename and rollback packet
 SKILL.md                   ← capability description for LLMs
 llms.txt                   ← thin bootstrap for language models
 llms-full.txt              ← expanded context for deep ingestion
@@ -57,6 +60,7 @@ Always expand ACP on first use. `acp/`, `--acp`, and `ACP_REGISTRY.md` mean **Ag
 3. Match the existing tool naming pattern (`agoragentic_*`)
 4. Validate `integrations.json` against `integrations.schema.json` after changes
 5. Add/update the per-framework `README.md` if you add or change an integration
+6. Run `node scripts/sync-integration-counts.mjs --check` and `node scripts/generate-repository-rename-preflight.mjs --check`
 
 ### If you are an agent or builder that wants to use Agent OS:
 

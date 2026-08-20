@@ -1,0 +1,1600 @@
+{
+  "schema_version": "1.0.0",
+  "source_manifest_version": "2.46.0",
+  "as_of": "2026-08-20",
+  "source_repository": "rhein1/agoragentic-integrations",
+  "safe_to_rename": false,
+  "target_repository": null,
+  "summary": {
+    "file_count": 131,
+    "occurrence_count": 300,
+    "category_file_counts": {
+      "installer_or_clone": 27,
+      "machine_discovery": 41,
+      "package_registry_metadata": 21,
+      "public_documentation": 65,
+      "raw_content_url": 2,
+      "release_or_provenance": 8,
+      "reusable_action": 2,
+      "source_or_test": 21
+    }
+  },
+  "reusable_action_references": [
+    {
+      "path": "transaction-assurance/CONFORMANCE.md",
+      "line": 101,
+      "reference": "uses: rhein1/agoragentic-integrations/.github/workflows/transaction-assurance-conformance.yml@<SUITE_COMMIT>"
+    },
+    {
+      "path": "transaction-assurance/examples/external-adopters/anchor-x402/README.md",
+      "line": 118,
+      "reference": "uses: rhein1/agoragentic-integrations/.github/workflows/transaction-assurance-conformance.yml@<SUITE_COMMIT>"
+    }
+  ],
+  "raw_content_urls": [
+    {
+      "path": "autogen/README.md",
+      "line": 9,
+      "reference": "curl -O https://raw.githubusercontent.com/rhein1/agoragentic-integrations/main/autogen/agoragentic_autogen.py"
+    },
+    {
+      "path": "langchain/README.md",
+      "line": 9,
+      "reference": "curl -O https://raw.githubusercontent.com/rhein1/agoragentic-integrations/main/langchain/agoragentic_tools.py"
+    }
+  ],
+  "owner_decisions": [
+    "Choose the final owner and repository name; no target is authorized by this packet.",
+    "Choose a compatibility window for package metadata, clone URLs, raw-content URLs, and reusable action consumers.",
+    "Choose whether external consumers receive a deprecation notice before the rename."
+  ],
+  "rollout": [
+    "Freeze unrelated changes and capture the current default-branch SHA.",
+    "Update reusable action consumers to immutable SHAs or the final repository path before renaming.",
+    "Rename through GitHub, then update package metadata, installers, raw-content URLs, discovery files, and public documentation.",
+    "Run repository validation and external no-spend smoke checks against both redirected and canonical URLs.",
+    "Publish a bounded migration notice that distinguishes redirects from permanent compatibility guarantees."
+  ],
+  "rollback": {
+    "trigger": "Any broken reusable action, installer, raw-content URL, package metadata, discovery surface, or external no-spend smoke check.",
+    "steps": [
+      "Restore the previous GitHub repository name while the redirect remains uncontested.",
+      "Revert the rename reference commit and republish only metadata that was already changed.",
+      "Re-run the full validation suite and external no-spend smoke checks before lifting the freeze."
+    ]
+  },
+  "files": [
+    {
+      "path": ".agents/skills/agoragentic-assure/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        27,
+        62,
+        65,
+        66
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-deploy/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        20,
+        21
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-execute/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-govern/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        21,
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-integrate/SKILL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        22,
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-prove/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic-sell/SKILL.md",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".agents/skills/agoragentic/SKILL.md",
+      "occurrences": 6,
+      "line_numbers": [
+        34,
+        38,
+        39,
+        41,
+        42,
+        43
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".cursor-plugin/plugin.json",
+      "occurrences": 1,
+      "line_numbers": [
+        12
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-assure.mdc",
+      "occurrences": 4,
+      "line_numbers": [
+        29,
+        64,
+        67,
+        68
+      ],
+      "categories": [
+        "installer_or_clone",
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-deploy.mdc",
+      "occurrences": 2,
+      "line_numbers": [
+        22,
+        23
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-execute.mdc",
+      "occurrences": 2,
+      "line_numbers": [
+        25,
+        26
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-govern.mdc",
+      "occurrences": 2,
+      "line_numbers": [
+        23,
+        24
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-integrate.mdc",
+      "occurrences": 3,
+      "line_numbers": [
+        24,
+        25,
+        26
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-prove.mdc",
+      "occurrences": 2,
+      "line_numbers": [
+        29,
+        30
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic-sell.mdc",
+      "occurrences": 1,
+      "line_numbers": [
+        24
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".cursor/rules/agoragentic.mdc",
+      "occurrences": 6,
+      "line_numbers": [
+        36,
+        40,
+        41,
+        43,
+        44,
+        45
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "occurrences": 3,
+      "line_numbers": [
+        4,
+        7,
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": ".github/workflows/transaction-assurance-conformance.yml",
+      "occurrences": 1,
+      "line_numbers": [
+        77
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-assure/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        27,
+        62,
+        65,
+        66
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-deploy/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        20,
+        21
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-execute/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-govern/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        21,
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-integrate/SKILL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        22,
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-prove/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic-sell/SKILL.md",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": ".opencode/skills/agoragentic/SKILL.md",
+      "occurrences": 6,
+      "line_numbers": [
+        34,
+        38,
+        39,
+        41,
+        42,
+        43
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "a2a/agent-card.json",
+      "occurrences": 1,
+      "line_numbers": [
+        76
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ACP_REGISTRY.md",
+      "occurrences": 1,
+      "line_numbers": [
+        68
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "acp/agent.json",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "agent-payments-assurance-challenge/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        30,
+        34
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "occurrences": 2,
+      "line_numbers": [
+        126,
+        127
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "autogen/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        9
+      ],
+      "categories": [
+        "public_documentation",
+        "raw_content_url"
+      ]
+    },
+    {
+      "path": "CHANGELOG.md",
+      "occurrences": 14,
+      "line_numbers": [
+        220,
+        221,
+        222,
+        223,
+        224,
+        225,
+        226,
+        227,
+        228,
+        229,
+        230,
+        231,
+        232,
+        233
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "CITATION.cff",
+      "occurrences": 1,
+      "line_numbers": [
+        14
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/.claude-plugin/plugin.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-assure/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        27,
+        62,
+        65,
+        66
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-deploy/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        20,
+        21
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-execute/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-govern/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        21,
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-integrate/SKILL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        22,
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-prove/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic-sell/SKILL.md",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/plugin/skills/agoragentic/SKILL.md",
+      "occurrences": 6,
+      "line_numbers": [
+        34,
+        38,
+        39,
+        41,
+        42,
+        43
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "claude-code/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "occurrences": 1,
+      "line_numbers": [
+        38
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "crawl4ai/agoragentic_crawl4ai.py",
+      "occurrences": 1,
+      "line_numbers": [
+        49
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "cursor/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        16
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "dify/agoragentic_provider.json",
+      "occurrences": 1,
+      "line_numbers": [
+        185
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "distribution/agent-payments-stack/correction.json",
+      "occurrences": 2,
+      "line_numbers": [
+        36,
+        43
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md",
+      "occurrences": 1,
+      "line_numbers": [
+        171
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/BRAND_SYSTEM.md",
+      "occurrences": 1,
+      "line_numbers": [
+        194
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/catalog-profile.json",
+      "occurrences": 2,
+      "line_numbers": [
+        9,
+        60
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "docs/COMMUNITY_TESTING.md",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        49
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/work-packs/MATRAIX_COHORT_ASSURANCE_ADAPTER.md",
+      "occurrences": 1,
+      "line_numbers": [
+        4
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/work-packs/MATRAIX_COHORT_ASSURANCE_REPRESENTATION_INTEGRITY.md",
+      "occurrences": 2,
+      "line_numbers": [
+        4,
+        6
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "ecosystem.json",
+      "occurrences": 4,
+      "line_numbers": [
+        16,
+        17,
+        50,
+        104
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "elizaos/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        23
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "examples/agoragentic-growth/2026-06-29-langgraph-agent-builder-execute-buyer-ad-26c9e34803/langgraph_agent_builder_execute_buyer_adapter.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        232
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "examples/agoragentic-growth/2026-06-30-agents-shipgate-mcp-seller-listing-mjs-4cf5445a35/agents_shipgate_mcp_seller_listing.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        63
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "examples/agoragentic-growth/2026-07-02-ibanforge-x402-execute-receipt-adapter-m-9a04cdff61/ibanforge_x402_execute_receipt_adapter.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        357
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "examples/agoragentic-growth/2026-07-05-render-x402-execute-tool-integration-doc-80657415c3/render_x402_execute_tool_integration_doc_pr.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        165
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "examples/agoragentic-growth/2026-07-08-apiad-aegis-local-execute-usage-wrapper--a2c7a71b20/apiad_aegis_local_execute_usage_wrapper.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        511
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "examples/anydoc-document-evidence/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        54
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "examples/buzz-signed-workspace-evidence/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        35
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "extraction/harness-core/standalone-overlay/MIGRATION.md",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "gemini-cli/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "glama.json",
+      "occurrences": 1,
+      "line_numbers": [
+        7
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "gstack/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        28
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "harness-core/package.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        82,
+        84
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "harness-core/README.md",
+      "occurrences": 7,
+      "line_numbers": [
+        146,
+        148,
+        190,
+        463,
+        511,
+        512,
+        513
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "harness-core/test/cli.test.cjs",
+      "occurrences": 1,
+      "line_numbers": [
+        66
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "harness-core/TRUSTED_PUBLISHING.md",
+      "occurrences": 1,
+      "line_numbers": [
+        19
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "hyperframes/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        27
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "hyperframes/schemas/local-render-receipt.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "hyperframes/schemas/sanitized-timeline.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "INTEGRATION_CATALOG_GUIDE.md",
+      "occurrences": 5,
+      "line_numbers": [
+        56,
+        132,
+        189,
+        190,
+        411
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "integrations.json",
+      "occurrences": 14,
+      "line_numbers": [
+        59,
+        68,
+        77,
+        86,
+        92,
+        100,
+        361,
+        373,
+        385,
+        397,
+        409,
+        1467,
+        1476,
+        1485
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "integrations.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        272
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/evidence/interchange-production-research-ledger.v1.json",
+      "occurrences": 3,
+      "line_numbers": [
+        186,
+        190,
+        220
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/sam/evidence/readonly-canary-20260820.json",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/SANDBOX_WALKTHROUGH.md",
+      "occurrences": 1,
+      "line_numbers": [
+        19
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "interchange/schemas/agent-card-federation-extension.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/schemas/external-pilot-evidence.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/schemas/federation-challenge-response.params.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/schemas/federation-follow-referral.params.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/schemas/post-pin-auth.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "langchain/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        9
+      ],
+      "categories": [
+        "public_documentation",
+        "raw_content_url"
+      ]
+    },
+    {
+      "path": "llms-full.txt",
+      "occurrences": 2,
+      "line_numbers": [
+        110,
+        111
+      ],
+      "categories": [
+        "machine_discovery",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "mcp/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        45,
+        50
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "mcp/server.json",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "micro-ecf/LLM_INSTALL.md",
+      "occurrences": 1,
+      "line_numbers": [
+        6
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "micro-ecf/package.json",
+      "occurrences": 3,
+      "line_numbers": [
+        11,
+        14,
+        16
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "micro-ecf/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        212
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "n8n/credentials/AgoragenticApi.credentials.ts",
+      "occurrences": 1,
+      "line_numbers": [
+        16
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "n8n/nodes/Agoragentic/Agoragentic.node.json",
+      "occurrences": 2,
+      "line_numbers": [
+        9,
+        14
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "n8n/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        21,
+        70
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "opencode/package.json",
+      "occurrences": 3,
+      "line_numbers": [
+        35,
+        38,
+        40
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "ows/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        91
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "premortem-golden-loop/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        42,
+        47
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "scripts/generate-skill-pack.mjs",
+      "occurrences": 3,
+      "line_numbers": [
+        61
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "scripts/prepare-harness-core-extraction.mjs",
+      "occurrences": 8,
+      "line_numbers": [
+        114,
+        115,
+        116,
+        117,
+        121,
+        123,
+        129,
+        135
+      ],
+      "categories": [
+        "installer_or_clone",
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "scripts/sync-integration-counts.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        52
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "scripts/verify-harness-core-extraction.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        127
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "scripts/verify-integrations-json.js",
+      "occurrences": 1,
+      "line_numbers": [
+        296
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "sdk/agent-os-cli/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        26,
+        33
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "sdk/agent-os-cli/README.md",
+      "occurrences": 3,
+      "line_numbers": [
+        5,
+        31,
+        32
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "sdk/node/agent-os-harness.generated.json",
+      "occurrences": 3,
+      "line_numbers": [
+        8,
+        51,
+        124
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "sdk/node/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        108,
+        115
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "sdk/node/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        47
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "sdk/python/pyproject.toml",
+      "occurrences": 2,
+      "line_numbers": [
+        45,
+        49
+      ],
+      "categories": [
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "SKILL.md",
+      "occurrences": 6,
+      "line_numbers": [
+        34,
+        38,
+        39,
+        41,
+        42,
+        43
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-assure/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        27,
+        62,
+        65,
+        66
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-deploy/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        20,
+        21
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-execute/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-govern/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        21,
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-integrate/SKILL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        22,
+        23,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-prove/SKILL.md",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic-sell/SKILL.md",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/agoragentic/SKILL.md",
+      "occurrences": 6,
+      "line_numbers": [
+        34,
+        38,
+        39,
+        41,
+        42,
+        43
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "skills/README.md",
+      "occurrences": 3,
+      "line_numbers": [
+        12,
+        18,
+        24
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "smolagents/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        139
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "specs/ACP-SPEC.md",
+      "occurrences": 2,
+      "line_numbers": [
+        354
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "submit-prs.mjs",
+      "occurrences": 4,
+      "line_numbers": [
+        107,
+        161,
+        242,
+        255
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "syrin/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        200
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "test/harness-core-extraction.test.mjs",
+      "occurrences": 8,
+      "line_numbers": [
+        26,
+        27,
+        30,
+        31,
+        34,
+        64,
+        82,
+        83
+      ],
+      "categories": [
+        "installer_or_clone",
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "transaction-assurance/CONFORMANCE.md",
+      "occurrences": 2,
+      "line_numbers": [
+        70,
+        101
+      ],
+      "categories": [
+        "public_documentation",
+        "reusable_action"
+      ]
+    },
+    {
+      "path": "transaction-assurance/examples/external-adopters/anchor-x402/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        81,
+        118
+      ],
+      "categories": [
+        "public_documentation",
+        "reusable_action"
+      ]
+    },
+    {
+      "path": "transaction-assurance/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        65,
+        70
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "transaction-assurance/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        60,
+        446
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "x402/buyer-demo.js",
+      "occurrences": 2,
+      "line_numbers": [
+        29,
+        427
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    }
+  ]
+}

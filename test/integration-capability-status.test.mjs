@@ -19,7 +19,7 @@ const expected = fs.readFileSync(
 test('generated capability status matches the machine inventory', () => {
   const result = verifyCapabilityStatus({ manifest, expected });
   assert.equal(result.ok, true);
-  assert.equal(result.generated, expected);
+  assert.equal(result.generated, result.expected);
 });
 
 test('generated capability status retains proof and authority boundaries', () => {
@@ -35,5 +35,5 @@ test('a machine-record change makes the committed status stale', () => {
   const changed = structuredClone(manifest);
   changed.integrations.find((entry) => entry.id === 'crewai')
     .capability_record.capabilities.router_client = 'tested';
-  assert.notEqual(renderCapabilityStatus(changed), expected);
+  assert.equal(verifyCapabilityStatus({ manifest: changed, expected }).ok, false);
 });

@@ -47,6 +47,8 @@
 - integrations.json — structured index of all integrations, tools, packages
 - integrations.schema.json — JSON Schema for validation
 - docs/INTEGRATION_CAPABILITY_STATUS.md — generated human-readable capability and evidence table
+- docs/REPOSITORY_RENAME_PREFLIGHT.md — no-authority repository rename dependency and rollback packet
+- docs/repository-rename-preflight.json — deterministic per-file rename dependency inventory
 - ecosystem.json — durable public portfolio profile and live-truth links
 - ecosystem.schema.json — included JSON Schema for the ecosystem profile
 - docs/catalog-profile.json — canonical descriptions, assets, package coordinate, authority boundary, and channel status

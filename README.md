@@ -217,6 +217,8 @@ Experimental and source-only integrations retain the limits stated in their own 
 |---|---|
 | [`integrations.json`](./integrations.json) | Canonical integration and package inventory |
 | [Generated integration capability status](./docs/INTEGRATION_CAPABILITY_STATUS.md) | Human-readable capability and evidence table derived from the canonical inventory |
+| [Repository rename preflight](./docs/REPOSITORY_RENAME_PREFLIGHT.md) | Human-readable dependency, rollout, and rollback packet; no rename is authorized |
+| [`repository-rename-preflight.json`](./docs/repository-rename-preflight.json) | Deterministic per-file rename dependency inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
@@ -243,6 +245,8 @@ Live machine surfaces are authoritative for current availability. Repository doc
 ```bash
 node scripts/adapter-conformance-agent.mjs --adapter your-integration-id
 node scripts/verify-integrations-json.js
+node scripts/sync-integration-counts.mjs --check
+node scripts/generate-repository-rename-preflight.mjs --check
 ```
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md), [distribution status](./docs/DISTRIBUTION.md), and [community testing](./docs/COMMUNITY_TESTING.md).

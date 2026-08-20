@@ -251,6 +251,8 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Machine index | integrations.json |
 | JSON Schema | integrations.schema.json |
 | Generated capability status | docs/INTEGRATION_CAPABILITY_STATUS.md |
+| Repository rename preflight | docs/REPOSITORY_RENAME_PREFLIGHT.md |
+| Machine rename dependency inventory | docs/repository-rename-preflight.json |
 | Ecosystem profile | ecosystem.json |
 | Ecosystem profile schema | ecosystem.schema.json |
 | Client distribution status | docs/DISTRIBUTION.md |
