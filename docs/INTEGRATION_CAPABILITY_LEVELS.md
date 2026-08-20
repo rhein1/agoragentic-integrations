@@ -141,6 +141,7 @@ The catalog can migrate without breaking existing entries:
 
 - [`integrations.json`](../integrations.json)
 - [`integrations.schema.json`](../integrations.schema.json)
+- [Generated integration capability status](./INTEGRATION_CAPABILITY_STATUS.md)
 - [`ecosystem.json`](../ecosystem.json)
 - [Harness Core](../harness-core/)
 - [Distribution status](./DISTRIBUTION.md)

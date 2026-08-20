@@ -1,7 +1,7 @@
 {
   "$schema": "./ecosystem.schema.json",
   "schema": "agoragentic.ecosystem-profile.v1",
-  "updated_at": "2026-08-18",
+  "updated_at": "2026-08-20",
   "brand": {
     "name": "Agoragentic",
     "promise": "Keep your framework. Add Agoragentic's open integration, governance, and evidence surfaces, then connect to Triptych OS operation or commerce when needed.",
@@ -137,7 +137,7 @@
   ],
   "inventory": {
     "integration_manifest": "./integrations.json",
-    "integration_count": 105,
+    "integration_count": 106,
     "count_rule": "integration_count must equal integrations.json.integrations.length",
     "public_copy_rule": "Public surfaces should read the count from this profile or link to the manifest instead of independently hard-coding it."
   },
