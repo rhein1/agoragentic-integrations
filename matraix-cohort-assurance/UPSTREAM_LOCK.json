@@ -1,0 +1,30 @@
+{
+  "schema": "agoragentic.external-source-lock.v1",
+  "repository": "https://github.com/MatrAIx-ai/MatrAIx-Persona-8B",
+  "commit": "68f5faf4eed9a4f48513ca3ea4f22ee0f6b14c82",
+  "tree": "ceb400be64ae7c971ba7e397aa2d049c3a08bd3b",
+  "observed_at": "2026-08-20T17:33:45Z",
+  "license": "MIT",
+  "source_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "4108c3fa8b0da77a554fa87c9053dc49bc1bf4ac1a500819d1dc1c8b172af9bb"
+    },
+    {
+      "path": "README.md",
+      "sha256": "bb85aec8dd0e7813d6f1c7f52894cec853edfead12df679fca36025e09e9d6e8"
+    },
+    {
+      "path": "application/task-spec/web/README.md",
+      "sha256": "ba81d2b766cf2b064ae9c4962abb8ee17a3e8fde867272f62dd0b0ba0d989e64"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "b6bbd827f949f7435864759075f70b2d357e28f0efc9be140e099ca0b9ca17e2"
+    }
+  ],
+  "dataset_bundled": false,
+  "partnership_claimed": false,
+  "external_compatibility_verified": false,
+  "canonical_payload_sha256": "c409499e8685b8f978dc7bac67179bf089cc8cd6dbbf3bb5b9aafbc460a9a254"
+}

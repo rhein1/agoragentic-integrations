@@ -1,0 +1,35 @@
+{
+  "schema": "agoragentic.synthetic-cohort-strategy.v1",
+  "dataset": {
+    "id": "agoragentic-sanitized-fixture-cohort",
+    "revision": "1",
+    "source": "package-local synthetic CI fixture",
+    "license_terms": "Agoragentic MIT fixture; no MatrAIx dataset redistributed",
+    "digest": "sha256:104d5c99e428412bf12c4fae3d02cb18f85fd47c53547856ef572182ee9c83e3"
+  },
+  "cohort_query_digest": "sha256:3b2d67fb4630fd6e591d6144f3907bf6a8ef49f8d24a6717881fa1da9a02fcce",
+  "sample_size": 4,
+  "seed": 3202026,
+  "replacement_policy": "without_replacement",
+  "model": {
+    "provider": "fixture",
+    "name": "deterministic-scripted-observer",
+    "revision": "1",
+    "digest": "sha256:c8e43fb9ac5fa80699f003bca5ac7c80b6292b740494199f44d2ef32a9e73fbf"
+  },
+  "same_backbone": true,
+  "representation_boundary": {
+    "human_participant_substitution_claimed": false,
+    "community_voice_claimed": false,
+    "representational_authority_claimed": false,
+    "deliberative_authority_claimed": false,
+    "affected_stakeholder_authorization_claimed": false,
+    "consent_inferred_from_simulation": false,
+    "lived_experience_claimed": false,
+    "human_preference_inference_claimed": false,
+    "population_inference_claimed": false,
+    "market_demand_inference_claimed": false,
+    "legal_or_policy_decision_use": false,
+    "consequential_demographic_decision_use": false
+  }
+}
