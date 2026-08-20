@@ -134,6 +134,12 @@ test('live capture requires one exact discovery match and describes before norma
   });
   assert.deepEqual(client.calls.map((call) => call.name), ['find_remote_tools', 'describe_remote_tool']);
   assert.equal(output.packet.eligibility.eligible, false);
+  assert.equal(output.capture_evidence.sam_endpoint_called, true);
+  assert.deepEqual(output.capture_evidence.sam_control_calls_made, [
+    'find_remote_tools',
+    'describe_remote_tool',
+  ]);
+  assert.equal(output.capture_evidence.external_provider_called, false);
   assert.equal(output.capture_evidence.provider_invoked, false);
   assert.equal(output.capture_evidence.call_remote_tool_used, false);
   assert.equal(JSON.stringify(output).includes(PEER), false);

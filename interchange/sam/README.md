@@ -42,6 +42,29 @@ npm test
 The committed test suite is hermetic: it uses injected MCP fixtures and makes no
 network, provider, wallet, payment, settlement, or publication calls.
 
+## Pinned no-spend canary
+
+On 2026-08-20, the live client completed an authenticated, loopback-only canary
+against Google SAM revision
+`b42aaaf2d7f9ec450ab15e97bf704a21539de0e3`. The disposable runtime used two
+in-process SAM nodes and one synthetic read-only MCP tool. The adapter called
+only `get_mesh_info`, `discover_remote_services`, `find_remote_tools`, and
+`describe_remote_tool`; it did not call `call_remote_tool` or the synthetic
+provider tool.
+
+The sanitized receipt is committed at
+[`evidence/readonly-canary-20260820.json`](evidence/readonly-canary-20260820.json).
+It records one connected peer and one exact peer-catalog tool match. The
+ephemeral mesh did not populate a DHT provider index, so type-wide service
+discovery returned zero; the receipt preserves that limitation instead of
+turning it into a positive claim.
+
+The receipt binds the disposable canary observation to the repository owner for
+review provenance only. It does not bind a reusable SAM PeerID to a production
+Agoragentic provider account. Import eligibility, execution, payment, wallet,
+trust mutation, marketplace publication, public execute, and production
+activation all remain disabled.
+
 ## Discover SAM tools without invoking them
 
 Start an enrolled `sam-node`, then use its token path rather than placing the
@@ -82,6 +105,11 @@ the peer, service, tool, labels, and schemas. It does not emit the raw PeerID or
 tool route. `--include-private-target` exists only for a local, owner-controlled
 handoff and its output must not be committed or published. Private-target output
 intentionally does not validate against the public-safe import schema.
+
+`capture_evidence.sam_control_calls_made` lists the SAM metadata calls used by a
+live capture. `external_provider_called: false` and `provider_invoked: false`
+mean that no discovered provider tool was called; they do not claim that the
+local SAM metadata endpoint was never contacted.
 
 Tool responses, discovery rows, token material, names, descriptions, and schemas
 are bounded before normalization. Oversized or malformed metadata fails closed
@@ -130,7 +158,6 @@ commercial eligibility, or settlement proof.
   its normalized/ineligible state.
 - Add an owner-reviewed SAM PeerID-to-provider binding ceremony with rotation
   and revocation.
-- Run one free, read-only canary over the pinned SAM revision.
 - Add an explicitly approved remote invocation canary and bind request/response
   hashes plus transport status into an Interchange receipt.
 - Only then evaluate a paid canary using the existing Agoragentic money path.
@@ -138,6 +165,8 @@ commercial eligibility, or settlement proof.
 ## Compatibility statement
 
 This slice was prepared against `google/sam` revision
-`b42aaaf2d7f9ec450ab15e97bf704a21539de0e3` and the documented local Streamable
-HTTP MCP gateway. Offline tests passing do not claim live testnet validation,
-Google endorsement, provider identity, commercial eligibility, or settlement.
+`b42aaaf2d7f9ec450ab15e97bf704a21539de0e3` and completed the bounded local
+canary described above through the documented Streamable HTTP MCP gateway.
+Offline tests and this disposable canary do not claim public testnet validation,
+Google endorsement, production provider identity, commercial eligibility,
+provider execution, payment, settlement, or production activation.

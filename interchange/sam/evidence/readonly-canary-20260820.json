@@ -1,0 +1,127 @@
+{
+  "schema": "agoragentic.interchange.sam-readonly-canary.v1",
+  "recorded_at": "2026-08-20T12:11:37.652Z",
+  "provenance": {
+    "upstream_repository": "https://github.com/google/sam",
+    "sam_runtime_revision": "b42aaaf2d7f9ec450ab15e97bf704a21539de0e3",
+    "sam_runtime_revision_kind": "google_sam_base_commit",
+    "adapter_repository": "https://github.com/rhein1/agoragentic-integrations",
+    "adapter_pr": 337,
+    "adapter_revision": "6da11d4d71ee74cdafd4616f537dd0910b9daf1b",
+    "runtime_kind": "operator_controlled_ephemeral_two_node_sam_mesh"
+  },
+  "observation": {
+    "endpoint_ref": "sha256:aa57e58a95625b61956dd9c5ffc4cd6d58f7850e98e46776ba8d3fca0ea5a5bc",
+    "endpoint_loopback": true,
+    "authenticated_sidecar": true,
+    "type_discovery_service_count": 0,
+    "exact_peer_catalog_tool_count": 1,
+    "type_discovery_limit": "ephemeral_direct_peer_mesh_did_not_populate_the_dht_provider_index",
+    "exact_peer_and_tool_match": true,
+    "allowed_tool_calls": [
+      "get_mesh_info",
+      "discover_remote_services",
+      "find_remote_tools",
+      "find_remote_tools",
+      "describe_remote_tool"
+    ],
+    "call_remote_tool_used": false,
+    "provider_tool_invoked": false,
+    "funds_moved": false,
+    "settlement_attempted": false,
+    "raw_peer_id_public": false,
+    "raw_tool_target_public": false
+  },
+  "operator_provider_binding": {
+    "binding_status": "repository_owner_attested_canary_binding",
+    "operator_account": "github:rhein1",
+    "operator_account_ref": "sha256:2475fd30c9509d6f9bd5f9450b41e5240cde243b6287b453e08f29a8b2ba9610",
+    "peer_ref": "sha256:10b5b4e902639293516a7d5d9fb3136d46dc95fc9acd7d926176103c860b5292",
+    "service_ref": "sha256:2ed24e9e4faff72657d39e883ef0908a196a891702739c83f353e830dea86d28",
+    "tool_ref": "sha256:cac66fda72e07258be42c67992b2bb7b96e3c4a70068c840c6d785be8d566646",
+    "scope": "ephemeral_local_canary_only",
+    "production_provider_account_bound": false,
+    "reusable_after_canary": false,
+    "attestation_mechanism": "signed_git_commit_after_runtime_capture"
+  },
+  "activation": {
+    "readonly_canary_completed": true,
+    "import_eligible": false,
+    "execution_enabled": false,
+    "payment_enabled": false,
+    "wallet_spend_enabled": false,
+    "trust_mutation_enabled": false,
+    "marketplace_publication_enabled": false,
+    "public_execute_enabled": false,
+    "production_activation": false
+  },
+  "normalized_packet": {
+    "schema": "agoragentic.interchange.sam-tool-import.v1",
+    "generated_at": "2026-08-20T12:11:37.652Z",
+    "source_kind": "sam_mesh_tool",
+    "lifecycle_status": "normalized",
+    "manifest_hash": "sha256:bcb75c18884f34505ce18dc488887c186e93cbe19a59c9e63b42c4716581d803",
+    "capability_card_input": {
+      "name": "agoragentic-canary: inspect schema",
+      "description": "Return bounded, read-only schema metadata for the SAM canary.",
+      "category": "developer-tools",
+      "tags": [
+        "sam",
+        "mcp",
+        "sovereign-agent-mesh"
+      ],
+      "interface_kind": "sam_mesh_tool",
+      "pricing": {
+        "pricing_model": "quote_required",
+        "currency": "USDC",
+        "unit_price": "0"
+      },
+      "risk_level": "network_discovered_unbound_provider",
+      "source": {
+        "source_type": "sam_mesh_tool_observation",
+        "source_ref": "sam:10b5b4e902639293:cac66fda72e07258"
+      }
+    },
+    "transport_evidence": {
+      "transport": "sam",
+      "observation_type": "caller_supplied_find_and_describe_results",
+      "peer_ref": "sha256:10b5b4e902639293516a7d5d9fb3136d46dc95fc9acd7d926176103c860b5292",
+      "service_ref": "sha256:2ed24e9e4faff72657d39e883ef0908a196a891702739c83f353e830dea86d28",
+      "tool_ref": "sha256:cac66fda72e07258be42c67992b2bb7b96e3c4a70068c840c6d785be8d566646",
+      "schema_hash": "sha256:cfc14e0d21b3de4310145ad0eff246fb04822d433b676f9a360e10be512e5689",
+      "labels_hash": "sha256:80fe33d67f23acbe69fa0adcd48c8ea3940f1f7b57849d5a861b46de4172c8be",
+      "observed_label_keys": [],
+      "authorization_verified_by_normalizer": false,
+      "reachability_verified_by_normalizer": false,
+      "provider_account_bound": false,
+      "point_in_time_only": true
+    },
+    "eligibility": {
+      "eligible": false,
+      "blockers": [
+        "sam_provider_account_binding_required",
+        "commercial_terms_required",
+        "live_authorization_canary_required",
+        "outcome_validator_required"
+      ]
+    },
+    "authority_flags": {
+      "eligible_for_execution": false,
+      "provider_identity_bound": false,
+      "commercial_terms_bound": false,
+      "payment_enabled": false,
+      "wallet_spend_enabled": false,
+      "trust_mutation_enabled": false,
+      "marketplace_publication_enabled": false,
+      "public_execute_enabled": false
+    },
+    "safety": {
+      "metadata_only": true,
+      "external_calls_made": false,
+      "provider_invoked": false,
+      "funds_moved": false,
+      "raw_peer_id_public": false,
+      "raw_tool_target_public": false
+    }
+  }
+}

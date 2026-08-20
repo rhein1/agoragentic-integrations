@@ -364,9 +364,12 @@ export async function captureSamTool({ peerId, toolName }, options = {}, depende
       authenticated: connection.authenticated,
       packet,
       capture_evidence: {
+        sam_endpoint_called: true,
+        sam_control_calls_made: ['find_remote_tools', 'describe_remote_tool'],
         find_remote_tools_succeeded: true,
         describe_remote_tool_succeeded: true,
         exact_peer_and_tool_match: true,
+        external_provider_called: false,
         provider_invoked: false,
         call_remote_tool_used: false,
         funds_moved: false,
