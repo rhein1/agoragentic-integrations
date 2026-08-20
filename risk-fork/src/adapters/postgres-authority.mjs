@@ -1,5 +1,4 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 
 import { sha256Ref } from '../canonical.mjs';
 import { verifyExecutionBinding } from '../contracts.mjs';
@@ -34,18 +33,17 @@ import {
   requireString,
   safeEqual,
 } from '../util.mjs';
+import {
+  acquirePostgresAuthorityClient,
+  buildPostgresAuthorityPoolConfig,
+  createPostgresAuthorityPool,
+  migratePostgresDistributedAuthority,
+  quotePostgresAuthorityIdentifier,
+  verifyPostgresDistributedAuthoritySchema,
+} from './postgres-authority-migrator.mjs';
 
 const POSTGRES_AUTHORITIES = new WeakMap();
 const SERIALIZATION_FAILURES = new Set(['40001', '40P01']);
-const MIGRATION_URL = new URL('../../migrations/001_distributed_authority.pg.sql', import.meta.url);
-
-function quoteIdentifier(value, label = 'PostgreSQL schema name') {
-  const normalized = requireString(value, label, { maxLength: 63 });
-  if (!/^[a-z_][a-z0-9_]*$/.test(normalized)) {
-    throw new TypeError(`${label} must be a lowercase PostgreSQL identifier`);
-  }
-  return `"${normalized}"`;
-}
 
 function asIso(value, label) {
   return requireIsoDate(value instanceof Date ? value : String(value), label);
@@ -55,6 +53,18 @@ function asVersion(value, label = 'operation version') {
   const normalized = typeof value === 'number' ? value : Number.parseInt(value, 10);
   if (!Number.isSafeInteger(normalized) || normalized < 1) {
     throw new TypeError(`${label} must be a positive safe integer`);
+  }
+  return normalized;
+}
+
+function asStatusCount(value, label) {
+  const text = typeof value === 'bigint' ? value.toString() : String(value);
+  if (!/^(?:0|[1-9][0-9]*)$/.test(text)) {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+  const normalized = Number(text);
+  if (!Number.isSafeInteger(normalized)) {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
   }
   return normalized;
 }
@@ -160,9 +170,13 @@ async function runBoundedVerification(state, callback, request, label) {
 
 async function withSerializable(state, operation) {
   for (let attempt = 0; attempt < state.maxTransactionAttempts; attempt += 1) {
-    const client = await state.pool.connect();
+    const client = await acquirePostgresAuthorityClient(state.pool, {
+      requireTls: state.requireTls,
+      verifiedClients: state.verifiedClients,
+    });
     try {
       await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+      await client.query('SET LOCAL synchronous_commit = on');
       await client.query(`SET LOCAL statement_timeout = ${state.statementTimeoutMs}`);
       await client.query(
         `SET LOCAL idle_in_transaction_session_timeout = ${state.statementTimeoutMs}`,
@@ -182,6 +196,18 @@ async function withSerializable(state, operation) {
     }
   }
   throw new Error('PostgreSQL distributed authority transaction retry limit exhausted');
+}
+
+async function queryWithVerifiedClient(state, sql, parameters = []) {
+  const client = await acquirePostgresAuthorityClient(state.pool, {
+    requireTls: state.requireTls,
+    verifiedClients: state.verifiedClients,
+  });
+  try {
+    return await client.query(sql, parameters);
+  } finally {
+    client.release();
+  }
 }
 
 function table(state, name) {
@@ -1531,12 +1557,132 @@ async function reconcile(state, input) {
 
 async function getOperation(state, operationRef) {
   const normalized = requireOpaqueRef(operationRef, 'operation_ref');
-  const result = await state.pool.query(
+  const result = await queryWithVerifiedClient(
+    state,
     `SELECT * FROM ${table(state, 'operations')}
       WHERE authority_id = $1 AND operation_ref = $2`,
     [state.authorityId, normalized],
   );
   return operationFromRow(result.rows[0] ?? null);
+}
+
+async function getAuthorityStatus(state) {
+  let client = null;
+  let transactionOpen = false;
+  try {
+    client = await acquirePostgresAuthorityClient(state.pool, {
+      requireTls: state.requireTls,
+      verifiedClients: state.verifiedClients,
+    });
+    await client.query('BEGIN READ ONLY');
+    transactionOpen = true;
+    const statusTimeoutMs = Math.min(state.statementTimeoutMs, 5_000);
+    await client.query(`SET LOCAL statement_timeout = ${statusTimeoutMs}`);
+    const schemaReport = await verifyPostgresDistributedAuthoritySchema(client, {
+      schemaName: state.schemaName,
+      verifyRuntimePrivileges: state.deploymentMode === 'production',
+    });
+    const result = await client.query(
+      `WITH status_clock AS (
+         SELECT clock_timestamp() AS observed_at
+       ), authority AS (
+         SELECT schema_version
+           FROM ${table(state, 'authority_meta')}
+          WHERE authority_id = $1
+       ), unresolved AS (
+         SELECT count(*) FILTER (WHERE status = 'prepared') AS prepared_count,
+                count(*) FILTER (WHERE status = 'effect_started') AS effect_started_count,
+                count(*) FILTER (WHERE status = 'ambiguous') AS ambiguous_count,
+                min(updated_at) AS oldest_updated_at
+           FROM ${table(state, 'operations')}
+          WHERE authority_id = $1
+            AND status IN ('prepared', 'effect_started', 'ambiguous')
+       )
+       SELECT authority.schema_version,
+              status_clock.observed_at,
+              unresolved.prepared_count,
+              unresolved.effect_started_count,
+              unresolved.ambiguous_count,
+              unresolved.oldest_updated_at,
+              CASE
+                WHEN unresolved.oldest_updated_at IS NULL THEN NULL
+                ELSE greatest(
+                  0,
+                  floor(extract(epoch FROM (
+                    status_clock.observed_at - unresolved.oldest_updated_at
+                  )) * 1000)
+                )::bigint
+              END AS oldest_age_ms
+         FROM status_clock
+         CROSS JOIN authority
+         CROSS JOIN unresolved`,
+      [state.authorityId],
+    );
+    if (result.rowCount !== 1) throw new Error('Authority status row is absent');
+    const row = result.rows[0];
+    const observedAt = asIso(row.observed_at, 'PostgreSQL authority status time');
+    const oldestUpdatedAt = optionalIso(
+      row.oldest_updated_at,
+      'PostgreSQL authority oldest unresolved time',
+    );
+    const oldestAgeMs = row.oldest_age_ms == null
+      ? null
+      : asStatusCount(row.oldest_age_ms, 'PostgreSQL authority oldest unresolved age');
+    if ((oldestUpdatedAt === null) !== (oldestAgeMs === null)) {
+      throw new Error('Authority unresolved age and timestamp disagree');
+    }
+    const migrationVersions = schemaReport.migration_versions.map((version) => (
+      asVersion(version, 'PostgreSQL authority migration version')
+    ));
+    const migrationHashes = schemaReport.migration_hashes.map((hash) => (
+      requireSha256Ref(hash, 'PostgreSQL authority migration hash')
+    ));
+    const pool = {
+      total_connections: asStatusCount(state.pool.totalCount, 'PostgreSQL pool total'),
+      idle_connections: asStatusCount(state.pool.idleCount, 'PostgreSQL pool idle total'),
+      waiting_requests: asStatusCount(state.pool.waitingCount, 'PostgreSQL pool waiting total'),
+    };
+    await client.query('ROLLBACK');
+    transactionOpen = false;
+    return deepFreeze({
+      schema: 'agoragentic.risk-fork.postgres-authority-status.v1',
+      version: 1,
+      schema_verification: {
+        verified: true,
+        schema_version: asVersion(row.schema_version, 'PostgreSQL authority schema version'),
+        migration_versions: migrationVersions,
+        migration_hashes: migrationHashes,
+      },
+      database_clock: {
+        reachable: true,
+        observed_at: observedAt,
+      },
+      unresolved: {
+        counts: {
+          prepared: asStatusCount(row.prepared_count, 'prepared operation count'),
+          effect_started: asStatusCount(
+            row.effect_started_count,
+            'effect-started operation count',
+          ),
+          ambiguous: asStatusCount(row.ambiguous_count, 'ambiguous operation count'),
+        },
+        oldest_updated_at: oldestUpdatedAt,
+        oldest_age_ms: oldestAgeMs,
+      },
+      pool,
+    });
+  } catch {
+    if (client && transactionOpen) await client.query('ROLLBACK').catch(() => {});
+    const error = new Error('PostgreSQL authority status is unavailable');
+    error.code = 'POSTGRES_AUTHORITY_STATUS_UNAVAILABLE';
+    throw error;
+  } finally {
+    try {
+      client?.release();
+    } catch {
+      // Status output and errors remain redacted if a broken client cannot release cleanly.
+    }
+  }
 }
 
 async function listUnresolved(state, input = {}) {
@@ -1548,7 +1694,8 @@ async function listUnresolved(state, input = {}) {
   }
   const before = input.before == null ? null : requireIsoDate(input.before, 'unresolved query before');
   const cursor = input.cursor == null ? null : requireOpaqueRef(input.cursor, 'unresolved query cursor');
-  const result = await state.pool.query(
+  const result = await queryWithVerifiedClient(
+    state,
     `SELECT * FROM ${table(state, 'operations')}
       WHERE authority_id = $1
         AND status IN ('prepared', 'effect_started', 'ambiguous')
@@ -1573,7 +1720,8 @@ async function getAuditTrail(state, input = {}) {
     || !Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
     throw new TypeError('distributed audit pagination is invalid');
   }
-  const result = await state.pool.query(
+  const result = await queryWithVerifiedClient(
+    state,
     `SELECT * FROM ${table(state, 'audit_events')}
       WHERE authority_id = $1 AND sequence > $2
       ORDER BY sequence ASC LIMIT $3`,
@@ -1581,7 +1729,8 @@ async function getAuditTrail(state, input = {}) {
   );
   let previous = after === 0 ? null : null;
   if (after > 0) {
-    const head = await state.pool.query(
+    const head = await queryWithVerifiedClient(
+      state,
       `SELECT event_hash FROM ${table(state, 'audit_events')}
         WHERE authority_id = $1 AND sequence = $2`,
       [state.authorityId, after],
@@ -1726,89 +1875,78 @@ function createInternals(options) {
     'PostgreSQL schema name',
     { maxLength: 63 },
   );
+  const deploymentMode = options.deploymentMode ?? 'development';
+  if (!['development', 'production'].includes(deploymentMode)) {
+    throw new TypeError('deploymentMode must be development or production');
+  }
+  const migrationMode = options.migrationMode
+    ?? (deploymentMode === 'production' ? 'verify-only' : 'apply');
+  if (!['apply', 'verify-only'].includes(migrationMode)) {
+    throw new TypeError('migrationMode must be apply or verify-only');
+  }
+  if (deploymentMode === 'production' && migrationMode !== 'verify-only') {
+    const error = new TypeError('Production PostgreSQL runtime cannot apply schema migrations');
+    error.code = 'POSTGRES_AUTHORITY_RUNTIME_DDL_FORBIDDEN';
+    throw error;
+  }
+  const requireTls = deploymentMode === 'production' || options.tls != null;
+  const tls = options.tls == null
+    ? null
+    : Object.freeze({ ...options.tls });
+  const poolOptions = Object.freeze({
+    connectionString: options.connectionString,
+    requireTls,
+    tls,
+    maxConnections: options.maxConnections ?? 16,
+    connectionTimeoutMs: options.connectionTimeoutMs ?? 5_000,
+    statementTimeoutMs: options.statementTimeoutMs ?? 30_000,
+    applicationName: 'agoragentic-risk-fork-authority',
+  });
+  buildPostgresAuthorityPoolConfig(poolOptions);
   return {
-    connectionString: requireString(options.connectionString, 'PostgreSQL connection string', {
-      maxLength: 8192,
-    }),
     authorityId: requireOpaqueRef(options.authorityId ?? 'risk-fork-authority:default', 'authorityId'),
     schemaName,
-    quotedSchema: quoteIdentifier(schemaName),
+    quotedSchema: quotePostgresAuthorityIdentifier(schemaName),
+    deploymentMode,
+    migrationMode,
+    requireTls,
+    poolOptions,
     maxConnections: options.maxConnections ?? 16,
     connectionTimeoutMs: options.connectionTimeoutMs ?? 5_000,
     statementTimeoutMs: options.statementTimeoutMs ?? 30_000,
     maxTransactionAttempts: options.maxTransactionAttempts ?? 4,
     verifyAuthorizationIntegrity: options.verifyAuthorizationIntegrity ?? null,
     verifyReconciliation: options.verifyReconciliation ?? null,
+    verifiedClients: new WeakSet(),
     initializing: null,
     pool: null,
   };
 }
 
 async function initializeAuthority(state) {
-  let postgres;
+  const pool = await createPostgresAuthorityPool(state.poolOptions);
   try {
-    postgres = await import('pg');
-  } catch (error) {
-    const unavailable = new Error('The PostgreSQL authority requires the reviewed pg package');
-    unavailable.code = 'POSTGRES_AUTHORITY_DRIVER_UNAVAILABLE';
-    unavailable.cause = error;
-    throw unavailable;
-  }
-  const Pool = postgres.Pool ?? postgres.default?.Pool;
-  if (typeof Pool !== 'function') throw new Error('The pg package does not export Pool');
-  const pool = new Pool({
-    connectionString: state.connectionString,
-    max: state.maxConnections,
-    connectionTimeoutMillis: state.connectionTimeoutMs,
-    query_timeout: state.statementTimeoutMs,
-    application_name: 'agoragentic-risk-fork-authority',
-  });
-  try {
-    const migrationTemplate = await readFile(MIGRATION_URL, 'utf8');
-    const migrationSource = migrationTemplate.replace(/\r\n?/g, '\n');
-    const migrationHash = sha256Ref(migrationSource);
-    const migrationSql = migrationSource.replaceAll('__RISK_FORK_SCHEMA__', state.quotedSchema);
-    const client = await pool.connect();
+    if (state.migrationMode === 'apply') {
+      await migratePostgresDistributedAuthority({
+        pool,
+        schemaName: state.schemaName,
+        requireTls: state.requireTls,
+      });
+    }
+    const client = await acquirePostgresAuthorityClient(pool, {
+      requireTls: state.requireTls,
+      verifiedClients: state.verifiedClients,
+    });
     try {
-      await client.query('BEGIN');
-      await client.query('SELECT pg_advisory_xact_lock(1380338246, 303)');
-      await client.query(`CREATE SCHEMA IF NOT EXISTS ${state.quotedSchema}`);
-      await client.query(
-        `CREATE TABLE IF NOT EXISTS ${table(state, 'authority_schema_migrations')} (
-           version integer PRIMARY KEY CHECK (version >= 1),
-           migration_hash text NOT NULL CHECK (migration_hash ~ '^sha256:[a-f0-9]{64}$'),
-           applied_at timestamptz NOT NULL DEFAULT clock_timestamp()
-         )`,
-      );
-      const applied = await client.query(
-        `SELECT migration_hash
-           FROM ${table(state, 'authority_schema_migrations')}
-          WHERE version = 1 FOR UPDATE`,
-      );
-      if (applied.rowCount === 0) {
-        await client.query(migrationSql);
-        await client.query(
-          `INSERT INTO ${table(state, 'authority_schema_migrations')} (
-             version, migration_hash, applied_at
-           ) VALUES (1, $1, clock_timestamp())`,
-          [migrationHash],
-        );
-      } else if (!safeEqual(applied.rows[0].migration_hash, migrationHash)) {
-        throw distributedAuthorityError(
-          'Applied PostgreSQL authority migration differs from the reviewed source',
-          'DISTRIBUTED_AUTHORITY_MIGRATION_HASH_MISMATCH',
-          { schema_name: state.schemaName, version: 1 },
-        );
-      }
+      await verifyPostgresDistributedAuthoritySchema(client, {
+        schemaName: state.schemaName,
+        verifyRuntimePrivileges: state.deploymentMode === 'production',
+      });
       await client.query(
         `INSERT INTO ${table(state, 'authority_meta')} (authority_id)
          VALUES ($1) ON CONFLICT (authority_id) DO NOTHING`,
         [state.authorityId],
       );
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
     } finally {
       client.release();
     }
@@ -1835,6 +1973,9 @@ export class PostgresDistributedCommitAuthority {
       'maxTransactionAttempts',
       'verifyAuthorizationIntegrity',
       'verifyReconciliation',
+      'deploymentMode',
+      'migrationMode',
+      'tls',
     ], 'PostgreSQL distributed authority options');
     for (const [field, value, min, max] of [
       ['maxConnections', options.maxConnections ?? 16, 1, 100],
@@ -1879,6 +2020,7 @@ export class PostgresDistributedCommitAuthority {
     const pool = state?.pool;
     if (pool) {
       state.pool = null;
+      state.verifiedClients = new WeakSet();
       await pool.end();
     }
   }
@@ -1923,6 +2065,13 @@ export class PostgresDistributedCommitAuthority {
     return getOperation(assertAuthority(this), operationRef);
   }
 
+  getAuthorityStatus() {
+    if (arguments.length !== 0) {
+      throw new TypeError('PostgreSQL authority status accepts no input');
+    }
+    return getAuthorityStatus(assertAuthority(this));
+  }
+
   listUnresolved(input) {
     return listUnresolved(assertAuthority(this), input);
   }
@@ -1937,4 +2086,14 @@ Object.freeze(PostgresDistributedCommitAuthority);
 
 export function isPostgresDistributedCommitAuthority(value) {
   return POSTGRES_AUTHORITIES.has(value);
+}
+
+export function isProductionPostgresDistributedCommitAuthority(value) {
+  const state = POSTGRES_AUTHORITIES.get(value);
+  return Boolean(state
+    && state.deploymentMode === 'production'
+    && state.migrationMode === 'verify-only'
+    && state.requireTls === true
+    && state.poolOptions.requireTls === true
+    && state.poolOptions.tls != null);
 }

@@ -5,7 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { LocalReferenceRiskForkAdapter } from '../src/adapters/local-reference.mjs';
-import { PostgresDistributedCommitAuthority } from '../src/adapters/postgres-authority.mjs';
+import {
+  PostgresDistributedCommitAuthority,
+  isProductionPostgresDistributedCommitAuthority,
+} from '../src/adapters/postgres-authority.mjs';
 import {
   FileParentHeadTransaction,
   commitPreparedArtifact,
@@ -22,6 +25,12 @@ import {
   makeForkIdentity,
   makePreparedLifecycle,
 } from './helpers.mjs';
+
+const TEST_CA = [
+  '-----BEGIN CERTIFICATE-----',
+  'contract-only-ca',
+  '-----END CERTIFICATE-----',
+].join('\n');
 
 function governance(capsule) {
   return {
@@ -159,6 +168,64 @@ test('production clean commit rejects the file reference authority', async (t) =
     }),
     (error) => error?.code === 'PRODUCTION_DISTRIBUTED_AUTHORITY_REQUIRED',
   );
+});
+
+test('production clean commit rejects a development PostgreSQL authority', async () => {
+  const value = fixture();
+  const distributedCommitAuthority = new PostgresDistributedCommitAuthority({
+    connectionString: 'postgresql://unused.invalid/risk_fork',
+  });
+  await assert.rejects(
+    commitPreparedArtifact({
+      ...value.input,
+      distributedCommitAuthority,
+      distributedClaimantRef: 'claimant:contract-test',
+    }, {
+      clock: () => NOW,
+      mode: 'production',
+    }),
+    (error) => error?.code === 'PRODUCTION_POSTGRES_AUTHORITY_CONFIGURATION_REQUIRED',
+  );
+});
+
+test('production controller rejects development authority and requires exact strict configuration', () => {
+  const provider = new LocalReferenceRiskForkAdapter();
+  const developmentAuthority = new PostgresDistributedCommitAuthority({
+    connectionString: 'postgresql://unused.invalid/risk_fork',
+  });
+  assert.equal(isProductionPostgresDistributedCommitAuthority(developmentAuthority), false);
+  assert.throws(
+    () => new RiskForkController({
+      provider,
+      mode: 'production',
+      distributedCommitAuthority: developmentAuthority,
+      distributedClaimantRef: 'claimant:contract-test',
+    }),
+    (error) => error?.code === 'PRODUCTION_POSTGRES_AUTHORITY_CONFIGURATION_REQUIRED',
+  );
+  assert.throws(
+    () => new RiskForkController({ provider, mode: 'production' }),
+    (error) => error?.code === 'PRODUCTION_POSTGRES_AUTHORITY_CONFIGURATION_REQUIRED',
+  );
+
+  const productionAuthority = new PostgresDistributedCommitAuthority({
+    connectionString: 'postgresql://runtime:secret@db.internal/risk_fork',
+    deploymentMode: 'production',
+    migrationMode: 'verify-only',
+    tls: { ca: TEST_CA },
+  });
+  assert.equal(isProductionPostgresDistributedCommitAuthority(productionAuthority), true);
+  assert.equal(isProductionPostgresDistributedCommitAuthority({
+    deploymentMode: 'production',
+    migrationMode: 'verify-only',
+    requireTls: true,
+  }), false);
+  assert.ok(new RiskForkController({
+    provider,
+    mode: 'production',
+    distributedCommitAuthority: productionAuthority,
+    distributedClaimantRef: 'claimant:contract-test',
+  }));
 });
 
 test('controller accepts only the concrete PostgreSQL authority as trusted construction state', () => {

@@ -10,7 +10,7 @@ The invariant is:
 
 > **Clone state never authority.** A clone may carry bounded state needed to evaluate a proposal. It must not inherit credentials, signing material, wallet capability, approvals, reusable authorization, trusted identity, or permission to mutate the parent.
 
-See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. Provider research and the bounded E2B decision are in [PROVIDER_COMPARISON.md](./PROVIDER_COMPARISON.md). The exact failing-before evidence, working-tree fixes, and remaining gates for PR #298 are recorded in [ADVERSARIAL_REMEDIATION.md](./ADVERSARIAL_REMEDIATION.md).
+See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQL provisioning, status, recovery, reconciliation, rollback, and deployment-drill requirements are in [POSTGRES_AUTHORITY_RUNBOOK.md](./POSTGRES_AUTHORITY_RUNBOOK.md). Provider research and the bounded E2B decision are in [PROVIDER_COMPARISON.md](./PROVIDER_COMPARISON.md). The exact failing-before evidence, working-tree fixes, and remaining gates for PR #298 are recorded in [ADVERSARIAL_REMEDIATION.md](./ADVERSARIAL_REMEDIATION.md).
 
 ## Current status
 
@@ -20,12 +20,12 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. Provider 
 | Savepoint Capsule, fork identity, execution binding | Experimental source implementation | The public v1 capsule permits no runtime snapshot or a verified filesystem-only snapshot; process-memory/runtime snapshots are invalid, and hashes/references are evidence rather than grants |
 | Hash-linked lifecycle | Experimental source implementation | A destroy request and a verified absence observation are separate facts |
 | Taint gate | Experimental source implementation | Imports only a typed result, bounded workspace diff, or consequential-action proposal; child-asserted test evidence cannot satisfy current required-test policy without clean re-execution or a trusted external attestation |
-| Clean commit | Experimental source implementation | Demonstration mode can use the concrete file reference transactions; production mode rejects them and requires the exactly branded PostgreSQL authority configured on the controller |
-| PostgreSQL distributed authority | Implemented and real-database tested | Server time, serializable row locks, exact approval/authorization reservation and consumption, durable ambiguity, success-only finalizing reconciliation, and an append-only global audit chain are implemented; point-in-time absence/failure observations never release post-effect reservations; one PostgreSQL server with independent processes/connections was tested, not managed failover, multi-region operation, backup/restore, or production roles/TLS |
+| Clean commit | Experimental source implementation | Demonstration mode can use the concrete file reference transactions; both production controller construction and the public clean-commit boundary require the exact branded PostgreSQL authority configured for production, verify-only migration mode, and verified CA-authenticated TLS |
+| PostgreSQL distributed authority | Implemented with disposable local TLS/role evidence | Server time, serializable row locks, exact approval/authorization reservation and consumption, durable ambiguity, success-only finalizing reconciliation, and an append-only global audit chain are implemented. A separate migrator, exact migration/catalog/trigger/privilege attestation, and executable owner/migrator/runtime role templates are locally tested against a fresh TLS PostgreSQL database; no managed HA, failover, multi-region, backup/restore, retention, monitoring, or deployment qualification is claimed |
 | Local reference adapter | Implemented protocol simulator | A non-empty source is attested authority-free before copy, then run through a constrained child process; **not an isolation boundary or kernel network control** |
-| E2B adapter | Configured strict clean-template source profile; unconfigured fail-closed | Without the complete clean-template profile, `createSavepoint`, `createFork`, and `executeInFork` refuse with `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK/provider I/O. The configured path has strict offline/mock contract evidence for an immutable sanitized manifest export, external authority-free verification, empty child env/IAM/mount requests, deny-all SDK network settings at birth, exact bootstrap/result binding, bounded streamed result import, and durable cleanup reconciliation. It has no credentialed provider or containment qualification |
+| E2B adapter | Reviewed clean-template/runtime source; unconfigured fail-closed | The package includes reviewed template, boot-guard, bootstrap, runner, and runtime-contract artifacts; an independent exact-byte clean-side source verifier; and default-off owner-gated build/live qualification harnesses. A configured profile remains unqualified unless canonical evidence and detached pinned trust verify exact template/runtime/SDK bindings. Only that verified state enables the renewable provider idle lease, always capped by the hard deadline. No credentialed live run, containment, lifecycle, latency, or cost proof is checked in |
 | Daytona and AWS/Firecracker | Research only | No adapter and no production-readiness claim |
-| Hosted/MCP/Harness integration | Not production-wired | A disabled-by-default planner injection seam has a real loopback ordering test before `server/discover`, but existing runtime callers do not supply it; no hosted or live interception is enforced |
+| Hosted/MCP/Harness integration | Source-only and not production-wired | A fail-closed host-enforcement bundle and planner seam have source/loopback contract evidence, but neither is installed into the hosted runtime or supplied by existing callers; no hosted or live interception is enforced |
 | Production readiness | **Blocked** | Neither execution adapter is an approved production isolation boundary, hosted interception is not enabled, the PostgreSQL authority is not deployed or managed-service qualified, and no live traffic is protected |
 | Performance and provider cost | Local reference benchmark available | Measures only local protocol mechanics; live MCP/cloud latency, containment, and provider cost remain unmeasured |
 
@@ -45,9 +45,19 @@ npm run pack:dry
 
 Passing local checks is not proof that a cloud adapter is deployed, that network isolation is effective, or that a provider object was destroyed.
 
+The following commands are mutation, provider, or spend-adjacent operator entrypoints—not ordinary checks—and remain disabled unless their explicit environment gates are satisfied:
+
+```powershell
+npm run e2b:build-template
+npm run e2b:live-qualification
+npm run postgres:migrate
+```
+
+Do not run them without explicit owner authorization, a synthetic/no-production-secret scope, bounded cost/network approval for E2B, or a dedicated migration database and CA for PostgreSQL. Merely exposing these commands does not mean a live qualification or deployment occurred.
+
 The repository adapter-conformance worker uses a request-correlated result/ACK handshake: the worker holds its terminal exit until the coordinator acknowledges the exact result, and the coordinator accepts the outcome only after ACK delivery completes and the worker exits consistently. This replaces timing-grace behavior; it is process-ordering evidence, not adapter containment evidence.
 
-The production blockers are tracked in [#301 (hosted MCP interception)](https://github.com/rhein1/agoragentic-integrations/issues/301), [#302 (sanitized E2B boot and live qualification)](https://github.com/rhein1/agoragentic-integrations/issues/302), and [#303 (distributed transaction authority)](https://github.com/rhein1/agoragentic-integrations/issues/303). The source implementation for #303 is present, but the issue is not production-closed until a reviewed managed PostgreSQL deployment proves access roles, TLS, migration/retention, backup/restore, failover, and operational reconciliation.
+The production blockers are tracked in [#301 (hosted MCP interception)](https://github.com/rhein1/agoragentic-integrations/issues/301), [#302 (sanitized E2B boot and live qualification)](https://github.com/rhein1/agoragentic-integrations/issues/302), and [#303 (distributed transaction authority)](https://github.com/rhein1/agoragentic-integrations/issues/303). The source implementation for #303 now includes CA-verified TLS, separate migration, exact schema/privilege attestation, least-privilege templates, and disposable local TLS/role evidence, but the issue is not production-closed until a reviewed managed deployment proves HA/failover, backup/restore, retention, monitoring, and operational reconciliation.
 
 ## Risk policy
 
@@ -67,7 +77,7 @@ Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verif
 1. A clean controller classifies the effective interaction before remote instruction-bearing content is accepted.
 2. It creates a Savepoint Capsule capped at 64 KiB containing hashes and opaque references—including allowed commit types and, when already applicable, an authorization reference/hash pair—not raw prompts, conversations, memories, workspace contents, secrets, tokens, grants, or private local paths. Its public v1 `runtime_snapshot.mode` is restricted to `none` or independently attested `filesystem`; a memory/process/runtime snapshot is invalid even if labeled verified.
 3. It creates a child with a fresh agent ID, session ID, runtime identity, nonce namespace, and entropy reference.
-4. Any production provider must establish network and lifecycle restrictions before the child starts and import only a demonstrably sanitized filesystem payload. The E2B adapter is fail-closed when its complete clean-template profile is absent. When configured, it stages an immutable exact-byte filesystem export with a hash-bound manifest, requires an external authority-free attestation, creates from a pinned clean template with empty environment, IAM-token, and mount requests plus deny-all SDK network settings, and requires exact pre-upload/post-import bootstrap attestations. These are offline/mock-qualified contract controls, not live proof that E2B blocks first-instruction or IPv6 egress or excludes inherited provider state.
+4. Any production provider must establish network and lifecycle restrictions before the child starts and import only a demonstrably sanitized filesystem payload. The E2B adapter is fail-closed when its complete clean-template profile is absent. When configured, it stages an immutable exact-byte filesystem export with a hash-bound manifest; a clean-side second pass reopens the staged bytes, rechecks them, verifies reviewed runtime artifact hashes, and requires a detached signature from a pinned independent verifier before upload. Child birth uses a pinned reviewed template with empty environment, IAM-token, and mount requests plus deny-all SDK network settings, followed by exact bootstrap/result binding. These are source/offline/mock-qualified controls, not live proof that E2B blocks first-instruction or IPv6 egress or excludes inherited provider state.
 5. Every child output remains tainted. There is no child-to-parent conversation merge or memory merge.
 6. The taint gate may prepare exactly one of:
    - `TYPED_RESULT`
@@ -75,7 +85,7 @@ Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verif
    - `CONSEQUENTIAL_ACTION_PROPOSAL`
 7. A child consequential-action candidate contains only the proposed action. The clean side creates and attaches the execution binding; the child never receives or returns the authorization reference, hash, nonce, or one-use identifier.
 8. The provider is asked to destroy the fork and savepoint; separate verification must establish destruction. Unknown or failed verification remains explicit.
-9. A clean controller first performs advisory current-governance and exact-approval preflight. In production mode, the concrete `PostgresDistributedCommitAuthority` then locks the parent, governance, approval, and optional authorization rows in a fixed order under a serializable transaction, uses PostgreSQL server time, and runs the final clean revalidation before reserving the exact rows. Demonstration mode may instead use the concrete file reference transactions. Callback-based authority substitutes, duck-typed authorities, mixed authority backends, and caller-injected controller authority are rejected.
+9. A clean controller first performs advisory current-governance and exact-approval preflight. In production mode, the concrete `PostgresDistributedCommitAuthority` must itself be constructed for `deploymentMode: 'production'`, `migrationMode: 'verify-only'`, and verified CA-authenticated TLS. It then locks the parent, governance, approval, and optional authorization rows in a fixed order under a serializable transaction, uses PostgreSQL server time, and runs the final clean revalidation before reserving the exact rows. Demonstration mode may instead use the concrete file reference transactions. Callback-based authority substitutes, development/apply-mode PostgreSQL instances, duck-typed authorities, mixed authority backends, and caller-injected controller authority are rejected.
 10. The PostgreSQL authority durably records `prepared`, then `effect_started` with a unique `effect_key`, before synchronously invoking the clean effect callback. The key is passed downstream for fencing/idempotency; it does not grant authority and does not prove generic exactly-once external effects. There is no automatic invocation after `effect_started` or `ambiguous`. Exact committed replay returns the stored result. Trusted exact-version reconciliation may finalize only exact proven success; a point-in-time absence or failure observation leaves the operation ambiguous and keeps the parent, approval, and one-use authorization unavailable because the original callback may still complete. File transactions retain only local single-filesystem reference semantics.
 11. A hash-bound receipt cross-binds lineage, fork/provider, risk decision, artifact, destruction evidence, optional authorization reference, and lifecycle-derived timestamps without embedding authority or raw private content.
 
@@ -86,13 +96,13 @@ Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verif
 | **REUSE** | Transaction Assurance canonical JSON and `sha256:` reference semantics | Shared hashing keeps evidence references compatible; Transaction Assurance evidence is not treated as authority, certification, or settlement proof |
 | **REUSE** | Existing authoritative policy, approval, revocation, credential, and action-execution subsystems | Consumed through clean-side verifier/executor callbacks; Risk Fork does not replace or mint their authority |
 | **NEW** | Local file-backed parent-head and execution-authorization transactions | Demonstrates fail-closed, under-lock reference semantics in demonstration mode only; production mode rejects it |
-| **NEW** | PostgreSQL distributed commit authority | One shared authority owns parent/governance/approval/authorization state, DB-time row ordering, effect fencing, reconciliation, and a serialized append-only audit chain; production managed-service qualification remains open |
+| **NEW** | PostgreSQL distributed commit authority | One shared authority owns parent/governance/approval/authorization state, DB-time row ordering, effect fencing, reconciliation, and a serialized append-only audit chain. Runtime verification, DDL migration, and owner/migrator/runtime provisioning are separate surfaces; production managed-service qualification remains open |
 | **EXTEND** | Transaction Assurance evidence envelopes and receipt linkage | Risk Fork receipts can reference external evidence while explicitly setting settlement/certification claims to false |
 | **EXTEND** | Existing governance and exact action binding | Adds fork identity, MCP origin/method, effective arguments, provider, target, amount, policy/mandate/budget refs, versions and hashes, governance epoch, validity window, nonce, audience, and one-use authorization ID to the commit boundary |
-| **EXTEND** | Tool interception | Adds a disabled-by-default planning seam before real MCP `server/discover`; hosted wiring and the remaining phase coverage are follow-up work |
+| **EXTEND** | Tool interception | Adds a fail-closed host-enforcement bundle and planning seam with source/loopback coverage before real MCP `server/discover`; hosted installation and live phase coverage remain follow-up work |
 | **NEW** | Savepoint Capsule and fresh fork identity | Bounded, content-excluding state contract plus new child identity/entropy namespace |
 | **NEW** | Risk classifier, lifecycle, taint gate, clean-commit composition, and Risk Fork receipt | Provider-neutral v1 contracts with fail-closed transitions and explicit unknown states |
-| **NEW** | Provider interface and adapters | Local protocol simulator plus an E2B adapter that defaults to fail-closed and exposes a configured strict clean-template profile with offline/mock conformance only; credentialed E2B containment and other providers remain future qualification work |
+| **NEW** | Provider interface and adapters | Local protocol simulator plus an E2B adapter that defaults to fail-closed, reviewed clean-template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned trust, and default-off qualification tooling. No live E2B qualification record is claimed |
 
 ## Source surfaces
 
@@ -104,6 +114,33 @@ import { LocalReferenceRiskForkAdapter } from '@agoragentic/risk-fork/adapters/l
 import { PostgresDistributedCommitAuthority } from '@agoragentic/risk-fork/adapters/postgres-authority';
 ```
 
+The finalized E2B security surfaces are focused subpath exports rather than implied authority on the root module:
+
+```js
+import {
+  E2B_QUALIFICATION_SCHEMA,
+  E2B_QUALIFICATION_TRUST_SCHEMA,
+  E2B_RUNTIME_SDK_INTEGRITY_SCHEMA,
+  createE2BQualificationTrustVerifier,
+  createE2BRuntimeSdkIntegrityVerifier,
+  isE2BQualificationEvidenceCanonical,
+  loadVerifiedE2BRuntimeSdk,
+  validateE2BQualificationEvidence,
+  verifyE2BQualificationTrust,
+} from '@agoragentic/risk-fork/e2b-qualification';
+import {
+  E2B_INDEPENDENT_SOURCE_ATTESTATION_SCHEMA,
+  createE2BAuthorityFreeSourceVerifier,
+  scanE2BStagedBytesAuthorityFree,
+} from '@agoragentic/risk-fork/adapters/e2b-source-verifier';
+import {
+  E2BRiskForkAdapter,
+  E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE,
+} from '@agoragentic/risk-fork/adapters/e2b';
+```
+
+`createE2BQualificationEvidence()` creates closed self-hashed evidence, while `isE2BQualificationEvidenceCanonical()` checks only structural, hash, binding, and canonical validity. Neither implies that every control passed or establishes verifier authority. Adapter qualification requires verified control status plus `verifyE2BQualificationTrust()` through a module-branded verifier, and qualified SDK loading requires the separate module-branded runtime-integrity verifier.
+
 Because the package is source-only and private, the checked-in example imports source files directly. Run it only as a protocol demonstration:
 
 ```powershell
@@ -113,6 +150,14 @@ node examples/local-reference.mjs
 The example prepares a typed artifact in an empty disposable workspace, destroys and independently verifies the local copies, and stops before clean commit. It does not contact a provider, spend funds, use credentials, or demonstrate real isolation.
 
 Risk Fork currently reuses the adjacent source checkout at `transaction-assurance/src/canonical.mjs`. Consequently, `npm pack --dry-run` is a contents audit, not proof that the tarball is independently installable outside this monorepo. A future publication tranche must replace that source-relative edge with a resolvable reviewed package dependency before removing `private: true`.
+
+### PostgreSQL authority operations
+
+Production runtime construction is deliberately verify-only. It requires CA-authenticated TLS, rejects connection-string TLS overrides and unsafe startup options, fixes synchronous commit on, and verifies transport, durability, replication-trigger mode, reviewed migration hashes, exact relation/column/constraint/index/foreign-key/trigger-function catalogs, and least-privilege runtime posture before authority use. Runtime checks include session/current-role equality, safe role attributes, no inherited memberships, bounded database/schema/table/column/function privileges, and exact audit-trigger enablement.
+
+DDL belongs to the separate PostgreSQL migrator. `ops/postgres/owner-bootstrap.sql.template` is the database-owner pre-migration step; `ops/postgres/roles.sql.template` is the migrator-owned post-migration grant/default-privilege step. A disposable local TLS test creates a fresh database and distinct migrator/runtime logins, executes both rendered templates and the reviewed migration, then exercises production verify-only initialization and privilege-escalation failures. That evidence is local and ephemeral: it does not qualify a managed cluster, failover, backup/restore, retention, monitoring, credential rotation, or deployment operations.
+
+Follow [POSTGRES_AUTHORITY_RUNBOOK.md](./POSTGRES_AUTHORITY_RUNBOOK.md) for the exact provisioning order, redacted read-only status/alert contract, prepared-only recovery, no-auto-retry reconciliation boundary, routing-disable rollback, and the managed backup/PITR/failover/restore/rotation evidence still required before activation.
 
 The local benchmark runs five disposable forks and reports observed savepoint, fork-start, closed-operation, diff, and destruction timings plus capsule/diff sizes:
 
@@ -138,9 +183,9 @@ Adapters implement:
 - `destroySavepoint`
 - `verifySavepointDestroyed`
 
-Capability flags are declarations that must be independently tested. `supports_verified_destruction: true` does not itself prove an individual resource was destroyed. Production mode requires declared hard TTL, idle TTL, maximum execution-time enforcement, and either prohibited child credentials or automatic credential expiry. Both included adapters declare `supports_idle_ttl: false`, so neither can pass the production gate in this version.
+Capability flags are declarations that must be independently tested. `supports_verified_destruction: true` does not itself prove an individual resource was destroyed. Production mode requires declared hard TTL, idle TTL, maximum execution-time enforcement, and either prohibited child credentials or automatic credential expiry. The local adapter and every unconfigured or merely configured E2B profile keep `supports_idle_ttl: false`. Only a configured E2B profile whose exact qualification evidence and detached pinned trust both verify may declare it true; no such live qualification artifact is checked in.
 
-The E2B adapter is dependency-injected and has two deliberately separate states. Construction requires a clean-side `verifyAuthorityFreeSource` function plus reviewed `trustedBootstrapArtifactHash` and `trustedRunnerArtifactHash` values in both states. If any of `cleanTemplateId`, `cleanTemplateHash`, `workspaceExportDirectory`, or `cleanupJournalDirectory` is absent, the profile is unavailable: `createSavepoint`, `createFork`, and `executeInFork` throw `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK loading, verification callbacks, or provider I/O, and the capability profile declares provider support false or unverified.
+The E2B adapter is dependency-injected and has three deliberately separate states: unavailable, configured-but-unqualified, and qualification-trusted. Construction requires a clean-side `verifyAuthorityFreeSource` function plus reviewed `trustedBootstrapArtifactHash` and `trustedRunnerArtifactHash` values in every state. If any of `cleanTemplateId`, `cleanTemplateHash`, `workspaceExportDirectory`, or `cleanupJournalDirectory` is absent, the profile is unavailable: `createSavepoint`, `createFork`, and `executeInFork` throw `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK loading, verification callbacks, or provider I/O, and the capability profile declares provider support false or unverified.
 
 When all four clean-template settings are present, the configured source profile is usable for strict offline/mock conformance. It:
 
@@ -151,7 +196,13 @@ When all four clean-template settings are present, the configured source profile
 - imports result bytes only through a fixed 4 MiB streamed buffer with controller-total and stream-idle deadlines, abort/cancel behavior, and fail-closed child cleanup on timeout, stall, overflow, or binding failure; and
 - writes cleanup intent before allocation, persists export/sandbox cleanup state, reconciles exact metadata-bound orphans across restart, and poisons every later allocation whenever cleanup is unknown until both sandbox and export absence are independently recorded.
 
-Those controls do **not** qualify E2B as a production isolation boundary. `credentialed_provider_validation` remains `not_run`, `containment_claim` remains `not_verified`, `supports_idle_ttl` remains `false`, and live E2B evidence has not established first-instruction or IPv6 egress blocking, exclusion of inherited environment/process/credential/socket/mount/entropy state, template provenance, provider destruction semantics, latency, or cost. The configured capability flags describe contract behavior exercised with dependency-injected mocks; they are not provider attestations. The local adapter likewise requires a manifest-bound clean-side verifier before it copies any non-empty source; empty workspaces use an explicit empty-snapshot proof.
+The reviewed `e2b-template/` source contains the template definition, first-boot guard, bootstrap, fixed runner, and shared runtime contract. The clean-side source-verifier factory independently reopens the immutable staged export, scans the exact bytes again, verifies the reviewed bootstrap/runner file hashes, and accepts absence claims only when a detached Ed25519 signature matches a pinned independent-verifier public-key hash. This is a stronger clean-side contract than a self-asserted callback, but it is still not cloud-containment evidence.
+
+Qualification evidence is closed, canonical, self-hashed, and exact-bound to `e2b@2.39.0`, the template/build/provenance hashes, reviewed runtime artifacts, a single synthetic sandbox, explicit lifecycle/network controls, cleanup observations, and bounded cost. A self-hash never qualifies the adapter. Qualification additionally requires detached Ed25519 trust bound to the evidence hash and a pinned verifier key, and the installed SDK bytes must match the signed integrity binding before SDK/provider use. Only then does the adapter arm and renew a provider `setTimeout` lease around bootstrap, upload, ready-idle, execution, and post-execution idle periods; every renewal is re-observed and capped by the immutable hard deadline, and an unknown lease outcome poisons later allocation until reconciliation.
+
+The build and live harnesses are default-off. They require explicit owner refs, synthetic scope, provider/network/spend flags, an absolute evidence directory, exact hashes, and a code-capped cost budget before loading the SDK or making provider calls. They emit sanitized evidence with all authority flags false; they do not sign their own qualification trust or grant production activation. No credentialed harness was run here, no live qualification/trust artifact is checked in, and `credentialed_provider_validation`, `containment_claim`, and `supports_idle_ttl` therefore remain unqualified for the repository's current evidence. Live first-instruction/IPv6 egress, inherited-state absence, real provider destruction, lifecycle timing, latency, and cost remain unproven.
+
+The configured capability flags without trusted qualification describe contract behavior exercised with dependency-injected mocks; they are not provider attestations. The local adapter likewise requires a manifest-bound clean-side verifier before it copies any non-empty source; empty workspaces use an explicit empty-snapshot proof.
 
 For a non-empty local source, `verifyAuthorityFreeSource(request, { snapshot_directory })` runs on the clean source before copy. It must return the closed `agoragentic.risk-fork.local-authority-free-attestation.v1` shape, echo the exact request/capsule/workspace hashes, provide opaque evidence ref/hash values, and set the four absence claims (`authority_free`, `credentials_absent`, `wallet_material_absent`, and `execution_authority_absent`) to `true`. This callback is a trusted boundary; a careless self-assertion defeats the reference adapter's pre-copy safeguard.
 

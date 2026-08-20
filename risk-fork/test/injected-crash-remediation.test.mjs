@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import { PostgresDistributedCommitAuthority } from '../src/adapters/postgres-authority.mjs';
 import {
   CommitAmbiguousError,
   FileExecutionAuthorizationTransaction,
@@ -22,6 +23,12 @@ import {
   makeForkIdentity,
   makePreparedLifecycle,
 } from './helpers.mjs';
+
+const TEST_CA = [
+  '-----BEGIN CERTIFICATE-----',
+  'contract-only-ca',
+  '-----END CERTIFICATE-----',
+].join('\n');
 
 class InjectedCrashProvider extends RiskForkProvider {
   constructor({ crashAt = null } = {}) {
@@ -183,9 +190,17 @@ async function capturePreparationError(controller, input) {
 test('injected provider admission crash blocks before any resource allocation attempt', async () => {
   const provider = new InjectedCrashProvider();
   const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
+  const distributedCommitAuthority = new PostgresDistributedCommitAuthority({
+    connectionString: 'postgresql://runtime:secret@db.internal/risk_fork',
+    deploymentMode: 'production',
+    migrationMode: 'verify-only',
+    tls: { ca: TEST_CA },
+  });
   let profileAttempts = 0;
   const controller = makeController(provider, {
     mode: 'production',
+    distributedCommitAuthority,
+    distributedClaimantRef: 'claimant:provider-admission-crash',
     verifyProviderProfile: async () => {
       profileAttempts += 1;
       const error = new Error('injected provider-profile allocation crash');

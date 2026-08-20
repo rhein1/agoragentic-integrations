@@ -160,14 +160,14 @@ function commitInput(fixture, acceptTypedResult) {
   };
 }
 
-test('production controller uses PostgreSQL clean authority and exact replay invokes once', {
+test('demonstration controller exercises PostgreSQL clean authority and exact replay invokes once', {
   skip: POSTGRES_SKIP,
 }, async (t) => {
   const fixture = typedFixture('success');
   const authority = await harness(t, fixture);
   const controller = new RiskForkController({
     provider: new LocalReferenceRiskForkAdapter(),
-    mode: 'production',
+    mode: 'demonstration',
     clock: () => new Date(NOW),
     distributedCommitAuthority: authority,
     distributedClaimantRef: 'claimant:postgres-clean-success',
@@ -192,14 +192,14 @@ test('production controller uses PostgreSQL clean authority and exact replay inv
   assert.equal(effects[0].context.automatic_retry_allowed, false);
 });
 
-test('a failed PostgreSQL effect maps to COMMIT_AMBIGUOUS and is never retried', {
+test('a failed demonstration PostgreSQL effect maps to COMMIT_AMBIGUOUS and is never retried', {
   skip: POSTGRES_SKIP,
 }, async (t) => {
   const fixture = typedFixture('ambiguous');
   const authority = await harness(t, fixture);
   const controller = new RiskForkController({
     provider: new LocalReferenceRiskForkAdapter(),
-    mode: 'production',
+    mode: 'demonstration',
     clock: () => new Date(NOW),
     distributedCommitAuthority: authority,
     distributedClaimantRef: 'claimant:postgres-clean-ambiguous',

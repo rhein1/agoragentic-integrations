@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   chmod,
   link,
@@ -16,7 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { sha256Ref } from '../src/canonical.mjs';
+import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import { E2BRiskForkAdapter, E2B_RISK_FORK_PATHS } from '../src/adapters/e2b.mjs';
 import {
   destroyImmutableWorkspaceExport,
@@ -24,6 +25,13 @@ import {
   workspaceExportPath,
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
+import {
+  E2B_QUALIFICATION_CONTROLS,
+  createE2BQualificationEvidence,
+  createE2BQualificationTrustVerifier,
+  createE2BRuntimeSdkIntegrityVerifier,
+  sha256BytesRef,
+} from '../src/e2b-qualification.mjs';
 import { NOW, hash, makeCapsule, makeForkIdentity } from './helpers.mjs';
 
 const TEMPLATE_ID = 'template-risk-fork-clean-immutable-v1';
@@ -32,6 +40,81 @@ const BOOTSTRAP_HASH = hash('trusted-bootstrap-artifact-v2');
 const RUNNER_HASH = hash('trusted-runner-artifact-v2');
 const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const SECRET_TEST_VALUE = 'abcdefghijklmnop';
+
+function createQualificationTrust(evidence) {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const verifier = createE2BQualificationTrustVerifier({
+    publicKey,
+    publicKeyHash: sha256BytesRef(publicKey.export({ type: 'spki', format: 'der' })),
+  });
+  const payload = verifier.createPayload(evidence);
+  return {
+    qualificationTrustVerifier: verifier,
+    qualificationTrust: Object.freeze({
+      ...payload,
+      signature: sign(
+        null,
+        Buffer.from(canonicalize(payload), 'utf8'),
+        privateKey,
+      ).toString('base64url'),
+    }),
+  };
+}
+
+function createQualificationEvidenceForSdk(integrityHash) {
+  return createE2BQualificationEvidence({
+    provider: {
+      name: 'e2b',
+      project_ref_hash: hash('qualified-project'),
+      region: 'test-region',
+    },
+    sdk: {
+      package: 'e2b',
+      version: '2.39.0',
+      integrity_hash: integrityHash,
+    },
+    template: {
+      template_id_hash: hash(TEMPLATE_ID),
+      build_id_hash: hash('qualified-build'),
+      template_evidence_hash: TEMPLATE_HASH,
+      provenance_hash: hash('qualified-provenance'),
+    },
+    runtime: {
+      bootstrap_artifact_hash: BOOTSTRAP_HASH,
+      runner_artifact_hash: RUNNER_HASH,
+      boot_guard_artifact_hash: hash('qualified-boot-guard'),
+    },
+    run: {
+      approval_ref_hash: hash('qualified-approval'),
+      run_ref_hash: hash('qualified-run'),
+      started_at: NOW.toISOString(),
+      completed_at: new Date(NOW.getTime() + 30_000).toISOString(),
+      sandbox_count: 1,
+      synthetic_workspace: true,
+    },
+    limits: {
+      hard_ttl_ms: 60_000,
+      idle_ttl_ms: 5_000,
+      max_execution_ms: 2_000,
+      max_cost_usd: '0.10',
+    },
+    observations: {
+      fork_start_ms: 100,
+      execution_ms: 100,
+      cleanup_ms: 100,
+      observed_cost_usd: '0.01',
+    },
+    controls: Object.fromEntries(
+      E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'verified']),
+    ),
+    cleanup: {
+      kill_requested: 'verified',
+      absence_verified: 'verified',
+      orphan_reconciliation: 'verified',
+    },
+    evidence_refs: [{ ref: 'evidence:qualified-e2b', hash: hash('qualified-e2b') }],
+  });
+}
 
 function parseFlag(command, flag) {
   const match = new RegExp(`${flag}\\s+(\\S+)`).exec(command);
@@ -42,6 +125,7 @@ function createMockSdk(options = {}) {
   const events = [];
   const files = new Map();
   let createOptions = null;
+  let leaseTimeoutMs = null;
   let killed = false;
   let bootstrapCount = 0;
 
@@ -120,6 +204,9 @@ function createMockSdk(options = {}) {
             workspace_digest: request.expected_workspace_digest,
             trusted_bootstrap_artifact_hash: BOOTSTRAP_HASH,
             trusted_runner_artifact_hash: RUNNER_HASH,
+            ...(options.bootEvidenceHash
+              ? { boot_evidence_hash: options.bootEvidenceHash }
+              : {}),
             attested_at: NOW.toISOString(),
             expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
             claims,
@@ -157,6 +244,11 @@ function createMockSdk(options = {}) {
         return { exitCode: 0, stdout: '', stderr: '' };
       },
     },
+    async setTimeout(timeoutMs) {
+      events.push({ type: 'set-timeout', timeoutMs });
+      leaseTimeoutMs = timeoutMs;
+      return true;
+    },
     async kill() {
       events.push({ type: 'kill-instance' });
       if (options.killError) throw options.killError;
@@ -171,6 +263,7 @@ function createMockSdk(options = {}) {
       await options.onCreate?.({ templateId, sdkOptions });
       events.push({ type: 'create', templateId, options: sdkOptions });
       createOptions = sdkOptions;
+      leaseTimeoutMs = sdkOptions.timeoutMs;
       if (options.createError) throw options.createError;
       killed = false;
       return child;
@@ -199,7 +292,7 @@ function createMockSdk(options = {}) {
         lifecycle: { onTimeout: 'kill', autoResume: false },
         volumeMounts: [],
         metadata: createOptions?.metadata ?? {},
-        endAt: new Date(NOW.getTime() + (createOptions?.timeoutMs ?? 60_000)),
+        endAt: new Date(NOW.getTime() + (leaseTimeoutMs ?? createOptions?.timeoutMs ?? 60_000)),
       };
     }
 
@@ -252,8 +345,49 @@ async function fixture(t, mockOptions = {}) {
   const inspected = await inspectLocalWorkspace({ source_workspace: source });
   const capsule = makeCapsule({ workspace: { digest: inspected.workspace_digest } });
   const mock = createMockSdk(mockOptions);
+  let qualificationEvidence = null;
+  let sdkIntegrityVerifier = null;
+  let mockSdkGlobal = null;
+  if (mockOptions.qualified) {
+    const sdkDirectory = path.join(root, 'e2b-sdk');
+    await mkdir(path.join(sdkDirectory, 'dist'), { recursive: true });
+    mockSdkGlobal = `__riskForkE2BSdk_${path.basename(root).replace(/[^A-Za-z0-9_]/g, '_')}`;
+    globalThis[mockSdkGlobal] = mock.Sandbox;
+    await writeFile(path.join(sdkDirectory, 'package.json'), JSON.stringify({
+      name: 'e2b',
+      version: '2.39.0',
+      main: 'dist/index.js',
+    }));
+    await writeFile(
+      path.join(sdkDirectory, 'dist', 'index.js'),
+      `module.exports = { Sandbox: globalThis[${JSON.stringify(mockSdkGlobal)}] };\n`,
+    );
+    sdkIntegrityVerifier = createE2BRuntimeSdkIntegrityVerifier({
+      packageDirectory: sdkDirectory,
+    });
+    qualificationEvidence = createQualificationEvidenceForSdk(
+      (await sdkIntegrityVerifier.inspect()).integrity_hash,
+    );
+    if (mockOptions.tamperSdkAfterQualification === 'version') {
+      await writeFile(path.join(sdkDirectory, 'package.json'), JSON.stringify({
+        name: 'e2b',
+        version: '2.40.0',
+        main: 'dist/index.js',
+      }));
+    } else if (mockOptions.tamperSdkAfterQualification === 'bytes') {
+      await writeFile(
+        path.join(sdkDirectory, 'dist', 'index.js'),
+        'module.exports = { Sandbox: class TamperedSandbox {} };\n',
+      );
+    }
+  }
+  const qualificationTrust = qualificationEvidence
+    ? createQualificationTrust(qualificationEvidence)
+    : {};
   const adapter = new E2BRiskForkAdapter({
-    SandboxClass: mock.Sandbox,
+    ...(qualificationEvidence
+      ? { sdkIntegrityVerifier }
+      : { SandboxClass: mock.Sandbox }),
     cleanTemplateId: TEMPLATE_ID,
     cleanTemplateHash: TEMPLATE_HASH,
     workspaceExportDirectory: exportsDirectory,
@@ -283,6 +417,12 @@ async function fixture(t, mockOptions = {}) {
     runnerCommand: 'trusted-runner',
     trustedBootstrapArtifactHash: BOOTSTRAP_HASH,
     trustedRunnerArtifactHash: RUNNER_HASH,
+    ...(qualificationEvidence
+      ? {
+          qualificationEvidence,
+          ...qualificationTrust,
+        }
+      : {}),
     clock: () => new Date(NOW),
   });
   t.after(async () => {
@@ -292,6 +432,7 @@ async function fixture(t, mockOptions = {}) {
         export_id: record.export_record.export_id,
       });
     }
+    if (mockSdkGlobal) delete globalThis[mockSdkGlobal];
     await rm(root, { recursive: true, force: true });
   });
   return { root, source, exportsDirectory, journalDirectory, capsule, mock, adapter };
@@ -496,6 +637,99 @@ test('configured capabilities remain production-ineligible until live containmen
   assert.equal(adapter.capabilities.child_credentials_mode, 'prohibited');
   assert.equal(adapter.capabilities.credentialed_provider_validation, 'not_run');
   assert.equal(adapter.capabilities.containment_claim, 'not_verified');
+});
+
+test('qualified profile arms provider idle leases around bootstrap and execution without extending the hard deadline', async (t) => {
+  const prepared = await fixture(t, {
+    qualified: true,
+    bootEvidenceHash: hash('qualified-boot-evidence'),
+  });
+  const savepoint = await prepared.adapter.createSavepoint({
+    capsule: prepared.capsule,
+    source_workspace: prepared.source,
+  });
+  const fork = await prepared.adapter.createFork({
+    savepoint_ref: savepoint.savepoint_ref,
+    fork_identity: makeForkIdentity(prepared.capsule),
+    network_policy: { mode: 'blocked', allowlist: [] },
+    ttl_ms: 60_000,
+    idle_ttl_ms: 5_000,
+  });
+  assert.equal(prepared.adapter.capabilities.supports_idle_ttl, true);
+  assert.equal(fork.idle_expires_at, new Date(NOW.getTime() + 5_000).toISOString());
+  assert.deepEqual(
+    prepared.mock.events.filter((event) => event.type === 'set-timeout').map((event) => event.timeoutMs),
+    [60_000, 60_000, 60_000, 5_000],
+  );
+
+  await prepared.adapter.executeInFork({
+    fork_ref: fork.fork_ref,
+    execution_mode: 'isolated_execution',
+    operation: { kind: 'analyze', subject_ref: 'opaque:qualified-idle-lease' },
+    timeout_ms: 2_000,
+  });
+  assert.deepEqual(
+    prepared.mock.events.filter((event) => event.type === 'set-timeout').slice(-2)
+      .map((event) => event.timeoutMs),
+    [7_000, 5_000],
+  );
+  const status = await prepared.adapter.getForkStatus({ fork_ref: fork.fork_ref });
+  assert.equal(status.idle_expires_at, new Date(NOW.getTime() + 5_000).toISOString());
+  const evidence = await prepared.adapter.collectEvidence({ fork_ref: fork.fork_ref });
+  assert.equal(evidence.qualification_status, 'verified');
+  assert.equal(evidence.provider_live_qualification, 'verified');
+  assert.equal(evidence.containment_claim, 'verified');
+  assert.equal(evidence.boot_evidence_hash, hash('qualified-boot-evidence'));
+
+  const unreviewedSdk = await fixture(t, {
+    qualified: true,
+    bootEvidenceHash: hash('qualified-boot-evidence'),
+    tamperSdkAfterQualification: 'version',
+  });
+  const unreviewedSavepoint = await unreviewedSdk.adapter.createSavepoint({
+    capsule: unreviewedSdk.capsule,
+    source_workspace: unreviewedSdk.source,
+  });
+  await assert.rejects(
+    unreviewedSdk.adapter.createFork({
+      savepoint_ref: unreviewedSavepoint.savepoint_ref,
+      fork_identity: makeForkIdentity(unreviewedSdk.capsule),
+      network_policy: { mode: 'blocked', allowlist: [] },
+      ttl_ms: 60_000,
+      idle_ttl_ms: 5_000,
+    }),
+    /exact e2b@2\.39\.0/i,
+  );
+  assert.equal(
+    unreviewedSdk.mock.events.some((event) => event.type === 'create'),
+    false,
+    'an unreviewed SDK version must be rejected before provider allocation',
+  );
+
+  const changedSdkBytes = await fixture(t, {
+    qualified: true,
+    bootEvidenceHash: hash('qualified-boot-evidence'),
+    tamperSdkAfterQualification: 'bytes',
+  });
+  const changedBytesSavepoint = await changedSdkBytes.adapter.createSavepoint({
+    capsule: changedSdkBytes.capsule,
+    source_workspace: changedSdkBytes.source,
+  });
+  await assert.rejects(
+    changedSdkBytes.adapter.createFork({
+      savepoint_ref: changedBytesSavepoint.savepoint_ref,
+      fork_identity: makeForkIdentity(changedSdkBytes.capsule),
+      network_policy: { mode: 'blocked', allowlist: [] },
+      ttl_ms: 60_000,
+      idle_ttl_ms: 5_000,
+    }),
+    /integrity.*mismatch/i,
+  );
+  assert.equal(
+    changedSdkBytes.mock.events.some((event) => event.type === 'create'),
+    false,
+    'changed SDK bytes must be rejected before provider allocation',
+  );
 });
 
 test('post-boot attestation fails closed before execution for every inherited-state claim', async (t) => {

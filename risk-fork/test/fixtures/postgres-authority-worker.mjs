@@ -1,11 +1,14 @@
 import { writeSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
 
 import { PostgresDistributedCommitAuthority } from '../../src/adapters/postgres-authority.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 
-let serialized = '';
-for await (const chunk of process.stdin) serialized += chunk;
-const input = JSON.parse(serialized);
+const inputReader = createInterface({ input: process.stdin });
+const inputIterator = inputReader[Symbol.asyncIterator]();
+const firstMessage = await inputIterator.next();
+if (firstMessage.done) throw new Error('PostgreSQL authority worker input is absent');
+const input = JSON.parse(firstMessage.value);
 
 function write(value) {
   writeSync(process.stdout.fd, `${JSON.stringify(value)}\n`);
@@ -37,6 +40,13 @@ const authority = new PostgresDistributedCommitAuthority({
 
 try {
   await authority.initialize();
+  if (input.mode === 'wait_after_initialize') {
+    write({ type: 'initialized' });
+    const startMessage = await inputIterator.next();
+    if (startMessage.done || JSON.parse(startMessage.value).command !== 'continue') {
+      throw new Error('PostgreSQL authority worker start command is absent');
+    }
+  }
   const operation = await authority.runCommit(input.request, {
     claimant_ref: input.claimant_ref,
     verifyUnderReservation: async (request) => ({
@@ -67,5 +77,6 @@ try {
     operation_ref: error?.evidence?.operation_ref ?? null,
   });
 } finally {
+  inputReader.close();
   await authority.close();
 }

@@ -18,7 +18,10 @@ import {
   verifyLifecycle,
 } from './lifecycle.mjs';
 import { assertRiskForkProvider } from './provider.mjs';
-import { isPostgresDistributedCommitAuthority } from './adapters/postgres-authority.mjs';
+import {
+  isPostgresDistributedCommitAuthority,
+  isProductionPostgresDistributedCommitAuthority,
+} from './adapters/postgres-authority.mjs';
 import { classifyRisk } from './risk-classifier.mjs';
 import { validateCommitCandidate, verifyCommitArtifact } from './taint-gate.mjs';
 import {
@@ -253,6 +256,16 @@ export class RiskForkController {
     if ((options.distributedCommitAuthority == null)
       !== (options.distributedClaimantRef == null)) {
       throw new TypeError('Distributed authority and claimant ref must be configured together');
+    }
+    if (this.mode === 'production'
+      && !isProductionPostgresDistributedCommitAuthority(
+        options.distributedCommitAuthority,
+      )) {
+      const error = new TypeError(
+        'Production Risk Fork requires the exact verify-only, TLS-required PostgreSQL authority',
+      );
+      error.code = 'PRODUCTION_POSTGRES_AUTHORITY_CONFIGURATION_REQUIRED';
+      throw error;
     }
     CONTROLLER_DISTRIBUTED_AUTHORITIES.set(this, Object.freeze({
       authority: options.distributedCommitAuthority ?? null,

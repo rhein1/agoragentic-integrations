@@ -245,31 +245,57 @@ function startWorker(harness, fixture, mode = 'normal') {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
-  let stdout = '';
+  let stdoutBuffer = '';
   let stderr = '';
+  const events = [];
+  let resolveInitialized;
+  let rejectInitialized;
+  const initialized = mode === 'wait_after_initialize'
+    ? new Promise((resolve, reject) => {
+        resolveInitialized = resolve;
+        rejectInitialized = reject;
+      })
+    : Promise.resolve();
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => { stdout += chunk; });
+  child.stdout.on('data', (chunk) => {
+    stdoutBuffer += chunk;
+    const lines = stdoutBuffer.split(/\r?\n/);
+    stdoutBuffer = lines.pop() ?? '';
+    for (const line of lines.filter(Boolean)) {
+      const event = JSON.parse(line);
+      events.push(event);
+      if (event.type === 'initialized') resolveInitialized?.();
+    }
+  });
   child.stderr.on('data', (chunk) => { stderr += chunk; });
-  child.stdin.end(JSON.stringify({
+  child.stdin.write(`${JSON.stringify({
     connection_string: POSTGRES_URL,
     authority_id: harness.authorityId,
     schema_name: harness.schemaName,
     claimant_ref: `worker:${randomBytes(4).toString('hex')}`,
     mode,
     request: fixture.request,
-  }));
+  })}\n`);
+  if (mode !== 'wait_after_initialize') child.stdin.end();
   const done = new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('exit', (code, signal) => {
-      const events = stdout
-        .split(/\r?\n/)
-        .filter(Boolean)
-        .map((line) => JSON.parse(line));
+      if (stdoutBuffer.trim()) events.push(JSON.parse(stdoutBuffer));
+      if (mode === 'wait_after_initialize'
+        && !events.some((event) => event.type === 'initialized')) {
+        rejectInitialized(new Error('PostgreSQL authority worker exited before initialization'));
+      }
       resolve({ code, signal, events, stderr });
     });
   });
-  return { child, done };
+  const continueRun = () => {
+    if (mode !== 'wait_after_initialize') {
+      throw new Error('Only a waiting PostgreSQL authority worker can be continued');
+    }
+    child.stdin.end(`${JSON.stringify({ command: 'continue' })}\n`);
+  };
+  return { child, done, initialized, continueRun };
 }
 
 async function waitForOperation(inspection, schemaName, status, timeoutMs = 10_000) {
@@ -535,6 +561,8 @@ test('an injected connection abort inside effect claim leaves only prepared stat
 }, async (t) => {
   const fixture = createFixture('prepared-crash', { consequential: true });
   const harness = await createHarness(t, fixture);
+  const worker = startWorker(harness, fixture, 'wait_after_initialize');
+  await worker.initialized;
   await harness.inspection.query(`
     CREATE FUNCTION "${harness.schemaName}".abort_effect_claim()
     RETURNS trigger LANGUAGE plpgsql AS $body$
@@ -549,7 +577,7 @@ test('an injected connection abort inside effect claim leaves only prepared stat
       BEFORE UPDATE ON "${harness.schemaName}".operations
       FOR EACH ROW EXECUTE FUNCTION "${harness.schemaName}".abort_effect_claim();
   `);
-  const worker = startWorker(harness, fixture);
+  worker.continueRun();
   const prepared = await waitForOperation(
     harness.inspection,
     harness.schemaName,

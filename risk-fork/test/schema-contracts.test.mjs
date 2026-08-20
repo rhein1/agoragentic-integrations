@@ -10,6 +10,10 @@ import addFormats from 'ajv-formats';
 
 import { LocalReferenceRiskForkAdapter } from '../src/adapters/local-reference.mjs';
 import {
+  E2B_QUALIFICATION_CONTROLS,
+  createE2BQualificationEvidence,
+} from '../src/e2b-qualification.mjs';
+import {
   FileParentHeadTransaction,
   commitPreparedArtifact,
   deriveParentAuthorityRef,
@@ -37,6 +41,7 @@ const EXPECTED_SCHEMA_FILES = Object.freeze([
   'commit-artifact.v1.json',
   'distributed-authority-operation.v1.json',
   'distributed-authority-reconciliation.v1.json',
+  'e2b-qualification-evidence.v1.json',
   'execution-binding.v1.json',
   'fork-identity.v1.json',
   'interception-plan.v1.json',
@@ -171,9 +176,91 @@ function makeRiskInput() {
   };
 }
 
+function makeE2BQualificationEvidence() {
+  return createE2BQualificationEvidence({
+    provider: {
+      name: 'e2b',
+      project_ref_hash: hash('schema-e2b-project'),
+      region: 'us-east-1',
+    },
+    sdk: {
+      package: 'e2b',
+      version: '2.39.0',
+      integrity_hash: hash('schema-e2b-sdk-integrity'),
+    },
+    template: {
+      template_id_hash: hash('schema-e2b-template'),
+      build_id_hash: hash('schema-e2b-build'),
+      template_evidence_hash: hash('schema-e2b-template-evidence'),
+      provenance_hash: hash('schema-e2b-provenance'),
+    },
+    runtime: {
+      bootstrap_artifact_hash: hash('schema-e2b-bootstrap'),
+      runner_artifact_hash: hash('schema-e2b-runner'),
+      boot_guard_artifact_hash: hash('schema-e2b-boot-guard'),
+    },
+    run: {
+      approval_ref_hash: hash('schema-e2b-approval'),
+      run_ref_hash: hash('schema-e2b-run'),
+      started_at: '2030-01-01T00:00:00.000Z',
+      completed_at: '2030-01-01T00:00:30.000Z',
+      sandbox_count: 1,
+      synthetic_workspace: true,
+    },
+    limits: {
+      hard_ttl_ms: 60_000,
+      idle_ttl_ms: 10_000,
+      max_execution_ms: 5_000,
+      max_cost_usd: '0.25',
+    },
+    observations: {
+      fork_start_ms: 1_000,
+      execution_ms: 250,
+      cleanup_ms: 500,
+      observed_cost_usd: '0.02',
+    },
+    controls: Object.fromEntries(
+      E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'verified']),
+    ),
+    cleanup: {
+      kill_requested: 'verified',
+      absence_verified: 'verified',
+      orphan_reconciliation: 'verified',
+    },
+    evidence_refs: [{
+      ref: 'evidence:schema-e2b-qualification',
+      hash: hash('schema-e2b-qualification'),
+    }],
+  });
+}
+
 test('all public Risk Fork schemas compile under strict AJV 2020', async () => {
   const ajv = await loadSchemaRegistry();
   assert.equal(Object.keys(ajv.schemas).length >= EXPECTED_SCHEMA_FILES.length, true);
+});
+
+test('E2B qualification schema accepts source evidence and rejects authority claims', async () => {
+  const ajv = await loadSchemaRegistry();
+  const evidence = makeE2BQualificationEvidence();
+  assertSchemaAccepts(ajv, 'e2b-qualification-evidence.v1.json', evidence);
+
+  const authorityClaim = clone(evidence);
+  authorityClaim.authority_flags.production_activation_granted = true;
+  assertSchemaRejects(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    authorityClaim,
+    'E2B qualification evidence claiming production activation',
+  );
+
+  const unsupportedSdk = clone(evidence);
+  unsupportedSdk.sdk.version = '2.40.0';
+  assertSchemaRejects(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    unsupportedSdk,
+    'E2B qualification evidence using an unreviewed SDK version',
+  );
 });
 
 test('distributed operation and reconciliation schemas preserve effect fencing semantics', async () => {

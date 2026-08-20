@@ -22,9 +22,12 @@
     "./controller": "./src/controller.mjs",
     "./interception": "./src/interception.mjs",
     "./receipt": "./src/receipt.mjs",
+    "./e2b-qualification": "./src/e2b-qualification.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",
     "./adapters/e2b": "./src/adapters/e2b.mjs",
+    "./adapters/e2b-source-verifier": "./src/adapters/e2b-source-verifier.mjs",
     "./adapters/postgres-authority": "./src/adapters/postgres-authority.mjs",
+    "./adapters/postgres-authority-migrator": "./src/adapters/postgres-authority-migrator.mjs",
     "./migrations/*": "./migrations/*",
     "./schema/*": "./schema/*"
   },
@@ -32,19 +35,26 @@
     "src/",
     "schema/",
     "migrations/",
+    "e2b-template/",
+    "ops/",
+    "scripts/",
     "examples/",
     "README.md",
     "SECURITY_MODEL.md",
+    "POSTGRES_AUTHORITY_RUNBOOK.md",
     "PROVIDER_COMPARISON.md",
     "ADVERSARIAL_REMEDIATION.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs",
+    "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
     "check": "node scripts/check.mjs",
     "self-test": "node examples/local-reference.mjs",
     "benchmark:local": "node scripts/benchmark-local.mjs",
+    "e2b:build-template": "node scripts/e2b-build-template.mjs",
+    "e2b:live-qualification": "node scripts/e2b-live-qualification.mjs",
+    "postgres:migrate": "node scripts/migrate-postgres-authority.mjs",
     "pack:dry": "npm pack --dry-run"
   },
   "dependencies": {
@@ -52,8 +62,11 @@
     "ajv-formats": "3.0.1",
     "pg": "8.16.3"
   },
+  "devDependencies": {
+    "e2b": "2.39.0"
+  },
   "peerDependencies": {
-    "e2b": ">=2.38.3 <3"
+    "e2b": "2.39.0"
   },
   "peerDependenciesMeta": {
     "e2b": {

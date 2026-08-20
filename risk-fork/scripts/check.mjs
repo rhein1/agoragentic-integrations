@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const roots = ['src', 'examples', 'scripts'];
+const roots = ['src', 'examples', 'scripts', 'e2b-template'];
 const files = [];
 
 async function collect(directory) {

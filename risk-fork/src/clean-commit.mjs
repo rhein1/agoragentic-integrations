@@ -10,7 +10,10 @@ import {
 } from './contracts.mjs';
 import { DistributedAuthorityAmbiguousError } from './distributed-authority.mjs';
 import { verifyLifecycle } from './lifecycle.mjs';
-import { isPostgresDistributedCommitAuthority } from './adapters/postgres-authority.mjs';
+import {
+  isPostgresDistributedCommitAuthority,
+  isProductionPostgresDistributedCommitAuthority,
+} from './adapters/postgres-authority.mjs';
 import {
   revalidateCommitArtifact,
   verifyCommitArtifact,
@@ -2198,6 +2201,15 @@ export async function commitPreparedArtifact(input = {}, options = {}) {
     throw codedTransactionError(
       'An exact concrete PostgresDistributedCommitAuthority is required',
       'POSTGRES_DISTRIBUTED_AUTHORITY_REQUIRED',
+      { capsule_hash: input.capsule?.capsule_hash ?? null },
+    );
+  }
+  if (mode === 'production'
+    && distributedAuthority
+    && !isProductionPostgresDistributedCommitAuthority(distributedAuthority)) {
+    throw codedTransactionError(
+      'Production clean commit requires the exact verify-only, TLS-required PostgreSQL authority',
+      'PRODUCTION_POSTGRES_AUTHORITY_CONFIGURATION_REQUIRED',
       { capsule_hash: input.capsule?.capsule_hash ?? null },
     );
   }
