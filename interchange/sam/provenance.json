@@ -10,7 +10,7 @@
   "compatibility_scope": "Offline-tested client and normalizer plus an operator-controlled, no-spend, read-only canary at the pinned Google SAM revision for get_mesh_info, discover_remote_services, find_remote_tools, and describe_remote_tool. call_remote_tool is intentionally absent from this slice.",
   "runtime_evidence": {
     "receipt": "evidence/readonly-canary-20260820.json",
-    "receipt_sha256": "f4cc503ab193850e5b1762c3820974871d34ead073e9d77682afefab8428d9a6",
+    "receipt_utf8_lf_sha256": "f4cc503ab193850e5b1762c3820974871d34ead073e9d77682afefab8428d9a6",
     "observed_at": "2026-08-20T12:11:37.652Z",
     "sam_runtime_revision": "b42aaaf2d7f9ec450ab15e97bf704a21539de0e3",
     "scope": "operator_controlled_ephemeral_two_node_sam_mesh",

@@ -13,9 +13,10 @@ test('sanitized canary evidence preserves every default-off boundary', async () 
 
   assert.equal(evidence.provenance.sam_runtime_revision, 'b42aaaf2d7f9ec450ab15e97bf704a21539de0e3');
   assert.equal(provenance.runtime_evidence.sam_runtime_revision, evidence.provenance.sam_runtime_revision);
+  const canonicalEvidenceText = evidenceText.replace(/\r\n?/g, '\n');
   assert.equal(
-    provenance.runtime_evidence.receipt_sha256,
-    createHash('sha256').update(evidenceText).digest('hex'),
+    provenance.runtime_evidence.receipt_utf8_lf_sha256,
+    createHash('sha256').update(canonicalEvidenceText).digest('hex'),
   );
   assert.equal(evidence.observation.authenticated_sidecar, true);
   assert.equal(evidence.observation.exact_peer_catalog_tool_count, 1);
