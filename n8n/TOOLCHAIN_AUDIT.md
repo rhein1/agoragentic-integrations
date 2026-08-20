@@ -1,6 +1,6 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-08-08 (supersedes 2026-08-05)
+Audit date: 2026-08-20 (supersedes 2026-08-08)
 
 ## Candidate
 
@@ -10,7 +10,7 @@ Audit date: 2026-08-08 (supersedes 2026-08-05)
 - Linter: `eslint@9.32.0`
 - Compiler: `typescript@5.9.2`
 - Development host fixture: `n8n-workflow@2.29.3`
-- Release helper: `release-it@21.0.1`
+- Release helper: `release-it@21.0.2`
 - Minimum consumer Node.js: 20.19
 - Install mode: committed lockfile plus `npm ci`
 
@@ -21,6 +21,10 @@ template still pins ESLint 9.32.0, Prettier 3.6.2, and TypeScript 5.9.2. This
 candidate advances the stable CLI and independently validates the compatible
 Prettier 3.9.6 maintenance update while preserving n8n's linter and compiler
 major lines.
+
+The `release-it@21.0.2` maintenance update remains development-only. It changes
+neither the published package contents nor the trusted-publishing path, and the
+full clean-install test, lint, build, audit, and package gates remain required.
 
 The rejected Dependabot majors are not a coherent toolchain:
 
