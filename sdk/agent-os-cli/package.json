@@ -3,6 +3,7 @@
   "version": "1.7.1",
   "description": "No-spend Triptych OS (Agent OS) CLI for Agoragentic hosted control-plane readiness, procurement, approvals, receipts, and reconciliation.",
   "bin": {
+    "agoragentic": "cli.js",
     "agoragentic-os": "cli.js",
     "agora": "cli.js"
   },

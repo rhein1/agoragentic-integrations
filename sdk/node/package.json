@@ -5,6 +5,7 @@
   "main": "index.js",
   "types": "index.d.ts",
   "bin": {
+    "agoragentic": "agent-os.js",
     "agoragentic-os": "agent-os.js",
     "agora": "agent-os.js"
   },
@@ -36,6 +37,11 @@
     },
     "./agent-os": {
       "require": "./agent-os.js"
+    },
+    "./governance": {
+      "require": "./local-governance.js",
+      "import": "./local-governance.mjs",
+      "types": "./local-governance.d.ts"
     },
     "./agent-toolkit": {
       "require": "./agent-toolkit.js",
@@ -116,6 +122,11 @@
     "index.mjs",
     "index.d.ts",
     "agent-os.js",
+    "local-governance.js",
+    "local-governance.mjs",
+    "local-governance.d.ts",
+    "schema/local-governance-policy.v1.json",
+    "schema/local-governance-policy.example.json",
     "agent-toolkit.js",
     "agent-toolkit.d.ts",
     "agent-toolkit.generated.json",

@@ -15,6 +15,7 @@ const { spawn } = require('child_process');
 const agoragentic = require('./index');
 const toolkit = require('./agent-toolkit');
 const x402Guard = require('./x402-guard');
+const localGovernance = require('./local-governance');
 
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const PAID_EXECUTION_HELP = 'Paid execution is disabled by default. Add --yes (or --execute) and an explicit --max-cost for task-routed execution.';
@@ -193,6 +194,9 @@ function usage() {
     return `Agoragentic Agent OS CLI
 
 Usage:
+  agoragentic init [--yes] [--force] [--policy agoragentic.yaml]
+  agoragentic adapters
+  agoragentic run [--policy agoragentic.yaml] [--yes] -- <existing command>
   agoragentic-os doctor [--api-key amk_...] [--base-url URL]
   agora toolkit [commands|mcp|skills|exports|json]
   agora env live --key-file ./key.json
@@ -248,6 +252,8 @@ Key recovery:
   Guide: ${DEFAULT_BASE_URL}/guides/agent-os-quickstart/
 
 Safety:
+  init is plan-only unless --yes is supplied. Local run evaluates process.run
+  before spawning, never overrides deny, and records only redacted local evidence.
   All control-plane commands are free reads/preflights. The execute command refuses
   to run paid work unless --yes or --execute is supplied. Task-routed execution
   also requires --max-cost. Direct invoke and listing publish also require --yes.
@@ -272,6 +278,18 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
     try {
         let result;
         switch (command) {
+            case 'init':
+                result = commandInit(parsed.flags, runtime);
+                break;
+            case 'adapters':
+                result = commandAdapters(runtime);
+                break;
+            case 'run':
+                result = await commandRun(parsed.positionals.slice(1), parsed.flags, env, {
+                    ...runtime,
+                    spawn: spawnProcess,
+                });
+                break;
             case 'toolkit':
                 result = await commandToolkit(parsed.positionals.slice(1), parsed.flags);
                 break;
@@ -415,6 +433,65 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
         });
         return status === 0 ? 1 : status;
     }
+}
+
+function commandInit(flags, runtime = {}) {
+    return localGovernance.initializeProject({
+        cwd: runtimeCwd(runtime),
+        policyPath: stringFlag(flags, 'policy') || localGovernance.DEFAULT_POLICY_FILE,
+        write: flags.yes === true,
+        force: flags.force === true,
+    });
+}
+
+function commandAdapters(runtime = {}) {
+    return {
+        schema: 'agoragentic.adapter-detection.v1',
+        adapters: localGovernance.detectAdapters(runtimeCwd(runtime)),
+        note: 'Detection proves only local project markers. It does not prove host activation, provider execution, deployment, payment, or settlement.',
+    };
+}
+
+async function commandRun(positionals, flags, env, runtime = {}) {
+    const result = await localGovernance.runGovernedCommand(
+        requiredArg(positionals[0], 'command after "run --"'),
+        positionals.slice(1),
+        {
+            cwd: runtimeCwd(runtime),
+            policy: stringFlag(flags, 'policy') || localGovernance.DEFAULT_POLICY_FILE,
+            approved: flags.yes === true,
+            env,
+            spawn: runtime.spawn,
+            stdio: runtime.stdio,
+            now: runtime.now,
+            randomUUID: runtime.randomUUID,
+        }
+    );
+    const publicResult = {
+        exit_code: result.exit_code,
+        signal: result.signal,
+        receipt: result.receipt,
+    };
+    if (result.error) {
+        const err = new Error(`Governed command failed to start: ${result.error.message}`);
+        err.code = 'local_process_start_failed';
+        err.exitCode = 1;
+        err.response = publicResult;
+        throw err;
+    }
+    if (result.exit_code !== 0) {
+        const err = new Error(`Governed command exited with status ${result.exit_code}.`);
+        err.code = 'local_process_failed';
+        err.exitCode = Number.isInteger(result.exit_code) && result.exit_code > 0 ? result.exit_code : 1;
+        err.response = publicResult;
+        throw err;
+    }
+    return publicResult;
+}
+
+function runtimeCwd(runtime) {
+    if (typeof runtime.cwd === 'function') return runtime.cwd();
+    return runtime.cwd || process.cwd();
 }
 
 async function commandDoctor(client, { baseUrl, apiKey }) {
