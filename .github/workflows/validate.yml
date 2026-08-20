@@ -185,6 +185,12 @@ jobs:
       - name: Verify generated integration capability status
         run: node scripts/generate-integration-capability-status.mjs --check
 
+      - name: Verify canonical integration count projections
+        run: node scripts/sync-integration-counts.mjs --check
+
+      - name: Verify repository rename preflight
+        run: node scripts/generate-repository-rename-preflight.mjs --check
+
       - name: Validate local governance policy schema
         run: ajv validate -s sdk/node/schema/local-governance-policy.v1.json -d sdk/node/schema/local-governance-policy.example.json --all-errors --spec=draft2020
 

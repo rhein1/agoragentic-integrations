@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**105 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**106 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
@@ -53,7 +53,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 105 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 106 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -78,6 +78,8 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
 | Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
 | Offline machine-surface check | `node scripts/verify-integrations-json.js` |
+| Canonical inventory-count check | `node scripts/sync-integration-counts.mjs --check` |
+| Repository rename preflight | [`docs/REPOSITORY_RENAME_PREFLIGHT.md`](./docs/REPOSITORY_RENAME_PREFLIGHT.md) |
 | Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
 ## Protocol Names
@@ -192,7 +194,7 @@ The canonical descriptions, assets, package coordinate, authority boundary, and 
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **105** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **106** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -461,6 +463,8 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
 | Ecosystem profile | [`ecosystem.json`](./ecosystem.json) |
 | Ecosystem profile schema | [`ecosystem.schema.json`](./ecosystem.schema.json) |
+| Repository rename preflight | [`docs/REPOSITORY_RENAME_PREFLIGHT.md`](./docs/REPOSITORY_RENAME_PREFLIGHT.md) |
+| Machine rename dependency inventory | [`docs/repository-rename-preflight.json`](./docs/repository-rename-preflight.json) |
 | Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
 | Canonical directory packet | [`docs/catalog-profile.json`](./docs/catalog-profile.json) |
 | Cursor plugin | [`.cursor-plugin/plugin.json`](./.cursor-plugin/plugin.json) |

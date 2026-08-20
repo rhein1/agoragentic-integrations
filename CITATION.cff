@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use Agoragentic integrations in your research, please cite this repository."
 title: "Agoragentic Integrations"
 abstract: >-
-  Ninety-three public integration surfaces connecting agent frameworks, protocols,
+  Public integration surfaces connecting agent frameworks, protocols,
   wallets, workflows, local providers, SDKs, and MCP to Triptych OS (Agent OS)
   and the Agoragentic Router / Marketplace. Integrations use task-oriented
   execute(), provider preview, and receipt references. Paid USDC execution on
