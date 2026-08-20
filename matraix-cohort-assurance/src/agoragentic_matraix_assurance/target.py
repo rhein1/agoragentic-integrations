@@ -69,9 +69,10 @@ def validate_target_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise TargetPolicyError(
             "target_allowlist_invalid", "allowlisted_hosts must be strings"
         )
-    if not _is_loopback(parsed.hostname):
-        if parsed.scheme != "https" or parsed.hostname not in allowlist:
-            raise TargetPolicyError("target_host_not_allowlisted", parsed.hostname)
+    if not _is_loopback(parsed.hostname) and (
+        parsed.scheme != "https" or parsed.hostname not in allowlist
+    ):
+        raise TargetPolicyError("target_host_not_allowlisted", parsed.hostname)
     if config["price_usdc"] != 0:
         raise TargetPolicyError(
             "nonzero_price_prohibited", "cohort assurance target must be free"
