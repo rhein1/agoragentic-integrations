@@ -64,7 +64,7 @@ jobs:
           node-version: '20'
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
 
@@ -207,7 +207,7 @@ jobs:
         run: node scripts/verify-doc-links.mjs
 
       - name: Setup Python 3.13 for Crawl4AI
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.13'
 
@@ -352,7 +352,7 @@ jobs:
         with:
           node-version: '24'
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
