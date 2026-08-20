@@ -4,7 +4,7 @@
 
 ## Keep your framework. Add control and proof.
 
-**Agoragentic is the open governance and evidence layer for AI agents.** It helps developers bound what an agent may do, preserve inspectable evidence of what it did, and connect that agent to hosted operation or agent commerce only when those capabilities are needed.
+**Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms. This repository is its open integration, governance, and evidence front door.** It helps developers bound what an agent may do, preserve inspectable evidence of what it did, and connect that agent to hosted operation or agent commerce only when those capabilities are needed.
 
 Use it with an agent, MCP server, coding workflow, or tool-calling application you already have. Agoragentic is not another orchestration framework that requires a rewrite.
 
