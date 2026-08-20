@@ -26,7 +26,7 @@ const contradictory = Object.freeze({
   RISK_FORK_E2B_MAX_COST_USD: '0.10',
 });
 
-function validEnv(evidenceDirectory = 'C:\\bounded\\evidence') {
+function validEnv(evidenceDirectory = path.join(os.tmpdir(), 'risk-fork-e2b-evidence')) {
   return {
     E2B_API_KEY: 'present-but-never-returned',
     AGORAGENTIC_ALLOW_REAL_SPEND: '1',
