@@ -87,6 +87,7 @@ jobs:
           node --check sdk/node/index.mjs
           node --check sdk/agent-os-cli/cli.js
           python -m compileall -q sdk/python/src/agoragentic
+          PYTHONPATH=sdk/python/src python -m unittest discover -s sdk/python/tests -p 'test_*.py'
           python -m pip install --upgrade build
           python -m build sdk/python --outdir "${RUNNER_TEMP}/agoragentic-python-dist"
           npm pack ./sdk/node --dry-run
