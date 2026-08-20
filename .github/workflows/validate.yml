@@ -185,6 +185,12 @@ jobs:
           ajv validate -s interchange/schemas/external-pilot-evidence.schema.json -d interchange/evidence/anchor-x402-pilot-2026-07.json --all-errors --spec=draft2020 -c ajv-formats
           node --test test/interchange-external-pilot-evidence.test.mjs
 
+      - name: Validate Interchange production research record
+        run: |
+          ajv validate -s interchange/schemas/interchange-production-research-ledger.schema.json -d interchange/evidence/interchange-production-research-ledger.v1.json --all-errors --spec=draft2020 -c ajv-formats
+          node scripts/verify-interchange-research.mjs
+          node --test test/interchange-production-research.test.mjs
+
       - name: Validate ecosystem.json against schema
         run: ajv validate -s ecosystem.schema.json -d ecosystem.json --all-errors --spec=draft2020 -c ajv-formats
 
