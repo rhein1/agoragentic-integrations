@@ -6,12 +6,16 @@
   "description": "Fail-closed SAM discovery and metadata normalization for Agoragentic Interchange.",
   "scripts": {
     "check": "node --check normalize.mjs && node --check client.mjs",
-    "test": "node --test normalize.test.mjs client.test.mjs"
+    "test": "node --test *.test.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
   }
 }

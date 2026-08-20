@@ -67,6 +67,9 @@ test('rejects a description for a different peer or tool', () => {
 test('rejects system, malformed, and errored discovery rows', () => {
   assert.throws(() => parseSamToolName('system://sam.catalog/list_local_services'), /mcp_namespace/);
   assert.throws(() => parseSamToolName('mcp://missing-tool'), /service_slash_tool/);
+  assert.throws(() => parseSamToolName('mcp://service/tool?admin=true'), /service_slash_tool/);
+  assert.throws(() => parseSamToolName('mcp://service/tool#private'), /service_slash_tool/);
+  assert.throws(() => parseSamToolName('mcp://user@service/tool'), /service_slash_tool/);
 
   const errored = fixture();
   errored.discovery.error = 'failed to connect';
@@ -75,4 +78,20 @@ test('rejects system, malformed, and errored discovery rows', () => {
 
 test('hashRef is deterministic across object key order', () => {
   assert.equal(hashRef({ b: 2, a: 1 }), hashRef({ a: 1, b: 2 }));
+});
+
+test('rejects unbounded or malformed remote metadata', () => {
+  const oversizedDescription = fixture();
+  oversizedDescription.description.description = 'x'.repeat(8_193);
+  assert.throws(() => normalizeSamTool(oversizedDescription), /sam_tool_description_too_long/);
+
+  const oversizedTool = fixture();
+  oversizedTool.discovery.tool_name = `mcp://service/${'x'.repeat(512)}`;
+  oversizedTool.description.tool_name = oversizedTool.discovery.tool_name;
+  assert.throws(() => normalizeSamTool(oversizedTool), /sam_tool_name_too_long/);
+
+  assert.throws(
+    () => normalizeSamTool({ ...fixture(), observedAt: 'not-a-timestamp' }),
+    /sam_observed_at_invalid/,
+  );
 });

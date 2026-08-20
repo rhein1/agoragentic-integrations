@@ -6,6 +6,7 @@ import {
   authenticatedFetch,
   captureSamTool,
   discoverSamTools,
+  resolveSamToken,
   validateSamEndpoint,
 } from './client.mjs';
 
@@ -54,6 +55,18 @@ test('authenticated fetch injects the SAM-specific header', async () => {
   assert.equal(headers.get('X-Test'), 'present');
 });
 
+test('explicit token paths override ambient tokens and ambiguous env sources fail closed', async () => {
+  const token = await resolveSamToken(
+    { tokenPath: '/operator/sam-token' },
+    { env: { SAM_API_TOKEN: 'wrong-ambient-token' }, readFile: async () => Buffer.from('file-token\n') },
+  );
+  assert.equal(token, 'file-token');
+  await assert.rejects(
+    resolveSamToken({}, { env: { SAM_API_TOKEN: 'one', SAM_API_TOKEN_PATH: '/two' } }),
+    (error) => error instanceof SamClientError && error.code === 'sam_token_source_ambiguous',
+  );
+});
+
 test('read-only discovery never calls a remote provider and redacts raw topology', async () => {
   const client = new FakeClient({
     get_mesh_info: text({ connected_peers: [PEER], dht_size: 1, router_peer_id: 'router-peer' }),
@@ -70,6 +83,38 @@ test('read-only discovery never calls a remote provider and redacts raw topology
   assert.equal(output.safety.provider_invoked, false);
   assert.equal(JSON.stringify(output).includes(PEER), false);
   assert.equal(JSON.stringify(output).includes(TOOL), false);
+});
+
+test('default output hashes a remote endpoint and only private diagnostics reveal its origin', async () => {
+  const responses = {
+    get_mesh_info: text({ connected_peers: [] }),
+    discover_remote_services: text([]),
+    find_remote_tools: text([]),
+  };
+  const safe = await discoverSamTools(
+    { endpoint: 'https://sam.private.example/mcp', allowRemote: true },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.match(safe.endpoint_ref, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(safe.endpoint_loopback, false);
+  assert.equal(safe.private_endpoint_origin, undefined);
+  assert.equal(JSON.stringify(safe).includes('sam.private.example'), false);
+
+  const privateOutput = await discoverSamTools(
+    { endpoint: 'https://sam.private.example/mcp', allowRemote: true, includePrivateTopology: true },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.equal(privateOutput.private_endpoint_origin, 'https://sam.private.example');
+});
+
+test('oversized SAM tool responses fail closed before parsing', async () => {
+  const client = new FakeClient({
+    get_mesh_info: { content: [{ type: 'text', text: 'x'.repeat(1_048_577) }] },
+  });
+  await assert.rejects(
+    discoverSamTools({}, { client, env: {} }),
+    (error) => error instanceof SamClientError && error.code === 'sam_tool_result_too_large',
+  );
 });
 
 test('live capture requires one exact discovery match and describes before normalizing', async () => {
@@ -101,4 +146,13 @@ test('live capture rejects ambiguous or missing exact matches', async () => {
     captureSamTool({ peerId: PEER, toolName: TOOL }, {}, { client, env: {} }),
     (error) => error instanceof SamClientError && error.code === 'sam_exact_tool_match_required',
   );
+});
+
+test('live capture rejects malformed targets before any MCP request', async () => {
+  const client = new FakeClient({});
+  await assert.rejects(
+    captureSamTool({ peerId: PEER, toolName: 'mcp://service/tool?leak=true' }, {}, { client, env: {} }),
+    (error) => error instanceof SamClientError && error.code === 'sam_tool_name_invalid',
+  );
+  assert.deepEqual(client.calls, []);
 });

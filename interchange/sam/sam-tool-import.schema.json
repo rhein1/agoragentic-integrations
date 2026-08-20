@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agoragentic.com/schemas/interchange/sam-tool-import.v1.json",
-  "title": "Agoragentic Interchange SAM Tool Import",
+  "title": "Agoragentic Interchange Public-Safe SAM Tool Import",
+  "description": "Metadata-only, ineligible SAM tool observation. Private transport targets are intentionally excluded.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -24,26 +25,125 @@
     "manifest_hash": { "$ref": "#/$defs/hash" },
     "capability_card_input": {
       "type": "object",
-      "required": ["name", "description", "category", "tags", "interface_kind", "pricing", "risk_level", "source"]
+      "additionalProperties": false,
+      "required": ["name", "description", "category", "tags", "interface_kind", "pricing", "risk_level", "source"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 8192 },
+        "category": { "const": "developer-tools" },
+        "tags": {
+          "type": "array",
+          "const": ["sam", "mcp", "sovereign-agent-mesh"]
+        },
+        "interface_kind": { "const": "sam_mesh_tool" },
+        "pricing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["pricing_model", "currency", "unit_price"],
+          "properties": {
+            "pricing_model": { "const": "quote_required" },
+            "currency": { "const": "USDC" },
+            "unit_price": { "const": "0" }
+          }
+        },
+        "risk_level": { "const": "network_discovered_unbound_provider" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_type", "source_ref"],
+          "properties": {
+            "source_type": { "const": "sam_mesh_tool_observation" },
+            "source_ref": { "type": "string", "pattern": "^sam:[a-f0-9]{16}:[a-f0-9]{16}$" }
+          }
+        }
+      }
     },
     "transport_evidence": {
       "type": "object",
-      "required": ["transport", "observation_type", "peer_ref", "service_ref", "tool_ref", "schema_hash", "labels_hash"]
+      "additionalProperties": false,
+      "required": [
+        "transport",
+        "observation_type",
+        "peer_ref",
+        "service_ref",
+        "tool_ref",
+        "schema_hash",
+        "labels_hash",
+        "observed_label_keys",
+        "authorization_verified_by_normalizer",
+        "reachability_verified_by_normalizer",
+        "provider_account_bound",
+        "point_in_time_only"
+      ],
+      "properties": {
+        "transport": { "const": "sam" },
+        "observation_type": { "const": "caller_supplied_find_and_describe_results" },
+        "peer_ref": { "$ref": "#/$defs/hash" },
+        "service_ref": { "$ref": "#/$defs/hash" },
+        "tool_ref": { "$ref": "#/$defs/hash" },
+        "schema_hash": { "$ref": "#/$defs/hash" },
+        "labels_hash": { "$ref": "#/$defs/hash" },
+        "observed_label_keys": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "authorization_verified_by_normalizer": { "const": false },
+        "reachability_verified_by_normalizer": { "const": false },
+        "provider_account_bound": { "const": false },
+        "point_in_time_only": { "const": true }
+      }
     },
     "eligibility": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["eligible", "blockers"],
       "properties": {
         "eligible": { "const": false },
-        "blockers": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        "blockers": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "sam_provider_account_binding_required",
+              "commercial_terms_required",
+              "live_authorization_canary_required",
+              "outcome_validator_required"
+            ]
+          }
+        }
       }
     },
     "authority_flags": {
       "type": "object",
-      "additionalProperties": { "const": false }
+      "additionalProperties": false,
+      "required": [
+        "eligible_for_execution",
+        "provider_identity_bound",
+        "commercial_terms_bound",
+        "payment_enabled",
+        "wallet_spend_enabled",
+        "trust_mutation_enabled",
+        "marketplace_publication_enabled",
+        "public_execute_enabled"
+      ],
+      "properties": {
+        "eligible_for_execution": { "const": false },
+        "provider_identity_bound": { "const": false },
+        "commercial_terms_bound": { "const": false },
+        "payment_enabled": { "const": false },
+        "wallet_spend_enabled": { "const": false },
+        "trust_mutation_enabled": { "const": false },
+        "marketplace_publication_enabled": { "const": false },
+        "public_execute_enabled": { "const": false }
+      }
     },
     "safety": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["metadata_only", "external_calls_made", "provider_invoked", "funds_moved", "raw_peer_id_public", "raw_tool_target_public"],
       "properties": {
         "metadata_only": { "const": true },
@@ -53,8 +153,7 @@
         "raw_peer_id_public": { "const": false },
         "raw_tool_target_public": { "const": false }
       }
-    },
-    "private_transport_target": { "type": "object" }
+    }
   },
   "$defs": {
     "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }

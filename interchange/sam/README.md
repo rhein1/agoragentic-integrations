@@ -35,7 +35,7 @@ opted-in remote endpoint must use HTTPS. Tokens may come from `SAM_API_TOKEN` or
 
 ```bash
 cd interchange/sam
-npm install
+npm ci
 npm test
 ```
 
@@ -53,7 +53,9 @@ node interchange/sam/client.mjs discover
 node interchange/sam/client.mjs discover --service code-reviewer
 ```
 
-Discovery output hashes peer and tool identifiers by default. Use
+Discovery output hashes the MCP endpoint, peer, and tool identifiers by default.
+Remote endpoint origins are emitted only with the same private diagnostic opt-in.
+Use
 `--include-private-topology` only for an owner-controlled local diagnostic; do
 not commit or publish that output.
 
@@ -78,7 +80,12 @@ The live capture requires exactly one matching discovery row for the requested
 peer and tool, describes it, then normalizes the pair. The default packet hashes
 the peer, service, tool, labels, and schemas. It does not emit the raw PeerID or
 tool route. `--include-private-target` exists only for a local, owner-controlled
-handoff and its output must not be committed or published.
+handoff and its output must not be committed or published. Private-target output
+intentionally does not validate against the public-safe import schema.
+
+Tool responses, discovery rows, token material, names, descriptions, and schemas
+are bounded before normalization. Oversized or malformed metadata fails closed
+instead of being copied into a capability-card candidate.
 
 A successful describe observation shows that the caller could discover and
 describe the tool at one point in time. It is not proof of provider ownership,

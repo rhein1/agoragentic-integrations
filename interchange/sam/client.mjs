@@ -3,9 +3,13 @@
 import { readFile as readFileDefault } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-import { hashRef, normalizeSamTool } from './normalize.mjs';
+import { hashRef, normalizeSamTool, parseSamToolName } from './normalize.mjs';
 
 export const DEFAULT_SAM_MCP_URL = 'http://127.0.0.1:8080/mcp';
+
+const MAX_SAM_TOKEN_BYTES = 16_384;
+const MAX_SAM_TOOL_RESULT_BYTES = 1_048_576;
+const MAX_SAM_DISCOVERY_ROWS = 512;
 
 export class SamClientError extends Error {
   constructor(code, message, { status = 500, retryable = false, cause } = {}) {
@@ -64,12 +68,22 @@ export function validateSamEndpoint(endpoint = DEFAULT_SAM_MCP_URL, { allowRemot
 export async function resolveSamToken(options = {}, dependencies = {}) {
   const env = dependencies.env || process.env;
   const readFile = dependencies.readFile || readFileDefault;
-  const direct = String(options.token || env.SAM_API_TOKEN || '').trim();
-  const tokenPath = String(options.tokenPath || (!direct ? env.SAM_API_TOKEN_PATH || '' : '')).trim();
-  if (options.token && options.tokenPath) {
+  const explicitToken = String(options.token || '').trim();
+  const explicitTokenPath = String(options.tokenPath || '').trim();
+  const envToken = String(env.SAM_API_TOKEN || '').trim();
+  const envTokenPath = String(env.SAM_API_TOKEN_PATH || '').trim();
+  if (explicitToken && explicitTokenPath) {
     throw new SamClientError('sam_token_source_ambiguous', 'Provide token or tokenPath, not both.', { status: 400 });
   }
-  let token = direct;
+  if (!explicitToken && !explicitTokenPath && envToken && envTokenPath) {
+    throw new SamClientError(
+      'sam_token_source_ambiguous',
+      'Set SAM_API_TOKEN or SAM_API_TOKEN_PATH, not both.',
+      { status: 400 },
+    );
+  }
+  let token = explicitToken || (explicitTokenPath ? '' : envToken);
+  const tokenPath = explicitTokenPath || (!token ? envTokenPath : '');
   if (!token && tokenPath) {
     let bytes;
     try {
@@ -80,10 +94,13 @@ export async function resolveSamToken(options = {}, dependencies = {}) {
         cause,
       });
     }
-    if (bytes.length > 16_384) {
+    if (bytes.length > MAX_SAM_TOKEN_BYTES) {
       throw new SamClientError('sam_token_file_too_large', 'The configured SAM API token file is unexpectedly large.', { status: 400 });
     }
     token = bytes.toString('utf8').trim();
+  }
+  if (Buffer.byteLength(token, 'utf8') > MAX_SAM_TOKEN_BYTES) {
+    throw new SamClientError('sam_token_too_large', 'The configured SAM API token is unexpectedly large.', { status: 400 });
   }
   if (token && /\s/.test(token)) {
     throw new SamClientError('sam_token_invalid', 'The SAM API token contains whitespace and was rejected.', { status: 400 });
@@ -132,7 +149,29 @@ function parseTextResult(result, toolName) {
       retryable: true,
     });
   }
-  if (result?.structuredContent !== undefined) return result.structuredContent;
+  const textBytes = texts.reduce((total, text) => total + Buffer.byteLength(text, 'utf8'), 0);
+  if (textBytes > MAX_SAM_TOOL_RESULT_BYTES) {
+    throw new SamClientError('sam_tool_result_too_large', `SAM tool ${toolName} returned too much text.`, {
+      status: 502,
+    });
+  }
+  if (result?.structuredContent !== undefined) {
+    let serialized;
+    try {
+      serialized = JSON.stringify(result.structuredContent);
+    } catch (cause) {
+      throw new SamClientError('sam_tool_result_invalid', `SAM tool ${toolName} returned invalid structured content.`, {
+        status: 502,
+        cause,
+      });
+    }
+    if (Buffer.byteLength(serialized || '', 'utf8') > MAX_SAM_TOOL_RESULT_BYTES) {
+      throw new SamClientError('sam_tool_result_too_large', `SAM tool ${toolName} returned too much structured content.`, {
+        status: 502,
+      });
+    }
+    return result.structuredContent;
+  }
   if (!texts.length) return null;
   if (texts.length === 1) {
     try {
@@ -184,9 +223,35 @@ async function withClient(options, dependencies, work) {
 }
 
 function asRows(value) {
-  if (Array.isArray(value)) return value.flatMap(asRows);
-  if (isRecord(value) && Array.isArray(value.tools)) return value.tools;
-  return isRecord(value) ? [value] : [];
+  const pending = [value];
+  const rows = [];
+  while (pending.length) {
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      for (let index = current.length - 1; index >= 0; index -= 1) pending.push(current[index]);
+    } else if (isRecord(current) && Array.isArray(current.tools)) {
+      pending.push(current.tools);
+    } else if (isRecord(current)) {
+      rows.push(current);
+      if (rows.length > MAX_SAM_DISCOVERY_ROWS) {
+        throw new SamClientError(
+          'sam_discovery_rows_too_many',
+          `SAM discovery exceeded the ${MAX_SAM_DISCOVERY_ROWS}-row safety limit.`,
+          { status: 502 },
+        );
+      }
+    }
+  }
+  return rows;
+}
+
+function redactEndpoint(endpoint, includePrivate = false) {
+  const output = {
+    endpoint_ref: hashRef({ origin: endpoint.origin, pathname: endpoint.pathname }),
+    endpoint_loopback: isLoopback(endpoint.hostname),
+  };
+  if (includePrivate) output.private_endpoint_origin = endpoint.origin;
+  return output;
 }
 
 function redactMeshInfo(value, includePrivate = false) {
@@ -222,7 +287,7 @@ export async function discoverSamTools(options = {}, dependencies = {}) {
     return {
       schema: 'agoragentic.interchange.sam-discovery.v1',
       captured_at: dependencies.now?.() || new Date().toISOString(),
-      endpoint_origin: connection.endpoint.origin,
+      ...redactEndpoint(connection.endpoint, options.includePrivateTopology === true),
       authenticated: connection.authenticated,
       mesh: redactMeshInfo(meshInfo, options.includePrivateTopology === true),
       service_count: asRows(services).length,
@@ -255,9 +320,24 @@ export async function captureSamTool({ peerId, toolName }, options = {}, depende
   const tool = String(toolName || '').trim();
   if (!peer) throw new SamClientError('sam_peer_id_required', 'peerId is required.', { status: 400 });
   if (!tool) throw new SamClientError('sam_tool_name_required', 'toolName is required.', { status: 400 });
+  if (peer.length > 256 || /\s/.test(peer)) {
+    throw new SamClientError('sam_peer_id_invalid', 'peerId is malformed or too long.', { status: 400 });
+  }
+  let parsedTool;
+  try {
+    parsedTool = parseSamToolName(tool);
+  } catch (cause) {
+    throw new SamClientError('sam_tool_name_invalid', 'toolName must use SAM\'s mcp://service/tool namespace.', {
+      status: 400,
+      cause,
+    });
+  }
 
   return withClient(options, dependencies, async (client, connection) => {
-    const matches = asRows(await callTool(client, 'find_remote_tools', { peer_id: peer }))
+    const matches = asRows(await callTool(client, 'find_remote_tools', {
+      peer_id: peer,
+      tool_name: parsedTool.bareToolName,
+    }))
       .filter((row) => row.peer_id === peer && row.tool_name === tool && !row.error);
     if (matches.length !== 1) {
       throw new SamClientError(
@@ -280,7 +360,7 @@ export async function captureSamTool({ peerId, toolName }, options = {}, depende
     return {
       schema: 'agoragentic.interchange.sam-live-capture.v1',
       captured_at: capturedAt,
-      endpoint_origin: connection.endpoint.origin,
+      ...redactEndpoint(connection.endpoint, options.includePrivateTarget === true),
       authenticated: connection.authenticated,
       packet,
       capture_evidence: {
