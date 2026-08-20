@@ -365,7 +365,7 @@ jobs:
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: adapter-conformance-${{ github.sha }}
           path: ${{ runner.temp }}/adapter-conformance-report.json
