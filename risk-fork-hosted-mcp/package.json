@@ -1,0 +1,63 @@
+{
+  "name": "@agoragentic/risk-fork-hosted-mcp",
+  "version": "0.1.0-alpha.0",
+  "description": "Private, unpublished, integrity-bound hosted MCP enforcement and Risk Fork runtime bundle.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    ".": "./dist/runtime/index.mjs",
+    "./e2b-context/*": "./e2b-context/*",
+    "./migrations/*": "./migrations/*",
+    "./ops/postgres/*": "./ops/postgres/*",
+    "./schema/*": "./schema/*"
+  },
+  "files": [
+    "dist/runtime/index.mjs",
+    "e2b-context/",
+    "integrity-manifest.json",
+    "migrations/001_distributed_authority.pg.sql",
+    "ops/postgres/",
+    "schema/e2b-qualification-evidence.v1.json",
+    "scripts/verify-integrity.mjs",
+    "THIRD_PARTY_NOTICES.txt",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check src/index.mjs && node --check scripts/build.mjs && node --check scripts/verify-integrity.mjs && node --check test/package-artifact.test.mjs",
+    "test": "node --test --test-concurrency=1 test/package-artifact.test.mjs",
+    "verify": "node scripts/verify-integrity.mjs",
+    "verify:source": "node scripts/verify-integrity.mjs --source",
+    "pack:dry": "npm pack --dry-run --json",
+    "prepack": "node scripts/build.mjs && node scripts/verify-integrity.mjs --source --quiet",
+    "prepublishOnly": "node -e \"throw new Error('RISK_FORK_HOSTED_MCP_PUBLISH_DISABLED')\""
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "esbuild": "0.28.1",
+    "pg": "8.16.3"
+  },
+  "peerDependencies": {
+    "e2b": "2.39.0"
+  },
+  "peerDependenciesMeta": {
+    "e2b": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "risk-fork-hosted-mcp"
+  }
+}
