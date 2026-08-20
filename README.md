@@ -88,7 +88,7 @@ The generic Harness `run` path validates configuration and policy and records a 
 | OpenCode | Experimental before / after hook adapter pinned to an exact host contract fixture | Source candidate with bounded local evidence; not a general end-to-end compatibility claim |
 | LangGraph, CrewAI, Codex, MCP, Hermes, Rust reference runtime, and others | Mapping examples and adapter contracts | Mapping or example support is not the same as in-path enforcement |
 
-Read [Integration capability levels](./docs/INTEGRATION_CAPABILITY_LEVELS.md) before interpreting an integration status.
+Read [Integration capability levels](./docs/INTEGRATION_CAPABILITY_LEVELS.md) before interpreting an integration status. The [generated capability status](./docs/INTEGRATION_CAPABILITY_STATUS.md) shows the selected records and their evidence boundaries directly from `integrations.json`.
 
 ## Choose one path
 
@@ -109,7 +109,7 @@ custom Node.js  ─┘
 
 Browse the machine-readable catalog in [`integrations.json`](./integrations.json). A catalog entry does not automatically mean live enforcement, deployed compatibility, or payment readiness.
 
-At this revision, the canonical `integrations.json` manifest contains **105** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
+At this revision, the canonical `integrations.json` manifest contains **106** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
 
 ### Govern what the agent may know
 
@@ -216,6 +216,7 @@ Experimental and source-only integrations retain the limits stated in their own 
 | Surface | Purpose |
 |---|---|
 | [`integrations.json`](./integrations.json) | Canonical integration and package inventory |
+| [Generated integration capability status](./docs/INTEGRATION_CAPABILITY_STATUS.md) | Human-readable capability and evidence table derived from the canonical inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |

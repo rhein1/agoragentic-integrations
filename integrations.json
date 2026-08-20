@@ -1,5 +1,5 @@
 {
-  "version": "2.45.0",
+  "version": "2.46.0",
   "updated_at": "2026-08-20",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -422,7 +422,28 @@
       "status": "ready",
       "path": "agent-os/agent_os_node.mjs",
       "install": "node 18+ or pip install requests",
-      "docs": "agent-os/README.md"
+      "docs": "agent-os/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "record_only",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "agent-os/agent_os_node.mjs"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "agoragentic-rust-framework",
@@ -503,7 +524,28 @@
       "status": "beta",
       "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
       "install": "npm install n8n-nodes-agoragentic",
-      "docs": "n8n/README.md"
+      "docs": "n8n/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "n8n/nodes/Agoragentic/Agoragentic.node.ts"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "open-wallet-standard",
@@ -558,7 +600,59 @@
       "status": "beta",
       "path": "harness-core/bin/agoragentic-harness.mjs",
       "install": "npx agoragentic-harness-core@latest init",
-      "docs": "harness-core/README.md"
+      "docs": "harness-core/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "tested",
+          "post_action_evidence": "local",
+          "approval_support": "host_enforced",
+          "receipt_support": "local",
+          "agent_os_export": "tested"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "harness-core/test/cli.test.cjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
+    },
+    {
+      "id": "codex-harness-mapping",
+      "name": "Codex Harness Mapping Stub",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "harness-core/src/adapters/index.mjs",
+      "install": "npx agoragentic-harness-core@latest adapters",
+      "docs": "harness-core/README.md",
+      "compatibility_scope": "Cataloged local no-spend mapping contract only; no Codex host hook, tool interception, execution, or runtime receipt claim",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "documented",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "none",
+          "approval_support": "none",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "harness-core/src/adapters/index.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "premortem-golden-loop",
@@ -585,7 +679,28 @@
       "status": "ready",
       "path": "crewai/agoragentic_crewai.py",
       "install": "pip install agoragentic",
-      "docs": "crewai/README.md"
+      "docs": "crewai/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "crewai/agoragentic_crewai.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "mcp",
@@ -594,7 +709,28 @@
       "status": "ready",
       "path": "mcp/mcp-server.js",
       "install": "npx agoragentic-mcp",
-      "docs": "mcp/README.md"
+      "docs": "mcp/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "tested",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "preview"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "mcp/test/v2-remote-relay.test.js"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "agent-client-protocol",
@@ -621,7 +757,28 @@
       "status": "ready",
       "path": "openai-agents/agoragentic_openai.py",
       "install": "pip install agoragentic",
-      "docs": "openai-agents/README.md"
+      "docs": "openai-agents/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "openai-agents/agoragentic_openai.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "elizaos",
@@ -918,7 +1075,28 @@
       "status": "ready",
       "path": "langgraph/agoragentic_langgraph.py",
       "install": "pip install requests langgraph langchain-core",
-      "docs": "langgraph/README.md"
+      "docs": "langgraph/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "langgraph/agoragentic_langgraph.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "cloudflare-agents",
@@ -1305,7 +1483,28 @@
       "status": "ready",
       "path": "claude-code/README.md",
       "install": "/plugin marketplace add rhein1/agoragentic-integrations; /plugin install agoragentic@agoragentic-integrations",
-      "docs": "claude-code/README.md"
+      "docs": "claude-code/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "documented",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "none",
+          "approval_support": "none",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "claude-code/README.md"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "cline-mcp",
@@ -1341,7 +1540,28 @@
       "status": "experimental",
       "path": "opencode/src/server.mjs",
       "install": "cd opencode && npm ci",
-      "docs": "opencode/README.md"
+      "docs": "opencode/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "experimental",
+          "post_action_evidence": "local",
+          "approval_support": "host_enforced",
+          "receipt_support": "local",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "1.18.15 contract fixture",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "opencode/test/opencode-plugin.test.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "gstack-harness-bridge",

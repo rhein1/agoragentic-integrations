@@ -182,6 +182,9 @@ jobs:
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
 
+      - name: Verify generated integration capability status
+        run: node scripts/generate-integration-capability-status.mjs --check
+
       - name: Validate local governance policy schema
         run: ajv validate -s sdk/node/schema/local-governance-policy.v1.json -d sdk/node/schema/local-governance-policy.example.json --all-errors --spec=draft2020
 
