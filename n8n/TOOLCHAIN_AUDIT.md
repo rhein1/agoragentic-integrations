@@ -89,6 +89,7 @@ publishing does not use that helper.
 ## Validation
 
 - `npm ci`
+- npm 10 Linux/x64 clean-install dry-run with optional dependencies included
 - `npm test`
 - `npm run lint`
 - `npm run build`

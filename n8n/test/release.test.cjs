@@ -53,3 +53,10 @@ test('current n8n metadata includes required subtitle and themed icons', () => {
 	assert.equal(fs.existsSync(path.join(root, 'credentials', 'agoragentic.dark.svg')), true);
 	assert.equal(readJson('tsconfig.json').compilerOptions.incremental, false);
 });
+
+test('lockfile retains cross-platform optional dependencies required on Linux', () => {
+	const lock = readJson('package-lock.json');
+
+	assert.ok(lock.packages['node_modules/@emnapi/core']);
+	assert.ok(lock.packages['node_modules/@emnapi/runtime']);
+});
