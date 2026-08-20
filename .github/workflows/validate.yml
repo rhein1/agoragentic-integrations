@@ -54,17 +54,17 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '20'
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
 
@@ -148,7 +148,7 @@ jobs:
           npm pack --dry-run
 
       - name: Setup Node 22 for n8n toolchain
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
 
@@ -207,7 +207,7 @@ jobs:
         run: node scripts/verify-doc-links.mjs
 
       - name: Setup Python 3.13 for Crawl4AI
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.13'
 
@@ -327,9 +327,9 @@ jobs:
   payment-contracts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for native TypeScript contract tests
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Test payment safety contracts
@@ -346,13 +346,13 @@ jobs:
   adapter-conformance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for TypeScript syntax checks
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
@@ -365,7 +365,7 @@ jobs:
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: adapter-conformance-${{ github.sha }}
           path: ${{ runner.temp }}/adapter-conformance-report.json
