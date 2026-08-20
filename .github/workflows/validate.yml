@@ -82,6 +82,7 @@ jobs:
       - name: Validate public SDK package sources
         run: |
           node --test test/sdk-public-source.test.mjs
+          node --test test/local-governance-cli.test.mjs
           node --check sdk/node/index.js
           node --check sdk/node/index.mjs
           node --check sdk/agent-os-cli/cli.js
@@ -179,6 +180,9 @@ jobs:
 
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
+
+      - name: Validate local governance policy schema
+        run: ajv validate -s sdk/node/schema/local-governance-policy.v1.json -d sdk/node/schema/local-governance-policy.example.json --all-errors --spec=draft2020
 
       - name: Validate Interchange external pilot evidence
         run: |
