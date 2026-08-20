@@ -1,6 +1,6 @@
 {
-  "version": "2.43.0",
-  "updated_at": "2026-08-13",
+  "version": "2.44.0",
+  "updated_at": "2026-08-20",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -360,6 +360,18 @@
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/261",
       "review_by": "2026-09-08",
+      "published": false,
+      "external_compatibility_verified": false,
+      "ready_for_manifest": false,
+      "authority_granted": false
+    },
+    {
+      "directory": "matraix-cohort-assurance",
+      "status": "unpublished_alpha",
+      "reason": "The exact upstream source lock, closed representation contract, no-spend target policy, and deterministic fixture replay pass, but no live MatrAIx provider run or independent external compatibility review has occurred.",
+      "owner": "repository-maintainers",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/320",
+      "review_by": "2026-09-30",
       "published": false,
       "external_compatibility_verified": false,
       "ready_for_manifest": false,
