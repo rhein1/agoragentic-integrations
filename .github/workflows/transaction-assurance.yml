@@ -49,6 +49,8 @@ jobs:
             'schema/transaction-assurance-evaluation.v1.json',
             'schema/transaction-evaluation-evidence.v1.json',
             'test/fixtures/protocol-adapter-vectors.v1.json',
+            'test/fixtures/mycelium-action-ref-v1.vectors.json',
+            'test/fixtures/mycelium-anchor-registry-v1.vectors.json',
             'vendor/acp-2026-04-17/schema.agentic_checkout.json',
             'examples/native-mandate.json',
             'examples/authority-request-input.json'

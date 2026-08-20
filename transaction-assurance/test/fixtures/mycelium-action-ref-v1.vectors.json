@@ -1,0 +1,81 @@
+{
+  "schema": "agoragentic.mycelium-action-ref-v1-vectors.v1",
+  "profile": "mycelium-action-ref-v1.0",
+  "source": {
+    "repository": "https://github.com/giskard09/argentum-core",
+    "revision": "2935c328177dca9f042fa1b910f5237ffe71da9e",
+    "tag": "action-ref-v2.0",
+    "derivation_version": "v1",
+    "specification_sha256": "sha256:c893d29e8d992e88442eccdde502e22edda0c20a580d391c56af988642452554",
+    "upstream_vector_set_sha256": "sha256:b6604d03c3f119224b594135d651eb74b205770cc276c46acd95dd800feb9050",
+    "upstream_negative_vector_set_sha256": "sha256:eae765de97298e2d086c41867922b7a6fe14eee4fd7efa572257658ce6876de9",
+    "license": "Apache-2.0"
+  },
+  "fixtures": {
+    "baseline": {
+      "preimage": {
+        "agent_id": "giskard-self",
+        "action_type": "trail.anchor",
+        "scope": "mycelium:baseline",
+        "timestamp": "2026-05-23T00:00:00.000Z"
+      },
+      "canonical_utf8": "{\"action_type\":\"trail.anchor\",\"agent_id\":\"giskard-self\",\"scope\":\"mycelium:baseline\",\"timestamp\":\"2026-05-23T00:00:00.000Z\"}",
+      "value": "f4ebda732e3c063bdd8547c734e4956f009bbed7f557cb949f7c8033e8c42d1d"
+    }
+  },
+  "vectors": [
+    {
+      "id": "valid-pinned-preimage",
+      "fixture": "baseline",
+      "expected": "match"
+    },
+    {
+      "id": "wrong-timestamp-precision",
+      "fixture": "baseline",
+      "set": {
+        "preimage.timestamp": "2026-05-23T00:00:00Z"
+      },
+      "expected": "reject_out_of_profile_domain"
+    },
+    {
+      "id": "noncanonical-key-order-hash",
+      "fixture": "baseline",
+      "set": {
+        "value": "ad7c0cfaa648d265ed057e6fd9fff68dbea1b546988c65afe24e92676f937b04"
+      },
+      "expected": "mismatch"
+    },
+    {
+      "id": "unsupported-profile",
+      "fixture": "baseline",
+      "set": {
+        "profile": "mycelium-action-ref-v2.0"
+      },
+      "expected": "reject_unsupported_profile"
+    },
+    {
+      "id": "v2-domain-digest-under-v1-profile",
+      "fixture": "baseline",
+      "set": {
+        "value": "c72caf19ccd3f74afeadf630e46473a828c56765abc368ba2285ab53a8b3ceae"
+      },
+      "expected": "mismatch"
+    },
+    {
+      "id": "non-ascii-scope",
+      "fixture": "baseline",
+      "set": {
+        "preimage.scope": "mycelium:r\u00e9sum\u00e9"
+      },
+      "expected": "reject_out_of_profile_domain"
+    },
+    {
+      "id": "wrong-declared-preimage-ref",
+      "fixture": "baseline",
+      "set": {
+        "preimage_ref": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": "mismatch"
+    }
+  ]
+}

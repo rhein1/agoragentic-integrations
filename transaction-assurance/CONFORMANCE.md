@@ -4,7 +4,7 @@ The Transaction Assurance conformance suite is an offline, deterministic test co
 
 ## What it evaluates
 
-The language-neutral vector input records bounded booleans and states for authority, terms, limits, payment identity, settlement, execution, outcome validation, reconciliation, and privacy. It intentionally cannot carry prompts, tool output, credentials, private keys, payment payloads, or private owner data.
+The language-neutral vector input records bounded booleans and states for authority, terms, limits, payment identity, settlement, execution, outcome validation, reconciliation, and privacy. Current suite `0.2.0-alpha.0` materializes the strict `agoragentic.transaction-assurance-conformance.v2` input. The original v1 field shape remains valid for historical callers and its missing v2-only checks receive legacy-compatible defaults; the four expanded checks are never added to v1 in place. It intentionally cannot carry prompts, tool output, credentials, private keys, payment payloads, or private owner data.
 
 The manifest pins four existing protocol adapters:
 
@@ -32,6 +32,14 @@ export async function evaluateTransactionAssuranceVector({ vector, input }) {
 
 The runner rejects extra result fields. It compares the target's exact decision and code with each vector's expected result. Target code runs in the caller's Node process; the suite does not sandbox it or prove that it avoided network or secret access.
 
+`pass` is a profile-scoped clean terminal decision, not a synonym for successful
+delivery. Callers must inspect the result code. `complete_chain_verified` means
+the paid execution and delivered outcome were verified;
+`reconciled_refunded` means payment was cleanly reversed; and
+`reconciled_dispute_resolved` means the dispute reached an explicit terminal
+resolution. The latter two do not claim that the buyer received the originally
+purchased outcome.
+
 Reference modules are included for:
 
 - an x402 resource server;
@@ -50,6 +58,23 @@ it is not external evidence until the independent operator reviews and commits
 the target in its own repository, runs it, and publishes the bounded artifacts
 plus actionable observations. The pack makes no network, payment, signature,
 live-settlement, or production-compatibility claim.
+
+The first independent run for historical suite `0.1.0-alpha.0` is published in the
+[`hypeprinter007-stack/anchor-x402-agoragentic-adopter`](https://github.com/hypeprinter007-stack/anchor-x402-agoragentic-adopter)
+repository. Its signed target commit is
+`13d6d70bb69cac2993753a22d423870bdfebe9a5`; artifacts are committed at
+`49634dd327eed9d3e03b5a51f510d15f04794c8a`; and the artifacts bind suite commit
+`607b3dddbc441fe52554b8842b9065e60131ae3b`. The run reports 42 passed and 0
+failed, a publicly verifiable receipt, no suite network use, and no spend
+authority. Its two actionable contract-clarity observations are recorded in
+[PR #297](https://github.com/rhein1/agoragentic-integrations/pull/297#issuecomment-5270120165).
+
+That evidence does not cover later vector versions. Current-source starter
+output is always labeled `starter_self_test` with
+`independent_adopter_run: false` and `external_adopter_gate_satisfied: false`.
+Passing it proves deterministic starter behavior only. Fresh evidence for suite
+`0.2.0-alpha.0` must be produced and published by an independent operator from
+an operator-controlled repository, then reviewed separately.
 
 ## Reports and receipts
 
@@ -90,4 +115,9 @@ The called workflow checks out the caller repository and the pinned suite separa
 
 It may not be described as certified safe, universally trusted, fraud-proof, legally comprehensive, endorsed by Agoragentic or a protocol provider, or proof of live settlement or production compatibility.
 
-The suite must not be marketed as an ecosystem standard until an external adopter runs it and reports actionable failures. That external evidence is not present yet.
+The independent run supplies the first external-adopter evidence required for
+maintainer review of this offline alpha. It produced two actionable
+contract-clarity findings but zero failed vectors; maintainers must decide
+whether that satisfies issue #246's literal "actionable failures" wording. It
+does not authorize package publication, public catalog inclusion, an
+ecosystem-standard claim, or any live compatibility claim.

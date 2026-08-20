@@ -1063,3 +1063,12 @@ export {
   normalizeVisaTapEvidence,
   normalizeX402Evidence,
 } from './protocol-adapters.mjs';
+
+export {
+  bindExternalVerification,
+  MYCELIUM_EXTERNAL_VERIFICATION_PINS,
+  normalizeAnchorEvidence,
+  normalizeExternalActionReference,
+  verifyAnchorEvidence,
+  verifyExternalActionReferencePreimage,
+} from './external-verification-adapters.mjs';

@@ -5,6 +5,7 @@
   "operator_origin": "https://anchor-x402.com",
   "target_name": "anchor-x402-normalized-policy-adapter",
   "target_contract": "offline_normalized_evidence_policy",
+  "evidence_class": "starter_self_test",
   "implementation_authorship": "agoragentic_clean_room_starter_operator_review_required",
   "source_wire_protocol": "x402",
   "normalized_protocol_inputs": [
@@ -32,6 +33,7 @@
   "production_compatibility_claimed": false,
   "certification_claimed": false,
   "operator_review_required": true,
+  "self_test_satisfies_external_adopter_gate": false,
   "required_operator_assertions": [
     "target_files_committed_in_operator_controlled_repository",
     "profile_reviewed_against_operator_policy",

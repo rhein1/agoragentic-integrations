@@ -4,6 +4,7 @@ import { canonicalize, sha256Ref } from './index.mjs';
 import { PROTOCOL_ADAPTER_PINS } from './protocol-adapters.mjs';
 
 export const CONFORMANCE_SCHEMA = 'agoragentic.transaction-assurance-conformance.v1';
+export const CONFORMANCE_SCHEMA_V2 = 'agoragentic.transaction-assurance-conformance.v2';
 export const CONFORMANCE_REPORT_SCHEMA = 'agoragentic.transaction-assurance-conformance-report.v1';
 export const CONFORMANCE_RECEIPT_SCHEMA = 'agoragentic.transaction-assurance-conformance-receipt.v1';
 
@@ -22,6 +23,12 @@ const RECONCILIATION_STATES = new Set([
 const TOKEN = /^[a-z0-9][a-z0-9._:-]{0,127}$/;
 const HASH = /^sha256:[0-9a-f]{64}$/;
 const MAX_VECTORS = 128;
+const PROTOCOL_VERSION_COMPARISON = Object.freeze({
+  google_ap2: 'semver_patch',
+  openai_stripe_acp: 'date',
+  visa_tap: 'opaque',
+  x402: 'semver_major',
+});
 
 function isObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -109,26 +116,48 @@ export function validateConformanceInput(input) {
     'reconciliation',
     'privacy',
   ], 'input');
-  if (input.schema !== CONFORMANCE_SCHEMA) throw new TypeError('input.schema is unsupported');
+  const isV2 = input.schema === CONFORMANCE_SCHEMA_V2;
+  if (!isV2 && input.schema !== CONFORMANCE_SCHEMA) {
+    throw new TypeError('input.schema is unsupported');
+  }
 
   exactKeys(input.protocol, ['adapter_id', 'source_version'], 'input.protocol');
   text(input.protocol.adapter_id, 'input.protocol.adapter_id', { token: true });
   text(input.protocol.source_version, 'input.protocol.source_version', { max: 128 });
 
-  exactKeys(input.authority, [
+  exactKeys(input.authority, isV2 ? [
+    'present',
+    'verification',
+    'revocation',
+    'principal_match',
+    'audience_match',
+    'agent_match',
+    'expired',
+  ] : [
     'verification',
     'revocation',
     'audience_match',
     'agent_match',
     'expired',
   ], 'input.authority');
+  if (isV2) bool(input.authority.present, 'input.authority.present');
   enumeration(input.authority.verification, 'input.authority.verification', VERIFICATION_STATES);
   enumeration(input.authority.revocation, 'input.authority.revocation', REVOCATION_STATES);
+  if (isV2) bool(input.authority.principal_match, 'input.authority.principal_match');
   bool(input.authority.audience_match, 'input.authority.audience_match');
   bool(input.authority.agent_match, 'input.authority.agent_match');
   bool(input.authority.expired, 'input.authority.expired');
 
-  validateBooleanRecord(input.terms, [
+  validateBooleanRecord(input.terms, isV2 ? [
+    'merchant_match',
+    'seller_match',
+    'category_match',
+    'action_match',
+    'rail_match',
+    'currency_match',
+    'quote_match',
+    'terms_match',
+  ] : [
     'merchant_match',
     'category_match',
     'action_match',
@@ -142,7 +171,12 @@ export function validateConformanceInput(input) {
     'daily_within_limit',
     'total_within_limit',
   ], 'input.limits');
-  validateBooleanRecord(input.payment, [
+  validateBooleanRecord(input.payment, isV2 ? [
+    'identifier_present',
+    'identifier_reused',
+    'replay_detected',
+    'evidence_replayed',
+  ] : [
     'identifier_present',
     'identifier_reused',
     'replay_detected',
@@ -163,6 +197,18 @@ export function validateConformanceInput(input) {
     'private_owner_data_exposed',
   ], 'input.privacy');
   return input;
+}
+
+function normalizeConformanceInputForEvaluation(input) {
+  validateConformanceInput(input);
+  if (input.schema === CONFORMANCE_SCHEMA_V2) return input;
+  const normalized = clone(input);
+  normalized.schema = CONFORMANCE_SCHEMA_V2;
+  normalized.authority.present = true;
+  normalized.authority.principal_match = true;
+  normalized.terms.seller_match = true;
+  normalized.payment.evidence_replayed = false;
+  return normalized;
 }
 
 export function validateConformanceManifest(manifest) {
@@ -272,21 +318,71 @@ function result(decision, code) {
   return Object.freeze({ decision, code });
 }
 
-export function evaluateReferenceVector(input) {
-  validateConformanceInput(input);
-  const pin = PROTOCOL_ADAPTER_PINS[input.protocol.adapter_id];
-  if (!pin || input.protocol.source_version !== pin.version) return result('deny', 'unsupported_protocol_version');
+function parseSemver(value) {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(value || '');
+  if (!match) return null;
+  const parts = match.slice(1).map(Number);
+  return parts.every(Number.isSafeInteger) ? parts : null;
+}
 
+function compareSemver(left, right) {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] > right[index] ? 1 : -1;
+  }
+  return 0;
+}
+
+function parseDateVersion(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(timestamp)) return null;
+  return new Date(timestamp).toISOString().slice(0, 10) === value ? timestamp : null;
+}
+
+function isNewerCompatibleVersion(sourceVersion, pin, comparison) {
+  if (comparison === 'date') {
+    const source = parseDateVersion(sourceVersion);
+    const pinned = parseDateVersion(pin.version);
+    return source !== null && pinned !== null && source > pinned;
+  }
+  if (comparison !== 'semver_major' && comparison !== 'semver_patch') return false;
+  const source = parseSemver(sourceVersion);
+  const pinned = parseSemver(pin.version);
+  if (!source || !pinned || compareSemver(source, pinned) <= 0 || source[0] !== pinned[0]) return false;
+  return comparison !== 'semver_patch' || source[1] === pinned[1];
+}
+
+function evaluateProtocolVersion(adapterId, sourceVersion) {
+  const pin = PROTOCOL_ADAPTER_PINS[adapterId];
+  if (!pin) return result('deny', 'unsupported_protocol_version');
+  if (sourceVersion === pin.version) return null;
+  if (isNewerCompatibleVersion(sourceVersion, pin, PROTOCOL_VERSION_COMPARISON[adapterId])) {
+    return result('review', 'newer_protocol_version_review_required');
+  }
+  return result('deny', 'unsupported_protocol_version');
+}
+
+export function evaluateReferenceVector(input) {
+  input = normalizeConformanceInputForEvaluation(input);
+  const protocolVersionDecision = evaluateProtocolVersion(
+    input.protocol.adapter_id,
+    input.protocol.source_version,
+  );
+  if (protocolVersionDecision?.decision === 'deny') return protocolVersionDecision;
+
+  if (!input.authority.present) return result('deny', 'authority_absent');
   if (input.authority.verification === 'unknown') return result('review', 'authority_verification_unknown');
   if (input.authority.verification !== 'verified') return result('review', 'authority_unverified');
   if (input.authority.revocation === 'revoked') return result('deny', 'authority_revoked');
   if (input.authority.revocation !== 'active') return result('review', 'authority_revocation_unknown');
   if (input.authority.expired) return result('deny', 'authority_expired');
+  if (!input.authority.principal_match) return result('deny', 'authority_wrong_principal');
   if (!input.authority.audience_match) return result('deny', 'authority_wrong_audience');
   if (!input.authority.agent_match) return result('deny', 'authority_wrong_agent');
 
   for (const [field, code] of [
     ['merchant_match', 'merchant_mismatch'],
+    ['seller_match', 'seller_mismatch'],
     ['category_match', 'category_mismatch'],
     ['action_match', 'action_mismatch'],
     ['rail_match', 'rail_mismatch'],
@@ -307,6 +403,7 @@ export function evaluateReferenceVector(input) {
   if (!input.payment.identifier_present) return result('deny', 'payment_identifier_missing');
   if (input.payment.identifier_reused) return result('deny', 'payment_identifier_reused');
   if (input.payment.replay_detected) return result('deny', 'paid_retry_replay_detected');
+  if (input.payment.evidence_replayed) return result('deny', 'evidence_replayed');
   if (!input.settlement.observed) return result('review', 'payment_not_observed');
   if (!input.settlement.verified) return result('deny', 'settlement_unverified');
   if (!input.settlement.final) return result('review', 'settlement_not_final');
@@ -326,9 +423,13 @@ export function evaluateReferenceVector(input) {
   if (input.reconciliation.status === 'refund_pending') return result('review', 'refund_pending');
   if (input.reconciliation.status === 'dispute_pending') return result('review', 'dispute_pending');
   if (input.reconciliation.status === 'none') return result('review', 'reconciliation_incomplete');
-  if (input.reconciliation.status === 'refunded') return result('pass', 'reconciled_refunded');
-  if (input.reconciliation.status === 'dispute_resolved') return result('pass', 'reconciled_dispute_resolved');
-  return result('pass', 'complete_chain_verified');
+  if (input.reconciliation.status === 'refunded') {
+    return protocolVersionDecision || result('pass', 'reconciled_refunded');
+  }
+  if (input.reconciliation.status === 'dispute_resolved') {
+    return protocolVersionDecision || result('pass', 'reconciled_dispute_resolved');
+  }
+  return protocolVersionDecision || result('pass', 'complete_chain_verified');
 }
 
 function validateEvaluatorResult(value, field) {

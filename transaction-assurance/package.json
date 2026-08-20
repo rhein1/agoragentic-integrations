@@ -16,6 +16,7 @@
   "exports": {
     ".": "./src/index.mjs",
     "./protocol-adapters": "./src/protocol-adapters.mjs",
+    "./external-verification-adapters": "./src/external-verification-adapters.mjs",
     "./conformance": "./src/conformance.mjs",
     "./evaluation-evidence": "./src/evaluation-evidence.mjs",
     "./toploc-evidence": "./src/toploc-evidence.mjs"
@@ -25,6 +26,7 @@
     "src/",
     "schema/",
     "conformance/",
+    "docs/",
     "vendor/",
     "examples/",
     "SKILL.md",
@@ -37,9 +39,9 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/index.mjs && node --check src/protocol-adapters.mjs && node --check src/conformance.mjs && node --check src/evaluation-evidence.mjs && node --check src/toploc-evidence.mjs && node --check bin/agora-assure.mjs && node --check bin/run-conformance.mjs && node --check bin/verify-conformance-receipt.mjs && node --check examples/x402-generic-middleware.mjs && node --check examples/conformance-targets/x402-resource-server.mjs && node --check examples/conformance-targets/mcp-paid-tool.mjs && node --check examples/conformance-targets/agent-wallet-policy.mjs && node --check examples/conformance-targets/marketplace-listing.mjs && node --check examples/external-adopters/anchor-x402/target.mjs && node --check examples/external-adopters/anchor-x402/run.mjs",
+    "check": "node --check src/index.mjs && node --check src/protocol-adapters.mjs && node --check src/external-verification-adapters.mjs && node --check src/conformance.mjs && node --check src/evaluation-evidence.mjs && node --check src/toploc-evidence.mjs && node --check bin/agora-assure.mjs && node --check bin/run-conformance.mjs && node --check bin/verify-conformance-receipt.mjs && node --check examples/x402-generic-middleware.mjs && node --check examples/conformance-targets/x402-resource-server.mjs && node --check examples/conformance-targets/mcp-paid-tool.mjs && node --check examples/conformance-targets/agent-wallet-policy.mjs && node --check examples/conformance-targets/marketplace-listing.mjs && node --check examples/external-adopters/anchor-x402/target.mjs && node --check examples/external-adopters/anchor-x402/run.mjs",
     "self-test": "node bin/agora-assure.mjs self-test",
-    "conformance": "node bin/run-conformance.mjs --target-name agoragentic-reference-evaluator --target-version 0.1.0-alpha.0 --target-commit local",
+    "conformance": "node bin/run-conformance.mjs --target-name agoragentic-reference-evaluator --target-commit local",
     "pack:dry": "npm pack --dry-run"
   },
   "dependencies": {

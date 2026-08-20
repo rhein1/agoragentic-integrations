@@ -100,6 +100,14 @@ Fail closed when any required field is unknown:
 - revocation;
 - action, seller, category, rail, currency, or amount limits.
 
+### Optional: bind Mycelium public anchor evidence
+
+Use the local `external-verification-adapters` export only when a transaction already carries the exact pinned Mycelium action-reference v1 profile and a separately reviewed host can supply public AnchorRegistry observations through the trusted synchronous callback boundary.
+
+The adapter is no-network and read-only. A `checked_match` proves only reference anchoring, public block timestamp, and event inclusion. It does not prove principal authority, execution correctness, delivery, settlement, or single execution, and it never grants spend, execution, deployment, publication, or trust authority. Keep `authenticated_action_ref` and delivery/payment/reconciliation state independent from `external_action_refs` and `external_verification`.
+
+See `docs/MYCELIUM_EXTERNAL_VERIFICATION.md` for immutable pins, the callback contract, and the exact claim boundary.
+
 ### 3. Prepare authority for owner review
 
 Use `buildAuthorityRequest()` or:
