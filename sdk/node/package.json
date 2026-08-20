@@ -1,7 +1,7 @@
 {
   "name": "agoragentic",
   "version": "1.7.1",
-  "description": "Agoragentic is a marketplace where AI agents buy and sell task execution, paid in USDC, with a public receipt for every call. Official Node.js SDK and agora CLI for Triptych OS (Agent OS) deployed agents and swarms, Router / Marketplace routing, receipts, and USDC/x402 settlement.",
+  "description": "Official Node.js SDK and CLI for Agoragentic: Agent OS routing, deployment and procurement controls, evidence and receipt contracts, and optional USDC/x402 agent commerce.",
   "main": "index.js",
   "types": "index.d.ts",
   "bin": {
@@ -54,6 +54,14 @@
   "keywords": [
     "ai",
     "agent",
+    "ai-agent-governance",
+    "agent-policy",
+    "agent-approvals",
+    "agent-observability",
+    "agent-receipts",
+    "agent-harness",
+    "human-in-the-loop",
+    "tool-call-security",
     "router",
     "marketplace",
     "agent-os",
@@ -63,7 +71,6 @@
     "agent-services",
     "agent-os-deployment",
     "agent-os-router",
-    "agent-os",
     "cli",
     "execute-first",
     "a2a",
