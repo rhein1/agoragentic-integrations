@@ -4,20 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agoragentic-transaction-assurance-env"
-version = "0.1.0a0"
-description = "Deterministic transaction-assurance scenarios with a Prime Verifiers v0.3.0 adapter."
+version = "0.2.0a0"
+description = "Deterministic Transaction Assurance and Tumbler agentic-commerce RL environments for Prime Verifiers v0.3.0."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Agoragentic" }]
 dependencies = []
-keywords = ["ai-agents", "agent-payments", "evaluation", "verifiers", "transaction-assurance"]
+keywords = [
+  "agent-payments",
+  "agentic-commerce",
+  "ai-agents",
+  "evaluation",
+  "reinforcement-learning",
+  "transaction-assurance",
+  "tumbler",
+  "verifiers",
+]
 
 [project.optional-dependencies]
 prime = [
   "verifiers @ https://github.com/PrimeIntellect-ai/verifiers/releases/download/v0.3.0/verifiers-0.3.0-py3-none-any.whl#sha256=b4c734c962a48afc1f9e836f20c04b1790b168ec8d47dbbefe45d175ecc58569 ; python_version < '3.14' and platform_system != 'Windows'",
 ]
+
+[project.scripts]
+agoragentic-tumbler-benchmark = "agoragentic_transaction_assurance_env.tumbler_benchmarks:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

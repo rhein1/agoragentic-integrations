@@ -71,11 +71,15 @@ jobs:
           python -m pip check
       - name: Verify exact upstream and installed package
         run: |
-          python -c "from importlib.metadata import version; assert version('verifiers') == '0.3.0'; assert version('agoragentic-transaction-assurance-env') == '0.1.0a0'"
+          python -c "from importlib.metadata import version; assert version('verifiers') == '0.3.0'; assert version('agoragentic-transaction-assurance-env') == '0.2.0a0'"
           python -c "import agoragentic_transaction_assurance_env as a; import verifiers.v1 as vf; assert a.PRIME_VERIFIERS_AVAILABLE; assert vf.Taskset.__module__ == 'verifiers.v1.taskset'"
       - name: Deterministic core and real adapter tests
         working-directory: verifiers-transaction-assurance
         run: python -m unittest discover -s tests -v
+      - name: Deterministic Tumbler benchmark smoke
+        run: |
+          agoragentic-tumbler-benchmark --policy safety_first_v1 --out "${RUNNER_TEMP}/tumbler-baseline.json"
+          python -c "import json, os; p=json.load(open(os.environ['RUNNER_TEMP'] + '/tumbler-baseline.json')); assert p['summary']['pass_count'] == p['summary']['scenario_count'] == 8"
       - name: Central inventory hold tests
         run: node --test test/integration-inventory-holds.test.mjs
       - name: Root machine-surface verifier
