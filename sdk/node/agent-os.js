@@ -285,6 +285,9 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
                 result = commandAdapters(runtime);
                 break;
             case 'run':
+                if (!parsed.separatorUsed) {
+                    throw userError('The run command requires "--" before the existing command.');
+                }
                 result = await commandRun(parsed.positionals.slice(1), parsed.flags, env, {
                     ...runtime,
                     spawn: spawnProcess,
@@ -1255,10 +1258,12 @@ async function commandReceipts(client, positionals) {
 function parseArgs(argv) {
     const flags = {};
     const positionals = [];
+    let separatorUsed = false;
 
     for (let i = 0; i < argv.length; i += 1) {
         const token = argv[i];
         if (token === '--') {
+            separatorUsed = true;
             positionals.push(...argv.slice(i + 1));
             break;
         }
@@ -1283,7 +1288,7 @@ function parseArgs(argv) {
         }
     }
 
-    return { flags, positionals };
+    return { flags, positionals, separatorUsed };
 }
 
 function readInput(flags) {

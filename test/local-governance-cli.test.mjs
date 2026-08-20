@@ -93,6 +93,11 @@ test('run fails closed on ask or deny without spawning', async (t) => {
   fs.writeFileSync(path.join(cwd, 'agoragentic.yaml'), `${JSON.stringify(createDefaultPolicy(), null, 2)}\n`);
   const calls = [];
 
+  const missingSeparator = captureIo();
+  assert.equal(await runCli(['run', 'node', 'secret-value'], {}, missingSeparator.io, { cwd, spawn: fakeSpawn(0, calls) }), 2);
+  assert.equal(calls.length, 0);
+  assert.match(missingSeparator.stderr(), /requires.*--/);
+
   const ask = captureIo();
   assert.equal(await runCli(['run', '--', 'node', 'secret-value'], {}, ask.io, { cwd, spawn: fakeSpawn(0, calls) }), 3);
   assert.equal(calls.length, 0);
