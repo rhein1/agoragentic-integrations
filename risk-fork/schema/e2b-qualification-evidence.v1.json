@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-e2b-qualification-evidence.v1.json",
+  "title": "Agoragentic Risk Fork E2B Qualification Evidence V1",
+  "description": "Closed, sanitized evidence for a single explicitly authorized E2B containment qualification. This record does not grant deployment, spend, or execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "provider", "sdk", "template", "runtime", "run", "limits", "observations", "controls", "cleanup", "evidence_refs", "authority_flags", "evidence_hash"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.e2b-qualification-evidence.v1" },
+    "status": { "$ref": "#/$defs/status" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "project_ref_hash", "region"],
+      "properties": {
+        "name": { "const": "e2b" },
+        "project_ref_hash": { "$ref": "#/$defs/hash" },
+        "region": { "$ref": "#/$defs/opaque" }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "version", "integrity_hash"],
+      "properties": {
+        "package": { "const": "e2b" },
+        "version": { "const": "2.39.0" },
+        "integrity_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template_id_hash", "build_id_hash", "template_evidence_hash", "provenance_hash"],
+      "properties": {
+        "template_id_hash": { "$ref": "#/$defs/hash" },
+        "build_id_hash": { "$ref": "#/$defs/hash" },
+        "template_evidence_hash": { "$ref": "#/$defs/hash" },
+        "provenance_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bootstrap_artifact_hash", "runner_artifact_hash", "boot_guard_artifact_hash"],
+      "properties": {
+        "bootstrap_artifact_hash": { "$ref": "#/$defs/hash" },
+        "runner_artifact_hash": { "$ref": "#/$defs/hash" },
+        "boot_guard_artifact_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_ref_hash", "run_ref_hash", "started_at", "completed_at", "sandbox_count", "synthetic_workspace"],
+      "properties": {
+        "approval_ref_hash": { "$ref": "#/$defs/hash" },
+        "run_ref_hash": { "$ref": "#/$defs/hash" },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "sandbox_count": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "synthetic_workspace": { "type": "boolean" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard_ttl_ms", "idle_ttl_ms", "max_execution_ms", "max_cost_usd"],
+      "properties": {
+        "hard_ttl_ms": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "idle_ttl_ms": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "max_execution_ms": { "type": "integer", "minimum": 100, "maximum": 600000 },
+        "max_cost_usd": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fork_start_ms", "execution_ms", "cleanup_ms", "observed_cost_usd"],
+      "properties": {
+        "fork_start_ms": { "$ref": "#/$defs/duration" },
+        "execution_ms": { "$ref": "#/$defs/duration" },
+        "cleanup_ms": { "$ref": "#/$defs/duration" },
+        "observed_cost_usd": {
+          "oneOf": [
+            { "$ref": "#/$defs/decimal" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_instruction_ipv4_egress_denied", "first_instruction_ipv6_egress_denied", "inherited_environment_absent", "inherited_processes_absent", "credential_files_absent", "wallet_material_absent", "persistent_mounts_absent", "unauthorized_sockets_absent", "fresh_entropy_verified", "template_provenance_verified", "bootstrap_binding_verified", "runner_binding_verified", "hard_ttl_verified", "idle_ttl_verified", "max_execution_time_verified", "destruction_semantics_verified", "orphan_reconciliation_verified", "latency_observed", "cost_within_cap"],
+      "properties": {
+        "first_instruction_ipv4_egress_denied": { "$ref": "#/$defs/control" },
+        "first_instruction_ipv6_egress_denied": { "$ref": "#/$defs/control" },
+        "inherited_environment_absent": { "$ref": "#/$defs/control" },
+        "inherited_processes_absent": { "$ref": "#/$defs/control" },
+        "credential_files_absent": { "$ref": "#/$defs/control" },
+        "wallet_material_absent": { "$ref": "#/$defs/control" },
+        "persistent_mounts_absent": { "$ref": "#/$defs/control" },
+        "unauthorized_sockets_absent": { "$ref": "#/$defs/control" },
+        "fresh_entropy_verified": { "$ref": "#/$defs/control" },
+        "template_provenance_verified": { "$ref": "#/$defs/control" },
+        "bootstrap_binding_verified": { "$ref": "#/$defs/control" },
+        "runner_binding_verified": { "$ref": "#/$defs/control" },
+        "hard_ttl_verified": { "$ref": "#/$defs/control" },
+        "idle_ttl_verified": { "$ref": "#/$defs/control" },
+        "max_execution_time_verified": { "$ref": "#/$defs/control" },
+        "destruction_semantics_verified": { "$ref": "#/$defs/control" },
+        "orphan_reconciliation_verified": { "$ref": "#/$defs/control" },
+        "latency_observed": { "$ref": "#/$defs/control" },
+        "cost_within_cap": { "$ref": "#/$defs/control" }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kill_requested", "absence_verified", "orphan_reconciliation"],
+      "properties": {
+        "kill_requested": { "$ref": "#/$defs/control" },
+        "absence_verified": { "$ref": "#/$defs/control" },
+        "orphan_reconciliation": { "$ref": "#/$defs/control" }
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "hash"],
+        "properties": {
+          "ref": { "$ref": "#/$defs/opaque" },
+          "hash": { "$ref": "#/$defs/hash" }
+        }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credentials_included", "wallet_material_included", "execution_authority_included", "production_activation_granted"],
+      "properties": {
+        "credentials_included": { "const": false },
+        "wallet_material_included": { "const": false },
+        "execution_authority_included": { "const": false },
+        "production_activation_granted": { "const": false }
+      }
+    },
+    "evidence_hash": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "opaque": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$" },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$" },
+    "duration": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+    "control": { "enum": ["verified", "failed", "unknown"] },
+    "status": { "enum": ["verified", "failed", "unknown"] }
+  }
+}

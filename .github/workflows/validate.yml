@@ -22,6 +22,9 @@ on:
       - 'assets/**'
       - 'acp/**'
       - 'mcp/**'
+      - 'deepagents/**'
+      - 'langchain/**'
+      - 'glama.json'
       - 'micro-ecf/**'
       - 'harness-core/**'
       - 'agent-payments-assurance-challenge/**'
@@ -89,6 +92,9 @@ jobs:
           npm audit --audit-level=moderate
           npm run verify:packed-install
           npm pack --dry-run
+
+      - name: Reject direct MCP bypass and unsafe release resolution
+        run: node --test test/mcp-direct-bypass.test.mjs
 
       - name: Validate Micro ECF package
         working-directory: micro-ecf
@@ -189,6 +195,7 @@ jobs:
       - name: Verify client-native distribution surfaces
         run: |
           node scripts/generate-skill-pack.mjs --check
+          node scripts/generate-client-banner.mjs --check
           node --test test/skill-pack-generation.test.mjs
           node scripts/verify-client-distribution.mjs
 
@@ -345,7 +352,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
-        run: node --test test/adapter-conformance-agent.test.mjs
+        run: |
+          node --test test/adapter-conformance-agent.test.mjs
+          node --test test/adapter-conformance-worker-order.test.mjs
       - name: Test framework adapter contracts
         run: |
           node --test test/framework-adapter-contracts.test.mjs

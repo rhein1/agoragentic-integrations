@@ -21,20 +21,25 @@ const {
     fromJsonSchema,
 } = require('@modelcontextprotocol/server');
 const { toNodeHandler } = require('@modelcontextprotocol/node');
+const { Client, StreamableHTTPClientTransport } = require('@modelcontextprotocol/client');
 
 const {
+    MCP_ENFORCEMENT_SCHEMAS,
     MCP_V2_PROTOCOL_VERSION,
     closeRemoteSession,
+    computeMcpCleanImportEvidenceHash,
     connectRemoteClient,
+    createMcpEnforcementBoundary,
     createRemoteToolDirectory,
 } = require('../mcp-server.js');
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
 const RELAY_ENTRYPOINT = path.join(PACKAGE_ROOT, 'mcp-server.js');
+const ENFORCED_RELAY_ENTRYPOINT = path.join(__dirname, 'fixtures', 'enforced-relay-entry.js');
 const FIXTURE_API_KEY = 'amk_loopback_fixture_key';
 const REGISTERED_FIXTURE_API_KEY = 'amk_loopback_registered_key';
 
-function createFixtureServer() {
+function createFixtureServer({ onRequest, onResponse } = {}) {
     const requests = [];
     const handler = createMcpHandler(async () => {
         const server = new McpServer({ name: 'agoragentic-mcp-loopback', version: '1.0.0' });
@@ -104,7 +109,10 @@ function createFixtureServer() {
         req.on('end', () => {
             const raw = Buffer.concat(chunks).toString('utf8');
             const body = JSON.parse(raw);
-            requests.push({ httpMethod: req.method, headers: { ...req.headers }, body });
+            const request = { httpMethod: req.method, headers: { ...req.headers }, body };
+            requests.push(request);
+            onRequest?.(request);
+            res.once('finish', () => onResponse?.(request));
             nodeHandler(req, res, body);
         });
     });
@@ -121,6 +129,88 @@ function createFixtureServer() {
     };
 }
 
+function cleanImported(request, result) {
+    const evidenceRef = `loopback:${request.request_id}`;
+    return {
+        schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+        request_id: request.request_id,
+        request_hash: request.request_hash,
+        phase: request.phase,
+        clean_imported: true,
+        authority_granted: false,
+        evidence_ref: evidenceRef,
+        evidence_hash: computeMcpCleanImportEvidenceHash(
+            request.request_hash,
+            result,
+            evidenceRef,
+        ),
+        result,
+    };
+}
+
+function createLoopbackBoundary({ apiKey = '', beforeOpen, onPhase, importResult } = {}) {
+    return createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            onPhase?.(openRequest);
+            await beforeOpen?.(openRequest);
+            const transport = new StreamableHTTPClientTransport(new URL(openRequest.mcp_server_ref), {
+                authProvider: { token: async () => apiKey || undefined },
+                onInsufficientScope: 'throw',
+                requestInit: {
+                    redirect: 'error',
+                    headers: { 'User-Agent': 'agoragentic-mcp-enforced-loopback-test' },
+                },
+            });
+            const client = new Client(
+                { name: 'agoragentic-mcp-enforced-loopback-test', version: '1.0.0' },
+                { versionNegotiation: { mode: { pin: MCP_V2_PROTOCOL_VERSION } } },
+            );
+            try {
+                await client.connect(transport);
+                if (client.getProtocolEra() !== 'modern'
+                    || client.getNegotiatedProtocolVersion() !== MCP_V2_PROTOCOL_VERSION
+                    || transport.sessionId !== undefined) {
+                    throw new Error('loopback host did not establish the pinned stateless protocol');
+                }
+            } catch (error) {
+                try {
+                    await client.close();
+                } catch {
+                    // Preserve the connection failure.
+                }
+                throw error;
+            }
+
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    onPhase?.(request);
+                    let raw;
+                    if (request.phase === 'tools/list') raw = await client.listTools(request.params);
+                    else if (request.phase === 'tools/call') raw = await client.callTool(request.params);
+                    else if (request.phase === 'resources/list') raw = await client.listResources(request.params);
+                    else if (request.phase === 'resources/read') raw = await client.readResource(request.params);
+                    else if (request.phase === 'prompts/list') raw = await client.listPrompts(request.params);
+                    else if (request.phase === 'prompts/get') raw = await client.getPrompt(request.params);
+                    else throw new Error(`unsupported loopback phase ${request.phase}`);
+                    const imported = importResult ? await importResult(request, raw) : raw;
+                    return cleanImported(request, imported);
+                },
+                async close() {
+                    await client.close();
+                },
+            };
+        },
+        async executeFallback(request) {
+            throw new Error(`unexpected fallback request ${request.tool_name}`);
+        },
+    });
+}
+
 function assertModernRequest(request, expectedMethod, expectedName) {
     assert.equal(request.httpMethod, 'POST');
     assert.equal(request.body.method, expectedMethod);
@@ -131,7 +221,12 @@ function assertModernRequest(request, expectedMethod, expectedName) {
     assert.equal(request.body.params._meta['io.modelcontextprotocol/protocolVersion'], MCP_V2_PROTOCOL_VERSION);
 }
 
-function spawnLegacyStdioClient(remoteUrl, apiKey, fallbackBaseUrl = 'http://127.0.0.1:9') {
+function spawnLegacyStdioClient(
+    remoteUrl,
+    apiKey,
+    fallbackBaseUrl = 'http://127.0.0.1:9',
+    entrypoint = RELAY_ENTRYPOINT,
+) {
     const env = {
         ...process.env,
         AGORAGENTIC_MCP_URL: remoteUrl,
@@ -142,7 +237,7 @@ function spawnLegacyStdioClient(remoteUrl, apiKey, fallbackBaseUrl = 'http://127
     } else {
         env.AGORAGENTIC_BASE_URL = fallbackBaseUrl;
     }
-    const child = spawn(process.execPath, [RELAY_ENTRYPOINT], {
+    const child = spawn(process.execPath, [entrypoint], {
         cwd: PACKAGE_ROOT,
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -240,17 +335,21 @@ function createUnavailableMcpWithFallbackFixture() {
     };
 }
 
-test('pins the remote MCP client to stateless 2026-07-28 and sends bearer auth per request', async () => {
+test('test-only host pins stateless 2026-07-28 and attaches bearer auth out of band per request', async () => {
     const fixture = createFixtureServer();
     const url = await fixture.listen();
-    const remoteSession = await connectRemoteClient({ remoteUrl: url, apiKey: FIXTURE_API_KEY });
+    const remoteSession = await connectRemoteClient({
+        remoteUrl: url,
+        enforcementBoundary: createLoopbackBoundary({ apiKey: FIXTURE_API_KEY }),
+    });
 
     try {
-        assert.equal(remoteSession.client.getProtocolEra(), 'modern');
-        assert.equal(remoteSession.client.getNegotiatedProtocolVersion(), MCP_V2_PROTOCOL_VERSION);
-        assert.equal(remoteSession.transport.sessionId, undefined);
-        await remoteSession.client.listTools();
-        await remoteSession.client.callTool({
+        assert.equal(remoteSession.protocol_version, MCP_V2_PROTOCOL_VERSION);
+        assert.equal(remoteSession.stateless, true);
+        assert.equal(Object.hasOwn(remoteSession, 'client'), false);
+        assert.equal(Object.hasOwn(remoteSession, 'transport'), false);
+        await remoteSession.listTools();
+        await remoteSession.callTool({
             name: 'relay_safe_probe',
             arguments: { value: 'safe' },
         });
@@ -273,18 +372,101 @@ test('pins the remote MCP client to stateless 2026-07-28 and sends bearer auth p
     }
 });
 
+test('the factory-created host capability owns server/discover before remote I/O or response acceptance', async () => {
+    const events = [];
+    const fixture = createFixtureServer({
+        onRequest(request) {
+            if (request.body.method === 'server/discover') events.push('server:discover-received');
+        },
+        onResponse(request) {
+            if (request.body.method === 'server/discover') events.push('server:discover-response-finished');
+        },
+    });
+    const url = await fixture.listen();
+    let releasePlanner;
+    let markPlannerStarted;
+    let remoteSession;
+    const plannerGate = new Promise((resolve) => {
+        releasePlanner = resolve;
+    });
+    const plannerStarted = new Promise((resolve) => {
+        markPlannerStarted = resolve;
+    });
+    let enforcementInput;
+
+    const boundary = createLoopbackBoundary({
+        beforeOpen: async (input) => {
+            enforcementInput = input;
+            events.push('enforcer:started');
+            markPlannerStarted();
+            await plannerGate;
+            events.push('enforcer:completed');
+        },
+    });
+
+    const connection = connectRemoteClient({
+        remoteUrl: url,
+        enforcementBoundary: boundary,
+    });
+
+    try {
+        await plannerStarted;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        assert.deepEqual(events, ['enforcer:started']);
+        assert.equal(enforcementInput.phase, 'server/discover');
+        assert.equal(enforcementInput.mcp_server_ref, new URL(url).href);
+        assert.equal(enforcementInput.mcp_server_origin, new URL(url).origin);
+        assert.equal(enforcementInput.transport_constraints.direct_network_permitted, false);
+        assert.equal(enforcementInput.transport_constraints.redirects, 'error');
+        assert.equal(enforcementInput.transport_constraints.response_acceptance, 'clean_import_only');
+
+        releasePlanner();
+        remoteSession = await connection;
+        events.push(`client:accepted-${remoteSession.protocol_version}`);
+
+        assert.deepEqual(events, [
+            'enforcer:started',
+            'enforcer:completed',
+            'server:discover-received',
+            'server:discover-response-finished',
+            `client:accepted-${MCP_V2_PROTOCOL_VERSION}`,
+        ]);
+    } finally {
+        releasePlanner();
+        await closeRemoteSession(remoteSession);
+        await fixture.close();
+    }
+});
+
 test('does not retain a registration-returned key for later stateless requests', async () => {
     const fixture = createFixtureServer();
     const url = await fixture.listen();
-    const remoteSession = await connectRemoteClient({ remoteUrl: url, apiKey: '' });
+    const remoteSession = await connectRemoteClient({
+        remoteUrl: url,
+        enforcementBoundary: createLoopbackBoundary({
+            importResult(request, raw) {
+                if (request.phase === 'tools/call'
+                    && request.params.name === 'agoragentic_register') {
+                    return {
+                        ...raw,
+                        content: [{
+                            type: 'text',
+                            text: JSON.stringify({ api_key_ref: 'stored-out-of-band-by-test-host' }),
+                        }],
+                    };
+                }
+                return raw;
+            },
+        }),
+    });
 
     try {
-        const registration = await remoteSession.client.callTool({
+        const registration = await remoteSession.callTool({
             name: 'agoragentic_register',
             arguments: {},
         });
         assert.equal(registration.isError, undefined);
-        await remoteSession.client.listTools();
+        await remoteSession.listTools();
 
         const registerRequest = fixture.requests.find((request) => (
             request.body.method === 'tools/call'
@@ -301,41 +483,270 @@ test('does not retain a registration-returned key for later stateless requests',
     }
 });
 
-test('keeps fallback identity separate from explicit remote pagination', async () => {
+test('resolves the complete paginated remote tool directory before fallback decisions', async () => {
     const calls = [];
-    const client = {
-        async listTools(params = {}) {
-            calls.push(params);
-            if (params.cursor === 'page-2') {
-                return { tools: [{ name: 'remote_page_two' }] };
-            }
+    const boundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
             return {
-                tools: [
-                    { name: 'remote_page_one' },
-                    { name: 'agoragentic_register' },
-                    { name: 'remote_page_two' },
-                ],
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    assert.equal(request.phase, 'tools/list');
+                    calls.push(request.params);
+                    const result = request.params.cursor === 'page-2'
+                        ? {
+                            tools: [
+                                { name: 'remote_page_two' },
+                                { name: 'agoragentic_register' },
+                            ],
+                        }
+                        : {
+                            tools: [{ name: 'remote_page_one' }],
+                            nextCursor: 'page-2',
+                        };
+                    return cleanImported(request, result);
+                },
+                async close() {},
             };
         },
-    };
-    const directory = createRemoteToolDirectory(client);
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    const session = await connectRemoteClient({
+        remoteUrl: 'https://pagination.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    const directory = createRemoteToolDirectory(session);
 
-    const page = await directory.list({ cursor: 'page-2' });
-    assert.deepEqual(page.tools.map((tool) => tool.name), ['remote_page_two']);
-    assert.equal(await directory.has('agoragentic_register'), true);
-    assert.equal(calls.length, 2);
-    assert.deepEqual(calls[1], {});
+    try {
+        assert.deepEqual(calls, [{}], 'connect preflight must be the first gated tools/list');
+        assert.equal(await directory.has('agoragentic_register'), true);
+        assert.deepEqual(calls, [{}, { cursor: 'page-2' }]);
 
-    await directory.list({ cursor: 'page-2' });
-    assert.equal(await directory.has('agoragentic_register'), true);
-    assert.equal(calls.length, 3);
+        const page = await directory.list({ cursor: 'page-2' });
+        assert.deepEqual(
+            page.tools.map((tool) => tool.name),
+            ['remote_page_two', 'agoragentic_register'],
+        );
+        assert.equal(await directory.has('agoragentic_register'), true);
+        assert.equal(calls.length, 3);
 
-    const aggregate = await directory.list();
-    assert.ok(aggregate.tools.some((tool) => tool.name === 'agoragentic_search'));
-    assert.equal(aggregate.tools.filter((tool) => tool.name === 'agoragentic_register').length, 1);
+        const aggregate = await directory.list();
+        assert.deepEqual(calls.slice(-2), [{}, { cursor: 'page-2' }]);
+        assert.equal(Object.hasOwn(aggregate, 'nextCursor'), false);
+        assert.ok(aggregate.tools.some((tool) => tool.name === 'remote_page_two'));
+        assert.ok(aggregate.tools.some((tool) => tool.name === 'agoragentic_search'));
+        assert.equal(aggregate.tools.filter((tool) => tool.name === 'agoragentic_register').length, 1);
+    } finally {
+        await closeRemoteSession(session);
+    }
 });
 
-test('derives fallback tools from a custom MCP origin instead of forwarding its key elsewhere', async () => {
+test('keeps concurrent pagination epochs isolated before consequential fallback decisions', async () => {
+    function deferred() {
+        let resolve;
+        const promise = new Promise((settle) => {
+            resolve = settle;
+        });
+        return { promise, resolve };
+    }
+
+    const oldPageTwo = deferred();
+    const oldPageTwoRequested = deferred();
+    const newPageTwo = deferred();
+    const newPageTwoRequested = deferred();
+    const calls = [];
+    let rootPageCalls = 0;
+    let fallbackSelections = 0;
+    const boundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    assert.equal(request.phase, 'tools/list');
+                    calls.push(request.params);
+                    let result;
+                    if (request.params.cursor === 'old-page-2') {
+                        oldPageTwoRequested.resolve();
+                        result = await oldPageTwo.promise;
+                    } else if (request.params.cursor === 'new-page-2') {
+                        newPageTwoRequested.resolve();
+                        result = await newPageTwo.promise;
+                    } else {
+                        rootPageCalls += 1;
+                        result = rootPageCalls === 1
+                            ? {
+                                tools: [{ name: 'agoragentic_register' }],
+                                nextCursor: 'old-page-2',
+                            }
+                            : {
+                                tools: [{ name: 'new-page-one' }],
+                                nextCursor: 'new-page-2',
+                            };
+                    }
+                    return cleanImported(request, result);
+                },
+                async close() {},
+            };
+        },
+        async executeFallback() {
+            throw new Error('the directory decision must not select fallback');
+        },
+    });
+    const session = await connectRemoteClient({
+        remoteUrl: 'https://pagination-race.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    const directory = createRemoteToolDirectory(session);
+    let routingDecision;
+    let refreshedList;
+
+    try {
+        routingDecision = (async () => {
+            const existsRemotely = await directory.has('agoragentic_register');
+            if (!existsRemotely) fallbackSelections += 1;
+            return existsRemotely;
+        })();
+        await oldPageTwoRequested.promise;
+
+        refreshedList = directory.list();
+        await newPageTwoRequested.promise;
+
+        oldPageTwo.resolve({ tools: [{ name: 'old-page-two' }] });
+        const oldEpochDecision = await routingDecision;
+        newPageTwo.resolve({ tools: [{ name: 'new-page-two' }] });
+        const aggregate = await refreshedList;
+
+        assert.equal(oldEpochDecision, true);
+        assert.equal(fallbackSelections, 0);
+        assert.equal(aggregate.tools.some((tool) => tool.name === 'old-page-two'), false);
+        assert.equal(aggregate.tools.some((tool) => tool.name === 'new-page-two'), true);
+        assert.equal(await directory.has('agoragentic_register'), false);
+        assert.deepEqual(calls, [
+            {},
+            { cursor: 'old-page-2' },
+            {},
+            { cursor: 'new-page-2' },
+        ]);
+    } finally {
+        oldPageTwo.resolve({ tools: [] });
+        newPageTwo.resolve({ tools: [] });
+        await Promise.allSettled([routingDecision, refreshedList].filter(Boolean));
+        await closeRemoteSession(session);
+    }
+});
+
+test('rejects credential assignments in imported text without blocking prose, short values, or references', async () => {
+    const cases = [
+        { text: 'api_key="syntheticvalue123456"', rejected: true },
+        { text: 'API_KEY = syntheticvalue123456', rejected: true },
+        { text: '{"api_key" = "syntheticvalue123456"}', rejected: true },
+        { text: '{"Api-Key": "syntheticvalue123456"', rejected: true },
+        { text: "'authorization' : 'syntheticvalue123456'", rejected: true },
+        { text: 'The api_key is resolved out of band by the host.', rejected: false },
+        { text: 'api_key="demo"', rejected: false },
+        { text: 'api_key_ref="host-store/reference-123"', rejected: false },
+    ];
+
+    for (const fixture of cases) {
+        let closes = 0;
+        const boundary = createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                return {
+                    schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                    }),
+                    async request(request) {
+                        const result = request.phase === 'tools/list'
+                            ? { tools: [{ name: 'assignment_text_probe' }] }
+                            : { content: [{ type: 'text', text: fixture.text }] };
+                        return cleanImported(request, result);
+                    },
+                    async close() {
+                        closes += 1;
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+        const session = await connectRemoteClient({
+            remoteUrl: 'https://assignment-text.example.invalid/api/mcp',
+            enforcementBoundary: boundary,
+        });
+        try {
+            const call = session.callTool({ name: 'assignment_text_probe', arguments: {} });
+            if (fixture.rejected) {
+                await assert.rejects(
+                    call,
+                    (error) => error?.code === 'MCP_CREDENTIAL_MATERIAL_REJECTED',
+                    fixture.text,
+                );
+            } else {
+                const result = await call;
+                assert.equal(result.content[0].text, fixture.text);
+            }
+        } finally {
+            await closeRemoteSession(session);
+        }
+        assert.equal(closes, 1, fixture.text);
+    }
+});
+
+test('refuses fallback decisions when remote tool pagination cannot be completed', async () => {
+    let fallbackCalls = 0;
+    const boundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    assert.equal(request.phase, 'tools/list');
+                    return cleanImported(request, {
+                        tools: [{ name: 'remote_page_one' }],
+                        nextCursor: 'repeated-cursor',
+                    });
+                },
+                async close() {},
+            };
+        },
+        async executeFallback() {
+            fallbackCalls += 1;
+            throw new Error('fallback must not run while the remote directory is incomplete');
+        },
+    });
+    const session = await connectRemoteClient({
+        remoteUrl: 'https://pagination-cycle.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    const directory = createRemoteToolDirectory(session);
+
+    try {
+        await assert.rejects(
+            directory.has('agoragentic_register'),
+            (error) => error?.code === 'MCP_REMOTE_TOOL_DIRECTORY_INCOMPLETE',
+        );
+        assert.equal(fallbackCalls, 0);
+    } finally {
+        await closeRemoteSession(session);
+    }
+});
+
+test('the default CLI exposes owned fallback metadata but performs no remote or fallback I/O', async () => {
     const fixture = createUnavailableMcpWithFallbackFixture();
     const origin = await fixture.listen();
     const relay = spawnLegacyStdioClient(`${origin}/api/mcp`, FIXTURE_API_KEY, null);
@@ -353,11 +764,12 @@ test('derives fallback tools from a custom MCP origin instead of forwarding its 
             requests: fixture.requests,
             stderr: relay.getStderr(),
         }));
-        assert.deepEqual(JSON.parse(search.result.content[0].text), { capabilities: [] });
-
-        const fallbackRequest = fixture.requests.find((request) => request.url.startsWith('/api/capabilities'));
-        assert.ok(fallbackRequest);
-        assert.equal(fallbackRequest.headers.authorization, `Bearer ${FIXTURE_API_KEY}`);
+        assert.equal(search.result.isError, true);
+        assert.equal(
+            JSON.parse(search.result.content[0].text).error,
+            'risk_fork_enforcement_required',
+        );
+        assert.deepEqual(fixture.requests, [], 'missing enforcement must block discover and fallback HTTP');
     } finally {
         await relay.close();
         await fixture.close();
@@ -367,7 +779,12 @@ test('derives fallback tools from a custom MCP origin instead of forwarding its 
 test('preserves legacy stdio host compatibility while proxying v2 tools, resources, prompts, and tool errors', async () => {
     const fixture = createFixtureServer();
     const url = await fixture.listen();
-    const relay = spawnLegacyStdioClient(url, FIXTURE_API_KEY);
+    const relay = spawnLegacyStdioClient(
+        url,
+        FIXTURE_API_KEY,
+        'http://127.0.0.1:9',
+        ENFORCED_RELAY_ENTRYPOINT,
+    );
 
     try {
         const initialized = await relay.initialize();

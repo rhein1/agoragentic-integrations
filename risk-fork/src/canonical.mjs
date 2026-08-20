@@ -1,0 +1,91 @@
+// Risk Fork intentionally reuses Transaction Assurance's canonical JSON and
+// SHA-256 reference semantics instead of creating a second receipt universe.
+// The stricter validation below is a fail-closed boundary: Transaction
+// Assurance accepts ordinary JavaScript values for ergonomic local evidence,
+// while security bindings must reject values that JSON would omit or coerce.
+import {
+  canonicalize as transactionAssuranceCanonicalize,
+  sha256Ref as transactionAssuranceSha256Ref,
+} from '../../transaction-assurance/src/canonical.mjs';
+
+const MAX_DEPTH = 64;
+const MAX_NODES = 100_000;
+const MAX_STRING_BYTES = 16 * 1024 * 1024;
+
+function assertJsonValue(value, state, path, depth) {
+  if (depth > MAX_DEPTH) throw new TypeError(`Canonical JSON exceeds ${MAX_DEPTH} levels at ${path}`);
+  state.nodes += 1;
+  if (state.nodes > MAX_NODES) throw new TypeError(`Canonical JSON exceeds ${MAX_NODES} values`);
+
+  if (value === null || typeof value === 'boolean') return;
+  if (typeof value === 'string') {
+    if (Buffer.byteLength(value, 'utf8') > MAX_STRING_BYTES) {
+      throw new TypeError(`Canonical JSON string is too large at ${path}`);
+    }
+    return;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || Object.is(value, -0)) {
+      throw new TypeError(`Canonical JSON number is not finite and unambiguous at ${path}`);
+    }
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new TypeError(`Canonical JSON integer is outside the safe range at ${path}`);
+    }
+    return;
+  }
+  if (typeof value !== 'object') {
+    throw new TypeError(`Canonical JSON contains a non-JSON value at ${path}`);
+  }
+  if (state.ancestors.has(value)) throw new TypeError(`Canonical JSON contains a cycle at ${path}`);
+  state.ancestors.add(value);
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      throw new TypeError(`Canonical JSON contains a symbol key at ${path}`);
+    }
+    for (const [key, descriptor] of Object.entries(descriptors)) {
+      if (Array.isArray(value) && key === 'length') continue;
+      if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+        throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path}.${key}`);
+      }
+    }
+
+    if (Array.isArray(value)) {
+      if (Object.keys(value).length !== value.length) {
+        throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path}`);
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        if (!Object.hasOwn(value, index)) {
+          throw new TypeError(`Canonical JSON array is sparse at ${path}[${index}]`);
+        }
+        assertJsonValue(value[index], state, `${path}[${index}]`, depth + 1);
+      }
+      return;
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError(`Canonical JSON contains a non-plain object at ${path}`);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      assertJsonValue(child, state, `${path}.${key}`, depth + 1);
+    }
+  } finally {
+    state.ancestors.delete(value);
+  }
+}
+
+export function assertCanonicalJson(value) {
+  assertJsonValue(value, { ancestors: new WeakSet(), nodes: 0 }, '$', 0);
+  return value;
+}
+
+export function canonicalize(value) {
+  assertCanonicalJson(value);
+  return transactionAssuranceCanonicalize(value);
+}
+
+export function sha256Ref(value) {
+  if (typeof value !== 'string') assertCanonicalJson(value);
+  return transactionAssuranceSha256Ref(value);
+}

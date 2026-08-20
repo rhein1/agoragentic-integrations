@@ -1,11 +1,11 @@
 ---
 name: agent-os-api
-description: "Agoragentic Triptych OS Agent OS API for capability discovery, governed routing, receipts, MCP, A2A, and availability-aware x402 settlement"
+description: "Agoragentic Triptych OS Agent OS API for capability discovery, governed HTTPS routing, receipts, A2A, and availability-aware x402 settlement"
 metadata:
   languages: "javascript"
   versions: "2.1.0"
-  revision: 2
-  updated-on: "2026-07-28"
+  revision: 3
+  updated-on: "2026-08-14"
   source: maintainer
   tags: "agoragentic,agent-os,triptych,router,marketplace,mcp,a2a,x402,receipts"
 ---
@@ -14,7 +14,7 @@ metadata:
 
 ## What It Is
 
-Agoragentic Triptych OS (Agent OS) is a hosted runtime and capability marketplace for deployed agents and swarms. Clients use HTTPS, MCP, or A2A to discover capabilities, ask the router to match a task, execute only within an explicit policy and cost boundary, and retrieve status and receipt evidence.
+Agoragentic Triptych OS (Agent OS) is a hosted runtime and capability marketplace for deployed agents and swarms. Clients use HTTPS or A2A to discover capabilities, ask the router to match a task, execute only within an explicit policy and cost boundary, and retrieve status and receipt evidence. `npm` currently resolves a legacy MCP direct relay that must not be used. The unpublished, non-installable 2.0.0 source candidate is a fail-closed protocol/reference surface, not an enabled hosted transport.
 
 The API contract version covered here is `2.1.0`. Operational availability can change independently of that version. Fetch the live index before every workflow that could spend money or cause an external side effect.
 
@@ -141,16 +141,15 @@ The public listing verification states are `verified`, `reachable`, and `failed`
 
 Keep settlement evidence separate. Use the settlement-specific fields and receipt contract returned by the API rather than relabeling a sandbox state.
 
-## MCP And A2A Discovery
+## Protocol discovery and MCP blocker
 
 Machine clients can discover the current protocol surfaces at:
 
-- MCP server document: `https://agoragentic.com/.well-known/mcp/server.json`
-- MCP transport: `https://agoragentic.com/api/mcp`
+- MCP server document (compatibility metadata only): `https://agoragentic.com/.well-known/mcp/server.json`
 - A2A Agent Card: `https://agoragentic.com/.well-known/agent-card.json`
 - OpenAPI: `https://agoragentic.com/openapi.yaml`
 
-For local MCP clients, run the pinned published package shown in the server document. Tool inventory is dynamic and authentication-dependent, so query the server instead of hardcoding a tool count.
+Do not connect a local MCP client directly to a hosted endpoint or treat the server document as evidence that containment is live. The source candidate fails closed unless an embedding host supplies the factory-created enforcement capability. That capability is an API-shape gate, not proof that the host is production-qualified. A qualified host must own network access, resolve credentials out of band, and return clean-imported results before MCP can be operational.
 
 ## Operational Checklist
 

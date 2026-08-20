@@ -1,6 +1,6 @@
 # Client-Native Distribution
 
-This file tracks repository readiness separately from external listing state. A package can be ready without being submitted, approved, listed, or active.
+This file tracks repository artifacts separately from external listing state and runtime qualification. A package or listing can exist without being safe, operational, approved, or active.
 
 The canonical machine packet is [`catalog-profile.json`](./catalog-profile.json).
 
@@ -8,19 +8,19 @@ The canonical machine packet is [`catalog-profile.json`](./catalog-profile.json)
 
 | Client | Local/direct package | External discovery state |
 |---|---|---|
-| Cursor | [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json) | Ready for publisher submission; no submission receipt or Marketplace listing is confirmed |
-| Gemini CLI | [`gemini-extension.json`](../gemini-extension.json) | Direct Git install ready and repository topic present; gallery indexing is not confirmed |
-| Claude Code | [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | Self-hosted community marketplace; no Anthropic listing claim |
-| Cline | [`llms-install.md`](../llms-install.md) | [Submission issue #808](https://github.com/cline/mcp-marketplace/issues/808) is open and pending Cline review |
-| Docker MCP Catalog | [`Dockerfile`](../Dockerfile) | [Registry PR #4524](https://github.com/docker/mcp-registry/pull/4524) is open and pending Docker review |
+| Cursor | [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json) | Metadata retained; remote MCP disabled pending qualified host enforcement |
+| Gemini CLI | [`gemini-extension.json`](../gemini-extension.json) | Metadata retained; remote MCP disabled; gallery indexing is not runtime evidence |
+| Claude Code | [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | Self-hosted metadata retained; remote MCP disabled; no Anthropic listing claim |
+| Cline | [`llms-install.md`](../llms-install.md) | Legacy direct-relay [submission issue #808](https://github.com/cline/mcp-marketplace/issues/808) requires withdrawal or correction; no current registry install is supported |
+| Docker MCP Catalog | [`Dockerfile`](../Dockerfile) | Legacy direct-relay [registry PR #4524](https://github.com/docker/mcp-registry/pull/4524) requires withdrawal or correction before review |
 
-Every default client package launches the published MCP relay without embedding `AGORAGENTIC_API_KEY`. Tool inventory is dynamic and authentication-dependent. Do not publish a static tool count in directory copy.
+No default client package launches a live Agoragentic relay. The fail-closed 2.0.0 build exists only as an unpublished, non-installable source candidate. The npm name still resolves a legacy direct relay and must not be installed or launched. Never embed `AGORAGENTIC_API_KEY`. Do not publish a static tool count in directory copy.
 
 ## Existing MCP Discovery
 
-The npm package, Official MCP Registry entry, Smithery listing, Glama listing, PulseMCP listing, and community awesome-list entry are established distribution surfaces.
+The npm package, Official MCP Registry entry, Smithery listing, Glama listing, PulseMCP listing, and community awesome-list entry are legacy direct-relay distribution records. Each requires correction or withdrawal; none points to a current installable fail-closed build, proves hosted Risk Fork interception, or qualifies live containment.
 
-The Smithery listing metadata is current. Its usage dashboard counts initialization and listability sessions separately from tool calls, so session totals must not be presented as evidence of capability use. The latest owner review found discovery/probe traffic but no recorded tool invocations.
+The Smithery record is not current build metadata. Its usage dashboard counts initialization and listability sessions separately from tool calls, so session totals must not be presented as evidence of capability use. The latest owner review found discovery/probe traffic but no recorded tool invocations.
 
 The owned `mcp.so` listing still carries stale copy and has more than one historical slug. The editor accepted changes but did not persist them, and the site's ticket form did not create a visible record. A support email was sent on 2026-07-23; no repair or consolidation is confirmed.
 
@@ -41,12 +41,11 @@ Both packets use live machine endpoints as authority instead of freezing invento
 
 ## Outstanding Distribution Work
 
-1. Complete the Cursor publisher application and retain a submission receipt; stop for owner terms acceptance.
-2. Wait for or respond to Cline review on [issue #808](https://github.com/cline/mcp-marketplace/issues/808).
-3. Wait for or respond to Docker review on [PR #4524](https://github.com/docker/mcp-registry/pull/4524).
-4. Follow up with `mcp.so` support until the owned listing persists current metadata and duplicate records are consolidated.
-5. Confirm Gemini CLI gallery indexing separately from direct-install and repository-topic readiness.
-6. Review the Context Hub packet, then submit it upstream only with explicit owner authorization.
-7. Review and submit the Agent Payments Stack correction only with explicit owner authorization; retain the submission receipt.
+1. Keep all MCP client listings non-operational until hosted interception and qualified host evidence satisfy issue #301.
+2. Withdraw or correct every legacy direct-relay record only with explicit owner authorization and retain each submission receipt.
+3. Treat npm, the Official MCP Registry, Cursor, Cline, Docker, Gemini, Smithery, Glama, PulseMCP, and community-directory presence as stale metadata only.
+4. Follow up with `mcp.so` support only after the owner approves the corrected non-operational copy.
+5. Review the Context Hub packet, then submit it upstream only with explicit owner authorization.
+6. Review and submit the Agent Payments Stack correction only with explicit owner authorization; retain the submission receipt.
 
 External status must be updated only after the corresponding service confirms submission or listing.

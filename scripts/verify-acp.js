@@ -29,12 +29,23 @@ function verifyFiles() {
   const agent = readJson(agentPath);
   assert(agent.id === 'agoragentic-agent-os', 'agent id must be agoragentic-agent-os');
   assert(agent.name === 'Agoragentic Agent OS', 'agent name must use Agent OS spine');
-  assert(agent.runtime && agent.runtime.command === 'npx', 'runtime command must be npx');
+  assert(agent.runtime && agent.runtime.command === null, 'registry runtime command must be disabled');
   assert(Array.isArray(agent.runtime.args), 'runtime args must be an array');
-  assert(agent.runtime.args.includes('agoragentic-mcp'), 'runtime args must launch agoragentic-mcp');
-  assert(agent.runtime.args.includes('--acp'), 'runtime args must include --acp');
+  assert(agent.runtime.args.length === 0, 'registry runtime args must not auto-launch a package');
+  assert(agent.runtime.source_checkout?.command === 'node', 'source-checkout runtime command must use node');
+  assert(
+    JSON.stringify(agent.runtime.source_checkout?.args) === JSON.stringify(['mcp/dist/mcp-server.cjs', '--acp']),
+    'source-checkout runtime args must point to the built repository artifact',
+  );
+  assert(
+    JSON.stringify(agent.runtime.source_checkout?.prerequisites) === JSON.stringify(['npm --prefix mcp ci', 'npm --prefix mcp run build']),
+    'source-checkout prerequisites must build the local package without registry resolution',
+  );
+  assert(agent.runtime.operational === false, 'ACP runtime must be marked non-operational');
+  assert(agent.runtime.status === 'blocked_pending_qualified_host_enforcement', 'ACP runtime must expose its enforcement blocker');
+  assert(Array.isArray(agent.auth) && agent.auth.length === 0, 'ACP registry must not advertise raw credential injection');
   assert(Array.isArray(agent.recommended_tools), 'recommended_tools must be present');
-  assert(agent.recommended_tools[0] === 'agoragentic_execute', 'execute must be first recommended tool');
+  assert(agent.recommended_tools.length === 0, 'blocked ACP runtime must not recommend executable tools');
   assert(!JSON.stringify(agent).includes('agoragentic_vault'), 'registry must not recommend legacy vault tools');
 
   const icon = fs.readFileSync(iconPath, 'utf8');
@@ -104,6 +115,18 @@ function verifyHandshake() {
           } else if (response.id === 3) {
             assert(response.result && response.result.stopReason === 'end_turn', 'session/prompt must end cleanly');
             assert(messages.some((message) => message.method === 'session/update'), 'session/prompt must emit a session/update notification');
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'tools/list', params: {} })}\n`);
+          } else if (response.id === 4) {
+            assert(response.result && Array.isArray(response.result.tools), 'tools/list must return the compatibility inventory');
+            assert(response.result.tools.length > 0, 'tools/list compatibility inventory must not be empty');
+            assert(response.result.tools.every((tool) => /enforcement implementation/i.test(tool.description)), 'every advertised tool must disclose the enforcement requirement');
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'unadvertised_tool', arguments: {} } })}\n`);
+          } else if (response.id === 5) {
+            assert(response.error && response.error.code === -32602, 'unadvertised tools/call must be rejected before enforcement');
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 6, method: 'tools/call', params: { name: 'agoragentic_execute', arguments: { task: 'must not run' } } })}\n`);
+          } else if (response.id === 6) {
+            assert(response.error && response.error.code === -32000, 'advertised tools/call must fail closed without host enforcement');
+            assert(response.error.data && response.error.data.enforcement_code === 'MCP_RISK_FORK_ENFORCEMENT_REQUIRED', 'ACP failure must expose the enforcement blocker code');
             clearTimeout(timer);
             child.kill('SIGTERM');
             resolve();

@@ -2,13 +2,13 @@
 
 > Drop-in adapters connecting agent frameworks, protocol adapters, observability hooks, Micro ECF policy exports, and Agent OS deployment examples to Agoragentic. Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms; Micro ECF is the local context wedge; the marketplace is the transaction rail; USDC settlement runs on Base L2.
 >
-> Downloadable here means SDKs, MCP and Agent Client Protocol (ACP) adapters, framework wrappers, Micro ECF tooling, Harness Core no-spend proof/export tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
+> Downloadable here means SDKs, fail-closed MCP and Agent Client Protocol (ACP) reference surfaces, framework wrappers, Micro ECF tooling, Harness Core no-spend proof/export tooling, examples, and public contracts. The full Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, receipts, reconciliation, trust mutation, and Full ECF internals are hosted or private.
 
 ## Packages
 - Python: `pip install agoragentic` (PyPI, ≥3.8)
 - Node.js SDK: `npm install agoragentic` (npm, Node ≥16)
-- MCP: `npx agoragentic-mcp` (npm, Node ≥18)
-- Agent Client Protocol (ACP): `npx agoragentic-mcp --acp` (stdio adapter, Node ≥18)
+- MCP: `npm --prefix mcp ci && npm --prefix mcp run build` from this source checkout (unpublished, non-installable 2.0.0 protocol/reference candidate; remote calls fail closed without a separately qualified host boundary; the npm name resolves a legacy direct relay and must not be used)
+- Agent Client Protocol (ACP): `node mcp/dist/mcp-server.cjs --acp` after that source build (owned metadata only; remote calls blocked)
 - Micro ECF: run `npx agoragentic-micro-ecf@latest plan --dir .` first; only after explicit approval run `npx agoragentic-micro-ecf@latest install --dir . --yes` (local context CLI, Node ≥18)
 - Harness Core: `npx agoragentic-harness-core@latest init` (published local no-spend CLI; npm is v0.2.0 while this repo carries the review-gated v0.2.1 patch candidate, Node ≥18)
 - OpenCode Harness plugin: `cd opencode && npm ci` from a source checkout (experimental `@agoragentic/opencode` candidate; exact OpenCode 1.18.15 contract fixture only; not published)
@@ -22,14 +22,15 @@
 - Env: AGORAGENTIC_API_KEY=amk_<key>
 - Get key: POST https://agoragentic.com/api/quickstart
 - Or call agoragentic_register at runtime
+- The unpublished MCP/ACP source candidate does not consume or forward this key. The npm package is a legacy direct relay and must not be used. Use SDK/REST auth only; never inject the key into either MCP surface.
 
 ## Integrations
-- Canonical inventory: `integrations.json` (105 indexed surfaces as of 2026-08-09).
+- Canonical inventory: `integrations.json` (106 indexed surfaces as of 2026-08-14).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), Cline (`llms-install.md`), and the experimental OpenCode Harness source plugin (`opencode/`). Package readiness does not imply external marketplace approval or live host compatibility.
 - Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
-- JavaScript/TypeScript frameworks and workflows include MCP, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.
+- JavaScript/TypeScript frameworks and workflows include the fail-closed MCP/ACP protocol reference, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.
 - Experimental entries are documentation paths unless their folder says otherwise; they are not represented as tested drop-in packages.
-- Agent Client Protocol: acp/agent.json and `npx agoragentic-mcp --acp`
+- Agent Client Protocol: `acp/agent.json` and the repo-built `node mcp/dist/mcp-server.cjs --acp` mode are protocol/reference surfaces; registry auto-launch is disabled and remote tools remain blocked pending qualified host enforcement.
 - Dify, Flowise, Zapier MCP, A2A, RepoBrain Local Provider, claude-view Local Provider, governed Crawl4AI local web evidence, Scrumboy, Hermes Agent Bridge
 - LangSmith: langsmith/README.md (observability)
 - Agent OS Control Plane: agent-os/README.md (public quote, procurement, approval, execute, and reconciliation flow)

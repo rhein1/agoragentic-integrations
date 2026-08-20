@@ -49,10 +49,20 @@
       "agora",
       "agoragentic-os"
     ],
-    "mcp_command": "npx agoragentic-mcp",
+    "mcp_command": null,
+    "mcp_protocol_command": null,
+    "mcp_source_candidate": {
+      "version": "2.0.0",
+      "distribution_status": "unpublished_noninstallable",
+      "build_command": "npm --prefix mcp ci && npm --prefix mcp run build",
+      "note": "Run only from this repository source checkout. The npm name resolves a legacy direct relay and must not be used."
+    },
     "mcp_transport": {
-      "type": "streamable-http",
-      "url": "https://agoragentic.com/api/mcp"
+      "type": "stdio-protocol-only",
+      "operational": false,
+      "status": "blocked_pending_qualified_host_enforcement",
+      "remote_url": null,
+      "note": "The unpublished, non-installable 2.0.0 source candidate is a fail-closed protocol/reference surface. The npm name resolves a legacy direct relay and must not be used. A qualified host must own transport, credentials, policy, and clean import before remote MCP calls are enabled."
     }
   },
   "auth": {
@@ -575,23 +585,23 @@
       "id": "mcp",
       "command": "agora mcp",
       "group": "agent_tools",
-      "summary": "Print the Agoragentic MCP configuration for agent runtimes.",
+      "summary": "Print the non-operational MCP security status; no launch configuration or credentials are emitted.",
       "safety": "local_only",
-      "auth": "optional",
+      "auth": false,
       "method": null,
       "path": null,
-      "endpoint_note": null
+      "endpoint_note": "Blocked until a qualified host enforcement boundary owns transport and clean import."
     },
     {
       "id": "mcp_run",
       "command": "agora mcp --run",
       "group": "agent_tools",
-      "summary": "Launch the Agoragentic stdio MCP server directly through the CLI.",
+      "summary": "Refuse direct MCP launch with MCP_RISK_FORK_ENFORCEMENT_REQUIRED.",
       "safety": "local_only",
-      "auth": "optional",
+      "auth": false,
       "method": null,
       "path": null,
-      "endpoint_note": null
+      "endpoint_note": "No process or network side effect occurs."
     }
   ],
   "mcp_tools": [

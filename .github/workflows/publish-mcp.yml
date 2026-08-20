@@ -1,55 +1,25 @@
-name: Publish Agoragentic MCP to npm
+name: Verify MCP publication remains disabled
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
-    if: startsWith(github.event.release.tag_name, 'mcp-v')
+  verify-publication-disabled:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcp
     steps:
       - uses: actions/checkout@v7
 
-      - name: Setup Node for npm trusted publishing
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
-          package-manager-cache: false
-
-      - name: Verify npm trusted publishing runtime
+      - name: Assert the unqualified source candidate is non-publishable
         run: |
-          node --version
-          npm --version
-
-      - name: Verify release tag matches package version
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          package_version="$(node -p "require('./package.json').version")"
-          test "${RELEASE_TAG}" = "mcp-v${package_version}"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Validate MCP package
-        run: |
-          npm run check
-          npm test
-          npm audit --audit-level=moderate
-          npm run verify:packed-install
-
-      - name: Dry-run package contents
-        run: npm pack --dry-run
-
-      - name: Publish MCP with npm trusted publishing
-        run: npm publish --access public
+          node - <<'NODE'
+          const packageJson = require('./mcp/package.json');
+          if (packageJson.private !== true) {
+            throw new Error('MCP source candidate must remain private');
+          }
+          if (!String(packageJson.scripts?.prepublishOnly || '').includes('MCP_PUBLISH_DISABLED')) {
+            throw new Error('MCP prepublish guard is missing');
+          }
+          NODE

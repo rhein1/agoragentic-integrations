@@ -1,0 +1,69 @@
+# Risk Fork adversarial remediation record
+
+## Scope and disposition
+
+- Audited head: `64b79ff17679ba89eb75b9794e33a63f41fddf75`
+- Branch: `codex/risk-fork-v1-20260811`
+- Review surface: Risk Fork protocol, adapters, MCP pre-discovery boundary, clean commit, receipts, concurrency/crash behavior, and repository validation
+- Disposition: PR #298 remains **draft and blocked**
+
+This record separates falsifying baseline evidence from the local remediation checkout. It records local validation only; it does **not** claim pushed-head GitHub CI. Risk Fork is not production-ready, is not deployed or published, and does not currently protect live Agoragentic MCP or Harness traffic.
+
+## Failing-before evidence
+
+The adversarial regressions were run against the exact audited head before remediation:
+
+| Area | Baseline result | Defect demonstrated |
+| --- | --- | --- |
+| E2B security boundary | `node --test test/e2b-security-boundary-remediation.test.mjs`: 0 passed, 26 failed | The snapshot-to-create design could not prove a filesystem-only child free of inherited environment, credential, process, socket, entropy, and mount state |
+| MCP trust and receipt binding | `node --test test/mcp-receipt-remediation.test.mjs`: 0 passed, 14 failed | Trust lowering lacked exact attestation binding, unknown methods were not preserved as bounded `HIGH` decisions, and receipt commit/destruction claims were not fully cross-bound |
+| Atomic clean commit | `node --test test/atomic-clean-commit-remediation.test.mjs`: 10 test nodes, 1 passed, 9 failed | Parent-head, current-governance, deletion-policy, authorization-consumption, and concurrent-consumer invariants were not one authoritative atomic boundary |
+| Client-count evidence | `node scripts/verify-client-distribution.mjs`: failed | The registry contained 106 integrations while the SVG still displayed 105 |
+| Adapter conformance CI | 105 of 106 adapters completed | The Hermes worker exited with code 0 and no stderr before the parent observed the IPC result, so the run was reported as failed |
+
+These are deliberate failing baselines, not evidence that the remediated head has passed.
+
+Additional failing-first regressions captured during independent remediation reviews proved and then closed: serialized MCP-attestation time backdating; serialized clean-commit and authorization time backdating; capsule or authorization expiry while final asynchronous clean-side gates were still running; stale governance during durable parent reservation; approval revocation and evidence rotation at the final parent gate; forged or mismatched authorization-verifier evidence; missing clean-side required-test verification; stale file locks after process death; receipt risk-summary substitution; worker result loss without a request-bound ACK; acceptance of development/apply-mode PostgreSQL authorities at production boundaries; TLS, startup-option, durability, replica-only-trigger, malformed-catalog, role-membership, and column-privilege PostgreSQL bypasses; and E2B self-hashed qualification, unpinned source-attestation, SDK-integrity, and lease-state bypasses. These regressions remain in the final suite rather than being weakened or deleted.
+
+## Working-tree remediation
+
+| Area | Remediation | Current claim boundary |
+| --- | --- | --- |
+| E2B | Unconfigured savepoint, fork-create, and execution entrypoints throw `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before verifier, SDK, or provider I/O. The package includes reviewed template/runtime artifacts and default-off owner-gated build/live harnesses. The configured profile stages a bounded immutable sanitized manifest export; independently reopens and scans its exact bytes; verifies reviewed runtime hashes plus a detached source-absence signature against a pinned verifier key; requests empty env/IAM/mounts and deny-all SDK network settings at birth; exact-binds bootstrap and runner results; imports results through a bounded deadline-controlled stream; and durably journals/reconciles cleanup while poisoning allocation on unknown absence. A self-hash never qualifies evidence: separate detached pinned qualification trust and an exact signed `e2b@2.39.0` SDK-integrity match are required before SDK/provider use. Only then may the adapter renew provider-observed idle leases capped by the hard deadline | Source/offline/mock conformance only; no credentialed provider run, signed live qualification artifact, or live containment, first-instruction/IPv6 egress, inherited-state exclusion, idle-lease, latency, or cost proof |
+| Local adapter | Existing authority-free manifest checks and closed child-operation vocabulary remain the reference path | Functional protocol simulator only; no VM/container/firewall/kernel isolation claim |
+| MCP discovery | A fail-closed host-enforcement bundle and planner seam have source and loopback ordering coverage before the real server receives `server/discover` and before its response is accepted | Source/loopback contract only; the hosted runtime does not install the bundle, existing callers omit the enforcement path, and live interception is not enforced |
+| MCP trust | Trust lowering requires exact server/origin, registry version, fresh attestation, trusted attestor, exact attestation hash, integrity bindings, the original live trusted-verifier boundary, and a clean-host clock; raw `verified` metadata or caller-supplied evaluation time cannot lower trust | Deterministic contract behavior only; no production trust service is bundled |
+| Unknown MCP methods | `UNKNOWN` preserves a bounded raw method and classifies `HIGH` | Classifier coverage only; production interception remains separate |
+| Receipts | Commit and destruction claims are bound to exact lifecycle events, hashes, provider/fork references, and accepted artifact digest; authoritative verification additionally requires and verifies the exact full risk decision, plus the original live trust verifier whenever trust lowering was recorded | Structure-only validation remains explicitly separate; neither API makes the receipt authority, creator authenticity, settlement, or certification proof |
+| Taint gate and required tests | Public artifact verification is structural/canonical and does not reconstruct current workspace policy from child paths or assume deletions are allowed; child test claims cannot satisfy current required-test policy without clean re-execution or a trusted external attestation exact-bound to the artifact, diff, and policy | The injected test verifier is a trusted clean-side boundary, not evidence supplied by the child |
+| Clean commit | Both public production boundaries require the exact branded PostgreSQL authority configured for production, verify-only migration mode, and CA-authenticated TLS. Runtime and DDL are separate; the migrator owns reviewed migration application while runtime verifies exact migration hashes, relation/column/constraint/index/foreign-key/trigger-function catalogs, safe durability/trigger settings, and least-privilege role/database/schema/table/column/function posture. Server-time serializable transactions lock parent/governance/approval/optional authorization rows, durably record `prepared` then `effect_started`, pass a unique effect fence to the clean callback, atomically finalize result/head/consumption, preserve unresolved ambiguity, allow only exact proven success to finalize during reconciliation, and serialize an append-only audit chain; non-success reconciliation never releases post-effect reservations, and file authorities remain demonstration-only | Independent-process/connection tests and a disposable fresh CA-TLS database test execute the owner-bootstrap and post-migration role templates with distinct migrator/runtime roles. They do not qualify managed HA/failover, multi-region operation, backup/restore, retention, monitoring, credential rotation, operator reconciliation, or live deployment, and no generic exactly-once external-effect claim is made |
+| Client count | A source-derived banner generator/check synchronizes the SVG and PNG evidence with the registry count | Generated-distribution consistency only; no product readiness claim |
+| Adapter worker | A request-correlated result/ACK protocol makes the child hold its terminal exit until the coordinator acknowledges the exact evidence; the coordinator requires ACK delivery completion and a consistent worker exit, with no post-exit timing grace | Deterministic process-ordering repair only; GitHub CI on the pushed head is still required |
+
+## Validation status
+
+The remediation suite includes dedicated PostgreSQL contract, independent-process race, pending-effect reconciliation race, crash/ambiguity, revocation, reconciliation/audit, exact production-configuration, TLS/durability, catalog/trigger, privilege, executable-role-template, and production-controller regressions. The pending-effect regression holds the original callback open while a verifier reports point-in-time absence and proves that the parent, approval, and one-use authorization remain unavailable, so no second callback can begin. A disposable local test creates a fresh TLS database and distinct migrator/runtime logins, renders and executes both role templates, runs the separate migrator, and verifies production runtime and escalation failures. E2B coverage includes reviewed runtime artifacts, independent exact-byte source verification, pinned detached trust, qualification and SDK-integrity rejection, renewable lease behavior, configured clean-template creation, immutable export, exact bootstrap/result binding, streamed-result limits/deadlines, cleanup journaling, restart reconciliation, default-off harness gates, and fail-closed defaults. Local validation is checkout-specific; pushed-head CI is authoritative only for the exact commit shown on PR #298 and must be checked there. Green source/mock-provider and disposable local PostgreSQL results do not establish production readiness.
+
+## Required follow-ups
+
+Production readiness remains blocked on all of the following:
+
+1. Close [#301](https://github.com/rhein1/agoragentic-integrations/issues/301): install and verify the source-only host-enforcement bundle in the actual hosted MCP/Harness path before `server/discover`, then adversarially qualify initialize/list/read/get/call, redirects, negotiation failures, retries, malformed frames, early responses, and untrusted content handling. Source and loopback evidence are not hosted enforcement.
+2. Close [#302](https://github.com/rhein1/agoragentic-integrations/issues/302): credentialed-live-qualify the reviewed clean-template/runtime artifacts with the default-off, owner-authorized, bounded canary and obtain detached qualification trust from an independent pinned verifier. Prove exact template/SDK provenance; first-instruction IPv4 and IPv6 egress behavior; absence of inherited environment variables, credential files, process tokens, random/nonce state, sockets, and persistent writable mounts; provider lifecycle/destruction semantics; renewable idle-lease enforcement; and observed latency/cost. The current source/offline/mock profile and unsigned harness output are not that evidence.
+3. Finish the production boundary for [#303](https://github.com/rhein1/agoragentic-integrations/issues/303): qualify the reviewed PostgreSQL authority and separate migrator on the intended managed deployment, including CA/TLS and credential rotation, HA/failover, migration/retention operations, backup/restore, monitoring/alerts, and an operator reconciliation runbook. Current evidence is source plus disposable local TLS/role testing only.
+4. Run the complete Risk Fork, Transaction Assurance, repository, packaging, schema, concurrency, crash-injection, and Node 20/22/24 CI matrix against the final pushed commit. Keep PR #298 draft and blocked until the evidence is reviewed.
+
+## Benchmark interpretation
+
+All checked-in benchmark output is **local orchestration overhead only**. A reported sub-millisecond “fork start,” including the previously observed 0.549 ms value, is a local reference-adapter measurement and cannot represent E2B environment creation, MicroVM launch, cloud fork latency, containment, provider cost, or a production SLO.
+
+## No-go claims
+
+Until the follow-ups above are complete and independently reviewed, do not claim that Risk Fork:
+
+- protects live Agoragentic MCP or Harness traffic;
+- provides a qualified E2B containment boundary;
+- turns the local adapter into security isolation;
+- supplies a deployed or managed-service-qualified production transaction authority;
+- guarantees generic exactly-once external side effects;
+- is ready to merge, deploy, publish, enable, or route production traffic.

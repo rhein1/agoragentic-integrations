@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-risk-decision.v1.json",
+  "title": "Agoragentic Risk Fork Deterministic Risk Decision V1",
+  "description": "A deterministic pre-contact or pre-execution risk decision. Tool annotations cannot lower the decision.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "level", "action", "blocked", "score", "isolation_boundary", "reasons", "input_hash", "normalized_input", "decision_hash", "classifier"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.risk-decision.v1" },
+    "level": { "$ref": "#/$defs/riskLevel" },
+    "action": { "enum": ["NORMAL_EXECUTION", "RISK_FORK_OPTIONAL", "RISK_FORK_REQUIRED", "RISK_FORK_PREPARE_CLEAN_COMMIT_REQUIRED", "DENY"] },
+    "blocked": { "type": "boolean" }, "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "isolation_boundary": { "enum": ["none", "before_remote_connect", "before_execution"] },
+    "reasons": {
+      "type": "array", "maxItems": 100,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["code", "level", "weight", "detail"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1, "maxLength": 200 }, "level": { "$ref": "#/$defs/riskLevel" },
+          "weight": { "type": "integer", "minimum": 0, "maximum": 100 }, "detail": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        }
+      }
+    },
+    "input_hash": { "$ref": "#/$defs/sha256" },
+    "normalized_input": { "$ref": "#/$defs/normalizedInput" },
+    "decision_hash": { "$ref": "#/$defs/sha256" },
+    "classifier": {
+      "type": "object", "additionalProperties": false, "required": ["name", "llm_boundary", "trusted_server_verification"],
+      "properties": {
+        "name": { "const": "agoragentic-risk-fork-deterministic-v1" }, "llm_boundary": { "const": "none" },
+        "trusted_server_verification": { "oneOf": [{ "$ref": "#/$defs/trustedServerVerification" }, { "type": "null" }] }
+      }
+    }
+  },
+  "oneOf": [
+    { "properties": { "blocked": { "const": true }, "level": { "const": "IRREVERSIBLE" }, "action": { "const": "DENY" } }, "required": ["blocked", "level", "action"] },
+    { "properties": { "blocked": { "const": false }, "level": { "const": "LOW" }, "action": { "const": "NORMAL_EXECUTION" } }, "required": ["blocked", "level", "action"] },
+    { "properties": { "blocked": { "const": false }, "level": { "const": "ELEVATED" }, "action": { "const": "RISK_FORK_OPTIONAL" } }, "required": ["blocked", "level", "action"] },
+    { "properties": { "blocked": { "const": false }, "level": { "const": "HIGH" }, "action": { "const": "RISK_FORK_REQUIRED" } }, "required": ["blocked", "level", "action"] },
+    { "properties": { "blocked": { "const": false }, "level": { "const": "IRREVERSIBLE" }, "action": { "const": "RISK_FORK_PREPARE_CLEAN_COMMIT_REQUIRED" } }, "required": ["blocked", "level", "action"] }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "riskLevel": { "enum": ["LOW", "ELEVATED", "HIGH", "IRREVERSIBLE"] },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "\\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "ref200": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 200 }] },
+    "ref300": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 300 }] },
+    "mcpRawMethod": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]+$" },
+    "ref500": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 500 }] },
+    "nullableRef": { "oneOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] },
+    "nullableRef200": { "oneOf": [{ "$ref": "#/$defs/ref200" }, { "type": "null" }] },
+    "nullableRef300": { "oneOf": [{ "$ref": "#/$defs/ref300" }, { "type": "null" }] },
+    "nullableMcpRawMethod": { "oneOf": [{ "$ref": "#/$defs/mcpRawMethod" }, { "type": "null" }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "nullableDate": { "oneOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+    "httpEndpoint": { "type": "string", "format": "uri", "pattern": "^https?://(?![^/?#]*@)[^?#]+$", "maxLength": 4096 },
+    "nullableHttpEndpoint": { "oneOf": [{ "$ref": "#/$defs/httpEndpoint" }, { "type": "null" }] },
+    "refList": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/ref" } },
+    "endpointList": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/httpEndpoint" } },
+    "serverAttestation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "status", "server_ref", "server_origin", "attestor_ref", "evidence_hash", "issued_at", "expires_at", "trust_registry_version", "signature_ref", "signature_hash", "attestation_hash"],
+      "properties": {
+        "schema": { "const": "agoragentic.risk-fork.mcp-server-attestation.v1" },
+        "status": { "const": "verified" },
+        "server_ref": { "$ref": "#/$defs/ref" },
+        "server_origin": { "$ref": "#/$defs/httpEndpoint" },
+        "attestor_ref": { "$ref": "#/$defs/ref" },
+        "evidence_hash": { "$ref": "#/$defs/sha256" },
+        "issued_at": { "$ref": "#/$defs/date" },
+        "expires_at": { "$ref": "#/$defs/date" },
+        "trust_registry_version": { "$ref": "#/$defs/ref" },
+        "signature_ref": { "$ref": "#/$defs/ref" },
+        "signature_hash": { "$ref": "#/$defs/sha256" },
+        "attestation_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "trustedServerVerification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "status", "request_hash", "evidence_ref", "evidence_hash"],
+      "properties": {
+        "schema": { "const": "agoragentic.risk-fork.trusted-mcp-server-verification.v1" },
+        "status": { "const": "verified" }, "request_hash": { "$ref": "#/$defs/sha256" },
+        "evidence_ref": { "$ref": "#/$defs/ref" }, "evidence_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "normalizedInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "evaluated_at", "mcp_phase", "raw_method", "mcp_server_ref", "mcp_server_origin", "mcp_server_trust", "mcp_server_attestation", "tool_name", "tool_annotations", "capabilities", "prompt_injection_indicators", "owner_policy"],
+      "properties": {
+        "request_id": { "$ref": "#/$defs/nullableRef200" },
+        "evaluated_at": { "$ref": "#/$defs/date" },
+        "mcp_phase": { "oneOf": [{ "enum": ["server/discover", "initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call", "UNKNOWN"] }, { "type": "null" }] },
+        "raw_method": { "$ref": "#/$defs/nullableMcpRawMethod" },
+        "mcp_server_ref": { "$ref": "#/$defs/nullableRef" }, "mcp_server_origin": { "$ref": "#/$defs/nullableHttpEndpoint" },
+        "mcp_server_trust": { "enum": ["verified", "reachable", "failed", "unknown", "untrusted"] },
+        "mcp_server_attestation": { "oneOf": [{ "$ref": "#/$defs/serverAttestation" }, { "type": "null" }] },
+        "tool_name": { "$ref": "#/$defs/nullableRef300" },
+        "tool_annotations": {
+          "type": "object", "additionalProperties": false,
+          "required": ["read_only_hint", "destructive_hint", "idempotent_hint", "open_world_hint"],
+          "properties": { "read_only_hint": { "type": "boolean" }, "destructive_hint": { "type": "boolean" }, "idempotent_hint": { "type": "boolean" }, "open_world_hint": { "type": "boolean" } }
+        },
+        "capabilities": {
+          "type": "object", "additionalProperties": false,
+          "required": ["network_access", "filesystem_read", "filesystem_write", "credential_access", "wallet_or_payment", "deployment", "publication", "communication", "database_mutation", "trust_or_reputation_mutation", "external_side_effect", "unknown_or_unclassified"],
+          "properties": {
+            "network_access": { "type": "boolean" }, "filesystem_read": { "type": "boolean" }, "filesystem_write": { "type": "boolean" },
+            "credential_access": { "type": "boolean" }, "wallet_or_payment": { "type": "boolean" }, "deployment": { "type": "boolean" },
+            "publication": { "type": "boolean" }, "communication": { "type": "boolean" }, "database_mutation": { "type": "boolean" },
+            "trust_or_reputation_mutation": { "type": "boolean" }, "external_side_effect": { "type": "boolean" }, "unknown_or_unclassified": { "type": "boolean" }
+          }
+        },
+        "prompt_injection_indicators": { "type": "array", "maxItems": 50, "uniqueItems": true, "items": { "$ref": "#/$defs/ref500" } },
+        "owner_policy": {
+          "type": "object", "additionalProperties": false,
+          "required": ["minimum_level", "force_risk_fork", "deny_irreversible", "trusted_server_refs", "trusted_attestor_refs", "trusted_attestation_hashes", "trust_registry_version", "allowed_egress"],
+          "properties": {
+            "minimum_level": { "$ref": "#/$defs/riskLevel" }, "force_risk_fork": { "type": "boolean" }, "deny_irreversible": { "type": "boolean" },
+            "trusted_server_refs": { "$ref": "#/$defs/refList" }, "trusted_attestor_refs": { "$ref": "#/$defs/refList" },
+            "trusted_attestation_hashes": { "type": "array", "maxItems": 100, "uniqueItems": true, "items": { "$ref": "#/$defs/sha256" } },
+            "trust_registry_version": { "$ref": "#/$defs/nullableRef" }, "allowed_egress": { "$ref": "#/$defs/endpointList" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mcp_phase": { "const": "UNKNOWN" } }, "required": ["mcp_phase"] },
+          "then": { "properties": { "raw_method": { "$ref": "#/$defs/mcpRawMethod" } } },
+          "else": { "properties": { "raw_method": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}

@@ -1,24 +1,19 @@
 {
   "name": "agoragentic-zapier-mcp-bridge",
-  "description": "Use Zapier MCP for business app actions and Agoragentic for routed paid agent work, receipts, and settlement.",
+  "description": "Zapier MCP example with Agoragentic MCP deliberately disabled pending qualified host enforcement.",
   "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key"
-      }
-    },
     "zapier": {
       "url": "https://actions.zapier.com/mcp/YOUR_AUTH_ID/sse"
     }
   },
+  "agoragentic_mcp": {
+    "operational": false,
+    "status": "blocked_pending_qualified_host_enforcement",
+    "note": "Do not add a command, URL, API key, or callback until a qualified host owns transport and clean import."
+  },
   "routing_policy": {
     "use_agoragentic_for": [
-      "external paid agent work",
-      "provider matching",
-      "receipt-backed execution",
-      "USDC settlement"
+      "none_until_qualified_host_enforcement"
     ],
     "use_zapier_for": [
       "connected SaaS actions",
@@ -26,7 +21,7 @@
       "user-authorized app operations"
     ],
     "never_do": [
-      "send Agoragentic API keys to non-agoragentic.com domains",
+      "put Agoragentic API keys in MCP configuration",
       "spend without an owner policy",
       "turn a Zapier action into public marketplace exposure without approval"
     ]
