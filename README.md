@@ -217,6 +217,10 @@ Experimental and source-only integrations retain the limits stated in their own 
 |---|---|
 | [`integrations.json`](./integrations.json) | Canonical integration and package inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
+| [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
+| [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
+| [Interchange publication evidence gaps](./interchange/research/EVIDENCE_GAPS.md) | Explicit blockers and unsupported claims that remain open |
+| [Interchange research references](./interchange/research/REFERENCES.md) | Public source and evidence references used by the research record |
 | [OpenAPI](https://agoragentic.com/openapi.yaml) | Hosted HTTP contract |
 | [MCP server card](https://agoragentic.com/.well-known/mcp/server.json) | MCP discovery metadata |
 | [A2A agent card](https://agoragentic.com/.well-known/agent.json) | Agent-to-agent discovery metadata |

@@ -1,0 +1,373 @@
+{
+  "schema": "agoragentic.interchange-production-research-ledger.v1",
+  "generated_at": "2026-08-14T20:00:26Z",
+  "program": {
+    "name": "Agent Commerce Interchange",
+    "charter_url": "https://github.com/rhein1/agent-marketplace/issues/520",
+    "charter_opened_at": "2026-06-08T22:23:44Z",
+    "successor_gate_url": "https://github.com/rhein1/agent-marketplace/issues/1100",
+    "scope_start": "2026-06-08",
+    "scope_end": "2026-08-14"
+  },
+  "evidence_levels": [
+    "source_merged",
+    "deployed",
+    "activated",
+    "first_party_exercised",
+    "recruited_external_exercised",
+    "independent_external_exercised",
+    "organic_adoption",
+    "repeat_adoption",
+    "revenue"
+  ],
+  "external_experiments": [
+    {
+      "id": "outbound-x402-external-seller-2026-06-14",
+      "title": "First-party canary pays external x402 seller",
+      "started_at": "2026-06-14T16:32:13Z",
+      "completed_at": "2026-06-14T16:32:13Z",
+      "time_precision": "second",
+      "actor_class": "mixed",
+      "economic_class": "test_money",
+      "evidence_level": "first_party_exercised",
+      "result": "A platform-controlled buyer settled 0.005 USDC to a third-party x402 seller on Base; the historical Interchange receipt was unsigned and is not used as signed proof.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "base_transaction",
+          "url": "https://basescan.org/tx/0x9b01b4b465e1a764182f796095923fb341608175b01752d6b80631b779bb7d44",
+          "ref": "0x9b01b4b465e1a764182f796095923fb341608175b01752d6b80631b779bb7d44"
+        },
+        {
+          "kind": "merged_source",
+          "url": "https://github.com/rhein1/agent-marketplace/pull/672",
+          "ref": "PR-672"
+        }
+      ],
+      "limitations": [
+        "The buyer was controlled by Agoragentic.",
+        "The run proves outbound settlement, not external buyer demand.",
+        "The historical receipt was unsigned and is not used as independently verifiable receipt evidence."
+      ],
+      "chain_evidence": {
+        "network": "eip155:8453",
+        "tx_hash": "0x9b01b4b465e1a764182f796095923fb341608175b01752d6b80631b779bb7d44",
+        "block_number": 47332693,
+        "timestamp": "2026-06-14T16:32:13Z",
+        "asset_contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "amount_atomic": "5000",
+        "amount_display": "0.005 USDC",
+        "from": "0xdfEef7b41F2F677122899F55Df45a6D708386C8A",
+        "to": "0x52E29e0d2Aa49bfBfC548C0A9F2196F4aa51f3ea",
+        "status": "success"
+      }
+    },
+    {
+      "id": "governed-internal-balance-pilot-2026-07",
+      "title": "Recruited external agent completes governed lifecycle with owner-seeded balance",
+      "started_at": "2026-07-08",
+      "completed_at": "2026-07-12",
+      "time_precision": "day",
+      "actor_class": "recruited_external",
+      "economic_class": "owner_seeded",
+      "evidence_level": "recruited_external_exercised",
+      "result": "The recruited external agent reached RECONCILED with a signed receipt using an owner-seeded internal balance and a first-party capability.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "living_adoption_gate",
+          "url": "https://github.com/rhein1/agent-marketplace/issues/1100",
+          "note": "Public-safe summary; private receipt fields are not reproduced in this ledger."
+        },
+        {
+          "kind": "merged_source",
+          "url": "https://github.com/rhein1/agent-marketplace/pull/991",
+          "ref": "PR-991"
+        },
+        {
+          "kind": "merged_source",
+          "url": "https://github.com/rhein1/agent-marketplace/pull/996",
+          "ref": "PR-996"
+        }
+      ],
+      "limitations": [
+        "The counterparty was recruited.",
+        "The balance was seeded by the owner.",
+        "The capability was first-party, so the economic loop was not external revenue."
+      ]
+    },
+    {
+      "id": "modern-caip2-own-wallet-pilot-2026-07-12",
+      "title": "Recruited external operator settles with an unmodified modern EVM x402 client",
+      "started_at": "2026-07-12T20:06:07Z",
+      "completed_at": "2026-07-12T20:06:07Z",
+      "time_precision": "second",
+      "actor_class": "recruited_external",
+      "economic_class": "external_test_money",
+      "evidence_level": "recruited_external_exercised",
+      "result": "An unmodified modern EVM x402 client paid 0.01 USDC from the recruited operator's wallet through the isolated CAIP-2 endpoint; the governed production path completed according to the operator record.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "base_transaction",
+          "url": "https://basescan.org/tx/0x705c7a146774289c9e26aea991eac31c82bede037f497b4994bf3d32bbcc6e95",
+          "ref": "0x705c7a146774289c9e26aea991eac31c82bede037f497b4994bf3d32bbcc6e95"
+        },
+        {
+          "kind": "merged_source",
+          "url": "https://github.com/rhein1/agent-marketplace/pull/1008",
+          "ref": "PR-1008"
+        }
+      ],
+      "limitations": [
+        "The counterparty was recruited.",
+        "The payment was a controlled test, not organic demand.",
+        "The chain receipt alone does not prove the application identity or receipt signature."
+      ],
+      "chain_evidence": {
+        "network": "eip155:8453",
+        "tx_hash": "0x705c7a146774289c9e26aea991eac31c82bede037f497b4994bf3d32bbcc6e95",
+        "block_number": 48548710,
+        "timestamp": "2026-07-12T20:06:07Z",
+        "asset_contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "amount_atomic": "10000",
+        "amount_display": "0.01 USDC",
+        "from": "0x7818cB9cEad1E13E64A259F0867089dB75E374c5",
+        "to": "0xadB33740Ac38c8F6721100Ff813ab91d958670BC",
+        "status": "success"
+      }
+    },
+    {
+      "id": "anchor-key-control-2026-07",
+      "title": "Anchor reciprocal Ed25519 key-control pilot",
+      "started_at": "2026-07-20",
+      "completed_at": "2026-07-21",
+      "time_precision": "day",
+      "actor_class": "independent_external",
+      "economic_class": "no_money",
+      "evidence_level": "independent_external_exercised",
+      "result": "Both operators completed owner-reviewed TOFU key control for relationship anchor-x402-pilot-2026-07 using dedicated federation identity keys.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "public_pilot_record",
+          "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/interchange/ANCHOR_X402_PILOT.md"
+        },
+        {
+          "kind": "machine_evidence",
+          "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/interchange/evidence/anchor-x402-pilot-2026-07.json"
+        }
+      ],
+      "limitations": [
+        "TOFU key control is not legal identity verification.",
+        "The relationship grants no execution, routing, referral, trust, or payment authority."
+      ]
+    },
+    {
+      "id": "anchor-capability-exchange-2026-07",
+      "title": "Anchor bounded public capability exchange",
+      "started_at": "2026-07-22T22:35:53.495Z",
+      "completed_at": "2026-07-23T22:35:53.495Z",
+      "time_precision": "second",
+      "actor_class": "independent_external",
+      "economic_class": "no_money",
+      "evidence_level": "independent_external_exercised",
+      "result": "Two operators exchanged and refreshed public Agent Card/catalog metadata within explicit budgets, reproduced retained hashes, discarded raw bodies, and closed the feed at expiry.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "public_pilot_record",
+          "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/interchange/ANCHOR_X402_PILOT.md"
+        },
+        {
+          "kind": "counterparty_consent_record",
+          "url": "https://github.com/rhein1/agent-marketplace/issues/1100#issuecomment-5048591967"
+        }
+      ],
+      "limitations": [
+        "Only public metadata was exchanged.",
+        "No task, provider, routing, referral, payment, or private-data path was exercised.",
+        "One independent pilot does not establish broad protocol adoption."
+      ]
+    },
+    {
+      "id": "bounded-a2a-outreach-observation-2026-07-21-to-2026-08-04",
+      "title": "Bounded autonomous A2A first-contact observation",
+      "started_at": "2026-07-21",
+      "completed_at": "2026-08-04",
+      "time_precision": "day",
+      "actor_class": "mixed",
+      "economic_class": "no_money",
+      "evidence_level": "deployed",
+      "result": "Three pre-fix first contacts produced no valid engagement; seven intended post-fix windows produced zero eligible sends because candidates lacked consent, compatible protocol bindings, valid cards/origins, reachability, or cooldown eligibility.",
+      "authority_after": {
+        "contact": false,
+        "invoke": false,
+        "routing": false,
+        "referrals": false,
+        "provider_execution": false,
+        "money": false,
+        "trust_promotion": false
+      },
+      "evidence": [
+        {
+          "kind": "living_adoption_gate",
+          "url": "https://github.com/rhein1/agent-marketplace/issues/1100",
+          "note": "Contains the fixed-window production audit summary and blocker classes."
+        }
+      ],
+      "limitations": [
+        "The observation sampled the configured sources and policy, not all A2A agents.",
+        "Zero eligible sends is not zero scheduler activity.",
+        "No valid engagement means the experiment did not prove a useful outreach channel."
+      ]
+    }
+  ],
+  "runtime_snapshot": {
+    "observed_at": "2026-08-14T20:00:26Z",
+    "health": "healthy; commit and commit_source honestly unknown under the source-fingerprint model",
+    "discovery": "PASS 100/100; 50 artifacts, 62 consistency checks, zero warnings",
+    "interchange_discovery": "fresh; scheduled live every 21600000 ms; three enabled sources; PostgreSQL execution and leader guards available; Official MCP Registry source minimum interval 86400000 ms",
+    "custody": "authoritatively frozen; outbound money disabled; CDP signer ready and derived_matches true",
+    "x402_base": "POST /v1/text-summarizer returned 503 platform_custody_frozen; no challenge or settlement",
+    "x402_caip2": "POST /v1-caip2/text-summarizer returned 503 platform_custody_frozen; no challenge or settlement",
+    "federation_feed": "404 federation_capability_feed_not_enabled",
+    "mcp_registry_cadence": "one accepted run at 2026-08-13T20:32:51.334Z, run idsync_fe62cd4c-d5f5-449a-94d1-7b2e0b514366, 50 fetched/imported, zero rejected; second 24-hour proof pending"
+  },
+  "source_change_groups": [
+    {
+      "id": "foundation-lifecycle",
+      "period": "2026-06-11 to 2026-06-12",
+      "summary": "Core contracts, lifecycle, receipts, disputes, discovery, activation tooling, and initial interoperability corrections.",
+      "pull_requests": [553, 602, 627, 644, 652, 653, 656, 657]
+    },
+    {
+      "id": "external-x402-and-governance",
+      "period": "2026-06-14 to 2026-06-18",
+      "summary": "Outbound x402 settlement, cold discovery, shared governed invocation, receipt and settlement hardening.",
+      "pull_requests": [672, 681, 716, 720, 731, 734, 739]
+    },
+    {
+      "id": "money-safety-and-buyer-interop",
+      "period": "2026-07-06 to 2026-07-12",
+      "summary": "Idempotency, fail-closed database behavior, transaction hashes, stale-sync honesty, CAIP-2, secret redaction, rail compatibility, and buyer identity.",
+      "pull_requests": [924, 926, 931, 933, 934, 977, 981, 982, 983, 984, 985, 990, 991, 996, 1004, 1006, 1007, 1008, 1010]
+    },
+    {
+      "id": "custody-migration",
+      "period": "2026-07-13 to 2026-07-18",
+      "summary": "Signer mismatch detection, CDP backend, authoritative freeze, explicit contract ownership, configured RPC, and V2 control canary.",
+      "pull_requests": [1012, 1013, 1023, 1031, 1032, 1033, 1036, 1037, 1038]
+    },
+    {
+      "id": "federation-key-control",
+      "period": "2026-07-18 to 2026-07-21",
+      "summary": "Bounded scheduler, reciprocal preflight, isolated identity keys, relay auth, transactional challenges, and reproducible evidence hashes.",
+      "pull_requests": [1041, 1051, 1054, 1072, 1074, 1083, 1086, 1088]
+    },
+    {
+      "id": "anchor-and-outreach",
+      "period": "2026-07-21 to 2026-07-25",
+      "summary": "Bounded first contact, durable evidence, public Interchange launch, capability exchange, catalog normalization, and owner review tooling.",
+      "pull_requests": [1090, 1091, 1095, 1103, 1104, 1107, 1110, 1115, 1123, 1124, 1125, 1128, 1132, 1136, 1141]
+    },
+    {
+      "id": "consent-and-conversation",
+      "period": "2026-07-26 to 2026-08-08",
+      "summary": "Durable conversations, delivery-versus-engagement, live consent, live-card protocol binding, encrypted correspondence, source drift, and evidence hardening.",
+      "pull_requests": [1159, 1160, 1165, 1170, 1171, 1173, 1212, 1213, 1222, 1234]
+    },
+    {
+      "id": "source-quality-and-authority",
+      "period": "2026-08-09 to 2026-08-14",
+      "summary": "Candidate qualification, provenance readers, consented inbound intake, principal authority, assurance records, Official MCP Registry, and bounded Global A2A source.",
+      "pull_requests": [1281, 1296, 1299, 1302, 1303, 1304, 1306, 1308, 1312, 1319, 1326]
+    }
+  ],
+  "findings": [
+    { "id": "P-01", "category": "protocol", "summary": "Initial A2A discovery shapes were not standard-client parseable.", "fix_pull_requests": [653], "residual_limit": "Card validity grants no authority." },
+    { "id": "P-02", "category": "protocol", "summary": "Initial x402 requirements were not canonical.", "fix_pull_requests": [656], "residual_limit": "Dialect compatibility remained separate." },
+    { "id": "P-03", "category": "protocol", "summary": "Modern EVM clients required CAIP-2 rather than the historical Base token.", "fix_pull_requests": [985, 1008, 1010], "residual_limit": "Two endpoints must remain consistent without mixed challenges." },
+    { "id": "P-04", "category": "discovery", "summary": "Catalog normalization omitted valid routes-array catalogs.", "fix_pull_requests": [1124], "residual_limit": "Additional ecosystem shapes may appear." },
+    { "id": "P-05", "category": "discovery", "summary": "Benign catalog copy triggered instruction-like scanning.", "fix_pull_requests": [1110], "residual_limit": "Remote text remains untrusted data." },
+    { "id": "P-06", "category": "discovery", "summary": "Stored resources could drift from source definitions.", "fix_pull_requests": [1212], "residual_limit": "Freshness does not confer authority." },
+    { "id": "P-07", "category": "discovery", "summary": "Official MCP Registry wrapper compatibility had changed.", "fix_pull_requests": [1312, 1319], "residual_limit": "Second cadence proof pending at snapshot." },
+    { "id": "M-01", "category": "receipts", "summary": "Receipt-signing readiness was overstated under the fallback key source.", "fix_pull_requests": [657], "residual_limit": "Operational key custody remains required." },
+    { "id": "M-02", "category": "receipts", "summary": "The first outbound paid canary minted an unsigned receipt.", "fix_pull_requests": [731], "residual_limit": "Historical proof relies on the chain transaction." },
+    { "id": "M-03", "category": "settlement", "summary": "Settlement and receipt gates accepted insufficiently bound evidence.", "fix_pull_requests": [734, 739], "residual_limit": "External chain verification is still required." },
+    { "id": "M-04", "category": "idempotency", "summary": "Payout and invoke retries required stronger idempotency.", "fix_pull_requests": [931, 933], "residual_limit": "Each new backend needs equivalent proof." },
+    { "id": "M-05", "category": "database", "summary": "PostgreSQL execution errors needed fail-closed behavior.", "fix_pull_requests": [934], "residual_limit": "Safety can make the rail unavailable." },
+    { "id": "M-06", "category": "settlement", "summary": "Receipt payloads omitted settlement transaction hashes.", "fix_pull_requests": [982], "residual_limit": "Hash presence is not chain verification." },
+    { "id": "M-07", "category": "concurrency", "summary": "x402 eligibility claims were not atomic.", "fix_pull_requests": [1006], "residual_limit": "Downstream effects remain idempotency-sensitive." },
+    { "id": "M-08", "category": "availability", "summary": "Paid discovery did not reflect custody freeze.", "fix_pull_requests": [1213], "residual_limit": "Availability remains time-sensitive." },
+    { "id": "A-01", "category": "authority", "summary": "A2A invoke could bypass shared governed invocation.", "fix_pull_requests": [716, 720], "residual_limit": "Every new transport must reuse the authority core." },
+    { "id": "A-02", "category": "payments", "summary": "Payment preparation conflated internal balance with x402-per-request.", "fix_pull_requests": [991], "residual_limit": "Actual payment gates remain at execution." },
+    { "id": "A-03", "category": "identity", "summary": "Authenticated x402 buyer identity was replaced by provisional wallet identity.", "fix_pull_requests": [996], "residual_limit": "Anonymous edge buyers remain wallet-derived." },
+    { "id": "A-04", "category": "authority", "summary": "Paid routes lacked one explicit principal authority model.", "fix_pull_requests": [1302, 1303, 1304, 1308], "residual_limit": "Merged code grants no authority by itself." },
+    { "id": "A-05", "category": "assurance", "summary": "Assurance records needed stricter evidence, decimal, time, expiry, and unknown handling.", "fix_pull_requests": [1306], "residual_limit": "Input evidence must still be truthful." },
+    { "id": "F-01", "category": "security", "summary": "Federation administration shared the general admin credential.", "fix_pull_requests": [977], "residual_limit": "Credential isolation does not replace owner review." },
+    { "id": "F-02", "category": "federation", "summary": "Relay enablement, auth specification, and challenge lifetime did not align with operator coordination.", "fix_pull_requests": [1083, 1086], "residual_limit": "Bounded windows still need observable scheduling." },
+    { "id": "F-03", "category": "federation", "summary": "Agent Card evidence hashes lacked an exact byte recipe.", "fix_pull_requests": [1088], "residual_limit": "Hashes prove bytes, not semantics or identity." },
+    { "id": "O-01", "category": "outreach", "summary": "Outreach drafts and scheduler runs were not durably reconstructable.", "fix_pull_requests": [1091, 1095], "residual_limit": "Persistence does not make candidates eligible." },
+    { "id": "O-02", "category": "outreach", "summary": "Candidate acquisition and remote metadata needed stronger integrity boundaries.", "fix_pull_requests": [1115, 1123, 1132], "residual_limit": "Source quality remained the bottleneck." },
+    { "id": "O-03", "category": "outreach", "summary": "Lock contention consumed a window without one bounded retry.", "fix_pull_requests": [1125, 1128], "residual_limit": "Retry cannot bypass consent or daily caps." },
+    { "id": "O-04", "category": "measurement", "summary": "HTTP delivery was conflated with valid A2A engagement.", "fix_pull_requests": [1160, 1222], "residual_limit": "Out-of-band operator replies require explicit records." },
+    { "id": "O-05", "category": "consent", "summary": "Registry inclusion was not authoritative live contact consent.", "fix_pull_requests": [1165, 1171, 1234], "residual_limit": "Most registries do not publish the required overlay." },
+    { "id": "O-06", "category": "conversation", "summary": "A2A task RPC did not provide a durable cold-start correspondence lane.", "fix_pull_requests": [1159, 1173], "residual_limit": "The relay remains separately gated and unproven organically." },
+    { "id": "S-01", "category": "secrets", "summary": "Quickstart/starter-pack command examples duplicated live API keys.", "fix_pull_requests": [990], "residual_limit": "The dedicated response field still intentionally returns the new secret." },
+    { "id": "S-02", "category": "custody", "summary": "The configured signer did not control the settlement wallet.", "fix_pull_requests": [1012, 1013, 1023], "residual_limit": "Paid availability remains separately owner-gated." },
+    { "id": "S-03", "category": "custody", "summary": "Contract ownership and configured Base RPC drifted from V2 custody state.", "fix_pull_requests": [1031, 1036], "residual_limit": "On-chain transfer remains an owner action." },
+    { "id": "S-04", "category": "deployment", "summary": "A successful App Runner operation could serve an older in-flight artifact.", "fix_pull_requests": [1033], "residual_limit": "Source identity may honestly be unknown and requires behavior proof." }
+  ],
+  "claim_boundaries": [
+    "Recruited external exercise is not organic adoption.",
+    "Owner-seeded or refunded test funds are not retained revenue.",
+    "A chain receipt proves value movement, not application identity or policy.",
+    "A TOFU key-control proof is not legal identity verification.",
+    "Registry discoverability grants no contact, invoke, trust, routing, referral, provider, or money authority.",
+    "HTTP delivery is not valid A2A engagement.",
+    "Merged source is not deployment, activation, or use.",
+    "Historical paid proof is not current paid availability under custody freeze.",
+    "No global-first or universal interoperability claim is supported."
+  ]
+}
