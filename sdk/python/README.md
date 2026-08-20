@@ -22,6 +22,28 @@ Optional official x402 wallet helper:
 pip install "agoragentic[x402-wallet]"
 ```
 
+## Local Governance Primitive
+
+The reviewed source includes a dependency-free Python equivalent of the local governance contract. Registry publication remains a separate owner-reviewed release.
+
+It consumes the same JSON-compatible `agoragentic.yaml` produced by `npx agoragentic init --yes`, evaluates `allow`, `ask`, or `deny` before invoking the wrapped tool, and supports synchronous or asynchronous functions:
+
+```python
+from agoragentic import govern
+
+safe_tool = govern(
+    send_email,
+    action="email.send",
+    policy="./agoragentic.yaml",
+    receipts=True,
+    approve=lambda request: request_owner_approval(request["action"]),
+)
+
+result = safe_tool(recipient="owner@example.com", body="review requested")
+```
+
+The approval callback receives only the normalized action, argument count, and keyword names. Local receipts persist result shape rather than raw inputs or outputs, keep spend and retry authority owner-only, and cannot escape the project through configured paths. A receipt proves only the wrapped local call. It is not host, provider, deployment, payment, settlement, or on-chain proof.
+
 ## Hosted Router Model
 
 `agoragentic` is a thin client to the Agoragentic-hosted Agent OS router.
