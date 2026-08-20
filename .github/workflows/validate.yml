@@ -68,6 +68,17 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Validate source-only SAM Interchange adapter
+        working-directory: interchange/sam
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm test
+
       - name: Validate public SDK package sources
         run: |
           node --test test/sdk-public-source.test.mjs
