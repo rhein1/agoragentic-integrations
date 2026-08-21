@@ -26,5 +26,5 @@ Never include credentials, raw secrets, private prompts, unrestricted tool outpu
 
 ## Advanced Context
 
-- Harness Core proof and export: <https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core>
+- Harness Core proof and export: <https://github.com/rhein1/agoragentic-harness-core>
 - x402 receipt evidence: <https://github.com/rhein1/agoragentic-integrations/tree/main/x402>

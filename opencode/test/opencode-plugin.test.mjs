@@ -25,11 +25,17 @@ const contract = JSON.parse(await fs.readFile(
   'utf8',
 ));
 const packageJson = JSON.parse(await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+const evaluationSchema = JSON.parse(await fs.readFile(
+  require.resolve('agoragentic-harness-core/schema/harness-evaluation.v1.json'),
+  'utf8',
+));
 const receiptSchema = JSON.parse(await fs.readFile(
   require.resolve('agoragentic-harness-core/schema/local-receipt.v1.json'),
   'utf8',
 ));
-const validateReceipt = new Ajv({ allErrors: true, strict: false }).compile(receiptSchema);
+const receiptAjv = new Ajv({ allErrors: true, strict: false });
+receiptAjv.addSchema(evaluationSchema);
+const validateReceipt = receiptAjv.compile(receiptSchema);
 
 test('package exposes only the exact pinned OpenCode server entry contract', async () => {
   assert.equal(contract.source_commit, '38e10eb1408feb700021b8e8766fb0ab41bf84e2');

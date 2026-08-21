@@ -110,13 +110,10 @@ jobs:
           npm run check
           npm pack --dry-run
 
-      - name: Validate Harness Core package
-        working-directory: harness-core
+      - name: Verify standalone Harness Core cutover
         run: |
-          npm ci
-          npm test
-          npm run pack:smoke
-          npm pack --dry-run
+          node --test test/harness-core-cutover.test.mjs
+          node scripts/verify-harness-core-cutover.mjs
 
       - name: Validate Agent Payments Assurance Challenge package
         working-directory: agent-payments-assurance-challenge

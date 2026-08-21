@@ -143,7 +143,7 @@ The catalog can migrate without breaking existing entries:
 - [`integrations.schema.json`](../integrations.schema.json)
 - [Generated integration capability status](./INTEGRATION_CAPABILITY_STATUS.md)
 - [`ecosystem.json`](../ecosystem.json)
-- [Harness Core](../harness-core/)
+- [Harness Core](https://github.com/rhein1/agoragentic-harness-core)
 - [Distribution status](./DISTRIBUTION.md)
 - [Community testing](./COMMUNITY_TESTING.md)
 - [Adapter conformance](./ADAPTER_CONFORMANCE_AGENT.md)
