@@ -1,0 +1,141 @@
+[
+  {
+    "rank": 11,
+    "name": "Janitor AI",
+    "slug": "janitor-ai",
+    "tokens": "971B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "consumer roleplay app",
+    "action": "BLOCKED; OpenRouter provider support alone is not an Agoragentic tool integration surface.",
+    "artifact": "decisions/blocked.json",
+    "sources": [
+      "https://janitorai.com/"
+    ]
+  },
+  {
+    "rank": 12,
+    "name": "Codex",
+    "slug": "codex",
+    "tokens": "948B",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "Codex MCP + skills",
+    "action": "Install the local MCP relay and optionally the official OpenRouter SDK skill.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://openrouter.ai/blog/announcements/openrouter-mcp-server/",
+      "https://openrouter.ai/docs/agent-sdk/usage-for-agents"
+    ]
+  },
+  {
+    "rank": 13,
+    "name": "Framer",
+    "slug": "framer",
+    "tokens": "887B",
+    "status": "plugin_scaffold",
+    "direction": "embedded_plugin",
+    "surface": "Framer plugin API",
+    "action": "Use the scaffold to call `match` from a server-side plugin action; do not expose keys in browser code.",
+    "artifact": "decisions/plugin-scaffolds.json",
+    "sources": [
+      "https://www.framer.com/developers/"
+    ]
+  },
+  {
+    "rank": 14,
+    "name": "Lemonade",
+    "slug": "lemonade",
+    "tokens": "834B",
+    "status": "vendor_intake",
+    "direction": "embedded_plugin",
+    "surface": "Roblox AI tooling",
+    "action": "Request a documented plugin/tool extension contract before implementation.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": []
+  },
+  {
+    "rank": 15,
+    "name": "Peezy Gateway",
+    "slug": "peezy-gateway",
+    "tokens": "800B",
+    "status": "provider_recipe",
+    "direction": "model_gateway",
+    "surface": "OpenAI-compatible agent gateway",
+    "action": "Treat Peezy as an outbound inference/provider rail, not an Agoragentic host.",
+    "artifact": "decisions/provider-recipes.json",
+    "sources": [
+      "https://p0.systems/"
+    ]
+  },
+  {
+    "rank": 16,
+    "name": "Oh-My-Pi",
+    "slug": "oh-my-pi",
+    "tokens": "786B",
+    "status": "ready_config",
+    "direction": "inbound_host",
+    "surface": "Oh-My-Pi MCP host",
+    "action": "Install the HTTP MCP config with environment-expanded bearer auth.",
+    "artifact": "host-configs.json",
+    "sources": [
+      "https://github.com/can1357/oh-my-pi"
+    ]
+  },
+  {
+    "rank": 17,
+    "name": "Nous Research API",
+    "slug": "nous-research-api",
+    "tokens": "742B",
+    "status": "provider_recipe",
+    "direction": "model_gateway",
+    "surface": "OpenAI-compatible Nous/Hermes inference API",
+    "action": "Use as a model/provider rail while keeping Agoragentic tools separate.",
+    "artifact": "decisions/provider-recipes.json",
+    "sources": [
+      "https://portal.nousresearch.com/"
+    ]
+  },
+  {
+    "rank": 18,
+    "name": "Codebuff",
+    "slug": "codebuff",
+    "tokens": "549B",
+    "status": "direct_adapter",
+    "direction": "embedded_tool",
+    "surface": "Codebuff SDK custom tools",
+    "action": "Use the included no-spend Codebuff custom tools for match, quote, status, and receipt.",
+    "artifact": "adapters/codebuff-tools.ts",
+    "sources": [
+      "https://www.codebuff.com/docs/advanced/sdk"
+    ]
+  },
+  {
+    "rank": 19,
+    "name": "Portkey AI",
+    "slug": "portkey-ai",
+    "tokens": "503B",
+    "status": "composition_recipe",
+    "direction": "gateway_and_mcp",
+    "surface": "Portkey gateway and MCP tooling",
+    "action": "Compose Portkey observability/gateway controls with Agoragentic execution rather than wrapping one gateway inside another blindly.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://portkey.ai/docs"
+    ]
+  },
+  {
+    "rank": 20,
+    "name": "Sahasra",
+    "slug": "sahasra",
+    "tokens": "482B",
+    "status": "composition_recipe",
+    "direction": "outbound_mcp_service",
+    "surface": "Stan Store MCP for the Sahasra storefront",
+    "action": "Use the Stan Store MCP composition recipe; Sahasra itself does not expose a separate verified developer contract.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://mcp.stan.store/mcp"
+    ]
+  }
+]
