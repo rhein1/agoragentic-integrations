@@ -27,9 +27,9 @@ Capability records: **10** of **106** catalog entries.
 |---|---|---|---|---|---|---|
 | Agent OS Control Plane | unknown | static | 2026-08-20T18:45:00Z | [agent-os/agent_os_node.mjs](../agent-os/agent_os_node.mjs) | yes | yes |
 | Claude Code Plugin | unknown | static | 2026-08-20T18:45:00Z | [claude-code/README.md](../claude-code/README.md) | no | no |
-| Codex Harness Mapping Stub | unknown | static | 2026-08-20T18:45:00Z | [harness-core/src/adapters/index.mjs](../harness-core/src/adapters/index.mjs) | no | no |
+| Codex Harness Mapping Stub | unknown | static | 2026-08-21T03:58:21Z | [harness-core/STANDALONE_RELEASE_EVIDENCE.json](../harness-core/STANDALONE_RELEASE_EVIDENCE.json) | no | no |
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |
-| Agoragentic Harness Core | unknown | local | 2026-08-20T18:45:00Z | [harness-core/test/cli.test.cjs](../harness-core/test/cli.test.cjs) | no | no |
+| Agoragentic Harness Core | standalone package 0.3.1 | local | 2026-08-21T03:58:21Z | [harness-core/STANDALONE_RELEASE_EVIDENCE.json](../harness-core/STANDALONE_RELEASE_EVIDENCE.json) | no | no |
 | LangGraph | unknown | static | 2026-08-20T18:45:00Z | [langgraph/agoragentic_langgraph.py](../langgraph/agoragentic_langgraph.py) | yes | yes |
 | MCP (Claude, VS Code, Cursor) | unknown | local | 2026-08-20T18:45:00Z | [mcp/test/v2-remote-relay.test.js](../mcp/test/v2-remote-relay.test.js) | yes | yes |
 | n8n Community Node | unknown | static | 2026-08-20T18:45:00Z | [n8n/nodes/Agoragentic/Agoragentic.node.ts](../n8n/nodes/Agoragentic/Agoragentic.node.ts) | yes | yes |

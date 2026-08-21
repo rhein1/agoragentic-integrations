@@ -27,7 +27,7 @@ Success means the framework can preview or route a task and preserve the returne
 1. Use the canonical [Micro ECF repository](https://github.com/rhein1/agoragentic-micro-ecf) to plan and install local policy artifacts. The `micro-ecf/` folder here is a compatibility snapshot.
 2. Follow the snapshot's [post-install workflow](../micro-ecf/POST_INSTALL.md) to run `doctor`, inspect `ECF.md`, refresh bounded artifacts, and keep blocked sources out of exported context.
 3. Review the [secret-block proof](../micro-ecf/examples/secret-block-proof.md) to see how an allowed source and a blocked `.env` can coexist without exporting the secret file.
-4. Use [Harness Core](../harness-core/README.md) when you want a smaller local-only proof, local receipt, listing-readiness check, and Agent OS Harness export without installing Micro ECF.
+4. Use the standalone [Harness Core](https://github.com/rhein1/agoragentic-harness-core) package when you want a smaller local-only proof, local receipt, listing-readiness check, and Agent OS Harness export without installing Micro ECF. The local [`harness-core/`](../harness-core/README.md) path is a migration pointer.
 5. Send a Harness export through the no-spend readiness and preview steps in the [Agent OS control-plane example](../agent-os/README.md).
 
 Micro ECF and Harness Core prepare local evidence; they do not deploy, fund, publish, settle x402, or provision hosted runtime. An Agent OS deployment request, funding, public API exposure, marketplace selling, and monetization are separate approval-gated steps.

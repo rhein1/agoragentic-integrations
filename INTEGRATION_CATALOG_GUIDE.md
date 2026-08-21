@@ -151,7 +151,7 @@ Use this chooser before picking a framework wrapper:
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.2.0; this repository contains the review-gated v0.3.0 candidate) |
+| Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` | Harness Core v0.3.1 from the canonical standalone repository |
 | Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm ci` | Experimental source-only AnyDoc adapter; no intentional upload, OCR, context attachment, or publication |
 | Apply Harness allow/ask/deny policy inside the exact pinned OpenCode tool hooks | `cd opencode && npm ci` from a source checkout | Experimental `@agoragentic/opencode` source candidate; OpenCode 1.18.15 contract fixture only, not published |
 | Convert explicit gstack planning/review/QA/release files into bounded Harness evidence | `cd gstack && npm install` | Experimental source-only artifact bridge; does not run gstack or retain raw workflow content |
@@ -216,7 +216,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**World AgentKit**](world-agentkit/) | Javascript | Experimental | `world-agentkit/agoragentic_world_agentkit.mjs` | [README](world-agentkit/README.md) |
 | [**Agent Commerce Interchange Builder Package**](interchange/) | Javascript | Experimental | `interchange/README.md` | [README](interchange/README.md) |
 | [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
-| [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
+| [**Agoragentic Harness Core**](https://github.com/rhein1/agoragentic-harness-core) | Javascript | Beta | `npx agoragentic-harness-core@latest` | [Migration pointer](harness-core/README.md) |
 | [**OpenCode Harness Plugin**](opencode/) | Javascript | Experimental | `opencode/src/server.mjs` | [README](opencode/README.md) |
 | [**gstack Harness Bridge**](gstack/) | Javascript | Experimental | `gstack/gstack-harness.mjs` | [README](gstack/README.md) |
 | [**HyperFrames Receipt Video Workflow**](hyperframes/) | Javascript | Experimental | `hyperframes/receipt-video.mjs` | [README](hyperframes/README.md) |
@@ -589,4 +589,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE), except `micro-ecf/`, `harness-core/`, `agent-payments-assurance-challenge/`, `examples/buzz-signed-workspace-evidence/`, and `examples/anydoc-document-evidence/`, which carry their own Apache-2.0 package licenses.
+[MIT](./LICENSE), except `micro-ecf/`, `agent-payments-assurance-challenge/`, `examples/buzz-signed-workspace-evidence/`, and `examples/anydoc-document-evidence/`, which carry their own Apache-2.0 package licenses. The standalone [Harness Core package](https://github.com/rhein1/agoragentic-harness-core) is Apache-2.0 licensed.

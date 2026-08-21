@@ -1,0 +1,63 @@
+{
+  "schema": "agoragentic.harness-core.standalone-release-evidence.v1",
+  "recorded_at": "2026-08-21T03:58:21Z",
+  "canonical_repository": "https://github.com/rhein1/agoragentic-harness-core",
+  "legacy_source_url": "https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core",
+  "source_cutover": {
+    "mode": "thin_pointer",
+    "duplicate_canonical_implementation_removed": true,
+    "pointer_files": [
+      "README.md",
+      "STANDALONE_RELEASE_EVIDENCE.json"
+    ]
+  },
+  "release": {
+    "tag": "v0.3.1",
+    "url": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1",
+    "target_commit": "be6ecc806c87d332434efa265d0c44efe432028a",
+    "published_at": "2026-08-21T03:44:23Z"
+  },
+  "npm": {
+    "package": "agoragentic-harness-core",
+    "version": "0.3.1",
+    "tarball": "https://registry.npmjs.org/agoragentic-harness-core/-/agoragentic-harness-core-0.3.1.tgz",
+    "integrity": "sha512-72w05AUaegIm1uVktCrDYRqtiD61jb1F6dVvY8H7Ks9/UYEuTN/3ViMq32NweCGy/9PZVLXeulBjIlD63ieoMg==",
+    "attestations": "https://registry.npmjs.org/-/npm/v1/attestations/agoragentic-harness-core@0.3.1",
+    "provenance_predicate": "https://slsa.dev/provenance/v1",
+    "repository": "git+https://github.com/rhein1/agoragentic-harness-core.git"
+  },
+  "publishing": {
+    "trusted_publisher_repository": "rhein1/agoragentic-harness-core",
+    "trusted_publisher_workflow": "publish.yml",
+    "workflow_run": "https://github.com/rhein1/agoragentic-harness-core/actions/runs/32444449246",
+    "conclusion": "success"
+  },
+  "clean_room": {
+    "published_package_installed": true,
+    "version": "0.3.1",
+    "cli_aliases_verified": [
+      "agora-harness",
+      "agoragentic-harness",
+      "agoragentic-harness-core",
+      "agoragentic-memory-skillopt"
+    ],
+    "commands_verified": [
+      "--help",
+      "init",
+      "validate",
+      "run --profile local_no_spend"
+    ],
+    "result": "passed"
+  },
+  "authority": {
+    "provider_dispatch": false,
+    "wallet": false,
+    "spend": false,
+    "x402": false,
+    "deployment": false,
+    "marketplace_publication": false,
+    "trust_mutation": false,
+    "hosted_memory": false,
+    "owner_approval_bypass": false
+  }
+}

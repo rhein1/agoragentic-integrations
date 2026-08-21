@@ -1,6 +1,6 @@
 {
-  "version": "2.46.0",
-  "updated_at": "2026-08-20",
+  "version": "2.47.0",
+  "updated_at": "2026-08-21",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -51,6 +51,7 @@
       "name": "agoragentic-harness-core",
       "install": "npx agoragentic-harness-core@latest init",
       "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
+      "distribution_status": "published",
       "min_node": "18"
     },
     "opencode": {
@@ -598,7 +599,7 @@
       "name": "Agoragentic Harness Core",
       "language": "javascript",
       "status": "beta",
-      "path": "harness-core/bin/agoragentic-harness.mjs",
+      "path": "harness-core/README.md",
       "install": "npx agoragentic-harness-core@latest init",
       "docs": "harness-core/README.md",
       "capability_record": {
@@ -612,10 +613,10 @@
           "agent_os_export": "tested"
         },
         "evidence": {
-          "host_version_tested": "unknown",
+          "host_version_tested": "standalone package 0.3.1",
           "proof_class": "local",
-          "last_verified_at": "2026-08-20T18:45:00Z",
-          "evidence_ref": "harness-core/test/cli.test.cjs"
+          "last_verified_at": "2026-08-21T03:58:21Z",
+          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
         },
         "requirements": {
           "network_required": false,
@@ -628,7 +629,7 @@
       "name": "Codex Harness Mapping Stub",
       "language": "javascript",
       "status": "experimental",
-      "path": "harness-core/src/adapters/index.mjs",
+      "path": "harness-core/README.md",
       "install": "npx agoragentic-harness-core@latest adapters",
       "docs": "harness-core/README.md",
       "compatibility_scope": "Cataloged local no-spend mapping contract only; no Codex host hook, tool interception, execution, or runtime receipt claim",
@@ -645,8 +646,8 @@
         "evidence": {
           "host_version_tested": "unknown",
           "proof_class": "static",
-          "last_verified_at": "2026-08-20T18:45:00Z",
-          "evidence_ref": "harness-core/src/adapters/index.mjs"
+          "last_verified_at": "2026-08-21T03:58:21Z",
+          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
         },
         "requirements": {
           "network_required": false,
@@ -1695,9 +1696,13 @@
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_canonical_repo": "https://github.com/rhein1/agoragentic-micro-ecf",
     "harness_core": "harness-core/README.md",
-    "harness_core_memory_skillopt": "harness-core/MEMORY_SKILLOPT.md",
-    "harness_core_memory_skillopt_selection_schema": "harness-core/schema/memory-skillopt-selection.v1.json",
-    "harness_core_memory_skillopt_task_draft_schema": "harness-core/schema/memory-skillopt-task-draft.v1.json",
+    "harness_core_canonical_repository": "https://github.com/rhein1/agoragentic-harness-core",
+    "harness_core_npm": "https://www.npmjs.com/package/agoragentic-harness-core",
+    "harness_core_release": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1",
+    "harness_core_release_evidence": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
+    "harness_core_memory_skillopt": "https://github.com/rhein1/agoragentic-harness-core/blob/main/MEMORY_SKILLOPT.md",
+    "harness_core_memory_skillopt_selection_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-selection.v1.json",
+    "harness_core_memory_skillopt_task_draft_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-task-draft.v1.json",
     "premortem_golden_loop": "premortem-golden-loop/README.md",
     "premortem_prompt": "premortem-golden-loop/PROMPT.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",

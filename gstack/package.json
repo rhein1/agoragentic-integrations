@@ -15,7 +15,7 @@
     ".": "./gstack-harness.mjs"
   },
   "dependencies": {
-    "agoragentic-harness-core": "0.2.0"
+    "agoragentic-harness-core": "0.3.1"
   },
   "scripts": {
     "check": "node --check gstack-harness.mjs && node --check cli.mjs && node --check test.mjs && node --check scripts/test-harness-core-compat.mjs",

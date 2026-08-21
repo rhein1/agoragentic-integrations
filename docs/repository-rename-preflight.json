@@ -1,22 +1,22 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.46.0",
-  "as_of": "2026-08-20",
+  "source_manifest_version": "2.47.0",
+  "as_of": "2026-08-21",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 131,
-    "occurrence_count": 300,
+    "file_count": 126,
+    "occurrence_count": 255,
     "category_file_counts": {
-      "installer_or_clone": 27,
+      "installer_or_clone": 22,
       "machine_discovery": 41,
-      "package_registry_metadata": 21,
-      "public_documentation": 65,
+      "package_registry_metadata": 19,
+      "public_documentation": 64,
       "raw_content_url": 2,
       "release_or_provenance": 8,
       "reusable_action": 2,
-      "source_or_test": 21
+      "source_or_test": 19
     }
   },
   "reusable_action_references": [
@@ -80,10 +80,9 @@
     },
     {
       "path": ".agents/skills/agoragentic-deploy/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        20,
-        21
+        20
       ],
       "categories": [
         "public_documentation"
@@ -102,10 +101,9 @@
     },
     {
       "path": ".agents/skills/agoragentic-govern/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        21,
-        22
+        21
       ],
       "categories": [
         "public_documentation"
@@ -125,9 +123,8 @@
     },
     {
       "path": ".agents/skills/agoragentic-prove/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        27,
         28
       ],
       "categories": [
@@ -186,10 +183,9 @@
     },
     {
       "path": ".cursor/rules/agoragentic-deploy.mdc",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        22,
-        23
+        22
       ],
       "categories": [
         "source_or_test"
@@ -208,10 +204,9 @@
     },
     {
       "path": ".cursor/rules/agoragentic-govern.mdc",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        23,
-        24
+        23
       ],
       "categories": [
         "source_or_test"
@@ -231,9 +226,8 @@
     },
     {
       "path": ".cursor/rules/agoragentic-prove.mdc",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        29,
         30
       ],
       "categories": [
@@ -303,10 +297,9 @@
     },
     {
       "path": ".opencode/skills/agoragentic-deploy/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        20,
-        21
+        20
       ],
       "categories": [
         "public_documentation"
@@ -325,10 +318,9 @@
     },
     {
       "path": ".opencode/skills/agoragentic-govern/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        21,
-        22
+        21
       ],
       "categories": [
         "public_documentation"
@@ -348,9 +340,8 @@
     },
     {
       "path": ".opencode/skills/agoragentic-prove/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        27,
         28
       ],
       "categories": [
@@ -428,9 +419,8 @@
     },
     {
       "path": "AGENTS.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        126,
         127
       ],
       "categories": [
@@ -452,11 +442,6 @@
       "path": "CHANGELOG.md",
       "occurrences": 14,
       "line_numbers": [
-        220,
-        221,
-        222,
-        223,
-        224,
         225,
         226,
         227,
@@ -465,7 +450,12 @@
         230,
         231,
         232,
-        233
+        233,
+        234,
+        235,
+        236,
+        237,
+        238
       ],
       "categories": [
         "public_documentation"
@@ -508,10 +498,9 @@
     },
     {
       "path": "claude-code/plugin/skills/agoragentic-deploy/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        20,
-        21
+        20
       ],
       "categories": [
         "public_documentation"
@@ -530,10 +519,9 @@
     },
     {
       "path": "claude-code/plugin/skills/agoragentic-govern/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        21,
-        22
+        21
       ],
       "categories": [
         "public_documentation"
@@ -553,9 +541,8 @@
     },
     {
       "path": "claude-code/plugin/skills/agoragentic-prove/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        27,
         28
       ],
       "categories": [
@@ -716,16 +703,13 @@
     },
     {
       "path": "ecosystem.json",
-      "occurrences": 4,
+      "occurrences": 2,
       "line_numbers": [
         16,
-        17,
-        50,
         104
       ],
       "categories": [
-        "machine_discovery",
-        "package_registry_metadata"
+        "machine_discovery"
       ]
     },
     {
@@ -816,10 +800,10 @@
       ]
     },
     {
-      "path": "extraction/harness-core/standalone-overlay/MIGRATION.md",
+      "path": "extraction/harness-core/README.md",
       "occurrences": 1,
       "line_numbers": [
-        10
+        4
       ],
       "categories": [
         "public_documentation"
@@ -858,54 +842,24 @@
       ]
     },
     {
-      "path": "harness-core/package.json",
-      "occurrences": 3,
-      "line_numbers": [
-        79,
-        82,
-        84
-      ],
-      "categories": [
-        "installer_or_clone",
-        "machine_discovery",
-        "package_registry_metadata"
-      ]
-    },
-    {
       "path": "harness-core/README.md",
-      "occurrences": 7,
+      "occurrences": 1,
       "line_numbers": [
-        146,
-        148,
-        190,
-        463,
-        511,
-        512,
-        513
+        23
       ],
       "categories": [
-        "installer_or_clone",
         "public_documentation"
       ]
     },
     {
-      "path": "harness-core/test/cli.test.cjs",
+      "path": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
       "occurrences": 1,
       "line_numbers": [
-        66
+        5
       ],
       "categories": [
-        "installer_or_clone"
-      ]
-    },
-    {
-      "path": "harness-core/TRUSTED_PUBLISHING.md",
-      "occurrences": 1,
-      "line_numbers": [
-        19
-      ],
-      "categories": [
-        "public_documentation"
+        "machine_discovery",
+        "release_or_provenance"
       ]
     },
     {
@@ -958,20 +912,20 @@
       "path": "integrations.json",
       "occurrences": 14,
       "line_numbers": [
-        59,
-        68,
-        77,
-        86,
-        92,
-        100,
-        361,
-        373,
-        385,
-        397,
-        409,
-        1467,
-        1476,
-        1485
+        60,
+        69,
+        78,
+        87,
+        93,
+        101,
+        362,
+        374,
+        386,
+        398,
+        410,
+        1468,
+        1477,
+        1486
       ],
       "categories": [
         "installer_or_clone",
@@ -1236,24 +1190,6 @@
       ]
     },
     {
-      "path": "scripts/prepare-harness-core-extraction.mjs",
-      "occurrences": 8,
-      "line_numbers": [
-        114,
-        115,
-        116,
-        117,
-        121,
-        123,
-        129,
-        135
-      ],
-      "categories": [
-        "installer_or_clone",
-        "source_or_test"
-      ]
-    },
-    {
       "path": "scripts/sync-integration-counts.mjs",
       "occurrences": 1,
       "line_numbers": [
@@ -1261,16 +1197,6 @@
       ],
       "categories": [
         "source_or_test"
-      ]
-    },
-    {
-      "path": "scripts/verify-harness-core-extraction.mjs",
-      "occurrences": 1,
-      "line_numbers": [
-        127
-      ],
-      "categories": [
-        "release_or_provenance"
       ]
     },
     {
@@ -1385,10 +1311,9 @@
     },
     {
       "path": "skills/agoragentic-deploy/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        20,
-        21
+        20
       ],
       "categories": [
         "public_documentation"
@@ -1407,10 +1332,9 @@
     },
     {
       "path": "skills/agoragentic-govern/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        21,
-        22
+        21
       ],
       "categories": [
         "public_documentation"
@@ -1430,9 +1354,8 @@
     },
     {
       "path": "skills/agoragentic-prove/SKILL.md",
-      "occurrences": 2,
+      "occurrences": 1,
       "line_numbers": [
-        27,
         28
       ],
       "categories": [
@@ -1517,24 +1440,6 @@
       ],
       "categories": [
         "public_documentation"
-      ]
-    },
-    {
-      "path": "test/harness-core-extraction.test.mjs",
-      "occurrences": 8,
-      "line_numbers": [
-        26,
-        27,
-        30,
-        31,
-        34,
-        64,
-        82,
-        83
-      ],
-      "categories": [
-        "installer_or_clone",
-        "source_or_test"
       ]
     },
     {

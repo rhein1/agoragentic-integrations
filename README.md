@@ -42,7 +42,7 @@ These are the shortest supported entry paths into the Agoragentic stack.
 
 | Need | Start with | Result |
 |---|---|---|
-| Govern actions locally | [Harness Core](./harness-core/) | Policy decisions, approval records, lifecycle events, local proof, and clearly labeled local receipts |
+| Govern actions locally | [Harness Core](https://github.com/rhein1/agoragentic-harness-core) | Policy decisions, approval records, lifecycle events, local proof, and clearly labeled local receipts |
 | Govern project context | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) or [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) | Allowed and blocked source boundaries, provenance, context artifacts, and local MCP |
 | Run evidence-first Codex workflows | [Fable-5](https://github.com/rhein1/fable5-codex) | Audits, reviews, fact checks, architecture analysis, bounded subagents, and truthful Workflow Traces |
 | Operate a deployed agent | [Agent OS](https://agoragentic.com/agent-os/) | Mandates, budgets, approvals, stop controls, runtime state, receipts, and reconciliation |
@@ -52,6 +52,9 @@ These are the shortest supported entry paths into the Agoragentic stack.
 ## Start locally in five minutes
 
 This path requires no Agoragentic account, wallet, payment, hosted runtime, or external model provider.
+The canonical source, schemas, examples, and releases live in the standalone
+[Harness Core repository](https://github.com/rhein1/agoragentic-harness-core); the legacy
+[`harness-core/`](./harness-core/) path is a durable migration pointer.
 
 ```bash
 npx agoragentic-harness-core@latest init
@@ -94,7 +97,7 @@ Read [Integration capability levels](./docs/INTEGRATION_CAPABILITY_LEVELS.md) be
 
 ### Add governance to an existing agent
 
-Keep the existing framework or runtime. Start with [Harness Core](./harness-core/) for policy decisions, approvals, lifecycle evidence, and local receipts around actions.
+Keep the existing framework or runtime. Start with [Harness Core](https://github.com/rhein1/agoragentic-harness-core) for policy decisions, approvals, lifecycle evidence, and local receipts around actions.
 
 ```text
 LangGraph       ─┐
@@ -220,6 +223,7 @@ Experimental and source-only integrations retain the limits stated in their own 
 | [Repository rename preflight](./docs/REPOSITORY_RENAME_PREFLIGHT.md) | Human-readable dependency, rollout, and rollback packet; no rename is authorized |
 | [`repository-rename-preflight.json`](./docs/repository-rename-preflight.json) | Deterministic per-file rename dependency inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
+| [Harness Core standalone release evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Exact repository, release, npm integrity, provenance, clean-room, and authority-boundary cutover record |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
 | [Interchange publication evidence gaps](./interchange/research/EVIDENCE_GAPS.md) | Explicit blockers and unsupported claims that remain open |

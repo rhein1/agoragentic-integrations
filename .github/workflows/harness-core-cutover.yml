@@ -1,0 +1,41 @@
+name: Harness Core standalone cutover
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'harness-core/**'
+      - 'gstack/**'
+      - 'opencode/**'
+      - 'ecosystem.json'
+      - 'integrations.json'
+      - 'scripts/verify-harness-core-cutover.mjs'
+      - 'test/harness-core-cutover.test.mjs'
+      - '.github/workflows/harness-core-cutover.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'harness-core/**'
+      - 'gstack/**'
+      - 'opencode/**'
+      - 'ecosystem.json'
+      - 'integrations.json'
+      - 'scripts/verify-harness-core-cutover.mjs'
+      - 'test/harness-core-cutover.test.mjs'
+      - '.github/workflows/harness-core-cutover.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Test cutover guards
+        run: node --test test/harness-core-cutover.test.mjs
+      - name: Verify pointer, consumers, release evidence, and retired workflows
+        run: node scripts/verify-harness-core-cutover.mjs

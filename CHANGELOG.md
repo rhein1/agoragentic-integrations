@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.47.0` and completed the Harness Core standalone cutover. The canonical source is now `rhein1/agoragentic-harness-core`; release `v0.3.1` is published through the standalone trusted-publishing workflow with npm provenance, and the legacy monorepo path is a durable migration pointer with exact release evidence.
+- Updated the source-only OpenCode and gstack consumers to exact published Harness Core `0.3.1`; gstack compatibility now installs the registry package in a clean temporary consumer instead of packing sibling source.
 - Bumped the canonical manifest to `2.41.0` and reconciled the Interchange
   status from self-pilot-only to one completed, closed external anchor-x402 pilot.
 - Corrected the Interchange x402 wording from unqualified live availability to
@@ -51,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Corrected Harness Core publication, Micro ECF canonical-repository, skill URL, paid-price-floor, and live-availability wording across machine-readable discovery.
 - Renamed the README table to `Featured Integration Paths`; `integrations.json` is the complete inventory.
 - Hardened `agoragentic-mcp@1.3.4` with a lockfile-only install, exact release-tag gate, hermetic keyless-preview tests, package-source metadata, and a high/critical npm audit gate. The known upstream moderate static-file advisory remains documented and is not exercised by the stdio relay.
+
+### Removed
+- Removed the duplicate Harness Core package, framework-example inventory, monorepo release workflows, and completed extraction tooling. Repository validation now fails if implementation files return under the legacy pointer paths or if downstream consumers drift from the standalone package.
 
 ## [manifest 2.16.0–2.24.2] - 2026-07-03
 
