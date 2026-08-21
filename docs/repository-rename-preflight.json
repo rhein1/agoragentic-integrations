@@ -6,15 +6,15 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 124,
-    "occurrence_count": 253,
+    "file_count": 126,
+    "occurrence_count": 255,
     "category_file_counts": {
       "installer_or_clone": 22,
-      "machine_discovery": 40,
+      "machine_discovery": 41,
       "package_registry_metadata": 19,
-      "public_documentation": 63,
+      "public_documentation": 64,
       "raw_content_url": 2,
-      "release_or_provenance": 7,
+      "release_or_provenance": 8,
       "reusable_action": 2,
       "source_or_test": 19
     }
@@ -839,6 +839,27 @@
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "harness-core/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        23
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
       ]
     },
     {
