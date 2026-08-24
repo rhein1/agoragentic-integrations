@@ -9,9 +9,10 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 
-import { FileNotFoundError } from 'e2b';
+import { FileNotFoundError, SandboxNotFoundError } from 'e2b';
 
 import {
   E2B_TEMPLATE_BUILD_ATTEMPT_SCHEMA,
@@ -20,7 +21,9 @@ import {
   runE2BTemplateBuild,
 } from '../scripts/e2b-build-template.mjs';
 import {
+  E2B_LIVE_QUALIFICATION_ATTEMPT_SCHEMA,
   assertE2BLiveQualificationGate,
+  persistE2BLiveQualificationAttempt,
   runE2BLiveQualification,
 } from '../scripts/e2b-live-qualification.mjs';
 import {
@@ -72,7 +75,12 @@ function validEnv(evidenceDirectory = path.resolve(os.tmpdir(), 'risk-fork-e2b-e
   };
 }
 
-function qualificationSandboxInfo(env, sandboxId, metadata) {
+function qualificationSandboxInfo(
+  env,
+  sandboxId,
+  metadata,
+  endAt = '2030-01-01T00:01:10.000Z',
+) {
   return {
     sandboxId,
     templateId: env.RISK_FORK_E2B_TEMPLATE_ID,
@@ -86,7 +94,50 @@ function qualificationSandboxInfo(env, sandboxId, metadata) {
     lifecycle: { onTimeout: 'kill', autoResume: false },
     volumeMounts: [],
     metadata,
-    endAt: '2030-01-01T00:01:10.000Z',
+    endAt,
+  };
+}
+
+function liveAttemptIntent(env, claimedAt = '2030-01-01T00:00:00.000Z') {
+  const gate = assertE2BLiveQualificationGate(env);
+  const core = {
+    schema: E2B_LIVE_QUALIFICATION_ATTEMPT_SCHEMA,
+    status: 'attempt_claimed_provider_outcome_unknown',
+    provider_outcome: 'unknown',
+    approval_ref_hash: sha256Ref(gate.approvalRef),
+    run_ref_hash: sha256Ref(gate.runRef),
+    project_ref_hash: sha256Ref(gate.projectRef),
+    template_id_hash: sha256Ref(gate.templateId),
+    template_build_id_hash: gate.templateBuildIdHash,
+    template_evidence_hash: gate.templateEvidenceHash,
+    template_provenance_hash: gate.templateProvenanceHash,
+    sdk_integrity_hash: gate.sdkIntegrityHash,
+    bootstrap_artifact_hash: gate.bootstrapArtifactHash,
+    runner_artifact_hash: gate.runnerArtifactHash,
+    boot_guard_artifact_hash: gate.bootGuardArtifactHash,
+    limits_hash: sha256Ref({
+      hard_ttl_ms: gate.hardTtlMs,
+      idle_ttl_ms: gate.idleTtlMs,
+      max_execution_ms: gate.maxExecutionMs,
+      max_cost_usd: gate.maxCostUsd,
+    }),
+    claimed_at: claimedAt,
+    sandbox_limit: 1,
+    synthetic_workspace: true,
+    credentials_included: false,
+    wallet_material_included: false,
+    execution_authority_included: false,
+    production_activation_granted: false,
+    attempt_intent_hash: null,
+  };
+  return { ...core, attempt_intent_hash: sha256Ref(core) };
+}
+
+function freshnessClock() {
+  let elapsed = 0;
+  return {
+    wait: async (milliseconds) => { elapsed += milliseconds; },
+    monotonicNow: () => elapsed,
   };
 }
 
@@ -372,6 +423,40 @@ test('template build attempt intent is durable, sanitized, one-shot, and precede
   assert.doesNotMatch(source, /\bunlink\b/);
 });
 
+test('live qualification claims approval and run exactly once before provider I/O', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-live-attempt-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const intent = liveAttemptIntent(env);
+  const outcomes = await Promise.allSettled([
+    persistE2BLiveQualificationAttempt(evidenceDirectory, intent),
+    persistE2BLiveQualificationAttempt(evidenceDirectory, intent),
+  ]);
+  assert.equal(outcomes.filter(({ status }) => status === 'fulfilled').length, 1);
+  const rejection = outcomes.find(({ status }) => status === 'rejected');
+  assert.equal(rejection.reason.code, 'E2B_LIVE_QUALIFICATION_APPROVAL_ALREADY_USED');
+  const serialized = (await Promise.all((await readdir(evidenceDirectory)).map(
+    (name) => readFile(path.join(evidenceDirectory, name), 'utf8'),
+  ))).join('');
+  assert.equal(serialized.includes(env.E2B_API_KEY), false);
+  assert.equal(serialized.includes(env.RISK_FORK_E2B_APPROVAL_REF), false);
+  assert.equal(serialized.includes(env.RISK_FORK_E2B_RUN_REF), false);
+
+  const source = await readFile(
+    new URL('../scripts/e2b-live-qualification.mjs', import.meta.url),
+    'utf8',
+  );
+  const durableClaim = source.indexOf('await persistE2BLiveQualificationAttempt(');
+  const sdkLoad = source.indexOf('await loadLiveQualificationSdk(');
+  const providerCall = source.indexOf('await runDefaultE2BSingleSandboxCanary(');
+  assert.notEqual(durableClaim, -1);
+  assert.notEqual(sdkLoad, -1);
+  assert.notEqual(providerCall, -1);
+  assert.equal(durableClaim < sdkLoad, true);
+  assert.equal(sdkLoad < providerCall, true);
+  assert.doesNotMatch(source, /\bunlink\b/);
+});
+
 test('default provider paths bind the exact inspected SDK tree before SDK or provider I/O', async () => {
   for (const relative of [
     '../scripts/e2b-build-template.mjs',
@@ -397,7 +482,7 @@ test('the shipped live module does not export its ungated provider runner', asyn
   assert.equal(Object.hasOwn(liveModule, 'runDefaultE2BSingleSandboxCanary'), false);
 });
 
-test('default harnesses fail closed on an unmatched SDK tree without writing evidence', async (t) => {
+test('default harnesses fail closed on an unmatched SDK tree and live authority stays consumed', async (t) => {
   const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-sdk-binding-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const env = {
@@ -413,7 +498,15 @@ test('default harnesses fail closed on an unmatched SDK tree without writing evi
     runE2BLiveQualification({ env }),
     /e2b|sdk|integrity|package|module/i,
   );
-  assert.deepEqual(await readdir(evidenceDirectory), []);
+  const names = await readdir(evidenceDirectory);
+  assert.equal(names.length, 2);
+  assert.equal(names.some((name) => name.startsWith('e2b-live-qualification-approval-')), true);
+  assert.equal(names.some((name) => name.startsWith('e2b-live-qualification-attempt-')), true);
+  await assert.rejects(
+    runE2BLiveQualification({ env }),
+    (error) => error?.code === 'E2B_LIVE_QUALIFICATION_APPROVAL_ALREADY_USED',
+  );
+  assert.deepEqual(await readdir(evidenceDirectory), names);
 });
 
 test('injected harness seams fail before SDK/provider I/O and cannot write evidence', async (t) => {
@@ -479,9 +572,11 @@ test('USD cap is a software admission/evidence gate and is not sent as a provide
     buildSource.indexOf('const completedAt', buildSource.indexOf('await Template.build(')),
   );
   const createCall = liveSource.slice(
-    liveSource.indexOf('sandbox = await Sandbox.create('),
-    liveSource.indexOf('createdAt =', liveSource.indexOf('sandbox = await Sandbox.create(')),
+    liveSource.indexOf('(request) => Sandbox.create('),
+    liveSource.indexOf('createdAt =', liveSource.indexOf('(request) => Sandbox.create(')),
   );
+  assert.notEqual(liveSource.indexOf('(request) => Sandbox.create('), -1);
+  assert.notEqual(liveSource.indexOf('createdAt =', liveSource.indexOf('(request) => Sandbox.create(')), -1);
   assert.match(buildCall, /cpuCount:\s*1/);
   assert.match(buildCall, /memoryMB:\s*512/);
   assert.doesNotMatch(buildCall, /cost|usd|spend/i);
@@ -490,6 +585,7 @@ test('USD cap is a software admission/evidence gate and is not sent as a provide
   assert.match(buildSource, /cost_within_cap:\s*'unknown'/);
   assert.match(liveSource, /observed_cost_usd:\s*null/);
   assert.match(liveSource, /external_observation_receipt:\s*null/);
+  assert.doesNotMatch(liveSource, /timer\.unref/);
 });
 
 let instrumentedLiveQualificationPromise;
@@ -519,7 +615,10 @@ async function loadInstrumentedLiveQualification() {
 
 async function runDefaultE2BSingleSandboxCanary(options) {
   const instrumented = await loadInstrumentedLiveQualification();
-  return instrumented.runDefaultE2BSingleSandboxCanary(options);
+  return instrumented.runDefaultE2BSingleSandboxCanary({
+    SandboxNotFoundError,
+    ...options,
+  });
 }
 
 test('default live harness attempts exactly one sandbox and never treats boot-local egress or missing cost as qualified', async (t) => {
@@ -535,13 +634,18 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
   let killed = false;
   let postKillGetInfoCalls = 0;
   let listCalls = 0;
+  let listPageRequests = 0;
   let metadata;
   let createOptions;
+  let endAt = '2030-01-01T00:01:10.000Z';
+  const freshness = freshnessClock();
   const child = {
     sandboxId: 'sandbox-default-live-canary',
     files: birthRuntime.files,
-    async setTimeout() {},
-    async kill() { killed = true; },
+    async setTimeout(timeoutMs) {
+      endAt = new Date(Date.parse('2030-01-01T00:00:10.000Z') + timeoutMs).toISOString();
+    },
+    async kill() { killed = true; return true; },
   };
   class Sandbox {
     static async create(_templateId, options) {
@@ -553,18 +657,19 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
     static async getInfo() {
       if (killed) {
         postKillGetInfoCalls += 1;
-        const error = new Error('not found');
-        error.status = 404;
-        throw error;
+        throw new SandboxNotFoundError('not found');
       }
-      return qualificationSandboxInfo(env, child.sandboxId, metadata);
+      return qualificationSandboxInfo(env, child.sandboxId, metadata, endAt);
     }
     static list() {
       listCalls += 1;
       let delivered = false;
       return {
         get hasNext() { return !delivered; },
-        async nextItems() {
+        async nextItems(request) {
+          assert.equal(request.signal instanceof AbortSignal, true);
+          assert.equal(request.requestTimeoutMs, 10_000);
+          listPageRequests += 1;
           delivered = true;
           return killed ? [] : [{ ...await Sandbox.getInfo(), metadata }];
         },
@@ -576,11 +681,13 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
     Sandbox,
     gate: assertE2BLiveQualificationGate(env),
     clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshness,
   });
   assert.equal(creates, 1);
   assert.equal(killed, true);
-  assert.equal(postKillGetInfoCalls, 2);
-  assert.equal(listCalls, 1);
+  assert.equal(postKillGetInfoCalls, 3);
+  assert.equal(listCalls, 7);
+  assert.equal(listPageRequests, 7);
   assert.ok(birthRuntime.state.request);
   assert.ok(birthRuntime.state.attestation);
   assert.ok(birthRuntime.state.bootEvidence);
@@ -600,6 +707,15 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
   assert.equal(canary.observations.observed_cost_usd, null);
   assert.equal(canary.cleanup.absence_verified, 'verified');
   assert.equal(canary.cleanup.orphan_reconciliation, 'verified');
+  assert.ok(canary.evidenceRefs.some(
+    ({ ref }) => ref === 'evidence:e2b-controller-lifecycle-observations',
+  ));
+  assert.ok(canary.evidenceRefs.some(
+    ({ ref }) => ref === 'evidence:e2b-provider-kill-acknowledgement',
+  ));
+  assert.ok(canary.evidenceRefs.some(
+    ({ ref }) => ref === 'evidence:e2b-fresh-terminal-absence-observations',
+  ));
   const refs = Object.fromEntries(canary.evidenceRefs.map(({ ref, hash }) => [ref, hash]));
   assert.equal(
     refs[E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.sandbox_id_hash],
@@ -658,28 +774,35 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
   );
 });
 
-test('live cleanup requires two provider not-found observations and an exact-bound empty list', async (t) => {
+test('live cleanup requires three freshness-spaced not-found and exact-bound empty observations', async (t) => {
   const cases = [{
     name: 'sandbox reappears after a transient not-found',
     mode: 'reappears',
     expectedAbsence: 'failed',
     expectedOrphans: 'failed',
     expectedGetInfoCalls: 2,
-    expectedListCalls: 1,
+    expectedListCalls: 5,
   }, {
     name: 'listing returns a mismatched sandbox',
     mode: 'mismatched-listing',
     expectedAbsence: 'unknown',
     expectedOrphans: 'unknown',
     expectedGetInfoCalls: 1,
-    expectedListCalls: 1,
+    expectedListCalls: 3,
   }, {
     name: 'filesystem-shaped ENOENT is not provider absence',
     mode: 'enoent',
     expectedAbsence: 'unknown',
     expectedOrphans: 'unknown',
     expectedGetInfoCalls: 1,
-    expectedListCalls: 0,
+    expectedListCalls: 4,
+  }, {
+    name: 'untyped HTTP 404 is not provider absence',
+    mode: 'raw-404',
+    expectedAbsence: 'unknown',
+    expectedOrphans: 'unknown',
+    expectedGetInfoCalls: 1,
+    expectedListCalls: 4,
   }];
 
   for (const scenario of cases) {
@@ -694,11 +817,12 @@ test('live cleanup requires two provider not-found observations and an exact-bou
       let metadata;
       let postKillGetInfoCalls = 0;
       let listCalls = 0;
+      const freshness = freshnessClock();
       const child = {
         sandboxId: `sandbox-cleanup-${scenario.mode}`,
         files: birthRuntime.files,
         async setTimeout() {},
-        async kill() { killed = true; },
+        async kill() { killed = true; return true; },
       };
       class Sandbox {
         static async create(_templateId, options) {
@@ -711,10 +835,17 @@ test('live cleanup requires two provider not-found observations and an exact-bou
           if (scenario.mode === 'reappears' && postKillGetInfoCalls === 2) {
             return qualificationSandboxInfo(env, child.sandboxId, metadata);
           }
-          const error = new Error('not found');
-          if (scenario.mode === 'enoent') error.code = 'ENOENT';
-          else error.status = 404;
-          throw error;
+          if (scenario.mode === 'enoent') {
+            const error = new Error('not found');
+            error.code = 'ENOENT';
+            throw error;
+          }
+          if (scenario.mode === 'raw-404') {
+            const error = new Error('untyped response');
+            error.status = 404;
+            throw error;
+          }
+          throw new SandboxNotFoundError('not found');
         }
         static list() {
           listCalls += 1;
@@ -738,6 +869,7 @@ test('live cleanup requires two provider not-found observations and an exact-bou
         Sandbox,
         gate: assertE2BLiveQualificationGate(env),
         clock: () => new Date('2030-01-01T00:00:10.000Z'),
+        ...freshness,
       });
       assert.equal(canary.cleanup.kill_requested, 'verified');
       assert.equal(canary.cleanup.absence_verified, scenario.expectedAbsence);
@@ -749,18 +881,381 @@ test('live cleanup requires two provider not-found observations and an exact-bou
   }
 });
 
+test('ambiguous create with no bound sandbox never upgrades an empty list to reconciliation', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-ambiguous-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  let listCalls = 0;
+  class Sandbox {
+    static async create() {
+      const error = new Error('provider response lost after request');
+      error.code = 'ETIMEDOUT';
+      throw error;
+    }
+    static list() {
+      listCalls += 1;
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return []; },
+      };
+    }
+  }
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(canary.sandboxCount, 0);
+  assert.equal(canary.cleanup.kill_requested, 'unknown');
+  assert.equal(canary.cleanup.absence_verified, 'unknown');
+  assert.equal(canary.cleanup.orphan_reconciliation, 'unknown');
+  assert.equal(canary.controls.orphan_reconciliation_verified, 'unknown');
+  assert.equal(listCalls, 4);
+});
+
+test('cleanup kills every duplicate exact-bound sandbox before rejecting the run', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-duplicates-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const ids = ['sandbox-duplicate-a', 'sandbox-duplicate-b'];
+  const killed = [];
+  let metadata;
+  let listCalls = 0;
+  class Sandbox {
+    static async create(_templateId, options) {
+      metadata = options.metadata;
+      const error = new Error('provider response lost after duplicate allocation');
+      error.code = 'ETIMEDOUT';
+      throw error;
+    }
+    static async kill(id) { killed.push(id); return true; }
+    static async getInfo(id) {
+      if (killed.includes(id)) throw new SandboxNotFoundError('not found');
+      return qualificationSandboxInfo(env, id, metadata);
+    }
+    static list() {
+      listCalls += 1;
+      const items = listCalls === 1
+        ? ids.map((sandboxIdValue) => ({
+          sandboxId: sandboxIdValue,
+          templateId: env.RISK_FORK_E2B_TEMPLATE_ID,
+          metadata,
+        }))
+        : [];
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return items; },
+      };
+    }
+  }
+  await assert.rejects(
+    runDefaultE2BSingleSandboxCanary({
+      Sandbox,
+      gate: assertE2BLiveQualificationGate(env),
+      clock: () => new Date('2030-01-01T00:00:10.000Z'),
+      ...freshnessClock(),
+    }),
+    (error) => error?.code === 'E2B_QUALIFICATION_SANDBOX_LIMIT_EXCEEDED',
+  );
+  assert.deepEqual(killed.sort(), ids);
+  assert.equal(new Set(killed).size, 2);
+});
+
+test('cleanup recovers and kills an exact ID from a truthy id-less create handle', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-idless-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const recoveredId = 'sandbox-recovered-from-idless-handle';
+  let killed = false;
+  let metadata;
+  let staticKillCalls = 0;
+  class Sandbox {
+    static async create(_templateId, options) {
+      metadata = options.metadata;
+      return { files: {}, async setTimeout() {} };
+    }
+    static async kill(id) {
+      assert.equal(id, recoveredId);
+      staticKillCalls += 1;
+      killed = true;
+      return true;
+    }
+    static async getInfo() {
+      if (killed) throw new SandboxNotFoundError('not found');
+      return qualificationSandboxInfo(env, recoveredId, metadata);
+    }
+    static list() {
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() {
+          delivered = true;
+          return killed ? [] : [{
+            sandboxId: recoveredId,
+            templateId: env.RISK_FORK_E2B_TEMPLATE_ID,
+            metadata,
+          }];
+        },
+      };
+    }
+  }
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(staticKillCalls, 1);
+  assert.equal(canary.sandboxCount, 1);
+  assert.equal(canary.cleanup.kill_requested, 'verified');
+  assert.equal(canary.cleanup.absence_verified, 'verified');
+});
+
+test('cleanup kills a second exact-bound sandbox discovered after the primary kill', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-late-duplicate-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const primaryId = 'sandbox-primary-cleanup';
+  const lateId = 'sandbox-late-cleanup';
+  const killed = [];
+  let metadata;
+  let listCalls = 0;
+  const child = { sandboxId: primaryId, files: {}, async setTimeout() {} };
+  class Sandbox {
+    static async create(_templateId, options) { metadata = options.metadata; return child; }
+    static async kill(id) { killed.push(id); return true; }
+    static async getInfo(id) {
+      if (killed.includes(id)) throw new SandboxNotFoundError('not found');
+      return qualificationSandboxInfo(env, id, metadata);
+    }
+    static list() {
+      listCalls += 1;
+      const visibleIds = listCalls === 1 ? [primaryId] : listCalls === 2 ? [lateId] : [];
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() {
+          delivered = true;
+          return visibleIds.map((sandboxIdValue) => ({
+            sandboxId: sandboxIdValue,
+            templateId: env.RISK_FORK_E2B_TEMPLATE_ID,
+            metadata,
+          }));
+        },
+      };
+    }
+  }
+  await assert.rejects(
+    runDefaultE2BSingleSandboxCanary({
+      Sandbox,
+      gate: assertE2BLiveQualificationGate(env),
+      clock: () => new Date('2030-01-01T00:00:10.000Z'),
+      ...freshnessClock(),
+    }),
+    (error) => error?.code === 'E2B_QUALIFICATION_SANDBOX_LIMIT_EXCEEDED',
+  );
+  assert.deepEqual(killed, [primaryId, lateId]);
+  assert.equal(new Set(killed).size, 2);
+});
+
+test('controller timeout aborts a hung provider create and leaves allocation terminal-unknown', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-provider-timeout-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = {
+    ...validEnv(evidenceDirectory),
+    RISK_FORK_E2B_HARD_TTL_MS: '1000',
+    RISK_FORK_E2B_IDLE_TTL_MS: '1000',
+    RISK_FORK_E2B_MAX_EXECUTION_MS: '100',
+  };
+  let createAborted = false;
+  class Sandbox {
+    static async create(_templateId, options) {
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          createAborted = true;
+          reject(options.signal.reason);
+        }, { once: true });
+      });
+    }
+    static list() {
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return []; },
+      };
+    }
+  }
+  const started = performance.now();
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(performance.now() - started < 2_500, true);
+  assert.equal(createAborted, true);
+  assert.equal(canary.sandboxCount, 0);
+  assert.equal(canary.cleanup.orphan_reconciliation, 'unknown');
+});
+
+test('controller deadline reaches cleanup when a birth-handshake write never settles', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-birth-timeout-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = {
+    ...validEnv(evidenceDirectory),
+    RISK_FORK_E2B_HARD_TTL_MS: '1000',
+    RISK_FORK_E2B_IDLE_TTL_MS: '1000',
+    RISK_FORK_E2B_MAX_EXECUTION_MS: '100',
+  };
+  let killed = false;
+  let metadata;
+  let writes = 0;
+  const child = {
+    sandboxId: 'sandbox-birth-write-timeout',
+    files: {
+      async read() { throw new FileNotFoundError('not found'); },
+      async write() {
+        writes += 1;
+        return new Promise(() => {});
+      },
+    },
+    async setTimeout() {},
+    async kill() { killed = true; return true; },
+  };
+  class Sandbox {
+    static async create(_templateId, options) { metadata = options.metadata; return child; }
+    static async getInfo() {
+      if (killed) throw new SandboxNotFoundError('not found');
+      return qualificationSandboxInfo(
+        env,
+        child.sandboxId,
+        metadata,
+        '2030-01-01T00:00:11.000Z',
+      );
+    }
+    static list() {
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return []; },
+      };
+    }
+  }
+  const started = performance.now();
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(performance.now() - started < 2_500, true);
+  assert.equal(writes, 1);
+  assert.equal(killed, true);
+  assert.equal(canary.cleanup.kill_requested, 'verified');
+  assert.equal(canary.cleanup.absence_verified, 'verified');
+});
+
+test('provider kill acknowledgement must be explicit before destruction can verify', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-kill-ack-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const birthRuntime = createBirthHandshakeFiles(env);
+  let killed = false;
+  let metadata;
+  const child = {
+    sandboxId: 'sandbox-kill-ack-unknown',
+    files: birthRuntime.files,
+    async setTimeout() {},
+    async kill() { killed = true; return false; },
+  };
+  class Sandbox {
+    static async create(_templateId, options) { metadata = options.metadata; return child; }
+    static async getInfo() {
+      if (!killed) return qualificationSandboxInfo(env, child.sandboxId, metadata);
+      throw new SandboxNotFoundError('not found');
+    }
+    static list() {
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return []; },
+      };
+    }
+  }
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(canary.cleanup.kill_requested, 'unknown');
+  assert.equal(canary.cleanup.absence_verified, 'verified');
+  assert.equal(canary.controls.destruction_semantics_verified, 'unknown');
+  assert.equal(canary.evidenceRefs.some(
+    ({ ref }) => ref === 'evidence:e2b-provider-kill-acknowledgement',
+  ), false);
+});
+
+test('static provider kill reconciles a created sandbox missing the instance kill API', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-static-kill-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  let killed = false;
+  let staticKillCalls = 0;
+  let metadata;
+  const child = {
+    sandboxId: 'sandbox-static-kill-fallback',
+    files: {},
+    async setTimeout() {},
+  };
+  class Sandbox {
+    static async create(_templateId, options) { metadata = options.metadata; return child; }
+    static async kill(id) {
+      assert.equal(id, child.sandboxId);
+      staticKillCalls += 1;
+      killed = true;
+      return true;
+    }
+    static async getInfo() {
+      if (!killed) return qualificationSandboxInfo(env, child.sandboxId, metadata);
+      throw new SandboxNotFoundError('not found');
+    }
+    static list() {
+      let delivered = false;
+      return {
+        get hasNext() { return !delivered; },
+        async nextItems() { delivered = true; return []; },
+      };
+    }
+  }
+  const canary = await runDefaultE2BSingleSandboxCanary({
+    Sandbox,
+    gate: assertE2BLiveQualificationGate(env),
+    clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshnessClock(),
+  });
+  assert.equal(staticKillCalls, 1);
+  assert.equal(canary.cleanup.kill_requested, 'verified');
+  assert.equal(canary.cleanup.absence_verified, 'verified');
+  assert.equal(canary.controls.destruction_semantics_verified, 'verified');
+});
+
 test('default live harness rejects template-build boot evidence during the birth handshake', async (t) => {
   const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-stale-boot-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const env = validEnv(evidenceDirectory);
   const birthRuntime = createBirthHandshakeFiles(env, '2030-01-01T00:00:00.000Z');
+  const freshness = freshnessClock();
   let killed = false;
   let metadata;
   const child = {
     sandboxId: 'sandbox-with-captured-build-evidence',
     files: birthRuntime.files,
     async setTimeout() {},
-    async kill() { killed = true; },
+    async kill() { killed = true; return true; },
   };
   class Sandbox {
     static async create(_templateId, options) {
@@ -769,9 +1264,7 @@ test('default live harness rejects template-build boot evidence during the birth
     }
     static async getInfo() {
       if (killed) {
-        const error = new Error('not found');
-        error.status = 404;
-        throw error;
+        throw new SandboxNotFoundError('not found');
       }
       return qualificationSandboxInfo(env, child.sandboxId, metadata);
     }
@@ -791,6 +1284,7 @@ test('default live harness rejects template-build boot evidence during the birth
     Sandbox,
     gate: assertE2BLiveQualificationGate(env),
     clock: () => new Date('2030-01-01T00:00:10.000Z'),
+    ...freshness,
   });
   const refs = new Map(canary.evidenceRefs.map(({ ref, hash }) => [ref, hash]));
   assert.equal(canary.controls.inherited_environment_absent, 'unknown');

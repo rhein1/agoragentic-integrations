@@ -7,6 +7,8 @@ import {
   realpath,
 } from 'node:fs/promises';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { setTimeout as pause } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -32,6 +34,40 @@ import { E2B_QUALIFICATION_MAX_CANARY_COST_USD } from './e2b-build-template.mjs'
 const ALL_TRAFFIC = '0.0.0.0/0';
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
 const PROFILE = 'agoragentic.risk-fork.e2b-live-qualification.v1';
+const LIVE_ATTEMPT_SCHEMA =
+  'agoragentic.risk-fork.e2b-live-qualification-attempt-intent.v1';
+const PROVIDER_CALL_TIMEOUT_MS = 10_000;
+const ABSENCE_OBSERVATION_COUNT = 3;
+const ABSENCE_OBSERVATION_INTERVAL_MS = 250;
+const CLEANUP_DISCOVERY_ROUNDS = 3;
+const CLEANUP_RECONCILIATION_ROUNDS = 3;
+const LIVE_ATTEMPT_KEYS = Object.freeze([
+  'schema',
+  'status',
+  'provider_outcome',
+  'approval_ref_hash',
+  'run_ref_hash',
+  'project_ref_hash',
+  'template_id_hash',
+  'template_build_id_hash',
+  'template_evidence_hash',
+  'template_provenance_hash',
+  'sdk_integrity_hash',
+  'bootstrap_artifact_hash',
+  'runner_artifact_hash',
+  'boot_guard_artifact_hash',
+  'limits_hash',
+  'claimed_at',
+  'sandbox_limit',
+  'synthetic_workspace',
+  'credentials_included',
+  'wallet_material_included',
+  'execution_authority_included',
+  'production_activation_granted',
+  'attempt_intent_hash',
+]);
+
+export const E2B_LIVE_QUALIFICATION_ATTEMPT_SCHEMA = LIVE_ATTEMPT_SCHEMA;
 
 function failGate(message) {
   const error = new Error(message);
@@ -155,6 +191,192 @@ function rejectEvidenceProducingTestSeams(options) {
   }
 }
 
+function sameResolvedPath(left, right) {
+  return path.relative(left, right) === '' && path.relative(right, left) === '';
+}
+
+function assertExactObjectKeys(value, expectedKeys, field) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  if (actual.length !== expected.length
+    || actual.some((key, index) => key !== expected[index])) {
+    throw new TypeError(`${field} contains unsupported or missing fields`);
+  }
+}
+
+async function prepareEvidenceDirectory(directory) {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const info = await lstat(directory, { bigint: true });
+  if (info.isSymbolicLink()
+    || !info.isDirectory()
+    || !sameResolvedPath(await realpath(directory), directory)) {
+    throw new Error('E2B qualification evidence directory must be a canonical real directory');
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid !== 'function'
+      || info.uid !== BigInt(process.getuid())
+      || (info.mode & 0o7777n) !== 0o700n) {
+      throw new Error('E2B qualification evidence directory ownership or mode is invalid');
+    }
+  }
+}
+
+async function syncDirectory(directory) {
+  let handle;
+  try {
+    handle = await open(directory, 'r');
+    await handle.sync();
+  } catch (error) {
+    if (!['EINVAL', 'EISDIR', 'EPERM', 'ENOTSUP'].includes(error?.code)) throw error;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function assertAbsent(target, code, message) {
+  try {
+    await lstat(target);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  const duplicate = new Error(message);
+  duplicate.code = code;
+  throw duplicate;
+}
+
+async function writeExclusiveEvidence(target, value, duplicateCode) {
+  let handle;
+  try {
+    handle = await open(
+      target,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      0o400,
+    );
+  } catch (error) {
+    if (error?.code === 'EEXIST') {
+      const duplicate = new Error('E2B qualification authority has already been consumed');
+      duplicate.code = duplicateCode;
+      throw duplicate;
+    }
+    throw error;
+  }
+  try {
+    await handle.writeFile(`${canonicalize(value)}\n`, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+function createLiveQualificationAttemptIntent(gate, claimedAt) {
+  const core = {
+    schema: LIVE_ATTEMPT_SCHEMA,
+    status: 'attempt_claimed_provider_outcome_unknown',
+    provider_outcome: 'unknown',
+    approval_ref_hash: sha256Ref(gate.approvalRef),
+    run_ref_hash: sha256Ref(gate.runRef),
+    project_ref_hash: sha256Ref(gate.projectRef),
+    template_id_hash: sha256Ref(gate.templateId),
+    template_build_id_hash: gate.templateBuildIdHash,
+    template_evidence_hash: gate.templateEvidenceHash,
+    template_provenance_hash: gate.templateProvenanceHash,
+    sdk_integrity_hash: gate.sdkIntegrityHash,
+    bootstrap_artifact_hash: gate.bootstrapArtifactHash,
+    runner_artifact_hash: gate.runnerArtifactHash,
+    boot_guard_artifact_hash: gate.bootGuardArtifactHash,
+    limits_hash: sha256Ref({
+      hard_ttl_ms: gate.hardTtlMs,
+      idle_ttl_ms: gate.idleTtlMs,
+      max_execution_ms: gate.maxExecutionMs,
+      max_cost_usd: gate.maxCostUsd,
+    }),
+    claimed_at: claimedAt.toISOString(),
+    sandbox_limit: 1,
+    synthetic_workspace: true,
+    credentials_included: false,
+    wallet_material_included: false,
+    execution_authority_included: false,
+    production_activation_granted: false,
+    attempt_intent_hash: null,
+  };
+  return Object.freeze({ ...core, attempt_intent_hash: sha256Ref(core) });
+}
+
+export async function persistE2BLiveQualificationAttempt(directory, intent) {
+  assertExactObjectKeys(intent, LIVE_ATTEMPT_KEYS, 'E2B live qualification attempt intent');
+  if (intent.schema !== LIVE_ATTEMPT_SCHEMA
+    || intent.status !== 'attempt_claimed_provider_outcome_unknown'
+    || intent.provider_outcome !== 'unknown'
+    || intent.sandbox_limit !== 1
+    || intent.synthetic_workspace !== true
+    || intent.credentials_included !== false
+    || intent.wallet_material_included !== false
+    || intent.execution_authority_included !== false
+    || intent.production_activation_granted !== false) {
+    throw new TypeError('E2B live qualification attempt intent weakens the one-shot boundary');
+  }
+  for (const field of LIVE_ATTEMPT_KEYS.filter((name) => name.endsWith('_hash'))) {
+    requireSha256Ref(intent[field], `E2B live qualification attempt ${field}`);
+  }
+  const claimedAt = new Date(intent.claimed_at);
+  if (!Number.isFinite(claimedAt.getTime()) || claimedAt.toISOString() !== intent.claimed_at) {
+    throw new TypeError('E2B live qualification attempt claimed_at is invalid');
+  }
+  if (sha256Ref({ ...intent, attempt_intent_hash: null }) !== intent.attempt_intent_hash) {
+    throw new Error('E2B live qualification attempt intent hash mismatch');
+  }
+  const requestedDirectory = requireString(
+    directory,
+    'E2B live qualification evidence directory',
+  );
+  if (!path.isAbsolute(requestedDirectory)) {
+    throw new TypeError('E2B live qualification evidence directory must be absolute');
+  }
+  const evidenceDirectory = path.resolve(requestedDirectory);
+  await prepareEvidenceDirectory(evidenceDirectory);
+  const approvalDigest = intent.approval_ref_hash.slice(7);
+  const runDigest = intent.run_ref_hash.slice(7);
+  const finalEvidence = path.join(
+    evidenceDirectory,
+    `e2b-qualification-${runDigest.slice(0, 24)}.json`,
+  );
+  await assertAbsent(
+    finalEvidence,
+    'E2B_LIVE_QUALIFICATION_EVIDENCE_ALREADY_RECORDED',
+    'E2B live qualification evidence already exists for this run',
+  );
+  const approvalClaim = path.join(
+    evidenceDirectory,
+    `e2b-live-qualification-approval-${approvalDigest}.json`,
+  );
+  await writeExclusiveEvidence(
+    approvalClaim,
+    intent,
+    'E2B_LIVE_QUALIFICATION_APPROVAL_ALREADY_USED',
+  );
+  await syncDirectory(evidenceDirectory);
+  const runClaim = path.join(
+    evidenceDirectory,
+    `e2b-live-qualification-attempt-${runDigest}.json`,
+  );
+  await writeExclusiveEvidence(
+    runClaim,
+    intent,
+    'E2B_LIVE_QUALIFICATION_ATTEMPT_ALREADY_RECORDED',
+  );
+  await syncDirectory(evidenceDirectory);
+  await assertAbsent(
+    finalEvidence,
+    'E2B_LIVE_QUALIFICATION_EVIDENCE_ALREADY_RECORDED',
+    'E2B live qualification evidence already exists for this run',
+  );
+  return runClaim;
+}
+
 async function loadLiveQualificationSdk(gate) {
   const verifier = createE2BRuntimeSdkIntegrityVerifier();
   const loaded = await loadVerifiedE2BRuntimeSdk({
@@ -172,14 +394,41 @@ async function loadLiveQualificationSdk(gate) {
   });
 }
 
-function isSandboxNotFound(error) {
-  const code = String(error?.code ?? '').toUpperCase();
-  const name = String(error?.name ?? '').toUpperCase();
-  return error?.status === 404
-    || error?.statusCode === 404
-    || error?.response?.status === 404
-    || code === 'SANDBOX_NOT_FOUND'
-    || name === 'SANDBOXNOTFOUNDERROR';
+function isSandboxNotFound(error, SandboxNotFoundError) {
+  return typeof SandboxNotFoundError === 'function'
+    && error instanceof SandboxNotFoundError;
+}
+
+function providerTimeout(label) {
+  const error = new Error(`E2B provider operation timed out: ${label}`);
+  error.code = 'E2B_PROVIDER_OPERATION_TIMEOUT';
+  return error;
+}
+
+async function withProviderCall(label, timeoutMs, operation) {
+  const boundedTimeoutMs = boundedInteger(timeoutMs, `${label} timeout`, {
+    min: 100,
+    max: PROVIDER_CALL_TIMEOUT_MS,
+  });
+  const controller = new AbortController();
+  let timer;
+  try {
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort(providerTimeout(label));
+        reject(providerTimeout(label));
+      }, boundedTimeoutMs);
+    });
+    return await Promise.race([
+      Promise.resolve().then(() => operation({
+        signal: controller.signal,
+        requestTimeoutMs: boundedTimeoutMs,
+      })),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function sandboxId(value) {
@@ -194,63 +443,140 @@ function emptyControls() {
   return Object.fromEntries(E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'unknown']));
 }
 
-async function listByMetadata(Sandbox, metadata, templateId) {
-  const paginator = Sandbox.list({
-    query: { state: ['running', 'paused'], metadata },
-  });
-  if (!paginator || typeof paginator.nextItems !== 'function'
-    || typeof paginator.hasNext !== 'boolean') {
-    throw new TypeError('E2B Sandbox.list must return a bounded paginator');
-  }
-  const ids = [];
-  let pages = 0;
-  while (paginator.hasNext === true) {
-    pages += 1;
-    if (pages > 10) throw new Error('E2B qualification listing exceeded 10 pages');
-    const items = await paginator.nextItems();
-    if (!Array.isArray(items)) throw new TypeError('E2B qualification list page is invalid');
-    for (const item of items) {
-      const itemTemplateId = item?.templateId ?? item?.templateID;
-      if (canonicalize(item?.metadata) !== canonicalize(metadata)
-        || itemTemplateId !== templateId) {
-        throw new Error(
-          'E2B qualification listing returned an item outside the exact metadata/template binding',
-        );
+async function listByMetadata(Sandbox, metadata, templateId, timeoutMs) {
+  return withProviderCall(
+    'Sandbox.list exact-bound pagination',
+    timeoutMs,
+    async (request) => {
+      const paginator = Sandbox.list({
+        ...request,
+        query: { state: ['running', 'paused'], metadata },
+      });
+      if (!paginator || typeof paginator.nextItems !== 'function'
+        || typeof paginator.hasNext !== 'boolean') {
+        throw new TypeError('E2B Sandbox.list must return a bounded paginator');
       }
-      ids.push(sandboxId(item));
-    }
-    if (typeof paginator.hasNext !== 'boolean') {
-      throw new TypeError('E2B qualification paginator stopped reporting hasNext');
-    }
-  }
-  return [...new Set(ids)].sort();
+      const ids = [];
+      let pages = 0;
+      while (paginator.hasNext === true) {
+        pages += 1;
+        if (pages > 10) throw new Error('E2B qualification listing exceeded 10 pages');
+        const items = await paginator.nextItems(request);
+        if (!Array.isArray(items)) {
+          throw new TypeError('E2B qualification list page is invalid');
+        }
+        for (const item of items) {
+          const itemTemplateId = item?.templateId ?? item?.templateID;
+          if (canonicalize(item?.metadata) !== canonicalize(metadata)
+            || itemTemplateId !== templateId) {
+            throw new Error(
+              'E2B qualification listing returned an item outside the exact metadata/template binding',
+            );
+          }
+          ids.push(sandboxId(item));
+        }
+        if (typeof paginator.hasNext !== 'boolean') {
+          throw new TypeError('E2B qualification paginator stopped reporting hasNext');
+        }
+      }
+      return [...new Set(ids)].sort();
+    },
+  );
 }
 
-function sandboxStillPresent(stage) {
+function sandboxStillPresent(stage, sandboxIds = []) {
   const error = new Error(`E2B qualification sandbox is still present during ${stage}`);
   error.code = 'E2B_QUALIFICATION_SANDBOX_STILL_PRESENT';
+  error.sandboxIds = [...new Set(sandboxIds)].sort();
   return error;
 }
 
-async function requireSandboxNotFound(Sandbox, id, stage) {
+async function requireSandboxNotFound(
+  Sandbox,
+  SandboxNotFoundError,
+  id,
+  stage,
+  timeoutMs,
+) {
   let notFound = false;
   try {
-    await Sandbox.getInfo(id);
+    await withProviderCall(
+      `Sandbox.getInfo:${stage}`,
+      timeoutMs,
+      (request) => Sandbox.getInfo(id, request),
+    );
   } catch (error) {
-    if (!isSandboxNotFound(error)) throw error;
+    if (!isSandboxNotFound(error, SandboxNotFoundError)) throw error;
     notFound = true;
   }
-  if (!notFound) throw sandboxStillPresent(stage);
+  if (!notFound) throw sandboxStillPresent(stage, [id]);
 }
 
-async function verifyStableSandboxAbsence(Sandbox, id, metadata, templateId) {
-  await requireSandboxNotFound(Sandbox, id, 'first provider lookup');
-  const remaining = await listByMetadata(Sandbox, metadata, templateId);
-  if (remaining.length !== 0) throw sandboxStillPresent('exact-bound listing');
-  await requireSandboxNotFound(Sandbox, id, 'second provider lookup');
+async function verifyStableSandboxAbsence(
+  Sandbox,
+  SandboxNotFoundError,
+  sandboxIds,
+  metadata,
+  templateId,
+  {
+    timeoutMs,
+    wait = pause,
+    monotonicNow = () => performance.now(),
+  },
+) {
+  const startedAt = monotonicNow();
+  const exactSandboxIds = [...new Set(sandboxIds)].sort();
+  if (exactSandboxIds.length === 0) {
+    throw new TypeError('E2B qualification absence verification requires a sandbox identity');
+  }
+  const observations = [];
+  for (let index = 0; index < ABSENCE_OBSERVATION_COUNT; index += 1) {
+    if (index > 0) await wait(ABSENCE_OBSERVATION_INTERVAL_MS);
+    for (const id of exactSandboxIds) {
+      await requireSandboxNotFound(
+        Sandbox,
+        SandboxNotFoundError,
+        id,
+        `provider absence observation ${index + 1}`,
+        timeoutMs,
+      );
+    }
+    const remaining = await listByMetadata(Sandbox, metadata, templateId, timeoutMs);
+    if (remaining.length !== 0) {
+      throw sandboxStillPresent(`exact-bound listing ${index + 1}`, remaining);
+    }
+    observations.push({
+      ordinal: index + 1,
+      elapsed_ms: Math.max(0, Math.floor(monotonicNow() - startedAt)),
+      sandbox_count: exactSandboxIds.length,
+      provider_not_found: true,
+      exact_bound_listing_empty: true,
+    });
+  }
+  const finalElapsedMs = observations.at(-1)?.elapsed_ms ?? 0;
+  if (finalElapsedMs < ABSENCE_OBSERVATION_INTERVAL_MS * (ABSENCE_OBSERVATION_COUNT - 1)) {
+    throw new Error('E2B qualification absence observations are not freshness-spaced');
+  }
+  return Object.freeze({
+    count: observations.length,
+    minimum_interval_ms: ABSENCE_OBSERVATION_INTERVAL_MS,
+    elapsed_ms: finalElapsedMs,
+    observations,
+    evidence_hash: sha256Ref(observations),
+  });
 }
 
-async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
+async function runDefaultE2BSingleSandboxCanary({
+  Sandbox,
+  SandboxNotFoundError,
+  gate,
+  clock,
+  wait = pause,
+  monotonicNow = () => performance.now(),
+}) {
+  if (typeof SandboxNotFoundError !== 'function') {
+    throw new TypeError('Installed e2b@2.39.0 lacks SandboxNotFoundError');
+  }
   const controls = emptyControls();
   const cleanup = {
     kill_requested: 'unknown',
@@ -270,43 +596,101 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
   let birthAttestationHash = null;
   let sandboxBirthBindingHash = null;
   let providerErrorHash = null;
+  let killRequestHash = null;
+  let absenceEvidence = null;
+  let sandboxLimitExceeded = false;
+  const knownSandboxIds = new Set();
+  const killAttemptedIds = new Set();
+  const killAcknowledgements = new Map();
+  const lifecycleObservations = [];
+  const providerCallTimeoutMs = Math.min(PROVIDER_CALL_TIMEOUT_MS, gate.hardTtlMs);
   const startedAt = new Date(clock());
   let createdAt = null;
   let cleanupStartedAt = null;
   let completedAt = null;
-  try {
-    sandbox = await Sandbox.create(gate.templateId, {
-      timeoutMs: gate.idleTtlMs,
-      secure: true,
-      allowInternetAccess: false,
-      network: {
-        allowOut: [],
-        denyOut: [ALL_TRAFFIC],
-        allowPublicTraffic: false,
-      },
-      lifecycle: { onTimeout: 'kill', autoResume: false },
-      envs: {},
-      iam: { tokens: {} },
-      volumeMounts: {},
+  const rememberSandboxIds = (candidates) => {
+    for (const candidate of candidates) knownSandboxIds.add(candidate);
+    if (!id && knownSandboxIds.size === 1) id = [...knownSandboxIds][0];
+    if (knownSandboxIds.size > 1) sandboxLimitExceeded = true;
+  };
+  const discoverExactSandboxIds = async () => {
+    const matches = await listByMetadata(
+      Sandbox,
       metadata,
-    });
+      gate.templateId,
+      providerCallTimeoutMs,
+    );
+    rememberSandboxIds(matches);
+    return matches;
+  };
+  const recordKillAcknowledgement = (sandboxIdValue, requestedAt) => {
+    killAcknowledgements.set(sandboxIdValue, sha256Ref({
+      sandbox_id_hash: sha256Ref(sandboxIdValue),
+      requested_at: requestedAt,
+      provider_acknowledged: true,
+    }));
+  };
+  const killKnownSandboxes = async () => {
+    for (const candidate of [...knownSandboxIds].sort()) {
+      if (killAttemptedIds.has(candidate)) continue;
+      killAttemptedIds.add(candidate);
+      const requestedAt = new Date(clock()).toISOString();
+      try {
+        const result = await withProviderCall(
+          'Sandbox.kill:reconciliation',
+          providerCallTimeoutMs,
+          (request) => Sandbox.kill(candidate, request),
+        );
+        if (result === true) recordKillAcknowledgement(candidate, requestedAt);
+      } catch {
+        // Each exact sandbox identity receives at most one kill attempt. A
+        // timeout or error stays unknown and is never retry authority.
+      }
+    }
+  };
+  try {
+    sandbox = await withProviderCall(
+      'Sandbox.create',
+      providerCallTimeoutMs,
+      (request) => Sandbox.create(gate.templateId, {
+        ...request,
+        timeoutMs: gate.idleTtlMs,
+        secure: true,
+        allowInternetAccess: false,
+        network: {
+          allowOut: [],
+          denyOut: [ALL_TRAFFIC],
+          allowPublicTraffic: false,
+        },
+        lifecycle: { onTimeout: 'kill', autoResume: false },
+        envs: {},
+        iam: { tokens: {} },
+        volumeMounts: {},
+        metadata,
+      }),
+    );
     createdAt = new Date(clock());
     id = sandboxId(sandbox);
+    knownSandboxIds.add(id);
     if (typeof sandbox?.kill !== 'function'
       || typeof sandbox?.setTimeout !== 'function'
       || typeof sandbox?.files?.read !== 'function'
       || typeof sandbox?.files?.write !== 'function') {
       throw new TypeError('E2B qualification sandbox is missing lifecycle or file APIs');
     }
-    const info = await Sandbox.getInfo(id);
-    validateE2BSandboxInfo(info, {
+    const info = await withProviderCall(
+      'Sandbox.getInfo:initial',
+      providerCallTimeoutMs,
+      (request) => Sandbox.getInfo(id, request),
+    );
+    lifecycleObservations.push(validateE2BSandboxInfo(info, {
       sandboxId: id,
       templateId: gate.templateId,
       metadata,
       createdAtMs: startedAt.getTime(),
       hardExpiresAtMs: startedAt.getTime() + gate.hardTtlMs,
       field: 'E2B qualification canary',
-    });
+    }));
     providerTemplateBindingHash = sha256Ref({
       sandbox_id_hash: sha256Ref(id),
       metadata_hash: sha256Ref(metadata),
@@ -316,19 +700,23 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
       template_provenance_hash: gate.templateProvenanceHash,
       sdk_integrity_hash: gate.sdkIntegrityHash,
     });
-    const birth = await performE2BSandboxBirthHandshake({
-      sandbox,
-      sandboxId: id,
-      metadata,
-      templateId: gate.templateId,
-      templateEvidenceHash: gate.templateEvidenceHash,
-      templateProvenanceHash: gate.templateProvenanceHash,
-      allocationStartedAt: startedAt,
-      bootstrapArtifactHash: gate.bootstrapArtifactHash,
-      runnerArtifactHash: gate.runnerArtifactHash,
-      timeoutMs: gate.maxExecutionMs,
-      clock,
-    });
+    const birth = await withProviderCall(
+      'sandbox birth handshake',
+      Math.min(providerCallTimeoutMs, gate.maxExecutionMs),
+      () => performE2BSandboxBirthHandshake({
+        sandbox,
+        sandboxId: id,
+        metadata,
+        templateId: gate.templateId,
+        templateEvidenceHash: gate.templateEvidenceHash,
+        templateProvenanceHash: gate.templateProvenanceHash,
+        allocationStartedAt: startedAt,
+        bootstrapArtifactHash: gate.bootstrapArtifactHash,
+        runnerArtifactHash: gate.runnerArtifactHash,
+        timeoutMs: gate.maxExecutionMs,
+        clock,
+      }),
+    );
     birthRequestHash = birth.request.request_hash;
     birthAttestationHash = birth.attestation.attestation_hash;
     bootEvidence = birth.bootEvidence;
@@ -361,49 +749,138 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
     // missing evidence before either can become verified.
     controls.first_instruction_ipv4_egress_denied = 'unknown';
     controls.first_instruction_ipv6_egress_denied = 'unknown';
-    await sandbox.setTimeout(Math.min(
+    const executionLeaseMs = Math.min(
       gate.maxExecutionMs + 5_000,
       gate.hardTtlMs,
-    ));
-    await Sandbox.getInfo(id);
-    await sandbox.setTimeout(gate.idleTtlMs);
-    await Sandbox.getInfo(id);
+    );
+    const executionLeaseRequestedAt = new Date(clock());
+    await withProviderCall(
+      'sandbox.setTimeout:execution',
+      providerCallTimeoutMs,
+      (request) => sandbox.setTimeout(executionLeaseMs, request),
+    );
+    const executionInfo = await withProviderCall(
+      'Sandbox.getInfo:execution-lease',
+      providerCallTimeoutMs,
+      (request) => Sandbox.getInfo(id, request),
+    );
+    lifecycleObservations.push(validateE2BSandboxInfo(executionInfo, {
+      sandboxId: id,
+      templateId: gate.templateId,
+      metadata,
+      createdAtMs: startedAt.getTime(),
+      hardExpiresAtMs: startedAt.getTime() + gate.hardTtlMs,
+      leaseRequestedAtMs: executionLeaseRequestedAt.getTime(),
+      leaseTimeoutMs: executionLeaseMs,
+      field: 'E2B qualification execution lease',
+    }));
+    const idleLeaseRequestedAt = new Date(clock());
+    await withProviderCall(
+      'sandbox.setTimeout:idle',
+      providerCallTimeoutMs,
+      (request) => sandbox.setTimeout(gate.idleTtlMs, request),
+    );
+    const idleInfo = await withProviderCall(
+      'Sandbox.getInfo:idle-lease',
+      providerCallTimeoutMs,
+      (request) => Sandbox.getInfo(id, request),
+    );
+    lifecycleObservations.push(validateE2BSandboxInfo(idleInfo, {
+      sandboxId: id,
+      templateId: gate.templateId,
+      metadata,
+      createdAtMs: startedAt.getTime(),
+      hardExpiresAtMs: startedAt.getTime() + gate.hardTtlMs,
+      leaseRequestedAtMs: idleLeaseRequestedAt.getTime(),
+      leaseTimeoutMs: gate.idleTtlMs,
+      field: 'E2B qualification idle lease',
+    }));
     controls.latency_observed = 'verified';
   } catch (error) {
     providerErrorHash = sha256Ref(String(error?.code ?? error?.name ?? 'provider_error'));
   } finally {
     cleanupStartedAt = new Date(clock());
     try {
-      if (!sandbox && !id) {
-        const matches = await listByMetadata(Sandbox, metadata, gate.templateId);
-        if (matches.length > 1) throw new Error('E2B qualification exceeded one sandbox');
-        if (matches.length === 1) id = matches[0];
-      }
-      if (sandbox) await sandbox.kill();
-      else if (id) await Sandbox.kill(id);
-      cleanup.kill_requested = id ? 'verified' : 'unknown';
+      await discoverExactSandboxIds();
     } catch {
-      cleanup.kill_requested = 'unknown';
+      cleanup.orphan_reconciliation = 'unknown';
     }
-    if (id) {
+    if (typeof sandbox?.kill === 'function') {
+      const instanceKillId = id;
+      if (instanceKillId) killAttemptedIds.add(instanceKillId);
+      const killRequestedAt = new Date(clock()).toISOString();
       try {
-        await verifyStableSandboxAbsence(Sandbox, id, metadata, gate.templateId);
-        cleanup.absence_verified = 'verified';
-        cleanup.orphan_reconciliation = 'verified';
-      } catch (error) {
-        const stillPresent = error?.code === 'E2B_QUALIFICATION_SANDBOX_STILL_PRESENT';
-        cleanup.absence_verified = stillPresent ? 'failed' : 'unknown';
-        cleanup.orphan_reconciliation = stillPresent ? 'failed' : 'unknown';
+        const killResult = await withProviderCall(
+          'sandbox.kill',
+          providerCallTimeoutMs,
+          (request) => sandbox.kill(request),
+        );
+        if (instanceKillId && killResult === true) {
+          recordKillAcknowledgement(instanceKillId, killRequestedAt);
+        }
+      } catch {
+        // The instance kill is a single attempt. Static cleanup does not
+        // replay the same exact identity after an ambiguous result.
       }
-    } else {
+    }
+    await killKnownSandboxes();
+    for (let round = 0; round < CLEANUP_DISCOVERY_ROUNDS; round += 1) {
+      if (round > 0) await wait(ABSENCE_OBSERVATION_INTERVAL_MS);
       try {
-        const remaining = await listByMetadata(Sandbox, metadata, gate.templateId);
-        cleanup.orphan_reconciliation = remaining.length === 0 ? 'verified' : 'failed';
+        await discoverExactSandboxIds();
+        await killKnownSandboxes();
       } catch {
         cleanup.orphan_reconciliation = 'unknown';
+        break;
       }
     }
+    if (knownSandboxIds.size > 0) {
+      for (let round = 0; round < CLEANUP_RECONCILIATION_ROUNDS; round += 1) {
+        const knownBefore = knownSandboxIds.size;
+        try {
+          absenceEvidence = await verifyStableSandboxAbsence(
+            Sandbox,
+            SandboxNotFoundError,
+            [...knownSandboxIds],
+            metadata,
+            gate.templateId,
+            {
+              timeoutMs: providerCallTimeoutMs,
+              wait,
+              monotonicNow,
+            },
+          );
+          cleanup.absence_verified = 'verified';
+          cleanup.orphan_reconciliation = 'verified';
+          break;
+        } catch (error) {
+          if (Array.isArray(error?.sandboxIds)) rememberSandboxIds(error.sandboxIds);
+          if (knownSandboxIds.size > knownBefore) {
+            await killKnownSandboxes();
+            continue;
+          }
+          const stillPresent = error?.code === 'E2B_QUALIFICATION_SANDBOX_STILL_PRESENT';
+          cleanup.absence_verified = stillPresent ? 'failed' : 'unknown';
+          cleanup.orphan_reconciliation = stillPresent ? 'failed' : 'unknown';
+          break;
+        }
+      }
+    } else {
+      cleanup.orphan_reconciliation = 'unknown';
+    }
+    if (knownSandboxIds.size > 0
+      && [...knownSandboxIds].every((candidate) => killAcknowledgements.has(candidate))) {
+      cleanup.kill_requested = 'verified';
+    }
+    if (knownSandboxIds.size === 1) {
+      killRequestHash = killAcknowledgements.get([...knownSandboxIds][0]) ?? null;
+    }
     completedAt = new Date(clock());
+  }
+  if (sandboxLimitExceeded) {
+    const error = new Error('E2B qualification exceeded one exact-bound sandbox');
+    error.code = 'E2B_QUALIFICATION_SANDBOX_LIMIT_EXCEEDED';
+    throw error;
   }
   controls.destruction_semantics_verified = cleanup.kill_requested === 'verified'
     && cleanup.absence_verified === 'verified' ? 'verified' : 'unknown';
@@ -419,6 +896,11 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
     sandbox_birth_binding_hash: sandboxBirthBindingHash,
     ipv4_probe_hash: bootEvidence?.observation_hashes.ipv4_probe_hash ?? null,
     ipv6_probe_hash: bootEvidence?.observation_hashes.ipv6_probe_hash ?? null,
+    lifecycle_observations_hash: lifecycleObservations.length > 0
+      ? sha256Ref(lifecycleObservations)
+      : null,
+    kill_request_hash: killRequestHash,
+    terminal_absence_evidence_hash: absenceEvidence?.evidence_hash ?? null,
     provider_error_hash: providerErrorHash,
     controls,
     cleanup,
@@ -476,10 +958,28 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
       hash: sandboxBirthBindingHash,
     });
   }
+  if (lifecycleObservations.length > 0) {
+    evidenceRefs.push({
+      ref: 'evidence:e2b-controller-lifecycle-observations',
+      hash: observation.lifecycle_observations_hash,
+    });
+  }
+  if (killRequestHash) {
+    evidenceRefs.push({
+      ref: 'evidence:e2b-provider-kill-acknowledgement',
+      hash: killRequestHash,
+    });
+  }
+  if (absenceEvidence) {
+    evidenceRefs.push({
+      ref: 'evidence:e2b-fresh-terminal-absence-observations',
+      hash: absenceEvidence.evidence_hash,
+    });
+  }
   return {
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
-    sandboxCount: 1,
+    sandboxCount: id || sandbox ? 1 : 0,
     observations: {
       fork_start_ms: createdAt
         ? Math.max(0, createdAt.getTime() - startedAt.getTime())
@@ -495,25 +995,19 @@ async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
 }
 
 async function persistExclusive(directory, evidence) {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const info = await lstat(directory);
-  if (info.isSymbolicLink() || !info.isDirectory() || await realpath(directory) !== directory) {
-    throw new Error('E2B qualification evidence directory must be a canonical real directory');
-  }
+  await prepareEvidenceDirectory(directory);
   const target = path.join(
     directory,
     `e2b-qualification-${evidence.run.run_ref_hash.slice(7, 31)}.json`,
   );
-  const handle = await open(
+  await writeExclusiveEvidence(
     target,
-    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
-    0o400,
+    evidence,
+    'E2B_LIVE_QUALIFICATION_EVIDENCE_ALREADY_RECORDED',
   );
-  try {
-    await handle.writeFile(`${canonicalize(evidence)}\n`, 'utf8');
-    await handle.sync();
-  } finally {
-    await handle.close();
+  await syncDirectory(directory);
+  if (!sameResolvedPath(await realpath(directory), directory)) {
+    throw new Error('E2B qualification evidence directory identity changed');
   }
   return target;
 }
@@ -521,17 +1015,25 @@ async function persistExclusive(directory, evidence) {
 export async function runE2BLiveQualification(options = {}) {
   const gate = assertE2BLiveQualificationGate(options.env ?? process.env);
   rejectEvidenceProducingTestSeams(options);
+  const attemptIntent = createLiveQualificationAttemptIntent(gate, new Date());
+  const attemptIntentPath = await persistE2BLiveQualificationAttempt(
+    gate.evidenceDirectory,
+    attemptIntent,
+  );
   const sdkRuntime = await loadLiveQualificationSdk(gate);
   const Sandbox = sdkExport(sdkRuntime.module, 'Sandbox');
+  const SandboxNotFoundError = sdkExport(sdkRuntime.module, 'SandboxNotFoundError');
   if (typeof Sandbox?.create !== 'function'
     || typeof Sandbox?.getInfo !== 'function'
     || typeof Sandbox?.list !== 'function'
-    || typeof Sandbox?.kill !== 'function') {
+    || typeof Sandbox?.kill !== 'function'
+    || typeof SandboxNotFoundError !== 'function') {
     throw new TypeError('Installed e2b@2.39.0 lacks the required Sandbox APIs');
   }
   const clock = () => new Date();
   const canary = await runDefaultE2BSingleSandboxCanary({
     Sandbox,
+    SandboxNotFoundError,
     gate,
     clock,
   });
@@ -574,7 +1076,12 @@ export async function runE2BLiveQualification(options = {}) {
     external_observation_receipt: null,
   });
   const evidencePath = await persistExclusive(gate.evidenceDirectory, evidence);
-  return Object.freeze({ evidence, evidencePath });
+  return Object.freeze({
+    attemptIntent,
+    attemptIntentPath,
+    evidence,
+    evidencePath,
+  });
 }
 
 async function main() {

@@ -5,7 +5,7 @@
 - Audited head: `64b79ff17679ba89eb75b9794e33a63f41fddf75`
 - Branch: `codex/risk-fork-v1-20260811`
 - Review surface: Risk Fork protocol, adapters, MCP pre-discovery boundary, clean commit, receipts, concurrency/crash behavior, and repository validation
-- Disposition: PR #298 remains **draft and blocked**
+- Disposition: PR #298 is **ready for review but remains blocked** pending independent approval and the production-readiness evidence below
 
 This record separates falsifying baseline evidence from the local remediation checkout. It records local validation only; it does **not** claim pushed-head GitHub CI. Risk Fork is not production-ready, is not deployed or published, and does not currently protect live Agoragentic MCP or Harness traffic.
 
@@ -51,7 +51,7 @@ Production readiness remains blocked on all of the following:
 1. Close [#301](https://github.com/rhein1/agoragentic-integrations/issues/301): install and verify the source-only host-enforcement bundle in the actual hosted MCP/Harness path before `server/discover`, then adversarially qualify initialize/list/read/get/call, redirects, negotiation failures, retries, malformed frames, early responses, and untrusted content handling. Source and loopback evidence are not hosted enforcement.
 2. Close [#302](https://github.com/rhein1/agoragentic-integrations/issues/302): credentialed-live-qualify the reviewed clean-template/runtime artifacts with the default-off, owner-authorized, bounded canary and obtain detached qualification trust from an independent pinned verifier. Prove exact template/SDK provenance; first-instruction IPv4 and IPv6 egress behavior; absence of inherited environment variables, credential files, process tokens, random/nonce state, sockets, and persistent writable mounts; provider lifecycle/destruction semantics; renewable idle-lease enforcement; and observed latency/cost. The current source/offline/mock profile and unsigned harness output are not that evidence.
 3. Finish the production boundary for [#303](https://github.com/rhein1/agoragentic-integrations/issues/303): qualify the reviewed PostgreSQL authority and separate migrator on the intended managed deployment, including CA/TLS and credential rotation, HA/failover, migration/retention operations, backup/restore, monitoring/alerts, and an operator reconciliation runbook. Current evidence is source plus disposable local TLS/role testing only.
-4. Run the complete Risk Fork, Transaction Assurance, repository, packaging, schema, concurrency, crash-injection, and Node 20/22/24 CI matrix against the final pushed commit. Keep PR #298 draft and blocked until the evidence is reviewed.
+4. Run the complete Risk Fork, Transaction Assurance, repository, packaging, schema, concurrency, crash-injection, and Node 20/22/24 CI matrix against the final pushed commit. Keep PR #298 review-required and blocked until the evidence is reviewed.
 
 ## Benchmark interpretation
 
