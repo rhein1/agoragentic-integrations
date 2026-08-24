@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import {
+  lstat,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -7,7 +14,9 @@ import test from 'node:test';
 import { FileNotFoundError } from 'e2b';
 
 import {
+  E2B_TEMPLATE_BUILD_ATTEMPT_SCHEMA,
   assertE2BTemplateBuildGate,
+  persistE2BTemplateBuildAttempt,
   runE2BTemplateBuild,
 } from '../scripts/e2b-build-template.mjs';
 import {
@@ -230,6 +239,137 @@ test('gates require explicit opaque owner refs, exact hashes, synthetic scope, a
     () => assertE2BLiveQualificationGate({ ...base, RISK_FORK_E2B_SYNTHETIC_WORKSPACE: '0' }),
     /synthetic/i,
   );
+});
+
+test('template build attempt intent is durable, sanitized, one-shot, and precedes provider I/O', async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-attempt-'));
+  const legacyDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-legacy-'));
+  t.after(() => Promise.all([
+    rm(evidenceDirectory, { recursive: true, force: true }),
+    rm(legacyDirectory, { recursive: true, force: true }),
+  ]));
+  const env = validEnv(evidenceDirectory);
+  const gate = assertE2BTemplateBuildGate(env);
+  const runtime = Object.fromEntries([
+    'template_definition_hash',
+    'boot_guard_artifact_hash',
+    'birth_watcher_artifact_hash',
+    'bootstrap_artifact_hash',
+    'runner_artifact_hash',
+    'runtime_contract_hash',
+    'birth_contract_hash',
+    'child_operation_hash',
+    'canonical_hash',
+    'transaction_assurance_canonical_hash',
+    'util_hash',
+  ].map((field) => [field, sha256Ref(field)]));
+  const sdk = {
+    package: 'e2b',
+    version: '2.39.0',
+    integrity_hash: env.RISK_FORK_E2B_SDK_INTEGRITY_HASH,
+  };
+  const provenanceHash = sha256Ref({ sdk, runtime });
+  const core = {
+    schema: E2B_TEMPLATE_BUILD_ATTEMPT_SCHEMA,
+    status: 'attempt_claimed_provider_outcome_unknown',
+    provider_outcome: 'unknown',
+    sdk,
+    template_alias_hash: sha256Ref(gate.templateAlias),
+    template_evidence_hash: provenanceHash,
+    provenance_hash: provenanceHash,
+    runtime,
+    approval_ref_hash: sha256Ref(gate.approvalRef),
+    run_ref_hash: sha256Ref(gate.runRef),
+    claimed_at: '2030-01-01T00:00:00.000Z',
+    requested_cpu_count: 1,
+    requested_memory_mb: 512,
+    authorized_max_cost_usd: gate.maxCostUsd,
+    raw_credentials_included: false,
+    wallet_material_included: false,
+    execution_authority_included: false,
+    production_activation_granted: false,
+    attempt_intent_hash: null,
+  };
+  const intent = Object.freeze({
+    ...core,
+    attempt_intent_hash: sha256Ref(core),
+  });
+
+  const results = await Promise.allSettled([
+    persistE2BTemplateBuildAttempt(evidenceDirectory, intent),
+    persistE2BTemplateBuildAttempt(evidenceDirectory, intent),
+  ]);
+  const fulfilled = results.filter(({ status }) => status === 'fulfilled');
+  const rejected = results.filter(({ status }) => status === 'rejected');
+  assert.equal(fulfilled.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].reason.code, 'E2B_TEMPLATE_BUILD_APPROVAL_ALREADY_USED');
+  const digest = intent.run_ref_hash.slice(7);
+  const expectedPath = path.join(
+    evidenceDirectory,
+    `e2b-template-build-attempt-${digest}.json`,
+  );
+  assert.equal(fulfilled[0].value, expectedPath);
+  const serialized = await readFile(expectedPath, 'utf8');
+  assert.equal(serialized, `${canonicalize(intent)}\n`);
+  assert.deepEqual(JSON.parse(serialized), intent);
+  const approvalPath = path.join(
+    evidenceDirectory,
+    `e2b-template-build-approval-${intent.approval_ref_hash.slice(7)}.json`,
+  );
+  assert.equal(await readFile(approvalPath, 'utf8'), serialized);
+  for (const raw of [
+    env.E2B_API_KEY,
+    env.RISK_FORK_E2B_APPROVAL_REF,
+    env.RISK_FORK_E2B_RUN_REF,
+    env.RISK_FORK_E2B_TEMPLATE_ALIAS,
+  ]) assert.equal(serialized.includes(raw), false);
+  if (process.platform !== 'win32') {
+    assert.equal((await lstat(expectedPath)).mode & 0o7777, 0o400);
+    assert.equal((await lstat(approvalPath)).mode & 0o7777, 0o400);
+  }
+
+  const secondRunCore = {
+    ...core,
+    run_ref_hash: sha256Ref('different-run-under-the-same-approval'),
+    attempt_intent_hash: null,
+  };
+  const secondRunIntent = {
+    ...secondRunCore,
+    attempt_intent_hash: sha256Ref(secondRunCore),
+  };
+  await assert.rejects(
+    persistE2BTemplateBuildAttempt(evidenceDirectory, secondRunIntent),
+    (error) => error?.code === 'E2B_TEMPLATE_BUILD_APPROVAL_ALREADY_USED',
+  );
+  assert.equal(
+    (await readdir(evidenceDirectory)).some((name) => (
+      name.includes(secondRunIntent.run_ref_hash.slice(7))
+    )),
+    false,
+  );
+
+  const legacyPath = path.join(
+    legacyDirectory,
+    `e2b-template-build-${digest.slice(0, 24)}.json`,
+  );
+  await writeFile(legacyPath, '{}\n');
+  await assert.rejects(
+    persistE2BTemplateBuildAttempt(legacyDirectory, intent),
+    (error) => error?.code === 'E2B_TEMPLATE_BUILD_EVIDENCE_ALREADY_RECORDED',
+  );
+  assert.deepEqual(await readdir(legacyDirectory), [path.basename(legacyPath)]);
+
+  const source = await readFile(
+    new URL('../scripts/e2b-build-template.mjs', import.meta.url),
+    'utf8',
+  );
+  const durableClaim = source.indexOf('const attemptIntentPath = await persistE2BTemplateBuildAttempt(');
+  const providerCall = source.indexOf('await Template.build(');
+  assert.notEqual(durableClaim, -1);
+  assert.notEqual(providerCall, -1);
+  assert.equal(durableClaim < providerCall, true);
+  assert.doesNotMatch(source, /\bunlink\b/);
 });
 
 test('default provider paths bind the exact inspected SDK tree before SDK or provider I/O', async () => {

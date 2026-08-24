@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import {
+  chmod,
+  link,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -14,6 +18,10 @@ import test from 'node:test';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import {
   EMPTY_RUNTIME_WORKSPACE_DIGEST,
+  E2B_BIRTH_RUNTIME_DIRECTORY,
+  E2B_BOOT_EVIDENCE_PATH,
+  E2B_BOOT_READY_PATH,
+  E2B_TEMPLATE_BUILD_READY_PATH,
   createBootEvidenceEnvelope,
   createE2BBirthRequest,
   e2bBirthRequestPaths,
@@ -57,7 +65,7 @@ function fakeTemplateSdk() {
   };
 }
 
-test('template definition is pure, Node 24, root-owned, non-root at runtime, and PATH-resolved boot-guard first', () => {
+test('template definition is pure, Node 24, root-owned, non-root at runtime, and creates no captured birth state', () => {
   const sdk = fakeTemplateSdk();
   const template = createRiskForkE2BTemplate({
     Template: sdk.Template,
@@ -70,17 +78,21 @@ test('template definition is pure, Node 24, root-owned, non-root at runtime, and
   assert.deepEqual(sdk.calls.filter(([name]) => name === 'setUser').at(-1), ['setUser', 'user']);
   const makeDir = sdk.calls.find(([name]) => name === 'makeDir');
   assert.equal(
-    makeDir[1].includes('/run/agoragentic-risk-fork'),
+    makeDir[1].includes(E2B_BIRTH_RUNTIME_DIRECTORY),
     false,
-    'ephemeral /run state must not rely on an earlier image layer',
+    'ephemeral birth state must not be captured in the image',
   );
   const rootRun = sdk.calls.find(([name]) => name === 'runCmd');
   assert.equal(rootRun[2].user, 'root');
-  assert.deepEqual(rootRun[1].slice(-3), [
-    'mkdir -p /run/agoragentic-risk-fork',
-    'chown user:user /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
-    'chmod 0700 /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
+  assert.deepEqual(rootRun[1].slice(-2), [
+    'chown user:user /workspace/agoragentic-risk-fork-v1',
+    'chmod 0700 /workspace/agoragentic-risk-fork-v1',
   ]);
+  assert.equal(
+    rootRun[1].some((command) => command.includes(E2B_BIRTH_RUNTIME_DIRECTORY)),
+    false,
+    'the one-use birth directory must be created only by the runtime watcher',
+  );
   const start = sdk.calls.find(([name]) => name === 'setStartCmd');
   assert.equal(
     start[1],
@@ -92,8 +104,28 @@ test('template definition is pure, Node 24, root-owned, non-root at runtime, and
     /(?:^|\s)\/\S*\/node(?:\s|$)/,
     'an image-specific hard-coded Node executable can be absent even when node is on PATH',
   );
-  assert.equal(start[2].ready, '/run/agoragentic-risk-fork/template-build-ready');
+  assert.equal(start[2].ready, E2B_TEMPLATE_BUILD_READY_PATH);
   assert.equal(sdk.calls.some(([name]) => name === 'build'), false, 'definition must not build on import');
+});
+
+test('every birth handshake path uses the fixed one-use runtime root and source has no legacy /run literal', async () => {
+  assert.equal(E2B_BIRTH_RUNTIME_DIRECTORY, '/tmp/agoragentic-risk-fork-v1.birth');
+  const requestPaths = e2bBirthRequestPaths(sha256Ref('fixed-runtime-root'));
+  for (const target of [
+    E2B_TEMPLATE_BUILD_READY_PATH,
+    E2B_BOOT_EVIDENCE_PATH,
+    E2B_BOOT_READY_PATH,
+    ...Object.values(requestPaths),
+  ]) {
+    assert.equal(path.posix.dirname(target), E2B_BIRTH_RUNTIME_DIRECTORY);
+  }
+  const sources = await Promise.all([
+    '../e2b-template/template.mjs',
+    '../e2b-template/bin/boot-guard.mjs',
+    '../e2b-template/bin/bootstrap.mjs',
+    '../e2b-template/lib/runtime-contract.mjs',
+  ].map((relative) => readFile(new URL(relative, import.meta.url), 'utf8')));
+  assert.doesNotMatch(sources.join('\n'), /\/run\/agoragentic-risk-fork/);
 });
 
 async function waitForPath(target) {
@@ -164,8 +196,9 @@ function bootEvidenceForRequest(request, observedAt = '2030-01-01T00:00:01.000Z'
 }
 
 test('captured birth watcher stays network-silent until one canonical post-allocation request', async (t) => {
-  const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-birth-'));
-  t.after(() => rm(runtimeDirectory, { recursive: true, force: true }));
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-birth-'));
+  const runtimeDirectory = path.join(runtimeRoot, 'fresh-birth');
+  t.after(() => rm(runtimeRoot, { recursive: true, force: true }));
   const request = birthRequest();
   let collectCalls = 0;
   const watcher = runBirthWatcher({
@@ -179,6 +212,13 @@ test('captured birth watcher stays network-silent until one canonical post-alloc
     requestWaitTimeoutMs: 1_000,
   });
   const buildReady = await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
+  const runtimeInfo = await lstat(runtimeDirectory);
+  assert.equal(runtimeInfo.isDirectory(), true);
+  if (process.platform !== 'win32') {
+    assert.equal(runtimeInfo.uid, process.getuid());
+    assert.equal(runtimeInfo.gid, process.getgid());
+    assert.equal(runtimeInfo.mode & 0o7777, 0o700);
+  }
   assert.equal(collectCalls, 0, 'build finalization must not collect boot or network evidence');
   assert.deepEqual(JSON.parse(buildReady.toString('utf8')), {
     build_only: true,
@@ -225,11 +265,12 @@ test('captured birth watcher stays network-silent until one canonical post-alloc
   );
 });
 
-test('birth watcher fails closed on expired, malformed, preexisting, and replayed state', async (t) => {
-  const expiredDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-expired-'));
+test('birth watcher fails closed on expired, preexisting, and replayed state', async (t) => {
+  const expiredRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-expired-'));
+  const expiredDirectory = path.join(expiredRoot, 'fresh-birth');
   const preexistingDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-preexisting-'));
   t.after(() => Promise.all([
-    rm(expiredDirectory, { recursive: true, force: true }),
+    rm(expiredRoot, { recursive: true, force: true }),
     rm(preexistingDirectory, { recursive: true, force: true }),
   ]));
 
@@ -254,16 +295,137 @@ test('birth watcher fails closed on expired, malformed, preexisting, and replaye
   );
   await assert.rejects(expiredWatcher, /expired|validity|outside/i);
 
+  await assert.rejects(
+    runBirthWatcher({ runtimeDirectory: preexistingDirectory, requestWaitTimeoutMs: 10 }),
+    /preexisting runtime state/i,
+    'an empty preexisting runtime directory is never reused',
+  );
   await writeFile(path.join(preexistingDirectory, 'birth-request.preexisting.json'), '{}\n');
   await assert.rejects(
     runBirthWatcher({ runtimeDirectory: preexistingDirectory, requestWaitTimeoutMs: 10 }),
     /preexisting runtime state/i,
+    'nonempty preexisting runtime state is never reused',
   );
   await assert.rejects(
     runBirthWatcher({ runtimeDirectory: expiredDirectory, requestWaitTimeoutMs: 10 }),
     /preexisting runtime state/i,
     'a consumed or failed request cannot be replayed through a restarted watcher',
   );
+});
+
+test('birth watcher rejects file, symlink, and symlink-parent runtime targets', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-runtime-target-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const fileTarget = path.join(root, 'file-target');
+  await writeFile(fileTarget, 'occupied\n');
+  await assert.rejects(
+    runBirthWatcher({ runtimeDirectory: fileTarget, requestWaitTimeoutMs: 10 }),
+    /preexisting runtime state/i,
+  );
+
+  const realTarget = path.join(root, 'real-target');
+  const linkedTarget = path.join(root, 'linked-target');
+  const realParent = path.join(root, 'real-parent');
+  const linkedParent = path.join(root, 'linked-parent');
+  await mkdir(realTarget);
+  await mkdir(realParent);
+  try {
+    await symlink(realTarget, linkedTarget, process.platform === 'win32' ? 'junction' : 'dir');
+    await symlink(realParent, linkedParent, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    if (error?.code === 'EPERM') {
+      t.diagnostic('directory symlinks are unavailable on this Windows host');
+      return;
+    }
+    throw error;
+  }
+  await assert.rejects(
+    runBirthWatcher({ runtimeDirectory: linkedTarget, requestWaitTimeoutMs: 10 }),
+    /preexisting runtime state/i,
+  );
+  await assert.rejects(
+    runBirthWatcher({
+      runtimeDirectory: path.join(linkedParent, 'fresh-birth'),
+      requestWaitTimeoutMs: 10,
+    }),
+    /parent.*real directory|parent.*canonical/i,
+  );
+});
+
+test('birth watcher rejects hard-linked request state before collecting evidence', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-hardlink-'));
+  const runtimeDirectory = path.join(root, 'fresh-birth');
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const request = birthRequest();
+  let collectCalls = 0;
+  const watcher = runBirthWatcher({
+    runtimeDirectory,
+    clock: () => new Date('2030-01-01T00:00:01.000Z'),
+    collectEvidence: async () => {
+      collectCalls += 1;
+      return bootEvidenceForRequest(request);
+    },
+    requestWaitTimeoutMs: 1_000,
+  });
+  await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
+  const remotePaths = e2bBirthRequestPaths(request.request_hash);
+  const sourcePath = path.join(root, 'request-source.json');
+  const requestPath = path.join(runtimeDirectory, path.posix.basename(remotePaths.request));
+  const triggerPath = path.join(runtimeDirectory, path.posix.basename(remotePaths.trigger));
+  await writeFile(sourcePath, `${canonicalize(request)}\n`);
+  await link(sourcePath, requestPath);
+  await writeFile(triggerPath, `${request.request_hash}\n`);
+  await assert.rejects(watcher, /bounded regular file|hard link/i);
+  assert.equal(collectCalls, 0);
+});
+
+test('birth watcher rejects replacement of its one-use runtime directory', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-replaced-runtime-'));
+  const runtimeDirectory = path.join(root, 'fresh-birth');
+  const movedDirectory = path.join(root, 'moved-birth');
+  t.after(() => rm(root, { recursive: true, force: true }));
+  let resumePoll;
+  const watcher = runBirthWatcher({
+    runtimeDirectory,
+    requestWaitTimeoutMs: 1_000,
+    delay: () => new Promise((resolve) => {
+      resumePoll = resolve;
+    }),
+  });
+  await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
+  for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(typeof resumePoll, 'function');
+  await rename(runtimeDirectory, movedDirectory);
+  await mkdir(runtimeDirectory, { mode: 0o700 });
+  resumePoll();
+  await assert.rejects(watcher, /runtime directory identity changed/i);
+});
+
+test('birth watcher rejects runtime directory mode drift', {
+  skip: process.platform === 'win32' ? 'POSIX mode bits are unavailable on Windows' : false,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-runtime-mode-'));
+  const runtimeDirectory = path.join(root, 'fresh-birth');
+  t.after(() => rm(root, { recursive: true, force: true }));
+  let resumePoll;
+  const watcher = runBirthWatcher({
+    runtimeDirectory,
+    requestWaitTimeoutMs: 1_000,
+    delay: () => new Promise((resolve) => {
+      resumePoll = resolve;
+    }),
+  });
+  await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
+  for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(typeof resumePoll, 'function');
+  await chmod(runtimeDirectory, 0o755);
+  resumePoll();
+  await assert.rejects(watcher, /runtime directory mode is invalid/i);
 });
 
 test('boot guard treats timeout as unknown and hashes provider credential keys without values', () => {

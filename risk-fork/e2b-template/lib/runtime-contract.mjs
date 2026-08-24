@@ -16,7 +16,7 @@ export const E2B_BIRTH_REQUEST_SCHEMA =
   'agoragentic.risk-fork.e2b-birth-request.v1';
 export const E2B_BIRTH_ATTESTATION_SCHEMA =
   'agoragentic.risk-fork.e2b-birth-attestation.v2';
-export const E2B_BIRTH_RUNTIME_DIRECTORY = '/run/agoragentic-risk-fork';
+export const E2B_BIRTH_RUNTIME_DIRECTORY = '/tmp/agoragentic-risk-fork-v1.birth';
 export const E2B_TEMPLATE_BUILD_READY_PATH =
   `${E2B_BIRTH_RUNTIME_DIRECTORY}/template-build-ready`;
 export const E2B_BOOT_EVIDENCE_PATH =

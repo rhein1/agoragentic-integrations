@@ -7,7 +7,8 @@ import {
   open,
   readdir,
   readFile,
-  rename,
+  realpath,
+  unlink,
 } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
@@ -399,13 +400,102 @@ async function writeExclusive(target, bytes, mode) {
   }
 }
 
+function sameResolvedPath(left, right) {
+  return path.relative(left, right) === '' && path.relative(right, left) === '';
+}
+
+function directoryIdentity(info) {
+  return JSON.stringify({
+    dev: String(info.dev),
+    ino: String(info.ino),
+    uid: String(info.uid),
+    gid: String(info.gid),
+    mode: String(info.mode & 0o7777n),
+  });
+}
+
+async function inspectBirthRuntimeDirectory(runtimeDirectory, expectedIdentity = null) {
+  const info = await lstat(runtimeDirectory, { bigint: true });
+  if (info.isSymbolicLink() || !info.isDirectory()) {
+    throw new Error('E2B birth runtime path is not a real directory');
+  }
+  const resolved = await realpath(runtimeDirectory);
+  if (!sameResolvedPath(runtimeDirectory, resolved)) {
+    throw new Error('E2B birth runtime directory is not canonical');
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid !== 'function' || typeof process.getgid !== 'function') {
+      throw new Error('E2B birth runtime ownership cannot be verified');
+    }
+    if (info.uid !== BigInt(process.getuid()) || info.gid !== BigInt(process.getgid())) {
+      throw new Error('E2B birth runtime directory ownership is invalid');
+    }
+    if ((info.mode & 0o7777n) !== 0o700n) {
+      throw new Error('E2B birth runtime directory mode is invalid');
+    }
+  }
+  const identity = directoryIdentity(info);
+  if (expectedIdentity != null && identity !== expectedIdentity) {
+    throw new Error('E2B birth runtime directory identity changed');
+  }
+  return identity;
+}
+
+async function initializeBirthRuntimeDirectory(runtimeDirectory, options = {}) {
+  const parent = path.dirname(runtimeDirectory);
+  const parentInfo = await lstat(parent, { bigint: true });
+  if (parentInfo.isSymbolicLink() || !parentInfo.isDirectory()) {
+    throw new Error('E2B birth runtime parent is not a real directory');
+  }
+  const parentReal = await realpath(parent);
+  if (!sameResolvedPath(parent, parentReal)) {
+    throw new Error('E2B birth runtime parent is not canonical');
+  }
+  if (options.requireSharedTmp === true && process.platform !== 'win32') {
+    if (parent !== '/tmp'
+      || parentInfo.uid !== 0n
+      || (parentInfo.mode & 0o1000n) === 0n
+      || (parentInfo.mode & 0o002n) === 0n) {
+      throw new Error('E2B birth runtime requires the root-owned sticky /tmp parent');
+    }
+    if (typeof process.getuid !== 'function' || process.getuid() === 0) {
+      throw new Error('E2B birth watcher must run as a non-root user');
+    }
+  }
+  try {
+    await mkdir(runtimeDirectory, { recursive: false, mode: 0o700 });
+  } catch (error) {
+    if (error?.code === 'EEXIST') {
+      throw new Error('E2B birth watcher refuses preexisting runtime state');
+    }
+    throw error;
+  }
+  const identity = await inspectBirthRuntimeDirectory(runtimeDirectory);
+  if ((await readdir(runtimeDirectory)).length !== 0) {
+    throw new Error('E2B birth watcher refuses preexisting runtime state');
+  }
+  return identity;
+}
+
+function stableRuntimeFileIdentity(info) {
+  return JSON.stringify({
+    dev: String(info.dev),
+    ino: String(info.ino),
+    size: String(info.size),
+    mtime_ns: String(info.mtimeNs ?? info.mtimeMs),
+    nlink: String(info.nlink),
+    uid: String(info.uid),
+    gid: String(info.gid),
+    mode: String(info.mode & 0o7777n),
+  });
+}
+
 export async function writeBootEvidence(evidence, options = {}) {
   const evidencePath = options.evidencePath ?? E2B_BOOT_EVIDENCE_PATH;
   const readyPath = options.readyPath ?? E2B_BOOT_READY_PATH;
   if (evidence.status !== 'failed') {
     throw new Error('same-UID watcher may write only untrusted failed boot observations');
   }
-  await mkdir(path.dirname(evidencePath), { recursive: true, mode: 0o700 });
   await writeExclusive(evidencePath, Buffer.from(`${canonicalize(evidence)}\n`), 0o400);
   if (options.writeReady !== false) {
     await writeExclusive(readyPath, Buffer.from(`${evidence.evidence_hash}\n`), 0o400);
@@ -425,21 +515,39 @@ function localBirthPaths(runtimeDirectory, requestHash) {
 }
 
 async function readBoundedRegularFile(target, maxBytes) {
-  const before = await lstat(target);
-  if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes) {
+  const before = await lstat(target, { bigint: true });
+  if (!before.isFile()
+    || before.isSymbolicLink()
+    || before.nlink !== 1n
+    || before.size > BigInt(maxBytes)) {
     throw new Error('E2B birth request artifact is not a bounded regular file');
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid !== 'function'
+      || before.uid !== BigInt(process.getuid())
+      || (before.mode & 0o022n) !== 0n) {
+      throw new Error('E2B birth request artifact ownership or mode is invalid');
+    }
   }
   const handle = await open(
     target,
     constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
   );
   try {
-    const during = await handle.stat();
-    if (!during.isFile() || during.size > maxBytes) {
+    const during = await handle.stat({ bigint: true });
+    if (!during.isFile()
+      || during.nlink !== 1n
+      || during.size > BigInt(maxBytes)
+      || stableRuntimeFileIdentity(during) !== stableRuntimeFileIdentity(before)) {
       throw new Error('E2B birth request artifact changed or exceeded its byte bound');
     }
     const bytes = await handle.readFile();
-    if (bytes.byteLength !== during.size || bytes.byteLength > maxBytes) {
+    const after = await handle.stat({ bigint: true });
+    const pathAfter = await lstat(target, { bigint: true });
+    if (BigInt(bytes.byteLength) !== during.size
+      || bytes.byteLength > maxBytes
+      || stableRuntimeFileIdentity(after) !== stableRuntimeFileIdentity(during)
+      || stableRuntimeFileIdentity(pathAfter) !== stableRuntimeFileIdentity(during)) {
       throw new Error('E2B birth request artifact changed while it was consumed');
     }
     return bytes;
@@ -448,7 +556,8 @@ async function readBoundedRegularFile(target, maxBytes) {
   }
 }
 
-async function inspectPendingBirthRequest(runtimeDirectory) {
+async function inspectPendingBirthRequest(runtimeDirectory, runtimeIdentity) {
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   const entries = await readdir(runtimeDirectory, { withFileTypes: true });
   const buildReadyName = path.basename(runtimePath(
     runtimeDirectory,
@@ -478,18 +587,20 @@ async function inspectPendingBirthRequest(runtimeDirectory) {
     if (!requests.has(digest)) {
       throw new Error('E2B birth watcher observed an unbound request trigger');
     }
+    await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
     return digest;
   }
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   return null;
 }
 
-async function waitForBirthRequest(runtimeDirectory, options) {
+async function waitForBirthRequest(runtimeDirectory, runtimeIdentity, options) {
   const delay = options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const pollMs = options.pollMs ?? 25;
   const timeoutMs = options.requestWaitTimeoutMs ?? null;
   const startedAt = Date.now();
   while (true) {
-    const digest = await inspectPendingBirthRequest(runtimeDirectory);
+    const digest = await inspectPendingBirthRequest(runtimeDirectory, runtimeIdentity);
     if (digest) return digest;
     if (timeoutMs != null && Date.now() - startedAt >= timeoutMs) {
       throw new Error('E2B birth watcher request deadline elapsed');
@@ -498,14 +609,13 @@ async function waitForBirthRequest(runtimeDirectory, options) {
   }
 }
 
-async function consumeBirthRequest(runtimeDirectory, digest, clock) {
+async function consumeBirthRequest(runtimeDirectory, runtimeIdentity, digest, clock) {
   const provisionalHash = `sha256:${digest}`;
   const paths = localBirthPaths(runtimeDirectory, provisionalHash);
-  await rename(paths.trigger, paths.consumed_trigger);
-  await rename(paths.request, paths.consumed);
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   const [triggerBytes, requestBytes] = await Promise.all([
-    readBoundedRegularFile(paths.consumed_trigger, 256),
-    readBoundedRegularFile(paths.consumed, E2B_BIRTH_REQUEST_MAX_BYTES),
+    readBoundedRegularFile(paths.trigger, 256),
+    readBoundedRegularFile(paths.request, E2B_BIRTH_REQUEST_MAX_BYTES),
   ]);
   if (triggerBytes.toString('utf8') !== `${provisionalHash}\n`) {
     throw new Error('E2B birth request trigger is malformed');
@@ -523,6 +633,12 @@ async function consumeBirthRequest(runtimeDirectory, digest, clock) {
   if (requestBytes.toString('utf8') !== `${canonicalize(request)}\n`) {
     throw new Error('E2B birth request bytes are not canonical');
   }
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
+  await writeExclusive(paths.consumed_trigger, triggerBytes, 0o400);
+  await writeExclusive(paths.consumed, requestBytes, 0o400);
+  await unlink(paths.trigger);
+  await unlink(paths.request);
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   const remaining = await readdir(runtimeDirectory);
   const allowed = new Set([
     path.basename(runtimePath(runtimeDirectory, E2B_TEMPLATE_BUILD_READY_PATH)),
@@ -541,11 +657,13 @@ export async function runBirthWatcher(options = {}) {
   );
   const clock = options.clock ?? (() => new Date());
   if (typeof clock !== 'function') throw new TypeError('E2B birth watcher clock is invalid');
-  await mkdir(runtimeDirectory, { recursive: true, mode: 0o700 });
-  const initialEntries = await readdir(runtimeDirectory);
-  if (initialEntries.length !== 0) {
-    throw new Error('E2B birth watcher refuses preexisting runtime state');
-  }
+  const usesDefaultRuntimeDirectory = sameResolvedPath(
+    runtimeDirectory,
+    path.resolve(E2B_BIRTH_RUNTIME_DIRECTORY),
+  );
+  const runtimeIdentity = await initializeBirthRuntimeDirectory(runtimeDirectory, {
+    requireSharedTmp: usesDefaultRuntimeDirectory,
+  });
   const buildReadyPath = runtimePath(runtimeDirectory, E2B_TEMPLATE_BUILD_READY_PATH);
   await writeExclusive(buildReadyPath, Buffer.from(`${canonicalize({
     schema: TEMPLATE_BUILD_READY_SCHEMA,
@@ -556,8 +674,14 @@ export async function runBirthWatcher(options = {}) {
     production_authority_included: false,
   })}\n`), 0o400);
 
-  const digest = await waitForBirthRequest(runtimeDirectory, options);
-  const { request, paths } = await consumeBirthRequest(runtimeDirectory, digest, clock);
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
+  const digest = await waitForBirthRequest(runtimeDirectory, runtimeIdentity, options);
+  const { request, paths } = await consumeBirthRequest(
+    runtimeDirectory,
+    runtimeIdentity,
+    digest,
+    clock,
+  );
   const collectEvidence = options.collectEvidence ?? collectBootEvidence;
   if (typeof collectEvidence !== 'function') {
     throw new TypeError('E2B birth watcher evidence collector is invalid');
@@ -570,6 +694,7 @@ export async function runBirthWatcher(options = {}) {
   });
   const evidencePath = runtimePath(runtimeDirectory, E2B_BOOT_EVIDENCE_PATH);
   const readyPath = runtimePath(runtimeDirectory, E2B_BOOT_READY_PATH);
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   await writeBootEvidence(bootEvidence, {
     evidencePath,
     readyPath,
@@ -590,6 +715,7 @@ export async function runBirthWatcher(options = {}) {
     Buffer.from(`${attestation.attestation_hash}\n`),
     0o400,
   );
+  await inspectBirthRuntimeDirectory(runtimeDirectory, runtimeIdentity);
   return Object.freeze({ request, bootEvidence, attestation });
 }
 

@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   canonicalize,
+  E2B_BOOT_EVIDENCE_PATH,
   inspectRuntimeWorkspace,
   requireSha256Ref,
   sha256FileRef,
@@ -13,7 +14,6 @@ import {
 } from '../lib/runtime-contract.mjs';
 
 const IDENTITY_PATH = '/tmp/agoragentic-risk-fork-v1.identity.json';
-const BOOT_EVIDENCE_PATH = '/run/agoragentic-risk-fork/boot-evidence.json';
 const WORKSPACE_ROOT = '/workspace/agoragentic-risk-fork-v1';
 const BOOTSTRAP_ARTIFACT_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/bootstrap.mjs';
 const RUNNER_ARTIFACT_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/run.mjs';
@@ -174,7 +174,7 @@ export async function runBootstrap(options = {}) {
   }
   const bootEvidence = validateBootEvidenceEnvelope(
     await readJsonBounded(
-      options.bootEvidencePath ?? BOOT_EVIDENCE_PATH,
+      options.bootEvidencePath ?? E2B_BOOT_EVIDENCE_PATH,
       MAX_REQUEST_BYTES,
       'boot evidence',
     ),
