@@ -1,6 +1,6 @@
 # Risk Fork Hosted MCP Runtime Bundle
 
-This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.0` into one integrity-bound ESM file. Every upstream source and packaged operational asset is pinned to Git commit `9efb61782883dd40409744710818994190439415`; the build does not read dirty upstream files.
+This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.0` into one integrity-bound ESM file. Every upstream source and packaged operational asset is pinned to Git commit `27f1c9f90b087a4c98bf537a8201c5443885eb72`; the build does not read dirty upstream files.
 
 The artifact supplies library code only. It does not supply a production host adapter, credentials, trust decisions, deployment authority, approval, or permission to route live traffic. Publication is deliberately disabled.
 
@@ -60,7 +60,7 @@ These files are inputs for an owner-controlled staging procedure, not a migratio
 
 ### E2B is not the outbound MCP transport
 
-The E2B adapter cannot safely be substituted for the host-owned outbound MCP session. Its clean-template requests use deny-all network settings and boot probes, but no credentialed run proves first-instruction or IPv6 containment; it runs bounded workspace operations and does not implement an arbitrary remote MCP transport. `connectRemoteClient` therefore still requires a separately qualified host enforcement boundary that owns the network session and clean import. This artifact alone does not close the hosted-MCP runtime qualification gate.
+The E2B adapter cannot safely be substituted for the host-owned outbound MCP session. Its clean-template requests use deny-all network settings and boot probes, but no credentialed run proves first-instruction or IPv6 containment; it runs bounded workspace operations and does not implement an arbitrary remote MCP transport. Its live SDK/provider path is also hard-disabled in the reviewed source because the same-UID birth watcher is not a separately privileged attestation authority. Signed qualification evidence cannot enable that path. `connectRemoteClient` therefore still requires a separately qualified host enforcement boundary that owns the network session and clean import. This artifact alone does not close the hosted-MCP runtime qualification gate.
 
 ## Reproducible artifact checks
 

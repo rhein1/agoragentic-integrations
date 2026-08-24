@@ -144,7 +144,7 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.package.version, '0.1.0-alpha.0');
   assert.equal(manifest.sources.mcp.version, '2.0.0');
   assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.0');
-  assert.equal(manifest.source_commit, '9efb61782883dd40409744710818994190439415');
+  assert.equal(manifest.source_commit, '27f1c9f90b087a4c98bf537a8201c5443885eb72');
   assert.deepEqual(manifest.runtime_dependencies, []);
   assert.deepEqual(manifest.optional_peer_dependencies, [
     { name: 'e2b', version: '2.39.0', optional: true },
@@ -448,12 +448,37 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
   assert.equal(api.isProductionPostgresDistributedCommitAuthority({}), false);
   assert.equal(
     api.HOSTED_MCP_BUNDLE_METADATA.reviewed_source_commit,
-    '9efb61782883dd40409744710818994190439415',
+    '27f1c9f90b087a4c98bf537a8201c5443885eb72',
   );
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.optional_e2b_peer_version, '2.39.0');
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.outbound_mcp_transport_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.managed_postgres_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.e2b_live_qualified, false);
+
+  let injectedLoaderCalls = 0;
+  const disabledAdapter = new api.E2BRiskForkAdapter({
+    cleanTemplateId: 'template-risk-fork-clean-immutable-v1',
+    cleanTemplateHash: sha256(Buffer.from('clean-template')),
+    cleanTemplateProvenanceHash: sha256(Buffer.from('clean-template-provenance')),
+    workspaceExportDirectory: path.join(packageRoot, '.test-unused-exports'),
+    cleanupJournalDirectory: path.join(packageRoot, '.test-unused-journal'),
+    verifyAuthorityFreeSource: async () => {
+      throw new Error('source verifier must not run while live E2B is source-disabled');
+    },
+    trustedBootstrapArtifactHash: sha256(Buffer.from('trusted-bootstrap')),
+    trustedRunnerArtifactHash: sha256(Buffer.from('trusted-runner')),
+  });
+  disabledAdapter.offlineConformance = true;
+  disabledAdapter.sdkLoader = async () => {
+    injectedLoaderCalls += 1;
+    throw new Error('provider loader must not run');
+  };
+  await assert.rejects(
+    disabledAdapter.reconcilePendingCleanup(),
+    (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER'
+      && error?.operation === 'reconcilePendingCleanup',
+  );
+  assert.equal(injectedLoaderCalls, 0);
 
   const boundary = api.createMcpEnforcementBoundary({
     async openSession() { throw new Error('not called'); },
@@ -532,6 +557,13 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       "assert.equal(typeof E2BRiskForkAdapter, 'function');",
       "assert.equal(typeof verifyPostgresDistributedAuthoritySchema, 'function');",
       "assert.equal(typeof createRiskForkE2BTemplate, 'function');",
+      "let providerLoads = 0;",
+      "const hash = 'sha256:' + 'a'.repeat(64);",
+      "const adapter = new E2BRiskForkAdapter({ cleanTemplateId: 'template-risk-fork-clean-immutable-v1', cleanTemplateHash: hash, cleanTemplateProvenanceHash: hash, workspaceExportDirectory: process.cwd() + '/unused-exports', cleanupJournalDirectory: process.cwd() + '/unused-journal', verifyAuthorityFreeSource: async () => { throw new Error('not called'); }, trustedBootstrapArtifactHash: hash, trustedRunnerArtifactHash: hash });",
+      "adapter.offlineConformance = true;",
+      "adapter.sdkLoader = async () => { providerLoads += 1; throw new Error('not called'); };",
+      "await assert.rejects(adapter.reconcilePendingCleanup(), (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER');",
+      "assert.equal(providerLoads, 0);",
       "process.stdout.write('PACKED_CONSUMER_OK\\n');",
       '',
     ].join('\n'), 'utf8');

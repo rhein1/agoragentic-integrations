@@ -12,6 +12,18 @@ import path from 'node:path';
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 
 export const BOOT_EVIDENCE_SCHEMA = 'agoragentic.risk-fork.e2b-boot-evidence.v1';
+export const E2B_BIRTH_REQUEST_SCHEMA =
+  'agoragentic.risk-fork.e2b-birth-request.v1';
+export const E2B_BIRTH_ATTESTATION_SCHEMA =
+  'agoragentic.risk-fork.e2b-birth-attestation.v2';
+export const E2B_BIRTH_RUNTIME_DIRECTORY = '/run/agoragentic-risk-fork';
+export const E2B_TEMPLATE_BUILD_READY_PATH =
+  `${E2B_BIRTH_RUNTIME_DIRECTORY}/template-build-ready`;
+export const E2B_BOOT_EVIDENCE_PATH =
+  `${E2B_BIRTH_RUNTIME_DIRECTORY}/boot-evidence.json`;
+export const E2B_BOOT_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-ready`;
+export const E2B_BIRTH_REQUEST_MAX_BYTES = 64 * 1024;
+export const E2B_BIRTH_MAX_VALIDITY_MS = 30_000;
 export const EMPTY_RUNTIME_WORKSPACE_DIGEST = sha256Ref([]);
 export const BOOT_EVIDENCE_CLAIMS = Object.freeze([
   'inherited_parent_processes_absent',
@@ -66,6 +78,51 @@ const OBSERVATION_HASH_KEYS = Object.freeze([
 const MAX_RUNTIME_FILES = 2_000;
 const MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
 const MAX_RUNTIME_DEPTH = 128;
+const BIRTH_AUTHORITY_FLAGS = Object.freeze([
+  'credentials_included',
+  'wallet_material_included',
+  'execution_authority_included',
+  'production_activation_granted',
+]);
+const BIRTH_REQUEST_KEYS = Object.freeze([
+  'schema',
+  'sandbox_id_hash',
+  'provider_metadata_hash',
+  'template_id_hash',
+  'template_evidence_hash',
+  'template_provenance_hash',
+  'allocation_started_at',
+  'expires_at',
+  'birth_nonce',
+  'authority_flags',
+  'request_hash',
+]);
+const BIRTH_ATTESTATION_CLAIMS = Object.freeze({
+  request_canonical_observed: true,
+  request_consumed_once_observed: true,
+  boot_observation_hash_bound: true,
+  observed_after_allocation: true,
+  privileged_producer_verified: false,
+});
+const BIRTH_ATTESTATION_KEYS = Object.freeze([
+  'schema',
+  'status',
+  'trust_status',
+  'birth_request_hash',
+  'boot_evidence_hash',
+  'sandbox_id_hash',
+  'provider_metadata_hash',
+  'template_id_hash',
+  'template_evidence_hash',
+  'template_provenance_hash',
+  'allocation_started_at',
+  'birth_nonce_hash',
+  'observed_at',
+  'expires_at',
+  'claims',
+  'authority_flags',
+  'attestation_hash',
+]);
 
 function assertPlainObject(value, field) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -107,6 +164,40 @@ function boundedCount(value, field, max = 1_000_000) {
     throw new TypeError(`${field} must be a bounded non-negative integer`);
   }
   return value;
+}
+
+function requireBirthNonce(value, field) {
+  if (typeof value !== 'string'
+    || value.length < 16
+    || value.length > 200
+    || /\s|[\u0000-\u001f\u007f]/.test(value)) {
+    throw new TypeError(`${field} must be a bounded opaque nonce`);
+  }
+  return value;
+}
+
+function normalizeAuthorityFlags(value, field) {
+  assertAllowedKeys(value, BIRTH_AUTHORITY_FLAGS, field);
+  const normalized = Object.fromEntries(BIRTH_AUTHORITY_FLAGS.map((key) => {
+    if (value[key] !== false) throw new Error(`${field}.${key} must remain false`);
+    return [key, false];
+  }));
+  return normalized;
+}
+
+function birthAuthorityFlags() {
+  return Object.fromEntries(BIRTH_AUTHORITY_FLAGS.map((key) => [key, false]));
+}
+
+export function e2bBirthRequestPaths(requestHash) {
+  const digest = requireSha256Ref(requestHash, 'E2B birth request hash').slice(7);
+  return Object.freeze({
+    request: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-request.${digest}.json`,
+    trigger: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-request.${digest}.ready`,
+    consumed: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-consumed.${digest}.json`,
+    consumed_trigger: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-consumed.${digest}.ready`,
+    attestation: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-attestation.${digest}.json`,
+  });
 }
 
 function normalizeRelative(value, field) {
@@ -351,6 +442,12 @@ export function createBootEvidenceEnvelope(input = {}) {
 }
 
 export function validateBootEvidenceEnvelope(value, options = {}) {
+  const normalized = validateBootObservationEnvelope(value, options);
+  if (normalized.status !== 'verified') throw new Error('E2B boot evidence claims are not verified');
+  return normalized;
+}
+
+export function validateBootObservationEnvelope(value, options = {}) {
   const normalized = normalizeBootEvidence(value, true);
   const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (normalized.evidence_hash !== expectedHash) throw new Error('E2B boot evidence hash mismatch');
@@ -372,8 +469,308 @@ export function validateBootEvidenceEnvelope(value, options = {}) {
       throw new Error(`E2B boot evidence binding mismatch: ${field}`);
     }
   }
-  if (normalized.status !== 'verified') throw new Error('E2B boot evidence claims are not verified');
   return Object.freeze(normalized);
+}
+
+function normalizeBirthRequest(value, includeComputed) {
+  assertPlainObject(value, 'E2B birth request');
+  assertAllowedKeys(
+    value,
+    includeComputed
+      ? BIRTH_REQUEST_KEYS
+      : BIRTH_REQUEST_KEYS.filter((key) => !['schema', 'request_hash'].includes(key)),
+    'E2B birth request',
+  );
+  const allocationStartedAt = requireIso(
+    value.allocation_started_at,
+    'E2B birth request.allocation_started_at',
+  );
+  const expiresAt = requireIso(value.expires_at, 'E2B birth request.expires_at');
+  if (Date.parse(expiresAt) <= Date.parse(allocationStartedAt)
+    || Date.parse(expiresAt) > Date.parse(allocationStartedAt) + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw new Error('E2B birth request validity window is invalid');
+  }
+  const normalized = {
+    schema: E2B_BIRTH_REQUEST_SCHEMA,
+    sandbox_id_hash: requireSha256Ref(
+      value.sandbox_id_hash,
+      'E2B birth request.sandbox_id_hash',
+    ),
+    provider_metadata_hash: requireSha256Ref(
+      value.provider_metadata_hash,
+      'E2B birth request.provider_metadata_hash',
+    ),
+    template_id_hash: requireSha256Ref(
+      value.template_id_hash,
+      'E2B birth request.template_id_hash',
+    ),
+    template_evidence_hash: requireSha256Ref(
+      value.template_evidence_hash,
+      'E2B birth request.template_evidence_hash',
+    ),
+    template_provenance_hash: requireSha256Ref(
+      value.template_provenance_hash,
+      'E2B birth request.template_provenance_hash',
+    ),
+    allocation_started_at: allocationStartedAt,
+    expires_at: expiresAt,
+    birth_nonce: requireBirthNonce(value.birth_nonce, 'E2B birth request.birth_nonce'),
+    authority_flags: normalizeAuthorityFlags(
+      value.authority_flags,
+      'E2B birth request.authority_flags',
+    ),
+    request_hash: includeComputed
+      ? requireSha256Ref(value.request_hash, 'E2B birth request.request_hash')
+      : null,
+  };
+  if (includeComputed && value.schema !== E2B_BIRTH_REQUEST_SCHEMA) {
+    throw new Error('E2B birth request schema is invalid');
+  }
+  return normalized;
+}
+
+export function createE2BBirthRequest(input = {}) {
+  const normalized = normalizeBirthRequest({
+    ...input,
+    authority_flags: input.authority_flags ?? birthAuthorityFlags(),
+  }, false);
+  normalized.request_hash = sha256Ref({ ...normalized, request_hash: null });
+  return Object.freeze({
+    ...normalized,
+    authority_flags: Object.freeze(normalized.authority_flags),
+  });
+}
+
+export function validateE2BBirthRequest(value, options = {}) {
+  const normalized = normalizeBirthRequest(value, true);
+  const expectedHash = sha256Ref({ ...normalized, request_hash: null });
+  if (normalized.request_hash !== expectedHash) throw new Error('E2B birth request hash mismatch');
+  if (canonicalize(normalized) !== canonicalize(value)) {
+    throw new Error('E2B birth request is not canonical and closed');
+  }
+  for (const [field, wanted] of [
+    ['sandbox_id_hash', options.sandboxIdHash],
+    ['provider_metadata_hash', options.providerMetadataHash],
+    ['template_id_hash', options.templateIdHash],
+    ['template_evidence_hash', options.templateEvidenceHash],
+    ['template_provenance_hash', options.templateProvenanceHash],
+    ['allocation_started_at', options.allocationStartedAt],
+    ['request_hash', options.requestHash],
+  ]) {
+    if (wanted != null && normalized[field] !== wanted) {
+      throw new Error(`E2B birth request binding mismatch: ${field}`);
+    }
+  }
+  if (options.birthNonce != null && normalized.birth_nonce !== options.birthNonce) {
+    throw new Error('E2B birth request binding mismatch: birth_nonce');
+  }
+  if (options.now != null) {
+    const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now);
+    if (!Number.isFinite(now)
+      || now < Date.parse(normalized.allocation_started_at)
+      || now >= Date.parse(normalized.expires_at)) {
+      throw new Error('E2B birth request is pre-allocation, expired, or outside its validity window');
+    }
+  }
+  return Object.freeze({
+    ...normalized,
+    authority_flags: Object.freeze(normalized.authority_flags),
+  });
+}
+
+function normalizeBirthAttestation(value, includeComputed) {
+  assertPlainObject(value, 'E2B birth attestation');
+  assertAllowedKeys(
+    value,
+    includeComputed
+      ? BIRTH_ATTESTATION_KEYS
+      : BIRTH_ATTESTATION_KEYS.filter(
+          (key) => !['schema', 'status', 'attestation_hash'].includes(key),
+        ),
+    'E2B birth attestation',
+  );
+  const allocationStartedAt = requireIso(
+    value.allocation_started_at,
+    'E2B birth attestation.allocation_started_at',
+  );
+  const observedAt = requireIso(value.observed_at, 'E2B birth attestation.observed_at');
+  const expiresAt = requireIso(value.expires_at, 'E2B birth attestation.expires_at');
+  if (Date.parse(observedAt) < Date.parse(allocationStartedAt)
+    || Date.parse(expiresAt) <= Date.parse(observedAt)
+    || Date.parse(expiresAt) > Date.parse(allocationStartedAt) + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw new Error('E2B birth attestation timing is invalid');
+  }
+  const claimKeys = Object.keys(BIRTH_ATTESTATION_CLAIMS);
+  assertAllowedKeys(value.claims, claimKeys, 'E2B birth attestation.claims');
+  const claims = Object.fromEntries(claimKeys.map((key) => {
+    if (value.claims[key] !== BIRTH_ATTESTATION_CLAIMS[key]) {
+      throw new Error(
+        `E2B birth attestation.claims.${key} must remain ${BIRTH_ATTESTATION_CLAIMS[key]}`,
+      );
+    }
+    return [key, BIRTH_ATTESTATION_CLAIMS[key]];
+  }));
+  const normalized = {
+    schema: E2B_BIRTH_ATTESTATION_SCHEMA,
+    status: 'untrusted_observation',
+    trust_status: 'untrusted_same_uid_self_assertion',
+    birth_request_hash: requireSha256Ref(
+      value.birth_request_hash,
+      'E2B birth attestation.birth_request_hash',
+    ),
+    boot_evidence_hash: requireSha256Ref(
+      value.boot_evidence_hash,
+      'E2B birth attestation.boot_evidence_hash',
+    ),
+    sandbox_id_hash: requireSha256Ref(
+      value.sandbox_id_hash,
+      'E2B birth attestation.sandbox_id_hash',
+    ),
+    provider_metadata_hash: requireSha256Ref(
+      value.provider_metadata_hash,
+      'E2B birth attestation.provider_metadata_hash',
+    ),
+    template_id_hash: requireSha256Ref(
+      value.template_id_hash,
+      'E2B birth attestation.template_id_hash',
+    ),
+    template_evidence_hash: requireSha256Ref(
+      value.template_evidence_hash,
+      'E2B birth attestation.template_evidence_hash',
+    ),
+    template_provenance_hash: requireSha256Ref(
+      value.template_provenance_hash,
+      'E2B birth attestation.template_provenance_hash',
+    ),
+    allocation_started_at: allocationStartedAt,
+    birth_nonce_hash: requireSha256Ref(
+      value.birth_nonce_hash,
+      'E2B birth attestation.birth_nonce_hash',
+    ),
+    observed_at: observedAt,
+    expires_at: expiresAt,
+    claims,
+    authority_flags: normalizeAuthorityFlags(
+      value.authority_flags,
+      'E2B birth attestation.authority_flags',
+    ),
+    attestation_hash: includeComputed
+      ? requireSha256Ref(value.attestation_hash, 'E2B birth attestation.attestation_hash')
+      : null,
+  };
+  if (includeComputed
+    && (value.schema !== E2B_BIRTH_ATTESTATION_SCHEMA
+      || value.status !== 'untrusted_observation'
+      || value.trust_status !== 'untrusted_same_uid_self_assertion')) {
+    throw new Error('E2B birth attestation schema, status, or trust status is invalid');
+  }
+  return normalized;
+}
+
+export function createE2BBirthAttestation(input = {}) {
+  const observedAt = requireIso(
+    input.observed_at ?? new Date().toISOString(),
+    'E2B birth attestation observed_at',
+  );
+  const request = validateE2BBirthRequest(input.request, { now: observedAt });
+  const bootEvidence = validateBootObservationEnvelope(input.bootEvidence, { now: observedAt });
+  if (bootEvidence.boot_nonce !== request.birth_nonce) {
+    throw new Error('E2B boot evidence nonce is not bound to the birth request');
+  }
+  if (Date.parse(bootEvidence.observed_at) < Date.parse(request.allocation_started_at)
+    || Date.parse(observedAt) < Date.parse(bootEvidence.observed_at)) {
+    throw new Error('E2B boot evidence predates allocation or birth attestation');
+  }
+  const expiresAt = new Date(Math.min(
+    Date.parse(request.expires_at),
+    Date.parse(bootEvidence.expires_at),
+  )).toISOString();
+  const normalized = normalizeBirthAttestation({
+    birth_request_hash: request.request_hash,
+    boot_evidence_hash: bootEvidence.evidence_hash,
+    sandbox_id_hash: request.sandbox_id_hash,
+    provider_metadata_hash: request.provider_metadata_hash,
+    template_id_hash: request.template_id_hash,
+    template_evidence_hash: request.template_evidence_hash,
+    template_provenance_hash: request.template_provenance_hash,
+    allocation_started_at: request.allocation_started_at,
+    birth_nonce_hash: sha256Ref(request.birth_nonce),
+    observed_at: observedAt,
+    expires_at: expiresAt,
+    claims: {
+      request_canonical_observed: true,
+      request_consumed_once_observed: true,
+      boot_observation_hash_bound: true,
+      observed_after_allocation: true,
+      privileged_producer_verified: false,
+    },
+    authority_flags: birthAuthorityFlags(),
+  }, false);
+  normalized.attestation_hash = sha256Ref({ ...normalized, attestation_hash: null });
+  return Object.freeze({
+    ...normalized,
+    claims: Object.freeze(normalized.claims),
+    authority_flags: Object.freeze(normalized.authority_flags),
+  });
+}
+
+export function validateE2BBirthAttestation(value, options = {}) {
+  const normalized = normalizeBirthAttestation(value, true);
+  const expectedHash = sha256Ref({ ...normalized, attestation_hash: null });
+  if (normalized.attestation_hash !== expectedHash) {
+    throw new Error('E2B birth attestation hash mismatch');
+  }
+  if (canonicalize(normalized) !== canonicalize(value)) {
+    throw new Error('E2B birth attestation is not canonical and closed');
+  }
+  const request = validateE2BBirthRequest(options.request, {
+    now: options.now ?? normalized.observed_at,
+  });
+  const bootEvidence = validateBootObservationEnvelope(options.bootEvidence, {
+    now: options.now ?? normalized.observed_at,
+    bootstrapArtifactHash: options.bootstrapArtifactHash,
+    runnerArtifactHash: options.runnerArtifactHash,
+  });
+  const expectedExpiresAt = new Date(Math.min(
+    Date.parse(request.expires_at),
+    Date.parse(bootEvidence.expires_at),
+  )).toISOString();
+  if (normalized.expires_at !== expectedExpiresAt) {
+    throw new Error('E2B birth attestation expiry is not exact-bound to its evidence');
+  }
+  for (const [field, wanted] of Object.entries({
+    birth_request_hash: request.request_hash,
+    boot_evidence_hash: bootEvidence.evidence_hash,
+    sandbox_id_hash: request.sandbox_id_hash,
+    provider_metadata_hash: request.provider_metadata_hash,
+    template_id_hash: request.template_id_hash,
+    template_evidence_hash: request.template_evidence_hash,
+    template_provenance_hash: request.template_provenance_hash,
+    allocation_started_at: request.allocation_started_at,
+    birth_nonce_hash: sha256Ref(request.birth_nonce),
+  })) {
+    if (normalized[field] !== wanted) {
+      throw new Error(`E2B birth attestation binding mismatch: ${field}`);
+    }
+  }
+  if (bootEvidence.boot_nonce !== request.birth_nonce
+    || Date.parse(bootEvidence.observed_at) < Date.parse(request.allocation_started_at)
+    || Date.parse(normalized.observed_at) < Date.parse(bootEvidence.observed_at)) {
+    throw new Error('E2B birth attestation does not prove fresh post-allocation boot evidence');
+  }
+  if (options.now != null) {
+    const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now);
+    if (!Number.isFinite(now)
+      || now < Date.parse(normalized.observed_at)
+      || now >= Date.parse(normalized.expires_at)) {
+      throw new Error('E2B birth attestation is stale or outside its validity window');
+    }
+  }
+  return Object.freeze({
+    ...normalized,
+    claims: Object.freeze(normalized.claims),
+    authority_flags: Object.freeze(normalized.authority_flags),
+  });
 }
 
 export { canonicalize, sha256Ref };

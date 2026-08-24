@@ -107,7 +107,7 @@ var require_package = __commonJS({
         "@modelcontextprotocol/node": "2.0.0",
         "@modelcontextprotocol/sdk": "1.30.0",
         "@modelcontextprotocol/server": "2.0.0",
-        esbuild: "0.28.1"
+        esbuild: "0.28.2"
       },
       overrides: {
         "@hono/node-server": "2.0.11"
@@ -51635,8 +51635,10 @@ import path3 from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 var E2B_QUALIFICATION_SCHEMA = "agoragentic.risk-fork.e2b-qualification-evidence.v1";
 var E2B_QUALIFICATION_TRUST_SCHEMA = "agoragentic.risk-fork.e2b-qualification-trust.v1";
+var E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA = "agoragentic.risk-fork.e2b-external-qualification-observation.v1";
 var E2B_RUNTIME_SDK_INTEGRITY_SCHEMA = "agoragentic.risk-fork.e2b-runtime-sdk-dependency-closure.v2";
 var QUALIFICATION_TRUST_VERIFIERS = /* @__PURE__ */ new WeakSet();
+var EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var RUNTIME_SDK_INTEGRITY_VERIFIERS = /* @__PURE__ */ new WeakSet();
 var MAX_RUNTIME_SDK_PACKAGES = 128;
 var MAX_RUNTIME_SDK_FILES_PER_PACKAGE = 2048;
@@ -51644,6 +51646,43 @@ var MAX_RUNTIME_SDK_FILES = 8192;
 var MAX_RUNTIME_SDK_BYTES_PER_PACKAGE = 64 * 1024 * 1024;
 var MAX_RUNTIME_SDK_BYTES = 256 * 1024 * 1024;
 var MAX_RUNTIME_DEPENDENCIES_PER_PACKAGE = 256;
+var MAX_EXTERNAL_OBSERVATION_LIFETIME_MS = 24 * 60 * 60 * 1e3;
+var E2B_EXTERNAL_QUALIFICATION_AUDIENCE = "agoragentic.risk-fork.e2b-qualification";
+var E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS = Object.freeze({
+  canary_evidence_hash: "evidence:e2b-single-sandbox-canary",
+  sandbox_id_hash: "evidence:e2b-sandbox-identity",
+  metadata_hash: "evidence:e2b-provider-metadata",
+  provider_template_binding_hash: "evidence:e2b-provider-template-binding",
+  birth_request_hash: "evidence:e2b-post-allocation-birth-request",
+  birth_attestation_hash: "evidence:e2b-post-allocation-birth-attestation",
+  boot_evidence_hash: "evidence:e2b-first-instruction-boot-guard",
+  sandbox_birth_binding_hash: "evidence:e2b-sandbox-birth-binding",
+  ipv4_probe_hash: "evidence:e2b-first-instruction-ipv4-probe",
+  ipv6_probe_hash: "evidence:e2b-first-instruction-ipv6-probe"
+});
+var E2B_EXTERNAL_PROVIDER_CONTROLS = Object.freeze([
+  "template_provenance_verified",
+  "bootstrap_binding_verified",
+  "runner_binding_verified",
+  "hard_ttl_verified",
+  "idle_ttl_verified",
+  "max_execution_time_verified"
+]);
+var EXTERNAL_QUALIFICATION_RESULT_REFS = Object.freeze({
+  observation_hash: "evidence:e2b-external-qualification-observation",
+  observer_key_hash: "evidence:e2b-external-observer-key",
+  provider_cost_cap_evidence_hash: "evidence:e2b-provider-cost-cap",
+  derived_cost_estimate_evidence_hash: "evidence:e2b-derived-cost-estimate",
+  aggregate_console_delta_evidence_hash: "evidence:e2b-aggregate-console-cost-delta",
+  actual_sandbox_cost_evidence_hash: "evidence:e2b-provider-finalized-sandbox-cost",
+  ipv6_provider_denial_evidence_hash: "evidence:e2b-provider-ipv6-denial"
+});
+var EXTERNAL_PROVIDER_CONTROL_RESULT_REFS = Object.freeze(
+  Object.fromEntries(E2B_EXTERNAL_PROVIDER_CONTROLS.map((control) => [
+    control,
+    `evidence:e2b-external-${control.replaceAll("_", "-")}`
+  ]))
+);
 var E2B_QUALIFICATION_CONTROLS = Object.freeze([
   "first_instruction_ipv4_egress_denied",
   "first_instruction_ipv6_egress_denied",
@@ -51666,6 +51705,21 @@ var E2B_QUALIFICATION_CONTROLS = Object.freeze([
   "cost_within_cap"
 ]);
 var CONTROL_STATUSES = Object.freeze(["verified", "failed", "unknown"]);
+var EXTERNAL_OBSERVATION_BINDING_KEYS = Object.freeze([
+  "approval_ref_hash",
+  "run_ref_hash",
+  "project_ref_hash",
+  "sdk_integrity_hash",
+  "template_id_hash",
+  "template_build_id_hash",
+  "template_evidence_hash",
+  "template_provenance_hash",
+  "bootstrap_artifact_hash",
+  "runner_artifact_hash",
+  "boot_guard_artifact_hash",
+  "limits_hash",
+  ...Object.keys(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS)
+]);
 var TOP_LEVEL_KEYS = Object.freeze([
   "schema",
   "status",
@@ -51679,6 +51733,7 @@ var TOP_LEVEL_KEYS = Object.freeze([
   "controls",
   "cleanup",
   "evidence_refs",
+  "external_observation_receipt",
   "authority_flags",
   "evidence_hash"
 ]);
@@ -51692,6 +51747,28 @@ function canonicalDecimal(value, field) {
 }
 function decimalMicros(value, field) {
   return BigInt(canonicalDecimal(value, field).replace(".", ""));
+}
+function nullableSha256Ref(value, field) {
+  return value === null ? null : requireSha256Ref(value, field);
+}
+function canonicalEd25519Spki(value, field) {
+  if (typeof value !== "string" || value.length < 40 || value.length > 200 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new TypeError(`${field} must be canonical base64url DER`);
+  }
+  const bytes = Buffer.from(value, "base64url");
+  if (bytes.toString("base64url") !== value) {
+    throw new TypeError(`${field} must be canonical base64url DER`);
+  }
+  let key;
+  try {
+    key = createPublicKey({ key: bytes, type: "spki", format: "der" });
+  } catch {
+    throw new TypeError(`${field} is not a valid public key`);
+  }
+  if (key.asymmetricKeyType !== "ed25519") {
+    throw new TypeError(`${field} must encode an Ed25519 public key`);
+  }
+  return value;
 }
 function normalizedStatusMap(value, keys, field) {
   assertPlainObject(value, field);
@@ -51835,7 +51912,10 @@ function normalizeEvidence2(value, { includeComputedFields }) {
       "E2B qualification limits.max_execution_ms",
       { min: 100, max: 10 * 60 * 1e3 }
     ),
-    max_cost_usd: limits.max_cost_usd
+    max_cost_usd: canonicalDecimal(
+      limits.max_cost_usd,
+      "E2B qualification limits.max_cost_usd"
+    )
   };
   decimalMicros(normalizedLimits.max_cost_usd, "E2B qualification limits.max_cost_usd");
   if (normalizedLimits.idle_ttl_ms > normalizedLimits.hard_ttl_ms || normalizedLimits.max_execution_ms > normalizedLimits.hard_ttl_ms) {
@@ -51865,7 +51945,10 @@ function normalizeEvidence2(value, { includeComputedFields }) {
       "E2B qualification observations.cleanup_ms",
       { min: 0, max: 24 * 60 * 60 * 1e3 }
     ),
-    observed_cost_usd: observations.observed_cost_usd
+    observed_cost_usd: observations.observed_cost_usd === null ? null : canonicalDecimal(
+      observations.observed_cost_usd,
+      "E2B qualification observations.observed_cost_usd"
+    )
   };
   const observedCost = normalizedObservations.observed_cost_usd === null ? null : decimalMicros(
     normalizedObservations.observed_cost_usd,
@@ -51906,6 +51989,34 @@ function normalizeEvidence2(value, { includeComputedFields }) {
   const refs = evidenceRefs.map((entry) => entry.ref);
   if (new Set(refs).size !== refs.length) {
     throw new TypeError("E2B qualification evidence refs must be unique");
+  }
+  const externalObservationReceipt = value.external_observation_receipt == null ? null : normalizeExternalObservationReceipt(value.external_observation_receipt);
+  if (externalObservationReceipt === null) {
+    for (const control of [
+      "first_instruction_ipv4_egress_denied",
+      "first_instruction_ipv6_egress_denied",
+      "cost_within_cap",
+      ...E2B_EXTERNAL_PROVIDER_CONTROLS
+    ]) {
+      if (controls[control] !== "unknown") {
+        throw new Error(
+          `E2B qualification evidence without an observer receipt requires ${control}=unknown`
+        );
+      }
+    }
+    if (normalizedObservations.observed_cost_usd !== null) {
+      throw new Error(
+        "E2B qualification evidence without an observer receipt requires unknown actual sandbox cost"
+      );
+    }
+    for (const ref of [
+      ...Object.values(EXTERNAL_QUALIFICATION_RESULT_REFS),
+      ...Object.values(EXTERNAL_PROVIDER_CONTROL_RESULT_REFS)
+    ]) {
+      if (evidenceRefs.some((entry) => entry.ref === ref)) {
+        throw new Error("Provisional E2B qualification evidence cannot contain observer results");
+      }
+    }
   }
   const status = deriveStatus(controls, cleanup);
   if (status === "verified" && (normalizedRun.sandbox_count !== 1 || normalizedRun.synthetic_workspace !== true)) {
@@ -51949,6 +52060,7 @@ function normalizeEvidence2(value, { includeComputedFields }) {
     controls,
     cleanup,
     evidence_refs: evidenceRefs,
+    external_observation_receipt: externalObservationReceipt,
     authority_flags: authorityFlags,
     evidence_hash: includeComputedFields ? requireSha256Ref(value.evidence_hash, "E2B qualification evidence.evidence_hash") : null
   };
@@ -51979,13 +52091,289 @@ function qualificationTrustPayload(evidence, verifierKeyHash) {
     )
   });
 }
-function requireEd25519Signature(value) {
+function assertDistinctQualificationTrustKey(evidence, verifierKeyHash) {
+  if (evidence.external_observation_receipt === null) {
+    throw new Error("E2B qualification trust requires finalized external observer evidence");
+  }
+  if (safeEqual(
+    evidence.external_observation_receipt.observer.public_key_hash,
+    verifierKeyHash
+  )) {
+    throw new Error(
+      "E2B qualification observer and qualification-trust keys must be distinct"
+    );
+  }
+}
+function requireBoolean2(value, field) {
+  if (typeof value !== "boolean") throw new TypeError(`${field} must be boolean`);
+  return value;
+}
+function normalizeExternalProviderControls(value) {
+  assertPlainObject(value, "E2B external qualification provider controls");
+  assertAllowedKeys(
+    value,
+    E2B_EXTERNAL_PROVIDER_CONTROLS,
+    "E2B external qualification provider controls"
+  );
+  return Object.fromEntries(E2B_EXTERNAL_PROVIDER_CONTROLS.map((control) => {
+    const field = `E2B external qualification provider controls.${control}`;
+    const entry = value[control];
+    assertPlainObject(entry, field);
+    assertAllowedKeys(entry, ["status", "evidence_hash"], field);
+    return [control, {
+      status: requireEnum(entry.status, CONTROL_STATUSES, `${field}.status`),
+      evidence_hash: requireSha256Ref(entry.evidence_hash, `${field}.evidence_hash`)
+    }];
+  }));
+}
+function normalizeObserverIdentity(value) {
+  const field = "E2B external qualification observer";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "algorithm",
+    "public_key_spki_base64url",
+    "public_key_hash"
+  ], field);
+  if (value.algorithm !== "Ed25519") {
+    throw new TypeError(`${field}.algorithm must be Ed25519`);
+  }
+  const publicKeySpki = canonicalEd25519Spki(
+    value.public_key_spki_base64url,
+    `${field}.public_key_spki_base64url`
+  );
+  const publicKeyHash = requireSha256Ref(
+    value.public_key_hash,
+    `${field}.public_key_hash`
+  );
+  const observedKeyHash = sha256BytesRef(Buffer.from(publicKeySpki, "base64url"));
+  if (!safeEqual(publicKeyHash, observedKeyHash)) {
+    throw new Error("E2B external qualification observer public key hash mismatch");
+  }
+  return {
+    algorithm: "Ed25519",
+    public_key_spki_base64url: publicKeySpki,
+    public_key_hash: publicKeyHash
+  };
+}
+function normalizeExternalObservationAudience(value) {
+  const field = "E2B external qualification observation audience";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "profile",
+    "project_ref_hash",
+    "run_ref_hash",
+    "template_id_hash",
+    "template_build_id_hash"
+  ], field);
+  if (value.profile !== E2B_EXTERNAL_QUALIFICATION_AUDIENCE) {
+    throw new TypeError(`${field}.profile is invalid`);
+  }
+  return {
+    profile: E2B_EXTERNAL_QUALIFICATION_AUDIENCE,
+    project_ref_hash: requireSha256Ref(value.project_ref_hash, `${field}.project_ref_hash`),
+    run_ref_hash: requireSha256Ref(value.run_ref_hash, `${field}.run_ref_hash`),
+    template_id_hash: requireSha256Ref(value.template_id_hash, `${field}.template_id_hash`),
+    template_build_id_hash: requireSha256Ref(
+      value.template_build_id_hash,
+      `${field}.template_build_id_hash`
+    )
+  };
+}
+function normalizeObservationTimes(value, field) {
+  const observedAt = requireIsoDate(value.observed_at, `${field}.observed_at`);
+  const issuedAt = requireIsoDate(value.issued_at, `${field}.issued_at`);
+  const expiresAt = requireIsoDate(value.expires_at, `${field}.expires_at`);
+  const observedMs = Date.parse(observedAt);
+  const issuedMs = Date.parse(issuedAt);
+  const expiresMs = Date.parse(expiresAt);
+  if (observedMs > issuedMs || issuedMs >= expiresMs) {
+    throw new Error(`${field} observed/issued/expires ordering is invalid`);
+  }
+  return { observed_at: observedAt, issued_at: issuedAt, expires_at: expiresAt };
+}
+function normalizeStatusEvidence(value, field) {
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, ["status", "evidence_hash"], field);
+  const status = requireEnum(value.status, CONTROL_STATUSES, `${field}.status`);
+  const evidenceHash = nullableSha256Ref(value.evidence_hash, `${field}.evidence_hash`);
+  if (status === "verified" && evidenceHash === null) {
+    throw new Error(`${field} cannot be verified without provider evidence`);
+  }
+  return { status, evidence_hash: evidenceHash };
+}
+function normalizeObservedCostLine(value, field) {
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, ["amount_usd", "evidence_hash"], field);
+  return {
+    amount_usd: canonicalDecimal(value.amount_usd, `${field}.amount_usd`),
+    evidence_hash: requireSha256Ref(value.evidence_hash, `${field}.evidence_hash`)
+  };
+}
+function normalizeActualSandboxCost(value, field) {
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, ["status", "amount_usd", "evidence_hash"], field);
+  const status = requireEnum(value.status, ["finalized", "unknown"], `${field}.status`);
+  if (status === "unknown") {
+    if (value.amount_usd !== null || value.evidence_hash !== null) {
+      throw new Error(`${field} unknown status requires null amount and evidence`);
+    }
+    return { status: "unknown", amount_usd: null, evidence_hash: null };
+  }
+  if (value.amount_usd === null || value.evidence_hash === null) {
+    throw new Error(`${field} finalized status requires exact amount and provider evidence`);
+  }
+  return {
+    status: "finalized",
+    amount_usd: canonicalDecimal(value.amount_usd, `${field}.amount_usd`),
+    evidence_hash: requireSha256Ref(value.evidence_hash, `${field}.evidence_hash`)
+  };
+}
+function normalizeExternalCost(value) {
+  const field = "E2B external qualification cost";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "currency",
+    "provider_cap",
+    "derived_estimate",
+    "aggregate_console_delta",
+    "actual_sandbox"
+  ], field);
+  if (value.currency !== "USD") throw new Error(`${field}.currency must be USD`);
+  const providerCap = normalizeObservedCostLine(value.provider_cap, `${field}.provider_cap`);
+  if (decimalMicros(providerCap.amount_usd, `${field}.provider_cap.amount_usd`) === 0n) {
+    throw new Error(`${field}.provider_cap.amount_usd must be greater than zero`);
+  }
+  return {
+    currency: "USD",
+    provider_cap: providerCap,
+    derived_estimate: normalizeObservedCostLine(
+      value.derived_estimate,
+      `${field}.derived_estimate`
+    ),
+    aggregate_console_delta: normalizeObservedCostLine(
+      value.aggregate_console_delta,
+      `${field}.aggregate_console_delta`
+    ),
+    actual_sandbox: normalizeActualSandboxCost(
+      value.actual_sandbox,
+      `${field}.actual_sandbox`
+    )
+  };
+}
+function normalizeExternalObservationBindings(value) {
+  const field = "E2B external qualification observation bindings";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, EXTERNAL_OBSERVATION_BINDING_KEYS, field);
+  return Object.fromEntries(EXTERNAL_OBSERVATION_BINDING_KEYS.map((key) => [
+    key,
+    requireSha256Ref(value[key], `${field}.${key}`)
+  ]));
+}
+function normalizeRequestedLimits(value) {
+  const field = "E2B external qualification observation requested limits";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "hard_ttl_ms",
+    "idle_ttl_ms",
+    "max_execution_ms",
+    "max_cost_usd"
+  ], field);
+  const normalized = {
+    hard_ttl_ms: boundedInteger(value.hard_ttl_ms, `${field}.hard_ttl_ms`, {
+      min: 1e3,
+      max: 24 * 60 * 60 * 1e3
+    }),
+    idle_ttl_ms: boundedInteger(value.idle_ttl_ms, `${field}.idle_ttl_ms`, {
+      min: 1e3,
+      max: 24 * 60 * 60 * 1e3
+    }),
+    max_execution_ms: boundedInteger(value.max_execution_ms, `${field}.max_execution_ms`, {
+      min: 100,
+      max: 10 * 60 * 1e3
+    }),
+    max_cost_usd: canonicalDecimal(value.max_cost_usd, `${field}.max_cost_usd`)
+  };
+  if (normalized.idle_ttl_ms > normalized.hard_ttl_ms || normalized.max_execution_ms > normalized.hard_ttl_ms) {
+    throw new TypeError("E2B external qualification requested limits exceed the hard TTL");
+  }
+  return normalized;
+}
+function normalizeExternalNetwork(value) {
+  const field = "E2B external qualification observation network";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "first_instruction_ipv4_egress_denied",
+    "first_instruction_ipv6_egress_denied",
+    "ipv6_provider_denial"
+  ], field);
+  return {
+    first_instruction_ipv4_egress_denied: requireBoolean2(
+      value.first_instruction_ipv4_egress_denied,
+      `${field}.first_instruction_ipv4_egress_denied`
+    ),
+    first_instruction_ipv6_egress_denied: requireBoolean2(
+      value.first_instruction_ipv6_egress_denied,
+      `${field}.first_instruction_ipv6_egress_denied`
+    ),
+    ipv6_provider_denial: normalizeStatusEvidence(
+      value.ipv6_provider_denial,
+      `${field}.ipv6_provider_denial`
+    )
+  };
+}
+function normalizeExternalObservationReceipt(value) {
+  const field = "E2B external qualification observation receipt";
+  assertPlainObject(value, field);
+  assertAllowedKeys(value, [
+    "schema",
+    "base_evidence_hash",
+    "observer",
+    "audience",
+    "observed_at",
+    "issued_at",
+    "expires_at",
+    "bindings",
+    "requested_limits",
+    "network",
+    "provider_controls",
+    "cost",
+    "observation_hash",
+    "signature"
+  ], field);
+  if (value.schema !== E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA) {
+    throw new TypeError(`${field}.schema is invalid`);
+  }
+  const payload = {
+    schema: E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA,
+    base_evidence_hash: requireSha256Ref(
+      value.base_evidence_hash,
+      `${field}.base_evidence_hash`
+    ),
+    observer: normalizeObserverIdentity(value.observer),
+    audience: normalizeExternalObservationAudience(value.audience),
+    ...normalizeObservationTimes(value, field),
+    bindings: normalizeExternalObservationBindings(value.bindings),
+    requested_limits: normalizeRequestedLimits(value.requested_limits),
+    network: normalizeExternalNetwork(value.network),
+    provider_controls: normalizeExternalProviderControls(value.provider_controls),
+    cost: normalizeExternalCost(value.cost),
+    observation_hash: requireSha256Ref(value.observation_hash, `${field}.observation_hash`)
+  };
+  const expectedObservationHash = sha256Ref2({ ...payload, observation_hash: null });
+  if (!safeEqual(payload.observation_hash, expectedObservationHash)) {
+    throw new Error("E2B external qualification observation hash mismatch");
+  }
+  const signature = value.signature;
+  requireEd25519Signature(signature, `${field}.signature`);
+  return deepFreeze({ ...payload, signature });
+}
+function requireEd25519Signature(value, field = "E2B qualification trust signature") {
   if (typeof value !== "string" || value.length < 80 || value.length > 100 || !/^[A-Za-z0-9_-]+$/.test(value)) {
-    throw new TypeError("E2B qualification trust signature must be canonical base64url");
+    throw new TypeError(`${field} must be canonical base64url`);
   }
   const bytes = Buffer.from(value, "base64url");
   if (bytes.length !== 64 || bytes.toString("base64url") !== value) {
-    throw new TypeError("E2B qualification trust signature must be a canonical Ed25519 signature");
+    throw new TypeError(`${field} must be a canonical Ed25519 signature`);
   }
   return bytes;
 }
@@ -52476,12 +52864,22 @@ function createE2BQualificationTrustVerifier(options = {}) {
   }
   const verifier = {
     key_hash: keyHash,
-    createPayload(value, expected = {}) {
-      const evidence = validateE2BQualificationEvidence(value, expected);
+    createPayload(value, expected = {}, externalObservationVerifier = null) {
+      const evidence = validateE2BQualificationEvidence(
+        value,
+        expected,
+        externalObservationVerifier
+      );
+      assertDistinctQualificationTrustKey(evidence, keyHash);
       return qualificationTrustPayload(evidence, keyHash);
     },
-    verify(value, trust, expected = {}) {
-      const evidence = validateE2BQualificationEvidence(value, expected);
+    verify(value, trust, expected = {}, externalObservationVerifier = null) {
+      const evidence = validateE2BQualificationEvidence(
+        value,
+        expected,
+        externalObservationVerifier
+      );
+      assertDistinctQualificationTrustKey(evidence, keyHash);
       assertPlainObject(trust, "E2B qualification trust");
       assertAllowedKeys(
         trust,
@@ -52507,20 +52905,167 @@ function createE2BQualificationTrustVerifier(options = {}) {
   QUALIFICATION_TRUST_VERIFIERS.add(verifier);
   return Object.freeze(verifier);
 }
-function verifyE2BQualificationTrust(value, trust, verifier, expected = {}) {
+function verifyE2BQualificationTrust(value, trust, verifier, expected = {}, externalObservationVerifier = null) {
   if (!verifier || !QUALIFICATION_TRUST_VERIFIERS.has(verifier)) {
     throw new TypeError(
       "E2B qualification trust requires a trusted verifier created by createE2BQualificationTrustVerifier"
     );
   }
-  return verifier.verify(value, trust, expected);
+  return verifier.verify(value, trust, expected, externalObservationVerifier);
 }
-function createE2BQualificationEvidence(input = {}) {
+function computedEvidence(input) {
   const evidence = normalizeEvidence2(input, { includeComputedFields: false });
   evidence.evidence_hash = sha256Ref2({ ...evidence, evidence_hash: null });
   return deepFreeze(evidence);
 }
-function validateE2BQualificationEvidence(value, expected = {}) {
+function externalResultRefSet() {
+  return /* @__PURE__ */ new Set([
+    ...Object.values(EXTERNAL_QUALIFICATION_RESULT_REFS),
+    ...Object.values(EXTERNAL_PROVIDER_CONTROL_RESULT_REFS)
+  ]);
+}
+function provisionalEvidenceFromFinalized(evidence) {
+  const {
+    schema: _schema,
+    status: _status,
+    authority_flags: _authorityFlags,
+    evidence_hash: _evidenceHash,
+    ...input
+  } = evidence;
+  const externalRefs = externalResultRefSet();
+  return computedEvidence({
+    ...input,
+    observations: {
+      ...evidence.observations,
+      observed_cost_usd: null
+    },
+    controls: {
+      ...evidence.controls,
+      first_instruction_ipv4_egress_denied: "unknown",
+      first_instruction_ipv6_egress_denied: "unknown",
+      cost_within_cap: "unknown",
+      ...Object.fromEntries(E2B_EXTERNAL_PROVIDER_CONTROLS.map((control) => [
+        control,
+        "unknown"
+      ]))
+    },
+    evidence_refs: evidence.evidence_refs.filter(({ ref }) => !externalRefs.has(ref)),
+    external_observation_receipt: null
+  });
+}
+function costControlStatus(evidence, observation) {
+  const actual = observation.cost.actual_sandbox;
+  if (actual.status !== "finalized") return "unknown";
+  const actualMicros = decimalMicros(
+    actual.amount_usd,
+    "E2B external qualification actual sandbox cost"
+  );
+  const requestedMaxMicros = decimalMicros(
+    evidence.limits.max_cost_usd,
+    "E2B qualification limits.max_cost_usd"
+  );
+  const providerCapMicros = decimalMicros(
+    observation.cost.provider_cap.amount_usd,
+    "E2B external qualification provider cost cap"
+  );
+  return providerCapMicros <= requestedMaxMicros && actualMicros <= requestedMaxMicros && actualMicros <= providerCapMicros ? "verified" : "failed";
+}
+function ipv6ControlStatus(observation) {
+  if (!observation.network.first_instruction_ipv6_egress_denied) return "failed";
+  return observation.network.ipv6_provider_denial.status;
+}
+function finalizeE2BQualificationEvidence(evidence, verified) {
+  const controls = {
+    ...evidence.controls,
+    first_instruction_ipv4_egress_denied: verified.network.first_instruction_ipv4_egress_denied ? "verified" : "failed",
+    first_instruction_ipv6_egress_denied: ipv6ControlStatus(verified),
+    cost_within_cap: costControlStatus(evidence, verified)
+  };
+  for (const control of E2B_EXTERNAL_PROVIDER_CONTROLS) {
+    controls[control] = verified.provider_controls[control].status;
+  }
+  const resultRefs = [
+    {
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.observation_hash,
+      hash: sha256Ref2(verified)
+    },
+    {
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.observer_key_hash,
+      hash: verified.observer.public_key_hash
+    },
+    {
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.provider_cost_cap_evidence_hash,
+      hash: verified.cost.provider_cap.evidence_hash
+    },
+    {
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.derived_cost_estimate_evidence_hash,
+      hash: verified.cost.derived_estimate.evidence_hash
+    },
+    {
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.aggregate_console_delta_evidence_hash,
+      hash: verified.cost.aggregate_console_delta.evidence_hash
+    }
+  ];
+  if (verified.cost.actual_sandbox.evidence_hash !== null) {
+    resultRefs.push({
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.actual_sandbox_cost_evidence_hash,
+      hash: verified.cost.actual_sandbox.evidence_hash
+    });
+  }
+  if (verified.network.ipv6_provider_denial.evidence_hash !== null) {
+    resultRefs.push({
+      ref: EXTERNAL_QUALIFICATION_RESULT_REFS.ipv6_provider_denial_evidence_hash,
+      hash: verified.network.ipv6_provider_denial.evidence_hash
+    });
+  }
+  resultRefs.push(...E2B_EXTERNAL_PROVIDER_CONTROLS.map((control) => ({
+    ref: EXTERNAL_PROVIDER_CONTROL_RESULT_REFS[control],
+    hash: verified.provider_controls[control].evidence_hash
+  })));
+  const {
+    schema: _schema,
+    status: _status,
+    authority_flags: _authorityFlags,
+    evidence_hash: _evidenceHash,
+    ...input
+  } = evidence;
+  return computedEvidence({
+    ...input,
+    observations: {
+      ...evidence.observations,
+      observed_cost_usd: verified.cost.actual_sandbox.amount_usd
+    },
+    controls,
+    evidence_refs: [...evidence.evidence_refs, ...resultRefs],
+    external_observation_receipt: verified
+  });
+}
+function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVerifier) {
+  if (!externalObservationVerifier || !EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.has(externalObservationVerifier)) {
+    throw new TypeError(
+      "Finalized E2B qualification evidence requires a caller-pinned external observation verifier"
+    );
+  }
+  const provisional = provisionalEvidenceFromFinalized(evidence);
+  const verified = externalObservationVerifier.verify(
+    provisional,
+    evidence.external_observation_receipt
+  );
+  const expectedFinalized = finalizeE2BQualificationEvidence(provisional, verified);
+  if (canonicalize2(expectedFinalized) !== canonicalize2(evidence)) {
+    throw new Error("E2B qualification evidence does not exactly match its observer receipt");
+  }
+}
+function createE2BQualificationEvidence(input = {}) {
+  const evidence = computedEvidence(input);
+  if (evidence.external_observation_receipt !== null) {
+    throw new Error(
+      "Finalized E2B qualification evidence must be created by applyE2BExternalQualificationObservation"
+    );
+  }
+  return evidence;
+}
+function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
   const normalized = normalizeEvidence2(value, { includeComputedFields: true });
   const expectedHash = sha256Ref2({ ...normalized, evidence_hash: null });
   if (!safeEqual(normalized.evidence_hash, expectedHash)) {
@@ -52530,11 +53075,14 @@ function validateE2BQualificationEvidence(value, expected = {}) {
     throw new Error("E2B qualification evidence is not canonical and closed");
   }
   assertExpectedBindings(normalized, expected);
+  if (normalized.external_observation_receipt !== null) {
+    assertFinalizedEvidenceMatchesReceipt(normalized, externalObservationVerifier);
+  }
   return deepFreeze(normalized);
 }
-function isE2BQualificationEvidenceCanonical(value, expected = {}) {
+function isE2BQualificationEvidenceCanonical(value, expected = {}, externalObservationVerifier = null) {
   try {
-    validateE2BQualificationEvidence(value, expected);
+    validateE2BQualificationEvidence(value, expected, externalObservationVerifier);
     return true;
   } catch {
     return false;
@@ -52554,6 +53102,508 @@ import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/e2b-template/lib/runtime-contract.mjs
+var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
+var E2B_BIRTH_REQUEST_SCHEMA = "agoragentic.risk-fork.e2b-birth-request.v1";
+var E2B_BIRTH_ATTESTATION_SCHEMA = "agoragentic.risk-fork.e2b-birth-attestation.v2";
+var E2B_BIRTH_RUNTIME_DIRECTORY = "/run/agoragentic-risk-fork";
+var E2B_TEMPLATE_BUILD_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/template-build-ready`;
+var E2B_BOOT_EVIDENCE_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/boot-evidence.json`;
+var E2B_BOOT_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-ready`;
+var E2B_BIRTH_REQUEST_MAX_BYTES = 64 * 1024;
+var E2B_BIRTH_MAX_VALIDITY_MS = 3e4;
+var EMPTY_RUNTIME_WORKSPACE_DIGEST = sha256Ref2([]);
+var BOOT_EVIDENCE_CLAIMS = Object.freeze([
+  "inherited_parent_processes_absent",
+  "unauthorized_environment_absent",
+  "credential_files_absent",
+  "wallet_signing_material_absent",
+  "inherited_authority_records_absent",
+  "persistent_mounts_absent",
+  "unauthorized_sockets_absent",
+  "first_instruction_ipv4_egress_denied",
+  "first_instruction_ipv6_egress_denied",
+  "fresh_entropy_verified",
+  "trusted_runtime_artifacts_verified"
+]);
+var BOOT_KEYS = Object.freeze([
+  "schema",
+  "status",
+  "observed_at",
+  "expires_at",
+  "boot_nonce",
+  "boot_id_hash",
+  "entropy_hash",
+  "bootstrap_artifact_hash",
+  "runner_artifact_hash",
+  "measurements",
+  "observation_hashes",
+  "claims",
+  "raw_environment_values_included",
+  "raw_processes_included",
+  "raw_sockets_included",
+  "raw_mounts_included",
+  "raw_credentials_included",
+  "evidence_hash"
+]);
+var MEASUREMENT_KEYS = Object.freeze([
+  "environment_key_count",
+  "process_count",
+  "socket_count",
+  "mount_count",
+  "credential_path_count"
+]);
+var OBSERVATION_HASH_KEYS = Object.freeze([
+  "environment_keys_hash",
+  "processes_hash",
+  "sockets_hash",
+  "mounts_hash",
+  "credential_paths_hash",
+  "ipv4_probe_hash",
+  "ipv6_probe_hash"
+]);
+var MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
+var BIRTH_AUTHORITY_FLAGS = Object.freeze([
+  "credentials_included",
+  "wallet_material_included",
+  "execution_authority_included",
+  "production_activation_granted"
+]);
+var BIRTH_REQUEST_KEYS = Object.freeze([
+  "schema",
+  "sandbox_id_hash",
+  "provider_metadata_hash",
+  "template_id_hash",
+  "template_evidence_hash",
+  "template_provenance_hash",
+  "allocation_started_at",
+  "expires_at",
+  "birth_nonce",
+  "authority_flags",
+  "request_hash"
+]);
+var BIRTH_ATTESTATION_CLAIMS = Object.freeze({
+  request_canonical_observed: true,
+  request_consumed_once_observed: true,
+  boot_observation_hash_bound: true,
+  observed_after_allocation: true,
+  privileged_producer_verified: false
+});
+var BIRTH_ATTESTATION_KEYS = Object.freeze([
+  "schema",
+  "status",
+  "trust_status",
+  "birth_request_hash",
+  "boot_evidence_hash",
+  "sandbox_id_hash",
+  "provider_metadata_hash",
+  "template_id_hash",
+  "template_evidence_hash",
+  "template_provenance_hash",
+  "allocation_started_at",
+  "birth_nonce_hash",
+  "observed_at",
+  "expires_at",
+  "claims",
+  "authority_flags",
+  "attestation_hash"
+]);
+function assertPlainObject2(value, field) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${field} must be a plain object`);
+  }
+  return value;
+}
+function assertAllowedKeys2(value, allowed, field) {
+  assertPlainObject2(value, field);
+  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unexpected.length > 0) {
+    throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(", ")}`);
+  }
+}
+function requireSha256Ref2(value, field) {
+  if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+    throw new TypeError(`${field} must be a SHA-256 reference`);
+  }
+  return value;
+}
+function requireIso(value, field) {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) {
+    throw new TypeError(`${field} must be an ISO date-time`);
+  }
+  const normalized = new Date(Date.parse(value)).toISOString();
+  if (normalized !== value) throw new TypeError(`${field} must be canonical ISO 8601`);
+  return normalized;
+}
+function boundedCount(value, field, max = 1e6) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > max) {
+    throw new TypeError(`${field} must be a bounded non-negative integer`);
+  }
+  return value;
+}
+function requireBirthNonce(value, field) {
+  if (typeof value !== "string" || value.length < 16 || value.length > 200 || /\s|[\u0000-\u001f\u007f]/.test(value)) {
+    throw new TypeError(`${field} must be a bounded opaque nonce`);
+  }
+  return value;
+}
+function normalizeAuthorityFlags(value, field) {
+  assertAllowedKeys2(value, BIRTH_AUTHORITY_FLAGS, field);
+  const normalized = Object.fromEntries(BIRTH_AUTHORITY_FLAGS.map((key) => {
+    if (value[key] !== false) throw new Error(`${field}.${key} must remain false`);
+    return [key, false];
+  }));
+  return normalized;
+}
+function birthAuthorityFlags() {
+  return Object.fromEntries(BIRTH_AUTHORITY_FLAGS.map((key) => [key, false]));
+}
+function e2bBirthRequestPaths(requestHash) {
+  const digest = requireSha256Ref2(requestHash, "E2B birth request hash").slice(7);
+  return Object.freeze({
+    request: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-request.${digest}.json`,
+    trigger: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-request.${digest}.ready`,
+    consumed: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-consumed.${digest}.json`,
+    consumed_trigger: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-consumed.${digest}.ready`,
+    attestation: `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-attestation.${digest}.json`
+  });
+}
+function normalizeBootEvidence(value, includeComputed) {
+  assertPlainObject2(value, "E2B boot evidence");
+  assertAllowedKeys2(
+    value,
+    includeComputed ? BOOT_KEYS : BOOT_KEYS.filter(
+      (key) => !["schema", "status", "raw_environment_values_included", "raw_processes_included", "raw_sockets_included", "raw_mounts_included", "raw_credentials_included", "evidence_hash"].includes(key)
+    ),
+    "E2B boot evidence"
+  );
+  const observedAt = requireIso(value.observed_at, "E2B boot evidence.observed_at");
+  const expiresAt = requireIso(value.expires_at, "E2B boot evidence.expires_at");
+  if (Date.parse(expiresAt) <= Date.parse(observedAt) || Date.parse(expiresAt) > Date.parse(observedAt) + 5 * 6e4) {
+    throw new Error("E2B boot evidence validity window is invalid");
+  }
+  if (typeof value.boot_nonce !== "string" || value.boot_nonce.length < 16 || value.boot_nonce.length > 200 || /\s|[\u0000-\u001f\u007f]/.test(value.boot_nonce)) {
+    throw new TypeError("E2B boot evidence boot_nonce is invalid");
+  }
+  assertPlainObject2(value.measurements, "E2B boot evidence.measurements");
+  assertAllowedKeys2(value.measurements, MEASUREMENT_KEYS, "E2B boot evidence.measurements");
+  const measurements = Object.fromEntries(MEASUREMENT_KEYS.map((key) => [
+    key,
+    boundedCount(value.measurements[key], `E2B boot evidence.measurements.${key}`)
+  ]));
+  assertPlainObject2(value.observation_hashes, "E2B boot evidence.observation_hashes");
+  assertAllowedKeys2(
+    value.observation_hashes,
+    OBSERVATION_HASH_KEYS,
+    "E2B boot evidence.observation_hashes"
+  );
+  const observationHashes = Object.fromEntries(OBSERVATION_HASH_KEYS.map((key) => [
+    key,
+    requireSha256Ref2(value.observation_hashes[key], `E2B boot evidence.${key}`)
+  ]));
+  assertPlainObject2(value.claims, "E2B boot evidence.claims");
+  assertAllowedKeys2(value.claims, BOOT_EVIDENCE_CLAIMS, "E2B boot evidence.claims");
+  const claims = Object.fromEntries(BOOT_EVIDENCE_CLAIMS.map((key) => {
+    if (typeof value.claims[key] !== "boolean") {
+      throw new TypeError(`E2B boot evidence.claims.${key} must be boolean`);
+    }
+    return [key, value.claims[key]];
+  }));
+  const status = Object.values(claims).every((claim) => claim === true) ? "verified" : "failed";
+  const rawFlags = {
+    raw_environment_values_included: false,
+    raw_processes_included: false,
+    raw_sockets_included: false,
+    raw_mounts_included: false,
+    raw_credentials_included: false
+  };
+  if (includeComputed) {
+    if (value.schema !== BOOT_EVIDENCE_SCHEMA || value.status !== status) {
+      throw new Error("E2B boot evidence schema or status is inconsistent");
+    }
+    for (const key of Object.keys(rawFlags)) {
+      if (value[key] !== false) throw new Error(`E2B boot evidence cannot include ${key}`);
+    }
+  }
+  return {
+    schema: BOOT_EVIDENCE_SCHEMA,
+    status,
+    observed_at: observedAt,
+    expires_at: expiresAt,
+    boot_nonce: value.boot_nonce,
+    boot_id_hash: requireSha256Ref2(value.boot_id_hash, "E2B boot evidence.boot_id_hash"),
+    entropy_hash: requireSha256Ref2(value.entropy_hash, "E2B boot evidence.entropy_hash"),
+    bootstrap_artifact_hash: requireSha256Ref2(
+      value.bootstrap_artifact_hash,
+      "E2B boot evidence.bootstrap_artifact_hash"
+    ),
+    runner_artifact_hash: requireSha256Ref2(
+      value.runner_artifact_hash,
+      "E2B boot evidence.runner_artifact_hash"
+    ),
+    measurements,
+    observation_hashes: observationHashes,
+    claims,
+    ...rawFlags,
+    evidence_hash: includeComputed ? requireSha256Ref2(value.evidence_hash, "E2B boot evidence.evidence_hash") : null
+  };
+}
+function validateBootObservationEnvelope(value, options = {}) {
+  const normalized = normalizeBootEvidence(value, true);
+  const expectedHash = sha256Ref2({ ...normalized, evidence_hash: null });
+  if (normalized.evidence_hash !== expectedHash) throw new Error("E2B boot evidence hash mismatch");
+  if (canonicalize2(normalized) !== canonicalize2(value)) {
+    throw new Error("E2B boot evidence is not canonical and closed");
+  }
+  const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now ?? /* @__PURE__ */ new Date());
+  if (!Number.isFinite(now) || now < Date.parse(normalized.observed_at) || now >= Date.parse(normalized.expires_at)) {
+    throw new Error("E2B boot evidence is stale or outside its validity window");
+  }
+  for (const [field, wanted] of [
+    ["bootstrap_artifact_hash", options.bootstrapArtifactHash],
+    ["runner_artifact_hash", options.runnerArtifactHash],
+    ["evidence_hash", options.evidenceHash]
+  ]) {
+    if (wanted != null && normalized[field] !== wanted) {
+      throw new Error(`E2B boot evidence binding mismatch: ${field}`);
+    }
+  }
+  return Object.freeze(normalized);
+}
+function normalizeBirthRequest(value, includeComputed) {
+  assertPlainObject2(value, "E2B birth request");
+  assertAllowedKeys2(
+    value,
+    includeComputed ? BIRTH_REQUEST_KEYS : BIRTH_REQUEST_KEYS.filter((key) => !["schema", "request_hash"].includes(key)),
+    "E2B birth request"
+  );
+  const allocationStartedAt = requireIso(
+    value.allocation_started_at,
+    "E2B birth request.allocation_started_at"
+  );
+  const expiresAt = requireIso(value.expires_at, "E2B birth request.expires_at");
+  if (Date.parse(expiresAt) <= Date.parse(allocationStartedAt) || Date.parse(expiresAt) > Date.parse(allocationStartedAt) + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw new Error("E2B birth request validity window is invalid");
+  }
+  const normalized = {
+    schema: E2B_BIRTH_REQUEST_SCHEMA,
+    sandbox_id_hash: requireSha256Ref2(
+      value.sandbox_id_hash,
+      "E2B birth request.sandbox_id_hash"
+    ),
+    provider_metadata_hash: requireSha256Ref2(
+      value.provider_metadata_hash,
+      "E2B birth request.provider_metadata_hash"
+    ),
+    template_id_hash: requireSha256Ref2(
+      value.template_id_hash,
+      "E2B birth request.template_id_hash"
+    ),
+    template_evidence_hash: requireSha256Ref2(
+      value.template_evidence_hash,
+      "E2B birth request.template_evidence_hash"
+    ),
+    template_provenance_hash: requireSha256Ref2(
+      value.template_provenance_hash,
+      "E2B birth request.template_provenance_hash"
+    ),
+    allocation_started_at: allocationStartedAt,
+    expires_at: expiresAt,
+    birth_nonce: requireBirthNonce(value.birth_nonce, "E2B birth request.birth_nonce"),
+    authority_flags: normalizeAuthorityFlags(
+      value.authority_flags,
+      "E2B birth request.authority_flags"
+    ),
+    request_hash: includeComputed ? requireSha256Ref2(value.request_hash, "E2B birth request.request_hash") : null
+  };
+  if (includeComputed && value.schema !== E2B_BIRTH_REQUEST_SCHEMA) {
+    throw new Error("E2B birth request schema is invalid");
+  }
+  return normalized;
+}
+function createE2BBirthRequest(input = {}) {
+  const normalized = normalizeBirthRequest({
+    ...input,
+    authority_flags: input.authority_flags ?? birthAuthorityFlags()
+  }, false);
+  normalized.request_hash = sha256Ref2({ ...normalized, request_hash: null });
+  return Object.freeze({
+    ...normalized,
+    authority_flags: Object.freeze(normalized.authority_flags)
+  });
+}
+function validateE2BBirthRequest(value, options = {}) {
+  const normalized = normalizeBirthRequest(value, true);
+  const expectedHash = sha256Ref2({ ...normalized, request_hash: null });
+  if (normalized.request_hash !== expectedHash) throw new Error("E2B birth request hash mismatch");
+  if (canonicalize2(normalized) !== canonicalize2(value)) {
+    throw new Error("E2B birth request is not canonical and closed");
+  }
+  for (const [field, wanted] of [
+    ["sandbox_id_hash", options.sandboxIdHash],
+    ["provider_metadata_hash", options.providerMetadataHash],
+    ["template_id_hash", options.templateIdHash],
+    ["template_evidence_hash", options.templateEvidenceHash],
+    ["template_provenance_hash", options.templateProvenanceHash],
+    ["allocation_started_at", options.allocationStartedAt],
+    ["request_hash", options.requestHash]
+  ]) {
+    if (wanted != null && normalized[field] !== wanted) {
+      throw new Error(`E2B birth request binding mismatch: ${field}`);
+    }
+  }
+  if (options.birthNonce != null && normalized.birth_nonce !== options.birthNonce) {
+    throw new Error("E2B birth request binding mismatch: birth_nonce");
+  }
+  if (options.now != null) {
+    const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now);
+    if (!Number.isFinite(now) || now < Date.parse(normalized.allocation_started_at) || now >= Date.parse(normalized.expires_at)) {
+      throw new Error("E2B birth request is pre-allocation, expired, or outside its validity window");
+    }
+  }
+  return Object.freeze({
+    ...normalized,
+    authority_flags: Object.freeze(normalized.authority_flags)
+  });
+}
+function normalizeBirthAttestation(value, includeComputed) {
+  assertPlainObject2(value, "E2B birth attestation");
+  assertAllowedKeys2(
+    value,
+    includeComputed ? BIRTH_ATTESTATION_KEYS : BIRTH_ATTESTATION_KEYS.filter(
+      (key) => !["schema", "status", "attestation_hash"].includes(key)
+    ),
+    "E2B birth attestation"
+  );
+  const allocationStartedAt = requireIso(
+    value.allocation_started_at,
+    "E2B birth attestation.allocation_started_at"
+  );
+  const observedAt = requireIso(value.observed_at, "E2B birth attestation.observed_at");
+  const expiresAt = requireIso(value.expires_at, "E2B birth attestation.expires_at");
+  if (Date.parse(observedAt) < Date.parse(allocationStartedAt) || Date.parse(expiresAt) <= Date.parse(observedAt) || Date.parse(expiresAt) > Date.parse(allocationStartedAt) + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw new Error("E2B birth attestation timing is invalid");
+  }
+  const claimKeys = Object.keys(BIRTH_ATTESTATION_CLAIMS);
+  assertAllowedKeys2(value.claims, claimKeys, "E2B birth attestation.claims");
+  const claims = Object.fromEntries(claimKeys.map((key) => {
+    if (value.claims[key] !== BIRTH_ATTESTATION_CLAIMS[key]) {
+      throw new Error(
+        `E2B birth attestation.claims.${key} must remain ${BIRTH_ATTESTATION_CLAIMS[key]}`
+      );
+    }
+    return [key, BIRTH_ATTESTATION_CLAIMS[key]];
+  }));
+  const normalized = {
+    schema: E2B_BIRTH_ATTESTATION_SCHEMA,
+    status: "untrusted_observation",
+    trust_status: "untrusted_same_uid_self_assertion",
+    birth_request_hash: requireSha256Ref2(
+      value.birth_request_hash,
+      "E2B birth attestation.birth_request_hash"
+    ),
+    boot_evidence_hash: requireSha256Ref2(
+      value.boot_evidence_hash,
+      "E2B birth attestation.boot_evidence_hash"
+    ),
+    sandbox_id_hash: requireSha256Ref2(
+      value.sandbox_id_hash,
+      "E2B birth attestation.sandbox_id_hash"
+    ),
+    provider_metadata_hash: requireSha256Ref2(
+      value.provider_metadata_hash,
+      "E2B birth attestation.provider_metadata_hash"
+    ),
+    template_id_hash: requireSha256Ref2(
+      value.template_id_hash,
+      "E2B birth attestation.template_id_hash"
+    ),
+    template_evidence_hash: requireSha256Ref2(
+      value.template_evidence_hash,
+      "E2B birth attestation.template_evidence_hash"
+    ),
+    template_provenance_hash: requireSha256Ref2(
+      value.template_provenance_hash,
+      "E2B birth attestation.template_provenance_hash"
+    ),
+    allocation_started_at: allocationStartedAt,
+    birth_nonce_hash: requireSha256Ref2(
+      value.birth_nonce_hash,
+      "E2B birth attestation.birth_nonce_hash"
+    ),
+    observed_at: observedAt,
+    expires_at: expiresAt,
+    claims,
+    authority_flags: normalizeAuthorityFlags(
+      value.authority_flags,
+      "E2B birth attestation.authority_flags"
+    ),
+    attestation_hash: includeComputed ? requireSha256Ref2(value.attestation_hash, "E2B birth attestation.attestation_hash") : null
+  };
+  if (includeComputed && (value.schema !== E2B_BIRTH_ATTESTATION_SCHEMA || value.status !== "untrusted_observation" || value.trust_status !== "untrusted_same_uid_self_assertion")) {
+    throw new Error("E2B birth attestation schema, status, or trust status is invalid");
+  }
+  return normalized;
+}
+function validateE2BBirthAttestation(value, options = {}) {
+  const normalized = normalizeBirthAttestation(value, true);
+  const expectedHash = sha256Ref2({ ...normalized, attestation_hash: null });
+  if (normalized.attestation_hash !== expectedHash) {
+    throw new Error("E2B birth attestation hash mismatch");
+  }
+  if (canonicalize2(normalized) !== canonicalize2(value)) {
+    throw new Error("E2B birth attestation is not canonical and closed");
+  }
+  const request = validateE2BBirthRequest(options.request, {
+    now: options.now ?? normalized.observed_at
+  });
+  const bootEvidence = validateBootObservationEnvelope(options.bootEvidence, {
+    now: options.now ?? normalized.observed_at,
+    bootstrapArtifactHash: options.bootstrapArtifactHash,
+    runnerArtifactHash: options.runnerArtifactHash
+  });
+  const expectedExpiresAt = new Date(Math.min(
+    Date.parse(request.expires_at),
+    Date.parse(bootEvidence.expires_at)
+  )).toISOString();
+  if (normalized.expires_at !== expectedExpiresAt) {
+    throw new Error("E2B birth attestation expiry is not exact-bound to its evidence");
+  }
+  for (const [field, wanted] of Object.entries({
+    birth_request_hash: request.request_hash,
+    boot_evidence_hash: bootEvidence.evidence_hash,
+    sandbox_id_hash: request.sandbox_id_hash,
+    provider_metadata_hash: request.provider_metadata_hash,
+    template_id_hash: request.template_id_hash,
+    template_evidence_hash: request.template_evidence_hash,
+    template_provenance_hash: request.template_provenance_hash,
+    allocation_started_at: request.allocation_started_at,
+    birth_nonce_hash: sha256Ref2(request.birth_nonce)
+  })) {
+    if (normalized[field] !== wanted) {
+      throw new Error(`E2B birth attestation binding mismatch: ${field}`);
+    }
+  }
+  if (bootEvidence.boot_nonce !== request.birth_nonce || Date.parse(bootEvidence.observed_at) < Date.parse(request.allocation_started_at) || Date.parse(normalized.observed_at) < Date.parse(bootEvidence.observed_at)) {
+    throw new Error("E2B birth attestation does not prove fresh post-allocation boot evidence");
+  }
+  if (options.now != null) {
+    const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now);
+    if (!Number.isFinite(now) || now < Date.parse(normalized.observed_at) || now >= Date.parse(normalized.expires_at)) {
+      throw new Error("E2B birth attestation is stale or outside its validity window");
+    }
+  }
+  return Object.freeze({
+    ...normalized,
+    claims: Object.freeze(normalized.claims),
+    authority_flags: Object.freeze(normalized.authority_flags)
+  });
+}
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
 import { randomUUID as randomUUID5 } from "node:crypto";
@@ -53614,6 +54664,7 @@ var DEFAULT_RUNNER_COMMAND = "/opt/agoragentic/risk-fork/bin/run";
 var MAX_JOB_BYTES = 1024 * 1024;
 var MAX_RESULT_BYTES = 4 * 1024 * 1024;
 var MAX_ATTESTATION_BYTES = 128 * 1024;
+var DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS = 1e4;
 var MAX_RESULT_STREAM_IDLE_TIMEOUT_MS = 5e3;
 var MIN_RESULT_STREAM_IDLE_TIMEOUT_MS = 50;
 var MAX_JSON_NODES = 2e4;
@@ -53624,6 +54675,8 @@ var PROFILE_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-clean-template.v1";
 var EMPTY_WORKSPACE_DIGEST = sha256Ref2([]);
 var E2B_SDK_ALL_TRAFFIC_SENTINEL = "0.0.0.0/0";
 var E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE = "E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE";
+var E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER = "E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER";
+var E2B_LIVE_FORK_SOURCE_ENABLED = false;
 function secureSnapshotProfileUnavailable(operation) {
   const error = new Error(
     "E2B secure Risk Fork snapshot profile is unavailable; the adapter is fail-closed"
@@ -53690,11 +54743,20 @@ function requireFixedCommand(value, field) {
   }
   return command;
 }
-function isNotFound(error) {
-  const status = error?.status ?? error?.statusCode ?? error?.response?.status ?? error?.cause?.status;
+function notFoundStatus(error) {
+  return error?.status ?? error?.statusCode ?? error?.response?.status ?? error?.cause?.status;
+}
+function isRemoteFileNotFound(error) {
+  const status = notFoundStatus(error);
   const code = String(error?.code ?? "").toUpperCase();
   const name = String(error?.name ?? "").toUpperCase();
-  return status === 404 || code === "NOT_FOUND" || code === "SANDBOX_NOT_FOUND" || name === "SANDBOXNOTFOUNDERROR";
+  return status === 404 || code === "ENOENT" || code === "NOT_FOUND" || name === "FILENOTFOUNDERROR";
+}
+function isSandboxNotFound(error) {
+  const status = notFoundStatus(error);
+  const code = String(error?.code ?? "").toUpperCase();
+  const name = String(error?.name ?? "").toUpperCase();
+  return status === 404 || code === "SANDBOX_NOT_FOUND" || name === "SANDBOXNOTFOUNDERROR";
 }
 function errorCode(error, fallback) {
   return String(error?.code ?? error?.name ?? fallback).slice(0, 200);
@@ -53954,7 +55016,7 @@ function assertExactMetadata(actual, expected, field) {
     if (actual[key] !== expected[key]) throw new Error(`${field} metadata binding mismatch`);
   }
 }
-function safeProviderObservation(info, expected = {}) {
+function validateE2BSandboxInfo(info, expected = {}) {
   const field = expected.field ?? "E2B sandbox";
   assertPlainObject(info, field);
   const sandboxId = requireString(
@@ -54006,12 +55068,250 @@ function safeProviderObservation(info, expected = {}) {
     sandbox_id_hash: sha256Ref2(sandboxId),
     template_id_hash: sha256Ref2(templateId),
     metadata_hash: sha256Ref2(expected.metadata),
-    network_status: "exact_sdk_all_traffic_sentinel_observed_offline_contract",
-    volume_mount_status: "verified_zero_reported",
-    lifecycle_status: "verified_kill_no_auto_resume",
+    network_status: "exact_sdk_ipv4_sentinel_observed_ipv6_unqualified",
+    volume_mount_status: "provider_reported_zero_observed",
+    lifecycle_status: "provider_reported_kill_no_auto_resume_observed",
     deadline: new Date(parsedEndAt).toISOString()
   };
   return deepFreeze({ ...observation, observation_hash: sha256Ref2(observation) });
+}
+function birthHandshakeError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  error.retryable = false;
+  error.production_qualified = false;
+  return error;
+}
+function liveForkDisabledUntrustedWatcher(operation) {
+  const error = new Error(
+    "E2B live Risk Fork allocation is disabled: the captured birth watcher is not a trusted authority boundary"
+  );
+  error.name = "E2BLiveForkDisabledUntrustedWatcherError";
+  error.code = E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER;
+  error.operation = operation;
+  error.provider = "e2b-clean-template-v1";
+  error.retryable = false;
+  error.production_qualified = false;
+  return error;
+}
+function parseCanonicalRuntimeEnvelope(bytes, field, maxBytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 3 || bytes.byteLength > maxBytes) {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ARTIFACT_INVALID",
+      `${field} is missing or outside its byte bound`
+    );
+  }
+  const text = Buffer.from(bytes).toString("utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw birthHandshakeError("E2B_BIRTH_ARTIFACT_INVALID", `${field} is not valid JSON`);
+  }
+  if (text !== `${canonicalize2(parsed)}
+`) {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ARTIFACT_INVALID",
+      `${field} bytes are not canonical`
+    );
+  }
+  return parsed;
+}
+async function assertRemoteBirthArtifactAbsent(files, target, timeoutMs) {
+  try {
+    await readBoundedResultBytes(files, target, {
+      maxBytes: MAX_ATTESTATION_BYTES,
+      totalTimeoutMs: Math.max(1, timeoutMs),
+      idleTimeoutMs: Math.max(1, Math.min(250, timeoutMs))
+    });
+  } catch (error) {
+    if (isRemoteFileNotFound(error)) return;
+    throw birthHandshakeError(
+      "E2B_BIRTH_PREFLIGHT_AMBIGUOUS",
+      `E2B birth preflight could not prove ${target} absent`
+    );
+  }
+  throw birthHandshakeError(
+    "E2B_BIRTH_PREEXISTING_STATE",
+    `E2B birth preflight found preexisting state at ${target}`
+  );
+}
+async function performE2BSandboxBirthHandshake(options = {}) {
+  const sandbox = options.sandbox;
+  if (!sandbox || typeof sandbox !== "object" || !sandbox.files) {
+    throw new TypeError("E2B birth handshake requires an allocated sandbox filesystem");
+  }
+  const files = sandbox.files;
+  if (typeof files.write !== "function" || typeof files.read !== "function") {
+    throw new TypeError("E2B birth handshake requires file write and read operations");
+  }
+  const sandboxId = requireOpaqueRef(options.sandboxId, "E2B birth sandboxId", {
+    maxLength: 500
+  });
+  if (sandbox.sandboxId != null && sandbox.sandboxId !== sandboxId) {
+    throw new Error("E2B birth sandbox identity does not match the allocated handle");
+  }
+  assertPlainObject(options.metadata, "E2B birth provider metadata");
+  const templateId = requireOpaqueRef(options.templateId, "E2B birth templateId", {
+    maxLength: 500
+  });
+  const templateEvidenceHash = requireSha256Ref(
+    options.templateEvidenceHash,
+    "E2B birth templateEvidenceHash"
+  );
+  const templateProvenanceHash = requireSha256Ref(
+    options.templateProvenanceHash,
+    "E2B birth templateProvenanceHash"
+  );
+  const bootstrapArtifactHash = requireSha256Ref(
+    options.bootstrapArtifactHash,
+    "E2B birth bootstrapArtifactHash"
+  );
+  const runnerArtifactHash = requireSha256Ref(
+    options.runnerArtifactHash,
+    "E2B birth runnerArtifactHash"
+  );
+  const clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") throw new TypeError("E2B birth handshake clock is invalid");
+  const allocationStartedAt = new Date(options.allocationStartedAt);
+  if (!Number.isFinite(allocationStartedAt.getTime())) {
+    throw new TypeError("E2B birth allocationStartedAt is invalid");
+  }
+  const timeoutMs = boundedInteger(
+    options.timeoutMs ?? DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS,
+    "E2B birth attestation timeout",
+    { min: 50, max: E2B_BIRTH_MAX_VALIDITY_MS }
+  );
+  const wallStartedAt = performance2.now();
+  const remainingMs = () => Math.floor(timeoutMs - (performance2.now() - wallStartedAt));
+  const now = new Date(clock());
+  if (!Number.isFinite(now.getTime()) || now.getTime() < allocationStartedAt.getTime() || now.getTime() >= allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ALLOCATION_STALE",
+      "E2B birth request cannot be opened outside the post-allocation validity window"
+    );
+  }
+  const request = createE2BBirthRequest({
+    sandbox_id_hash: sha256Ref2(sandboxId),
+    provider_metadata_hash: sha256Ref2(options.metadata),
+    template_id_hash: sha256Ref2(templateId),
+    template_evidence_hash: templateEvidenceHash,
+    template_provenance_hash: templateProvenanceHash,
+    allocation_started_at: allocationStartedAt.toISOString(),
+    expires_at: new Date(
+      allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
+    ).toISOString(),
+    birth_nonce: randomUUID6()
+  });
+  const paths = e2bBirthRequestPaths(request.request_hash);
+  for (const target of [
+    E2B_BOOT_EVIDENCE_PATH,
+    E2B_BOOT_READY_PATH,
+    paths.request,
+    paths.trigger,
+    paths.consumed,
+    paths.consumed_trigger,
+    paths.attestation
+  ]) {
+    const remaining2 = remainingMs();
+    if (remaining2 <= 0) {
+      throw birthHandshakeError(
+        "E2B_BIRTH_ATTESTATION_TIMEOUT",
+        "E2B birth preflight exceeded its controller deadline"
+      );
+    }
+    await assertRemoteBirthArtifactAbsent(files, target, remaining2);
+  }
+  await files.write(paths.request, `${canonicalize2(request)}
+`);
+  await files.write(paths.trigger, `${request.request_hash}
+`);
+  let attestationBytes;
+  while (remainingMs() > 0) {
+    const remaining2 = remainingMs();
+    try {
+      attestationBytes = await readBoundedResultBytes(files, paths.attestation, {
+        maxBytes: MAX_ATTESTATION_BYTES,
+        totalTimeoutMs: Math.max(1, remaining2),
+        idleTimeoutMs: Math.max(1, Math.min(250, remaining2))
+      });
+      break;
+    } catch (error) {
+      if (!isRemoteFileNotFound(error)) {
+        throw birthHandshakeError(
+          "E2B_BIRTH_ATTESTATION_AMBIGUOUS",
+          "E2B birth attestation could not be read unambiguously"
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(25, remaining2)));
+    }
+  }
+  if (!attestationBytes) {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ATTESTATION_TIMEOUT",
+      "E2B birth watcher did not attest before the controller deadline"
+    );
+  }
+  const remaining = remainingMs();
+  if (remaining <= 0) {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ATTESTATION_TIMEOUT",
+      "E2B birth evidence read exceeded the controller deadline"
+    );
+  }
+  let bootEvidenceBytes;
+  try {
+    bootEvidenceBytes = await readBoundedResultBytes(files, E2B_BOOT_EVIDENCE_PATH, {
+      maxBytes: MAX_ATTESTATION_BYTES,
+      totalTimeoutMs: Math.max(1, remaining),
+      idleTimeoutMs: Math.max(1, Math.min(250, remaining))
+    });
+  } catch {
+    throw birthHandshakeError(
+      "E2B_BIRTH_ATTESTATION_AMBIGUOUS",
+      "E2B birth attestation exists without readable boot evidence"
+    );
+  }
+  const attestationValue = parseCanonicalRuntimeEnvelope(
+    attestationBytes,
+    "E2B birth attestation",
+    MAX_ATTESTATION_BYTES
+  );
+  const bootEvidenceValue = parseCanonicalRuntimeEnvelope(
+    bootEvidenceBytes,
+    "E2B boot evidence",
+    MAX_ATTESTATION_BYTES
+  );
+  const verifiedAt = new Date(clock());
+  const verifiedRequest = validateE2BBirthRequest(request, {
+    sandboxIdHash: sha256Ref2(sandboxId),
+    providerMetadataHash: sha256Ref2(options.metadata),
+    templateIdHash: sha256Ref2(templateId),
+    templateEvidenceHash,
+    templateProvenanceHash,
+    allocationStartedAt: allocationStartedAt.toISOString(),
+    requestHash: request.request_hash,
+    now: verifiedAt
+  });
+  const bootEvidence = validateBootObservationEnvelope(bootEvidenceValue, {
+    now: verifiedAt,
+    bootstrapArtifactHash,
+    runnerArtifactHash
+  });
+  const attestation = validateE2BBirthAttestation(attestationValue, {
+    request: verifiedRequest,
+    bootEvidence,
+    bootstrapArtifactHash,
+    runnerArtifactHash,
+    now: verifiedAt
+  });
+  return deepFreeze({
+    request: verifiedRequest,
+    request_path: paths.request,
+    trigger_path: paths.trigger,
+    attestation,
+    bootEvidence
+  });
 }
 function validateSourceAttestation(result, request, expected = {}) {
   assertPlainObject(result, "authority-free source attestation");
@@ -54197,7 +55497,7 @@ function parseRunnerResult(value, expected) {
   }
   return deepFreeze({ ...cloneJson(value), commit_candidate: candidate });
 }
-function makeCapabilities(configured, qualified = false) {
+function makeCapabilities(configured, qualificationEvidencePresent = false) {
   if (!configured) {
     return {
       supports_memory_snapshot: false,
@@ -54224,35 +55524,45 @@ function makeCapabilities(configured, qualified = false) {
     supports_memory_snapshot: false,
     supports_filesystem_snapshot: true,
     supports_live_fork: false,
-    supports_network_policy: true,
+    supports_network_policy: false,
     supports_egress_allowlist: false,
-    supports_runtime_attestation: true,
+    supports_runtime_attestation: false,
     supports_suspend_resume: false,
-    supports_verified_destruction: true,
-    supports_hard_ttl: true,
-    supports_idle_ttl: qualified,
-    supports_max_execution_time: true,
+    supports_verified_destruction: false,
+    supports_hard_ttl: false,
+    supports_idle_ttl: false,
+    supports_max_execution_time: false,
     supports_automatic_credential_expiry: false,
     child_credentials_mode: "prohibited",
-    isolation_class: qualified ? "e2b_clean_template_qualified" : "e2b_clean_template_unqualified",
-    adapter_implementation: qualified ? "qualified_clean_template_profile" : "offline_clean_template_profile",
-    mock_conformance: qualified ? "strict_offline_and_live_qualified" : "strict_offline",
-    credentialed_provider_validation: qualified ? "passed" : "not_run",
-    containment_claim: qualified ? "verified" : "not_verified"
+    isolation_class: "e2b_live_fork_blocked_untrusted_same_uid_watcher",
+    adapter_implementation: "source_wired_default_off",
+    mock_conformance: "handshake_mechanics_only_untrusted",
+    credentialed_provider_validation: qualificationEvidencePresent ? "evidence_present_activation_blocked" : "not_run",
+    containment_claim: "not_verified"
   };
 }
 var E2BRiskForkAdapter = class extends RiskForkProvider {
+  #offlineConformance;
+  #SandboxClass;
+  #sdkLoader;
+  #sdkVersion;
+  #sdkVersionLoader;
+  #sdkVersionVerified;
+  #sdkIntegrityVerifier;
+  #sdkIntegrityVerified;
   constructor(options = {}) {
+    const templateProvenanceCandidate = options.cleanTemplateProvenanceHash ?? options.qualificationEvidence?.template?.provenance_hash;
     const profileValues = [
       options.cleanTemplateId,
       options.cleanTemplateHash,
+      templateProvenanceCandidate,
       options.workspaceExportDirectory,
       options.cleanupJournalDirectory
     ];
     const configured = profileValues.every((value) => value !== void 0 && value !== null);
     if (!configured && profileValues.some((value) => value !== void 0 && value !== null)) {
       throw new TypeError(
-        "cleanTemplateId, cleanTemplateHash, workspaceExportDirectory, and cleanupJournalDirectory are required together"
+        "cleanTemplateId, cleanTemplateHash, cleanTemplateProvenanceHash, workspaceExportDirectory, and cleanupJournalDirectory are required together"
       );
     }
     if (!configured && options.qualificationEvidence != null) {
@@ -54263,11 +55573,16 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       templateHash: options.cleanTemplateHash,
       bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
       runnerArtifactHash: options.trustedRunnerArtifactHash
-    });
+    }, options.externalQualificationObservationVerifier ?? null);
     const hasQualificationTrust = options.qualificationTrust != null;
     const hasQualificationVerifier = options.qualificationTrustVerifier != null;
     if (!qualificationEvidence && (hasQualificationTrust || hasQualificationVerifier)) {
       throw new TypeError("E2B qualification trust requires qualification evidence");
+    }
+    if (!qualificationEvidence && options.externalQualificationObservationVerifier != null) {
+      throw new TypeError(
+        "E2B external qualification observation verifier requires qualification evidence"
+      );
     }
     if (hasQualificationTrust !== hasQualificationVerifier) {
       throw new TypeError("E2B qualification trust and its verifier are required together");
@@ -54281,18 +55596,32 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         templateHash: options.cleanTemplateHash,
         bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
         runnerArtifactHash: options.trustedRunnerArtifactHash
-      }
+      },
+      options.externalQualificationObservationVerifier ?? null
     ) : null;
-    const qualified = qualificationEvidence?.status === "verified" && qualificationTrust !== null;
+    const qualificationEligible = qualificationEvidence?.status === "verified" && qualificationTrust !== null;
+    if (qualificationEvidence && templateProvenanceCandidate !== qualificationEvidence.template.provenance_hash) {
+      throw new TypeError("cleanTemplateProvenanceHash does not match qualification evidence");
+    }
     super({
       id: configured ? "e2b-clean-template-v1" : "e2b-snapshot-v1",
-      capabilities: makeCapabilities(configured, qualified)
+      capabilities: makeCapabilities(configured, qualificationEligible)
     });
     if (typeof options.verifyAuthorityFreeSource !== "function") {
       throw new TypeError("verifyAuthorityFreeSource must be an external clean-controller verifier");
     }
     if (options.SandboxClass !== void 0 && typeof options.SandboxClass !== "function") {
       throw new TypeError("SandboxClass must be a class");
+    }
+    if (options.offlineConformance !== void 0 && typeof options.offlineConformance !== "boolean") {
+      throw new TypeError("offlineConformance must be boolean");
+    }
+    const offlineConformance = options.offlineConformance === true;
+    if (offlineConformance && typeof options.SandboxClass !== "function") {
+      throw new TypeError("offlineConformance requires an injected SandboxClass");
+    }
+    if (offlineConformance && qualificationEvidence) {
+      throw new TypeError("offlineConformance cannot carry E2B qualification evidence or trust");
     }
     if (options.sdkLoader !== void 0 && typeof options.sdkLoader !== "function") {
       throw new TypeError("sdkLoader must be a function");
@@ -54308,10 +55637,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         "sdkIntegrityVerifier must be created by createE2BRuntimeSdkIntegrityVerifier"
       );
     }
-    if (!qualified && options.sdkIntegrityVerifier !== void 0) {
+    if (!qualificationEligible && options.sdkIntegrityVerifier !== void 0) {
       throw new TypeError("sdkIntegrityVerifier is only valid with signed qualified evidence");
     }
-    if (qualified && [
+    if (qualificationEligible && [
       options.SandboxClass,
       options.sdkLoader,
       options.sdkVersion,
@@ -54321,18 +55650,38 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         "Qualified E2B SDK loading cannot be injected; the runtime integrity verifier must load the exact signed package tree"
       );
     }
+    if (!offlineConformance && [
+      options.SandboxClass,
+      options.sdkLoader,
+      options.sdkVersion,
+      options.sdkVersionLoader
+    ].some((value) => value !== void 0)) {
+      throw new TypeError(
+        "Injected E2B provider paths require offlineConformance=true"
+      );
+    }
     this.configured = configured;
     this.qualificationEvidence = qualificationEvidence;
+    this.externalQualificationObservationVerifier = options.externalQualificationObservationVerifier ?? null;
     this.qualificationTrust = qualificationTrust;
-    this.qualified = qualified;
+    this.qualificationTrustVerifier = options.qualificationTrustVerifier ?? null;
+    this.qualificationExpectedBindings = configured ? Object.freeze({
+      templateId: options.cleanTemplateId,
+      templateHash: options.cleanTemplateHash,
+      bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
+      runnerArtifactHash: options.trustedRunnerArtifactHash
+    }) : Object.freeze({});
+    this.qualificationEligible = qualificationEligible;
+    this.qualified = E2B_LIVE_FORK_SOURCE_ENABLED && qualificationEligible;
+    this.#offlineConformance = offlineConformance;
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource;
-    this.SandboxClass = options.SandboxClass ?? null;
-    this.sdkLoader = options.sdkLoader ?? defaultSdkLoader;
-    this.sdkVersion = options.sdkVersion ?? null;
-    this.sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
-    this.sdkVersionVerified = false;
-    this.sdkIntegrityVerifier = qualified ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier() : null;
-    this.sdkIntegrityVerified = false;
+    this.#SandboxClass = options.SandboxClass ?? null;
+    this.#sdkLoader = options.sdkLoader ?? defaultSdkLoader;
+    this.#sdkVersion = options.sdkVersion ?? null;
+    this.#sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
+    this.#sdkVersionVerified = false;
+    this.#sdkIntegrityVerifier = qualificationEligible ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier() : null;
+    this.#sdkIntegrityVerified = false;
     this.clock = options.clock ?? (() => /* @__PURE__ */ new Date());
     if (typeof this.clock !== "function") throw new TypeError("clock must be a function");
     this.bootstrapCommand = requireFixedCommand(
@@ -54355,6 +55704,12 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     );
     this.cleanTemplateId = configured ? requireOpaqueRef(options.cleanTemplateId, "cleanTemplateId", { maxLength: 500 }) : null;
     this.cleanTemplateHash = configured ? requireSha256Ref(options.cleanTemplateHash, "cleanTemplateHash") : null;
+    this.cleanTemplateProvenanceHash = configured ? requireSha256Ref(templateProvenanceCandidate, "cleanTemplateProvenanceHash") : null;
+    this.birthAttestationTimeoutMs = boundedInteger(
+      options.birthAttestationTimeoutMs ?? DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS,
+      "birthAttestationTimeoutMs",
+      { min: 50, max: E2B_BIRTH_MAX_VALIDITY_MS }
+    );
     this.workspaceExportDirectory = configured ? path6.resolve(requireString(options.workspaceExportDirectory, "workspaceExportDirectory")) : null;
     this.maxFiles = boundedInteger(options.maxFiles ?? 2e3, "maxFiles", {
       min: 1,
@@ -54378,33 +55733,60 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   #requireConfigured(operation) {
     if (!this.configured) throw secureSnapshotProfileUnavailable(operation);
   }
-  async #sandboxClass() {
-    if (this.qualified && !this.sdkIntegrityVerified) {
+  #requireForkRuntimeEnabled(operation) {
+    if (!E2B_LIVE_FORK_SOURCE_ENABLED && !this.#offlineConformance) {
+      throw liveForkDisabledUntrustedWatcher(operation);
+    }
+  }
+  #revalidateQualificationTrust() {
+    if (!this.qualificationEvidence) return null;
+    const evidence = validateE2BQualificationEvidence(
+      this.qualificationEvidence,
+      this.qualificationExpectedBindings,
+      this.externalQualificationObservationVerifier
+    );
+    const trust = verifyE2BQualificationTrust(
+      evidence,
+      this.qualificationTrust,
+      this.qualificationTrustVerifier,
+      this.qualificationExpectedBindings,
+      this.externalQualificationObservationVerifier
+    );
+    if (evidence.status !== "verified" || !trust) {
+      throw new Error("E2B qualification evidence and trust are no longer valid");
+    }
+    this.qualificationEvidence = evidence;
+    this.qualificationTrust = trust;
+    return Object.freeze({ evidence, trust });
+  }
+  async #sandboxClass(operation = "providerIo") {
+    this.#requireForkRuntimeEnabled(operation);
+    if (this.qualificationEligible && !this.#sdkIntegrityVerified) {
       const verified = await loadVerifiedE2BRuntimeSdk(
         this.qualificationEvidence.sdk,
-        this.sdkIntegrityVerifier
+        this.#sdkIntegrityVerifier
       );
-      this.SandboxClass = normalizeSandboxClass(verified.module);
-      this.sdkVersion = verified.version;
-      this.sdkVersionVerified = true;
-      this.sdkIntegrityVerified = true;
+      this.#SandboxClass = normalizeSandboxClass(verified.module);
+      this.#sdkVersion = verified.version;
+      this.#sdkVersionVerified = true;
+      this.#sdkIntegrityVerified = true;
     }
-    if (!this.sdkVersionVerified && (!this.SandboxClass || this.qualified)) {
-      const version = this.sdkVersion ?? await this.sdkVersionLoader();
+    if (!this.#sdkVersionVerified && (!this.#SandboxClass || this.qualificationEligible)) {
+      const version = this.#sdkVersion ?? await this.#sdkVersionLoader();
       if (version !== "2.39.0") {
         throw new Error(`E2B clean-template profile requires exact e2b@2.39.0; observed ${String(version)}`);
       }
-      this.sdkVersionVerified = true;
+      this.#sdkVersionVerified = true;
     }
-    if (!this.SandboxClass) {
-      this.SandboxClass = normalizeSandboxClass(await this.sdkLoader());
+    if (!this.#SandboxClass) {
+      this.#SandboxClass = normalizeSandboxClass(await this.#sdkLoader());
     }
     for (const method of ["create", "getInfo", "list", "kill"]) {
-      if (typeof this.SandboxClass[method] !== "function") {
+      if (typeof this.#SandboxClass[method] !== "function") {
         throw new TypeError(`E2B Sandbox.${method} is required by the clean-template profile`);
       }
     }
-    return this.SandboxClass;
+    return this.#SandboxClass;
   }
   async #initialize() {
     if (this.initialized) return;
@@ -54433,6 +55815,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async #armForkLease(record, requestedTimeoutMs, reason2) {
     if (!this.qualified) return null;
+    this.#revalidateQualificationTrust();
     if (typeof record.sandbox?.setTimeout !== "function") {
       throw new TypeError("Qualified E2B child must expose provider-enforced setTimeout");
     }
@@ -54451,7 +55834,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       await record.sandbox.setTimeout(timeoutMs);
       const Sandbox = await this.#sandboxClass();
       const info = await Sandbox.getInfo(record.sandbox_id);
-      const observation = safeProviderObservation(info, {
+      const observation = validateE2BSandboxInfo(info, {
         sandboxId: record.sandbox_id,
         templateId: this.cleanTemplateId,
         metadata: record.metadata,
@@ -54496,15 +55879,14 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     return false;
   }
   async #listByCleanupRef(Sandbox, record) {
-    const paginator = Sandbox.list({
-      query: {
-        state: ["running", "paused"],
-        metadata: {
-          "agoragentic.risk_fork.profile": PROFILE_METADATA_SCHEMA,
-          "agoragentic.risk_fork.cleanup_ref": record.cleanup_ref
-        }
+    const query = {
+      state: ["running", "paused"],
+      metadata: {
+        "agoragentic.risk_fork.profile": PROFILE_METADATA_SCHEMA,
+        "agoragentic.risk_fork.cleanup_ref": record.cleanup_ref
       }
-    });
+    };
+    const paginator = Sandbox.list({ query });
     if (!paginator || typeof paginator.nextItems !== "function" || typeof paginator.hasNext !== "boolean") {
       throw new TypeError("E2B Sandbox.list must return a bounded paginator");
     }
@@ -54518,21 +55900,40 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       for (const item of items) {
         const metadata = item?.metadata;
         const templateId = item?.templateId ?? item?.templateID;
-        if (metadata?.["agoragentic.risk_fork.profile"] === PROFILE_METADATA_SCHEMA && metadata?.["agoragentic.risk_fork.cleanup_ref"] === record.cleanup_ref && safeEqual(sha256Ref2(metadata), record.metadata_hash) && templateId === this.cleanTemplateId) {
-          matches.push(requireString(
-            item.sandboxId ?? item.sandboxID,
-            "reconciled E2B sandbox id",
-            { maxLength: 500 }
-          ));
+        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref2(metadata), record.metadata_hash) || templateId !== this.cleanTemplateId) {
+          throw new Error("E2B cleanup listing returned an item outside the exact metadata binding");
         }
+        matches.push(requireString(
+          item.sandboxId ?? item.sandboxID,
+          "reconciled E2B sandbox id",
+          { maxLength: 500 }
+        ));
       }
       if (typeof paginator.hasNext !== "boolean") {
         throw new TypeError("E2B sandbox paginator stopped reporting hasNext");
       }
     }
-    return [...new Set(matches)].sort();
+    const sandboxIds = [...new Set(matches)].sort();
+    const observation = {
+      query_hash: sha256Ref2(query),
+      metadata_hash: record.metadata_hash,
+      template_id_hash: sha256Ref2(this.cleanTemplateId),
+      page_count: pages,
+      sandbox_id_hashes: sandboxIds.map((sandboxId) => sha256Ref2(sandboxId))
+    };
+    return deepFreeze({
+      sandbox_ids: sandboxIds,
+      observation_hash: sha256Ref2(observation)
+    });
   }
   async #verifySandboxAbsent(Sandbox, recordId, sandboxId) {
+    let record;
+    try {
+      record = await this.cleanupJournal.get(recordId);
+    } catch {
+      this.#poisonAllocationUntilReconciled(recordId);
+      return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
+    }
     try {
       await Sandbox.getInfo(sandboxId);
       this.#poisonAllocationUntilReconciled(recordId);
@@ -54544,7 +55945,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       });
       return { status: "failed", outcome: "failure", sandbox_id: sandboxId };
     } catch (error) {
-      if (!isNotFound(error)) {
+      if (!isSandboxNotFound(error)) {
         this.#poisonAllocationUntilReconciled(recordId);
         await this.cleanupJournal.markSandboxUnknown(
           recordId,
@@ -54553,6 +55954,51 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         ).catch(() => {
         });
         return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
+      }
+      let listing;
+      try {
+        listing = await this.#listByCleanupRef(Sandbox, record);
+      } catch (listError) {
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          errorCode(listError, "ABSENCE_LIST_BINDING_FAILED"),
+          sandboxId
+        ).catch(() => {
+        });
+        return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
+      }
+      if (listing.sandbox_ids.length !== 0) {
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          "RESOURCE_STILL_LISTED",
+          sandboxId
+        ).catch(() => {
+        });
+        return { status: "failed", outcome: "failure", sandbox_id: sandboxId };
+      }
+      try {
+        await Sandbox.getInfo(sandboxId);
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          "RESOURCE_REAPPEARED_DURING_ABSENCE_CHECK",
+          sandboxId
+        ).catch(() => {
+        });
+        return { status: "failed", outcome: "failure", sandbox_id: sandboxId };
+      } catch (secondError) {
+        if (!isSandboxNotFound(secondError)) {
+          this.#poisonAllocationUntilReconciled(recordId);
+          await this.cleanupJournal.markSandboxUnknown(
+            recordId,
+            errorCode(secondError, "SECOND_ABSENCE_CHECK_FAILED"),
+            sandboxId
+          ).catch(() => {
+          });
+          return { status: "unknown", outcome: "unknown", sandbox_id: sandboxId };
+        }
       }
       try {
         await this.cleanupJournal.markSandboxVerifiedAbsent(recordId, sandboxId);
@@ -54564,7 +56010,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       const evidence = {
         sandbox_id_hash: sha256Ref2(sandboxId),
         absent: true,
-        source: "Sandbox.getInfo.not_found"
+        source: "Sandbox.getInfo.not_found.list.empty.Sandbox.getInfo.not_found",
+        cleanup_list_observation_hash: listing.observation_hash
       };
       return {
         status: "verified",
@@ -54644,7 +56091,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
             await this.cleanupJournal.markSandboxVerifiedAbsent(initial.record_id);
             sandboxOk = true;
           } else {
-            if (sandboxIds.length === 0) sandboxIds = await this.#listByCleanupRef(Sandbox, initial);
+            if (sandboxIds.length === 0) {
+              const listing = await this.#listByCleanupRef(Sandbox, initial);
+              sandboxIds = listing.sandbox_ids;
+            }
             if (sandboxIds.length === 0) {
               await this.cleanupJournal.markSandboxUnknown(
                 initial.record_id,
@@ -54698,6 +56148,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async reconcilePendingCleanup() {
     this.#requireConfigured("reconcilePendingCleanup");
+    this.#requireForkRuntimeEnabled("reconcilePendingCleanup");
+    this.#revalidateQualificationTrust();
     await this.cleanupJournal.initialize();
     return this.#reconcilePendingCleanup({
       excludeOwned: true,
@@ -54706,6 +56158,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async createSavepoint(input = {}) {
     this.#requireConfigured("createSavepoint");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
@@ -54817,6 +56270,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async createFork(input = {}) {
     this.#requireConfigured("createFork");
+    this.#requireForkRuntimeEnabled("createFork");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(
       input,
       ["savepoint_ref", "fork_identity", "network_policy", "ttl_ms", "idle_ttl_ms"],
@@ -54885,6 +56340,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     let sandbox;
     let sandboxId = null;
     try {
+      this.#revalidateQualificationTrust();
       sandbox = await Sandbox.create(this.cleanTemplateId, createOptions);
       sandboxId = requireString(sandbox?.sandboxId, "E2B child sandbox id", { maxLength: 500 });
       await this.cleanupJournal.markSandboxAllocated(savepoint.record_id, sandboxId);
@@ -54900,7 +56356,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       }
       const hardExpiresAtMs = createStartedAt.getTime() + ttlMs;
       const info = await Sandbox.getInfo(sandboxId);
-      const childObservation = safeProviderObservation(info, {
+      const childObservation = validateE2BSandboxInfo(info, {
         sandboxId,
         templateId: this.cleanTemplateId,
         metadata,
@@ -54922,6 +56378,27 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         lease_expires_at: this.qualified ? childObservation.deadline : null,
         last_lease: null
       };
+      if (this.qualified) {
+        const remaining = hardExpiresAtMs - this.clock().getTime();
+        await this.#armForkLease(
+          leaseRecord,
+          Math.min(Math.max(idleTtlMs, 6e4), remaining),
+          "birth_attestation"
+        );
+      }
+      const birth = await performE2BSandboxBirthHandshake({
+        sandbox,
+        sandboxId,
+        metadata,
+        templateId: this.cleanTemplateId,
+        templateEvidenceHash: this.cleanTemplateHash,
+        templateProvenanceHash: this.cleanTemplateProvenanceHash,
+        allocationStartedAt: createStartedAt,
+        bootstrapArtifactHash: this.trustedBootstrapArtifactHash,
+        runnerArtifactHash: this.trustedRunnerArtifactHash,
+        timeoutMs: this.birthAttestationTimeoutMs,
+        clock: this.clock
+      });
       const commonBootstrap = {
         schema: "agoragentic.risk-fork.clean-bootstrap-request.v1",
         fork_identity: cloneJson(input.fork_identity),
@@ -54971,10 +56448,14 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           bootstrapArtifactHash: this.trustedBootstrapArtifactHash,
           runnerArtifactHash: this.trustedRunnerArtifactHash,
           bootEvidenceHash: expectedBootEvidenceHash,
-          requireBootEvidence: this.qualified
+          requireBootEvidence: true
         }, this.clock());
       };
-      const preUploadAttestation = await attest("pre_upload", EMPTY_WORKSPACE_DIGEST);
+      const preUploadAttestation = await attest(
+        "pre_upload",
+        EMPTY_WORKSPACE_DIGEST,
+        birth.bootEvidence.evidence_hash
+      );
       if (this.qualified) {
         const remaining = hardExpiresAtMs - this.clock().getTime();
         await this.#armForkLease(
@@ -55015,6 +56496,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         network_policy_hash: policy.policy_hash,
         metadata,
         child_observation: childObservation,
+        birth_request: birth.request,
+        birth_attestation: birth.attestation,
         pre_upload_attestation: preUploadAttestation,
         post_import_attestation: postImportAttestation,
         created_at: createStartedAt.toISOString(),
@@ -55022,7 +56505,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         idle_ttl_ms: idleTtlMs,
         lease_expires_at: leaseRecord.lease_expires_at,
         last_lease: leaseRecord.last_lease,
-        boot_evidence_hash: postImportAttestation.boot_evidence_hash ?? null,
+        boot_evidence_hash: birth.bootEvidence.evidence_hash,
         status: "ready",
         last_execution: null,
         last_result: null,
@@ -55038,18 +56521,20 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           workspace_manifest_hash: savepoint.export_record.manifest_hash,
           identity_hash: record.identity_hash,
           network_policy_hash: record.network_policy_hash,
+          birth_request_hash: birth.request.request_hash,
+          birth_attestation_hash: birth.attestation.attestation_hash,
           post_import_attestation_hash: postImportAttestation.attestation_hash,
           boot_evidence_hash: record.boot_evidence_hash
         }),
         status: "ready",
         expires_at: record.expires_at,
         isolation_class: this.capabilities.isolation_class,
-        network_status: this.qualified ? "live_qualification_evidence_verified_ipv4_ipv6_egress_denial" : "sdk_all_traffic_sentinel_observed_ipv6_not_live_qualified",
-        lifecycle_status: this.qualified ? "live_qualification_evidence_verified_lifecycle_controls" : "verified_requested_kill_no_auto_resume_offline_only",
-        ttl_status: this.qualified ? "provider_enforced_live_qualified_with_immutable_controller_cap" : "configured_unqualified_live",
+        network_status: "offline_conformance_observation_only_ipv4_ipv6_unqualified",
+        lifecycle_status: "offline_conformance_requested_not_provider_qualified",
+        ttl_status: "offline_conformance_requested_not_provider_qualified",
         idle_ttl_status: this.qualified ? "provider_lease_armed_with_hard_deadline_cap" : "not_qualified",
         idle_expires_at: record.lease_expires_at,
-        bootstrap_status: this.qualified ? "live_qualification_evidence_verified_boot_guard_binding" : "verified_mock_contract",
+        bootstrap_status: "untrusted_same_uid_observation_only",
         inherited_authority_accepted: false
       });
     } catch (error) {
@@ -55081,6 +56566,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async getForkStatus(input = {}) {
     this.#requireConfigured("getForkStatus");
+    this.#requireForkRuntimeEnabled("getForkStatus");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["fork_ref"], "E2B getForkStatus input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     if (record.destroyed_verified) {
@@ -55095,7 +56582,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     const Sandbox = await this.#sandboxClass();
     try {
       const info = await Sandbox.getInfo(record.sandbox_id);
-      safeProviderObservation(info, {
+      validateE2BSandboxInfo(info, {
         sandboxId: record.sandbox_id,
         templateId: this.cleanTemplateId,
         metadata: record.metadata,
@@ -55116,7 +56603,24 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         evidence_status: "verified_present"
       });
     } catch (error) {
-      if (isNotFound(error)) {
+      if (isSandboxNotFound(error)) {
+        const absence = await this.#verifySandboxAbsent(
+          Sandbox,
+          record.record_id,
+          record.sandbox_id
+        );
+        if (absence.status !== "verified") {
+          return deepFreeze({
+            fork_ref: record.ref,
+            status: "unknown",
+            provider_state: "unknown",
+            expires_at: record.expires_at,
+            evidence_status: "unknown"
+          });
+        }
+        record.destroyed_verified = true;
+        record.destruction_status = "verified_absent_stable_observation";
+        record.status = "destroyed";
         return deepFreeze({
           fork_ref: record.ref,
           status: "absent",
@@ -55139,6 +56643,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       validateChildOperation(input.operation, "operation");
     }
     this.#requireConfigured("executeInFork");
+    this.#requireForkRuntimeEnabled("executeInFork");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(
       input,
       ["fork_ref", "operation", "execution_mode", "timeout_ms", "scoped_credentials"],
@@ -55199,7 +56705,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         await this.#armForkLease(record, executionLeaseMs, "execution_window");
       }
       await record.sandbox.files.remove(resultPath).catch((error) => {
-        if (!isNotFound(error) && error?.code !== "ENOENT") throw error;
+        if (!isRemoteFileNotFound(error)) throw error;
       });
       await record.sandbox.files.write(jobPath, JSON.stringify(job));
       const command = `${this.runnerCommand} --job ${jobPath} --result ${resultPath}`;
@@ -55306,6 +56812,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async collectEvidence(input = {}) {
     this.#requireConfigured("collectEvidence");
+    this.#requireForkRuntimeEnabled("collectEvidence");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["fork_ref"], "E2B collectEvidence input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     const evidence = {
@@ -55314,6 +56822,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       identity_hash: record.identity_hash,
       network_policy_hash: record.network_policy_hash,
       child_observation_hash: record.child_observation.observation_hash,
+      birth_request_hash: record.birth_request.request_hash,
+      birth_attestation_hash: record.birth_attestation.attestation_hash,
       pre_upload_attestation_hash: record.pre_upload_attestation.attestation_hash,
       post_import_attestation_hash: record.post_import_attestation.attestation_hash,
       runner_status: record.last_execution ? "observed" : "not_run",
@@ -55337,6 +56847,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async collectDiff(input = {}) {
     this.#requireConfigured("collectDiff");
+    this.#requireForkRuntimeEnabled("collectDiff");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["fork_ref"], "E2B collectDiff input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     const diff = record.last_result?.commit_candidate;
@@ -55347,10 +56859,14 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async suspendFork() {
     this.#requireConfigured("suspendFork");
+    this.#requireForkRuntimeEnabled("suspendFork");
+    this.#revalidateQualificationTrust();
     throw new Error("E2B clean-template Risk Fork forbids pause, resume, and persistent suspension");
   }
   async destroyFork(input = {}) {
     this.#requireConfigured("destroyFork");
+    this.#requireForkRuntimeEnabled("destroyFork");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["fork_ref", "reason"], "E2B destroyFork input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     if (record.destroyed_verified) {
@@ -55395,6 +56911,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async verifyDestroyed(input = {}) {
     this.#requireConfigured("verifyDestroyed");
+    this.#requireForkRuntimeEnabled("verifyDestroyed");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["fork_ref"], "E2B verifyDestroyed input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     this.#poisonAllocationUntilReconciled(record.record_id);
@@ -55416,6 +56934,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async destroySavepoint(input = {}) {
     this.#requireConfigured("destroySavepoint");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["savepoint_ref"], "E2B destroySavepoint input");
     const record = this.#savepointRecord(requireString(input.savepoint_ref, "savepoint_ref"));
     if (record.destroyed) {
@@ -55458,6 +56977,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   }
   async verifySavepointDestroyed(input = {}) {
     this.#requireConfigured("verifySavepointDestroyed");
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ["savepoint_ref"], "E2B verifySavepointDestroyed input");
     const record = this.#savepointRecord(requireString(input.savepoint_ref, "savepoint_ref"));
     this.#poisonAllocationUntilReconciled(record.record_id);
@@ -55875,7 +57395,7 @@ var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_version: "0.1.0-alpha.0",
   mcp_source_version: "2.0.0",
   risk_fork_source_version: "0.1.0-alpha.0",
-  reviewed_source_commit: "9efb61782883dd40409744710818994190439415",
+  reviewed_source_commit: "27f1c9f90b087a4c98bf537a8201c5443885eb72",
   optional_e2b_peer_version: "2.39.0",
   publication_status: "private_unpublished",
   outbound_mcp_transport_qualified: false,

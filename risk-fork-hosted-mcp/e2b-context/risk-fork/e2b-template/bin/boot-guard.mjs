@@ -7,6 +7,7 @@ import {
   open,
   readdir,
   readFile,
+  rename,
 } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
@@ -15,14 +16,29 @@ import { pathToFileURL } from 'node:url';
 import {
   canonicalize,
   createBootEvidenceEnvelope,
+  createE2BBirthAttestation,
+  E2B_BIRTH_REQUEST_MAX_BYTES,
+  E2B_BIRTH_RUNTIME_DIRECTORY,
+  E2B_BOOT_EVIDENCE_PATH,
+  E2B_BOOT_READY_PATH,
+  E2B_TEMPLATE_BUILD_READY_PATH,
+  e2bBirthRequestPaths,
   sha256FileRef,
   sha256Ref,
+  validateE2BBirthRequest,
 } from '../lib/runtime-contract.mjs';
 
-export const E2B_BOOT_EVIDENCE_PATH = '/run/agoragentic-risk-fork/boot-evidence.json';
-export const E2B_BOOT_READY_PATH = '/run/agoragentic-risk-fork/ready';
+export {
+  E2B_BOOT_EVIDENCE_PATH,
+  E2B_BOOT_READY_PATH,
+  E2B_TEMPLATE_BUILD_READY_PATH,
+};
 const DEFAULT_BOOTSTRAP_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/bootstrap.mjs';
 const DEFAULT_RUNNER_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/run.mjs';
+const TEMPLATE_BUILD_READY_SCHEMA =
+  'agoragentic.risk-fork.e2b-template-build-ready.v1';
+const BIRTH_REQUEST_FILE = /^birth-request\.([0-9a-f]{64})\.json$/;
+const BIRTH_REQUEST_TRIGGER = /^birth-request\.([0-9a-f]{64})\.ready$/;
 const PROBE_TIMEOUT_MS = 1_500;
 const MAX_PROCESS_ENVIRONMENT_BYTES = 1024 * 1024;
 const MAX_PROCESS_ENVIRONMENTS = 4_096;
@@ -73,7 +89,7 @@ export function classifyLiteralProbeOutcome(outcome) {
     return { status: 'denied', local_denial_observed: true };
   }
   if (outcome === 'ENETUNREACH' || outcome === 'EHOSTUNREACH') {
-    return { status: 'unreachable', local_denial_observed: true };
+    return { status: 'unreachable', local_denial_observed: false };
   }
   return { status: 'unknown', local_denial_observed: false };
 }
@@ -325,7 +341,7 @@ export async function collectBootEvidence(options = {}) {
   return createBootEvidenceEnvelope({
     observed_at: observedAt.toISOString(),
     expires_at: new Date(observedAt.getTime() + 5 * 60_000).toISOString(),
-    boot_nonce: randomUUID(),
+    boot_nonce: options.bootNonce ?? randomUUID(),
     boot_id_hash: sha256Ref(bootId),
     entropy_hash: sha256Ref(entropy.toString('hex')),
     bootstrap_artifact_hash: bootstrapArtifactHash,
@@ -350,19 +366,21 @@ export async function collectBootEvidence(options = {}) {
       ipv6_probe_hash: sha256Ref(ipv6),
     },
     claims: {
-      inherited_parent_processes_absent: processes.succeeded && processes.forbidden.length === 0,
-      unauthorized_environment_absent: unexpectedEnvironmentKeys.length === 0
-        && processEnvironments.succeeded
-        && processEnvironments.forbidden.length === 0,
-      credential_files_absent: credentials.succeeded && credentials.count === 0,
-      wallet_signing_material_absent: credentials.succeeded && credentials.count === 0,
-      inherited_authority_records_absent: credentials.succeeded && credentials.count === 0,
-      persistent_mounts_absent: mounts.succeeded && mounts.forbidden.length === 0,
-      unauthorized_sockets_absent: sockets.succeeded && sockets.count === 0,
-      first_instruction_ipv4_egress_denied: ipv4.local_denial_observed === true,
-      first_instruction_ipv6_egress_denied: ipv6.local_denial_observed === true,
-      fresh_entropy_verified: entropy.some((byte) => byte !== 0),
-      trusted_runtime_artifacts_verified: true,
+      // These observations are useful diagnostics, but selected-path and
+      // blacklist scans cannot prove universal absence. The captured watcher
+      // also shares the sandbox UID and therefore cannot author trusted
+      // evidence or establish cross-birth entropy freshness.
+      inherited_parent_processes_absent: false,
+      unauthorized_environment_absent: false,
+      credential_files_absent: false,
+      wallet_signing_material_absent: false,
+      inherited_authority_records_absent: false,
+      persistent_mounts_absent: false,
+      unauthorized_sockets_absent: false,
+      first_instruction_ipv4_egress_denied: false,
+      first_instruction_ipv6_egress_denied: false,
+      fresh_entropy_verified: false,
+      trusted_runtime_artifacts_verified: false,
     },
   });
 }
@@ -384,15 +402,199 @@ async function writeExclusive(target, bytes, mode) {
 export async function writeBootEvidence(evidence, options = {}) {
   const evidencePath = options.evidencePath ?? E2B_BOOT_EVIDENCE_PATH;
   const readyPath = options.readyPath ?? E2B_BOOT_READY_PATH;
-  if (evidence.status !== 'verified') throw new Error('boot evidence is not verified');
+  if (evidence.status !== 'failed') {
+    throw new Error('same-UID watcher may write only untrusted failed boot observations');
+  }
   await mkdir(path.dirname(evidencePath), { recursive: true, mode: 0o700 });
   await writeExclusive(evidencePath, Buffer.from(`${canonicalize(evidence)}\n`), 0o400);
-  await writeExclusive(readyPath, Buffer.from(`${evidence.evidence_hash}\n`), 0o400);
+  if (options.writeReady !== false) {
+    await writeExclusive(readyPath, Buffer.from(`${evidence.evidence_hash}\n`), 0o400);
+  }
+}
+
+function runtimePath(runtimeDirectory, canonicalPath) {
+  return path.join(runtimeDirectory, path.posix.basename(canonicalPath));
+}
+
+function localBirthPaths(runtimeDirectory, requestHash) {
+  const canonical = e2bBirthRequestPaths(requestHash);
+  return Object.fromEntries(Object.entries(canonical).map(([key, target]) => [
+    key,
+    runtimePath(runtimeDirectory, target),
+  ]));
+}
+
+async function readBoundedRegularFile(target, maxBytes) {
+  const before = await lstat(target);
+  if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes) {
+    throw new Error('E2B birth request artifact is not a bounded regular file');
+  }
+  const handle = await open(
+    target,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const during = await handle.stat();
+    if (!during.isFile() || during.size > maxBytes) {
+      throw new Error('E2B birth request artifact changed or exceeded its byte bound');
+    }
+    const bytes = await handle.readFile();
+    if (bytes.byteLength !== during.size || bytes.byteLength > maxBytes) {
+      throw new Error('E2B birth request artifact changed while it was consumed');
+    }
+    return bytes;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function inspectPendingBirthRequest(runtimeDirectory) {
+  const entries = await readdir(runtimeDirectory, { withFileTypes: true });
+  const buildReadyName = path.basename(runtimePath(
+    runtimeDirectory,
+    E2B_TEMPLATE_BUILD_READY_PATH,
+  ));
+  const requests = new Map();
+  const triggers = new Map();
+  for (const entry of entries) {
+    if (entry.name === buildReadyName && entry.isFile()) continue;
+    const requestMatch = BIRTH_REQUEST_FILE.exec(entry.name);
+    const triggerMatch = BIRTH_REQUEST_TRIGGER.exec(entry.name);
+    if (!entry.isFile() || (!requestMatch && !triggerMatch)) {
+      throw new Error('E2B birth watcher observed malformed or replayed runtime state');
+    }
+    const destination = requestMatch ? requests : triggers;
+    const digest = (requestMatch ?? triggerMatch)[1];
+    if (destination.has(digest)) {
+      throw new Error('E2B birth watcher observed duplicate runtime state');
+    }
+    destination.set(digest, entry.name);
+  }
+  if (requests.size > 1 || triggers.size > 1) {
+    throw new Error('E2B birth watcher admits exactly one request');
+  }
+  if (triggers.size === 1) {
+    const [digest] = triggers.keys();
+    if (!requests.has(digest)) {
+      throw new Error('E2B birth watcher observed an unbound request trigger');
+    }
+    return digest;
+  }
+  return null;
+}
+
+async function waitForBirthRequest(runtimeDirectory, options) {
+  const delay = options.delay ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const pollMs = options.pollMs ?? 25;
+  const timeoutMs = options.requestWaitTimeoutMs ?? null;
+  const startedAt = Date.now();
+  while (true) {
+    const digest = await inspectPendingBirthRequest(runtimeDirectory);
+    if (digest) return digest;
+    if (timeoutMs != null && Date.now() - startedAt >= timeoutMs) {
+      throw new Error('E2B birth watcher request deadline elapsed');
+    }
+    await delay(pollMs);
+  }
+}
+
+async function consumeBirthRequest(runtimeDirectory, digest, clock) {
+  const provisionalHash = `sha256:${digest}`;
+  const paths = localBirthPaths(runtimeDirectory, provisionalHash);
+  await rename(paths.trigger, paths.consumed_trigger);
+  await rename(paths.request, paths.consumed);
+  const [triggerBytes, requestBytes] = await Promise.all([
+    readBoundedRegularFile(paths.consumed_trigger, 256),
+    readBoundedRegularFile(paths.consumed, E2B_BIRTH_REQUEST_MAX_BYTES),
+  ]);
+  if (triggerBytes.toString('utf8') !== `${provisionalHash}\n`) {
+    throw new Error('E2B birth request trigger is malformed');
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(requestBytes.toString('utf8'));
+  } catch {
+    throw new Error('E2B birth request is not valid JSON');
+  }
+  const request = validateE2BBirthRequest(parsed, {
+    requestHash: provisionalHash,
+    now: clock(),
+  });
+  if (requestBytes.toString('utf8') !== `${canonicalize(request)}\n`) {
+    throw new Error('E2B birth request bytes are not canonical');
+  }
+  const remaining = await readdir(runtimeDirectory);
+  const allowed = new Set([
+    path.basename(runtimePath(runtimeDirectory, E2B_TEMPLATE_BUILD_READY_PATH)),
+    path.basename(paths.consumed),
+    path.basename(paths.consumed_trigger),
+  ]);
+  if (remaining.some((name) => !allowed.has(name))) {
+    throw new Error('E2B birth watcher observed ambiguous state after consumption');
+  }
+  return { request, paths };
+}
+
+export async function runBirthWatcher(options = {}) {
+  const runtimeDirectory = path.resolve(
+    options.runtimeDirectory ?? E2B_BIRTH_RUNTIME_DIRECTORY,
+  );
+  const clock = options.clock ?? (() => new Date());
+  if (typeof clock !== 'function') throw new TypeError('E2B birth watcher clock is invalid');
+  await mkdir(runtimeDirectory, { recursive: true, mode: 0o700 });
+  const initialEntries = await readdir(runtimeDirectory);
+  if (initialEntries.length !== 0) {
+    throw new Error('E2B birth watcher refuses preexisting runtime state');
+  }
+  const buildReadyPath = runtimePath(runtimeDirectory, E2B_TEMPLATE_BUILD_READY_PATH);
+  await writeExclusive(buildReadyPath, Buffer.from(`${canonicalize({
+    schema: TEMPLATE_BUILD_READY_SCHEMA,
+    status: 'captured_watcher_waiting',
+    build_only: true,
+    evidence_trust: 'untrusted_same_uid_self_assertion',
+    network_observation_performed: false,
+    production_authority_included: false,
+  })}\n`), 0o400);
+
+  const digest = await waitForBirthRequest(runtimeDirectory, options);
+  const { request, paths } = await consumeBirthRequest(runtimeDirectory, digest, clock);
+  const collectEvidence = options.collectEvidence ?? collectBootEvidence;
+  if (typeof collectEvidence !== 'function') {
+    throw new TypeError('E2B birth watcher evidence collector is invalid');
+  }
+  const bootEvidence = await collectEvidence({
+    clock,
+    bootNonce: request.birth_nonce,
+    bootstrapArtifactPath: options.bootstrapArtifactPath,
+    runnerArtifactPath: options.runnerArtifactPath,
+  });
+  const evidencePath = runtimePath(runtimeDirectory, E2B_BOOT_EVIDENCE_PATH);
+  const readyPath = runtimePath(runtimeDirectory, E2B_BOOT_READY_PATH);
+  await writeBootEvidence(bootEvidence, {
+    evidencePath,
+    readyPath,
+    writeReady: false,
+  });
+  const attestation = createE2BBirthAttestation({
+    request,
+    bootEvidence,
+    observed_at: new Date(clock()).toISOString(),
+  });
+  await writeExclusive(
+    paths.attestation,
+    Buffer.from(`${canonicalize(attestation)}\n`),
+    0o400,
+  );
+  await writeExclusive(
+    readyPath,
+    Buffer.from(`${attestation.attestation_hash}\n`),
+    0o400,
+  );
+  return Object.freeze({ request, bootEvidence, attestation });
 }
 
 async function main() {
-  const evidence = await collectBootEvidence();
-  await writeBootEvidence(evidence);
+  await runBirthWatcher();
   await new Promise((resolve) => {
     process.once('SIGTERM', resolve);
     process.once('SIGINT', resolve);

@@ -9,7 +9,7 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '..');
 const verifySources = process.argv.slice(2).includes('--source');
 const quiet = process.argv.slice(2).includes('--quiet');
-const reviewedSourceCommit = '9efb61782883dd40409744710818994190439415';
+const reviewedSourceCommit = '27f1c9f90b087a4c98bf537a8201c5443885eb72';
 
 function sha256(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -178,5 +178,12 @@ if (/\.\.\/mcp|\.\.\/risk-fork/.test(text) || /C:\\projects\\|C:\/projects\//i.t
 const api = await import(`${pathToFileURL(resolveBelow(packageRoot, manifest.artifact.path, 'artifact')).href}?sha=${manifest.artifact.sha256.slice(7)}`);
 if (JSON.stringify(Object.keys(api).sort()) !== JSON.stringify([...manifest.exports].sort())) {
   throw new Error('Bundle runtime exports do not match the integrity manifest');
+}
+if (api.HOSTED_MCP_BUNDLE_METADATA?.reviewed_source_commit !== reviewedSourceCommit
+  || api.HOSTED_MCP_BUNDLE_METADATA?.authority_granted !== false
+  || api.HOSTED_MCP_BUNDLE_METADATA?.outbound_mcp_transport_qualified !== false
+  || api.HOSTED_MCP_BUNDLE_METADATA?.managed_postgres_qualified !== false
+  || api.HOSTED_MCP_BUNDLE_METADATA?.e2b_live_qualified !== false) {
+  throw new Error('Bundle runtime metadata does not preserve reviewed default-off authority state');
 }
 if (!quiet) process.stdout.write(`RISK_FORK_HOSTED_MCP_INTEGRITY_OK ${manifest.artifact.sha256}\n`);
