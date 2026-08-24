@@ -1062,7 +1062,7 @@
       "sha256": "sha256:807ba580ed423e518672c27b4022a56acb693be04349733ffc1fe6f324fbcee2"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/postgres-array/LICENSE",
+      "path": "risk-fork-hosted-mcp/node_modules/postgres-array/license",
       "source": "workspace_dependency",
       "bytes": 1111,
       "sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393"
@@ -1080,7 +1080,7 @@
       "sha256": "sha256:c078b99e1009c4bcf6e3ab59d9fe808b12caee3461204ae599cdd9cccd990801"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/postgres-bytea/LICENSE",
+      "path": "risk-fork-hosted-mcp/node_modules/postgres-bytea/license",
       "source": "workspace_dependency",
       "bytes": 1111,
       "sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393"
@@ -1098,7 +1098,7 @@
       "sha256": "sha256:9a09e3ec0775237576b1f6ff0fba0ed6171235aeded635a42c174b517e34cb1a"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/postgres-date/LICENSE",
+      "path": "risk-fork-hosted-mcp/node_modules/postgres-date/license",
       "source": "workspace_dependency",
       "bytes": 1111,
       "sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393"
@@ -1116,7 +1116,7 @@
       "sha256": "sha256:836fe0a39e52f051d62583d8375d3b270b4cb93dd026b125438a89e5a0258c41"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/postgres-interval/LICENSE",
+      "path": "risk-fork-hosted-mcp/node_modules/postgres-interval/license",
       "source": "workspace_dependency",
       "bytes": 1111,
       "sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393"
@@ -2199,7 +2199,7 @@
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
     "bytes": 34222,
-    "sha256": "sha256:0ddc7b0845af1cf825232aee45198968f272b62fd7ba12c73fff0f1ce4ccbd16",
+    "sha256": "sha256:e111e01d634f9481f4659c1f581af6356c603e95210538b376f18cd878c6b5df",
     "sources": [
       {
         "package": "@modelcontextprotocol/sdk",
@@ -2360,7 +2360,7 @@
         "version": "2.0.0",
         "declared_license": "MIT",
         "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/postgres-array/LICENSE",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-array/license",
         "source_bytes": 1111,
         "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
         "notice_bytes": 1110,
@@ -2371,7 +2371,7 @@
         "version": "1.0.1",
         "declared_license": "MIT",
         "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/postgres-bytea/LICENSE",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-bytea/license",
         "source_bytes": 1111,
         "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
         "notice_bytes": 1110,
@@ -2382,7 +2382,7 @@
         "version": "1.0.7",
         "declared_license": "MIT",
         "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/postgres-date/LICENSE",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-date/license",
         "source_bytes": 1111,
         "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
         "notice_bytes": 1110,
@@ -2393,7 +2393,7 @@
         "version": "1.2.0",
         "declared_license": "MIT",
         "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/postgres-interval/LICENSE",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-interval/license",
         "source_bytes": 1111,
         "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
         "notice_bytes": 1110,
@@ -2532,7 +2532,7 @@
     {
       "path": "THIRD_PARTY_NOTICES.txt",
       "bytes": 34222,
-      "sha256": "sha256:0ddc7b0845af1cf825232aee45198968f272b62fd7ba12c73fff0f1ce4ccbd16"
+      "sha256": "sha256:e111e01d634f9481f4659c1f581af6356c603e95210538b376f18cd878c6b5df"
     }
   ]
 }

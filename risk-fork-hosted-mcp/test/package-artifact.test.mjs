@@ -14,7 +14,10 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { extractCompleteReadmeLicense } from '../scripts/license-notices.mjs';
+import {
+  extractCompleteReadmeLicense,
+  selectStandaloneLicenseEntry,
+} from '../scripts/license-notices.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '..');
@@ -203,6 +206,17 @@ test('build is deterministic and records exact source and artifact integrity', a
     assert.equal(source.notice_sha256, sha256(extractedBytes));
     assert.ok(noticesText.includes(extracted.text));
   }
+  for (const source of manifest.third_party_notices.sources.filter(
+    (entry) => entry.method === 'standalone_license_file',
+  )) {
+    const absoluteSource = path.join(repositoryRoot, ...source.path.split('/'));
+    const actualName = selectStandaloneLicenseEntry(
+      await readdir(path.dirname(absoluteSource), { withFileTypes: true }),
+      source.package,
+      source.version,
+    );
+    assert.equal(path.basename(source.path), actualName);
+  }
   assert.doesNotMatch(
     noticesText,
     /No standalone license file was present in the installed build dependency/,
@@ -246,6 +260,53 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.doesNotMatch(secondBundle.toString('utf8'), /\.\.\/mcp|\.\.\/risk-fork/);
   assert.doesNotMatch(secondBundle.toString('utf8'), /C:\\projects\\|C:\/projects\//i);
   run(process.execPath, ['scripts/verify-integrity.mjs', '--source']);
+});
+
+test('standalone license discovery preserves actual casing and fails closed on ambiguity or non-files', async () => {
+  const entry = (name, type = 'file') => ({
+    name,
+    isFile: () => type === 'file',
+  });
+  assert.equal(
+    selectStandaloneLicenseEntry([entry('license')], 'postgres-array', '2.0.0'),
+    'license',
+  );
+  assert.equal(
+    selectStandaloneLicenseEntry([entry('LICENSE.md')], 'example', '1.0.0'),
+    'LICENSE.md',
+  );
+  assert.equal(
+    selectStandaloneLicenseEntry([entry('README.md')], 'example', '1.0.0'),
+    null,
+  );
+  assert.throws(
+    () => selectStandaloneLicenseEntry([
+      entry('LICENSE'),
+      entry('license'),
+    ], 'example', '1.0.0'),
+    /ambiguous standalone license files: LICENSE, license/,
+  );
+  assert.throws(
+    () => selectStandaloneLicenseEntry([entry('COPYING', 'symlink')], 'example', '1.0.0'),
+    /not a regular file/,
+  );
+
+  const temporaryPackage = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-license-case-'));
+  try {
+    await writeFile(path.join(temporaryPackage, 'license'), 'example license\n', 'utf8');
+    assert.equal(
+      selectStandaloneLicenseEntry(
+        await readdir(temporaryPackage, { withFileTypes: true }),
+        'postgres-array',
+        '2.0.0',
+      ),
+      'license',
+    );
+  } finally {
+    const resolvedTemporaryPackage = path.resolve(temporaryPackage);
+    assert.ok(resolvedTemporaryPackage.startsWith(`${path.resolve(os.tmpdir())}${path.sep}`));
+    await rm(resolvedTemporaryPackage, { recursive: true, force: true });
+  }
 });
 
 test('reviewed README license fallback fails closed on absent, ambiguous, or incomplete notice text', async () => {

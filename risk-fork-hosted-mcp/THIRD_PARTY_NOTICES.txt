@@ -426,7 +426,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ========================================================================
 postgres-array@2.0.0
 Declared license: MIT
-Notice source: risk-fork-hosted-mcp/node_modules/postgres-array/LICENSE
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-array/license
 Notice source method: standalone_license_file
 Notice source bytes: 1111
 Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
@@ -457,7 +457,7 @@ THE SOFTWARE.
 ========================================================================
 postgres-bytea@1.0.1
 Declared license: MIT
-Notice source: risk-fork-hosted-mcp/node_modules/postgres-bytea/LICENSE
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-bytea/license
 Notice source method: standalone_license_file
 Notice source bytes: 1111
 Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
@@ -488,7 +488,7 @@ THE SOFTWARE.
 ========================================================================
 postgres-date@1.0.7
 Declared license: MIT
-Notice source: risk-fork-hosted-mcp/node_modules/postgres-date/LICENSE
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-date/license
 Notice source method: standalone_license_file
 Notice source bytes: 1111
 Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
@@ -519,7 +519,7 @@ THE SOFTWARE.
 ========================================================================
 postgres-interval@1.2.0
 Declared license: MIT
-Notice source: risk-fork-hosted-mcp/node_modules/postgres-interval/LICENSE
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-interval/license
 Notice source method: standalone_license_file
 Notice source bytes: 1111
 Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393

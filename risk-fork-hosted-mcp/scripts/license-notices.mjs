@@ -26,6 +26,14 @@ const REQUIRED_MIT_NOTICE_FRAGMENTS = Object.freeze([
   'in no event shall the authors or copyright holders be liable for any claim',
 ]);
 
+const STANDALONE_LICENSE_FILENAMES = new Set([
+  'license',
+  'license.md',
+  'license.txt',
+  'licence',
+  'copying',
+]);
+
 function packageKey(packageName, version) {
   return `${packageName}@${version}`;
 }
@@ -62,6 +70,30 @@ function assertCompleteMitNotice(notice, key) {
 
 export function getCompleteReadmeLicenseFallback(packageName, version) {
   return COMPLETE_README_LICENSE_FALLBACKS.get(packageKey(packageName, version)) ?? null;
+}
+
+export function selectStandaloneLicenseEntry(entries, packageName, version) {
+  const key = packageKey(packageName, version);
+  if (!Array.isArray(entries)) {
+    throw new TypeError(`${key} package directory entries must be an array`);
+  }
+  const matches = entries.filter((entry) => (
+    entry
+    && typeof entry.name === 'string'
+    && STANDALONE_LICENSE_FILENAMES.has(entry.name.toLowerCase())
+  ));
+  if (matches.length === 0) return null;
+  if (matches.length !== 1) {
+    const names = matches.map((entry) => entry.name).sort((left, right) => (
+      left < right ? -1 : left > right ? 1 : 0
+    ));
+    throw new Error(`${key} has ambiguous standalone license files: ${names.join(', ')}`);
+  }
+  const selected = matches[0];
+  if (typeof selected.isFile !== 'function' || !selected.isFile()) {
+    throw new Error(`${key} standalone license entry is not a regular file: ${selected.name}`);
+  }
+  return selected.name;
 }
 
 export function extractCompleteReadmeLicense({

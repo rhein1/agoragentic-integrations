@@ -4,6 +4,7 @@ import {
   mkdir,
   open,
   readFile,
+  readdir,
   rm,
   stat,
   writeFile,
@@ -15,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import {
   extractCompleteReadmeLicense,
   getCompleteReadmeLicenseFallback,
+  selectStandaloneLicenseEntry,
 } from './license-notices.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -246,32 +248,31 @@ async function buildThirdPartyNotices(inputPaths) {
     });
     const version = typeof pkg.version === 'string' ? pkg.version : 'unknown';
     const declaredLicense = typeof pkg.license === 'string' ? pkg.license : 'see bundled source';
-    const candidates = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'COPYING'];
     let licenseRecord = null;
-    for (const candidate of candidates) {
-      const licensePath = path.join(packageRootInfo.absolute, candidate);
-      try {
-        const bytes = await readFile(licensePath);
-        const text = bytes.toString('utf8').replace(/\r\n?/g, '\n').trim();
-        if (text.length === 0 || text.includes('\u0000') || text.includes('\uFFFD')) {
-          throw new Error(`${pkg.name ?? packageName}@${version} has an invalid standalone license file`);
-        }
-        licenseRecord = {
-          method: 'standalone_license_file',
-          path: repoRelative(licensePath),
-          sourceBytes: bytes,
-          text,
-        };
-        noticeInputs.push({
-          path: licenseRecord.path,
-          source: 'workspace_dependency',
-          bytes: bytes.byteLength,
-          sha256: sha256(bytes),
-        });
-        break;
-      } catch (error) {
-        if (error?.code !== 'ENOENT') throw error;
+    const licenseEntry = selectStandaloneLicenseEntry(
+      await readdir(packageRootInfo.absolute, { withFileTypes: true }),
+      pkg.name ?? packageName,
+      version,
+    );
+    if (licenseEntry) {
+      const licensePath = path.join(packageRootInfo.absolute, licenseEntry);
+      const bytes = await readFile(licensePath);
+      const text = bytes.toString('utf8').replace(/\r\n?/g, '\n').trim();
+      if (text.length === 0 || text.includes('\u0000') || text.includes('\uFFFD')) {
+        throw new Error(`${pkg.name ?? packageName}@${version} has an invalid standalone license file`);
       }
+      licenseRecord = {
+        method: 'standalone_license_file',
+        path: repoRelative(licensePath),
+        sourceBytes: bytes,
+        text,
+      };
+      noticeInputs.push({
+        path: licenseRecord.path,
+        source: 'workspace_dependency',
+        bytes: bytes.byteLength,
+        sha256: sha256(bytes),
+      });
     }
     if (!licenseRecord) {
       const fallback = getCompleteReadmeLicenseFallback(pkg.name ?? packageName, version);
