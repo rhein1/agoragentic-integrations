@@ -4,7 +4,6 @@ mcp/dist/
 mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
-harness-core/node_modules/
 opencode/node_modules/
 risk-fork/node_modules/
 transaction-assurance/node_modules/

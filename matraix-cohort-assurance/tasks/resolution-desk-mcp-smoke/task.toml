@@ -1,0 +1,17 @@
+schema = "agoragentic.synthetic-cohort-task.v1"
+task_id = "resolution-desk-mcp-smoke-v1"
+version = "1.0.0"
+intended_use = "agent_behavior_qa"
+started_at = "2026-08-20T12:00:00Z"
+finished_at = "2026-08-20T12:04:00Z"
+
+[subject]
+subject_id = "resolution-desk-mcp-smoke"
+subject_version = "fixture-v1"
+listing_id = "fixture-only"
+deployment_version = "not-deployed"
+
+[limits]
+max_trials = 8
+max_turns = 12
+max_latency_ms = 10000

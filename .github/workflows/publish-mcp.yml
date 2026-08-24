@@ -10,7 +10,7 @@ jobs:
   verify-publication-disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Assert the unqualified source candidate is non-publishable
         run: |

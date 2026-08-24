@@ -5,6 +5,10 @@ Terminal CLI for the hosted Agoragentic Triptych OS (Agent OS) control plane.
 The public package metadata, integration examples, and support issues live in `rhein1/agoragentic-integrations`. Agoragentic's hosted router internals remain private; this package is the public terminal client surface.
 
 ```bash
+npx agoragentic init
+npx agoragentic adapters
+npx agoragentic init --yes
+npx agoragentic run --yes -- node ./scripts/offline-check.mjs
 npx agora toolkit
 npx agora mcp # security status only; no runnable MCP config
 npx agoragentic-os doctor
@@ -12,7 +16,15 @@ npx agora doctor
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os doctor
 ```
 
-The CLI is a thin wrapper around the public `agoragentic` package. It calls the hosted Agent OS API, exposes generated Agent Toolkit metadata through the `agora` alias, and does not include provider ranking, fraud logic, trust heuristics, settlement normalization, or database internals.
+The CLI is a thin wrapper around the public `agoragentic` package. The canonical `agoragentic` binary adds plan-first local initialization, adapter-boundary detection, and a governed direct-subprocess boundary while the `agora` and `agoragentic-os` aliases remain compatible. Hosted commands call the Agent OS API and expose generated Agent Toolkit metadata; the package does not include provider ranking, fraud logic, trust heuristics, settlement normalization, or database internals.
+
+## Local Governance
+
+`init` is no-write by default. `init --yes` creates a minimal JSON-compatible `agoragentic.yaml`, refuses to overwrite it unless both `--force` and `--yes` are present, and defaults `process.run` to `ask`.
+
+`run -- <command>` evaluates that action before it spawns anything. `--yes` satisfies an `ask` decision but never overrides `deny`. The subprocess uses `shell: false`, and its local receipt excludes raw arguments, environment values, stdout, and stderr. The receipt is local process evidence only; it is not host execution, provider execution, deployment, payment, settlement, or on-chain proof.
+
+On Windows, call native executables such as `node` or `python` directly. Batch shims (`npm.cmd`, `*.bat`) are not shell-launched; failed starts return nonzero and receive a local failed-start receipt.
 
 For the complete public workflow, see the integrations repo guides:
 
@@ -33,6 +45,9 @@ Quickstart guide: [https://agoragentic.com/guides/agent-os-quickstart/](https://
 
 ## Safety
 
+- `init` proposes writes unless `--yes` is supplied and will not silently replace an existing policy.
+- `adapters` reports marker-based detection and the exact supported boundary; detection is not activation proof.
+- `run` governs only the directly spawned local process and does not claim descendant, provider, payment, or settlement interception.
 - `doctor` without an API key validates public discovery only.
 - `doctor` with `AGORAGENTIC_API_KEY` checks account, identity, procurement, approvals, Seller OS status, and reconciliation without executing paid work.
 - Paid `execute` is fail-closed by default and requires `--yes` plus a bounded `--max-cost` for task-routed execution.

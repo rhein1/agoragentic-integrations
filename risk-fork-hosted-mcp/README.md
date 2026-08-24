@@ -64,6 +64,8 @@ The E2B adapter cannot safely be substituted for the host-owned outbound MCP ses
 
 ## Reproducible artifact checks
 
+Run the build, test, source-lineage verification, and pack checks only from this repository's source checkout, where `src/`, `test/`, and `scripts/build.mjs` are present:
+
 ```text
 npm run build
 npm test
@@ -71,4 +73,11 @@ npm run verify:source
 npm run pack:dry
 ```
 
-`integrity-manifest.json` records the exact Git commit, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.
+From an installed or extracted packed artifact, run the packaged integrity verifier instead:
+
+```text
+npm run verify
+# equivalent: node scripts/verify-integrity.mjs
+```
+
+`integrity-manifest.json` records the exact Git commit, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. `THIRD_PARTY_NOTICES.txt` is generated from exact dependency source bytes: a standalone license file is preferred, while only the reviewed `pg-types@2.2.0` and `pgpass@1.0.5` fallbacks may use their complete single README license sections. The source path, byte count, source hash, extraction method, extracted byte count, and extracted hash are recorded and verified; a missing, ambiguous, unsupported, or incomplete fallback fails the build. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.

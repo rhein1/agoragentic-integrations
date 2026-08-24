@@ -1,0 +1,52 @@
+{
+  "schema": "agoragentic.synthetic-cohort-reporting.v1",
+  "claim_scope": {
+    "supported_claim_types": [
+      "system_behavior_observation",
+      "workflow_failure_observation",
+      "mandate_compliance_observation",
+      "model_sensitivity_observation"
+    ],
+    "unsupported_claim_types": [
+      "human_preference",
+      "population_prevalence",
+      "market_demand",
+      "community_voice",
+      "representational_legitimacy",
+      "consent",
+      "lived_experience",
+      "policy_legitimacy",
+      "legal_deliberation",
+      "consequential_eligibility"
+    ]
+  },
+  "limitations": [
+    "synthetic_model_mediated_evidence",
+    "not_human_validation",
+    "not_population_prevalence_estimate",
+    "not_customer_demand_validation",
+    "not_safety_certification",
+    "synthetic_personas_do_not_represent_real_people",
+    "not_human_participant_substitution",
+    "not_affected_community_participation",
+    "not_representational_or_deliberative_authority",
+    "consent_and_lived_experience_not_inferable"
+  ],
+  "public_facets": [
+    "technical_proficiency_profile",
+    "interaction_complexity_profile",
+    "urgency_configuration",
+    "communication_detail_preference",
+    "approval_requirement",
+    "task_or_failure_mode_identifier"
+  ],
+  "authority": {
+    "wallet_authority_granted": false,
+    "payment_authority_granted": false,
+    "execution_authority_granted": false,
+    "deployment_authority_granted": false,
+    "publication_authority_granted": false,
+    "trust_mutation_authority_granted": false,
+    "marketplace_listing_authority_granted": false
+  }
+}

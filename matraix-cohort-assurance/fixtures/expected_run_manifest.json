@@ -1,0 +1,10 @@
+{
+  "schema": "agoragentic.synthetic-cohort-run-manifest.v1",
+  "run_id": "aeocar_aa2ee443f67dc76f99652ee2",
+  "source_lock_sha256": "c409499e8685b8f978dc7bac67179bf089cc8cd6dbbf3bb5b9aafbc460a9a254",
+  "task_digest": "6399cf7d958e0944ae391c2167917df6f5f616e0c4bc59cbedc74aeaa52266e7",
+  "sanitized_trials_sha256": "ee9c0218d1624712285bf8cbe555fb2e6d49661a047945e376cfe39e0d64a195",
+  "evidence_sha256": "9a8d40de83fd813172bf47195582689c6d67112b8319f0c12b1ff7a71f598a9d",
+  "external_execution": false,
+  "authority_granted": false
+}

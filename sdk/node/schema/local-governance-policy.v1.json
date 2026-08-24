@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/local-governance-policy.v1.json",
+  "title": "Agoragentic local governance policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "default_decision", "actions"],
+  "properties": {
+    "schema": { "const": "agoragentic.local-governance-policy.v1" },
+    "default_decision": { "enum": ["allow", "ask", "deny"] },
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "directory": { "type": "string", "minLength": 1 }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision"],
+        "properties": {
+          "decision": { "enum": ["allow", "ask", "deny"] },
+          "approval": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spend": { "const": "owner_only" },
+        "retry": { "const": "owner_only" }
+      }
+    }
+  }
+}

@@ -46,6 +46,10 @@ if (manifest.schema !== 'agoragentic.risk-fork-hosted-mcp.integrity.v1'
   || !Array.isArray(manifest.exports)
   || !Array.isArray(manifest.inputs)
   || !Array.isArray(manifest.packaged_assets)
+  || manifest.third_party_notices?.path !== 'THIRD_PARTY_NOTICES.txt'
+  || !Number.isSafeInteger(manifest.third_party_notices?.bytes)
+  || !/^sha256:[a-f0-9]{64}$/.test(manifest.third_party_notices?.sha256 ?? '')
+  || !Array.isArray(manifest.third_party_notices?.sources)
   || JSON.stringify(manifest.optional_peer_dependencies) !== JSON.stringify([
     { name: 'e2b', version: '2.39.0', optional: true },
   ])) {
@@ -83,6 +87,67 @@ for (const asset of manifest.packaged_assets ?? []) {
       || input.sha256 !== asset.sha256) {
       throw new Error(`Packaged asset is not bound to a reviewed Git source: ${asset.path}`);
     }
+  }
+}
+const noticeAsset = manifest.packaged_assets.find(
+  (asset) => asset.path === manifest.third_party_notices.path,
+);
+if (!noticeAsset
+  || noticeAsset.bytes !== manifest.third_party_notices.bytes
+  || noticeAsset.sha256 !== manifest.third_party_notices.sha256) {
+  throw new Error('Third-party notices are not bound to the packaged asset');
+}
+const noticeSources = manifest.third_party_notices.sources;
+if (JSON.stringify(noticeSources) !== JSON.stringify(
+  [...noticeSources].sort((left, right) => left.package.localeCompare(right.package)),
+)) {
+  throw new Error('Third-party notice sources are not deterministically ordered');
+}
+const noticesText = (await readFile(
+  resolveBelow(packageRoot, manifest.third_party_notices.path, 'third-party notices'),
+)).toString('utf8');
+const noticeBlocks = noticesText.split(`${'='.repeat(72)}\n`).slice(1).map((block) => block.trim());
+if (noticeBlocks.length !== noticeSources.length) {
+  throw new Error('Third-party notice source count does not match the generated notice blocks');
+}
+for (let index = 0; index < noticeSources.length; index += 1) {
+  const source = noticeSources[index];
+  if (typeof source.package !== 'string' || source.package === ''
+    || typeof source.version !== 'string' || source.version === ''
+    || typeof source.declared_license !== 'string' || source.declared_license === ''
+    || !/^(?:standalone_license_file|markdown_license_section)$/.test(source.method ?? '')
+    || typeof source.path !== 'string' || source.path === ''
+    || !Number.isSafeInteger(source.source_bytes) || source.source_bytes <= 0
+    || !/^sha256:[a-f0-9]{64}$/.test(source.source_sha256 ?? '')
+    || !Number.isSafeInteger(source.notice_bytes) || source.notice_bytes <= 0
+    || !/^sha256:[a-f0-9]{64}$/.test(source.notice_sha256 ?? '')) {
+    throw new Error(`Third-party notice source contract is invalid at index ${index}`);
+  }
+  const input = manifest.inputs.find((entry) => entry.path === source.path);
+  if (!input
+    || input.source !== 'workspace_dependency'
+    || input.bytes !== source.source_bytes
+    || input.sha256 !== source.source_sha256) {
+    throw new Error(`Third-party notice source is not bound to an exact workspace input: ${source.path}`);
+  }
+  const prefix = [
+    `${source.package}@${source.version}`,
+    `Declared license: ${source.declared_license}`,
+    `Notice source: ${source.path}`,
+    `Notice source method: ${source.method}`,
+    `Notice source bytes: ${source.source_bytes}`,
+    `Notice source SHA-256: ${source.source_sha256}`,
+    `Extracted notice bytes: ${source.notice_bytes}`,
+    `Extracted notice SHA-256: ${source.notice_sha256}`,
+    '',
+  ].join('\n');
+  const block = noticeBlocks[index];
+  if (!block.startsWith(prefix)) {
+    throw new Error(`Third-party notice metadata does not match its generated block: ${source.package}`);
+  }
+  const noticeBytes = Buffer.from(block.slice(prefix.length).trim(), 'utf8');
+  if (noticeBytes.byteLength !== source.notice_bytes || sha256(noticeBytes) !== source.notice_sha256) {
+    throw new Error(`Third-party extracted notice integrity mismatch: ${source.package}`);
   }
 }
 if (verifySources) {

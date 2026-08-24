@@ -5,6 +5,12 @@ This file is generated deterministically from the exact packages bundled into di
 ========================================================================
 @modelcontextprotocol/sdk@1.30.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1071
+Notice source SHA-256: sha256:5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d
+Extracted notice bytes: 1070
+Extracted notice SHA-256: sha256:8694aa57bec3f3e9ad0559e91c63a795904e967104efb9d6fc9d153e56f567c2
 MIT License
 
 Copyright (c) 2024 Anthropic, PBC
@@ -30,6 +36,12 @@ SOFTWARE.
 ========================================================================
 ajv@8.20.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/ajv/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1090
+Notice source SHA-256: sha256:a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3
+Extracted notice bytes: 1088
+Extracted notice SHA-256: sha256:f2fde84e6c1f177681e152a4459f025a87e855c0aa374238ba79b2e72a15b57c
 The MIT License (MIT)
 
 Copyright (c) 2015-2021 Evgeny Poberezkin
@@ -55,6 +67,12 @@ SOFTWARE.
 ========================================================================
 ajv-formats@3.0.1
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/ajv-formats/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1074
+Notice source SHA-256: sha256:9df3bb69929a3b650ed73b3bfa1756725aaff0ac296461605753547004eafeaf
+Extracted notice bytes: 1073
+Extracted notice SHA-256: sha256:0eb7e0538bf86badc8cc36fc66164d495630f21f6998529188406fb00c782a5e
 MIT License
 
 Copyright (c) 2020 Evgeny Poberezkin
@@ -80,6 +98,12 @@ SOFTWARE.
 ========================================================================
 fast-deep-equal@3.1.3
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/fast-deep-equal/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1074
+Notice source SHA-256: sha256:7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a
+Extracted notice bytes: 1073
+Extracted notice SHA-256: sha256:aa407ee69b3f646286f5162d0679256a0fe5b7fcc51f104ffb647efe167715ea
 MIT License
 
 Copyright (c) 2017 Evgeny Poberezkin
@@ -105,6 +129,12 @@ SOFTWARE.
 ========================================================================
 fast-uri@3.1.5
 Declared license: BSD-3-Clause
+Notice source: risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1813
+Notice source SHA-256: sha256:b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786
+Extracted notice bytes: 1813
+Extracted notice SHA-256: sha256:b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786
 Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
 Copyright (c) 2021-present The Fastify team <https://github.com/fastify/fastify#team>
 All rights reserved.
@@ -139,6 +169,12 @@ The complete list of contributors can be found at:
 ========================================================================
 json-schema-traverse@1.0.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/json-schema-traverse/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1074
+Notice source SHA-256: sha256:7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a
+Extracted notice bytes: 1073
+Extracted notice SHA-256: sha256:aa407ee69b3f646286f5162d0679256a0fe5b7fcc51f104ffb647efe167715ea
 MIT License
 
 Copyright (c) 2017 Evgeny Poberezkin
@@ -164,6 +200,12 @@ SOFTWARE.
 ========================================================================
 pg@8.16.3
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/pg/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1077
+Notice source SHA-256: sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3
+Extracted notice bytes: 1076
+Extracted notice SHA-256: sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a
 MIT License
 
 Copyright (c) 2010 - 2021 Brian Carlson
@@ -189,6 +231,12 @@ SOFTWARE.
 ========================================================================
 pg-cloudflare@1.4.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/pg-cloudflare/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1077
+Notice source SHA-256: sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3
+Extracted notice bytes: 1076
+Extracted notice SHA-256: sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a
 MIT License
 
 Copyright (c) 2010 - 2021 Brian Carlson
@@ -214,6 +262,12 @@ SOFTWARE.
 ========================================================================
 pg-connection-string@2.14.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/pg-connection-string/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1082
+Notice source SHA-256: sha256:2244b5486c4427001b6756a87b9a297d427c111dcc3ba64a097492a8979c23d0
+Extracted notice bytes: 1082
+Extracted notice SHA-256: sha256:2244b5486c4427001b6756a87b9a297d427c111dcc3ba64a097492a8979c23d0
 The MIT License (MIT)
 
 Copyright (c) 2014 Iced Development
@@ -239,6 +293,12 @@ SOFTWARE.
 ========================================================================
 pg-int8@1.0.1
 Declared license: ISC
+Notice source: risk-fork-hosted-mcp/node_modules/pg-int8/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 750
+Notice source SHA-256: sha256:4e8e87ccdfc7e4b47fd89015f78468aa53b6bf43ab6e6e12d43e8f55294911de
+Extracted notice bytes: 749
+Extracted notice SHA-256: sha256:1cd3df8c20bd2aa49630296f8e31741b3322e6d3b0a20296bd13e7e3a0646f85
 Copyright © 2017, Charmander <~@charmander.me>
 
 Permission to use, copy, modify, and/or distribute this software for any
@@ -256,6 +316,12 @@ PERFORMANCE OF THIS SOFTWARE.
 ========================================================================
 pg-pool@3.14.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/pg-pool/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1073
+Notice source SHA-256: sha256:4f15ee7fc2a72082859d7e0d12dfa4bcdd70b1c744ad3850d07780730ac08557
+Extracted notice bytes: 1072
+Extracted notice SHA-256: sha256:6de3cefc5135b313b021b77e9ecef618d29a3efc0a86c99337403a9e8da24580
 MIT License
 
 Copyright (c) 2017 Brian M. Carlson
@@ -281,6 +347,12 @@ SOFTWARE.
 ========================================================================
 pg-protocol@1.16.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/pg-protocol/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1077
+Notice source SHA-256: sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3
+Extracted notice bytes: 1076
+Extracted notice SHA-256: sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a
 MIT License
 
 Copyright (c) 2010 - 2021 Brian Carlson
@@ -306,16 +378,60 @@ SOFTWARE.
 ========================================================================
 pg-types@2.2.0
 Declared license: MIT
-No standalone license file was present in the installed build dependency.
+Notice source: risk-fork-hosted-mcp/node_modules/pg-types/README.md
+Notice source method: markdown_license_section
+Notice source bytes: 3831
+Notice source SHA-256: sha256:ecda9bca71d3f0cee4e600d1dd2bef336213f39ef2e8fca6a1a1c1c8723f643a
+Extracted notice bytes: 1082
+Extracted notice SHA-256: sha256:a3a081597284cb155888f951f1b74579d7ed3ceccc69ff5da66db24feb3d0597
+The MIT License (MIT)
+
+Copyright (c) 2014 Brian M. Carlson
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ========================================================================
 pgpass@1.0.5
 Declared license: MIT
-No standalone license file was present in the installed build dependency.
+Notice source: risk-fork-hosted-mcp/node_modules/pgpass/README.md
+Notice source method: markdown_license_section
+Notice source bytes: 3294
+Notice source SHA-256: sha256:62549909404b5a0dcb2b4b74c9a930baf8095dbcfa1543c4ffc79378acd22b57
+Extracted notice bytes: 1060
+Extracted notice SHA-256: sha256:7a69666f39f8ad8b5574b60fb0443407abd3e2651b5cae8b559d640d5ff14e84
+Copyright (c) 2013-2016 Hannes Hörl
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ========================================================================
 postgres-array@2.0.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-array/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1111
+Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
+Extracted notice bytes: 1110
+Extracted notice SHA-256: sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8
 The MIT License (MIT)
 
 Copyright (c) Ben Drucker <bvdrucker@gmail.com> (bendrucker.me)
@@ -341,6 +457,12 @@ THE SOFTWARE.
 ========================================================================
 postgres-bytea@1.0.1
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-bytea/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1111
+Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
+Extracted notice bytes: 1110
+Extracted notice SHA-256: sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8
 The MIT License (MIT)
 
 Copyright (c) Ben Drucker <bvdrucker@gmail.com> (bendrucker.me)
@@ -366,6 +488,12 @@ THE SOFTWARE.
 ========================================================================
 postgres-date@1.0.7
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-date/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1111
+Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
+Extracted notice bytes: 1110
+Extracted notice SHA-256: sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8
 The MIT License (MIT)
 
 Copyright (c) Ben Drucker <bvdrucker@gmail.com> (bendrucker.me)
@@ -391,6 +519,12 @@ THE SOFTWARE.
 ========================================================================
 postgres-interval@1.2.0
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/postgres-interval/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1111
+Notice source SHA-256: sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393
+Extracted notice bytes: 1110
+Extracted notice SHA-256: sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8
 The MIT License (MIT)
 
 Copyright (c) Ben Drucker <bvdrucker@gmail.com> (bendrucker.me)
@@ -416,6 +550,12 @@ THE SOFTWARE.
 ========================================================================
 split2@4.2.0
 Declared license: ISC
+Notice source: risk-fork-hosted-mcp/node_modules/split2/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 764
+Notice source SHA-256: sha256:c372ef2fa1dfcb124ed807609751e75e3a009f108c5724916b489288fcb88a0c
+Extracted notice bytes: 763
+Extracted notice SHA-256: sha256:a6f69779493956e3e43ad85d9f22a4cdfd0b330344dd0ded0c3049b587529203
 Copyright (c) 2014-2018, Matteo Collina <hello@matteocollina.com>
 
 Permission to use, copy, modify, and/or distribute this software for any
@@ -433,6 +573,12 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ========================================================================
 xtend@4.0.2
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/xtend/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1078
+Notice source SHA-256: sha256:82e67379203d5794e7c44549847d8d64ae6904591381682360470898bd306821
+Extracted notice bytes: 1077
+Extracted notice SHA-256: sha256:5c9d0334d815bf27bab1f5b67e9788b66e82f5e03774db757ad12fdebd8be10e
 The MIT License (MIT)
 Copyright (c) 2012-2014 Raynos.
 
@@ -457,6 +603,12 @@ THE SOFTWARE.
 ========================================================================
 zod@4.4.3
 Declared license: MIT
+Notice source: risk-fork-hosted-mcp/node_modules/zod/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 1072
+Notice source SHA-256: sha256:3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8
+Extracted notice bytes: 1071
+Extracted notice SHA-256: sha256:f61cacc2acb8b71aa79a128b3e732bf25e02aab40747bbbd5bf00c97c9cda28d
 MIT License
 
 Copyright (c) 2025 Colin McDonnell
@@ -482,6 +634,12 @@ SOFTWARE.
 ========================================================================
 zod-to-json-schema@3.25.2
 Declared license: ISC
+Notice source: risk-fork-hosted-mcp/node_modules/zod-to-json-schema/LICENSE
+Notice source method: standalone_license_file
+Notice source bytes: 745
+Notice source SHA-256: sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4
+Extracted notice bytes: 745
+Extracted notice SHA-256: sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4
 ISC License
 
 Copyright (c) 2020, Stefan Terdell

@@ -1,0 +1,18 @@
+{
+  "schema": "agoragentic.local-governance-policy.v1",
+  "default_decision": "ask",
+  "receipts": {
+    "enabled": true,
+    "directory": ".agoragentic/receipts"
+  },
+  "actions": {
+    "process.run": {
+      "decision": "ask",
+      "approval": "explicit_cli_yes"
+    }
+  },
+  "authority": {
+    "spend": "owner_only",
+    "retry": "owner_only"
+  }
+}

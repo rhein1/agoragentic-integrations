@@ -18,4 +18,4 @@ This skill does not provision infrastructure, mutate hosted runtime, spend funds
 ## Advanced Context
 
 - Agent OS public handoff contracts: <https://github.com/rhein1/agoragentic-integrations/tree/main/agent-os>
-- Harness export preparation: <https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core>
+- Harness export preparation: <https://github.com/rhein1/agoragentic-harness-core>

@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/interchange-production-research-ledger.v1.json",
+  "title": "Agoragentic Interchange Production Research Ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generated_at",
+    "program",
+    "evidence_levels",
+    "external_experiments",
+    "runtime_snapshot",
+    "source_change_groups",
+    "findings",
+    "claim_boundaries"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.interchange-production-research-ledger.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "charter_url", "charter_opened_at", "successor_gate_url", "scope_start", "scope_end"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "charter_url": { "type": "string", "format": "uri" },
+        "charter_opened_at": { "type": "string", "format": "date-time" },
+        "successor_gate_url": { "type": "string", "format": "uri" },
+        "scope_start": { "type": "string", "format": "date" },
+        "scope_end": { "type": "string", "format": "date" }
+      }
+    },
+    "evidence_levels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "source_merged",
+          "deployed",
+          "activated",
+          "first_party_exercised",
+          "recruited_external_exercised",
+          "independent_external_exercised",
+          "organic_adoption",
+          "repeat_adoption",
+          "revenue"
+        ]
+      }
+    },
+    "external_experiments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/experiment" }
+    },
+    "runtime_snapshot": { "$ref": "#/$defs/runtimeSnapshot" },
+    "source_change_groups": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceChangeGroup" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "claim_boundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "authorityFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contact", "invoke", "routing", "referrals", "provider_execution", "money", "trust_promotion"],
+      "properties": {
+        "contact": { "type": "boolean" },
+        "invoke": { "type": "boolean" },
+        "routing": { "type": "boolean" },
+        "referrals": { "type": "boolean" },
+        "provider_execution": { "type": "boolean" },
+        "money": { "type": "boolean" },
+        "trust_promotion": { "type": "boolean" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "url"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "ref": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "started_at",
+        "completed_at",
+        "time_precision",
+        "actor_class",
+        "economic_class",
+        "evidence_level",
+        "result",
+        "authority_after",
+        "evidence",
+        "limitations"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "started_at": {
+          "anyOf": [
+            { "type": "string", "format": "date" },
+            { "type": "string", "format": "date-time" }
+          ]
+        },
+        "completed_at": {
+          "anyOf": [
+            { "type": "string", "format": "date" },
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        },
+        "time_precision": { "enum": ["second", "day"] },
+        "actor_class": {
+          "enum": ["first_party", "recruited_external", "independent_external", "mixed"]
+        },
+        "economic_class": {
+          "enum": ["no_money", "owner_seeded", "test_money", "external_test_money", "retained_revenue", "not_applicable"]
+        },
+        "evidence_level": { "type": "string" },
+        "result": { "type": "string", "minLength": 1 },
+        "authority_after": { "$ref": "#/$defs/authorityFlags" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "chain_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["network", "tx_hash", "block_number", "timestamp", "asset_contract", "amount_atomic", "amount_display", "from", "to", "status"],
+          "properties": {
+            "network": { "type": "string" },
+            "tx_hash": { "type": "string", "pattern": "^0x[a-fA-F0-9]{64}$" },
+            "block_number": { "type": "integer", "minimum": 1 },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "asset_contract": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" },
+            "amount_atomic": { "type": "string", "pattern": "^[0-9]+$" },
+            "amount_display": { "type": "string" },
+            "from": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" },
+            "to": { "type": "string", "pattern": "^0x[a-fA-F0-9]{40}$" },
+            "status": { "type": "string" }
+          }
+        }
+      }
+    },
+    "runtimeSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "health", "discovery", "interchange_discovery", "custody", "x402_base", "x402_caip2", "federation_feed", "mcp_registry_cadence"],
+      "properties": {
+        "observed_at": { "type": "string", "format": "date-time" },
+        "health": { "type": "string" },
+        "discovery": { "type": "string" },
+        "interchange_discovery": { "type": "string" },
+        "custody": { "type": "string" },
+        "x402_base": { "type": "string" },
+        "x402_caip2": { "type": "string" },
+        "federation_feed": { "type": "string" },
+        "mcp_registry_cadence": { "type": "string" }
+      }
+    },
+    "sourceChangeGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "period", "summary", "pull_requests"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]+$" },
+        "period": { "type": "string" },
+        "summary": { "type": "string", "minLength": 1 },
+        "pull_requests": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "summary", "fix_pull_requests", "residual_limit"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Z]-[0-9]{2}$" },
+        "category": { "type": "string" },
+        "summary": { "type": "string", "minLength": 1 },
+        "fix_pull_requests": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "residual_limit": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

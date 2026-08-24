@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools==84.0.0", "wheel==0.47.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agoragentic-matraix-cohort-assurance"
+version = "0.1.0a0"
+description = "Fail-closed synthetic cohort assurance contracts and deterministic evidence replay."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Agoragentic" }]
+dependencies = []
+keywords = [
+  "agent-evaluation",
+  "cohort-assurance",
+  "evidence",
+  "synthetic-personas",
+]
+
+[project.scripts]
+agoragentic-matraix-assurance = "agoragentic_matraix_assurance.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agoragentic_matraix_assurance = ["py.typed"]
+
+[tool.setuptools.data-files]
+"share/agos-matraix" = ["UPSTREAM_LOCK.json"]
+"share/agos-matraix/f" = ["fixtures/*.json"]
+"share/agos-matraix/t" = [
+  "tasks/resolution-desk-mcp-smoke/*.json",
+  "tasks/resolution-desk-mcp-smoke/*.md",
+  "tasks/resolution-desk-mcp-smoke/*.toml",
+]

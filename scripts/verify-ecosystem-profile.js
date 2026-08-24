@@ -198,39 +198,35 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
       .map((claim) => `docs/BRAND_SYSTEM.md unsupported Harness Core claim: ${claim}`));
 
     const harnessReadmePath = path.join(root, 'harness-core', 'README.md');
-    const harnessHeroPath = path.join(root, 'harness-core', 'assets', 'harness-core-product-hero.svg');
+    const harnessEvidencePath = path.join(root, 'harness-core', 'STANDALONE_RELEASE_EVIDENCE.json');
     const harnessReadme = fs.readFileSync(harnessReadmePath, 'utf8');
-    const harnessHero = fs.readFileSync(harnessHeroPath, 'utf8');
+    const harnessEvidence = readJson(harnessEvidencePath, errors, root);
 
     for (const required of [
-      'Put a policy gate and a receipt around any agent action.',
-      'Host execution is outside the generic `run` path',
-      'Local receipts are not settlement receipts',
-      'Claude Code `PreToolUse`',
-      'status: "stub"',
-      'before_policy',
-      'after_receipt',
-      'Agent OS preview',
+      'https://github.com/rhein1/agoragentic-harness-core',
+      'https://www.npmjs.com/package/agoragentic-harness-core',
+      'releases/tag/v0.3.1',
+      'thin pointer',
+      'not settlement receipts',
     ]) {
       if (!harnessReadme.includes(required)) {
-        errors.push(`harness-core/README.md is missing flagship contract text: ${required}`);
+        errors.push(`harness-core/README.md is missing standalone cutover text: ${required}`);
       }
     }
 
-    if (!harnessHero.includes('<title id="title">Agoragentic Harness Core</title>')) {
-      errors.push('Harness Core hero must include an accessible title');
+    const harnessProduct = (ecosystem.products || []).find((entry) => entry.id === 'harness-core');
+    if (harnessProduct?.repository !== 'https://github.com/rhein1/agoragentic-harness-core') {
+      errors.push('ecosystem.json Harness Core product must point to the standalone repository');
     }
-    if (!harnessHero.includes('<desc id="desc">')) {
-      errors.push('Harness Core hero must include an accessible description');
+    if (harnessEvidence?.source_cutover?.duplicate_canonical_implementation_removed !== true) {
+      errors.push('Harness Core release evidence must record duplicate source removal');
     }
-    if (!harnessHero.includes('HOST BOUNDARY') || !harnessHero.includes('CONFIGURATION RECEIPT')) {
-      errors.push('Harness Core hero must show the host boundary and configuration-receipt contract');
+    if (harnessEvidence?.npm?.version !== '0.3.1') {
+      errors.push('Harness Core release evidence must record npm 0.3.1');
     }
-    if (/\bwhat ran\b|\bnext safe action\b|>TOOL EXECUTION</i.test(harnessHero)) {
-      errors.push('Harness Core hero must not claim execution/result fields that the local receipt does not emit');
-    }
-    if (/\b\d+\s+(?:services|listings|calls|agents)\b/i.test(harnessHero)) {
-      errors.push('Harness Core hero must not bake mutable public counts into the image');
+    if (harnessEvidence?.authority
+      && !Object.values(harnessEvidence.authority).every((value) => value === false)) {
+      errors.push('Harness Core release evidence must not grant authority');
     }
   }
 

@@ -48,9 +48,15 @@ It does **not** retain raw workflow content, extract a success claim from the co
 
 ## Harness Core compatibility evidence
 
-The published npm `latest` line remains Harness Core `0.2.0`; the source tree's review-gated `0.3.0` candidate is verified separately. `npm run test:core-compat` packs the sibling `../harness-core` source into a temporary tarball, installs that tarball in a temporary consumer while resolving its declared package dependencies, and runs the bridge fixture suite against it. The targeted regression checks the generated Harness provenance is exactly `0.3.0` and keeps the zero-spend, no-gstack-execution, no-hosted-billing, and no-marketplace-publication boundaries intact.
+The canonical Harness Core source is the standalone
+[`rhein1/agoragentic-harness-core`](https://github.com/rhein1/agoragentic-harness-core)
+repository. This bridge pins published package `0.3.1`. `npm run test:core-compat` installs that exact npm
+version into a temporary clean consumer, verifies standalone repository metadata and all four CLI aliases,
+then runs the bridge fixture suite against it. The targeted regression keeps the zero-spend,
+no-gstack-execution, no-hosted-billing, and no-marketplace-publication boundaries intact.
 
-This is local package compatibility evidence only. It does not publish Harness Core, change the bridge's published dependency line, execute gstack, call a provider, deploy a runtime, or grant any hosted authority.
+This is published-package compatibility evidence only. It does not publish Harness Core, execute gstack,
+call a provider, deploy a runtime, or grant any hosted authority.
 
 ## Authority boundary
 
@@ -74,7 +80,7 @@ npm test
 npm run test:core-compat
 ```
 
-The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, the documented CLI command, and a packed local Harness Core `0.3.0` compatibility regression. The repository CI executes that regression on Node 20, 22, and 24.
+The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, the documented CLI command, and a clean-room published Harness Core `0.3.1` compatibility regression. The repository CI executes that regression on Node 20, 22, and 24.
 
 ## License
 

@@ -12,6 +12,10 @@ import { builtinModules, createRequire } from 'node:module';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  extractCompleteReadmeLicense,
+  getCompleteReadmeLicenseFallback,
+} from './license-notices.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '..');
@@ -228,6 +232,7 @@ async function buildThirdPartyNotices(inputPaths) {
   const packageNames = [...new Set(inputPaths.map(packageNameFromInput).filter(Boolean))].sort();
   const notices = [];
   const noticeInputs = [];
+  const noticeSources = [];
   for (const packageName of packageNames) {
     const matchingInput = inputPaths.find((input) => packageNameFromInput(input) === packageName);
     const packageRootInfo = await findPackageRoot(matchingInput, packageName);
@@ -239,15 +244,26 @@ async function buildThirdPartyNotices(inputPaths) {
       bytes: packageBytes.byteLength,
       sha256: sha256(packageBytes),
     });
+    const version = typeof pkg.version === 'string' ? pkg.version : 'unknown';
+    const declaredLicense = typeof pkg.license === 'string' ? pkg.license : 'see bundled source';
     const candidates = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'COPYING'];
-    let licenseText = null;
+    let licenseRecord = null;
     for (const candidate of candidates) {
       const licensePath = path.join(packageRootInfo.absolute, candidate);
       try {
         const bytes = await readFile(licensePath);
-        licenseText = bytes.toString('utf8').replace(/\r\n?/g, '\n').trim();
-        noticeInputs.push({
+        const text = bytes.toString('utf8').replace(/\r\n?/g, '\n').trim();
+        if (text.length === 0 || text.includes('\u0000') || text.includes('\uFFFD')) {
+          throw new Error(`${pkg.name ?? packageName}@${version} has an invalid standalone license file`);
+        }
+        licenseRecord = {
+          method: 'standalone_license_file',
           path: repoRelative(licensePath),
+          sourceBytes: bytes,
+          text,
+        };
+        noticeInputs.push({
+          path: licenseRecord.path,
           source: 'workspace_dependency',
           bytes: bytes.byteLength,
           sha256: sha256(bytes),
@@ -257,10 +273,66 @@ async function buildThirdPartyNotices(inputPaths) {
         if (error?.code !== 'ENOENT') throw error;
       }
     }
+    if (!licenseRecord) {
+      const fallback = getCompleteReadmeLicenseFallback(pkg.name ?? packageName, version);
+      if (!fallback) {
+        throw new Error(
+          `${pkg.name ?? packageName}@${version} has no standalone license file or reviewed complete README fallback`,
+        );
+      }
+      const readmePath = path.join(packageRootInfo.absolute, fallback.file);
+      let readmeBytes;
+      try {
+        readmeBytes = await readFile(readmePath);
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          throw new Error(`${pkg.name ?? packageName}@${version} reviewed README license source is missing`);
+        }
+        throw error;
+      }
+      const extracted = extractCompleteReadmeLicense({
+        bytes: readmeBytes,
+        packageName: pkg.name ?? packageName,
+        version,
+        declaredLicense,
+      });
+      licenseRecord = {
+        method: extracted.method,
+        path: repoRelative(readmePath),
+        sourceBytes: readmeBytes,
+        text: extracted.text,
+      };
+      noticeInputs.push({
+        path: licenseRecord.path,
+        source: 'workspace_dependency',
+        bytes: readmeBytes.byteLength,
+        sha256: sha256(readmeBytes),
+      });
+    }
+    const noticeBytes = Buffer.from(licenseRecord.text, 'utf8');
+    const sourceSha256 = sha256(licenseRecord.sourceBytes);
+    const noticeSha256 = sha256(noticeBytes);
+    noticeSources.push({
+      package: pkg.name ?? packageName,
+      version,
+      declared_license: declaredLicense,
+      method: licenseRecord.method,
+      path: licenseRecord.path,
+      source_bytes: licenseRecord.sourceBytes.byteLength,
+      source_sha256: sourceSha256,
+      notice_bytes: noticeBytes.byteLength,
+      notice_sha256: noticeSha256,
+    });
     notices.push([
-      `${pkg.name ?? packageName}@${pkg.version ?? 'unknown'}`,
-      `Declared license: ${typeof pkg.license === 'string' ? pkg.license : 'see bundled source'}`,
-      licenseText ?? 'No standalone license file was present in the installed build dependency.',
+      `${pkg.name ?? packageName}@${version}`,
+      `Declared license: ${declaredLicense}`,
+      `Notice source: ${licenseRecord.path}`,
+      `Notice source method: ${licenseRecord.method}`,
+      `Notice source bytes: ${licenseRecord.sourceBytes.byteLength}`,
+      `Notice source SHA-256: ${sourceSha256}`,
+      `Extracted notice bytes: ${noticeBytes.byteLength}`,
+      `Extracted notice SHA-256: ${noticeSha256}`,
+      licenseRecord.text,
     ].join('\n'));
   }
   return {
@@ -272,6 +344,7 @@ async function buildThirdPartyNotices(inputPaths) {
       ...notices.flatMap((notice) => ['='.repeat(72), notice, '']),
     ].join('\n').trim()}\n`,
     inputs: noticeInputs,
+    sources: noticeSources,
   };
 }
 
@@ -546,6 +619,12 @@ const manifest = {
   ],
   exports: exportedNames,
   inputs,
+  third_party_notices: {
+    path: 'THIRD_PARTY_NOTICES.txt',
+    bytes: noticeBytes.byteLength,
+    sha256: sha256(noticeBytes),
+    sources: notices.sources,
+  },
   artifact: {
     path: 'dist/runtime/index.mjs',
     bytes: output.contents.byteLength,

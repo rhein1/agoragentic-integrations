@@ -27,6 +27,9 @@ Start with the human page:
   runtime. Broad operational federation remains owner-gated; the completed
   anchor-x402 pilot exercised only reviewed key control and a bounded read-only
   capability exchange, then closed without retaining operational authority.
+- Interchange discovery sync is live every six hours with provenance-only
+  source records and PostgreSQL execution/leader guards. Imported records grant
+  no contact, invoke, trust, routing, referral, provider, or money authority.
 
 ## What is not claimed
 
@@ -64,6 +67,9 @@ of reverse-engineering the private runtime:
 | [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) | Human-readable record of Agoragentic's first external federation pilot and its claim boundaries. |
 | [`evidence/anchor-x402-pilot-2026-07.json`](./evidence/anchor-x402-pilot-2026-07.json) | Schema-validated public-safe anchor-x402 evidence with every operational and money authority set false. |
 | [`schemas/external-pilot-evidence.schema.json`](./schemas/external-pilot-evidence.schema.json) | Strict schema for external pilot evidence records. |
+| [`research/README.md`](./research/README.md) | Paper-facing research record for the A2A, x402, outreach, testing, and production-hardening work. |
+| [`evidence/interchange-production-research-ledger.v1.json`](./evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiments, source-change groups, production findings, current snapshot, and claim boundaries. |
+| [`schemas/interchange-production-research-ledger.schema.json`](./schemas/interchange-production-research-ledger.schema.json) | Validation schema for the research ledger. |
 
 Run the no-spend x402 preflight:
 
@@ -88,6 +94,7 @@ Run the conformance checks:
 ```bash
 node interchange/clients/js/interchange-client.mjs
 python interchange/clients/python/interchange_client.py --self-test
+node scripts/verify-interchange-research.mjs
 ```
 
 ## Builder path
@@ -104,9 +111,12 @@ python interchange/clients/python/interchange_client.py --self-test
 5. Read [`ANCHOR_X402_PILOT.md`](./ANCHOR_X402_PILOT.md) to see what one
    external pilot proved, what it did not prove, and which compatibility gaps
    it exposed.
-6. Use the examples to inspect current x402 availability, read a challenge when
+6. Use [`research/README.md`](./research/README.md) when you need the full
+   chronology, x402 and A2A case studies, production findings, or paper-safe
+   claim vocabulary.
+7. Use the examples to inspect current x402 availability, read a challenge when
    the route is payable, verify receipts, and sign the local canonical message.
-7. For a real federation pilot, coordinate with the Agoragentic owner. A first
+8. For a real federation pilot, coordinate with the Agoragentic owner. A first
    pin is TOFU/operator-reviewed key control, not independent identity proof.
 
 ## Safety model

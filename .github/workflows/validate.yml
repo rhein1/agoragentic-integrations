@@ -57,27 +57,40 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '20'
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
+
+      - name: Validate source-only SAM Interchange adapter
+        working-directory: interchange/sam
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm test
 
       - name: Validate public SDK package sources
         run: |
           node --test test/sdk-public-source.test.mjs
+          node --test test/local-governance-cli.test.mjs
           node --check sdk/node/index.js
           node --check sdk/node/index.mjs
           node --check sdk/agent-os-cli/cli.js
           python -m compileall -q sdk/python/src/agoragentic
+          PYTHONPATH=sdk/python/src python -m unittest discover -s sdk/python/tests -p 'test_*.py'
           python -m pip install --upgrade build
           python -m build sdk/python --outdir "${RUNNER_TEMP}/agoragentic-python-dist"
           npm pack ./sdk/node --dry-run
@@ -103,13 +116,10 @@ jobs:
           npm run check
           npm pack --dry-run
 
-      - name: Validate Harness Core package
-        working-directory: harness-core
+      - name: Verify standalone Harness Core cutover
         run: |
-          npm ci
-          npm test
-          npm run pack:smoke
-          npm pack --dry-run
+          node --test test/harness-core-cutover.test.mjs
+          node scripts/verify-harness-core-cutover.mjs
 
       - name: Validate Agent Payments Assurance Challenge package
         working-directory: agent-payments-assurance-challenge
@@ -143,7 +153,7 @@ jobs:
           npm pack --dry-run
 
       - name: Setup Node 22 for n8n toolchain
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '22'
 
@@ -175,10 +185,28 @@ jobs:
       - name: Validate integrations.json against schema
         run: ajv validate -s integrations.schema.json -d integrations.json --all-errors --spec=draft2020 -c ajv-formats
 
+      - name: Verify generated integration capability status
+        run: node scripts/generate-integration-capability-status.mjs --check
+
+      - name: Verify canonical integration count projections
+        run: node scripts/sync-integration-counts.mjs --check
+
+      - name: Verify repository rename preflight
+        run: node scripts/generate-repository-rename-preflight.mjs --check
+
+      - name: Validate local governance policy schema
+        run: ajv validate -s sdk/node/schema/local-governance-policy.v1.json -d sdk/node/schema/local-governance-policy.example.json --all-errors --spec=draft2020
+
       - name: Validate Interchange external pilot evidence
         run: |
           ajv validate -s interchange/schemas/external-pilot-evidence.schema.json -d interchange/evidence/anchor-x402-pilot-2026-07.json --all-errors --spec=draft2020 -c ajv-formats
           node --test test/interchange-external-pilot-evidence.test.mjs
+
+      - name: Validate Interchange production research record
+        run: |
+          ajv validate -s interchange/schemas/interchange-production-research-ledger.schema.json -d interchange/evidence/interchange-production-research-ledger.v1.json --all-errors --spec=draft2020 -c ajv-formats
+          node scripts/verify-interchange-research.mjs
+          node --test test/interchange-production-research.test.mjs
 
       - name: Validate ecosystem.json against schema
         run: ajv validate -s ecosystem.schema.json -d ecosystem.json --all-errors --spec=draft2020 -c ajv-formats
@@ -203,7 +231,7 @@ jobs:
         run: node scripts/verify-doc-links.mjs
 
       - name: Setup Python 3.13 for Crawl4AI
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.13'
 
@@ -323,9 +351,9 @@ jobs:
   payment-contracts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for native TypeScript contract tests
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Test payment safety contracts
@@ -342,13 +370,13 @@ jobs:
   adapter-conformance:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Setup Node 24 for TypeScript syntax checks
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: '24'
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
@@ -363,7 +391,7 @@ jobs:
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
       - name: Upload conformance evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: adapter-conformance-${{ github.sha }}
           path: ${{ runner.temp }}/adapter-conformance-report.json

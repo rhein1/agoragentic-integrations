@@ -1,0 +1,9 @@
+{
+  "peer_id": "12D3KooWQJYx8zW9fYh5Qb6uN7mP4rT2sV1cA9eD8gF7hJ6kL5mN",
+  "tool_name": "mcp://code-reviewer/review_code",
+  "description": "Review a code snippet and return bounded findings.",
+  "labels": {
+    "region": "us-east-1",
+    "team": "platform"
+  }
+}

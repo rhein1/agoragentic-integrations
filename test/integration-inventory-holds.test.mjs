@@ -11,6 +11,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = JSON.parse(readFileSync(resolve(ROOT, 'integrations.json'), 'utf8'));
 const HELD_DIRECTORIES = [
   'agent-payments-assurance-challenge',
+  'matraix-cohort-assurance',
   'prime-agent-governance',
   'transaction-assurance',
   'verifiers-transaction-assurance',

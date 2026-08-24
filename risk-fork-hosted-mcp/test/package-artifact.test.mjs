@@ -14,6 +14,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { extractCompleteReadmeLicense } from '../scripts/license-notices.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '..');
@@ -149,6 +150,63 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.artifact.path, 'dist/runtime/index.mjs');
   assert.equal(manifest.artifact.sha256, sha256(secondBundle));
   assert.equal(manifest.artifact.bytes, secondBundle.byteLength);
+  assert.equal(manifest.third_party_notices.path, 'THIRD_PARTY_NOTICES.txt');
+  const noticesBytes = await readFile(path.join(packageRoot, 'THIRD_PARTY_NOTICES.txt'));
+  const noticesText = noticesBytes.toString('utf8');
+  assert.equal(manifest.third_party_notices.bytes, noticesBytes.byteLength);
+  assert.equal(manifest.third_party_notices.sha256, sha256(noticesBytes));
+  assert.deepEqual(
+    manifest.third_party_notices.sources,
+    [...manifest.third_party_notices.sources]
+      .sort((left, right) => left.package.localeCompare(right.package)),
+  );
+  const readmeFallbacks = [
+    {
+      package: 'pg-types',
+      version: '2.2.0',
+      source_bytes: 3831,
+      source_sha256: 'sha256:ecda9bca71d3f0cee4e600d1dd2bef336213f39ef2e8fca6a1a1c1c8723f643a',
+    },
+    {
+      package: 'pgpass',
+      version: '1.0.5',
+      source_bytes: 3294,
+      source_sha256: 'sha256:62549909404b5a0dcb2b4b74c9a930baf8095dbcfa1543c4ffc79378acd22b57',
+    },
+  ];
+  for (const expected of readmeFallbacks) {
+    const source = manifest.third_party_notices.sources.find(
+      (entry) => entry.package === expected.package && entry.version === expected.version,
+    );
+    assert.ok(source, `missing ${expected.package}@${expected.version} notice source`);
+    assert.equal(source.declared_license, 'MIT');
+    assert.equal(source.method, 'markdown_license_section');
+    assert.match(source.path, new RegExp(
+      `^risk-fork-hosted-mcp/node_modules/${expected.package}/README\\.md$`,
+    ));
+    assert.equal(source.source_bytes, expected.source_bytes);
+    assert.equal(source.source_sha256, expected.source_sha256);
+    const readmeBytes = await readFile(path.join(
+      packageRoot,
+      'node_modules',
+      expected.package,
+      'README.md',
+    ));
+    const extracted = extractCompleteReadmeLicense({
+      bytes: readmeBytes,
+      packageName: expected.package,
+      version: expected.version,
+      declaredLicense: 'MIT',
+    });
+    const extractedBytes = Buffer.from(extracted.text, 'utf8');
+    assert.equal(source.notice_bytes, extractedBytes.byteLength);
+    assert.equal(source.notice_sha256, sha256(extractedBytes));
+    assert.ok(noticesText.includes(extracted.text));
+  }
+  assert.doesNotMatch(
+    noticesText,
+    /No standalone license file was present in the installed build dependency/,
+  );
   assert.ok(manifest.inputs.length > 20);
   assert.deepEqual(manifest.inputs, [...manifest.inputs].sort((a, b) => a.path.localeCompare(b.path)));
   for (const input of manifest.inputs) {
@@ -188,6 +246,70 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.doesNotMatch(secondBundle.toString('utf8'), /\.\.\/mcp|\.\.\/risk-fork/);
   assert.doesNotMatch(secondBundle.toString('utf8'), /C:\\projects\\|C:\/projects\//i);
   run(process.execPath, ['scripts/verify-integrity.mjs', '--source']);
+});
+
+test('reviewed README license fallback fails closed on absent, ambiguous, or incomplete notice text', async () => {
+  const valid = await readFile(path.join(packageRoot, 'node_modules', 'pg-types', 'README.md'));
+  assert.match(extractCompleteReadmeLicense({
+    bytes: valid,
+    packageName: 'pg-types',
+    version: '2.2.0',
+    declaredLicense: 'MIT',
+  }).text, /Copyright \(c\) 2014 Brian M\. Carlson/);
+  assert.throws(
+    () => extractCompleteReadmeLicense({
+      bytes: Buffer.from('# package\n\nNo license section.\n'),
+      packageName: 'pg-types',
+      version: '2.2.0',
+      declaredLicense: 'MIT',
+    }),
+    /exactly one license heading/,
+  );
+  assert.throws(
+    () => extractCompleteReadmeLicense({
+      bytes: Buffer.concat([valid, Buffer.from('\n## License\nDuplicate.\n')]),
+      packageName: 'pg-types',
+      version: '2.2.0',
+      declaredLicense: 'MIT',
+    }),
+    /exactly one license heading/,
+  );
+  assert.throws(
+    () => extractCompleteReadmeLicense({
+      bytes: Buffer.from('## License\nCopyright (c) Example\nPermission is hereby granted, free of charge, to any person obtaining a copy.\n'),
+      packageName: 'pg-types',
+      version: '2.2.0',
+      declaredLicense: 'MIT',
+    }),
+    /incomplete/,
+  );
+  const truncatedPrefixNotice = Buffer.from([
+    '## License',
+    'Copyright (c) Example',
+    'Permission is hereby granted, free of charge, to any person obtaining a copy',
+    'The above copyright notice and this permission notice shall be included in',
+    'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND',
+    'IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM',
+    '',
+  ].join('\n'));
+  assert.throws(
+    () => extractCompleteReadmeLicense({
+      bytes: truncatedPrefixNotice,
+      packageName: 'pg-types',
+      version: '2.2.0',
+      declaredLicense: 'MIT',
+    }),
+    /source bytes or SHA-256 do not match/,
+  );
+  assert.throws(
+    () => extractCompleteReadmeLicense({
+      bytes: valid,
+      packageName: 'pg-types',
+      version: '2.2.1',
+      declaredLicense: 'MIT',
+    }),
+    /no reviewed README license fallback/,
+  );
 });
 
 test('concurrent builds serialize reviewed snapshots and publish one deterministic artifact', async () => {

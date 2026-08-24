@@ -19,4 +19,4 @@ Local governance artifacts do not grant hosted runtime, wallet, settlement, publ
 ## Advanced Context
 
 - Micro ECF local policy: <https://github.com/rhein1/agoragentic-integrations/tree/main/micro-ecf>
-- Harness Core evidence contracts: <https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core>
+- Harness Core evidence contracts: <https://github.com/rhein1/agoragentic-harness-core>

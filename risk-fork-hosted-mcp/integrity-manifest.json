@@ -900,6 +900,12 @@
       "sha256": "sha256:3ec0293cb38cc8d9475e3eb32ac5f19d195bf9fccc8b19a0714e6ecd6e7c2cf0"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/pg-types/README.md",
+      "source": "workspace_dependency",
+      "bytes": 3831,
+      "sha256": "sha256:ecda9bca71d3f0cee4e600d1dd2bef336213f39ef2e8fca6a1a1c1c8723f643a"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/pg/esm/index.mjs",
       "source": "workspace_dependency",
       "bytes": 579,
@@ -1042,6 +1048,12 @@
       "source": "workspace_dependency",
       "bytes": 1074,
       "sha256": "sha256:d75240eb4fe759c10db9f903838275348676a8bdc1f329e20a833713cd7c99bd"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/pgpass/README.md",
+      "source": "workspace_dependency",
+      "bytes": 3294,
+      "sha256": "sha256:62549909404b5a0dcb2b4b74c9a930baf8095dbcfa1543c4ffc79378acd22b57"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/postgres-array/index.js",
@@ -2184,6 +2196,255 @@
       "sha256": "sha256:1bf8cad0a40c5e8d9d6dad9afbc876843ba08c4494350cc0ce74919af7cad2e4"
     }
   ],
+  "third_party_notices": {
+    "path": "THIRD_PARTY_NOTICES.txt",
+    "bytes": 34222,
+    "sha256": "sha256:0ddc7b0845af1cf825232aee45198968f272b62fd7ba12c73fff0f1ce4ccbd16",
+    "sources": [
+      {
+        "package": "@modelcontextprotocol/sdk",
+        "version": "1.30.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/LICENSE",
+        "source_bytes": 1071,
+        "source_sha256": "sha256:5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d",
+        "notice_bytes": 1070,
+        "notice_sha256": "sha256:8694aa57bec3f3e9ad0559e91c63a795904e967104efb9d6fc9d153e56f567c2"
+      },
+      {
+        "package": "ajv",
+        "version": "8.20.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/ajv/LICENSE",
+        "source_bytes": 1090,
+        "source_sha256": "sha256:a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3",
+        "notice_bytes": 1088,
+        "notice_sha256": "sha256:f2fde84e6c1f177681e152a4459f025a87e855c0aa374238ba79b2e72a15b57c"
+      },
+      {
+        "package": "ajv-formats",
+        "version": "3.0.1",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/ajv-formats/LICENSE",
+        "source_bytes": 1074,
+        "source_sha256": "sha256:9df3bb69929a3b650ed73b3bfa1756725aaff0ac296461605753547004eafeaf",
+        "notice_bytes": 1073,
+        "notice_sha256": "sha256:0eb7e0538bf86badc8cc36fc66164d495630f21f6998529188406fb00c782a5e"
+      },
+      {
+        "package": "fast-deep-equal",
+        "version": "3.1.3",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/fast-deep-equal/LICENSE",
+        "source_bytes": 1074,
+        "source_sha256": "sha256:7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+        "notice_bytes": 1073,
+        "notice_sha256": "sha256:aa407ee69b3f646286f5162d0679256a0fe5b7fcc51f104ffb647efe167715ea"
+      },
+      {
+        "package": "fast-uri",
+        "version": "3.1.5",
+        "declared_license": "BSD-3-Clause",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE",
+        "source_bytes": 1813,
+        "source_sha256": "sha256:b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786",
+        "notice_bytes": 1813,
+        "notice_sha256": "sha256:b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786"
+      },
+      {
+        "package": "json-schema-traverse",
+        "version": "1.0.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/json-schema-traverse/LICENSE",
+        "source_bytes": 1074,
+        "source_sha256": "sha256:7bf9b2de73a6b356761c948d0e9eeb4be6c1270bd04c79cd489c1e400ffdfc1a",
+        "notice_bytes": 1073,
+        "notice_sha256": "sha256:aa407ee69b3f646286f5162d0679256a0fe5b7fcc51f104ffb647efe167715ea"
+      },
+      {
+        "package": "pg",
+        "version": "8.16.3",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg/LICENSE",
+        "source_bytes": 1077,
+        "source_sha256": "sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3",
+        "notice_bytes": 1076,
+        "notice_sha256": "sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a"
+      },
+      {
+        "package": "pg-cloudflare",
+        "version": "1.4.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-cloudflare/LICENSE",
+        "source_bytes": 1077,
+        "source_sha256": "sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3",
+        "notice_bytes": 1076,
+        "notice_sha256": "sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a"
+      },
+      {
+        "package": "pg-connection-string",
+        "version": "2.14.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-connection-string/LICENSE",
+        "source_bytes": 1082,
+        "source_sha256": "sha256:2244b5486c4427001b6756a87b9a297d427c111dcc3ba64a097492a8979c23d0",
+        "notice_bytes": 1082,
+        "notice_sha256": "sha256:2244b5486c4427001b6756a87b9a297d427c111dcc3ba64a097492a8979c23d0"
+      },
+      {
+        "package": "pg-int8",
+        "version": "1.0.1",
+        "declared_license": "ISC",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-int8/LICENSE",
+        "source_bytes": 750,
+        "source_sha256": "sha256:4e8e87ccdfc7e4b47fd89015f78468aa53b6bf43ab6e6e12d43e8f55294911de",
+        "notice_bytes": 749,
+        "notice_sha256": "sha256:1cd3df8c20bd2aa49630296f8e31741b3322e6d3b0a20296bd13e7e3a0646f85"
+      },
+      {
+        "package": "pg-pool",
+        "version": "3.14.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-pool/LICENSE",
+        "source_bytes": 1073,
+        "source_sha256": "sha256:4f15ee7fc2a72082859d7e0d12dfa4bcdd70b1c744ad3850d07780730ac08557",
+        "notice_bytes": 1072,
+        "notice_sha256": "sha256:6de3cefc5135b313b021b77e9ecef618d29a3efc0a86c99337403a9e8da24580"
+      },
+      {
+        "package": "pg-protocol",
+        "version": "1.16.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-protocol/LICENSE",
+        "source_bytes": 1077,
+        "source_sha256": "sha256:192b8f5c96900f04a1271dec39688655d7416c1c6ea84a508e18b50d2b6751f3",
+        "notice_bytes": 1076,
+        "notice_sha256": "sha256:a66a0335a42bfcb53bf1534bfdc3bac940b0d2cb0f1e9c92e56e24b412768f3a"
+      },
+      {
+        "package": "pg-types",
+        "version": "2.2.0",
+        "declared_license": "MIT",
+        "method": "markdown_license_section",
+        "path": "risk-fork-hosted-mcp/node_modules/pg-types/README.md",
+        "source_bytes": 3831,
+        "source_sha256": "sha256:ecda9bca71d3f0cee4e600d1dd2bef336213f39ef2e8fca6a1a1c1c8723f643a",
+        "notice_bytes": 1082,
+        "notice_sha256": "sha256:a3a081597284cb155888f951f1b74579d7ed3ceccc69ff5da66db24feb3d0597"
+      },
+      {
+        "package": "pgpass",
+        "version": "1.0.5",
+        "declared_license": "MIT",
+        "method": "markdown_license_section",
+        "path": "risk-fork-hosted-mcp/node_modules/pgpass/README.md",
+        "source_bytes": 3294,
+        "source_sha256": "sha256:62549909404b5a0dcb2b4b74c9a930baf8095dbcfa1543c4ffc79378acd22b57",
+        "notice_bytes": 1060,
+        "notice_sha256": "sha256:7a69666f39f8ad8b5574b60fb0443407abd3e2651b5cae8b559d640d5ff14e84"
+      },
+      {
+        "package": "postgres-array",
+        "version": "2.0.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-array/LICENSE",
+        "source_bytes": 1111,
+        "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
+        "notice_bytes": 1110,
+        "notice_sha256": "sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8"
+      },
+      {
+        "package": "postgres-bytea",
+        "version": "1.0.1",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-bytea/LICENSE",
+        "source_bytes": 1111,
+        "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
+        "notice_bytes": 1110,
+        "notice_sha256": "sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8"
+      },
+      {
+        "package": "postgres-date",
+        "version": "1.0.7",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-date/LICENSE",
+        "source_bytes": 1111,
+        "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
+        "notice_bytes": 1110,
+        "notice_sha256": "sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8"
+      },
+      {
+        "package": "postgres-interval",
+        "version": "1.2.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/postgres-interval/LICENSE",
+        "source_bytes": 1111,
+        "source_sha256": "sha256:f057f36739d53d228a746de4440c1e0c644ecde06d6beab45337d39c9d12a393",
+        "notice_bytes": 1110,
+        "notice_sha256": "sha256:764b88ead8dab3c5c15a3d38788495467d3b765004160547ddda64613260b7f8"
+      },
+      {
+        "package": "split2",
+        "version": "4.2.0",
+        "declared_license": "ISC",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/split2/LICENSE",
+        "source_bytes": 764,
+        "source_sha256": "sha256:c372ef2fa1dfcb124ed807609751e75e3a009f108c5724916b489288fcb88a0c",
+        "notice_bytes": 763,
+        "notice_sha256": "sha256:a6f69779493956e3e43ad85d9f22a4cdfd0b330344dd0ded0c3049b587529203"
+      },
+      {
+        "package": "xtend",
+        "version": "4.0.2",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/xtend/LICENSE",
+        "source_bytes": 1078,
+        "source_sha256": "sha256:82e67379203d5794e7c44549847d8d64ae6904591381682360470898bd306821",
+        "notice_bytes": 1077,
+        "notice_sha256": "sha256:5c9d0334d815bf27bab1f5b67e9788b66e82f5e03774db757ad12fdebd8be10e"
+      },
+      {
+        "package": "zod",
+        "version": "4.4.3",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/zod/LICENSE",
+        "source_bytes": 1072,
+        "source_sha256": "sha256:3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+        "notice_bytes": 1071,
+        "notice_sha256": "sha256:f61cacc2acb8b71aa79a128b3e732bf25e02aab40747bbbd5bf00c97c9cda28d"
+      },
+      {
+        "package": "zod-to-json-schema",
+        "version": "3.25.2",
+        "declared_license": "ISC",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/LICENSE",
+        "source_bytes": 745,
+        "source_sha256": "sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4",
+        "notice_bytes": 745,
+        "notice_sha256": "sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4"
+      }
+    ]
+  },
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 2210410,
@@ -2270,8 +2531,8 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.txt",
-      "bytes": 24236,
-      "sha256": "sha256:79a7470fe1b62c6126ab3a9b8a9af9efe4482f797186da22d118b0c8e99cc056"
+      "bytes": 34222,
+      "sha256": "sha256:0ddc7b0845af1cf825232aee45198968f272b62fd7ba12c73fff0f1ce4ccbd16"
     }
   ]
 }

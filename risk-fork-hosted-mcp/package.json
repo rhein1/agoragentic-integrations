@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check src/index.mjs && node --check scripts/build.mjs && node --check scripts/verify-integrity.mjs && node --check test/package-artifact.test.mjs",
+    "check": "node --check src/index.mjs && node --check scripts/build.mjs && node --check scripts/license-notices.mjs && node --check scripts/verify-integrity.mjs && node --check test/package-artifact.test.mjs",
     "test": "node --test --test-concurrency=1 test/package-artifact.test.mjs",
     "verify": "node scripts/verify-integrity.mjs",
     "verify:source": "node scripts/verify-integrity.mjs --source",
