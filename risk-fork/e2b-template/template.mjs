@@ -1,9 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { E2B_TEMPLATE_BUILD_READY_PATH } from './lib/runtime-contract.mjs';
+
 export const E2B_TEMPLATE_RUNTIME_ROOT = '/opt/agoragentic/risk-fork';
 export const E2B_TEMPLATE_WORKSPACE_ROOT = '/workspace/agoragentic-risk-fork-v1';
-export const E2B_TEMPLATE_READY_PATH = '/run/agoragentic-risk-fork/ready';
+export const E2B_TEMPLATE_READY_PATH = E2B_TEMPLATE_BUILD_READY_PATH;
 
 function defaultContextRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -32,7 +34,6 @@ export function createRiskForkE2BTemplate(options = {}) {
       '/opt/agoragentic/risk-fork/src',
       '/opt/agoragentic/risk-fork/bin',
       '/opt/agoragentic/transaction-assurance/src',
-      '/run/agoragentic-risk-fork',
       E2B_TEMPLATE_WORKSPACE_ROOT,
     ], { user: 'root', mode: 0o755 })
     .copyItems([
@@ -69,6 +70,7 @@ export function createRiskForkE2BTemplate(options = {}) {
       `chmod 0555 ${runtime}/e2b-template/bin/boot-guard.mjs ${runtime}/e2b-template/bin/bootstrap.mjs ${runtime}/e2b-template/bin/run.mjs`,
       `ln -s ${runtime}/e2b-template/bin/bootstrap.mjs ${runtime}/bin/bootstrap`,
       `ln -s ${runtime}/e2b-template/bin/run.mjs ${runtime}/bin/run`,
+      'mkdir -p /run/agoragentic-risk-fork',
       'chown user:user /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
       'chmod 0700 /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
     ], { user: 'root' })
@@ -76,7 +78,7 @@ export function createRiskForkE2BTemplate(options = {}) {
     .setWorkdir(E2B_TEMPLATE_WORKSPACE_ROOT);
 
   return builder.setStartCmd(
-    '/usr/bin/env -i HOME=/home/user USER=user LOGNAME=user SHELL=/bin/sh PATH=/usr/local/bin:/usr/bin:/bin /usr/bin/node /opt/agoragentic/risk-fork/e2b-template/bin/boot-guard.mjs',
+    '/usr/bin/env -i HOME=/home/user USER=user LOGNAME=user SHELL=/bin/sh PATH=/usr/local/bin:/usr/bin:/bin node /opt/agoragentic/risk-fork/e2b-template/bin/boot-guard.mjs',
     waitForFile(E2B_TEMPLATE_READY_PATH),
   );
 }

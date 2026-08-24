@@ -5,7 +5,7 @@
   "description": "Closed, sanitized evidence for a single explicitly authorized E2B containment qualification. This record does not grant deployment, spend, or execution authority.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "status", "provider", "sdk", "template", "runtime", "run", "limits", "observations", "controls", "cleanup", "evidence_refs", "authority_flags", "evidence_hash"],
+  "required": ["schema", "status", "provider", "sdk", "template", "runtime", "run", "limits", "observations", "controls", "cleanup", "evidence_refs", "external_observation_receipt", "authority_flags", "evidence_hash"],
   "properties": {
     "schema": { "const": "agoragentic.risk-fork.e2b-qualification-evidence.v1" },
     "status": { "$ref": "#/$defs/status" },
@@ -131,6 +131,7 @@
       "minItems": 1,
       "maxItems": 64,
       "uniqueItems": true,
+      "$comment": "uniqueItems rejects exact duplicate objects only; validateE2BQualificationEvidence additionally requires every ref key to be unique even when hashes differ.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -140,6 +141,12 @@
           "hash": { "$ref": "#/$defs/hash" }
         }
       }
+    },
+    "external_observation_receipt": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/externalObservationReceipt" }
+      ]
     },
     "authority_flags": {
       "type": "object",
@@ -157,9 +164,206 @@
   "$defs": {
     "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "opaque": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$" },
-    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]{1,6})?$" },
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$" },
     "duration": { "type": "integer", "minimum": 0, "maximum": 86400000 },
     "control": { "enum": ["verified", "failed", "unknown"] },
-    "status": { "enum": ["verified", "failed", "unknown"] }
+    "status": { "enum": ["verified", "failed", "unknown"] },
+    "nullableHash": {
+      "oneOf": [
+        { "$ref": "#/$defs/hash" },
+        { "type": "null" }
+      ]
+    },
+    "observer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "public_key_spki_base64url", "public_key_hash"],
+      "properties": {
+        "algorithm": { "const": "Ed25519" },
+        "public_key_spki_base64url": {
+          "type": "string",
+          "minLength": 40,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "public_key_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "observationAudience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "project_ref_hash", "run_ref_hash", "template_id_hash", "template_build_id_hash"],
+      "properties": {
+        "profile": { "const": "agoragentic.risk-fork.e2b-qualification" },
+        "project_ref_hash": { "$ref": "#/$defs/hash" },
+        "run_ref_hash": { "$ref": "#/$defs/hash" },
+        "template_id_hash": { "$ref": "#/$defs/hash" },
+        "template_build_id_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "observationBindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approval_ref_hash", "run_ref_hash", "project_ref_hash", "sdk_integrity_hash", "template_id_hash", "template_build_id_hash", "template_evidence_hash", "template_provenance_hash", "bootstrap_artifact_hash", "runner_artifact_hash", "boot_guard_artifact_hash", "limits_hash", "canary_evidence_hash", "sandbox_id_hash", "metadata_hash", "provider_template_binding_hash", "birth_request_hash", "birth_attestation_hash", "boot_evidence_hash", "sandbox_birth_binding_hash", "ipv4_probe_hash", "ipv6_probe_hash"],
+      "properties": {
+        "approval_ref_hash": { "$ref": "#/$defs/hash" },
+        "run_ref_hash": { "$ref": "#/$defs/hash" },
+        "project_ref_hash": { "$ref": "#/$defs/hash" },
+        "sdk_integrity_hash": { "$ref": "#/$defs/hash" },
+        "template_id_hash": { "$ref": "#/$defs/hash" },
+        "template_build_id_hash": { "$ref": "#/$defs/hash" },
+        "template_evidence_hash": { "$ref": "#/$defs/hash" },
+        "template_provenance_hash": { "$ref": "#/$defs/hash" },
+        "bootstrap_artifact_hash": { "$ref": "#/$defs/hash" },
+        "runner_artifact_hash": { "$ref": "#/$defs/hash" },
+        "boot_guard_artifact_hash": { "$ref": "#/$defs/hash" },
+        "limits_hash": { "$ref": "#/$defs/hash" },
+        "canary_evidence_hash": { "$ref": "#/$defs/hash" },
+        "sandbox_id_hash": { "$ref": "#/$defs/hash" },
+        "metadata_hash": { "$ref": "#/$defs/hash" },
+        "provider_template_binding_hash": { "$ref": "#/$defs/hash" },
+        "birth_request_hash": { "$ref": "#/$defs/hash" },
+        "birth_attestation_hash": { "$ref": "#/$defs/hash" },
+        "boot_evidence_hash": { "$ref": "#/$defs/hash" },
+        "sandbox_birth_binding_hash": { "$ref": "#/$defs/hash" },
+        "ipv4_probe_hash": { "$ref": "#/$defs/hash" },
+        "ipv6_probe_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "requestedLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hard_ttl_ms", "idle_ttl_ms", "max_execution_ms", "max_cost_usd"],
+      "properties": {
+        "hard_ttl_ms": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "idle_ttl_ms": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "max_execution_ms": { "type": "integer", "minimum": 100, "maximum": 600000 },
+        "max_cost_usd": { "$ref": "#/$defs/decimal" }
+      }
+    },
+    "statusEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_hash"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "evidence_hash": { "$ref": "#/$defs/nullableHash" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "verified" } } },
+          "then": { "properties": { "evidence_hash": { "$ref": "#/$defs/hash" } } }
+        }
+      ]
+    },
+    "providerControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template_provenance_verified", "bootstrap_binding_verified", "runner_binding_verified", "hard_ttl_verified", "idle_ttl_verified", "max_execution_time_verified"],
+      "properties": {
+        "template_provenance_verified": { "$ref": "#/$defs/providerControl" },
+        "bootstrap_binding_verified": { "$ref": "#/$defs/providerControl" },
+        "runner_binding_verified": { "$ref": "#/$defs/providerControl" },
+        "hard_ttl_verified": { "$ref": "#/$defs/providerControl" },
+        "idle_ttl_verified": { "$ref": "#/$defs/providerControl" },
+        "max_execution_time_verified": { "$ref": "#/$defs/providerControl" }
+      }
+    },
+    "providerControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_hash"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "evidence_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "observedCostLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amount_usd", "evidence_hash"],
+      "properties": {
+        "amount_usd": { "$ref": "#/$defs/decimal" },
+        "evidence_hash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "actualSandboxCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "amount_usd", "evidence_hash"],
+      "properties": {
+        "status": { "enum": ["finalized", "unknown"] },
+        "amount_usd": {
+          "oneOf": [
+            { "$ref": "#/$defs/decimal" },
+            { "type": "null" }
+          ]
+        },
+        "evidence_hash": { "$ref": "#/$defs/nullableHash" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "unknown" } } },
+          "then": {
+            "properties": {
+              "amount_usd": { "type": "null" },
+              "evidence_hash": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "amount_usd": { "$ref": "#/$defs/decimal" },
+              "evidence_hash": { "$ref": "#/$defs/hash" }
+            }
+          }
+        }
+      ]
+    },
+    "externalObservationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "base_evidence_hash", "observer", "audience", "observed_at", "issued_at", "expires_at", "bindings", "requested_limits", "network", "provider_controls", "cost", "observation_hash", "signature"],
+      "properties": {
+        "schema": { "const": "agoragentic.risk-fork.e2b-external-qualification-observation.v1" },
+        "base_evidence_hash": { "$ref": "#/$defs/hash" },
+        "observer": { "$ref": "#/$defs/observer" },
+        "audience": { "$ref": "#/$defs/observationAudience" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "issued_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "bindings": { "$ref": "#/$defs/observationBindings" },
+        "requested_limits": { "$ref": "#/$defs/requestedLimits" },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["first_instruction_ipv4_egress_denied", "first_instruction_ipv6_egress_denied", "ipv6_provider_denial"],
+          "properties": {
+            "first_instruction_ipv4_egress_denied": { "type": "boolean" },
+            "first_instruction_ipv6_egress_denied": { "type": "boolean" },
+            "ipv6_provider_denial": { "$ref": "#/$defs/statusEvidence" }
+          }
+        },
+        "provider_controls": { "$ref": "#/$defs/providerControls" },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "provider_cap", "derived_estimate", "aggregate_console_delta", "actual_sandbox"],
+          "properties": {
+            "currency": { "const": "USD" },
+            "provider_cap": { "$ref": "#/$defs/observedCostLine" },
+            "derived_estimate": { "$ref": "#/$defs/observedCostLine" },
+            "aggregate_console_delta": { "$ref": "#/$defs/observedCostLine" },
+            "actual_sandbox": { "$ref": "#/$defs/actualSandboxCost" }
+          }
+        },
+        "observation_hash": { "$ref": "#/$defs/hash" },
+        "signature": {
+          "type": "string",
+          "minLength": 86,
+          "maxLength": 86,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    }
   }
 }

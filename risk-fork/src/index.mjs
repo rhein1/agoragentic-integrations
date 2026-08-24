@@ -17,10 +17,15 @@ export {
   verifySavepointCapsule,
 } from './contracts.mjs';
 export {
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
+  E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA,
+  E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_QUALIFICATION_CONTROLS,
   E2B_QUALIFICATION_SCHEMA,
   E2B_QUALIFICATION_TRUST_SCHEMA,
   E2B_RUNTIME_SDK_INTEGRITY_SCHEMA,
+  applyE2BExternalQualificationObservation,
+  createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
   createE2BQualificationTrustVerifier,
   createE2BRuntimeSdkIntegrityVerifier,
@@ -30,6 +35,7 @@ export {
   sha256BytesRef,
   sha256FileRef,
   validateE2BQualificationEvidence,
+  verifyE2BExternalQualificationObservation,
   verifyE2BQualificationTrust,
 } from './e2b-qualification.mjs';
 export {

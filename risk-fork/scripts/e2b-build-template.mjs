@@ -165,9 +165,21 @@ async function runtimeHashes() {
   const files = {
     template_definition_hash: path.join(PACKAGE_ROOT, 'e2b-template', 'template.mjs'),
     boot_guard_artifact_hash: path.join(PACKAGE_ROOT, 'e2b-template', 'bin', 'boot-guard.mjs'),
+    birth_watcher_artifact_hash: path.join(
+      PACKAGE_ROOT,
+      'e2b-template',
+      'bin',
+      'boot-guard.mjs',
+    ),
     bootstrap_artifact_hash: path.join(PACKAGE_ROOT, 'e2b-template', 'bin', 'bootstrap.mjs'),
     runner_artifact_hash: path.join(PACKAGE_ROOT, 'e2b-template', 'bin', 'run.mjs'),
     runtime_contract_hash: path.join(PACKAGE_ROOT, 'e2b-template', 'lib', 'runtime-contract.mjs'),
+    birth_contract_hash: path.join(
+      PACKAGE_ROOT,
+      'e2b-template',
+      'lib',
+      'runtime-contract.mjs',
+    ),
     child_operation_hash: path.join(PACKAGE_ROOT, 'src', 'child-operation.mjs'),
     canonical_hash: path.join(PACKAGE_ROOT, 'src', 'canonical.mjs'),
     transaction_assurance_canonical_hash: path.join(

@@ -43,14 +43,14 @@ function createFixture(options = {}) {
   }
 
   const adapter = new E2BRiskForkAdapter({
-    ...(options.useSdkLoader
-      ? {
-          sdkLoader: async () => {
-            counters.sdkLoader += 1;
-            return { Sandbox };
-          },
-        }
-      : { SandboxClass: Sandbox }),
+    SandboxClass: Sandbox,
+    offlineConformance: true,
+    ...(options.useSdkLoader ? {
+      sdkLoader: async () => {
+        counters.sdkLoader += 1;
+        return { Sandbox };
+      },
+    } : {}),
     verifyAuthorityFreeSource: async () => {
       counters.authorityVerifier += 1;
       throw new Error('unexpected authority verifier call');

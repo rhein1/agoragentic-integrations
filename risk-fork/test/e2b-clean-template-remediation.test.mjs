@@ -20,13 +20,23 @@ import test from 'node:test';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import { E2BRiskForkAdapter, E2B_RISK_FORK_PATHS } from '../src/adapters/e2b.mjs';
 import {
+  E2B_BOOT_EVIDENCE_PATH,
+  createBootEvidenceEnvelope,
+  createE2BBirthAttestation,
+  e2bBirthRequestPaths,
+} from '../e2b-template/lib/runtime-contract.mjs';
+import {
   destroyImmutableWorkspaceExport,
   verifyImmutableWorkspaceExportDestroyed,
   workspaceExportPath,
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import {
+  E2B_EXTERNAL_PROVIDER_CONTROLS,
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
+  applyE2BExternalQualificationObservation,
+  createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
   createE2BQualificationTrustVerifier,
   createE2BRuntimeSdkIntegrityVerifier,
@@ -36,18 +46,19 @@ import { NOW, hash, makeCapsule, makeForkIdentity } from './helpers.mjs';
 
 const TEMPLATE_ID = 'template-risk-fork-clean-immutable-v1';
 const TEMPLATE_HASH = hash('template-risk-fork-clean-immutable-v1');
+const TEMPLATE_PROVENANCE_HASH = hash('template-risk-fork-clean-provenance-v1');
 const BOOTSTRAP_HASH = hash('trusted-bootstrap-artifact-v2');
 const RUNNER_HASH = hash('trusted-runner-artifact-v2');
 const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const SECRET_TEST_VALUE = 'abcdefghijklmnop';
 
-function createQualificationTrust(evidence) {
+function createQualificationTrust(evidence, externalObservationVerifier) {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   const verifier = createE2BQualificationTrustVerifier({
     publicKey,
     publicKeyHash: sha256BytesRef(publicKey.export({ type: 'spki', format: 'der' })),
   });
-  const payload = verifier.createPayload(evidence);
+  const payload = verifier.createPayload(evidence, {}, externalObservationVerifier);
   return {
     qualificationTrustVerifier: verifier,
     qualificationTrust: Object.freeze({
@@ -62,7 +73,13 @@ function createQualificationTrust(evidence) {
 }
 
 function createQualificationEvidenceForSdk(integrityHash) {
-  return createE2BQualificationEvidence({
+  const externallyObserved = new Set([
+    'first_instruction_ipv4_egress_denied',
+    'first_instruction_ipv6_egress_denied',
+    'cost_within_cap',
+    ...E2B_EXTERNAL_PROVIDER_CONTROLS,
+  ]);
+  const provisional = createE2BQualificationEvidence({
     provider: {
       name: 'e2b',
       project_ref_hash: hash('qualified-project'),
@@ -77,7 +94,7 @@ function createQualificationEvidenceForSdk(integrityHash) {
       template_id_hash: hash(TEMPLATE_ID),
       build_id_hash: hash('qualified-build'),
       template_evidence_hash: TEMPLATE_HASH,
-      provenance_hash: hash('qualified-provenance'),
+      provenance_hash: TEMPLATE_PROVENANCE_HASH,
     },
     runtime: {
       bootstrap_artifact_hash: BOOTSTRAP_HASH,
@@ -102,18 +119,87 @@ function createQualificationEvidenceForSdk(integrityHash) {
       fork_start_ms: 100,
       execution_ms: 100,
       cleanup_ms: 100,
-      observed_cost_usd: '0.01',
+      observed_cost_usd: null,
     },
     controls: Object.fromEntries(
-      E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'verified']),
+      E2B_QUALIFICATION_CONTROLS.map((name) => [
+        name,
+        externallyObserved.has(name) ? 'unknown' : 'verified',
+      ]),
     ),
     cleanup: {
       kill_requested: 'verified',
       absence_verified: 'verified',
       orphan_reconciliation: 'verified',
     },
-    evidence_refs: [{ ref: 'evidence:qualified-e2b', hash: hash('qualified-e2b') }],
+    evidence_refs: Object.entries(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS)
+      .map(([field, ref]) => ({ ref, hash: hash(`qualified-${field}`) })),
   });
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const externalQualificationObservationVerifier =
+    createE2BExternalQualificationObservationVerifier({
+      publicKey,
+      publicKeyHash: sha256BytesRef(publicKey.export({ type: 'spki', format: 'der' })),
+      clock: () => new Date(NOW.getTime() + 70_000),
+      maxReceiptAgeMs: 5 * 60_000,
+      audience: {
+        profile: 'agoragentic.risk-fork.e2b-qualification',
+        project_ref_hash: provisional.provider.project_ref_hash,
+        run_ref_hash: provisional.run.run_ref_hash,
+        template_id_hash: provisional.template.template_id_hash,
+        template_build_id_hash: provisional.template.build_id_hash,
+      },
+    });
+  const payload = externalQualificationObservationVerifier.createPayload(provisional, {
+    observed_at: new Date(NOW.getTime() + 60_000).toISOString(),
+    issued_at: new Date(NOW.getTime() + 65_000).toISOString(),
+    expires_at: new Date(NOW.getTime() + 2 * 60_000).toISOString(),
+    first_instruction_ipv4_egress_denied: true,
+    first_instruction_ipv6_egress_denied: true,
+    ipv6_provider_denial: {
+      status: 'verified',
+      evidence_hash: hash('synthetic-provider-ipv6-denial'),
+    },
+    provider_controls: Object.fromEntries(E2B_EXTERNAL_PROVIDER_CONTROLS.map((control) => [
+      control,
+      { status: 'verified', evidence_hash: hash(`synthetic-${control}`) },
+    ])),
+    cost: {
+      provider_cap: {
+        amount_usd: '0.10',
+        evidence_hash: hash('synthetic-provider-cap'),
+      },
+      derived_estimate: {
+        amount_usd: '0.01',
+        evidence_hash: hash('synthetic-derived-estimate'),
+      },
+      aggregate_console_delta: {
+        amount_usd: '0.01',
+        evidence_hash: hash('synthetic-console-delta'),
+      },
+      actual_sandbox: {
+        status: 'finalized',
+        amount_usd: '0.01',
+        evidence_hash: hash('synthetic-finalized-sandbox-cost'),
+      },
+    },
+  });
+  const observation = Object.freeze({
+    ...payload,
+    signature: sign(
+      null,
+      Buffer.from(canonicalize(payload), 'utf8'),
+      privateKey,
+    ).toString('base64url'),
+  });
+  return {
+    evidence: applyE2BExternalQualificationObservation(
+      provisional,
+      observation,
+      externalQualificationObservationVerifier,
+    ),
+    externalQualificationObservationVerifier,
+  };
 }
 
 function parseFlag(command, flag) {
@@ -128,6 +214,64 @@ function createMockSdk(options = {}) {
   let leaseTimeoutMs = null;
   let killed = false;
   let bootstrapCount = 0;
+  let birthBootEvidence = null;
+
+  function attestBirthRequest(request) {
+    birthBootEvidence = createBootEvidenceEnvelope({
+      observed_at: NOW.toISOString(),
+      expires_at: new Date(NOW.getTime() + 5 * 60_000).toISOString(),
+      boot_nonce: request.birth_nonce,
+      boot_id_hash: hash('mock-birth-boot-id'),
+      entropy_hash: hash('mock-birth-entropy'),
+      bootstrap_artifact_hash: BOOTSTRAP_HASH,
+      runner_artifact_hash: RUNNER_HASH,
+      measurements: {
+        environment_key_count: 4,
+        process_count: 2,
+        socket_count: 0,
+        mount_count: 12,
+        credential_path_count: 0,
+      },
+      observation_hashes: {
+        environment_keys_hash: hash('mock-birth-environment'),
+        processes_hash: hash('mock-birth-processes'),
+        sockets_hash: hash('mock-birth-sockets'),
+        mounts_hash: hash('mock-birth-mounts'),
+        credential_paths_hash: hash('mock-birth-credentials'),
+        ipv4_probe_hash: hash('mock-birth-ipv4-denied'),
+        ipv6_probe_hash: hash('mock-birth-ipv6-denied'),
+      },
+      claims: {
+        inherited_parent_processes_absent: true,
+        unauthorized_environment_absent: true,
+        credential_files_absent: true,
+        wallet_signing_material_absent: true,
+        inherited_authority_records_absent: true,
+        persistent_mounts_absent: true,
+        unauthorized_sockets_absent: true,
+        first_instruction_ipv4_egress_denied: true,
+        first_instruction_ipv6_egress_denied: true,
+        fresh_entropy_verified: true,
+        trusted_runtime_artifacts_verified: true,
+      },
+    });
+    const birthAttestation = {
+      ...createE2BBirthAttestation({
+        request,
+        bootEvidence: birthBootEvidence,
+        observed_at: NOW.toISOString(),
+      }),
+      ...(options.birthAttestationOverrides ?? {}),
+    };
+    const paths = e2bBirthRequestPaths(request.request_hash);
+    files.set(E2B_BOOT_EVIDENCE_PATH, Buffer.from(`${canonicalize(birthBootEvidence)}\n`));
+    files.set(paths.attestation, Buffer.from(`${canonicalize(birthAttestation)}\n`));
+    files.set(paths.consumed, files.get(paths.request));
+    files.set(paths.consumed_trigger, files.get(paths.trigger));
+    files.delete(paths.request);
+    files.delete(paths.trigger);
+    events.push({ type: 'birth-attestation', request, attestation: birthAttestation });
+  }
 
   const child = {
     sandboxId: 'sandbox-clean-template-child-v1',
@@ -139,6 +283,14 @@ function createMockSdk(options = {}) {
           files.set(entry.path, Buffer.isBuffer(entry.data)
             ? Buffer.from(entry.data)
             : Buffer.from(entry.data));
+          if (entry.path.endsWith('.ready')
+            && entry.path.includes('/birth-request.')
+            && options.birthNeverAttests !== true) {
+            const requestHash = Buffer.from(entry.data).toString('utf8').trim();
+            const requestPaths = e2bBirthRequestPaths(requestHash);
+            const request = JSON.parse(files.get(requestPaths.request).toString('utf8'));
+            attestBirthRequest(request);
+          }
         }
       },
       async read(target, readOptions = {}) {
@@ -149,7 +301,7 @@ function createMockSdk(options = {}) {
           throw error;
         }
         if (readOptions.format === 'stream') {
-          if (options.resultStreamFactory) {
+          if (options.resultStreamFactory && target.includes('.result.')) {
             return options.resultStreamFactory({ target, readOptions, files, events });
           }
           const content = Buffer.from(files.get(target));
@@ -204,8 +356,8 @@ function createMockSdk(options = {}) {
             workspace_digest: request.expected_workspace_digest,
             trusted_bootstrap_artifact_hash: BOOTSTRAP_HASH,
             trusted_runner_artifact_hash: RUNNER_HASH,
-            ...(options.bootEvidenceHash
-              ? { boot_evidence_hash: options.bootEvidenceHash }
+            ...(birthBootEvidence
+              ? { boot_evidence_hash: birthBootEvidence.evidence_hash }
               : {}),
             attested_at: NOW.toISOString(),
             expires_at: new Date(NOW.getTime() + 60_000).toISOString(),
@@ -266,6 +418,11 @@ function createMockSdk(options = {}) {
       leaseTimeoutMs = sdkOptions.timeoutMs;
       if (options.createError) throw options.createError;
       killed = false;
+      files.clear();
+      birthBootEvidence = null;
+      if (options.preexistingBirthState) {
+        files.set(E2B_BOOT_EVIDENCE_PATH, Buffer.from('{}\n'));
+      }
       return child;
     }
 
@@ -331,6 +488,7 @@ function createMockSdk(options = {}) {
     files,
     get createOptions() { return createOptions; },
     get bootstrapCount() { return bootstrapCount; },
+    get birthBootEvidence() { return birthBootEvidence; },
     get killed() { return killed; },
   };
 }
@@ -346,6 +504,7 @@ async function fixture(t, mockOptions = {}) {
   const capsule = makeCapsule({ workspace: { digest: inspected.workspace_digest } });
   const mock = createMockSdk(mockOptions);
   let qualificationEvidence = null;
+  let externalQualificationObservationVerifier = null;
   let sdkIntegrityVerifier = null;
   let mockSdkGlobal = null;
   if (mockOptions.qualified) {
@@ -365,9 +524,12 @@ async function fixture(t, mockOptions = {}) {
     sdkIntegrityVerifier = createE2BRuntimeSdkIntegrityVerifier({
       packageDirectory: sdkDirectory,
     });
-    qualificationEvidence = createQualificationEvidenceForSdk(
+    const qualification = createQualificationEvidenceForSdk(
       (await sdkIntegrityVerifier.inspect()).integrity_hash,
     );
+    qualificationEvidence = qualification.evidence;
+    externalQualificationObservationVerifier =
+      qualification.externalQualificationObservationVerifier;
     if (mockOptions.tamperSdkAfterQualification === 'version') {
       await writeFile(path.join(sdkDirectory, 'package.json'), JSON.stringify({
         name: 'e2b',
@@ -382,14 +544,18 @@ async function fixture(t, mockOptions = {}) {
     }
   }
   const qualificationTrust = qualificationEvidence
-    ? createQualificationTrust(qualificationEvidence)
+    ? createQualificationTrust(
+        qualificationEvidence,
+        externalQualificationObservationVerifier,
+      )
     : {};
   const adapter = new E2BRiskForkAdapter({
     ...(qualificationEvidence
       ? { sdkIntegrityVerifier }
-      : { SandboxClass: mock.Sandbox }),
+      : { SandboxClass: mock.Sandbox, offlineConformance: true }),
     cleanTemplateId: TEMPLATE_ID,
     cleanTemplateHash: TEMPLATE_HASH,
+    cleanTemplateProvenanceHash: TEMPLATE_PROVENANCE_HASH,
     workspaceExportDirectory: exportsDirectory,
     cleanupJournalDirectory: journalDirectory,
     verifyAuthorityFreeSource: async (request) => ({
@@ -417,9 +583,11 @@ async function fixture(t, mockOptions = {}) {
     runnerCommand: 'trusted-runner',
     trustedBootstrapArtifactHash: BOOTSTRAP_HASH,
     trustedRunnerArtifactHash: RUNNER_HASH,
+    birthAttestationTimeoutMs: mockOptions.birthAttestationTimeoutMs ?? 1_000,
     ...(qualificationEvidence
       ? {
           qualificationEvidence,
+          externalQualificationObservationVerifier,
           ...qualificationTrust,
         }
       : {}),
@@ -500,8 +668,8 @@ test('strict clean-template profile exports locally and never snapshots or forks
   assert.equal(prepared.mock.bootstrapCount, 2, 'pre-upload and post-import attestations are both required');
 });
 
-test('child birth options are exact, authority-free, mount-free, and deny all network at birth', async (t) => {
-  const { mock } = await prepareFork(t);
+test('child birth options are exact and authority-free while IPv6 remains unqualified', async (t) => {
+  const { mock, fork } = await prepareFork(t);
   assert.equal(mock.events.find((event) => event.type === 'create').templateId, TEMPLATE_ID);
   assert.deepEqual(mock.createOptions.envs, {});
   assert.deepEqual(mock.createOptions.iam, { tokens: {} });
@@ -515,6 +683,81 @@ test('child birth options are exact, authority-free, mount-free, and deny all ne
   });
   assert.deepEqual(mock.createOptions.lifecycle, { onTimeout: 'kill', autoResume: false });
   assert.equal(mock.createOptions.timeoutMs, 60_000);
+  assert.equal(fork.network_status, 'offline_conformance_observation_only_ipv4_ipv6_unqualified');
+});
+
+test('birth request is exact-bound after getInfo and attested before identity, commands, or upload', async (t) => {
+  const prepared = await prepareFork(t);
+  const events = prepared.mock.events;
+  const getInfoIndex = events.findIndex((event) => event.type === 'get-info');
+  const requestWriteIndex = events.findIndex((event) => event.type === 'file-write'
+    && /\/birth-request\.[0-9a-f]{64}\.json$/.test(event.path));
+  const triggerWriteIndex = events.findIndex((event) => event.type === 'file-write'
+    && /\/birth-request\.[0-9a-f]{64}\.ready$/.test(event.path));
+  const birthIndex = events.findIndex((event) => event.type === 'birth-attestation');
+  const identityIndex = events.findIndex((event) => event.type === 'file-write'
+    && event.path === E2B_RISK_FORK_PATHS.identity);
+  const commandIndex = events.findIndex((event) => event.type === 'command');
+  const workspaceIndex = events.findIndex((event) => event.type === 'file-write'
+    && event.path.startsWith('/workspace/'));
+  assert.equal(getInfoIndex >= 0 && getInfoIndex < requestWriteIndex, true);
+  assert.equal(requestWriteIndex < triggerWriteIndex && triggerWriteIndex < birthIndex, true);
+  assert.equal(birthIndex < identityIndex && birthIndex < commandIndex && birthIndex < workspaceIndex, true);
+  assert.equal(events.slice(0, birthIndex).some((event) => event.type === 'command'), false);
+  const { request, attestation } = events[birthIndex];
+  assert.equal(request.sandbox_id_hash, hash(prepared.mock.child.sandboxId));
+  assert.equal(request.provider_metadata_hash, hash(prepared.mock.createOptions.metadata));
+  assert.equal(request.template_id_hash, hash(TEMPLATE_ID));
+  assert.equal(request.template_evidence_hash, TEMPLATE_HASH);
+  assert.equal(request.template_provenance_hash, TEMPLATE_PROVENANCE_HASH);
+  assert.equal(attestation.birth_request_hash, request.request_hash);
+  assert.equal(attestation.boot_evidence_hash, prepared.mock.birthBootEvidence.evidence_hash);
+  assert.equal(Date.parse(attestation.observed_at) >= Date.parse(request.allocation_started_at), true);
+  assert.deepEqual(Object.values(request.authority_flags), [false, false, false, false]);
+  const evidence = await prepared.adapter.collectEvidence({ fork_ref: prepared.fork.fork_ref });
+  assert.equal(evidence.birth_request_hash, request.request_hash);
+  assert.equal(evidence.birth_attestation_hash, attestation.attestation_hash);
+});
+
+test('birth timeout, malformed attestation, and preexisting state kill and reconcile before bootstrap', async (t) => {
+  for (const [name, mockOptions, pattern] of [
+    [
+      'timeout',
+      { birthNeverAttests: true, birthAttestationTimeoutMs: 50 },
+      /birth watcher did not attest|controller deadline/i,
+    ],
+    [
+      'malformed',
+      { birthAttestationOverrides: { sandbox_id_hash: hash('substituted-sandbox') } },
+      /birth attestation|hash mismatch|binding mismatch/i,
+    ],
+    [
+      'preexisting',
+      { preexistingBirthState: true },
+      /birth preflight found preexisting state/i,
+    ],
+  ]) {
+    await t.test(name, async (t2) => {
+      const value = await fixture(t2, mockOptions);
+      const savepoint = await value.adapter.createSavepoint({
+        capsule: value.capsule,
+        source_workspace: value.source,
+      });
+      await assert.rejects(
+        value.adapter.createFork({
+          savepoint_ref: savepoint.savepoint_ref,
+          fork_identity: makeForkIdentity(value.capsule),
+          network_policy: { mode: 'blocked', allowlist: [] },
+          ttl_ms: 60_000,
+        }),
+        pattern,
+      );
+      assert.equal(value.mock.killed, true);
+      assert.equal(value.mock.events.some((event) => event.type === 'command'), false);
+      assert.equal(value.mock.events.some((event) => event.type === 'file-write'
+        && event.path === E2B_RISK_FORK_PATHS.identity), false);
+    });
+  }
 });
 
 test('allocation intent with the exact provider metadata is durable before Sandbox.create', async (t) => {
@@ -629,17 +872,19 @@ test('source mutation after external verification cannot change the staged bytes
 test('configured capabilities remain production-ineligible until live containment qualification', async (t) => {
   const { adapter } = await fixture(t);
   assert.equal(adapter.capabilities.supports_filesystem_snapshot, true);
-  assert.equal(adapter.capabilities.supports_network_policy, true);
-  assert.equal(adapter.capabilities.supports_verified_destruction, true);
-  assert.equal(adapter.capabilities.supports_hard_ttl, true);
-  assert.equal(adapter.capabilities.supports_max_execution_time, true);
+  assert.equal(adapter.capabilities.supports_live_fork, false);
+  assert.equal(adapter.capabilities.supports_network_policy, false);
+  assert.equal(adapter.capabilities.supports_runtime_attestation, false);
+  assert.equal(adapter.capabilities.supports_verified_destruction, false);
+  assert.equal(adapter.capabilities.supports_hard_ttl, false);
+  assert.equal(adapter.capabilities.supports_max_execution_time, false);
   assert.equal(adapter.capabilities.supports_idle_ttl, false);
   assert.equal(adapter.capabilities.child_credentials_mode, 'prohibited');
   assert.equal(adapter.capabilities.credentialed_provider_validation, 'not_run');
   assert.equal(adapter.capabilities.containment_claim, 'not_verified');
 });
 
-test('qualified profile arms provider idle leases around bootstrap and execution without extending the hard deadline', async (t) => {
+test('signed qualification cannot bypass the source-wired untrusted-watcher allocation gate', async (t) => {
   const prepared = await fixture(t, {
     qualified: true,
     bootEvidenceHash: hash('qualified-boot-evidence'),
@@ -648,88 +893,24 @@ test('qualified profile arms provider idle leases around bootstrap and execution
     capsule: prepared.capsule,
     source_workspace: prepared.source,
   });
-  const fork = await prepared.adapter.createFork({
-    savepoint_ref: savepoint.savepoint_ref,
-    fork_identity: makeForkIdentity(prepared.capsule),
-    network_policy: { mode: 'blocked', allowlist: [] },
-    ttl_ms: 60_000,
-    idle_ttl_ms: 5_000,
-  });
-  assert.equal(prepared.adapter.capabilities.supports_idle_ttl, true);
-  assert.equal(fork.idle_expires_at, new Date(NOW.getTime() + 5_000).toISOString());
-  assert.deepEqual(
-    prepared.mock.events.filter((event) => event.type === 'set-timeout').map((event) => event.timeoutMs),
-    [60_000, 60_000, 60_000, 5_000],
-  );
-
-  await prepared.adapter.executeInFork({
-    fork_ref: fork.fork_ref,
-    execution_mode: 'isolated_execution',
-    operation: { kind: 'analyze', subject_ref: 'opaque:qualified-idle-lease' },
-    timeout_ms: 2_000,
-  });
-  assert.deepEqual(
-    prepared.mock.events.filter((event) => event.type === 'set-timeout').slice(-2)
-      .map((event) => event.timeoutMs),
-    [7_000, 5_000],
-  );
-  const status = await prepared.adapter.getForkStatus({ fork_ref: fork.fork_ref });
-  assert.equal(status.idle_expires_at, new Date(NOW.getTime() + 5_000).toISOString());
-  const evidence = await prepared.adapter.collectEvidence({ fork_ref: fork.fork_ref });
-  assert.equal(evidence.qualification_status, 'verified');
-  assert.equal(evidence.provider_live_qualification, 'verified');
-  assert.equal(evidence.containment_claim, 'verified');
-  assert.equal(evidence.boot_evidence_hash, hash('qualified-boot-evidence'));
-
-  const unreviewedSdk = await fixture(t, {
-    qualified: true,
-    bootEvidenceHash: hash('qualified-boot-evidence'),
-    tamperSdkAfterQualification: 'version',
-  });
-  const unreviewedSavepoint = await unreviewedSdk.adapter.createSavepoint({
-    capsule: unreviewedSdk.capsule,
-    source_workspace: unreviewedSdk.source,
-  });
   await assert.rejects(
-    unreviewedSdk.adapter.createFork({
-      savepoint_ref: unreviewedSavepoint.savepoint_ref,
-      fork_identity: makeForkIdentity(unreviewedSdk.capsule),
+    prepared.adapter.createFork({
+      savepoint_ref: savepoint.savepoint_ref,
+      fork_identity: makeForkIdentity(prepared.capsule),
       network_policy: { mode: 'blocked', allowlist: [] },
       ttl_ms: 60_000,
       idle_ttl_ms: 5_000,
     }),
-    /exact e2b@2\.39\.0/i,
+    (error) => error?.code === 'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER'
+      && error?.production_qualified === false,
   );
   assert.equal(
-    unreviewedSdk.mock.events.some((event) => event.type === 'create'),
+    prepared.mock.events.some((event) => event.type === 'create'),
     false,
-    'an unreviewed SDK version must be rejected before provider allocation',
+    'signed evidence must not reach SDK loading or provider allocation',
   );
-
-  const changedSdkBytes = await fixture(t, {
-    qualified: true,
-    bootEvidenceHash: hash('qualified-boot-evidence'),
-    tamperSdkAfterQualification: 'bytes',
-  });
-  const changedBytesSavepoint = await changedSdkBytes.adapter.createSavepoint({
-    capsule: changedSdkBytes.capsule,
-    source_workspace: changedSdkBytes.source,
-  });
-  await assert.rejects(
-    changedSdkBytes.adapter.createFork({
-      savepoint_ref: changedBytesSavepoint.savepoint_ref,
-      fork_identity: makeForkIdentity(changedSdkBytes.capsule),
-      network_policy: { mode: 'blocked', allowlist: [] },
-      ttl_ms: 60_000,
-      idle_ttl_ms: 5_000,
-    }),
-    /integrity.*mismatch/i,
-  );
-  assert.equal(
-    changedSdkBytes.mock.events.some((event) => event.type === 'create'),
-    false,
-    'changed SDK bytes must be rejected before provider allocation',
-  );
+  assert.equal(prepared.adapter.capabilities.supports_idle_ttl, false);
+  assert.equal(prepared.adapter.capabilities.containment_claim, 'not_verified');
 });
 
 test('post-boot attestation fails closed before execution for every inherited-state claim', async (t) => {

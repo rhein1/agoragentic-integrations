@@ -5,16 +5,22 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { E2BCleanupJournal } from '../src/adapters/e2b-cleanup-journal.mjs';
-import { E2BRiskForkAdapter } from '../src/adapters/e2b.mjs';
+import {
+  E2BRiskForkAdapter,
+  E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER,
+} from '../src/adapters/e2b.mjs';
 import { hash, NOW } from './helpers.mjs';
 
 const TEMPLATE_ID = 'template-risk-fork-clean-immutable-v1';
+const TEMPLATE_PROVENANCE_HASH = hash('template-risk-fork-clean-provenance-v1');
 
 function reconciliationAdapter({ directory, exportsDirectory, SandboxClass }) {
   return new E2BRiskForkAdapter({
     SandboxClass,
+    offlineConformance: true,
     cleanTemplateId: TEMPLATE_ID,
     cleanTemplateHash: hash(TEMPLATE_ID),
+    cleanTemplateProvenanceHash: TEMPLATE_PROVENANCE_HASH,
     workspaceExportDirectory: exportsDirectory,
     cleanupJournalDirectory: directory,
     verifyAuthorityFreeSource: async () => {
@@ -73,6 +79,65 @@ test('cleanup journal never rounds unknown cleanup up to verified absence', asyn
   assert.equal((await journal.listPending()).length, 1);
 });
 
+test('source-disabled reconciliation cannot load a provider and injected paths require the offline seam', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-source-fence-'));
+  const directory = path.join(root, 'journal');
+  const exportsDirectory = path.join(root, 'exports');
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const common = {
+    cleanTemplateId: TEMPLATE_ID,
+    cleanTemplateHash: hash(TEMPLATE_ID),
+    cleanTemplateProvenanceHash: TEMPLATE_PROVENANCE_HASH,
+    workspaceExportDirectory: exportsDirectory,
+    cleanupJournalDirectory: directory,
+    verifyAuthorityFreeSource: async () => {
+      throw new Error('source verifier must not run');
+    },
+    trustedBootstrapArtifactHash: hash('trusted-bootstrap'),
+    trustedRunnerArtifactHash: hash('trusted-runner'),
+    clock: () => new Date(NOW),
+  };
+  let providerCalls = 0;
+  class Sandbox {
+    static async create() { providerCalls += 1; }
+    static async getInfo() { providerCalls += 1; }
+    static list() { providerCalls += 1; }
+    static async kill() { providerCalls += 1; }
+  }
+
+  assert.throws(
+    () => new E2BRiskForkAdapter({ ...common, SandboxClass: Sandbox }),
+    /offlineConformance=true/,
+  );
+  const adapter = new E2BRiskForkAdapter(common);
+  for (const field of [
+    'offlineConformance',
+    'SandboxClass',
+    'sdkLoader',
+    'sdkVersion',
+    'sdkVersionLoader',
+    'sdkIntegrityVerifier',
+  ]) {
+    assert.equal(Object.hasOwn(adapter, field), false, `${field} must remain constructor-private`);
+  }
+  let injectedLoaderCalls = 0;
+  // Lookalike public properties must not alter the constructor-captured fence
+  // or replace the private provider handles.
+  adapter.offlineConformance = true;
+  adapter.SandboxClass = Sandbox;
+  adapter.sdkLoader = async () => {
+    injectedLoaderCalls += 1;
+    return { Sandbox };
+  };
+  await assert.rejects(
+    adapter.reconcilePendingCleanup(),
+    (error) => error?.code === E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER
+      && error?.operation === 'reconcilePendingCleanup',
+  );
+  assert.equal(providerCalls, 0);
+  assert.equal(injectedLoaderCalls, 0);
+});
+
 test('restart reconciliation discovers an exact metadata-bound orphan, kills it, and verifies absence', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-orphan-reconcile-'));
   const directory = path.join(root, 'journal');
@@ -104,7 +169,7 @@ test('restart reconciliation discovers an exact metadata-bound orphan, kills it,
         get hasNext() { return !delivered; },
         async nextItems() {
           delivered = true;
-          return [orphan];
+          return killed ? [] : [orphan];
         },
       };
     }

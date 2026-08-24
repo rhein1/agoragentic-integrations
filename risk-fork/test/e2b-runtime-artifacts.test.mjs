@@ -11,17 +11,21 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { sha256Ref } from '../src/canonical.mjs';
+import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import {
   EMPTY_RUNTIME_WORKSPACE_DIGEST,
   createBootEvidenceEnvelope,
+  createE2BBirthRequest,
+  e2bBirthRequestPaths,
   inspectRuntimeWorkspace,
   sha256FileRef,
+  validateE2BBirthAttestation,
 } from '../e2b-template/lib/runtime-contract.mjs';
 import { runBootstrap } from '../e2b-template/bin/bootstrap.mjs';
 import {
   classifyLiteralProbeOutcome,
   inspectProcessEnvironmentBytes,
+  runBirthWatcher,
 } from '../e2b-template/bin/boot-guard.mjs';
 import {
   parseRunnerTransportPaths,
@@ -53,7 +57,7 @@ function fakeTemplateSdk() {
   };
 }
 
-test('template definition is pure, Node 24, root-owned, non-root at runtime, and boot-guard first', () => {
+test('template definition is pure, Node 24, root-owned, non-root at runtime, and PATH-resolved boot-guard first', () => {
   const sdk = fakeTemplateSdk();
   const template = createRiskForkE2BTemplate({
     Template: sdk.Template,
@@ -64,11 +68,202 @@ test('template definition is pure, Node 24, root-owned, non-root at runtime, and
   assert.deepEqual(sdk.calls.find(([name]) => name === 'fromNodeImage'), ['fromNodeImage', '24']);
   assert.ok(sdk.calls.some(([name, value]) => name === 'setUser' && value === 'root'));
   assert.deepEqual(sdk.calls.filter(([name]) => name === 'setUser').at(-1), ['setUser', 'user']);
+  const makeDir = sdk.calls.find(([name]) => name === 'makeDir');
+  assert.equal(
+    makeDir[1].includes('/run/agoragentic-risk-fork'),
+    false,
+    'ephemeral /run state must not rely on an earlier image layer',
+  );
+  const rootRun = sdk.calls.find(([name]) => name === 'runCmd');
+  assert.equal(rootRun[2].user, 'root');
+  assert.deepEqual(rootRun[1].slice(-3), [
+    'mkdir -p /run/agoragentic-risk-fork',
+    'chown user:user /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
+    'chmod 0700 /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
+  ]);
   const start = sdk.calls.find(([name]) => name === 'setStartCmd');
-  assert.match(start[1], /env -i/);
-  assert.match(start[1], /boot-guard\.mjs/);
-  assert.equal(start[2].ready, '/run/agoragentic-risk-fork/ready');
+  assert.equal(
+    start[1],
+    '/usr/bin/env -i HOME=/home/user USER=user LOGNAME=user SHELL=/bin/sh PATH=/usr/local/bin:/usr/bin:/bin node /opt/agoragentic/risk-fork/e2b-template/bin/boot-guard.mjs',
+    'the Node image executable must resolve from the sanitized PATH before boot-guard',
+  );
+  assert.doesNotMatch(
+    start[1],
+    /(?:^|\s)\/\S*\/node(?:\s|$)/,
+    'an image-specific hard-coded Node executable can be absent even when node is on PATH',
+  );
+  assert.equal(start[2].ready, '/run/agoragentic-risk-fork/template-build-ready');
   assert.equal(sdk.calls.some(([name]) => name === 'build'), false, 'definition must not build on import');
+});
+
+async function waitForPath(target) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      return await readFile(target);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+  throw new Error(`timed out waiting for ${target}`);
+}
+
+function birthRequest(overrides = {}) {
+  return createE2BBirthRequest({
+    sandbox_id_hash: sha256Ref('sandbox-birth-1'),
+    provider_metadata_hash: sha256Ref({ profile: 'clean' }),
+    template_id_hash: sha256Ref('template-birth-1'),
+    template_evidence_hash: sha256Ref('template-evidence-birth-1'),
+    template_provenance_hash: sha256Ref('template-provenance-birth-1'),
+    allocation_started_at: '2030-01-01T00:00:00.000Z',
+    expires_at: '2030-01-01T00:00:20.000Z',
+    birth_nonce: 'birth-nonce-1234567890',
+    ...overrides,
+  });
+}
+
+function bootEvidenceForRequest(request, observedAt = '2030-01-01T00:00:01.000Z') {
+  return createBootEvidenceEnvelope({
+    observed_at: observedAt,
+    expires_at: '2030-01-01T00:05:00.000Z',
+    boot_nonce: request.birth_nonce,
+    boot_id_hash: sha256Ref('birth-boot-id'),
+    entropy_hash: sha256Ref('birth-entropy'),
+    bootstrap_artifact_hash: sha256Ref('birth-bootstrap'),
+    runner_artifact_hash: sha256Ref('birth-runner'),
+    measurements: {
+      environment_key_count: 4,
+      process_count: 2,
+      socket_count: 0,
+      mount_count: 12,
+      credential_path_count: 0,
+    },
+    observation_hashes: {
+      environment_keys_hash: sha256Ref(['HOME', 'PATH', 'USER', '_']),
+      processes_hash: sha256Ref(['watcher']),
+      sockets_hash: sha256Ref([]),
+      mounts_hash: sha256Ref(['mounts']),
+      credential_paths_hash: sha256Ref([]),
+      ipv4_probe_hash: sha256Ref('ipv4-locally-denied'),
+      ipv6_probe_hash: sha256Ref('ipv6-locally-denied'),
+    },
+    claims: {
+      inherited_parent_processes_absent: false,
+      unauthorized_environment_absent: false,
+      credential_files_absent: false,
+      wallet_signing_material_absent: false,
+      inherited_authority_records_absent: false,
+      persistent_mounts_absent: false,
+      unauthorized_sockets_absent: false,
+      first_instruction_ipv4_egress_denied: false,
+      first_instruction_ipv6_egress_denied: false,
+      fresh_entropy_verified: false,
+      trusted_runtime_artifacts_verified: false,
+    },
+  });
+}
+
+test('captured birth watcher stays network-silent until one canonical post-allocation request', async (t) => {
+  const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-birth-'));
+  t.after(() => rm(runtimeDirectory, { recursive: true, force: true }));
+  const request = birthRequest();
+  let collectCalls = 0;
+  const watcher = runBirthWatcher({
+    runtimeDirectory,
+    clock: () => new Date('2030-01-01T00:00:01.000Z'),
+    collectEvidence: async ({ bootNonce }) => {
+      collectCalls += 1;
+      assert.equal(bootNonce, request.birth_nonce);
+      return bootEvidenceForRequest(request);
+    },
+    requestWaitTimeoutMs: 1_000,
+  });
+  const buildReady = await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
+  assert.equal(collectCalls, 0, 'build finalization must not collect boot or network evidence');
+  assert.deepEqual(JSON.parse(buildReady.toString('utf8')), {
+    build_only: true,
+    evidence_trust: 'untrusted_same_uid_self_assertion',
+    network_observation_performed: false,
+    production_authority_included: false,
+    schema: 'agoragentic.risk-fork.e2b-template-build-ready.v1',
+    status: 'captured_watcher_waiting',
+  });
+  const remotePaths = e2bBirthRequestPaths(request.request_hash);
+  const requestPath = path.join(runtimeDirectory, path.posix.basename(remotePaths.request));
+  const triggerPath = path.join(runtimeDirectory, path.posix.basename(remotePaths.trigger));
+  await writeFile(requestPath, `${canonicalize(request)}\n`);
+  assert.equal(collectCalls, 0, 'an incomplete request cannot trigger evidence collection');
+  await writeFile(triggerPath, `${request.request_hash}\n`);
+  const result = await watcher;
+  assert.equal(collectCalls, 1);
+  assert.equal(result.bootEvidence.boot_nonce, request.birth_nonce);
+  assert.equal(result.attestation.birth_request_hash, request.request_hash);
+  assert.equal(result.attestation.status, 'untrusted_observation');
+  assert.equal(result.attestation.trust_status, 'untrusted_same_uid_self_assertion');
+  assert.equal(result.attestation.claims.privileged_producer_verified, false);
+  assert.equal(
+    result.attestation.boot_evidence_hash,
+    result.bootEvidence.evidence_hash,
+  );
+  assert.equal(
+    Date.parse(result.attestation.observed_at) >= Date.parse(request.allocation_started_at),
+    true,
+  );
+  assert.equal(
+    (await readFile(path.join(runtimeDirectory, 'birth-ready'), 'utf8')).trim(),
+    result.attestation.attestation_hash,
+  );
+  assert.deepEqual(
+    validateE2BBirthAttestation(result.attestation, {
+      request,
+      bootEvidence: result.bootEvidence,
+      bootstrapArtifactHash: sha256Ref('birth-bootstrap'),
+      runnerArtifactHash: sha256Ref('birth-runner'),
+      now: '2030-01-01T00:00:01.000Z',
+    }),
+    result.attestation,
+  );
+});
+
+test('birth watcher fails closed on expired, malformed, preexisting, and replayed state', async (t) => {
+  const expiredDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-expired-'));
+  const preexistingDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-preexisting-'));
+  t.after(() => Promise.all([
+    rm(expiredDirectory, { recursive: true, force: true }),
+    rm(preexistingDirectory, { recursive: true, force: true }),
+  ]));
+
+  const expired = birthRequest({ expires_at: '2030-01-01T00:00:01.000Z' });
+  const expiredWatcher = runBirthWatcher({
+    runtimeDirectory: expiredDirectory,
+    clock: () => new Date('2030-01-01T00:00:02.000Z'),
+    collectEvidence: async () => {
+      throw new Error('expired request must not collect evidence');
+    },
+    requestWaitTimeoutMs: 1_000,
+  });
+  await waitForPath(path.join(expiredDirectory, 'template-build-ready'));
+  const expiredPaths = e2bBirthRequestPaths(expired.request_hash);
+  await writeFile(
+    path.join(expiredDirectory, path.posix.basename(expiredPaths.request)),
+    `${canonicalize(expired)}\n`,
+  );
+  await writeFile(
+    path.join(expiredDirectory, path.posix.basename(expiredPaths.trigger)),
+    `${expired.request_hash}\n`,
+  );
+  await assert.rejects(expiredWatcher, /expired|validity|outside/i);
+
+  await writeFile(path.join(preexistingDirectory, 'birth-request.preexisting.json'), '{}\n');
+  await assert.rejects(
+    runBirthWatcher({ runtimeDirectory: preexistingDirectory, requestWaitTimeoutMs: 10 }),
+    /preexisting runtime state/i,
+  );
+  await assert.rejects(
+    runBirthWatcher({ runtimeDirectory: expiredDirectory, requestWaitTimeoutMs: 10 }),
+    /preexisting runtime state/i,
+    'a consumed or failed request cannot be replayed through a restarted watcher',
+  );
 });
 
 test('boot guard treats timeout as unknown and hashes provider credential keys without values', () => {
@@ -82,7 +277,7 @@ test('boot guard treats timeout as unknown and hashes provider credential keys w
   });
   assert.deepEqual(classifyLiteralProbeOutcome('ENETUNREACH'), {
     status: 'unreachable',
-    local_denial_observed: true,
+    local_denial_observed: false,
   });
   const inspected = inspectProcessEnvironmentBytes(Buffer.from(
     'PATH=/usr/bin\0E2B_API_KEY=must-never-appear\0AWS_SESSION_TOKEN=also-secret\0',

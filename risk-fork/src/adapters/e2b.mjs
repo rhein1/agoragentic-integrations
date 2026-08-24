@@ -4,8 +4,18 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 
-import { sha256Ref } from '../canonical.mjs';
+import { canonicalize, sha256Ref } from '../canonical.mjs';
 import { validateChildOperation } from '../child-operation.mjs';
+import {
+  E2B_BIRTH_MAX_VALIDITY_MS,
+  E2B_BOOT_EVIDENCE_PATH,
+  E2B_BOOT_READY_PATH,
+  createE2BBirthRequest,
+  e2bBirthRequestPaths,
+  validateBootObservationEnvelope,
+  validateE2BBirthAttestation,
+  validateE2BBirthRequest,
+} from '../../e2b-template/lib/runtime-contract.mjs';
 import {
   createE2BRuntimeSdkIntegrityVerifier,
   isE2BRuntimeSdkIntegrityVerifier,
@@ -48,6 +58,7 @@ const DEFAULT_RUNNER_COMMAND = '/opt/agoragentic/risk-fork/bin/run';
 const MAX_JOB_BYTES = 1024 * 1024;
 const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const MAX_ATTESTATION_BYTES = 128 * 1024;
+const DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS = 10_000;
 const MAX_RESULT_STREAM_IDLE_TIMEOUT_MS = 5_000;
 const MIN_RESULT_STREAM_IDLE_TIMEOUT_MS = 50;
 const MAX_JSON_NODES = 20_000;
@@ -65,6 +76,15 @@ const E2B_SDK_ALL_TRAFFIC_SENTINEL = '0.0.0.0/0';
 
 export const E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE =
   'E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE';
+export const E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER =
+  'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER';
+
+// The captured template watcher and its outbox run under the same sandbox UID
+// as child code. Until the provider supplies a separately privileged producer
+// plus externally verifiable privilege separation, production allocation must
+// remain impossible from source. `offlineConformance` below is a mock-only seam
+// requiring an injected SandboxClass and cannot carry qualification evidence.
+const E2B_LIVE_FORK_SOURCE_ENABLED = false;
 
 function secureSnapshotProfileUnavailable(operation) {
   const error = new Error(
@@ -141,15 +161,28 @@ function requireFixedCommand(value, field) {
   return command;
 }
 
-function isNotFound(error) {
-  const status = error?.status
+function notFoundStatus(error) {
+  return error?.status
     ?? error?.statusCode
     ?? error?.response?.status
     ?? error?.cause?.status;
+}
+
+function isRemoteFileNotFound(error) {
+  const status = notFoundStatus(error);
   const code = String(error?.code ?? '').toUpperCase();
   const name = String(error?.name ?? '').toUpperCase();
   return status === 404
+    || code === 'ENOENT'
     || code === 'NOT_FOUND'
+    || name === 'FILENOTFOUNDERROR';
+}
+
+function isSandboxNotFound(error) {
+  const status = notFoundStatus(error);
+  const code = String(error?.code ?? '').toUpperCase();
+  const name = String(error?.name ?? '').toUpperCase();
+  return status === 404
     || code === 'SANDBOX_NOT_FOUND'
     || name === 'SANDBOXNOTFOUNDERROR';
 }
@@ -443,7 +476,7 @@ function assertExactMetadata(actual, expected, field) {
   }
 }
 
-function safeProviderObservation(info, expected = {}) {
+export function validateE2BSandboxInfo(info, expected = {}) {
   const field = expected.field ?? 'E2B sandbox';
   assertPlainObject(info, field);
   const sandboxId = requireString(
@@ -501,12 +534,260 @@ function safeProviderObservation(info, expected = {}) {
     sandbox_id_hash: sha256Ref(sandboxId),
     template_id_hash: sha256Ref(templateId),
     metadata_hash: sha256Ref(expected.metadata),
-    network_status: 'exact_sdk_all_traffic_sentinel_observed_offline_contract',
-    volume_mount_status: 'verified_zero_reported',
-    lifecycle_status: 'verified_kill_no_auto_resume',
+    network_status: 'exact_sdk_ipv4_sentinel_observed_ipv6_unqualified',
+    volume_mount_status: 'provider_reported_zero_observed',
+    lifecycle_status: 'provider_reported_kill_no_auto_resume_observed',
     deadline: new Date(parsedEndAt).toISOString(),
   };
   return deepFreeze({ ...observation, observation_hash: sha256Ref(observation) });
+}
+
+function birthHandshakeError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  error.retryable = false;
+  error.production_qualified = false;
+  return error;
+}
+
+function liveForkDisabledUntrustedWatcher(operation) {
+  const error = new Error(
+    'E2B live Risk Fork allocation is disabled: the captured birth watcher is not a trusted authority boundary',
+  );
+  error.name = 'E2BLiveForkDisabledUntrustedWatcherError';
+  error.code = E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER;
+  error.operation = operation;
+  error.provider = 'e2b-clean-template-v1';
+  error.retryable = false;
+  error.production_qualified = false;
+  return error;
+}
+
+function parseCanonicalRuntimeEnvelope(bytes, field, maxBytes) {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 3 || bytes.byteLength > maxBytes) {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ARTIFACT_INVALID',
+      `${field} is missing or outside its byte bound`,
+    );
+  }
+  const text = Buffer.from(bytes).toString('utf8');
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw birthHandshakeError('E2B_BIRTH_ARTIFACT_INVALID', `${field} is not valid JSON`);
+  }
+  if (text !== `${canonicalize(parsed)}\n`) {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ARTIFACT_INVALID',
+      `${field} bytes are not canonical`,
+    );
+  }
+  return parsed;
+}
+
+async function assertRemoteBirthArtifactAbsent(files, target, timeoutMs) {
+  try {
+    await readBoundedResultBytes(files, target, {
+      maxBytes: MAX_ATTESTATION_BYTES,
+      totalTimeoutMs: Math.max(1, timeoutMs),
+      idleTimeoutMs: Math.max(1, Math.min(250, timeoutMs)),
+    });
+  } catch (error) {
+    if (isRemoteFileNotFound(error)) return;
+    throw birthHandshakeError(
+      'E2B_BIRTH_PREFLIGHT_AMBIGUOUS',
+      `E2B birth preflight could not prove ${target} absent`,
+    );
+  }
+  throw birthHandshakeError(
+    'E2B_BIRTH_PREEXISTING_STATE',
+    `E2B birth preflight found preexisting state at ${target}`,
+  );
+}
+
+/**
+ * Complete the one-use handshake with the captured template birth watcher.
+ * The caller must first exact-bind Sandbox.getInfo and must not upload identity,
+ * workspace data, commands, credentials, or other authority before this returns.
+ */
+export async function performE2BSandboxBirthHandshake(options = {}) {
+  const sandbox = options.sandbox;
+  if (!sandbox || typeof sandbox !== 'object' || !sandbox.files) {
+    throw new TypeError('E2B birth handshake requires an allocated sandbox filesystem');
+  }
+  const files = sandbox.files;
+  if (typeof files.write !== 'function' || typeof files.read !== 'function') {
+    throw new TypeError('E2B birth handshake requires file write and read operations');
+  }
+  const sandboxId = requireOpaqueRef(options.sandboxId, 'E2B birth sandboxId', {
+    maxLength: 500,
+  });
+  if (sandbox.sandboxId != null && sandbox.sandboxId !== sandboxId) {
+    throw new Error('E2B birth sandbox identity does not match the allocated handle');
+  }
+  assertPlainObject(options.metadata, 'E2B birth provider metadata');
+  const templateId = requireOpaqueRef(options.templateId, 'E2B birth templateId', {
+    maxLength: 500,
+  });
+  const templateEvidenceHash = requireSha256Ref(
+    options.templateEvidenceHash,
+    'E2B birth templateEvidenceHash',
+  );
+  const templateProvenanceHash = requireSha256Ref(
+    options.templateProvenanceHash,
+    'E2B birth templateProvenanceHash',
+  );
+  const bootstrapArtifactHash = requireSha256Ref(
+    options.bootstrapArtifactHash,
+    'E2B birth bootstrapArtifactHash',
+  );
+  const runnerArtifactHash = requireSha256Ref(
+    options.runnerArtifactHash,
+    'E2B birth runnerArtifactHash',
+  );
+  const clock = options.clock ?? (() => new Date());
+  if (typeof clock !== 'function') throw new TypeError('E2B birth handshake clock is invalid');
+  const allocationStartedAt = new Date(options.allocationStartedAt);
+  if (!Number.isFinite(allocationStartedAt.getTime())) {
+    throw new TypeError('E2B birth allocationStartedAt is invalid');
+  }
+  const timeoutMs = boundedInteger(
+    options.timeoutMs ?? DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS,
+    'E2B birth attestation timeout',
+    { min: 50, max: E2B_BIRTH_MAX_VALIDITY_MS },
+  );
+  const wallStartedAt = performance.now();
+  const remainingMs = () => Math.floor(timeoutMs - (performance.now() - wallStartedAt));
+  const now = new Date(clock());
+  if (!Number.isFinite(now.getTime())
+    || now.getTime() < allocationStartedAt.getTime()
+    || now.getTime() >= allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS) {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ALLOCATION_STALE',
+      'E2B birth request cannot be opened outside the post-allocation validity window',
+    );
+  }
+  const request = createE2BBirthRequest({
+    sandbox_id_hash: sha256Ref(sandboxId),
+    provider_metadata_hash: sha256Ref(options.metadata),
+    template_id_hash: sha256Ref(templateId),
+    template_evidence_hash: templateEvidenceHash,
+    template_provenance_hash: templateProvenanceHash,
+    allocation_started_at: allocationStartedAt.toISOString(),
+    expires_at: new Date(
+      allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS,
+    ).toISOString(),
+    birth_nonce: randomUUID(),
+  });
+  const paths = e2bBirthRequestPaths(request.request_hash);
+  for (const target of [
+    E2B_BOOT_EVIDENCE_PATH,
+    E2B_BOOT_READY_PATH,
+    paths.request,
+    paths.trigger,
+    paths.consumed,
+    paths.consumed_trigger,
+    paths.attestation,
+  ]) {
+    const remaining = remainingMs();
+    if (remaining <= 0) {
+      throw birthHandshakeError(
+        'E2B_BIRTH_ATTESTATION_TIMEOUT',
+        'E2B birth preflight exceeded its controller deadline',
+      );
+    }
+    await assertRemoteBirthArtifactAbsent(files, target, remaining);
+  }
+
+  await files.write(paths.request, `${canonicalize(request)}\n`);
+  await files.write(paths.trigger, `${request.request_hash}\n`);
+  let attestationBytes;
+  while (remainingMs() > 0) {
+    const remaining = remainingMs();
+    try {
+      attestationBytes = await readBoundedResultBytes(files, paths.attestation, {
+        maxBytes: MAX_ATTESTATION_BYTES,
+        totalTimeoutMs: Math.max(1, remaining),
+        idleTimeoutMs: Math.max(1, Math.min(250, remaining)),
+      });
+      break;
+    } catch (error) {
+      if (!isRemoteFileNotFound(error)) {
+        throw birthHandshakeError(
+          'E2B_BIRTH_ATTESTATION_AMBIGUOUS',
+          'E2B birth attestation could not be read unambiguously',
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(25, remaining)));
+    }
+  }
+  if (!attestationBytes) {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ATTESTATION_TIMEOUT',
+      'E2B birth watcher did not attest before the controller deadline',
+    );
+  }
+  const remaining = remainingMs();
+  if (remaining <= 0) {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ATTESTATION_TIMEOUT',
+      'E2B birth evidence read exceeded the controller deadline',
+    );
+  }
+  let bootEvidenceBytes;
+  try {
+    bootEvidenceBytes = await readBoundedResultBytes(files, E2B_BOOT_EVIDENCE_PATH, {
+      maxBytes: MAX_ATTESTATION_BYTES,
+      totalTimeoutMs: Math.max(1, remaining),
+      idleTimeoutMs: Math.max(1, Math.min(250, remaining)),
+    });
+  } catch {
+    throw birthHandshakeError(
+      'E2B_BIRTH_ATTESTATION_AMBIGUOUS',
+      'E2B birth attestation exists without readable boot evidence',
+    );
+  }
+  const attestationValue = parseCanonicalRuntimeEnvelope(
+    attestationBytes,
+    'E2B birth attestation',
+    MAX_ATTESTATION_BYTES,
+  );
+  const bootEvidenceValue = parseCanonicalRuntimeEnvelope(
+    bootEvidenceBytes,
+    'E2B boot evidence',
+    MAX_ATTESTATION_BYTES,
+  );
+  const verifiedAt = new Date(clock());
+  const verifiedRequest = validateE2BBirthRequest(request, {
+    sandboxIdHash: sha256Ref(sandboxId),
+    providerMetadataHash: sha256Ref(options.metadata),
+    templateIdHash: sha256Ref(templateId),
+    templateEvidenceHash,
+    templateProvenanceHash,
+    allocationStartedAt: allocationStartedAt.toISOString(),
+    requestHash: request.request_hash,
+    now: verifiedAt,
+  });
+  const bootEvidence = validateBootObservationEnvelope(bootEvidenceValue, {
+    now: verifiedAt,
+    bootstrapArtifactHash,
+    runnerArtifactHash,
+  });
+  const attestation = validateE2BBirthAttestation(attestationValue, {
+    request: verifiedRequest,
+    bootEvidence,
+    bootstrapArtifactHash,
+    runnerArtifactHash,
+    now: verifiedAt,
+  });
+  return deepFreeze({
+    request: verifiedRequest,
+    request_path: paths.request,
+    trigger_path: paths.trigger,
+    attestation,
+    bootEvidence,
+  });
 }
 
 function validateSourceAttestation(result, request, expected = {}) {
@@ -708,7 +989,7 @@ function parseRunnerResult(value, expected) {
   return deepFreeze({ ...cloneJson(value), commit_candidate: candidate });
 }
 
-function makeCapabilities(configured, qualified = false) {
+function makeCapabilities(configured, qualificationEvidencePresent = false) {
   if (!configured) {
     return {
       supports_memory_snapshot: false,
@@ -735,40 +1016,57 @@ function makeCapabilities(configured, qualified = false) {
     supports_memory_snapshot: false,
     supports_filesystem_snapshot: true,
     supports_live_fork: false,
-    supports_network_policy: true,
+    supports_network_policy: false,
     supports_egress_allowlist: false,
-    supports_runtime_attestation: true,
+    supports_runtime_attestation: false,
     supports_suspend_resume: false,
-    supports_verified_destruction: true,
-    supports_hard_ttl: true,
-    supports_idle_ttl: qualified,
-    supports_max_execution_time: true,
+    supports_verified_destruction: false,
+    supports_hard_ttl: false,
+    supports_idle_ttl: false,
+    supports_max_execution_time: false,
     supports_automatic_credential_expiry: false,
     child_credentials_mode: 'prohibited',
-    isolation_class: qualified
-      ? 'e2b_clean_template_qualified'
-      : 'e2b_clean_template_unqualified',
-    adapter_implementation: qualified
-      ? 'qualified_clean_template_profile'
-      : 'offline_clean_template_profile',
-    mock_conformance: qualified ? 'strict_offline_and_live_qualified' : 'strict_offline',
-    credentialed_provider_validation: qualified ? 'passed' : 'not_run',
-    containment_claim: qualified ? 'verified' : 'not_verified',
+    isolation_class: 'e2b_live_fork_blocked_untrusted_same_uid_watcher',
+    adapter_implementation: 'source_wired_default_off',
+    mock_conformance: 'handshake_mechanics_only_untrusted',
+    credentialed_provider_validation: qualificationEvidencePresent
+      ? 'evidence_present_activation_blocked'
+      : 'not_run',
+    containment_claim: 'not_verified',
   };
 }
 
 export class E2BRiskForkAdapter extends RiskForkProvider {
+  #offlineConformance;
+
+  #SandboxClass;
+
+  #sdkLoader;
+
+  #sdkVersion;
+
+  #sdkVersionLoader;
+
+  #sdkVersionVerified;
+
+  #sdkIntegrityVerifier;
+
+  #sdkIntegrityVerified;
+
   constructor(options = {}) {
+    const templateProvenanceCandidate = options.cleanTemplateProvenanceHash
+      ?? options.qualificationEvidence?.template?.provenance_hash;
     const profileValues = [
       options.cleanTemplateId,
       options.cleanTemplateHash,
+      templateProvenanceCandidate,
       options.workspaceExportDirectory,
       options.cleanupJournalDirectory,
     ];
     const configured = profileValues.every((value) => value !== undefined && value !== null);
     if (!configured && profileValues.some((value) => value !== undefined && value !== null)) {
       throw new TypeError(
-        'cleanTemplateId, cleanTemplateHash, workspaceExportDirectory, and cleanupJournalDirectory are required together',
+        'cleanTemplateId, cleanTemplateHash, cleanTemplateProvenanceHash, workspaceExportDirectory, and cleanupJournalDirectory are required together',
       );
     }
     if (!configured && options.qualificationEvidence != null) {
@@ -781,11 +1079,16 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
           templateHash: options.cleanTemplateHash,
           bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
           runnerArtifactHash: options.trustedRunnerArtifactHash,
-        });
+        }, options.externalQualificationObservationVerifier ?? null);
     const hasQualificationTrust = options.qualificationTrust != null;
     const hasQualificationVerifier = options.qualificationTrustVerifier != null;
     if (!qualificationEvidence && (hasQualificationTrust || hasQualificationVerifier)) {
       throw new TypeError('E2B qualification trust requires qualification evidence');
+    }
+    if (!qualificationEvidence && options.externalQualificationObservationVerifier != null) {
+      throw new TypeError(
+        'E2B external qualification observation verifier requires qualification evidence',
+      );
     }
     if (hasQualificationTrust !== hasQualificationVerifier) {
       throw new TypeError('E2B qualification trust and its verifier are required together');
@@ -801,18 +1104,35 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
             bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
             runnerArtifactHash: options.trustedRunnerArtifactHash,
           },
+          options.externalQualificationObservationVerifier ?? null,
         )
       : null;
-    const qualified = qualificationEvidence?.status === 'verified' && qualificationTrust !== null;
+    const qualificationEligible = qualificationEvidence?.status === 'verified'
+      && qualificationTrust !== null;
+    if (qualificationEvidence
+      && templateProvenanceCandidate !== qualificationEvidence.template.provenance_hash) {
+      throw new TypeError('cleanTemplateProvenanceHash does not match qualification evidence');
+    }
     super({
       id: configured ? 'e2b-clean-template-v1' : 'e2b-snapshot-v1',
-      capabilities: makeCapabilities(configured, qualified),
+      capabilities: makeCapabilities(configured, qualificationEligible),
     });
     if (typeof options.verifyAuthorityFreeSource !== 'function') {
       throw new TypeError('verifyAuthorityFreeSource must be an external clean-controller verifier');
     }
     if (options.SandboxClass !== undefined && typeof options.SandboxClass !== 'function') {
       throw new TypeError('SandboxClass must be a class');
+    }
+    if (options.offlineConformance !== undefined
+      && typeof options.offlineConformance !== 'boolean') {
+      throw new TypeError('offlineConformance must be boolean');
+    }
+    const offlineConformance = options.offlineConformance === true;
+    if (offlineConformance && typeof options.SandboxClass !== 'function') {
+      throw new TypeError('offlineConformance requires an injected SandboxClass');
+    }
+    if (offlineConformance && qualificationEvidence) {
+      throw new TypeError('offlineConformance cannot carry E2B qualification evidence or trust');
     }
     if (options.sdkLoader !== undefined && typeof options.sdkLoader !== 'function') {
       throw new TypeError('sdkLoader must be a function');
@@ -829,10 +1149,10 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         'sdkIntegrityVerifier must be created by createE2BRuntimeSdkIntegrityVerifier',
       );
     }
-    if (!qualified && options.sdkIntegrityVerifier !== undefined) {
+    if (!qualificationEligible && options.sdkIntegrityVerifier !== undefined) {
       throw new TypeError('sdkIntegrityVerifier is only valid with signed qualified evidence');
     }
-    if (qualified && [
+    if (qualificationEligible && [
       options.SandboxClass,
       options.sdkLoader,
       options.sdkVersion,
@@ -842,20 +1162,43 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         'Qualified E2B SDK loading cannot be injected; the runtime integrity verifier must load the exact signed package tree',
       );
     }
+    if (!offlineConformance && [
+      options.SandboxClass,
+      options.sdkLoader,
+      options.sdkVersion,
+      options.sdkVersionLoader,
+    ].some((value) => value !== undefined)) {
+      throw new TypeError(
+        'Injected E2B provider paths require offlineConformance=true',
+      );
+    }
     this.configured = configured;
     this.qualificationEvidence = qualificationEvidence;
+    this.externalQualificationObservationVerifier =
+      options.externalQualificationObservationVerifier ?? null;
     this.qualificationTrust = qualificationTrust;
-    this.qualified = qualified;
+    this.qualificationTrustVerifier = options.qualificationTrustVerifier ?? null;
+    this.qualificationExpectedBindings = configured
+      ? Object.freeze({
+          templateId: options.cleanTemplateId,
+          templateHash: options.cleanTemplateHash,
+          bootstrapArtifactHash: options.trustedBootstrapArtifactHash,
+          runnerArtifactHash: options.trustedRunnerArtifactHash,
+        })
+      : Object.freeze({});
+    this.qualificationEligible = qualificationEligible;
+    this.qualified = E2B_LIVE_FORK_SOURCE_ENABLED && qualificationEligible;
+    this.#offlineConformance = offlineConformance;
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource;
-    this.SandboxClass = options.SandboxClass ?? null;
-    this.sdkLoader = options.sdkLoader ?? defaultSdkLoader;
-    this.sdkVersion = options.sdkVersion ?? null;
-    this.sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
-    this.sdkVersionVerified = false;
-    this.sdkIntegrityVerifier = qualified
+    this.#SandboxClass = options.SandboxClass ?? null;
+    this.#sdkLoader = options.sdkLoader ?? defaultSdkLoader;
+    this.#sdkVersion = options.sdkVersion ?? null;
+    this.#sdkVersionLoader = options.sdkVersionLoader ?? defaultSdkVersionLoader;
+    this.#sdkVersionVerified = false;
+    this.#sdkIntegrityVerifier = qualificationEligible
       ? options.sdkIntegrityVerifier ?? createE2BRuntimeSdkIntegrityVerifier()
       : null;
-    this.sdkIntegrityVerified = false;
+    this.#sdkIntegrityVerified = false;
     this.clock = options.clock ?? (() => new Date());
     if (typeof this.clock !== 'function') throw new TypeError('clock must be a function');
     this.bootstrapCommand = requireFixedCommand(
@@ -882,6 +1225,14 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.cleanTemplateHash = configured
       ? requireSha256Ref(options.cleanTemplateHash, 'cleanTemplateHash')
       : null;
+    this.cleanTemplateProvenanceHash = configured
+      ? requireSha256Ref(templateProvenanceCandidate, 'cleanTemplateProvenanceHash')
+      : null;
+    this.birthAttestationTimeoutMs = boundedInteger(
+      options.birthAttestationTimeoutMs ?? DEFAULT_BIRTH_ATTESTATION_TIMEOUT_MS,
+      'birthAttestationTimeoutMs',
+      { min: 50, max: E2B_BIRTH_MAX_VALIDITY_MS },
+    );
     this.workspaceExportDirectory = configured
       ? path.resolve(requireString(options.workspaceExportDirectory, 'workspaceExportDirectory'))
       : null;
@@ -911,33 +1262,65 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     if (!this.configured) throw secureSnapshotProfileUnavailable(operation);
   }
 
-  async #sandboxClass() {
-    if (this.qualified && !this.sdkIntegrityVerified) {
+  #requireForkRuntimeEnabled(operation) {
+    if (!E2B_LIVE_FORK_SOURCE_ENABLED && !this.#offlineConformance) {
+      throw liveForkDisabledUntrustedWatcher(operation);
+    }
+  }
+
+  #revalidateQualificationTrust() {
+    if (!this.qualificationEvidence) return null;
+    const evidence = validateE2BQualificationEvidence(
+      this.qualificationEvidence,
+      this.qualificationExpectedBindings,
+      this.externalQualificationObservationVerifier,
+    );
+    const trust = verifyE2BQualificationTrust(
+      evidence,
+      this.qualificationTrust,
+      this.qualificationTrustVerifier,
+      this.qualificationExpectedBindings,
+      this.externalQualificationObservationVerifier,
+    );
+    if (evidence.status !== 'verified' || !trust) {
+      throw new Error('E2B qualification evidence and trust are no longer valid');
+    }
+    this.qualificationEvidence = evidence;
+    this.qualificationTrust = trust;
+    return Object.freeze({ evidence, trust });
+  }
+
+  async #sandboxClass(operation = 'providerIo') {
+    // This is the last-line fence for every SDK/provider path, including
+    // restart reconciliation reached indirectly from createSavepoint(). An
+    // injected class is reachable only through the explicit mock-only seam.
+    this.#requireForkRuntimeEnabled(operation);
+    if (this.qualificationEligible && !this.#sdkIntegrityVerified) {
       const verified = await loadVerifiedE2BRuntimeSdk(
         this.qualificationEvidence.sdk,
-        this.sdkIntegrityVerifier,
+        this.#sdkIntegrityVerifier,
       );
-      this.SandboxClass = normalizeSandboxClass(verified.module);
-      this.sdkVersion = verified.version;
-      this.sdkVersionVerified = true;
-      this.sdkIntegrityVerified = true;
+      this.#SandboxClass = normalizeSandboxClass(verified.module);
+      this.#sdkVersion = verified.version;
+      this.#sdkVersionVerified = true;
+      this.#sdkIntegrityVerified = true;
     }
-    if (!this.sdkVersionVerified && (!this.SandboxClass || this.qualified)) {
-      const version = this.sdkVersion ?? await this.sdkVersionLoader();
+    if (!this.#sdkVersionVerified && (!this.#SandboxClass || this.qualificationEligible)) {
+      const version = this.#sdkVersion ?? await this.#sdkVersionLoader();
       if (version !== '2.39.0') {
         throw new Error(`E2B clean-template profile requires exact e2b@2.39.0; observed ${String(version)}`);
       }
-      this.sdkVersionVerified = true;
+      this.#sdkVersionVerified = true;
     }
-    if (!this.SandboxClass) {
-      this.SandboxClass = normalizeSandboxClass(await this.sdkLoader());
+    if (!this.#SandboxClass) {
+      this.#SandboxClass = normalizeSandboxClass(await this.#sdkLoader());
     }
     for (const method of ['create', 'getInfo', 'list', 'kill']) {
-      if (typeof this.SandboxClass[method] !== 'function') {
+      if (typeof this.#SandboxClass[method] !== 'function') {
         throw new TypeError(`E2B Sandbox.${method} is required by the clean-template profile`);
       }
     }
-    return this.SandboxClass;
+    return this.#SandboxClass;
   }
 
   async #initialize() {
@@ -970,6 +1353,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async #armForkLease(record, requestedTimeoutMs, reason) {
     if (!this.qualified) return null;
+    this.#revalidateQualificationTrust();
     if (typeof record.sandbox?.setTimeout !== 'function') {
       throw new TypeError('Qualified E2B child must expose provider-enforced setTimeout');
     }
@@ -988,7 +1372,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       await record.sandbox.setTimeout(timeoutMs);
       const Sandbox = await this.#sandboxClass();
       const info = await Sandbox.getInfo(record.sandbox_id);
-      const observation = safeProviderObservation(info, {
+      const observation = validateE2BSandboxInfo(info, {
         sandboxId: record.sandbox_id,
         templateId: this.cleanTemplateId,
         metadata: record.metadata,
@@ -1037,15 +1421,14 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
   }
 
   async #listByCleanupRef(Sandbox, record) {
-    const paginator = Sandbox.list({
-      query: {
-        state: ['running', 'paused'],
-        metadata: {
-          'agoragentic.risk_fork.profile': PROFILE_METADATA_SCHEMA,
-          'agoragentic.risk_fork.cleanup_ref': record.cleanup_ref,
-        },
+    const query = {
+      state: ['running', 'paused'],
+      metadata: {
+        'agoragentic.risk_fork.profile': PROFILE_METADATA_SCHEMA,
+        'agoragentic.risk_fork.cleanup_ref': record.cleanup_ref,
       },
-    });
+    };
+    const paginator = Sandbox.list({ query });
     if (!paginator || typeof paginator.nextItems !== 'function'
       || typeof paginator.hasNext !== 'boolean') {
       throw new TypeError('E2B Sandbox.list must return a bounded paginator');
@@ -1060,25 +1443,44 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       for (const item of items) {
         const metadata = item?.metadata;
         const templateId = item?.templateId ?? item?.templateID;
-        if (metadata?.['agoragentic.risk_fork.profile'] === PROFILE_METADATA_SCHEMA
-          && metadata?.['agoragentic.risk_fork.cleanup_ref'] === record.cleanup_ref
-          && safeEqual(sha256Ref(metadata), record.metadata_hash)
-          && templateId === this.cleanTemplateId) {
-          matches.push(requireString(
-            item.sandboxId ?? item.sandboxID,
-            'reconciled E2B sandbox id',
-            { maxLength: 500 },
-          ));
+        if (metadata?.['agoragentic.risk_fork.profile'] !== PROFILE_METADATA_SCHEMA
+          || metadata?.['agoragentic.risk_fork.cleanup_ref'] !== record.cleanup_ref
+          || !safeEqual(sha256Ref(metadata), record.metadata_hash)
+          || templateId !== this.cleanTemplateId) {
+          throw new Error('E2B cleanup listing returned an item outside the exact metadata binding');
         }
+        matches.push(requireString(
+          item.sandboxId ?? item.sandboxID,
+          'reconciled E2B sandbox id',
+          { maxLength: 500 },
+        ));
       }
       if (typeof paginator.hasNext !== 'boolean') {
         throw new TypeError('E2B sandbox paginator stopped reporting hasNext');
       }
     }
-    return [...new Set(matches)].sort();
+    const sandboxIds = [...new Set(matches)].sort();
+    const observation = {
+      query_hash: sha256Ref(query),
+      metadata_hash: record.metadata_hash,
+      template_id_hash: sha256Ref(this.cleanTemplateId),
+      page_count: pages,
+      sandbox_id_hashes: sandboxIds.map((sandboxId) => sha256Ref(sandboxId)),
+    };
+    return deepFreeze({
+      sandbox_ids: sandboxIds,
+      observation_hash: sha256Ref(observation),
+    });
   }
 
   async #verifySandboxAbsent(Sandbox, recordId, sandboxId) {
+    let record;
+    try {
+      record = await this.cleanupJournal.get(recordId);
+    } catch {
+      this.#poisonAllocationUntilReconciled(recordId);
+      return { status: 'unknown', outcome: 'unknown', sandbox_id: sandboxId };
+    }
     try {
       await Sandbox.getInfo(sandboxId);
       this.#poisonAllocationUntilReconciled(recordId);
@@ -1089,7 +1491,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       ).catch(() => {});
       return { status: 'failed', outcome: 'failure', sandbox_id: sandboxId };
     } catch (error) {
-      if (!isNotFound(error)) {
+      if (!isSandboxNotFound(error)) {
         this.#poisonAllocationUntilReconciled(recordId);
         await this.cleanupJournal.markSandboxUnknown(
           recordId,
@@ -1097,6 +1499,47 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
           sandboxId,
         ).catch(() => {});
         return { status: 'unknown', outcome: 'unknown', sandbox_id: sandboxId };
+      }
+      let listing;
+      try {
+        listing = await this.#listByCleanupRef(Sandbox, record);
+      } catch (listError) {
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          errorCode(listError, 'ABSENCE_LIST_BINDING_FAILED'),
+          sandboxId,
+        ).catch(() => {});
+        return { status: 'unknown', outcome: 'unknown', sandbox_id: sandboxId };
+      }
+      if (listing.sandbox_ids.length !== 0) {
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          'RESOURCE_STILL_LISTED',
+          sandboxId,
+        ).catch(() => {});
+        return { status: 'failed', outcome: 'failure', sandbox_id: sandboxId };
+      }
+      try {
+        await Sandbox.getInfo(sandboxId);
+        this.#poisonAllocationUntilReconciled(recordId);
+        await this.cleanupJournal.markSandboxUnknown(
+          recordId,
+          'RESOURCE_REAPPEARED_DURING_ABSENCE_CHECK',
+          sandboxId,
+        ).catch(() => {});
+        return { status: 'failed', outcome: 'failure', sandbox_id: sandboxId };
+      } catch (secondError) {
+        if (!isSandboxNotFound(secondError)) {
+          this.#poisonAllocationUntilReconciled(recordId);
+          await this.cleanupJournal.markSandboxUnknown(
+            recordId,
+            errorCode(secondError, 'SECOND_ABSENCE_CHECK_FAILED'),
+            sandboxId,
+          ).catch(() => {});
+          return { status: 'unknown', outcome: 'unknown', sandbox_id: sandboxId };
+        }
       }
       try {
         await this.cleanupJournal.markSandboxVerifiedAbsent(recordId, sandboxId);
@@ -1108,7 +1551,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       const evidence = {
         sandbox_id_hash: sha256Ref(sandboxId),
         absent: true,
-        source: 'Sandbox.getInfo.not_found',
+        source: 'Sandbox.getInfo.not_found.list.empty.Sandbox.getInfo.not_found',
+        cleanup_list_observation_hash: listing.observation_hash,
       };
       return {
         status: 'verified',
@@ -1192,7 +1636,10 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
             await this.cleanupJournal.markSandboxVerifiedAbsent(initial.record_id);
             sandboxOk = true;
           } else {
-            if (sandboxIds.length === 0) sandboxIds = await this.#listByCleanupRef(Sandbox, initial);
+            if (sandboxIds.length === 0) {
+              const listing = await this.#listByCleanupRef(Sandbox, initial);
+              sandboxIds = listing.sandbox_ids;
+            }
             if (sandboxIds.length === 0) {
               await this.cleanupJournal.markSandboxUnknown(
                 initial.record_id,
@@ -1246,6 +1693,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async reconcilePendingCleanup() {
     this.#requireConfigured('reconcilePendingCleanup');
+    this.#requireForkRuntimeEnabled('reconcilePendingCleanup');
+    this.#revalidateQualificationTrust();
     await this.cleanupJournal.initialize();
     return this.#reconcilePendingCleanup({
       excludeOwned: true,
@@ -1255,6 +1704,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async createSavepoint(input = {}) {
     this.#requireConfigured('createSavepoint');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['capsule', 'source_workspace'], 'E2B createSavepoint input');
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
@@ -1366,6 +1816,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async createFork(input = {}) {
     this.#requireConfigured('createFork');
+    this.#requireForkRuntimeEnabled('createFork');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(
       input,
       ['savepoint_ref', 'fork_identity', 'network_policy', 'ttl_ms', 'idle_ttl_ms'],
@@ -1438,6 +1890,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     let sandbox;
     let sandboxId = null;
     try {
+      this.#revalidateQualificationTrust();
       sandbox = await Sandbox.create(this.cleanTemplateId, createOptions);
       sandboxId = requireString(sandbox?.sandboxId, 'E2B child sandbox id', { maxLength: 500 });
       await this.cleanupJournal.markSandboxAllocated(savepoint.record_id, sandboxId);
@@ -1456,7 +1909,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       }
       const hardExpiresAtMs = createStartedAt.getTime() + ttlMs;
       const info = await Sandbox.getInfo(sandboxId);
-      const childObservation = safeProviderObservation(info, {
+      const childObservation = validateE2BSandboxInfo(info, {
         sandboxId,
         templateId: this.cleanTemplateId,
         metadata,
@@ -1478,6 +1931,27 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         lease_expires_at: this.qualified ? childObservation.deadline : null,
         last_lease: null,
       };
+      if (this.qualified) {
+        const remaining = hardExpiresAtMs - this.clock().getTime();
+        await this.#armForkLease(
+          leaseRecord,
+          Math.min(Math.max(idleTtlMs, 60_000), remaining),
+          'birth_attestation',
+        );
+      }
+      const birth = await performE2BSandboxBirthHandshake({
+        sandbox,
+        sandboxId,
+        metadata,
+        templateId: this.cleanTemplateId,
+        templateEvidenceHash: this.cleanTemplateHash,
+        templateProvenanceHash: this.cleanTemplateProvenanceHash,
+        allocationStartedAt: createStartedAt,
+        bootstrapArtifactHash: this.trustedBootstrapArtifactHash,
+        runnerArtifactHash: this.trustedRunnerArtifactHash,
+        timeoutMs: this.birthAttestationTimeoutMs,
+        clock: this.clock,
+      });
       const commonBootstrap = {
         schema: 'agoragentic.risk-fork.clean-bootstrap-request.v1',
         fork_identity: cloneJson(input.fork_identity),
@@ -1533,10 +2007,14 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
           bootstrapArtifactHash: this.trustedBootstrapArtifactHash,
           runnerArtifactHash: this.trustedRunnerArtifactHash,
           bootEvidenceHash: expectedBootEvidenceHash,
-          requireBootEvidence: this.qualified,
+          requireBootEvidence: true,
         }, this.clock());
       };
-      const preUploadAttestation = await attest('pre_upload', EMPTY_WORKSPACE_DIGEST);
+      const preUploadAttestation = await attest(
+        'pre_upload',
+        EMPTY_WORKSPACE_DIGEST,
+        birth.bootEvidence.evidence_hash,
+      );
       if (this.qualified) {
         const remaining = hardExpiresAtMs - this.clock().getTime();
         await this.#armForkLease(
@@ -1577,6 +2055,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         network_policy_hash: policy.policy_hash,
         metadata,
         child_observation: childObservation,
+        birth_request: birth.request,
+        birth_attestation: birth.attestation,
         pre_upload_attestation: preUploadAttestation,
         post_import_attestation: postImportAttestation,
         created_at: createStartedAt.toISOString(),
@@ -1584,7 +2064,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         idle_ttl_ms: idleTtlMs,
         lease_expires_at: leaseRecord.lease_expires_at,
         last_lease: leaseRecord.last_lease,
-        boot_evidence_hash: postImportAttestation.boot_evidence_hash ?? null,
+        boot_evidence_hash: birth.bootEvidence.evidence_hash,
         status: 'ready',
         last_execution: null,
         last_result: null,
@@ -1600,28 +2080,22 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
           workspace_manifest_hash: savepoint.export_record.manifest_hash,
           identity_hash: record.identity_hash,
           network_policy_hash: record.network_policy_hash,
+          birth_request_hash: birth.request.request_hash,
+          birth_attestation_hash: birth.attestation.attestation_hash,
           post_import_attestation_hash: postImportAttestation.attestation_hash,
           boot_evidence_hash: record.boot_evidence_hash,
         }),
         status: 'ready',
         expires_at: record.expires_at,
         isolation_class: this.capabilities.isolation_class,
-        network_status: this.qualified
-          ? 'live_qualification_evidence_verified_ipv4_ipv6_egress_denial'
-          : 'sdk_all_traffic_sentinel_observed_ipv6_not_live_qualified',
-        lifecycle_status: this.qualified
-          ? 'live_qualification_evidence_verified_lifecycle_controls'
-          : 'verified_requested_kill_no_auto_resume_offline_only',
-        ttl_status: this.qualified
-          ? 'provider_enforced_live_qualified_with_immutable_controller_cap'
-          : 'configured_unqualified_live',
+        network_status: 'offline_conformance_observation_only_ipv4_ipv6_unqualified',
+        lifecycle_status: 'offline_conformance_requested_not_provider_qualified',
+        ttl_status: 'offline_conformance_requested_not_provider_qualified',
         idle_ttl_status: this.qualified
           ? 'provider_lease_armed_with_hard_deadline_cap'
           : 'not_qualified',
         idle_expires_at: record.lease_expires_at,
-        bootstrap_status: this.qualified
-          ? 'live_qualification_evidence_verified_boot_guard_binding'
-          : 'verified_mock_contract',
+        bootstrap_status: 'untrusted_same_uid_observation_only',
         inherited_authority_accepted: false,
       });
     } catch (error) {
@@ -1654,6 +2128,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async getForkStatus(input = {}) {
     this.#requireConfigured('getForkStatus');
+    this.#requireForkRuntimeEnabled('getForkStatus');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['fork_ref'], 'E2B getForkStatus input');
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
     if (record.destroyed_verified) {
@@ -1668,7 +2144,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     const Sandbox = await this.#sandboxClass();
     try {
       const info = await Sandbox.getInfo(record.sandbox_id);
-      safeProviderObservation(info, {
+      validateE2BSandboxInfo(info, {
         sandboxId: record.sandbox_id,
         templateId: this.cleanTemplateId,
         metadata: record.metadata,
@@ -1689,7 +2165,24 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         evidence_status: 'verified_present',
       });
     } catch (error) {
-      if (isNotFound(error)) {
+      if (isSandboxNotFound(error)) {
+        const absence = await this.#verifySandboxAbsent(
+          Sandbox,
+          record.record_id,
+          record.sandbox_id,
+        );
+        if (absence.status !== 'verified') {
+          return deepFreeze({
+            fork_ref: record.ref,
+            status: 'unknown',
+            provider_state: 'unknown',
+            expires_at: record.expires_at,
+            evidence_status: 'unknown',
+          });
+        }
+        record.destroyed_verified = true;
+        record.destruction_status = 'verified_absent_stable_observation';
+        record.status = 'destroyed';
         return deepFreeze({
           fork_ref: record.ref,
           status: 'absent',
@@ -1713,6 +2206,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       validateChildOperation(input.operation, 'operation');
     }
     this.#requireConfigured('executeInFork');
+    this.#requireForkRuntimeEnabled('executeInFork');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(
       input,
       ['fork_ref', 'operation', 'execution_mode', 'timeout_ms', 'scoped_credentials'],
@@ -1777,7 +2272,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         await this.#armForkLease(record, executionLeaseMs, 'execution_window');
       }
       await record.sandbox.files.remove(resultPath).catch((error) => {
-        if (!isNotFound(error) && error?.code !== 'ENOENT') throw error;
+        if (!isRemoteFileNotFound(error)) throw error;
       });
       await record.sandbox.files.write(jobPath, JSON.stringify(job));
       const command = `${this.runnerCommand} --job ${jobPath} --result ${resultPath}`;
@@ -1883,6 +2378,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async collectEvidence(input = {}) {
     this.#requireConfigured('collectEvidence');
+    this.#requireForkRuntimeEnabled('collectEvidence');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['fork_ref'], 'E2B collectEvidence input');
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
     const evidence = {
@@ -1891,6 +2388,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       identity_hash: record.identity_hash,
       network_policy_hash: record.network_policy_hash,
       child_observation_hash: record.child_observation.observation_hash,
+      birth_request_hash: record.birth_request.request_hash,
+      birth_attestation_hash: record.birth_attestation.attestation_hash,
       pre_upload_attestation_hash: record.pre_upload_attestation.attestation_hash,
       post_import_attestation_hash: record.post_import_attestation.attestation_hash,
       runner_status: record.last_execution ? 'observed' : 'not_run',
@@ -1915,6 +2414,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async collectDiff(input = {}) {
     this.#requireConfigured('collectDiff');
+    this.#requireForkRuntimeEnabled('collectDiff');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['fork_ref'], 'E2B collectDiff input');
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
     const diff = record.last_result?.commit_candidate;
@@ -1926,11 +2427,15 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async suspendFork() {
     this.#requireConfigured('suspendFork');
+    this.#requireForkRuntimeEnabled('suspendFork');
+    this.#revalidateQualificationTrust();
     throw new Error('E2B clean-template Risk Fork forbids pause, resume, and persistent suspension');
   }
 
   async destroyFork(input = {}) {
     this.#requireConfigured('destroyFork');
+    this.#requireForkRuntimeEnabled('destroyFork');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['fork_ref', 'reason'], 'E2B destroyFork input');
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
     if (record.destroyed_verified) {
@@ -1976,6 +2481,8 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async verifyDestroyed(input = {}) {
     this.#requireConfigured('verifyDestroyed');
+    this.#requireForkRuntimeEnabled('verifyDestroyed');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['fork_ref'], 'E2B verifyDestroyed input');
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
     this.#poisonAllocationUntilReconciled(record.record_id);
@@ -2002,6 +2509,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async destroySavepoint(input = {}) {
     this.#requireConfigured('destroySavepoint');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['savepoint_ref'], 'E2B destroySavepoint input');
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
     if (record.destroyed) {
@@ -2044,6 +2552,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
 
   async verifySavepointDestroyed(input = {}) {
     this.#requireConfigured('verifySavepointDestroyed');
+    this.#revalidateQualificationTrust();
     assertAllowedKeys(input, ['savepoint_ref'], 'E2B verifySavepointDestroyed input');
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
     this.#poisonAllocationUntilReconciled(record.record_id);

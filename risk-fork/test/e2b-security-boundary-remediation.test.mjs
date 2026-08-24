@@ -397,6 +397,7 @@ function createMockSdk(options = {}) {
 function createAdapter(mock, verifier = authorityVerifier(mock.events)) {
   return new E2BRiskForkAdapter({
     SandboxClass: mock.Sandbox,
+    offlineConformance: true,
     verifyAuthorityFreeSource: verifier,
     bootstrapCommand: 'trusted-bootstrap',
     runnerCommand: 'trusted-runner',

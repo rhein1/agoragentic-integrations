@@ -10,11 +10,16 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
   createE2BRuntimeSdkIntegrityVerifier,
   createE2BQualificationEvidence,
   loadVerifiedE2BRuntimeSdk,
 } from '../src/e2b-qualification.mjs';
+import {
+  performE2BSandboxBirthHandshake,
+  validateE2BSandboxInfo,
+} from '../src/adapters/e2b.mjs';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import {
   boundedInteger,
@@ -22,13 +27,10 @@ import {
   requireSha256Ref,
   requireString,
 } from '../src/util.mjs';
-import { validateBootEvidenceEnvelope } from '../e2b-template/lib/runtime-contract.mjs';
 import { E2B_QUALIFICATION_MAX_CANARY_COST_USD } from './e2b-build-template.mjs';
 
-const BOOT_EVIDENCE_PATH = '/run/agoragentic-risk-fork/boot-evidence.json';
 const ALL_TRAFFIC = '0.0.0.0/0';
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
-const MAX_BOOT_EVIDENCE_BYTES = 1024 * 1024;
 const PROFILE = 'agoragentic.risk-fork.e2b-live-qualification.v1';
 
 function failGate(message) {
@@ -170,12 +172,14 @@ async function loadLiveQualificationSdk(gate) {
   });
 }
 
-function isNotFound(error) {
+function isSandboxNotFound(error) {
+  const code = String(error?.code ?? '').toUpperCase();
+  const name = String(error?.name ?? '').toUpperCase();
   return error?.status === 404
     || error?.statusCode === 404
     || error?.response?.status === 404
-    || error?.code === 'NOT_FOUND'
-    || error?.code === 'ENOENT';
+    || code === 'SANDBOX_NOT_FOUND'
+    || name === 'SANDBOXNOTFOUNDERROR';
 }
 
 function sandboxId(value) {
@@ -190,24 +194,7 @@ function emptyControls() {
   return Object.fromEntries(E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'unknown']));
 }
 
-async function readBootEvidence(sandbox) {
-  const raw = await sandbox.files.read(BOOT_EVIDENCE_PATH);
-  const bytes = typeof raw === 'string'
-    ? Buffer.from(raw, 'utf8')
-    : raw instanceof Uint8Array
-      ? Buffer.from(raw)
-      : null;
-  if (!bytes || bytes.byteLength > MAX_BOOT_EVIDENCE_BYTES) {
-    throw new Error('E2B boot evidence is missing or exceeds its byte bound');
-  }
-  try {
-    return JSON.parse(bytes.toString('utf8'));
-  } catch {
-    throw new Error('E2B boot evidence is invalid JSON');
-  }
-}
-
-async function listByMetadata(Sandbox, metadata) {
+async function listByMetadata(Sandbox, metadata, templateId) {
   const paginator = Sandbox.list({
     query: { state: ['running', 'paused'], metadata },
   });
@@ -217,19 +204,53 @@ async function listByMetadata(Sandbox, metadata) {
   }
   const ids = [];
   let pages = 0;
-  while (paginator.hasNext) {
+  while (paginator.hasNext === true) {
     pages += 1;
     if (pages > 10) throw new Error('E2B qualification listing exceeded 10 pages');
     const items = await paginator.nextItems();
     if (!Array.isArray(items)) throw new TypeError('E2B qualification list page is invalid');
     for (const item of items) {
-      if (canonicalize(item?.metadata) === canonicalize(metadata)) ids.push(sandboxId(item));
+      const itemTemplateId = item?.templateId ?? item?.templateID;
+      if (canonicalize(item?.metadata) !== canonicalize(metadata)
+        || itemTemplateId !== templateId) {
+        throw new Error(
+          'E2B qualification listing returned an item outside the exact metadata/template binding',
+        );
+      }
+      ids.push(sandboxId(item));
+    }
+    if (typeof paginator.hasNext !== 'boolean') {
+      throw new TypeError('E2B qualification paginator stopped reporting hasNext');
     }
   }
   return [...new Set(ids)].sort();
 }
 
-export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
+function sandboxStillPresent(stage) {
+  const error = new Error(`E2B qualification sandbox is still present during ${stage}`);
+  error.code = 'E2B_QUALIFICATION_SANDBOX_STILL_PRESENT';
+  return error;
+}
+
+async function requireSandboxNotFound(Sandbox, id, stage) {
+  let notFound = false;
+  try {
+    await Sandbox.getInfo(id);
+  } catch (error) {
+    if (!isSandboxNotFound(error)) throw error;
+    notFound = true;
+  }
+  if (!notFound) throw sandboxStillPresent(stage);
+}
+
+async function verifyStableSandboxAbsence(Sandbox, id, metadata, templateId) {
+  await requireSandboxNotFound(Sandbox, id, 'first provider lookup');
+  const remaining = await listByMetadata(Sandbox, metadata, templateId);
+  if (remaining.length !== 0) throw sandboxStillPresent('exact-bound listing');
+  await requireSandboxNotFound(Sandbox, id, 'second provider lookup');
+}
+
+async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock }) {
   const controls = emptyControls();
   const cleanup = {
     kill_requested: 'unknown',
@@ -244,6 +265,10 @@ export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock })
   let sandbox = null;
   let id = null;
   let bootEvidence = null;
+  let providerTemplateBindingHash = null;
+  let birthRequestHash = null;
+  let birthAttestationHash = null;
+  let sandboxBirthBindingHash = null;
   let providerErrorHash = null;
   const startedAt = new Date(clock());
   let createdAt = null;
@@ -269,18 +294,55 @@ export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock })
     id = sandboxId(sandbox);
     if (typeof sandbox?.kill !== 'function'
       || typeof sandbox?.setTimeout !== 'function'
-      || typeof sandbox?.files?.read !== 'function') {
+      || typeof sandbox?.files?.read !== 'function'
+      || typeof sandbox?.files?.write !== 'function') {
       throw new TypeError('E2B qualification sandbox is missing lifecycle or file APIs');
     }
     const info = await Sandbox.getInfo(id);
-    if ((info?.templateId ?? info?.templateID) !== gate.templateId
-      || canonicalize(info?.metadata) !== canonicalize(metadata)) {
-      throw new Error('E2B qualification provider observation is not template/metadata bound');
-    }
-    bootEvidence = validateBootEvidenceEnvelope(await readBootEvidence(sandbox), {
-      now: new Date(clock()),
+    validateE2BSandboxInfo(info, {
+      sandboxId: id,
+      templateId: gate.templateId,
+      metadata,
+      createdAtMs: startedAt.getTime(),
+      hardExpiresAtMs: startedAt.getTime() + gate.hardTtlMs,
+      field: 'E2B qualification canary',
+    });
+    providerTemplateBindingHash = sha256Ref({
+      sandbox_id_hash: sha256Ref(id),
+      metadata_hash: sha256Ref(metadata),
+      template_id_hash: sha256Ref(gate.templateId),
+      template_build_id_hash: gate.templateBuildIdHash,
+      template_evidence_hash: gate.templateEvidenceHash,
+      template_provenance_hash: gate.templateProvenanceHash,
+      sdk_integrity_hash: gate.sdkIntegrityHash,
+    });
+    const birth = await performE2BSandboxBirthHandshake({
+      sandbox,
+      sandboxId: id,
+      metadata,
+      templateId: gate.templateId,
+      templateEvidenceHash: gate.templateEvidenceHash,
+      templateProvenanceHash: gate.templateProvenanceHash,
+      allocationStartedAt: startedAt,
       bootstrapArtifactHash: gate.bootstrapArtifactHash,
       runnerArtifactHash: gate.runnerArtifactHash,
+      timeoutMs: gate.maxExecutionMs,
+      clock,
+    });
+    birthRequestHash = birth.request.request_hash;
+    birthAttestationHash = birth.attestation.attestation_hash;
+    bootEvidence = birth.bootEvidence;
+    sandboxBirthBindingHash = sha256Ref({
+      sandbox_id_hash: sha256Ref(id),
+      metadata_hash: sha256Ref(metadata),
+      template_id_hash: sha256Ref(gate.templateId),
+      template_evidence_hash: gate.templateEvidenceHash,
+      template_provenance_hash: gate.templateProvenanceHash,
+      birth_request_hash: birthRequestHash,
+      birth_attestation_hash: birthAttestationHash,
+      boot_evidence_hash: bootEvidence.evidence_hash,
+      boot_observed_at: bootEvidence.observed_at,
+      allocation_started_at: startedAt.toISOString(),
     });
     const bootMappings = {
       inherited_environment_absent: 'unauthorized_environment_absent',
@@ -313,7 +375,7 @@ export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock })
     cleanupStartedAt = new Date(clock());
     try {
       if (!sandbox && !id) {
-        const matches = await listByMetadata(Sandbox, metadata);
+        const matches = await listByMetadata(Sandbox, metadata, gate.templateId);
         if (matches.length > 1) throw new Error('E2B qualification exceeded one sandbox');
         if (matches.length === 1) id = matches[0];
       }
@@ -325,17 +387,21 @@ export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock })
     }
     if (id) {
       try {
-        await Sandbox.getInfo(id);
-        cleanup.absence_verified = 'failed';
+        await verifyStableSandboxAbsence(Sandbox, id, metadata, gate.templateId);
+        cleanup.absence_verified = 'verified';
+        cleanup.orphan_reconciliation = 'verified';
       } catch (error) {
-        cleanup.absence_verified = isNotFound(error) ? 'verified' : 'unknown';
+        const stillPresent = error?.code === 'E2B_QUALIFICATION_SANDBOX_STILL_PRESENT';
+        cleanup.absence_verified = stillPresent ? 'failed' : 'unknown';
+        cleanup.orphan_reconciliation = stillPresent ? 'failed' : 'unknown';
       }
-    }
-    try {
-      const remaining = await listByMetadata(Sandbox, metadata);
-      cleanup.orphan_reconciliation = remaining.length === 0 ? 'verified' : 'failed';
-    } catch {
-      cleanup.orphan_reconciliation = 'unknown';
+    } else {
+      try {
+        const remaining = await listByMetadata(Sandbox, metadata, gate.templateId);
+        cleanup.orphan_reconciliation = remaining.length === 0 ? 'verified' : 'failed';
+      } catch {
+        cleanup.orphan_reconciliation = 'unknown';
+      }
     }
     completedAt = new Date(clock());
   }
@@ -346,19 +412,68 @@ export async function runDefaultE2BSingleSandboxCanary({ Sandbox, gate, clock })
     sandbox_id_hash: id ? sha256Ref(id) : null,
     template_id_hash: sha256Ref(gate.templateId),
     metadata_hash: sha256Ref(metadata),
+    provider_template_binding_hash: providerTemplateBindingHash,
+    birth_request_hash: birthRequestHash,
+    birth_attestation_hash: birthAttestationHash,
     boot_evidence_hash: bootEvidence?.evidence_hash ?? null,
+    sandbox_birth_binding_hash: sandboxBirthBindingHash,
+    ipv4_probe_hash: bootEvidence?.observation_hashes.ipv4_probe_hash ?? null,
+    ipv6_probe_hash: bootEvidence?.observation_hashes.ipv6_probe_hash ?? null,
     provider_error_hash: providerErrorHash,
     controls,
     cleanup,
   };
   const evidenceRefs = [{
-    ref: 'evidence:e2b-single-sandbox-canary',
+    ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.canary_evidence_hash,
     hash: sha256Ref(observation),
+  }, {
+    ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.metadata_hash,
+    hash: observation.metadata_hash,
   }];
-  if (bootEvidence) {
+  if (id) {
     evidenceRefs.push({
-      ref: 'evidence:e2b-first-instruction-boot-guard',
-      hash: bootEvidence.evidence_hash,
+      ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.sandbox_id_hash,
+      hash: observation.sandbox_id_hash,
+    });
+  }
+  if (providerTemplateBindingHash) {
+    evidenceRefs.push({
+      ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.provider_template_binding_hash,
+      hash: providerTemplateBindingHash,
+    });
+  }
+  if (birthRequestHash) {
+    evidenceRefs.push({
+      ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.birth_request_hash,
+      hash: birthRequestHash,
+    });
+  }
+  if (birthAttestationHash) {
+    evidenceRefs.push({
+      ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.birth_attestation_hash,
+      hash: birthAttestationHash,
+    });
+  }
+  if (bootEvidence) {
+    evidenceRefs.push(
+      {
+        ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.boot_evidence_hash,
+        hash: bootEvidence.evidence_hash,
+      },
+      {
+        ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.ipv4_probe_hash,
+        hash: bootEvidence.observation_hashes.ipv4_probe_hash,
+      },
+      {
+        ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.ipv6_probe_hash,
+        hash: bootEvidence.observation_hashes.ipv6_probe_hash,
+      },
+    );
+  }
+  if (sandboxBirthBindingHash) {
+    evidenceRefs.push({
+      ref: E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS.sandbox_birth_binding_hash,
+      hash: sandboxBirthBindingHash,
     });
   }
   return {
@@ -456,6 +571,7 @@ export async function runE2BLiveQualification(options = {}) {
     controls: canary.controls,
     cleanup: canary.cleanup,
     evidence_refs: canary.evidenceRefs,
+    external_observation_receipt: null,
   });
   const evidencePath = await persistExclusive(gate.evidenceDirectory, evidence);
   return Object.freeze({ evidence, evidencePath });

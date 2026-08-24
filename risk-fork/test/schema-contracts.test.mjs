@@ -10,8 +10,11 @@ import addFormats from 'ajv-formats';
 
 import { LocalReferenceRiskForkAdapter } from '../src/adapters/local-reference.mjs';
 import {
+  E2B_EXTERNAL_PROVIDER_CONTROLS,
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
   createE2BQualificationEvidence,
+  validateE2BQualificationEvidence,
 } from '../src/e2b-qualification.mjs';
 import {
   FileParentHeadTransaction,
@@ -177,6 +180,12 @@ function makeRiskInput() {
 }
 
 function makeE2BQualificationEvidence() {
+  const externalControls = new Set([
+    'first_instruction_ipv4_egress_denied',
+    'first_instruction_ipv6_egress_denied',
+    'cost_within_cap',
+    ...E2B_EXTERNAL_PROVIDER_CONTROLS,
+  ]);
   return createE2BQualificationEvidence({
     provider: {
       name: 'e2b',
@@ -217,20 +226,22 @@ function makeE2BQualificationEvidence() {
       fork_start_ms: 1_000,
       execution_ms: 250,
       cleanup_ms: 500,
-      observed_cost_usd: '0.02',
+      observed_cost_usd: null,
     },
     controls: Object.fromEntries(
-      E2B_QUALIFICATION_CONTROLS.map((name) => [name, 'verified']),
+      E2B_QUALIFICATION_CONTROLS.map((name) => [
+        name,
+        externalControls.has(name) ? 'unknown' : 'verified',
+      ]),
     ),
     cleanup: {
       kill_requested: 'verified',
       absence_verified: 'verified',
       orphan_reconciliation: 'verified',
     },
-    evidence_refs: [{
-      ref: 'evidence:schema-e2b-qualification',
-      hash: hash('schema-e2b-qualification'),
-    }],
+    evidence_refs: Object.entries(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS)
+      .map(([field, ref]) => ({ ref, hash: hash(`schema-${field}`) })),
+    external_observation_receipt: null,
   });
 }
 
@@ -260,6 +271,42 @@ test('E2B qualification schema accepts source evidence and rejects authority cla
     'e2b-qualification-evidence.v1.json',
     unsupportedSdk,
     'E2B qualification evidence using an unreviewed SDK version',
+  );
+
+  const missingReceiptField = clone(evidence);
+  delete missingReceiptField.external_observation_receipt;
+  assertSchemaRejects(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    missingReceiptField,
+    'E2B qualification evidence omitting explicit observer receipt state',
+  );
+
+  for (const spelling of ['0', '0.25', '0.25000', '0.2500000']) {
+    const nonCanonicalDecimal = clone(evidence);
+    nonCanonicalDecimal.limits.max_cost_usd = spelling;
+    assertSchemaRejects(
+      ajv,
+      'e2b-qualification-evidence.v1.json',
+      nonCanonicalDecimal,
+      `E2B qualification evidence using non-six-place decimal ${spelling}`,
+    );
+  }
+
+  const duplicateSemanticRef = clone(evidence);
+  duplicateSemanticRef.evidence_refs.push({
+    ref: duplicateSemanticRef.evidence_refs[0].ref,
+    hash: hash('different-hash-for-the-same-evidence-ref'),
+  });
+  assertSchemaAccepts(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    duplicateSemanticRef,
+    'structurally distinct evidence refs sharing a semantic ref key',
+  );
+  assert.throws(
+    () => validateE2BQualificationEvidence(duplicateSemanticRef),
+    /evidence refs must be unique/i,
   );
 });
 
