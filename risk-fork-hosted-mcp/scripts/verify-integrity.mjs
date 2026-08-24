@@ -9,7 +9,7 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const repositoryRoot = path.resolve(packageRoot, '..');
 const verifySources = process.argv.slice(2).includes('--source');
 const quiet = process.argv.slice(2).includes('--quiet');
-const reviewedSourceCommit = '27f1c9f90b087a4c98bf537a8201c5443885eb72';
+const reviewedSourceCommit = 'dede3ae3806a03e63660a5772a28433a75573048';
 
 function sha256(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;

@@ -88,7 +88,7 @@ export const HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_version: '0.1.0-alpha.0',
   mcp_source_version: '2.0.0',
   risk_fork_source_version: '0.1.0-alpha.0',
-  reviewed_source_commit: '27f1c9f90b087a4c98bf537a8201c5443885eb72',
+  reviewed_source_commit: 'dede3ae3806a03e63660a5772a28433a75573048',
   optional_e2b_peer_version: '2.39.0',
   publication_status: 'private_unpublished',
   outbound_mcp_transport_qualified: false,

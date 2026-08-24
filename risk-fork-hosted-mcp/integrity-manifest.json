@@ -5,7 +5,7 @@
     "version": "0.1.0-alpha.0",
     "private": true
   },
-  "source_commit": "27f1c9f90b087a4c98bf537a8201c5443885eb72",
+  "source_commit": "dede3ae3806a03e63660a5772a28433a75573048",
   "sources": {
     "mcp": {
       "name": "agoragentic-mcp",
@@ -2007,7 +2007,7 @@
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
       "bytes": 3372,
-      "sha256": "sha256:ee543ba63c86be581e607ad4171cc58a4f49d21823acadc61c572aeeb710b333"
+      "sha256": "sha256:2e96e89d38f23ebb5d6b477690a69fec18dc4378f33388b29d663d4bf07d6417"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
@@ -2018,14 +2018,14 @@
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
       "source": "git_blob",
-      "bytes": 21849,
-      "sha256": "sha256:8f0eeb6cb91d023c4a1c263a08f9844fd9dc8472f206fbdaca4458ac6f54562f"
+      "bytes": 26720,
+      "sha256": "sha256:9488f2a00e22762444269d9d899f66bd53d8807a33519540fd11aa5123c46cbf"
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
       "source": "git_blob",
-      "bytes": 10160,
-      "sha256": "sha256:4e137c15d451840f14546f27d5f09092b392046b941d3385a789a10e13146dca"
+      "bytes": 10114,
+      "sha256": "sha256:deaf3997976954cc93d1aa2f6405425c902f58e84206a82c0aa278bfa2d5dfb0"
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
@@ -2036,14 +2036,14 @@
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source": "git_blob",
-      "bytes": 29449,
-      "sha256": "sha256:088086ef6e678d76c8d064f988f451922f2993c798562cb206781119e8a504d0"
+      "bytes": 29458,
+      "sha256": "sha256:8123d5d73f632ec404b244693054892866bcfb7051a9b6ec33ce6033e4c3450f"
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
       "source": "git_blob",
-      "bytes": 3244,
-      "sha256": "sha256:e185f12996e10ff8f369c06c7bbc823e042fbf3c543f93864d9dd8bc9351488c"
+      "bytes": 3145,
+      "sha256": "sha256:39ad3dbceb4538ec8390f9e5c6dc2182e35560519e83d5ea8a5acf6717c50393"
     },
     {
       "path": "risk-fork/migrations/001_distributed_authority.pg.sql",
@@ -2447,21 +2447,21 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2269982,
-    "sha256": "sha256:0cca2405acecb480a5c2f78107c55df2337a4656bb9085410195d7ef1a8d2bca"
+    "bytes": 2269991,
+    "sha256": "sha256:4e451005671462b46522f5f549744a1b147479fe6ddc3d5466c7bf59d97be491"
   },
   "packaged_assets": [
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
       "source_path": "risk-fork/e2b-template/bin/boot-guard.mjs",
-      "bytes": 21849,
-      "sha256": "sha256:8f0eeb6cb91d023c4a1c263a08f9844fd9dc8472f206fbdaca4458ac6f54562f"
+      "bytes": 26720,
+      "sha256": "sha256:9488f2a00e22762444269d9d899f66bd53d8807a33519540fd11aa5123c46cbf"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs",
       "source_path": "risk-fork/e2b-template/bin/bootstrap.mjs",
-      "bytes": 10160,
-      "sha256": "sha256:4e137c15d451840f14546f27d5f09092b392046b941d3385a789a10e13146dca"
+      "bytes": 10114,
+      "sha256": "sha256:deaf3997976954cc93d1aa2f6405425c902f58e84206a82c0aa278bfa2d5dfb0"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/run.mjs",
@@ -2472,14 +2472,14 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source_path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
-      "bytes": 29449,
-      "sha256": "sha256:088086ef6e678d76c8d064f988f451922f2993c798562cb206781119e8a504d0"
+      "bytes": 29458,
+      "sha256": "sha256:8123d5d73f632ec404b244693054892866bcfb7051a9b6ec33ce6033e4c3450f"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/template.mjs",
       "source_path": "risk-fork/e2b-template/template.mjs",
-      "bytes": 3244,
-      "sha256": "sha256:e185f12996e10ff8f369c06c7bbc823e042fbf3c543f93864d9dd8bc9351488c"
+      "bytes": 3145,
+      "sha256": "sha256:39ad3dbceb4538ec8390f9e5c6dc2182e35560519e83d5ea8a5acf6717c50393"
     },
     {
       "path": "e2b-context/risk-fork/src/canonical.mjs",

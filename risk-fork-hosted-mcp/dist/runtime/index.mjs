@@ -53107,7 +53107,7 @@ import { fileURLToPath as fileURLToPath2 } from "node:url";
 var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
 var E2B_BIRTH_REQUEST_SCHEMA = "agoragentic.risk-fork.e2b-birth-request.v1";
 var E2B_BIRTH_ATTESTATION_SCHEMA = "agoragentic.risk-fork.e2b-birth-attestation.v2";
-var E2B_BIRTH_RUNTIME_DIRECTORY = "/run/agoragentic-risk-fork";
+var E2B_BIRTH_RUNTIME_DIRECTORY = "/tmp/agoragentic-risk-fork-v1.birth";
 var E2B_TEMPLATE_BUILD_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/template-build-ready`;
 var E2B_BOOT_EVIDENCE_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/boot-evidence.json`;
 var E2B_BOOT_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-ready`;
@@ -57395,7 +57395,7 @@ var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_version: "0.1.0-alpha.0",
   mcp_source_version: "2.0.0",
   risk_fork_source_version: "0.1.0-alpha.0",
-  reviewed_source_commit: "27f1c9f90b087a4c98bf537a8201c5443885eb72",
+  reviewed_source_commit: "dede3ae3806a03e63660a5772a28433a75573048",
   optional_e2b_peer_version: "2.39.0",
   publication_status: "private_unpublished",
   outbound_mcp_transport_qualified: false,

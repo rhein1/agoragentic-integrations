@@ -70,9 +70,8 @@ export function createRiskForkE2BTemplate(options = {}) {
       `chmod 0555 ${runtime}/e2b-template/bin/boot-guard.mjs ${runtime}/e2b-template/bin/bootstrap.mjs ${runtime}/e2b-template/bin/run.mjs`,
       `ln -s ${runtime}/e2b-template/bin/bootstrap.mjs ${runtime}/bin/bootstrap`,
       `ln -s ${runtime}/e2b-template/bin/run.mjs ${runtime}/bin/run`,
-      'mkdir -p /run/agoragentic-risk-fork',
-      'chown user:user /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
-      'chmod 0700 /run/agoragentic-risk-fork /workspace/agoragentic-risk-fork-v1',
+      'chown user:user /workspace/agoragentic-risk-fork-v1',
+      'chmod 0700 /workspace/agoragentic-risk-fork-v1',
     ], { user: 'root' })
     .setUser('user')
     .setWorkdir(E2B_TEMPLATE_WORKSPACE_ROOT);

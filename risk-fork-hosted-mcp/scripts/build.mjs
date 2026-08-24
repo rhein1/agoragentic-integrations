@@ -30,7 +30,7 @@ const snapshotRiskForkRoot = path.join(snapshotRoot, 'risk-fork');
 const packageNodeModules = path.join(packageRoot, 'node_modules');
 const resolutionRoots = [packageRoot, mcpRoot, riskForkRoot];
 const require = createRequire(import.meta.url);
-const REVIEWED_SOURCE_COMMIT = '27f1c9f90b087a4c98bf537a8201c5443885eb72';
+const REVIEWED_SOURCE_COMMIT = 'dede3ae3806a03e63660a5772a28433a75573048';
 const PACKAGED_REVIEWED_ASSETS = Object.freeze([
   {
     source: 'risk-fork/migrations/001_distributed_authority.pg.sql',

@@ -1,6 +1,6 @@
 # Risk Fork Hosted MCP Runtime Bundle
 
-This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.0` into one integrity-bound ESM file. Every upstream source and packaged operational asset is pinned to Git commit `27f1c9f90b087a4c98bf537a8201c5443885eb72`; the build does not read dirty upstream files.
+This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.0` into one integrity-bound ESM file. Every upstream source and packaged operational asset is pinned to Git commit `dede3ae3806a03e63660a5772a28433a75573048`; the build does not read dirty upstream files.
 
 The artifact supplies library code only. It does not supply a production host adapter, credentials, trust decisions, deployment authority, approval, or permission to route live traffic. Publication is deliberately disabled.
 

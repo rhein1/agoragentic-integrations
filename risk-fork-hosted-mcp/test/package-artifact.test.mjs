@@ -144,7 +144,7 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.package.version, '0.1.0-alpha.0');
   assert.equal(manifest.sources.mcp.version, '2.0.0');
   assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.0');
-  assert.equal(manifest.source_commit, '27f1c9f90b087a4c98bf537a8201c5443885eb72');
+  assert.equal(manifest.source_commit, 'dede3ae3806a03e63660a5772a28433a75573048');
   assert.deepEqual(manifest.runtime_dependencies, []);
   assert.deepEqual(manifest.optional_peer_dependencies, [
     { name: 'e2b', version: '2.39.0', optional: true },
@@ -448,7 +448,7 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
   assert.equal(api.isProductionPostgresDistributedCommitAuthority({}), false);
   assert.equal(
     api.HOSTED_MCP_BUNDLE_METADATA.reviewed_source_commit,
-    '27f1c9f90b087a4c98bf537a8201c5443885eb72',
+    'dede3ae3806a03e63660a5772a28433a75573048',
   );
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.optional_e2b_peer_version, '2.39.0');
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.outbound_mcp_transport_qualified, false);
