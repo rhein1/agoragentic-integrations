@@ -1,0 +1,140 @@
+[
+  {
+    "rank": 31,
+    "name": "MavenBio",
+    "slug": "mavenbio",
+    "tokens": "286B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "biotech application",
+    "action": "BLOCKED; no public developer integration surface was verified.",
+    "artifact": "decisions/blocked.json",
+    "sources": [
+      "https://mavenbio.io/"
+    ]
+  },
+  {
+    "rank": 32,
+    "name": "Zazen (Freebuff fork)",
+    "slug": "zazen-freebuff-fork",
+    "tokens": "258B",
+    "status": "needs_verification",
+    "direction": "possible_framework_fork",
+    "surface": "reported Freebuff/Codebuff fork",
+    "action": "Do not reuse the Codebuff adapter until the fork and SDK compatibility are independently verified.",
+    "artifact": "decisions/needs-verification.json",
+    "sources": [
+      "https://freebuff.com/"
+    ]
+  },
+  {
+    "rank": 33,
+    "name": "Sekai",
+    "slug": "sekai",
+    "tokens": "247B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "consumer character platform",
+    "action": "BLOCKED until a documented plugin/API surface exists.",
+    "artifact": "decisions/blocked.json",
+    "sources": [
+      "https://sekai.chat/"
+    ]
+  },
+  {
+    "rank": 34,
+    "name": "Z Code",
+    "slug": "z-code",
+    "tokens": "225B",
+    "status": "blocked_pending_qualified_host_enforcement",
+    "direction": "inbound_host",
+    "surface": "Z Code MCP host",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
+    "sources": [
+      "https://zcode.ai/"
+    ]
+  },
+  {
+    "rank": 35,
+    "name": "Craft",
+    "slug": "craft",
+    "tokens": "220B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "AI RPG consumer app",
+    "action": "BLOCKED until Craft publishes an extension or tool contract.",
+    "artifact": "decisions/blocked.json",
+    "sources": []
+  },
+  {
+    "rank": 36,
+    "name": "OpenHands",
+    "slug": "openhands",
+    "tokens": "220B",
+    "status": "blocked_pending_qualified_host_enforcement",
+    "direction": "inbound_host",
+    "surface": "OpenHands MCP host",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
+    "sources": [
+      "https://docs.openhands.dev/usage/runtimes/mcp"
+    ]
+  },
+  {
+    "rank": 37,
+    "name": "Ito",
+    "slug": "ito",
+    "tokens": "218B",
+    "status": "vendor_intake",
+    "direction": "github_workflow",
+    "surface": "GitHub App / agentic QA platform",
+    "action": "Integrate through GitHub checks/webhooks or a vendor API; do not pretend Ito is an MCP host.",
+    "artifact": "decisions/vendor-intakes.json",
+    "sources": [
+      "https://ito.dev/"
+    ]
+  },
+  {
+    "rank": 38,
+    "name": "Open WebUI",
+    "slug": "open-webui",
+    "tokens": "212B",
+    "status": "blocked_pending_qualified_host_enforcement",
+    "direction": "inbound_host",
+    "surface": "Open WebUI native MCP",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
+    "sources": [
+      "https://docs.openwebui.com/features/plugin/tools/openapi-servers/mcp/"
+    ]
+  },
+  {
+    "rank": 39,
+    "name": "extra.email",
+    "slug": "extra-email",
+    "tokens": "208B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "consumer email application",
+    "action": "BLOCKED until a mail API, plugin framework, or MCP surface is documented.",
+    "artifact": "decisions/blocked.json",
+    "sources": [
+      "https://extra.email/"
+    ]
+  },
+  {
+    "rank": 40,
+    "name": "HammerAI",
+    "slug": "hammerai",
+    "tokens": "190B",
+    "status": "blocked_no_public_surface",
+    "direction": "provider_only_client",
+    "surface": "local character chat client",
+    "action": "OpenRouter model configuration is not equivalent to Agoragentic tool integration; BLOCKED pending a tool/plugin API.",
+    "artifact": "decisions/blocked.json",
+    "sources": [
+      "https://www.hammerai.com/"
+    ]
+  }
+]

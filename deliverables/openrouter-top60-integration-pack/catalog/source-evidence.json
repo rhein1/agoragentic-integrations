@@ -1,0 +1,30 @@
+{
+  "schema": "agoragentic.openrouter-top60-ranking-provenance.v1",
+  "snapshot_date": "2026-08-09",
+  "source_kind": "user_supplied_screenshots",
+  "source_description": "The rank, name, and token values were transcribed from user-supplied OpenRouter ranking screenshots.",
+  "original_artifacts_preserved": false,
+  "original_artifact_paths": [],
+  "original_artifact_sha256": [],
+  "independently_reproducible": false,
+  "transcription": {
+    "catalog_parts": [
+      "catalog/entries-01.json",
+      "catalog/entries-02.json",
+      "catalog/entries-03.json",
+      "catalog/entries-04.json",
+      "catalog/entries-05.json",
+      "catalog/entries-06.json"
+    ],
+    "entry_count": 60,
+    "projected_fields": [
+      "rank",
+      "name",
+      "tokens"
+    ],
+    "canonicalization": "UTF-8 JSON.stringify of the rank-ordered array with object keys rank, name, tokens",
+    "catalog_projection_sha256": "c585e2c539e46a99d2b33849a6a0bd6fbf93164b6887e34a49ca1731578a8822",
+    "cross_checked_against_preserved_source": false,
+    "limitations": "This digest covers the catalog transcription only. It is not a screenshot hash and cannot independently prove the source ranking. Reproduction requires the original screenshots, which are not preserved here."
+  }
+}

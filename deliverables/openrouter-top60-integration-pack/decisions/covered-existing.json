@@ -1,0 +1,74 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "covered_existing",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 1,
+      "name": "Hermes Agent",
+      "slug": "hermes-agent",
+      "direction": "inbound_host",
+      "action": "Retain the existing adapter; add it to the cross-ecosystem compatibility map rather than creating a duplicate.",
+      "sources": [
+        "https://github.com/NousResearch/hermes-agent"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "existing_path": "hermes-agent/README.md"
+    },
+    {
+      "rank": 2,
+      "name": "Claude Code",
+      "slug": "claude-code",
+      "direction": "inbound_host",
+      "action": "Retain existing plugin; cross-link OpenRouter model routing and the official OpenRouter skill.",
+      "sources": [
+        "https://docs.anthropic.com/en/docs/claude-code/mcp",
+        "https://openrouter.ai/docs/guides/coding-agents/claude-code-integration"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "existing_path": "claude-code/README.md"
+    },
+    {
+      "rank": 5,
+      "name": "Cline",
+      "slug": "cline",
+      "direction": "inbound_host",
+      "action": "Retain the existing Cline documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
+      "sources": [
+        "https://docs.cline.bot/mcp/configuring-mcp-servers"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "existing_path": "cline/README.md"
+    },
+    {
+      "rank": 22,
+      "name": "Cursor",
+      "slug": "cursor",
+      "direction": "inbound_host",
+      "action": "Retain the existing Cursor documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
+      "sources": [
+        "https://docs.cursor.com/context/model-context-protocol"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "existing_path": "cursor/README.md"
+    },
+    {
+      "rank": 25,
+      "name": "LangChain",
+      "slug": "langchain",
+      "direction": "framework_adapter",
+      "action": "Retain existing adapter and avoid creating an OpenRouter-specific duplicate.",
+      "sources": [
+        "https://python.langchain.com/docs/integrations/providers/openrouter/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "existing_path": "langchain/README.md"
+    }
+  ]
+}

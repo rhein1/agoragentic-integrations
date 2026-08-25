@@ -4,6 +4,11 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import {
+  containsDirectMcpEndpoint,
+  containsRegistryResolvingMcpCommand,
+  containsVersionedMcpCoordinate,
+} from '../deliverables/openrouter-top60-integration-pack/scripts/validate.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const require = createRequire(import.meta.url);
@@ -24,6 +29,7 @@ function trackedTextFiles() {
     .filter(Boolean)
     .filter((relativePath) => relativePath !== 'CHANGELOG.md')
     .filter((relativePath) => relativePath !== 'test/mcp-direct-bypass.test.mjs')
+    .filter((relativePath) => fs.existsSync(path.join(root, relativePath)))
     .filter((relativePath) => {
       const bytes = fs.readFileSync(path.join(root, relativePath));
       return bytes.length <= 5 * 1024 * 1024 && !bytes.includes(0);
@@ -110,14 +116,6 @@ test('published SDK, ACP, and catalog metadata mark MCP non-operational without 
 test('current source, docs, manifests, generated files, scripts, examples, and CI expose no registry-resolving MCP command', () => {
   const banned = [
     {
-      label: 'registry-resolving npx command',
-      pattern: new RegExp(String.raw`\bnpx(?:\s+-y)?\s+agoragentic-${'mcp'}(?:@[^\s\x60"']+)?`, 'i'),
-    },
-    {
-      label: 'legacy or fictitious MCP package coordinate',
-      pattern: new RegExp(`agoragentic-${'mcp'}@(?:latest|1\\.3\\.6|2\\.0\\.0)`, 'i'),
-    },
-    {
       label: 'npm latest-version badge',
       pattern: new RegExp(`img\\.shields\\.io/npm/v/agoragentic-${'mcp'}`, 'i'),
     },
@@ -129,6 +127,8 @@ test('current source, docs, manifests, generated files, scripts, examples, and C
 
   for (const relativePath of trackedTextFiles()) {
     const text = read(relativePath);
+    assert.equal(containsRegistryResolvingMcpCommand(text), false, `${relativePath} contains a registry-resolving MCP command`);
+    assert.equal(containsVersionedMcpCoordinate(text), false, `${relativePath} contains a versioned MCP package coordinate`);
     for (const { label, pattern } of banned) {
       assert.doesNotMatch(text, pattern, `${relativePath} contains a ${label}`);
     }
@@ -138,6 +138,85 @@ test('current source, docs, manifests, generated files, scripts, examples, and C
   assert.equal(packageJson.version, '2.0.0');
   assert.match(packageJson.description, /unpublished.*non-installable/i);
   assert.match(read('mcp/README.md'), /2\.0\.0.*unpublished.*non-installable/is);
+});
+
+test('shared MCP policy matcher rejects command and endpoint spelling variants', () => {
+  const packageName = `agoragentic-${'mcp'}`;
+  for (const command of [
+    `npx "${packageName}" --stdio`,
+    `npx "agoragentic"-mcp --stdio`,
+    `npx ${packageName}&& echo unsafe`,
+    `npx.cmd --yes ${packageName}`,
+    `npx --package=${packageName} harmless`,
+    `npx --package=alias@npm:${packageName} alias`,
+    `npx -p ${packageName} harmless`,
+    `npx.ps1 ${packageName}`,
+    `npm exec ${packageName}`,
+    `npm --prefix ./tmp exec ${packageName}`,
+    `pnpm dlx ${packageName}`,
+    `pnpm --dir ./tmp dlx ${packageName}`,
+    `yarn dlx ${packageName}`,
+    `bunx ${packageName}`,
+    `pnpx ${packageName}`,
+    `bun x ${packageName}`,
+    `sh -c 'npx ${packageName}'`,
+    `bash -lc "npx ${packageName}"`,
+    `cmd /c "npx ${packageName}"`,
+    `powershell -Command "npx ${packageName}"`,
+  ]) {
+    assert.equal(containsRegistryResolvingMcpCommand(command), true, command);
+  }
+  for (const endpoint of [
+    `https://agoragentic.com/api/${'mcp'}`,
+    `https://agoragentic.com:443/api/${'mcp'}`,
+    `https://agoragentic.com/api/%6dcp`,
+    `https://agoragentic.com/API/${'MCP'}`,
+    `https://www.agoragentic.com/api/${'mcp'}`,
+    String.raw`https:\agoragentic.com\api\mcp`,
+  ]) {
+    assert.equal(containsDirectMcpEndpoint(endpoint), true, endpoint);
+  }
+});
+
+test('OpenRouter review-pack MCP host records are blocker-only and non-runnable', () => {
+  const packPrefix = 'deliverables/openrouter-top60-integration-pack';
+  assert.equal(fs.existsSync(path.join(root, packPrefix, 'host-configs.json')), false);
+
+  const packet = readJson(`${packPrefix}/decisions/blocked-qualified-host-enforcement.json`);
+  assert.equal(packet.group, 'blocked_pending_qualified_host_enforcement');
+  assert.equal(packet.runtime_verified, false);
+  assert.equal(packet.authority_granted, false);
+  assert.equal(packet.items.length, 12);
+
+  function assertBlocked(value, label) {
+    if (typeof value === 'string') {
+      assert.equal(containsVersionedMcpCoordinate(value), false, `${label} contains a versioned registry coordinate`);
+      assert.equal(containsRegistryResolvingMcpCommand(value), false, `${label} contains a registry-resolving command`);
+      assert.equal(containsDirectMcpEndpoint(value), false, `${label} contains the direct hosted MCP endpoint`);
+      return;
+    }
+    if (Array.isArray(value)) {
+      assert.equal(containsRegistryResolvingMcpCommand(value), false, `${label} contains split registry-runner arguments`);
+      value.forEach((item, index) => assertBlocked(item, `${label}[${index}]`));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      assert.doesNotMatch(
+        key,
+        /^(?:command|cmd|executable|args|configuration|url|headers?|authorization|enabled)$/i,
+        `${label}.${key} is a runnable MCP configuration field`,
+      );
+      assertBlocked(child, `${label}.${key}`);
+    }
+  }
+
+  for (const [index, item] of packet.items.entries()) {
+    assert.equal(item.runtime_verified, false);
+    assert.equal(item.authority_granted, false);
+    assert.ok(Array.isArray(item.required_controls) && item.required_controls.length > 0);
+    assertBlocked(item, `blocked host decision ${index}`);
+  }
 });
 
 test('unqualified MCP 2.0.0 source candidate is mechanically non-publishable', () => {
@@ -202,7 +281,7 @@ test('assigned client surfaces contain no direct hosted MCP transport or raw cre
     'zapier-mcp/agoragentic-zapier-mcp.example.json',
   ];
   for (const relativePath of directTransportSurfaces) {
-    assert.doesNotMatch(read(relativePath), /https:\/\/agoragentic\.com\/api\/mcp/i, `${relativePath} must not advertise the direct MCP endpoint`);
+    assert.equal(containsDirectMcpEndpoint(read(relativePath)), false, `${relativePath} must not advertise the direct MCP endpoint`);
   }
 
   const haystack = read('haystack/agoragentic_haystack.py');

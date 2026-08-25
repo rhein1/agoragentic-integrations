@@ -1,0 +1,88 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "provider_recipe",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 15,
+      "name": "Peezy Gateway",
+      "slug": "peezy-gateway",
+      "direction": "model_gateway",
+      "action": "Treat Peezy as an outbound inference/provider rail, not an Agoragentic host.",
+      "sources": [
+        "https://p0.systems/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "role": "model_provider_only",
+      "required_controls": [
+        "model allowlist",
+        "cost/token cap",
+        "retention review",
+        "timeout",
+        "retry cap"
+      ]
+    },
+    {
+      "rank": 17,
+      "name": "Nous Research API",
+      "slug": "nous-research-api",
+      "direction": "model_gateway",
+      "action": "Use as a model/provider rail while keeping Agoragentic tools separate.",
+      "sources": [
+        "https://portal.nousresearch.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "role": "model_provider_only",
+      "required_controls": [
+        "model allowlist",
+        "cost/token cap",
+        "retention review",
+        "timeout",
+        "retry cap"
+      ]
+    },
+    {
+      "rank": 45,
+      "name": "Sophia's LoreBar",
+      "slug": "sophias-lorebar",
+      "direction": "model_gateway",
+      "action": "Treat as an outbound model/provider rail; it does not make LoreBar an Agoragentic tool host.",
+      "sources": [
+        "https://lorebary.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "role": "model_provider_only",
+      "required_controls": [
+        "model allowlist",
+        "cost/token cap",
+        "retention review",
+        "timeout",
+        "retry cap"
+      ]
+    },
+    {
+      "rank": 52,
+      "name": "ppq.ai",
+      "slug": "ppq-ai",
+      "direction": "model_gateway",
+      "action": "Use as an outbound model/provider rail with explicit budget and data-policy controls.",
+      "sources": [
+        "https://ppq.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "role": "model_provider_only",
+      "required_controls": [
+        "model allowlist",
+        "cost/token cap",
+        "retention review",
+        "timeout",
+        "retry cap"
+      ]
+    }
+  ]
+}

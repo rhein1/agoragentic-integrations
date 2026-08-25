@@ -1,0 +1,25 @@
+{
+  "name": "@agoragentic/openrouter-top60-integration-pack-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --import tsx --test",
+    "test:runtime": "node --import tsx --test test/runtime-contracts.test.mjs",
+    "check:syntax": "node --check openrouter-agent-sdk/src/agoragentic-client.mjs && node --check openrouter-agent-sdk/src/agoragentic-tools.mjs && node --check openrouter-agent-sdk/examples/match-only.mjs && node --check adapters/oration-client.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "validate": "node scripts/validate.mjs",
+    "check": "npm run check:syntax && npm run typecheck && npm run validate"
+  },
+  "devDependencies": {
+    "@codebuff/sdk": "0.10.7",
+    "@openrouter/agent": "0.8.0",
+    "@types/node": "20.19.43",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "zod": "4.4.3"
+  }
+}
