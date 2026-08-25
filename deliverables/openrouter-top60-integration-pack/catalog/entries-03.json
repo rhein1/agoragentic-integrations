@@ -21,7 +21,7 @@
     "status": "covered_existing",
     "direction": "inbound_host",
     "surface": "Cursor plugin + MCP",
-    "action": "Retain current package; add the top-60 compatibility reference.",
+    "action": "Retain the existing Cursor documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
     "artifact": "decisions/covered-existing.json",
     "sources": [
       "https://docs.cursor.com/context/model-context-protocol"
@@ -35,7 +35,7 @@
     "status": "composition_recipe",
     "direction": "outbound_mcp_service",
     "surface": "HackerAI remote MCP",
-    "action": "Connect HackerAI and Agoragentic as separate MCP servers in the same host; require explicit authorization for penetration-testing actions.",
+    "action": "Compose HackerAI as an external MCP security tool beside a supported Agoragentic SDK or REST match-only client; require explicit authorization for penetration-testing actions and do not imply that Agoragentic MCP is live.",
     "artifact": "decisions/composition-recipes.json",
     "sources": [
       "https://mcp.hackerai.co/mcp"
@@ -72,11 +72,11 @@
     "name": "Zed Editor",
     "slug": "zed-editor",
     "tokens": "367B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Zed context server/MCP",
-    "action": "Add the remote public MCP config or launch the local relay for authenticated use.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://zed.dev/docs/assistant/model-context-protocol"
     ]
@@ -100,11 +100,11 @@
     "name": "Zoo Code",
     "slug": "zoo-code",
     "tokens": "342B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Zoo Code MCP host",
-    "action": "Install the local relay in `.roo/mcp.json`; this is the active migration target for Roo Code users.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://zoo.dev/docs"
     ]

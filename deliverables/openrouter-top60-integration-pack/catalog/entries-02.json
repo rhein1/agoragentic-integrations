@@ -18,11 +18,11 @@
     "name": "Codex",
     "slug": "codex",
     "tokens": "948B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Codex MCP + skills",
-    "action": "Install the local MCP relay and optionally the official OpenRouter SDK skill.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://openrouter.ai/blog/announcements/openrouter-mcp-server/",
       "https://openrouter.ai/docs/agent-sdk/usage-for-agents"
@@ -73,11 +73,11 @@
     "name": "Oh-My-Pi",
     "slug": "oh-my-pi",
     "tokens": "786B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Oh-My-Pi MCP host",
-    "action": "Install the HTTP MCP config with environment-expanded bearer auth.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://github.com/can1357/oh-my-pi"
     ]

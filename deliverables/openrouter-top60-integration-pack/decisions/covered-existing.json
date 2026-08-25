@@ -36,7 +36,7 @@
       "name": "Cline",
       "slug": "cline",
       "direction": "inbound_host",
-      "action": "Retain current package; add compatibility reference only.",
+      "action": "Retain the existing Cline documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
       "sources": [
         "https://docs.cline.bot/mcp/configuring-mcp-servers"
       ],
@@ -49,7 +49,7 @@
       "name": "Cursor",
       "slug": "cursor",
       "direction": "inbound_host",
-      "action": "Retain current package; add the top-60 compatibility reference.",
+      "action": "Retain the existing Cursor documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
       "sources": [
         "https://docs.cursor.com/context/model-context-protocol"
       ],

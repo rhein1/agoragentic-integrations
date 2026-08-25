@@ -24,6 +24,7 @@ function trackedTextFiles() {
     .filter(Boolean)
     .filter((relativePath) => relativePath !== 'CHANGELOG.md')
     .filter((relativePath) => relativePath !== 'test/mcp-direct-bypass.test.mjs')
+    .filter((relativePath) => fs.existsSync(path.join(root, relativePath)))
     .filter((relativePath) => {
       const bytes = fs.readFileSync(path.join(root, relativePath));
       return bytes.length <= 5 * 1024 * 1024 && !bytes.includes(0);
@@ -111,11 +112,11 @@ test('current source, docs, manifests, generated files, scripts, examples, and C
   const banned = [
     {
       label: 'registry-resolving npx command',
-      pattern: new RegExp(String.raw`\bnpx(?:\s+-y)?\s+agoragentic-${'mcp'}(?:@[^\s\x60"']+)?`, 'i'),
+      pattern: new RegExp(String.raw`\bnpx(?:\.cmd)?(?:\s+(?:--|-{1,2}[A-Za-z][\w-]*(?:=[^\s\x60"']+)?))*\s+(?:agoragentic-${'mcp'}(?:@[^\s\x60"']+)?|(?:-p|--package)=agoragentic-${'mcp'}(?:@[^\s\x60"']+)?)(?=\s|$|[\x60"'])`, 'i'),
     },
     {
-      label: 'legacy or fictitious MCP package coordinate',
-      pattern: new RegExp(`agoragentic-${'mcp'}@(?:latest|1\\.3\\.6|2\\.0\\.0)`, 'i'),
+      label: 'versioned MCP package coordinate',
+      pattern: new RegExp(String.raw`\bagoragentic-${'mcp'}@[^\s\x60"']+`, 'i'),
     },
     {
       label: 'npm latest-version badge',
@@ -138,6 +139,57 @@ test('current source, docs, manifests, generated files, scripts, examples, and C
   assert.equal(packageJson.version, '2.0.0');
   assert.match(packageJson.description, /unpublished.*non-installable/i);
   assert.match(read('mcp/README.md'), /2\.0\.0.*unpublished.*non-installable/is);
+});
+
+test('OpenRouter review-pack MCP host records are blocker-only and non-runnable', () => {
+  const packPrefix = 'deliverables/openrouter-top60-integration-pack';
+  assert.equal(fs.existsSync(path.join(root, packPrefix, 'host-configs.json')), false);
+
+  const packet = readJson(`${packPrefix}/decisions/blocked-qualified-host-enforcement.json`);
+  assert.equal(packet.group, 'blocked_pending_qualified_host_enforcement');
+  assert.equal(packet.runtime_verified, false);
+  assert.equal(packet.authority_granted, false);
+  assert.equal(packet.items.length, 12);
+
+  const packageName = `agoragentic-${'mcp'}`;
+  const versionedCoordinate = new RegExp(`\\b${packageName}@[^\\s\\x60"']+`, 'i');
+  const registryCommand = new RegExp(`\\bnpx(?:\\.cmd)?(?:\\s+(?:--|-{1,2}[A-Za-z][\\w-]*(?:=[^\\s\\x60"']+)?))*\\s+(?:${packageName}(?:@[^\\s\\x60"']+)?|(?:-p|--package)=${packageName}(?:@[^\\s\\x60"']+)?)(?=\\s|$|[\\x60"'])`, 'i');
+  const directEndpoint = new RegExp(`https://agoragentic\\.com/api/${'mcp'}\\b`, 'i');
+
+  function assertBlocked(value, label) {
+    if (typeof value === 'string') {
+      assert.doesNotMatch(value, versionedCoordinate, `${label} contains a versioned registry coordinate`);
+      assert.doesNotMatch(value, registryCommand, `${label} contains a registry-resolving command`);
+      assert.doesNotMatch(value, directEndpoint, `${label} contains the direct hosted MCP endpoint`);
+      return;
+    }
+    if (Array.isArray(value)) {
+      const tokens = value.filter(item => typeof item === 'string').map(item => item.trim().toLowerCase());
+      const npxIndex = tokens.findIndex(token => /^npx(?:\.cmd)?$/i.test(token));
+      assert.ok(
+        npxIndex < 0 || !tokens.slice(npxIndex + 1).some(token => token === packageName || token.startsWith(`${packageName}@`)),
+        `${label} contains split npx arguments`,
+      );
+      value.forEach((item, index) => assertBlocked(item, `${label}[${index}]`));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      assert.doesNotMatch(
+        key,
+        /^(?:command|cmd|executable|args|configuration|url|headers?|authorization|enabled)$/i,
+        `${label}.${key} is a runnable MCP configuration field`,
+      );
+      assertBlocked(child, `${label}.${key}`);
+    }
+  }
+
+  for (const [index, item] of packet.items.entries()) {
+    assert.equal(item.runtime_verified, false);
+    assert.equal(item.authority_granted, false);
+    assert.ok(Array.isArray(item.required_controls) && item.required_controls.length > 0);
+    assertBlocked(item, `blocked host decision ${index}`);
+  }
 });
 
 test('unqualified MCP 2.0.0 source candidate is mechanically non-publishable', () => {

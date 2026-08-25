@@ -46,11 +46,11 @@
     "name": "Z Code",
     "slug": "z-code",
     "tokens": "225B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Z Code MCP host",
-    "action": "Use the included stdio MCP configuration and verify the client-specific scope.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://zcode.ai/"
     ]
@@ -72,11 +72,11 @@
     "name": "OpenHands",
     "slug": "openhands",
     "tokens": "220B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "OpenHands MCP host",
-    "action": "Register the local relay through OpenHands MCP configuration/CLI.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://docs.openhands.dev/usage/runtimes/mcp"
     ]
@@ -100,11 +100,11 @@
     "name": "Open WebUI",
     "slug": "open-webui",
     "tokens": "212B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Open WebUI native MCP",
-    "action": "Add Agoragentic as a remote MCP server in the admin UI; start with anonymous public tools.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://docs.openwebui.com/features/plugin/tools/openapi-servers/mcp/"
     ]

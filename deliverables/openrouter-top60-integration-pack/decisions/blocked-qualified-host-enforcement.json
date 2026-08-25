@@ -1,0 +1,238 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "blocked_pending_qualified_host_enforcement",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 3,
+      "name": "Kilo Code",
+      "slug": "kilo-code",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://kilo.ai/docs/features/mcp"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 4,
+      "name": "OpenClaw",
+      "slug": "openclaw",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://docs.openclaw.ai/mcp"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 6,
+      "name": "pi",
+      "slug": "pi",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://github.com/badlogic/pi-mono",
+        "https://github.com/nicobailon/pi-mcp-adapter"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 8,
+      "name": "Command Code",
+      "slug": "command-code",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://commandcode.ai"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 12,
+      "name": "Codex",
+      "slug": "codex",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://openrouter.ai/blog/announcements/openrouter-mcp-server/",
+        "https://openrouter.ai/docs/agent-sdk/usage-for-agents"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 16,
+      "name": "Oh-My-Pi",
+      "slug": "oh-my-pi",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://github.com/can1357/oh-my-pi"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 26,
+      "name": "Zed Editor",
+      "slug": "zed-editor",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://zed.dev/docs/assistant/model-context-protocol"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 28,
+      "name": "Zoo Code",
+      "slug": "zoo-code",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://zoo.dev/docs"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 34,
+      "name": "Z Code",
+      "slug": "z-code",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://zcode.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 36,
+      "name": "OpenHands",
+      "slug": "openhands",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://docs.openhands.dev/usage/runtimes/mcp"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 38,
+      "name": "Open WebUI",
+      "slug": "open-webui",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://docs.openwebui.com/features/plugin/tools/openapi-servers/mcp/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    },
+    {
+      "rank": 59,
+      "name": "mimocode",
+      "slug": "mimocode",
+      "direction": "inbound_host",
+      "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+      "sources": [
+        "https://github.com/XiaomiMiMo/MiMo-Code"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_controls": [
+        "Withdraw or correct the legacy registry relay before any package-based host integration.",
+        "Mediate every remote discovery and tool request through a separately qualified host enforcement boundary.",
+        "Keep platform credentials outside the MCP process and resolve them only inside the qualified host.",
+        "Produce host-specific match-only evidence with spend, publication, deployment, messaging, calling, and trust mutation disabled.",
+        "Pass independent malicious-protocol, cleanup, rollback, and kill-switch verification."
+      ]
+    }
+  ]
+}

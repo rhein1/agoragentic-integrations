@@ -33,7 +33,7 @@
     "status": "deprecated",
     "direction": "migration",
     "surface": "retired coding agent",
-    "action": "Do not ship a new adapter; direct users to Zoo Code or Cline.",
+    "action": "Retain a retirement tombstone; do not redirect users to Zoo Code or Cline as a live Agoragentic MCP path while qualified host enforcement remains unavailable.",
     "artifact": "decisions/deprecated.json",
     "sources": [
       "https://github.com/RooCodeInc/Roo-Code"

@@ -9,21 +9,13 @@ const DEFAULT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const AUTHORITY_KEYS = ['execute', 'spend', 'publish', 'deploy', 'message', 'call', 'mutate_trust'];
 const PART_PATHS = Array.from({ length: 6 }, (_, index) => `catalog/entries-${String(index + 1).padStart(2, '0')}.json`);
 const ENTRY_KEYS = ['rank', 'name', 'slug', 'tokens', 'status', 'direction', 'surface', 'action', 'artifact', 'sources'];
-const HOST_KEYS = [
-  'rank',
-  'name',
-  'slug',
-  'direction',
-  'action',
-  'status',
-  'runtime_verified',
-  'authority_granted',
-  'transport',
-  'configuration',
-  'sources',
-  'safe_first_prompt',
-  'verification_gate'
-];
+const BLOCKED_HOST_STATUS = 'blocked_pending_qualified_host_enforcement';
+const BLOCKED_HOST_DECISION_PATH = 'decisions/blocked-qualified-host-enforcement.json';
+const MCP_PACKAGE_NAME = `agoragentic-${'mcp'}`;
+const VERSIONED_MCP_COORDINATE = new RegExp(`\\b${MCP_PACKAGE_NAME}@[^\\s\\x60"']+`, 'i');
+const REGISTRY_RESOLVING_MCP_COMMAND = new RegExp(`\\bnpx(?:\\.cmd)?(?:\\s+(?:--|-{1,2}[A-Za-z][\\w-]*(?:=[^\\s\\x60"']+)?))*\\s+(?:${MCP_PACKAGE_NAME}(?:@[^\\s\\x60"']+)?|(?:-p|--package)=${MCP_PACKAGE_NAME}(?:@[^\\s\\x60"']+)?)(?=\\s|$|[\\x60"'])`, 'i');
+const DIRECT_MCP_ENDPOINT = new RegExp(`https://agoragentic\\.com/api/${'mcp'}\\b`, 'i');
+const CREDENTIAL_MATERIAL = /AGORAGENTIC_API_KEY|Bearer\s+[^\s]/i;
 const DECISION_COMMON_KEYS = [
   'rank',
   'name',
@@ -36,6 +28,7 @@ const DECISION_COMMON_KEYS = [
 ];
 const DECISION_FILES = {
   covered_existing: 'decisions/covered-existing.json',
+  [BLOCKED_HOST_STATUS]: BLOCKED_HOST_DECISION_PATH,
   composition_recipe: 'decisions/composition-recipes.json',
   provider_recipe: 'decisions/provider-recipes.json',
   plugin_scaffold: 'decisions/plugin-scaffolds.json',
@@ -46,6 +39,7 @@ const DECISION_FILES = {
 };
 const DECISION_EXTRAS = {
   covered_existing: ['existing_path'],
+  [BLOCKED_HOST_STATUS]: ['required_controls'],
   composition_recipe: ['pattern', 'boundary'],
   provider_recipe: ['role', 'required_controls'],
   plugin_scaffold: ['pattern', 'boundary'],
@@ -56,7 +50,7 @@ const DECISION_EXTRAS = {
 };
 const EXPECTED_STATUS_COUNTS = {
   covered_existing: 5,
-  ready_config: 12,
+  [BLOCKED_HOST_STATUS]: 12,
   direct_adapter: 2,
   composition_recipe: 9,
   provider_recipe: 4,
@@ -110,6 +104,67 @@ const INDEX_KEYS = [
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function containsCredentialMaterial(value) {
+  try {
+    return CREDENTIAL_MATERIAL.test(JSON.stringify(value));
+  } catch {
+    return false;
+  }
+}
+
+function containsRegistryResolvingMcpCommand(value) {
+  if (typeof value === 'string') return REGISTRY_RESOLVING_MCP_COMMAND.test(value);
+  if (!Array.isArray(value)) return false;
+  const tokens = value.filter(item => typeof item === 'string').map(item => item.trim());
+  const npxIndex = tokens.findIndex(token => /^npx(?:\.cmd)?$/i.test(token));
+  return npxIndex >= 0 && tokens.slice(npxIndex + 1).some(token =>
+    token.toLowerCase() === '-y' || token.toLowerCase() === MCP_PACKAGE_NAME || token.toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
+  ) && tokens.slice(npxIndex + 1).some(token =>
+    token.toLowerCase() === MCP_PACKAGE_NAME || token.toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
+  );
+}
+
+function containsMcpPackageToken(value) {
+  return Array.isArray(value) && value.some(item =>
+    typeof item === 'string' && (
+      item.trim().toLowerCase() === MCP_PACKAGE_NAME ||
+      item.trim().toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
+    )
+  );
+}
+
+function validateNoRunnableMcpConfiguration(value, label, fail) {
+  if (typeof value === 'string') {
+    if (VERSIONED_MCP_COORDINATE.test(value)) fail(`${label} must not contain a versioned agoragentic-mcp registry coordinate`);
+    if (REGISTRY_RESOLVING_MCP_COMMAND.test(value)) fail(`${label} must not contain a registry-resolving agoragentic-mcp command`);
+    if (DIRECT_MCP_ENDPOINT.test(value)) fail(`${label} must not contain the direct hosted MCP endpoint`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (containsRegistryResolvingMcpCommand(value)) fail(`${label} must not contain split npx arguments for agoragentic-mcp`);
+    value.forEach((item, index) => validateNoRunnableMcpConfiguration(item, `${label}[${index}]`, fail));
+    return;
+  }
+  if (!isPlainObject(value)) return;
+
+  const command = value.command ?? value.cmd ?? value.executable;
+  if (typeof command === 'string' && /^npx(?:\.cmd)?$/i.test(command.trim()) && containsMcpPackageToken(value.args)) {
+    fail(`${label} must not contain split npx arguments for agoragentic-mcp`);
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childLabel = `${label}.${key}`;
+    if (key.toLowerCase() === 'enabled' && child === true) fail(`${childLabel} must not enable an MCP configuration`);
+    if (/^(?:authorization|headers?|env|environment)$/i.test(key) && containsCredentialMaterial(child)) {
+      fail(`${childLabel} must not forward MCP credentials or authorization headers`);
+    }
+    if (/^(?:command|cmd|executable|args)$/i.test(key) && containsRegistryResolvingMcpCommand(child)) {
+      fail(`${childLabel} must not contain a registry-resolving agoragentic-mcp command`);
+    }
+    validateNoRunnableMcpConfiguration(child, childLabel, fail);
+  }
 }
 
 function sameJson(left, right) {
@@ -289,13 +344,14 @@ function validateDecisionItem(item, group, label, fail) {
       if (extra === 'existing_path' && !isSafeRelativePath(item[extra])) fail(`${label}.existing_path must be repository-relative`);
     }
   }
+  validateNoRunnableMcpConfiguration(item, label, fail);
 }
 
 export async function validatePack(rootOverride = DEFAULT_ROOT) {
   const root = path.resolve(rootOverride);
   const errors = [];
   const fail = message => errors.push(message);
-  const summary = { entries: 0, hosts: 0, decisions: 0, files: 0 };
+  const summary = { entries: 0, decisions: 0, files: 0 };
 
   const declaredSchema = await readJson(root, 'catalog/schema.json', fail);
   if (isPlainObject(declaredSchema)) {
@@ -377,13 +433,16 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
       if (typeof entry.slug !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(entry.slug) || slugSet.has(entry.slug)) fail(`${label}.slug is invalid or duplicated`);
       else slugSet.add(entry.slug);
       if (typeof entry.tokens !== 'string' || !/^\d+(?:\.\d+)?[BT]$/.test(entry.tokens)) fail(`${label}.tokens is invalid`);
+      if (entry.status === 'ready_config') fail(`${label}.status ready_config is forbidden pending qualified host enforcement`);
       if (!ENTRY_STATUSES.has(entry.status)) fail(`${label}.status is invalid`);
       else statusCounts[entry.status] += 1;
       if (!ENTRY_DIRECTIONS.has(entry.direction)) fail(`${label}.direction is invalid`);
       validateNonEmptyString(entry.surface, `${label}.surface`, fail);
       validateNonEmptyString(entry.action, `${label}.action`, fail);
       validateHttpsSources(entry.sources, `${label}.sources`, fail);
+      if (entry.artifact === 'host-configs.json') fail(`${label}.artifact must not reference host-configs.json`);
       await validatePackFile(root, entry.artifact, `${label}.artifact`, fail);
+      validateNoRunnableMcpConfiguration(entry, label, fail);
       entries.push(entry);
     }
   }
@@ -437,40 +496,6 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
     }
   }
 
-  const hostsPacket = await readJson(root, 'host-configs.json', fail);
-  const hostMap = new Map();
-  const hostPacketKeys = ['schema', 'status', 'runtime_verified', 'authority_granted', 'hosts'];
-  if (validateExactObject(hostsPacket, 'host-configs.json', hostPacketKeys, hostPacketKeys, fail)) {
-    if (hostsPacket.schema !== 'agoragentic.openrouter-host-configs.v1') fail('host-configs.json.schema is invalid');
-    if (hostsPacket.status !== 'candidate_only') fail('host-configs.json.status must be candidate_only');
-    if (hostsPacket.runtime_verified !== false) fail('host-configs.json.runtime_verified must be false');
-    if (hostsPacket.authority_granted !== false) fail('host-configs.json.authority_granted must be false');
-    if (!Array.isArray(hostsPacket.hosts) || hostsPacket.hosts.length !== 12) fail('host-configs.json.hosts must contain exactly 12 candidates');
-    for (const [hostIndex, host] of (hostsPacket.hosts || []).entries()) {
-      const label = `host-configs.json.hosts[${hostIndex}]`;
-      if (!validateExactObject(host, label, HOST_KEYS, HOST_KEYS, fail)) continue;
-      if (!Number.isInteger(host.rank) || host.rank < 1 || host.rank > 60) fail(`${label}.rank must be an integer from 1 through 60`);
-      validateNonEmptyString(host.name, `${label}.name`, fail);
-      if (typeof host.slug !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(host.slug) || hostMap.has(host.slug)) fail(`${label}.slug is invalid or duplicated`);
-      else hostMap.set(host.slug, host);
-      if (host.direction !== 'inbound_host') fail(`${label}.direction must be inbound_host`);
-      validateNonEmptyString(host.action, `${label}.action`, fail);
-      if (host.status !== 'candidate_config') fail(`${label}.status must be candidate_config`);
-      if (host.runtime_verified !== false) fail(`${label}.runtime_verified must be false`);
-      if (host.authority_granted !== false) fail(`${label}.authority_granted must be false`);
-      validateNonEmptyString(host.transport, `${label}.transport`, fail);
-      if (!isPlainObject(host.configuration) || Object.keys(host.configuration).length === 0) fail(`${label}.configuration must be a non-empty object`);
-      validateHttpsSources(host.sources, `${label}.sources`, fail, { allowEmpty: false });
-      validateNonEmptyString(host.safe_first_prompt, `${label}.safe_first_prompt`, fail);
-      validateStringArray(host.verification_gate, `${label}.verification_gate`, fail, { minItems: 1 });
-    }
-    const hostConfigText = JSON.stringify(hostsPacket);
-    for (const match of hostConfigText.matchAll(/agoragentic-mcp@([^"\\\s]+)/g)) {
-      if (match[1] !== '1.3.6') fail(`host-configs.json contains unpublished or unreviewed agoragentic-mcp pin ${match[1]}`);
-    }
-  }
-  summary.hosts = hostMap.size;
-
   const decisionMap = new Map();
   for (const [group, relativePath] of Object.entries(DECISION_FILES)) {
     const packet = await readJson(root, relativePath, fail);
@@ -495,13 +520,6 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
 
   for (const entry of entries) {
     const label = `catalog entry ${entry.slug}`;
-    if (entry.status === 'ready_config') {
-      if (entry.artifact !== 'host-configs.json') fail(`${label}.artifact must be host-configs.json`);
-      const host = hostMap.get(entry.slug);
-      if (!host) fail(`${label} has no matching host candidate`);
-      else compareFields(entry, host, ['rank', 'name', 'slug', 'direction', 'action', 'sources'], `host candidate ${entry.slug}`, fail);
-      continue;
-    }
     if (entry.status === 'direct_adapter') {
       if (!/^adapters\/[a-z0-9-]+\.(?:mjs|ts)$/.test(entry.artifact)) fail(`${label}.artifact must be a bounded adapter source file`);
       continue;
@@ -518,9 +536,6 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
       if (decision.group !== entry.status) fail(`decision ${entry.slug}.group does not match catalog status`);
       compareFields(entry, decision.item, ['rank', 'name', 'slug', 'direction', 'action', 'sources'], `decision ${entry.slug}`, fail);
     }
-  }
-  for (const slug of hostMap.keys()) {
-    if (!entries.some(entry => entry.slug === slug && entry.status === 'ready_config')) fail(`host candidate ${slug} has no matching ready_config catalog entry`);
   }
   for (const [slug, decision] of decisionMap) {
     if (!entries.some(entry => entry.slug === slug && entry.status === decision.group)) fail(`decision ${slug} has no matching catalog entry`);
@@ -557,6 +572,7 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
       try {
         const actualFiles = await collectPackFiles(root);
         summary.files = actualFiles.length;
+        if (actualFiles.includes('host-configs.json')) fail('host-configs.json is forbidden pending qualified host enforcement');
         const declaredFiles = [...manifest.files].sort();
         const missing = actualFiles.filter(file => !declaredFiles.includes(file));
         const stale = declaredFiles.filter(file => !actualFiles.includes(file));
@@ -579,6 +595,6 @@ if (invokedAsScript) {
     for (const error of result.errors) console.error(`❌ ${error}`);
     process.exitCode = 1;
   } else {
-    console.log(`✅ OpenRouter top-60 review pack validated: ${result.summary.entries} catalog entries, ${result.summary.hosts} host candidates, ${result.summary.decisions} decision records, ${result.summary.files} files`);
+    console.log(`✅ OpenRouter top-60 review pack validated: ${result.summary.entries} catalog entries, ${result.summary.decisions} decision records, ${result.summary.files} files`);
   }
 }

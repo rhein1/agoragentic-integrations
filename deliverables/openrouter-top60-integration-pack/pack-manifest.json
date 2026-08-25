@@ -1,6 +1,6 @@
 {
   "schema": "agoragentic.openrouter-top60-review-pack.v2",
-  "base_commit": "68b732e945fcfa70aeb16692586c14fc1e70c66c",
+  "base_commit": "27aa21c613ee6ad5ae69e49659e3fd75ba2eccad",
   "file_count": 36,
   "catalog_entries": 60,
   "active_manifest_entries_added": 0,
@@ -22,6 +22,7 @@
     "catalog/index.json",
     "catalog/schema.json",
     "catalog/source-evidence.json",
+    "decisions/blocked-qualified-host-enforcement.json",
     "decisions/blocked.json",
     "decisions/composition-recipes.json",
     "decisions/covered-existing.json",
@@ -30,7 +31,6 @@
     "decisions/plugin-scaffolds.json",
     "decisions/provider-recipes.json",
     "decisions/vendor-intakes.json",
-    "host-configs.json",
     "openrouter-agent-sdk/examples/match-only.mjs",
     "openrouter-agent-sdk/package.json",
     "openrouter-agent-sdk/src/agoragentic-client.mjs",

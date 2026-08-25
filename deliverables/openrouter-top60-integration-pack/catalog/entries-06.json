@@ -118,11 +118,11 @@
     "name": "mimocode",
     "slug": "mimocode",
     "tokens": "86.7B",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "MiMoCode MCP host",
-    "action": "Install the local Agoragentic relay under the exact `mcp` configuration key.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://github.com/XiaomiMiMo/MiMo-Code"
     ]

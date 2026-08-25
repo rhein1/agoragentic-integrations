@@ -33,11 +33,11 @@
     "name": "Kilo Code",
     "slug": "kilo-code",
     "tokens": "7.33T",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
-    "surface": "MCP host via a pinned local stdio relay",
-    "action": "Install the pinned local stdio relay; public/no-spend tools can be used without an API key, while authenticated tools remain separately gated.",
-    "artifact": "host-configs.json",
+    "surface": "Kilo Code MCP host",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://kilo.ai/docs/features/mcp"
     ]
@@ -47,11 +47,11 @@
     "name": "OpenClaw",
     "slug": "openclaw",
     "tokens": "4.47T",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "MCP and ACP host",
-    "action": "Add Agoragentic as a streamable-HTTP MCP server; keep authenticated execution approval-gated.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://docs.openclaw.ai/mcp"
     ]
@@ -64,7 +64,7 @@
     "status": "covered_existing",
     "direction": "inbound_host",
     "surface": "Cline MCP host",
-    "action": "Retain current package; add compatibility reference only.",
+    "action": "Retain the existing Cline documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
     "artifact": "decisions/covered-existing.json",
     "sources": [
       "https://docs.cline.bot/mcp/configuring-mcp-servers"
@@ -75,11 +75,11 @@
     "name": "pi",
     "slug": "pi",
     "tokens": "2.61T",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "pi through pi-mcp-adapter",
-    "action": "Install `pi-mcp-adapter` and load the local Agoragentic relay.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://github.com/badlogic/pi-mono",
       "https://github.com/nicobailon/pi-mcp-adapter"
@@ -93,7 +93,7 @@
     "status": "composition_recipe",
     "direction": "outbound_mcp_service",
     "surface": "Descript remote OAuth MCP",
-    "action": "Compose Descript and Agoragentic in a shared MCP host; do not mislabel Descript as an agent framework.",
+    "action": "Compose Descript as an external MCP evidence/tool source beside a supported Agoragentic SDK or REST match-only client; do not imply that Agoragentic MCP is live.",
     "artifact": "decisions/composition-recipes.json",
     "sources": [
       "https://api.descript.com/v2/mcp"
@@ -104,11 +104,11 @@
     "name": "Command Code",
     "slug": "command-code",
     "tokens": "1.62T",
-    "status": "ready_config",
+    "status": "blocked_pending_qualified_host_enforcement",
     "direction": "inbound_host",
     "surface": "Command Code MCP host",
-    "action": "Register the pinned local stdio relay with `cmd mcp add`; the candidate command does not configure a hosted endpoint.",
-    "artifact": "host-configs.json",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
     "sources": [
       "https://commandcode.ai"
     ]

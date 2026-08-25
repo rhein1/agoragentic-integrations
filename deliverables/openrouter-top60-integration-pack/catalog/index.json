@@ -7,9 +7,9 @@
   "repo_snapshot": {
     "repository": "rhein1/agoragentic-integrations",
     "branch": "main",
-    "commit": "68b732e945fcfa70aeb16692586c14fc1e70c66c",
-    "manifest_version": "2.40.0",
-    "manifest_count": 105
+    "commit": "27aa21c613ee6ad5ae69e49659e3fd75ba2eccad",
+    "manifest_version": "2.49.0",
+    "manifest_count": 107
   },
   "distribution_status": "review_only",
   "runtime_verified": false,

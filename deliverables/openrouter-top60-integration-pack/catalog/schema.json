@@ -196,7 +196,7 @@
         "status": {
           "enum": [
             "covered_existing",
-            "ready_config",
+            "blocked_pending_qualified_host_enforcement",
             "direct_adapter",
             "composition_recipe",
             "provider_recipe",

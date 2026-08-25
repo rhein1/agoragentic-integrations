@@ -8,6 +8,8 @@ import { validatePack } from '../scripts/validate.mjs';
 
 const sourceRoot = fileURLToPath(new URL('..', import.meta.url));
 const temporaryRoots = [];
+const blockedHostDecisionPath = 'decisions/blocked-qualified-host-enforcement.json';
+const mcpPackageName = `agoragentic-${'mcp'}`;
 
 async function readJson(root, relativePath) {
   return JSON.parse(await readFile(path.join(root, ...relativePath.split('/')), 'utf8'));
@@ -74,7 +76,7 @@ test('reconciled review pack passes the deterministic validator without network 
   assert.deepEqual(result, {
     ok: true,
     errors: [],
-    summary: { entries: 60, hosts: 12, decisions: 46, files: result.summary.files }
+    summary: { entries: 60, decisions: 58, files: result.summary.files }
   });
   assert.ok(result.summary.files >= 31);
 });
@@ -112,6 +114,107 @@ test('catalog action drift from its decision packet is rejected', async () => {
   entries[6].action = 'Unreviewed replacement action';
   await writeJson(root, 'catalog/entries-01.json', entries);
   assertRejected(await validatePack(root), 'decision descript.action does not match catalog');
+});
+
+test('versioned MCP registry coordinates are rejected from blocker records', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  packet.items[0].required_controls[0] = `Do not install ${mcpPackageName}@9.9.9`;
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(
+    await validatePack(root),
+    `${blockedHostDecisionPath}.items[0].required_controls[0] must not contain a versioned agoragentic-mcp registry coordinate`
+  );
+});
+
+test('equivalent npx MCP launch forms are rejected from blocker text', async () => {
+  for (const launcher of ['npx --yes', 'npx --', 'npx.cmd --yes']) {
+    const root = await copyPack();
+    const packet = await readJson(root, blockedHostDecisionPath);
+    packet.items[0].required_controls[0] = `Run ${launcher} ${mcpPackageName}`;
+    await writeJson(root, blockedHostDecisionPath, packet);
+    assertRejected(
+      await validatePack(root),
+      `${blockedHostDecisionPath}.items[0].required_controls[0] must not contain a registry-resolving agoragentic-mcp command`
+    );
+  }
+});
+
+test('split npx MCP arguments are rejected structurally', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  packet.items[0].configuration = { command: 'npx.cmd', args: ['--yes', mcpPackageName] };
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(
+    await validatePack(root),
+    `${blockedHostDecisionPath}.items[0].configuration must not contain split npx arguments for agoragentic-mcp`
+  );
+});
+
+test('direct MCP endpoints are rejected from blocker records', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  packet.items[0].required_controls[0] = `Configure https://agoragentic.com/api/${'mcp'} in this host`;
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(
+    await validatePack(root),
+    `${blockedHostDecisionPath}.items[0].required_controls[0] must not contain the direct hosted MCP endpoint`
+  );
+});
+
+test('credential and authorization forwarding are rejected from blocker records', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  packet.items[0].configuration = {
+    headers: { Authorization: `Bearer \${AGORAGENTIC_${'API_KEY'}}` }
+  };
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(
+    await validatePack(root),
+    `${blockedHostDecisionPath}.items[0].configuration.headers must not forward MCP credentials or authorization headers`
+  );
+});
+
+test('enabled MCP configuration is rejected from blocker records', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  packet.items[0].configuration = { enabled: true };
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(
+    await validatePack(root),
+    `${blockedHostDecisionPath}.items[0].configuration.enabled must not enable an MCP configuration`
+  );
+});
+
+test('restored ready_config status and host-configs artifact are rejected', async () => {
+  const root = await copyPack();
+  const entries = await readJson(root, 'catalog/entries-01.json');
+  entries[2].status = 'ready_config';
+  entries[2].artifact = 'host-configs.json';
+  await writeJson(root, 'catalog/entries-01.json', entries);
+  await writeJson(root, 'host-configs.json', { status: 'candidate_only', hosts: [] });
+  const result = await validatePack(root);
+  assertRejected(result, 'catalog/entries-01.json[2].status ready_config is forbidden pending qualified host enforcement');
+  assert.ok(result.errors.includes('catalog/entries-01.json[2].artifact must not reference host-configs.json'));
+  assert.ok(result.errors.includes('host-configs.json is forbidden pending qualified host enforcement'));
+});
+
+test('mismatched blocker records are rejected', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  const originalSlug = packet.items[0].slug;
+  packet.items[0].slug = `${originalSlug}-mismatch`;
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(await validatePack(root), `catalog entry ${originalSlug} has no matching decision record`);
+});
+
+test('blocker action drift from the catalog is rejected', async () => {
+  const root = await copyPack();
+  const packet = await readJson(root, blockedHostDecisionPath);
+  const slug = packet.items[0].slug;
+  packet.items[0].action = 'Unreviewed blocker action';
+  await writeJson(root, blockedHostDecisionPath, packet);
+  assertRejected(await validatePack(root), `decision ${slug}.action does not match catalog`);
 });
 
 test('runtime verification claims are rejected at item level', async () => {
