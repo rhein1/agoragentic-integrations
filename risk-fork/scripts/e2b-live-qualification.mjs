@@ -12,6 +12,7 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 import {
+  E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
   E2B_QUALIFICATION_FAILURE_CLASSES,
@@ -777,21 +778,11 @@ async function runDefaultE2BSingleSandboxCanary({
       boot_observed_at: bootEvidence.observed_at,
       allocation_started_at: startedAt.toISOString(),
     });
-    const bootMappings = {
-      inherited_environment_absent: 'unauthorized_environment_absent',
-      inherited_processes_absent: 'inherited_parent_processes_absent',
-      credential_files_absent: 'credential_files_absent',
-      wallet_material_absent: 'wallet_signing_material_absent',
-      persistent_mounts_absent: 'persistent_mounts_absent',
-      unauthorized_sockets_absent: 'unauthorized_sockets_absent',
-      fresh_entropy_verified: 'fresh_entropy_verified',
-    };
-    for (const [control, claim] of Object.entries(bootMappings)) {
-      controls[control] = bootEvidence.claims[claim] === true ? 'verified' : 'failed';
-    }
-    // Boot-local socket outcomes are deliberately insufficient for these two
-    // controls. A reviewed external controlled-canary observer must supply the
-    // missing evidence before either can become verified.
+    // The watcher and outbox share the child UID. Its boot claims are retained
+    // as diagnostic hashes, but they are never privilege-separated evidence.
+    // A detached external observer receipt must derive every birth and network
+    // control; the provisional controller record therefore stays unknown.
+    for (const control of E2B_EXTERNAL_BIRTH_CONTROLS) controls[control] = 'unknown';
     controls.first_instruction_ipv4_egress_denied = 'unknown';
     controls.first_instruction_ipv6_egress_denied = 'unknown';
     const executionLeaseMs = Math.min(

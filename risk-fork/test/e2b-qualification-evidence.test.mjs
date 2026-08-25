@@ -18,6 +18,7 @@ import addFormats from 'ajv-formats';
 
 import { E2BRiskForkAdapter } from '../src/adapters/e2b.mjs';
 import {
+  E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_QUALIFICATION_CONTROLS,
@@ -46,6 +47,7 @@ const EXTERNALLY_OBSERVED_CONTROLS = new Set([
   'first_instruction_ipv4_egress_denied',
   'first_instruction_ipv6_egress_denied',
   'cost_within_cap',
+  ...E2B_EXTERNAL_BIRTH_CONTROLS,
   ...E2B_EXTERNAL_PROVIDER_CONTROLS,
 ]);
 
@@ -163,6 +165,21 @@ function signedExternalObservation(
     first_instruction_ipv4_egress_denied: true,
     first_instruction_ipv6_egress_denied: true,
     ...overrides,
+    observer_boundary: {
+      producer_class: 'privileged_host_supervisor',
+      status: 'verified',
+      evidence_hash: hash('external-observer-privilege-boundary'),
+      child_write_access: false,
+      reusable_signing_authority_in_child: false,
+      ...overrides.observer_boundary,
+    },
+    birth_controls: {
+      ...Object.fromEntries(E2B_EXTERNAL_BIRTH_CONTROLS.map((control) => [
+        control,
+        { status: 'verified', evidence_hash: hash(`external-${control}`) },
+      ])),
+      ...overrides.birth_controls,
+    },
     ipv6_provider_denial: {
       status: 'verified',
       evidence_hash: hash('provider-ipv6-denial-record'),
@@ -560,6 +577,15 @@ test('every unknown or failed mandatory control keeps the adapter production-unq
               },
             }
           : { cost: { actual_sandbox: { amount_usd: '0.26' } } };
+      } else if (E2B_EXTERNAL_BIRTH_CONTROLS.includes(control)) {
+        observationOverrides = {
+          birth_controls: {
+            [control]: {
+              status,
+              evidence_hash: status === 'unknown' ? null : hash(`${control}-${status}`),
+            },
+          },
+        };
       } else {
         observationOverrides = {
           provider_controls: {
@@ -749,7 +775,7 @@ test('unobserved provider cost stays explicit and can never qualify as verified'
   );
 });
 
-test('a pinned independent observation exact-binds first-instruction IPv4/IPv6 and finalized actual cost', () => {
+test('a pinned independent observation exact-binds first-instruction IPv4/IPv6 and finalized actual cost', async () => {
   const provisional = createE2BQualificationEvidence(externalObservationReadyInput());
   const { verifier, observation } = signedExternalObservation(provisional);
   const finalized = applyE2BExternalQualificationObservation(
@@ -764,6 +790,13 @@ test('a pinned independent observation exact-binds first-instruction IPv4/IPv6 a
   assert.equal(finalized.controls.first_instruction_ipv6_egress_denied, 'verified');
   assert.equal(finalized.controls.cost_within_cap, 'verified');
   assert.deepEqual(finalized.external_observation_receipt, observation);
+  assert.deepEqual(observation.observer_boundary, {
+    producer_class: 'privileged_host_supervisor',
+    status: 'verified',
+    evidence_hash: hash('external-observer-privilege-boundary'),
+    child_write_access: false,
+    reusable_signing_authority_in_child: false,
+  });
   assert.throws(
     () => validateE2BQualificationEvidence(finalized),
     /pinned|observer|verifier/i,
@@ -772,6 +805,15 @@ test('a pinned independent observation exact-binds first-instruction IPv4/IPv6 a
     validateE2BQualificationEvidence(finalized, {}, verifier),
     finalized,
   );
+  const schemaPath = fileURLToPath(new URL('../schema/e2b-qualification-evidence.v1.json', import.meta.url));
+  const schema = JSON.parse(await readFile(schemaPath, 'utf8'));
+  const schemaValidate = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(schemaValidate);
+  const validateFinalized = schemaValidate.compile(schema);
+  assert.equal(validateFinalized(finalized), true, schemaValidate.errorsText(validateFinalized.errors));
+  const boundaryDowngrade = JSON.parse(JSON.stringify(finalized));
+  boundaryDowngrade.external_observation_receipt.observer_boundary.status = 'unknown';
+  assert.equal(validateFinalized(boundaryDowngrade), false);
   for (const control of E2B_EXTERNAL_PROVIDER_CONTROLS) {
     assert.equal(finalized.controls[control], 'verified');
     assert.equal(
@@ -783,6 +825,25 @@ test('a pinned independent observation exact-binds first-instruction IPv4/IPv6 a
       true,
     );
   }
+  for (const control of E2B_EXTERNAL_BIRTH_CONTROLS) {
+    assert.equal(provisional.controls[control], 'unknown');
+    assert.equal(finalized.controls[control], 'verified');
+    assert.equal(
+      finalized.evidence_refs.some(
+        ({ ref, hash: refHash }) => ref === `evidence:e2b-external-${
+          control.replaceAll('_', '-')
+        }` && refHash === hash(`external-${control}`),
+      ),
+      true,
+    );
+  }
+  assert.equal(
+    finalized.evidence_refs.some(
+      ({ ref, hash: refHash }) => ref === 'evidence:e2b-external-observer-boundary'
+        && refHash === hash('external-observer-privilege-boundary'),
+    ),
+    true,
+  );
   assert.equal(finalized.observations.observed_cost_usd, '0.020000');
   assert.equal(observation.observer.algorithm, 'Ed25519');
   assert.equal(observation.observer.public_key_hash, verifier.key_hash);
@@ -899,6 +960,108 @@ test('observer and qualification-trust roles require distinct Ed25519 keys', () 
     }),
     /distinct|observer.*qualification/i,
   );
+});
+
+test('birth controls require a closed privilege-separated observer boundary', () => {
+  const provisional = createE2BQualificationEvidence(externalObservationReadyInput());
+  for (const control of E2B_EXTERNAL_BIRTH_CONTROLS) {
+    assert.throws(
+      () => createE2BQualificationEvidence(externalObservationReadyInput({
+        controls: {
+          ...externalObservationReadyInput().controls,
+          [control]: 'verified',
+        },
+      })),
+      /observer receipt|without.*receipt|unknown/i,
+    );
+  }
+
+  const unknownBirthControls = Object.fromEntries(E2B_EXTERNAL_BIRTH_CONTROLS.map(
+    (control) => [control, { status: 'unknown', evidence_hash: null }],
+  ));
+  assert.throws(
+    () => signedExternalObservation(provisional, {
+      observer_boundary: { status: 'unknown', evidence_hash: null },
+    }),
+    /privilege separation|birth controls/i,
+  );
+  const unqualified = signedExternalObservation(provisional, {
+    observer_boundary: { status: 'unknown', evidence_hash: null },
+    birth_controls: unknownBirthControls,
+  });
+  const finalized = applyE2BExternalQualificationObservation(
+    provisional,
+    unqualified.observation,
+    unqualified.verifier,
+  );
+  assert.equal(finalized.status, 'unknown');
+  for (const control of E2B_EXTERNAL_BIRTH_CONTROLS) {
+    assert.equal(finalized.controls[control], 'unknown');
+  }
+
+  for (const authorityField of [
+    ['child_write_access', true],
+    ['reusable_signing_authority_in_child', true],
+  ]) {
+    assert.throws(
+      () => signedExternalObservation(provisional, {
+        observer_boundary: { [authorityField[0]]: authorityField[1] },
+      }),
+      /authority|child|boundary/i,
+    );
+  }
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  const baseVerifierOptions = {
+    publicKey,
+    publicKeyHash: sha256BytesRef(publicKey.export({ type: 'spki', format: 'der' })),
+    clock: () => new Date(OBSERVER_NOW),
+    maxReceiptAgeMs: OBSERVER_MAX_RECEIPT_AGE_MS,
+    audience: observationAudience(provisional),
+  };
+  for (const extra of [{ privateKey }, { sign: () => 'forbidden' }]) {
+    assert.throws(
+      () => createE2BExternalQualificationObservationVerifier({
+        ...baseVerifierOptions,
+        ...extra,
+      }),
+      /unsupported|fields/i,
+    );
+  }
+  const publicPem = publicKey.export({ type: 'spki', format: 'pem' }).toString('utf8');
+  const privatePem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString('utf8');
+  for (const privateKeyInput of [
+    privateKey,
+    privatePem,
+    `${publicPem}${privatePem}${publicPem}`,
+    `${publicPem}garbage\n${publicPem}`,
+  ]) {
+    assert.throws(
+      () => createE2BExternalQualificationObservationVerifier({
+        ...baseVerifierOptions,
+        publicKey: privateKeyInput,
+      }),
+      /publicKey is invalid/i,
+    );
+  }
+  const pemVerifier = createE2BExternalQualificationObservationVerifier({
+    ...baseVerifierOptions,
+    publicKey: publicPem,
+  });
+  assert.equal(pemVerifier.key_hash, baseVerifierOptions.publicKeyHash);
+  for (const privateKeyInput of [privateKey, privatePem]) {
+    assert.throws(
+      () => createE2BQualificationTrustVerifier({
+        publicKey: privateKeyInput,
+        publicKeyHash: baseVerifierOptions.publicKeyHash,
+      }),
+      /publicKey is invalid/i,
+    );
+  }
+  const pemTrustVerifier = createE2BQualificationTrustVerifier({
+    publicKey: publicPem,
+    publicKeyHash: baseVerifierOptions.publicKeyHash,
+  });
+  assert.equal(pemTrustVerifier.key_hash, baseVerifierOptions.publicKeyHash);
 });
 
 test('observer receipts reject future issue, expiry, overlong lifetime, and audience drift', () => {

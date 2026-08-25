@@ -35,6 +35,7 @@ import {
 } from '../e2b-template/lib/runtime-contract.mjs';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
 import {
+  E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_FAILURE_CLASSES,
   E2B_QUALIFICATION_FAILURE_STAGES,
@@ -745,7 +746,9 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
     denyOut: ['0.0.0.0/0'],
     allowPublicTraffic: false,
   });
-  assert.equal(canary.controls.inherited_environment_absent, 'verified');
+  for (const control of E2B_EXTERNAL_BIRTH_CONTROLS) {
+    assert.equal(canary.controls[control], 'unknown');
+  }
   assert.equal(canary.controls.first_instruction_ipv4_egress_denied, 'unknown');
   assert.equal(canary.controls.first_instruction_ipv6_egress_denied, 'unknown');
   assert.equal(canary.controls.cost_within_cap, 'unknown');

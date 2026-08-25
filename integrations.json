@@ -1,6 +1,6 @@
 {
-  "version": "2.48.0",
-  "updated_at": "2026-08-24",
+  "version": "2.49.0",
+  "updated_at": "2026-08-25",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -120,7 +120,7 @@
       "distribution_status": "source_only",
       "source": "risk-fork",
       "min_node": "20",
-      "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and qualification-gated renewable idle leases, but no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, detached pinned Ed25519 trust and an exact signed e2b@2.39.0 SDK-integrity match are required before provider use; the hosted MCP enforcement bundle remains source-only and unwired; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
+      "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and qualification-gated renewable idle leases; same-UID boot claims are diagnostic only, and seven inherited-state/fresh-entropy controls remain unknown until a signed external receipt proves a closed privilege-separated observer boundary plus exact per-control evidence; no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, detached pinned Ed25519 trust and an exact signed e2b@2.39.0 SDK-integrity match are required before provider use; the hosted MCP enforcement bundle remains source-only and unwired; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
     }
   },
   "env_vars": {
@@ -1624,7 +1624,7 @@
       "path": "risk-fork/src/index.mjs",
       "install": "cd risk-fork && npm ci",
       "docs": "risk-fork/README.md",
-      "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and qualification-gated renewable idle leases, but no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, detached pinned Ed25519 trust and an exact signed e2b@2.39.0 SDK-integrity match are required before provider use; the hosted MCP enforcement bundle remains source-only and unwired; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
+      "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and qualification-gated renewable idle leases; same-UID boot claims are diagnostic only, and seven inherited-state/fresh-entropy controls remain unknown until a signed external receipt proves a closed privilege-separated observer boundary plus exact per-control evidence; no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, detached pinned Ed25519 trust and an exact signed e2b@2.39.0 SDK-integrity match are required before provider use; the hosted MCP enforcement bundle remains source-only and unwired; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
     }
   ],
   "specs": [

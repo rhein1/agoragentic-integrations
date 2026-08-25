@@ -200,6 +200,28 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "required": ["external_observation_receipt"],
+        "properties": { "external_observation_receipt": { "type": "null" } }
+      },
+      "then": {
+        "properties": {
+          "controls": {
+            "type": "object",
+            "properties": {
+              "inherited_environment_absent": { "const": "unknown" },
+              "inherited_processes_absent": { "const": "unknown" },
+              "credential_files_absent": { "const": "unknown" },
+              "wallet_material_absent": { "const": "unknown" },
+              "persistent_mounts_absent": { "const": "unknown" },
+              "unauthorized_sockets_absent": { "const": "unknown" },
+              "fresh_entropy_verified": { "const": "unknown" }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -303,6 +325,44 @@
         }
       ]
     },
+    "nonVerifiedStatusEvidence": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["failed", "unknown"] }
+      }
+    },
+    "observerBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer_class", "status", "evidence_hash", "child_write_access", "reusable_signing_authority_in_child"],
+      "properties": {
+        "producer_class": { "enum": ["provider_control_plane", "privileged_host_supervisor"] },
+        "status": { "$ref": "#/$defs/status" },
+        "evidence_hash": { "$ref": "#/$defs/nullableHash" },
+        "child_write_access": { "const": false },
+        "reusable_signing_authority_in_child": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "verified" } } },
+          "then": { "properties": { "evidence_hash": { "$ref": "#/$defs/hash" } } }
+        }
+      ]
+    },
+    "birthControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inherited_environment_absent", "inherited_processes_absent", "credential_files_absent", "wallet_material_absent", "persistent_mounts_absent", "unauthorized_sockets_absent", "fresh_entropy_verified"],
+      "properties": {
+        "inherited_environment_absent": { "$ref": "#/$defs/statusEvidence" },
+        "inherited_processes_absent": { "$ref": "#/$defs/statusEvidence" },
+        "credential_files_absent": { "$ref": "#/$defs/statusEvidence" },
+        "wallet_material_absent": { "$ref": "#/$defs/statusEvidence" },
+        "persistent_mounts_absent": { "$ref": "#/$defs/statusEvidence" },
+        "unauthorized_sockets_absent": { "$ref": "#/$defs/statusEvidence" },
+        "fresh_entropy_verified": { "$ref": "#/$defs/statusEvidence" }
+      }
+    },
     "providerControls": {
       "type": "object",
       "additionalProperties": false,
@@ -369,7 +429,7 @@
     "externalObservationReceipt": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema", "base_evidence_hash", "observer", "audience", "observed_at", "issued_at", "expires_at", "bindings", "requested_limits", "network", "provider_controls", "cost", "observation_hash", "signature"],
+      "required": ["schema", "base_evidence_hash", "observer", "audience", "observed_at", "issued_at", "expires_at", "observer_boundary", "bindings", "requested_limits", "birth_controls", "network", "provider_controls", "cost", "observation_hash", "signature"],
       "properties": {
         "schema": { "const": "agoragentic.risk-fork.e2b-external-qualification-observation.v1" },
         "base_evidence_hash": { "$ref": "#/$defs/hash" },
@@ -378,8 +438,10 @@
         "observed_at": { "type": "string", "format": "date-time" },
         "issued_at": { "type": "string", "format": "date-time" },
         "expires_at": { "type": "string", "format": "date-time" },
+        "observer_boundary": { "$ref": "#/$defs/observerBoundary" },
         "bindings": { "$ref": "#/$defs/observationBindings" },
         "requested_limits": { "$ref": "#/$defs/requestedLimits" },
+        "birth_controls": { "$ref": "#/$defs/birthControls" },
         "network": {
           "type": "object",
           "additionalProperties": false,
@@ -410,7 +472,37 @@
           "maxLength": 86,
           "pattern": "^[A-Za-z0-9_-]+$"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["observer_boundary"],
+            "properties": {
+              "observer_boundary": {
+                "type": "object",
+                "required": ["status"],
+                "properties": { "status": { "enum": ["failed", "unknown"] } }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "birth_controls": {
+                "type": "object",
+                "properties": {
+                  "inherited_environment_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "inherited_processes_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "credential_files_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "wallet_material_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "persistent_mounts_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "unauthorized_sockets_absent": { "$ref": "#/$defs/nonVerifiedStatusEvidence" },
+                  "fresh_entropy_verified": { "$ref": "#/$defs/nonVerifiedStatusEvidence" }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
