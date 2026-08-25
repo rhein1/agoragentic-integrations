@@ -4,7 +4,7 @@
 >
 > These records describe bounded implementation and evidence surfaces. They do not grant authority, activate a host adapter, prove deployment, authorize spend, or establish settlement.
 
-Capability records: **10** of **106** catalog entries.
+Capability records: **10** of **107** catalog entries.
 
 ## Capabilities
 
