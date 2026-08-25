@@ -1,0 +1,44 @@
+{
+  "schema": "agoragentic.transaction-assurance.external-adopter-profile.v1",
+  "profile_version": "0.1.0",
+  "operator_display_name": "anchor-x402",
+  "operator_origin": "https://anchor-x402.com",
+  "target_name": "anchor-x402-normalized-policy-adapter",
+  "target_contract": "offline_normalized_evidence_policy",
+  "evidence_class": "starter_self_test",
+  "implementation_authorship": "agoragentic_clean_room_starter_operator_review_required",
+  "source_wire_protocol": "x402",
+  "normalized_protocol_inputs": [
+    "google_ap2",
+    "openai_stripe_acp",
+    "visa_tap",
+    "x402"
+  ],
+  "profiles_evaluated": [
+    "authority_identity",
+    "commercial_terms",
+    "execution_delivery",
+    "outcome_validation",
+    "payment_idempotency",
+    "privacy_redaction",
+    "reconciliation",
+    "settlement_finality"
+  ],
+  "network_required": false,
+  "secret_access_required": false,
+  "spend_authority": false,
+  "wire_protocol_parsing_claimed": false,
+  "signature_verification_claimed": false,
+  "live_settlement_claimed": false,
+  "production_compatibility_claimed": false,
+  "certification_claimed": false,
+  "operator_review_required": true,
+  "self_test_satisfies_external_adopter_gate": false,
+  "required_operator_assertions": [
+    "target_files_committed_in_operator_controlled_repository",
+    "profile_reviewed_against_operator_policy",
+    "run_uses_immutable_suite_and_target_commits",
+    "artifacts_reviewed_for_public_safety_before_publication",
+    "actionable_observations_reported"
+  ]
+}

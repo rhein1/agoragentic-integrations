@@ -200,6 +200,63 @@ function assertInventoryCoverage(manifest) {
   }
 }
 
+function assertCapabilityRecords(manifest) {
+  const requiredIds = [
+    'agent-os',
+    'claude-code-plugin',
+    'codex-harness-mapping',
+    'crewai',
+    'harness-core',
+    'langgraph',
+    'mcp',
+    'n8n',
+    'openai-agents',
+    'opencode-harness-plugin',
+  ];
+  const integrations = new Map((manifest.integrations || []).map((entry) => [entry.id, entry]));
+
+  for (const id of requiredIds) {
+    if (!integrations.get(id)?.capability_record) {
+      fail(`integrations.json ${id} must include a capability_record`);
+    }
+  }
+
+  for (const integration of manifest.integrations || []) {
+    const record = integration.capability_record;
+    if (!record) continue;
+    const { capabilities, evidence, requirements } = record;
+    if (evidence.evidence_ref) {
+      const evidencePath = path.resolve(root, evidence.evidence_ref);
+      const relative = path.relative(root, evidencePath);
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        fail(`${integration.id}.capability_record.evidence_ref escapes the repository`);
+      } else if (!fs.existsSync(evidencePath)) {
+        fail(`${integration.id}.capability_record.evidence_ref does not exist: ${evidence.evidence_ref}`);
+      }
+    }
+    if (evidence.last_verified_at && new Date(evidence.last_verified_at).getTime() > Date.now()) {
+      fail(`${integration.id}.capability_record.evidence.last_verified_at is in the future`);
+    }
+    const tested = [
+      capabilities.router_client,
+      capabilities.manifest_mapping,
+      capabilities.pre_action_enforcement,
+      capabilities.agent_os_export,
+    ].includes('tested');
+    if (tested && (evidence.proof_class === 'static' || !evidence.evidence_ref || !evidence.last_verified_at)) {
+      fail(`${integration.id} tested capabilities require non-static dated evidence`);
+    }
+    if (capabilities.pre_action_enforcement === 'none'
+      && ['host_enforced', 'hosted_enforced'].includes(capabilities.approval_support)) {
+      fail(`${integration.id} cannot claim enforced approvals without pre-action enforcement`);
+    }
+    if (capabilities.receipt_support === 'settlement'
+      && (evidence.proof_class !== 'settlement' || requirements.spend_capable !== true)) {
+      fail(`${integration.id} settlement receipt support requires settlement proof and a spend-capable path`);
+    }
+  }
+}
+
 function assertDiscoveryParity(manifest) {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
   const llms = fs.readFileSync(path.join(root, 'llms.txt'), 'utf8');
@@ -354,6 +411,7 @@ if (duplicates.length) fail(`integrations.json has duplicate top-level keys: ${d
 const manifest = JSON.parse(rawManifest);
 assertManifestShape(manifest);
 assertInventoryCoverage(manifest);
+assertCapabilityRecords(manifest);
 assertDiscoveryParity(manifest);
 assertMachineCopy();
 assertProtocolNamespaces(manifest);

@@ -1,6 +1,6 @@
 {
-  "version": "2.41.0",
-  "updated_at": "2026-08-09",
+  "version": "2.47.0",
+  "updated_at": "2026-08-21",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -51,6 +51,7 @@
       "name": "agoragentic-harness-core",
       "install": "npx agoragentic-harness-core@latest init",
       "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
+      "distribution_status": "published",
       "min_node": "18"
     },
     "opencode": {
@@ -366,6 +367,18 @@
       "authority_granted": false
     },
     {
+      "directory": "matraix-cohort-assurance",
+      "status": "unpublished_alpha",
+      "reason": "The exact upstream source lock, closed representation contract, no-spend target policy, and deterministic fixture replay pass, but no live MatrAIx provider run or independent external compatibility review has occurred.",
+      "owner": "repository-maintainers",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/320",
+      "review_by": "2026-09-30",
+      "published": false,
+      "external_compatibility_verified": false,
+      "ready_for_manifest": false,
+      "authority_granted": false
+    },
+    {
       "directory": "prime-agent-governance",
       "status": "unpublished_alpha",
       "reason": "Exact Prime Agent v0.7.1 package and event fixtures pass, but an external host run is still required before public catalog inclusion.",
@@ -380,7 +393,7 @@
     {
       "directory": "transaction-assurance",
       "status": "unpublished_alpha",
-      "reason": "The source-only vendor-neutral conformance suite, four version-pinned protocol profiles, deterministic runner, reports, receipt verifier, examples, and reusable workflow are implemented. A real external adopter run is still required before public catalog inclusion or any ecosystem-standard claim.",
+      "reason": "A signed independent anchor-x402 run against historical suite 0.1.0-alpha.0 and pinned target and suite commits passed 42/42 with a publicly verified receipt, no network use, and no spend authority, and produced two actionable contract-clarity findings. Current suite 0.2.0-alpha.0 adds seven required negative/review vectors and needs fresh independent artifacts; starter self-tests cannot satisfy that gate. The package also includes optional read-only Mycelium external-verification profiles. Publication, public catalog inclusion, and any ecosystem-standard or live-compatibility claim remain separately review-gated.",
       "owner": "repository-maintainers",
       "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/246",
       "review_by": "2026-09-08",
@@ -410,7 +423,28 @@
       "status": "ready",
       "path": "agent-os/agent_os_node.mjs",
       "install": "node 18+ or pip install requests",
-      "docs": "agent-os/README.md"
+      "docs": "agent-os/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "record_only",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "agent-os/agent_os_node.mjs"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "agoragentic-rust-framework",
@@ -491,7 +525,28 @@
       "status": "beta",
       "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
       "install": "npm install n8n-nodes-agoragentic",
-      "docs": "n8n/README.md"
+      "docs": "n8n/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "n8n/nodes/Agoragentic/Agoragentic.node.ts"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "open-wallet-standard",
@@ -544,9 +599,61 @@
       "name": "Agoragentic Harness Core",
       "language": "javascript",
       "status": "beta",
-      "path": "harness-core/bin/agoragentic-harness.mjs",
+      "path": "harness-core/README.md",
       "install": "npx agoragentic-harness-core@latest init",
-      "docs": "harness-core/README.md"
+      "docs": "harness-core/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "tested",
+          "post_action_evidence": "local",
+          "approval_support": "host_enforced",
+          "receipt_support": "local",
+          "agent_os_export": "tested"
+        },
+        "evidence": {
+          "host_version_tested": "standalone package 0.3.1",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-21T03:58:21Z",
+          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
+    },
+    {
+      "id": "codex-harness-mapping",
+      "name": "Codex Harness Mapping Stub",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "harness-core/README.md",
+      "install": "npx agoragentic-harness-core@latest adapters",
+      "docs": "harness-core/README.md",
+      "compatibility_scope": "Cataloged local no-spend mapping contract only; no Codex host hook, tool interception, execution, or runtime receipt claim",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "documented",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "none",
+          "approval_support": "none",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-21T03:58:21Z",
+          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "premortem-golden-loop",
@@ -573,7 +680,28 @@
       "status": "ready",
       "path": "crewai/agoragentic_crewai.py",
       "install": "pip install agoragentic",
-      "docs": "crewai/README.md"
+      "docs": "crewai/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "crewai/agoragentic_crewai.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "mcp",
@@ -582,7 +710,28 @@
       "status": "ready",
       "path": "mcp/mcp-server.js",
       "install": "npx agoragentic-mcp",
-      "docs": "mcp/README.md"
+      "docs": "mcp/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "tested",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "preview"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "mcp/test/v2-remote-relay.test.js"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "agent-client-protocol",
@@ -609,7 +758,28 @@
       "status": "ready",
       "path": "openai-agents/agoragentic_openai.py",
       "install": "pip install agoragentic",
-      "docs": "openai-agents/README.md"
+      "docs": "openai-agents/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "openai-agents/agoragentic_openai.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "elizaos",
@@ -906,7 +1076,28 @@
       "status": "ready",
       "path": "langgraph/agoragentic_langgraph.py",
       "install": "pip install requests langgraph langchain-core",
-      "docs": "langgraph/README.md"
+      "docs": "langgraph/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "host_observed",
+          "approval_support": "none",
+          "receipt_support": "hosted_execution",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "langgraph/agoragentic_langgraph.py"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "cloudflare-agents",
@@ -1293,7 +1484,28 @@
       "status": "ready",
       "path": "claude-code/README.md",
       "install": "/plugin marketplace add rhein1/agoragentic-integrations; /plugin install agoragentic@agoragentic-integrations",
-      "docs": "claude-code/README.md"
+      "docs": "claude-code/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "documented",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "none",
+          "approval_support": "none",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "unknown",
+          "proof_class": "static",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "claude-code/README.md"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "cline-mcp",
@@ -1329,7 +1541,28 @@
       "status": "experimental",
       "path": "opencode/src/server.mjs",
       "install": "cd opencode && npm ci",
-      "docs": "opencode/README.md"
+      "docs": "opencode/README.md",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "experimental",
+          "post_action_evidence": "local",
+          "approval_support": "host_enforced",
+          "receipt_support": "local",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "1.18.15 contract fixture",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-20T18:45:00Z",
+          "evidence_ref": "opencode/test/opencode-plugin.test.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "gstack-harness-bridge",
@@ -1434,6 +1667,18 @@
     "interchange_python_reference_client": "interchange/clients/python/interchange_client.py",
     "interchange_anchor_x402_pilot": "interchange/ANCHOR_X402_PILOT.md",
     "interchange_anchor_x402_evidence": "interchange/evidence/anchor-x402-pilot-2026-07.json",
+    "interchange_research_record": "interchange/research/README.md",
+    "interchange_research_paper_outline": "interchange/research/PAPER_OUTLINE.md",
+    "interchange_research_chronology": "interchange/research/CHRONOLOGY.md",
+    "interchange_research_a2a_case_study": "interchange/research/A2A_FEDERATION_CASE_STUDY.md",
+    "interchange_research_x402_case_study": "interchange/research/X402_PRODUCTION_CASE_STUDY.md",
+    "interchange_research_production_findings": "interchange/research/PRODUCTION_FINDINGS.md",
+    "interchange_research_claim_matrix": "interchange/research/CLAIM_EVIDENCE_MATRIX.md",
+    "interchange_research_evidence_gaps": "interchange/research/EVIDENCE_GAPS.md",
+    "interchange_research_references": "interchange/research/REFERENCES.md",
+    "interchange_production_research_ledger": "interchange/evidence/interchange-production-research-ledger.v1.json",
+    "interchange_production_research_ledger_schema": "interchange/schemas/interchange-production-research-ledger.schema.json",
+    "interchange_production_research_verifier": "scripts/verify-interchange-research.mjs",
     "interchange_external_pilot_evidence_schema": "interchange/schemas/external-pilot-evidence.schema.json",
     "interchange_agent_card_extension_schema": "interchange/schemas/agent-card-federation-extension.schema.json",
     "interchange_post_pin_auth_schema": "interchange/schemas/post-pin-auth.schema.json",
@@ -1451,9 +1696,13 @@
     "micro_ecf": "micro-ecf/README.md",
     "micro_ecf_canonical_repo": "https://github.com/rhein1/agoragentic-micro-ecf",
     "harness_core": "harness-core/README.md",
-    "harness_core_memory_skillopt": "harness-core/MEMORY_SKILLOPT.md",
-    "harness_core_memory_skillopt_selection_schema": "harness-core/schema/memory-skillopt-selection.v1.json",
-    "harness_core_memory_skillopt_task_draft_schema": "harness-core/schema/memory-skillopt-task-draft.v1.json",
+    "harness_core_canonical_repository": "https://github.com/rhein1/agoragentic-harness-core",
+    "harness_core_npm": "https://www.npmjs.com/package/agoragentic-harness-core",
+    "harness_core_release": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1",
+    "harness_core_release_evidence": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
+    "harness_core_memory_skillopt": "https://github.com/rhein1/agoragentic-harness-core/blob/main/MEMORY_SKILLOPT.md",
+    "harness_core_memory_skillopt_selection_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-selection.v1.json",
+    "harness_core_memory_skillopt_task_draft_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-task-draft.v1.json",
     "premortem_golden_loop": "premortem-golden-loop/README.md",
     "premortem_prompt": "premortem-golden-loop/PROMPT.md",
     "micro_ecf_llm_install": "micro-ecf/LLM_INSTALL.md",
@@ -1520,6 +1769,10 @@
     "buzz_signed_workspace_evidence_provenance": "examples/buzz-signed-workspace-evidence/upstream-provenance.json",
     "anydoc_document_evidence": "examples/anydoc-document-evidence/README.md",
     "anydoc_document_evidence_adapter": "examples/anydoc-document-evidence/agoragentic-anydoc.mjs",
-    "anydoc_semantic_conformance": "examples/anydoc-document-evidence/conformance/README.md"
+    "anydoc_semantic_conformance": "examples/anydoc-document-evidence/conformance/README.md",
+    "transaction_assurance_source": "transaction-assurance/README.md",
+    "transaction_assurance_skill": "skills/agoragentic-assure/SKILL.md",
+    "transaction_assurance_authority_schema": "transaction-assurance/schema/normalized-authority.v1.json",
+    "transaction_assurance_evaluation_schema": "transaction-assurance/schema/transaction-assurance-evaluation.v1.json"
   }
 }

@@ -1,6 +1,6 @@
 {
   "schema": "agoragentic.skill-pack.v2",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "canonical_root": "skills",
   "skills": [
     {
@@ -22,6 +22,22 @@
       "id": "agoragentic-prove",
       "source": "skills/agoragentic-prove/SKILL.md",
       "advanced_context": ["harness-core", "x402"]
+    },
+    {
+      "id": "agoragentic-assure",
+      "source": "skills/agoragentic-assure/SKILL.md",
+      "advanced_context": ["transaction-assurance", "x402", "interchange"],
+      "contract": {
+        "package": "@agoragentic/transaction-assurance",
+        "version": "0.2.0-alpha.0",
+        "source": "transaction-assurance",
+        "schemas": [
+          "transaction-assurance/schema/normalized-authority.v1.json",
+          "transaction-assurance/schema/transaction-assurance-evaluation.v1.json"
+        ],
+        "network": "none",
+        "authority_granted": false
+      }
     },
     {
       "id": "agoragentic-deploy",

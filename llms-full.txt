@@ -11,7 +11,7 @@ The published packages and repo-local CLIs are:
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
 - **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥20)
 - **Micro ECF**: run `npx agoragentic-micro-ecf@latest plan --dir .` first; only after explicit approval run `npx agoragentic-micro-ecf@latest install --dir . --yes` (npm, Node ≥18)
-- **Harness Core**: `npx agoragentic-harness-core@latest init` (npm currently serves v0.2.0; this repo carries the review-gated v0.2.1 patch candidate, Node ≥18)
+- **Harness Core**: `npx agoragentic-harness-core@latest init` (standalone package v0.3.1 from `https://github.com/rhein1/agoragentic-harness-core`, Node ≥18)
 - **OpenCode Harness plugin**: `cd opencode && npm ci` from a source checkout (experimental `@agoragentic/opencode` candidate; exact OpenCode 1.18.15 contract fixture only; not published)
 - **gstack Harness bridge**: `cd gstack && npm install` from a source checkout (experimental explicit-artifact adapter; no gstack execution, raw-content retention, hosted authority, or spend)
 - **HyperFrames receipt video workflow**: `cd hyperframes && npm install` from a source checkout (experimental local-only receipt/evidence renderer; deterministic sanitized scenes and hash-bound MP4 receipt, with external rendering, hosted deployment, provider calls, publication, listing, x402, and spend disabled)
@@ -62,7 +62,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 105 integration surfaces as of 2026-08-09. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 106 integration surfaces as of 2026-08-21. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -157,7 +157,7 @@ The canonical inventory is `integrations.json` and contains 105 integration surf
 | Agent OS Control Plane | agent-os/agent_os_node.mjs | npm install agoragentic or pip install agoragentic |
 | Agoragentic Rust Framework HTTP Runtime | rust-framework/README.md | set AGORAGENTIC_RUST_AGENT_URL for self-hosted runtime calls |
 | Micro ECF Harness Export | micro-ecf/README.md | npx agoragentic-micro-ecf@latest doctor --dir . |
-| Harness Core Middleware Kernel | harness-core/bin/agoragentic-harness.mjs | npx agoragentic-harness-core@latest init |
+| Harness Core Middleware Kernel | https://github.com/rhein1/agoragentic-harness-core | npx agoragentic-harness-core@latest init |
 | OpenCode Harness Plugin | opencode/src/server.mjs | cd opencode && npm ci from a source checkout |
 | gstack Harness Bridge | gstack/gstack-harness.mjs | cd gstack && npm install from a source checkout |
 | HyperFrames Receipt Video Workflow | hyperframes/receipt-video.mjs | cd hyperframes && npm install from a source checkout |
@@ -167,7 +167,7 @@ Agent OS is the hosted operating layer for deployed agents and swarms, not a loc
 
 Micro ECF is the local context wedge for context, tools, budgets, approvals, memory, and swarm boundaries. Its canonical package and documentation live at `https://github.com/rhein1/agoragentic-micro-ecf`; the `micro-ecf/` folder here is a compatibility snapshot. Micro ECF generates `ECF.md` as a persistent agent-readable policy contract, then `.micro-ecf/*` source maps, context packets, policy summaries, and Agent OS harness exports. Use `micro-ecf scan --dir .`, `micro-ecf doctor --dir .`, and `micro-ecf lint ECF.md` before relying on the artifacts. The harness export produces a stable `agent_os_preview_request` for hosted Agent OS preview. Use `npx agoragentic-os@latest deploy readiness --file .micro-ecf/harness-export.json`, then `deploy preview`, and only use `deploy create` when the owner is ready to record a hosted deployment request. Micro ECF does not execute hosted work, activate billing, provision runtime, publish marketplace listings, settle x402, or expose Full ECF internals.
 
-Harness Core is the local no-spend middleware kernel for builders who need policy gates, append-only event/run evidence, local approvals and review records, proof, receipts, loopback runtime metadata probes, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. It records or blocks proposed actions; it does not execute frameworks or tools, deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private Full ECF internals.
+Harness Core is the standalone local no-spend middleware kernel at `https://github.com/rhein1/agoragentic-harness-core` for builders who need policy gates, append-only event/run evidence, local approvals and review records, proof, receipts, loopback runtime metadata probes, Agent OS export, and listing-readiness artifacts without installing the full Micro ECF workflow. The `harness-core/` path in this repository is a migration pointer, not a second implementation. Harness Core records or blocks proposed actions; it does not execute frameworks or tools, deploy infrastructure, spend funds, publish listings, activate x402, mutate trust, write hosted memory, or expose private Full ECF internals.
 
 The experimental OpenCode Harness source plugin applies those existing Harness families inside OpenCode's native tool hooks. Its evidence is limited to the exact OpenCode 1.18.15 official-source contract fixture and hermetic direct-hook tests; it is not published and does not claim an end-to-end OpenCode run. It registers no hosted tools and persists only bounded hashes, shape metadata, references, approvals, and local receipts.
 
@@ -250,6 +250,9 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 |-------|----------|
 | Machine index | integrations.json |
 | JSON Schema | integrations.schema.json |
+| Generated capability status | docs/INTEGRATION_CAPABILITY_STATUS.md |
+| Repository rename preflight | docs/REPOSITORY_RENAME_PREFLIGHT.md |
+| Machine rename dependency inventory | docs/repository-rename-preflight.json |
 | Ecosystem profile | ecosystem.json |
 | Ecosystem profile schema | ecosystem.schema.json |
 | Client distribution status | docs/DISTRIBUTION.md |
@@ -276,7 +279,7 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Flowise | flowise/README.md |
 | Composio | composio/README.md |
 | HumanLayer | humanlayer/README.md |
-| Harness Core | harness-core/README.md |
+| Harness Core | https://github.com/rhein1/agoragentic-harness-core |
 | OpenCode Harness plugin | opencode/README.md |
 | OpenCode pinned contract fixture | opencode/contracts/opencode-plugin-1.18.15.json |
 | gstack Harness bridge | gstack/README.md |

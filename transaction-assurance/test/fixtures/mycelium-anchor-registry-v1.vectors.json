@@ -1,0 +1,118 @@
+{
+  "schema": "agoragentic.mycelium-anchor-registry-v1-vectors.v1",
+  "profile": "mycelium-anchor-registry-v1",
+  "source": {
+    "repository": "https://github.com/giskard09/giskard-payments",
+    "revision": "cd8100e63d17882ba11843882acaf5b1e069fdce",
+    "source_sha256": "sha256:82437f6f5ba3952a2c7ac34700e82c03bc819662687a2d23f7cfce72aee903a0",
+    "registry_address": "0x49feca52bc634a9ab773226d16619dec547794aa",
+    "runtime_code_sha256": "sha256:e2f5675b490dbb4211cfbeb89a8e8913a2215843c91c33ced8f46935b83d82ed",
+    "license": "MIT"
+  },
+  "fixtures": {
+    "base_real_anchor": {
+      "evidence": {
+        "profile": "mycelium-anchor-registry-v1",
+        "action_reference_profile": "mycelium-action-ref-v1.0",
+        "action_reference": "d0f0a32e5290e0e71efc9265d86fe517db80f1c209ddff5106b9f69ba3c181db",
+        "chain_id": "eip155:8453",
+        "registry_address": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+        "transaction_hash": "0xf00a5317e47d4f4d581eb16bf08b64dde45944706c615299c334f8082562f184",
+        "block_number": "48936665",
+        "log_index": 71
+      },
+      "verifier_observation": {
+        "schema": "agoragentic.external-anchor-verifier-observation.v1",
+        "profile": "mycelium-anchor-registry-v1",
+        "chain_id": "eip155:8453",
+        "registry_address": "0x49feca52bc634a9ab773226d16619dec547794aa",
+        "runtime_code": "0x608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063eecdf9271461002d575b5f5ffd5b610047600480360381019061004291906100d2565b610049565b005b3373ffffffffffffffffffffffffffffffffffffffff16817ffe2289542f7a0110ac112c3a4d712afdcaaf2900a1326f4e6f340b563a0e8734426040516100909190610115565b60405180910390a350565b5f5ffd5b5f819050919050565b6100b18161009f565b81146100bb575f5ffd5b50565b5f813590506100cc816100a8565b92915050565b5f602082840312156100e7576100e661009b565b5b5f6100f4848285016100be565b91505092915050565b5f819050919050565b61010f816100fd565b82525050565b5f6020820190506101285f830184610106565b9291505056fea26469706673582212202267335562733f038da16f93a6cad865bbf6078cdf27bb210b3737e85b58275364736f6c63430008210033",
+        "transaction_hash": "0xf00a5317e47d4f4d581eb16bf08b64dde45944706c615299c334f8082562f184",
+        "transaction_status": "success",
+        "transaction_to": "0x49feca52bc634a9ab773226d16619dec547794aa",
+        "transaction_input": "0xeecdf927d0f0a32e5290e0e71efc9265d86fe517db80f1c209ddff5106b9f69ba3c181db",
+        "block_number": "48936665",
+        "block_hash": "0x444ef7d905a054809fb8e150e81c5ed9565f177b2e6e81bc3c66edaf3f082b2d",
+        "block_timestamp": "1784662677",
+        "head_block_number": "49756001",
+        "events": [
+          {
+            "transaction_hash": "0xf00a5317e47d4f4d581eb16bf08b64dde45944706c615299c334f8082562f184",
+            "address": "0x49feca52bc634a9ab773226d16619dec547794aa",
+            "block_number": "48936665",
+            "block_hash": "0x444ef7d905a054809fb8e150e81c5ed9565f177b2e6e81bc3c66edaf3f082b2d",
+            "log_index": 71,
+            "removed": false,
+            "topics": [
+              "0xfe2289542f7a0110ac112c3a4d712afdcaaf2900a1326f4e6f340b563a0e8734",
+              "0xd0f0a32e5290e0e71efc9265d86fe517db80f1c209ddff5106b9f69ba3c181db",
+              "0x000000000000000000000000dcc84e9798e8eb1b1b48a31b8f35e5aa7b83dbf4"
+            ],
+            "data": "0x000000000000000000000000000000000000000000000000000000006a5fca95"
+          }
+        ],
+        "verifier_ref": "verifier://fixture/base-rpc",
+        "evidence_ref": "fixture://base/tx/f00a5317",
+        "checked_at": "2026-08-09T18:00:00.000Z"
+      }
+    },
+    "synthetic_baseline_anchor": {
+      "evidence": {
+        "profile": "mycelium-anchor-registry-v1",
+        "action_reference_profile": "mycelium-action-ref-v1.0",
+        "action_reference": "f4ebda732e3c063bdd8547c734e4956f009bbed7f557cb949f7c8033e8c42d1d",
+        "chain_id": "eip155:8453",
+        "registry_address": "0x49fEcA52bC634a9Ab773226D16619deC547794aa",
+        "transaction_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "block_number": "48936665",
+        "log_index": 0
+      },
+      "verifier_observation": {
+        "schema": "agoragentic.external-anchor-verifier-observation.v1",
+        "profile": "mycelium-anchor-registry-v1",
+        "chain_id": "eip155:8453",
+        "registry_address": "0x49feca52bc634a9ab773226d16619dec547794aa",
+        "runtime_code": "0x608060405234801561000f575f5ffd5b5060043610610029575f3560e01c8063eecdf9271461002d575b5f5ffd5b610047600480360381019061004291906100d2565b610049565b005b3373ffffffffffffffffffffffffffffffffffffffff16817ffe2289542f7a0110ac112c3a4d712afdcaaf2900a1326f4e6f340b563a0e8734426040516100909190610115565b60405180910390a350565b5f5ffd5b5f819050919050565b6100b18161009f565b81146100bb575f5ffd5b50565b5f813590506100cc816100a8565b92915050565b5f602082840312156100e7576100e661009b565b5b5f6100f4848285016100be565b91505092915050565b5f819050919050565b61010f816100fd565b82525050565b5f6020820190506101285f830184610106565b9291505056fea26469706673582212202267335562733f038da16f93a6cad865bbf6078cdf27bb210b3737e85b58275364736f6c63430008210033",
+        "transaction_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "transaction_status": "success",
+        "transaction_to": "0x49feca52bc634a9ab773226d16619dec547794aa",
+        "transaction_input": "0xeecdf927f4ebda732e3c063bdd8547c734e4956f009bbed7f557cb949f7c8033e8c42d1d",
+        "block_number": "48936665",
+        "block_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "block_timestamp": "1784662677",
+        "head_block_number": "48936676",
+        "events": [
+          {
+            "transaction_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "address": "0x49feca52bc634a9ab773226d16619dec547794aa",
+            "block_number": "48936665",
+            "block_hash": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "log_index": 0,
+            "removed": false,
+            "topics": [
+              "0xfe2289542f7a0110ac112c3a4d712afdcaaf2900a1326f4e6f340b563a0e8734",
+              "0xf4ebda732e3c063bdd8547c734e4956f009bbed7f557cb949f7c8033e8c42d1d",
+              "0x000000000000000000000000dcc84e9798e8eb1b1b48a31b8f35e5aa7b83dbf4"
+            ],
+            "data": "0x000000000000000000000000000000000000000000000000000000006a5fca95"
+          }
+        ],
+        "verifier_ref": "verifier://fixture/synthetic",
+        "evidence_ref": "fixture://synthetic/baseline-anchor",
+        "checked_at": "2026-08-09T18:00:00.000Z"
+      }
+    }
+  },
+  "negative_vectors": [
+    "wrong_action_reference",
+    "wrong_chain",
+    "wrong_registry_address",
+    "wrong_runtime_code",
+    "reverted_transaction",
+    "wrong_target_or_selector",
+    "missing_event",
+    "wrong_log_index_or_block",
+    "insufficient_finality"
+  ],
+  "multi_event_rule": "A selected matching event may verify even when the bounded observation contains other valid anchors for the same reference. The result records the observed count and never claims single execution or global uniqueness."
+}

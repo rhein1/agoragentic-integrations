@@ -4,7 +4,6 @@ mcp/dist/
 mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
-harness-core/node_modules/
 opencode/node_modules/
 gstack/node_modules/
 hyperframes/node_modules/
@@ -13,6 +12,7 @@ examples/anydoc-document-evidence/node_modules/
 examples/anydoc-document-evidence/conformance/generated/
 examples/anydoc-document-evidence/conformance/report.json
 examples/anydoc-document-evidence/*.tgz
+transaction-assurance/node_modules/
 __pycache__/
 *.pyc
 sdk/python/build/

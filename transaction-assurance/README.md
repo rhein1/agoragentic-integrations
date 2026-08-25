@@ -44,12 +44,23 @@ This is a source-visible, unpublished alpha implementation.
 - spend authority: none
 - protocol recognition: implemented
 - external cryptographic verifiers: trusted in-process callback interface implemented; verifier implementations remain external
+- optional external anchor verification: Mycelium action-reference v1 and AnchorRegistry v1 read-only profiles implemented; no writer or hosted dependency
 - hosted Agoragentic execution changes: none
 - marketplace catalog entry: intentionally deferred
 - vendor-neutral conformance suite: implemented as an offline source-only alpha
-- external adopter evidence: not yet obtained
+- external adopter evidence: one independent offline run against historical suite `0.1.0-alpha.0` at pinned target and suite commits; 42/42 with a verified receipt, no network, and no spend authority; current suite `0.2.0-alpha.0` requires fresh independent artifacts
 
 `package.json` remains `private: true` until review, conformance fixtures, provenance, and release ownership are complete.
+
+## Agent-host install path
+
+The focused `agoragentic-assure` Agent Skill is generated from one canonical source for Codex, Claude Code, OpenCode, Cursor, GitHub Copilot, and Gemini CLI. Install it with the source-visible skill pack:
+
+```bash
+npx skills add rhein1/agoragentic-integrations --full-depth --skill agoragentic-assure
+```
+
+The skill pins this package at `0.2.0-alpha.0` and points every host to the same normalized-authority and evaluation schemas. Installing the skill does not install a registry package, configure credentials, grant authority, call a provider, or move money. The local package remains source-only; clone this repository and run the five-minute self-test below when local evaluation code is needed.
 
 ## Vendor-neutral conformance suite
 
@@ -89,6 +100,16 @@ node bin/verify-conformance-receipt.mjs \
 
 The runner itself makes no network calls and grants no authority. A target module is caller-supplied code and runs with the caller's process permissions; review it before execution. The bundled examples are reference contract fixtures, not external adoption evidence.
 
+The first independent adopter evidence for historical suite `0.1.0-alpha.0` is published by `anchor-x402` at target
+commit `13d6d70bb69cac2993753a22d423870bdfebe9a5`, with artifacts committed at
+`49634dd327eed9d3e03b5a51f510d15f04794c8a` and bound to suite commit
+`607b3dddbc441fe52554b8842b9065e60131ae3b`. The public verifier reports the
+receipt as valid. This is bounded offline conformance evidence only; it does not
+establish live settlement, production compatibility, certification,
+endorsement, or partnership, and it does not automatically cover the expanded
+`0.2.0-alpha.0` vector set. The current starter is labeled
+`starter_self_test`; its own passing output cannot satisfy the external gate.
+
 See [CONFORMANCE.md](CONFORMANCE.md) for the target-module contract, reusable workflow, version-pinned protocol profiles, and exact claim boundary. See [CONTRIBUTING_CONFORMANCE.md](CONTRIBUTING_CONFORMANCE.md) before proposing a fixture or adapter.
 
 ## Five-minute local proof
@@ -127,6 +148,11 @@ import {
   canonicalize,
   computeEnvelopeHash,
   sha256Ref,
+  normalizeExternalActionReference,
+  verifyExternalActionReferencePreimage,
+  normalizeAnchorEvidence,
+  verifyAnchorEvidence,
+  bindExternalVerification,
 } from '@agoragentic/transaction-assurance';
 ```
 
@@ -378,6 +404,14 @@ A production verifier must:
 6. avoid partnership or endorsement claims without evidence.
 
 Deterministic, license-attributed adapter vectors live in `test/fixtures/protocol-adapter-vectors.v1.json` and run on Node 20, 22, and 24. They cover unsupported versions, wrong audience/merchant/purpose, expiry, replay, changed cart/terms, payment-identifier mismatch, payment without delivery, wallet-policy scope failures, and privacy exclusions.
+
+## Optional Mycelium external verification
+
+The `./external-verification-adapters` export adds one exact Mycelium action-reference v1 profile and one read-only AnchorRegistry v1 profile. The adapter recomputes the pinned JCS/SHA-256 preimage locally and interprets raw public-chain facts returned by a trusted synchronous callback. It verifies allowlisted chain and registry identity, pinned runtime code, receipt success, target and calldata, event reference, exact block/log binding, and a 12-confirmation floor.
+
+The adapter never calls an RPC endpoint or hosted Argentum service, submits an anchor, moves money, executes a provider, or grants authority. A checked anchor proves only reference anchoring, public block timestamp, and event inclusion. It does not prove principal authority, execution correctness, delivery, settlement, or single execution. Binding adds a sibling `external_action_refs` record and separate `external_verification` state without reinterpreting any existing `authenticated_action_ref`.
+
+See [docs/MYCELIUM_EXTERNAL_VERIFICATION.md](docs/MYCELIUM_EXTERNAL_VERIFICATION.md) for immutable source pins, callback contract, fixtures, limitations, and attribution.
 
 ### AP2 field map
 

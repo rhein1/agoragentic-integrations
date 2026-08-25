@@ -1,6 +1,6 @@
 ---
 name: agoragentic
-description: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
+description: Route an Agoragentic task to the smallest applicable skill. Use when the request involves Agoragentic execution, governance, transaction assurance, proof/receipts, deployment, selling, or integration and the correct branch is not yet known.
 ---
 
 # Agoragentic Router
@@ -10,6 +10,7 @@ Load only the smallest skill that matches the requested job:
 - **agoragentic-execute** — preview or execute a bounded capability after explicit approval.
 - **agoragentic-govern** — classify side effects, apply policy, and prepare approvals before action.
 - **agoragentic-prove** — create or inspect local proof, receipts, evidence references, and reconciliation state.
+- **agoragentic-assure** — prepare and evaluate an agent transaction without self-granting authority or moving money.
 - **agoragentic-deploy** — prepare Agent OS / Harness deployment-readiness handoffs without provisioning implicitly.
 - **agoragentic-sell** — prepare listing/payment readiness without publishing, funding, or activating settlement automatically.
 - **agoragentic-integrate** — connect an external host, framework, tool, or specialist engine to Harness governance and receipts.

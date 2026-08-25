@@ -1,0 +1,79 @@
+name: MatrAIx Cohort Assurance
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'matraix-cohort-assurance/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'scripts/integration-inventory-holds.js'
+      - 'scripts/verify-integrations-json.js'
+      - 'test/integration-inventory-holds.test.mjs'
+      - '.github/workflows/matraix-cohort-assurance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'matraix-cohort-assurance/**'
+      - 'integrations.json'
+      - 'integrations.schema.json'
+      - 'scripts/integration-inventory-holds.js'
+      - 'scripts/verify-integrations-json.js'
+      - 'test/integration-inventory-holds.test.mjs'
+      - '.github/workflows/matraix-cohort-assurance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    env:
+      AGORAGENTIC_MATRAIX_LIVE: '0'
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PIP_NO_INPUT: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install bounded test tools
+        run: python -m pip install build==1.5.0 pytest==9.0.2 ruff==0.16.2
+      - name: Static checks
+        working-directory: matraix-cohort-assurance
+        run: |
+          python -m ruff check src tests
+          python -m ruff format --check src tests
+          python -m compileall -q src tests
+      - name: Offline source-lock and contract checks
+        working-directory: matraix-cohort-assurance
+        run: |
+          python -m pip install -e .
+          python -m agoragentic_matraix_assurance verify-lock --offline-fixture
+          python -m agoragentic_matraix_assurance validate
+          python -m agoragentic_matraix_assurance replay --verify-expected --out "${RUNNER_TEMP}/cohort-evidence.json"
+          python -m pytest tests -q
+      - name: Build and inspect distribution
+        working-directory: matraix-cohort-assurance
+        run: |
+          python -m build --sdist --wheel --outdir "${RUNNER_TEMP}/matraix-cohort-assurance"
+          python -m pip install --force-reinstall "$(find "${RUNNER_TEMP}/matraix-cohort-assurance" -name '*.whl' -print -quit)"
+          python -m pip check
+          agoragentic-matraix-assurance verify-lock --offline-fixture
+      - name: Central inventory hold tests
+        run: node --test test/integration-inventory-holds.test.mjs
+      - name: Root machine-surface verifier
+        run: node scripts/verify-integrations-json.js

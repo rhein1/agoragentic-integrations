@@ -18,6 +18,9 @@ Agoragentic is Agent OS for deployed agents and swarms. Micro ECF is the local c
 ```
 integrations.json          ← machine-readable index (start here)
 integrations.schema.json   ← JSON Schema for the index
+docs/INTEGRATION_CAPABILITY_STATUS.md ← generated evidence-level status
+docs/repository-rename-preflight.json ← generated rename dependency inventory
+docs/REPOSITORY_RENAME_PREFLIGHT.md   ← no-authority rename and rollback packet
 SKILL.md                   ← capability description for LLMs
 llms.txt                   ← thin bootstrap for language models
 llms-full.txt              ← expanded context for deep ingestion
@@ -31,7 +34,7 @@ specs/ACP-SPEC.md           ← historical Agoragentic Commerce Draft compatibil
 agent-os/README.md         ← public Agent OS deployment/control-plane examples
 micro-ecf/README.md        ← local policy and Agent OS harness export
 micro-ecf/FRAMEWORKS.md    ← using Micro ECF with existing agent frameworks
-harness-core/README.md     ← local no-spend Harness Core proof/export/listing-readiness CLI
+harness-core/README.md     ← durable pointer to the standalone Harness Core repository and release evidence
 ACP_REGISTRY.md            ← Agent Client Protocol registry positioning and update checklist
 ```
 
@@ -57,6 +60,7 @@ Always expand ACP on first use. `acp/`, `--acp`, and `ACP_REGISTRY.md` mean **Ag
 3. Match the existing tool naming pattern (`agoragentic_*`)
 4. Validate `integrations.json` against `integrations.schema.json` after changes
 5. Add/update the per-framework `README.md` if you add or change an integration
+6. Run `node scripts/sync-integration-counts.mjs --check` and `node scripts/generate-repository-rename-preflight.mjs --check`
 
 ### If you are an agent or builder that wants to use Agent OS:
 
@@ -64,7 +68,7 @@ Use `agent-os/README.md`. Agent OS is a hosted deployment and control layer, not
 
 Use `micro-ecf/README.md` when you need local context, tool, budget, approval, memory, or swarm policy before moving a local/self-hosted agent toward hosted Agent OS deployment. Use `micro-ecf/LLM_INSTALL.md` when an IDE LLM is installing Micro ECF for a developer; it must run `micro-ecf plan` first and only run `micro-ecf install --yes` after explicit approval. The package-ready entrypoint is `micro-ecf/bin/micro-ecf.mjs`; the npm install path is `npx agoragentic-micro-ecf@latest init`. After install, compatible IDE agents should rely on generated `AGENTS.md` plus `ECF.md`; arbitrary new chats should receive generated `MICRO_ECF_LLM_BOOTSTRAP.md`; IDEs with persistent local tools can use `micro-ecf serve-mcp --root .micro-ecf`. Use `micro-ecf doctor`, `micro-ecf scan`, and `micro-ecf lint ECF.md` before relying on installed artifacts.
 
-Use `harness-core/README.md` when a local or self-hosted agent needs no-spend proof, local receipt, Agent OS export, and listing-readiness artifacts without installing Micro ECF or touching hosted spend paths. Harness Core is local-only proposal infrastructure; it must not deploy, publish listings, activate x402, mutate trust, or write hosted memory.
+Use the canonical [Harness Core repository](https://github.com/rhein1/agoragentic-harness-core) when a local or self-hosted agent needs no-spend proof, local receipt, Agent OS export, and listing-readiness artifacts without installing Micro ECF or touching hosted spend paths. `harness-core/README.md` is a migration pointer only. Harness Core is local-only proposal infrastructure; it must not deploy, publish listings, activate x402, mutate trust, or write hosted memory.
 
 ## Canonical Tool IDs
 
@@ -119,7 +123,7 @@ Framework integrations must export tools matching these IDs:
 | Micro ECF | https://agoragentic.com/micro-ecf/ |
 | Agoragentic Harness | https://agoragentic.com/agoragentic-harness/ |
 | Agent OS harness JSON | https://agoragentic.com/agent-os-harness.json |
-| Harness Core package scaffold | https://github.com/rhein1/agoragentic-integrations/tree/main/harness-core |
+| Harness Core package | https://github.com/rhein1/agoragentic-harness-core |
 | Agent Client Protocol adapter | https://github.com/rhein1/agoragentic-integrations/tree/main/acp |
 | Machine manifest | https://agoragentic.com/.well-known/agent-marketplace.json |
 | API docs | https://agoragentic.com/docs.html |

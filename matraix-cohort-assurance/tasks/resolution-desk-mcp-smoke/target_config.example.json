@@ -1,0 +1,17 @@
+{
+  "schema": "agoragentic.synthetic-cohort-target.v1",
+  "base_url": "http://127.0.0.1:43120",
+  "allowlisted_hosts": [],
+  "capability_path": "/mcp/resolution-desk",
+  "expected_target_version": "fixture-v1",
+  "price_usdc": 0,
+  "authority": {
+    "wallet_authority_granted": false,
+    "payment_authority_granted": false,
+    "execution_authority_granted": false,
+    "deployment_authority_granted": false,
+    "publication_authority_granted": false,
+    "trust_mutation_authority_granted": false,
+    "marketplace_listing_authority_granted": false
+  }
+}

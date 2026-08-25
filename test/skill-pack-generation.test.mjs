@@ -99,3 +99,29 @@ test('skills.sh instructions expose router-only and complete-pack installs', () 
   assert.match(readme, /npx skills add rhein1\/agoragentic-integrations --skill agoragentic/);
   for (const { id } of skills) assert.match(readme, new RegExp(`--skill ${id}(?:\\s|$)`));
 });
+
+test('transaction assurance host outputs share one package and schema contract', () => {
+  const { manifest, outputs, skills } = buildExpectedOutputs();
+  const assurance = skills.find(({ id }) => id === 'agoragentic-assure');
+  assert.ok(assurance?.contract);
+  const markers = [
+    assurance.contract.package,
+    assurance.contract.version,
+    assurance.contract.source,
+    ...assurance.contract.schemas,
+  ];
+  const hostFiles = [
+    `${manifest.targets.codex.root}/agoragentic-assure/SKILL.md`,
+    `${manifest.targets.claude_code.root}/agoragentic-assure/SKILL.md`,
+    `${manifest.targets.opencode.root}/agoragentic-assure/SKILL.md`,
+    `${manifest.targets.cursor.root}/agoragentic-assure.mdc`,
+    manifest.targets.github_copilot.path,
+    manifest.targets.gemini_cli.path,
+  ];
+  for (const relativePath of hostFiles) {
+    const content = outputs.get(relativePath);
+    assert.ok(content, relativePath);
+    for (const marker of markers) assert.ok(content.includes(marker), `${relativePath}: ${marker}`);
+    assert.match(content, /authority granted (?:by installation or evaluation: false|`false`)/i, relativePath);
+  }
+});

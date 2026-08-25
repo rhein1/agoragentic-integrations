@@ -1,22 +1,13 @@
-# Harness Core Framework Wrapping Examples
+# Harness Core framework examples have moved
 
-These declarative examples pin the selective OSS scope from issue #855. They define mapping inputs for existing frameworks and local runtimes; they are not executable adapters and do not prove that a framework action ran. In the package adapter catalog, these paths remain `status: "stub"` with `authority: "local_no_spend_mapping_only"`.
+The canonical framework-wrapping examples now ship with the standalone Harness Core repository:
 
-The examples do not replace framework runtimes and do not grant hosted provisioning, wallet spend, x402 activation, marketplace publication, trust mutation, provider dispatch, private ECF export, or owner-approval bypass. Claude Code `PreToolUse` enforcement is a separate packaged adapter and is not represented by this example inventory.
+- Examples: <https://github.com/rhein1/agoragentic-harness-core/tree/main/examples/frameworks>
+- Source: <https://github.com/rhein1/agoragentic-harness-core>
+- npm: <https://www.npmjs.com/package/agoragentic-harness-core>
 
-Inventory:
+This legacy path remains as a pointer so existing links do not fail. It intentionally contains no
+second example inventory or validator.
 
-- `langgraph`
-- `crewai`
-- `mcp`
-- `codex`
-- `hermes`
-- `rust_reference_runtime`
-
-Machine-readable inventory: `framework-wrapping-examples.json`.
-
-Validate the inventory locally from this directory:
-
-```sh
-node ./validate.mjs
-```
+The examples are local no-spend mapping contracts. They do not execute a framework, prove host
+execution, deploy, publish, spend, activate x402, mutate trust, or grant provider authority.

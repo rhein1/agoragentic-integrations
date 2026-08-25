@@ -347,6 +347,143 @@
         "compatibility_scope": {
           "type": "string",
           "description": "Exact source or runtime boundary for an experimental integration."
+        },
+        "capability_record": {
+          "$ref": "#/$defs/integrationCapabilityRecord"
+        }
+      }
+    },
+    "integrationCapabilityRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capabilities",
+        "evidence",
+        "requirements"
+      ],
+      "properties": {
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "router_client",
+            "manifest_mapping",
+            "pre_action_enforcement",
+            "post_action_evidence",
+            "approval_support",
+            "receipt_support",
+            "agent_os_export"
+          ],
+          "properties": {
+            "router_client": {
+              "enum": [
+                "none",
+                "example",
+                "tested"
+              ]
+            },
+            "manifest_mapping": {
+              "enum": [
+                "none",
+                "documented",
+                "tested"
+              ]
+            },
+            "pre_action_enforcement": {
+              "enum": [
+                "none",
+                "experimental",
+                "tested"
+              ]
+            },
+            "post_action_evidence": {
+              "enum": [
+                "none",
+                "local",
+                "host_observed",
+                "provider_observed"
+              ]
+            },
+            "approval_support": {
+              "enum": [
+                "none",
+                "record_only",
+                "host_enforced",
+                "hosted_enforced"
+              ]
+            },
+            "receipt_support": {
+              "enum": [
+                "none",
+                "local",
+                "hosted_execution",
+                "settlement"
+              ]
+            },
+            "agent_os_export": {
+              "enum": [
+                "none",
+                "preview",
+                "tested"
+              ]
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host_version_tested",
+            "proof_class",
+            "last_verified_at",
+            "evidence_ref"
+          ],
+          "properties": {
+            "host_version_tested": {
+              "type": "string",
+              "minLength": 1
+            },
+            "proof_class": {
+              "enum": [
+                "static",
+                "local",
+                "host_runtime",
+                "provider",
+                "deployed",
+                "settlement"
+              ]
+            },
+            "last_verified_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "evidence_ref": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          }
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "network_required",
+            "spend_capable"
+          ],
+          "properties": {
+            "network_required": {
+              "type": "boolean"
+            },
+            "spend_capable": {
+              "type": "boolean"
+            }
+          }
         }
       }
     }
