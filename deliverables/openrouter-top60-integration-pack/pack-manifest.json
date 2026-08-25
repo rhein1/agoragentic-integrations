@@ -1,12 +1,13 @@
 {
   "schema": "agoragentic.openrouter-top60-review-pack.v2",
   "base_commit": "68b732e945fcfa70aeb16692586c14fc1e70c66c",
-  "file_count": 29,
+  "file_count": 36,
   "catalog_entries": 60,
   "active_manifest_entries_added": 0,
   "runtime_verified": false,
   "authority_granted": false,
   "files": [
+    ".gitignore",
     "AUDIT.md",
     "PR_BODY.md",
     "README.md",
@@ -20,6 +21,7 @@
     "catalog/entries-06.json",
     "catalog/index.json",
     "catalog/schema.json",
+    "catalog/source-evidence.json",
     "decisions/blocked.json",
     "decisions/composition-recipes.json",
     "decisions/covered-existing.json",
@@ -34,7 +36,12 @@
     "openrouter-agent-sdk/src/agoragentic-client.mjs",
     "openrouter-agent-sdk/src/agoragentic-tools.mjs",
     "pack-manifest.json",
+    "package-lock.json",
+    "package.json",
     "scripts/validate.mjs",
-    "test/review-pack.test.mjs"
+    "test/review-pack.test.mjs",
+    "test/runtime-contracts.test.mjs",
+    "test/validator-contracts.test.mjs",
+    "tsconfig.json"
   ]
 }

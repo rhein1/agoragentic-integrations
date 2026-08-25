@@ -1,9 +1,11 @@
 # OpenRouter Top-60 Audit Against Agoragentic Integrations
 
-Snapshot date: **2026-08-09**  
+Snapshot date: **2026-08-09**
 Repository inspected: `rhein1/agoragentic-integrations@68b732e945fcfa70aeb16692586c14fc1e70c66c`
 
 **Distribution state:** review-only deliverable; no active manifest entry or live compatibility claim.
+
+**Ranking provenance:** ranks, names, and token values were transcribed from user-supplied screenshots. The original screenshots and their hashes are not preserved in this pack, so the ranking is not independently reproducible. `catalog/source-evidence.json` records that limitation and a deterministic hash of the catalog transcription only; it is not a screenshot hash.
 
 The ranking is not a list of sixty interchangeable agent frameworks. It mixes MCP hosts, coding agents, model gateways, remote MCP services, plugin ecosystems, closed consumer applications, and retired products. The audit therefore assigns the correct integration direction instead of manufacturing sixty unsafe or nonfunctional adapters.
 
@@ -26,12 +28,12 @@ The ranking is not a list of sixty interchangeable agent frameworks. It mixes MC
 |---:|---|---:|---|---|---|
 | 1 | Hermes Agent | 33T | `covered_existing` | `inbound_host` | Retain the existing adapter; add it to the cross-ecosystem compatibility map rather than creating a duplicate. |
 | 2 | Claude Code | 7.53T | `covered_existing` | `inbound_host` | Retain existing plugin; cross-link OpenRouter model routing and the official OpenRouter skill. |
-| 3 | Kilo Code | 7.33T | `ready_config` | `inbound_host` | Install the public/no-spend remote MCP config; use the local relay for authenticated tools. |
+| 3 | Kilo Code | 7.33T | `ready_config` | `inbound_host` | Install the pinned local stdio relay; public/no-spend tools can be used without an API key, while authenticated tools remain separately gated. |
 | 4 | OpenClaw | 4.47T | `ready_config` | `inbound_host` | Add Agoragentic as a streamable-HTTP MCP server; keep authenticated execution approval-gated. |
 | 5 | Cline | 3.55T | `covered_existing` | `inbound_host` | Retain current package; add compatibility reference only. |
 | 6 | pi | 2.61T | `ready_config` | `inbound_host` | Install `pi-mcp-adapter` and load the local Agoragentic relay. |
 | 7 | Descript | 1.76T | `composition_recipe` | `outbound_mcp_service` | Compose Descript and Agoragentic in a shared MCP host; do not mislabel Descript as an agent framework. |
-| 8 | Command Code | 1.62T | `ready_config` | `inbound_host` | Register the hosted MCP endpoint with `cmd mcp add`; public tools work without a key. |
+| 8 | Command Code | 1.62T | `ready_config` | `inbound_host` | Register the pinned local stdio relay with `cmd mcp add`; the candidate command does not configure a hosted endpoint. |
 | 9 | Hello Minds, powered by Ethoswarm | 1.26T | `vendor_intake` | `proprietary_agent_platform` | Use the generated vendor intake to request a supported custom-tool or MCP registration contract. |
 | 10 | ISEKAI ZERO | 988B | `blocked_no_public_surface` | `none` | BLOCKED until a public plugin, MCP, tool, or API surface is documented. |
 | 11 | Janitor AI | 971B | `blocked_no_public_surface` | `none` | BLOCKED; OpenRouter provider support alone is not an Agoragentic tool integration surface. |

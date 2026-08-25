@@ -35,8 +35,8 @@
     "tokens": "7.33T",
     "status": "ready_config",
     "direction": "inbound_host",
-    "surface": "remote MCP host",
-    "action": "Install the public/no-spend remote MCP config; use the local relay for authenticated tools.",
+    "surface": "MCP host via a pinned local stdio relay",
+    "action": "Install the pinned local stdio relay; public/no-spend tools can be used without an API key, while authenticated tools remain separately gated.",
     "artifact": "host-configs.json",
     "sources": [
       "https://kilo.ai/docs/features/mcp"
@@ -107,7 +107,7 @@
     "status": "ready_config",
     "direction": "inbound_host",
     "surface": "Command Code MCP host",
-    "action": "Register the hosted MCP endpoint with `cmd mcp add`; public tools work without a key.",
+    "action": "Register the pinned local stdio relay with `cmd mcp add`; the candidate command does not configure a hosted endpoint.",
     "artifact": "host-configs.json",
     "sources": [
       "https://commandcode.ai"

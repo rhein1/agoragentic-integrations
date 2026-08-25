@@ -34,6 +34,7 @@ on:
       - 'zoneless/**'
       - 'scripts/**'
       - 'docs/**'
+      - 'deliverables/openrouter-top60-integration-pack/**'
       - 'examples/buzz-signed-workspace-evidence/**'
       - 'examples/governed-research-agent/**'
       - 'examples/agoragentic-growth/**'
@@ -62,6 +63,20 @@ jobs:
         uses: actions/setup-node@v7.0.0
         with:
           node-version: '20'
+
+      - name: Validate source-only OpenRouter top-60 review pack
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+          ORATION_ENABLE_CREATE: 'false'
+          ORATION_ENABLE_TELEPHONY: 'false'
+          ORATION_ALLOW_IGNORE_DND: 'false'
+        run: |
+          npm ci --ignore-scripts --prefix deliverables/openrouter-top60-integration-pack
+          npm --prefix deliverables/openrouter-top60-integration-pack run check
+          npm --prefix deliverables/openrouter-top60-integration-pack test
+          npm --prefix deliverables/openrouter-top60-integration-pack run typecheck
 
       - name: Setup Python
         uses: actions/setup-python@v7.0.0

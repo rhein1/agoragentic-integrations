@@ -30,6 +30,28 @@ function assertText(value, name) {
   return value.trim();
 }
 
+function assertRecord(value, name) {
+  const prototype = value && typeof value === 'object' ? Object.getPrototypeOf(value) : undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || (prototype !== Object.prototype && prototype !== null)) {
+    throw new AgoragenticOpenRouterError({ code: 'invalid_input', message: `${name} must be a plain object`, status: 400 });
+  }
+  return { ...value };
+}
+
+function assertNonnegativeFiniteNumber(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new AgoragenticOpenRouterError({ code: 'invalid_input', message: `${name} must be a finite non-negative number`, status: 400 });
+  }
+  return value;
+}
+
+function assertNonnegativeInteger(value, name) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new AgoragenticOpenRouterError({ code: 'invalid_input', message: `${name} must be a non-negative integer`, status: 400 });
+  }
+  return value;
+}
+
 function combineSignal(signal, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`request timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -133,17 +155,37 @@ export class AgoragenticClient {
 
   match({ task, constraints = {}, signal } = {}) {
     const params = new URLSearchParams({ task: assertText(task, 'task') });
-    if (constraints.max_cost !== undefined) params.set('max_cost', String(constraints.max_cost));
-    if (constraints.min_trust !== undefined) params.set('min_trust', String(constraints.min_trust));
+    const normalized = assertRecord(constraints, 'constraints');
+    if (normalized.category !== undefined) params.set('category', assertText(normalized.category, 'constraints.category'));
+    if (normalized.max_cost !== undefined) params.set('max_cost', String(assertNonnegativeFiniteNumber(normalized.max_cost, 'constraints.max_cost')));
+    if (normalized.max_latency_ms !== undefined) params.set('max_latency_ms', String(assertNonnegativeInteger(normalized.max_latency_ms, 'constraints.max_latency_ms')));
+    if (normalized.payment_network !== undefined) params.set('payment_network', assertText(normalized.payment_network, 'constraints.payment_network'));
     return this.request(`/api/execute/match?${params}`, { signal });
   }
 
-  quote({ task, input = {}, constraints = {}, signal } = {}) {
-    return this.request('/api/execute/quote', { method: 'POST', body: { task: assertText(task, 'task'), input, constraints }, signal });
+  quote({ task, constraints = {}, signal } = {}) {
+    return this.match({ task, constraints, signal });
   }
 
   execute({ task, input = {}, constraints = {}, signal } = {}) {
-    return this.request('/api/execute', { method: 'POST', body: { task: assertText(task, 'task'), input, constraints }, signal });
+    const normalized = assertRecord(constraints, 'constraints');
+    const normalizedInput = assertRecord(input, 'input');
+    const hasMaxCost = Object.hasOwn(normalized, 'max_cost');
+    const hasQuoteId = Object.hasOwn(normalized, 'quote_id');
+    if (hasMaxCost) normalized.max_cost = assertNonnegativeFiniteNumber(normalized.max_cost, 'constraints.max_cost');
+    if (hasQuoteId) normalized.quote_id = assertText(normalized.quote_id, 'constraints.quote_id');
+    if (!hasMaxCost && !hasQuoteId) {
+      throw new AgoragenticOpenRouterError({
+        code: 'missing_execution_bound',
+        message: 'constraints.max_cost or constraints.quote_id is required before execution',
+        status: 400,
+      });
+    }
+    const quoteId = hasQuoteId ? normalized.quote_id : undefined;
+    if (hasQuoteId) delete normalized.quote_id;
+    const body = { task: assertText(task, 'task'), input: normalizedInput, constraints: normalized };
+    if (hasQuoteId) body.quote_id = quoteId;
+    return this.request('/api/execute', { method: 'POST', body, signal });
   }
 
   status({ invocationId, signal } = {}) {
@@ -151,6 +193,6 @@ export class AgoragenticClient {
   }
 
   receipt({ invocationId, signal } = {}) {
-    return this.request(`/api/execute/receipt/${encodeURIComponent(assertText(invocationId, 'invocationId'))}`, { signal });
+    return this.request(`/api/commerce/receipts/${encodeURIComponent(assertText(invocationId, 'invocationId'))}`, { signal });
   }
 }

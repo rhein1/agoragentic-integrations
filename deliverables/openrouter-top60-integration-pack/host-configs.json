@@ -2,13 +2,17 @@
   "schema": "agoragentic.openrouter-host-configs.v1",
   "status": "candidate_only",
   "runtime_verified": false,
+  "authority_granted": false,
   "hosts": [
     {
       "rank": 3,
       "name": "Kilo Code",
       "slug": "kilo-code",
+      "direction": "inbound_host",
+      "action": "Install the pinned local stdio relay; public/no-spend tools can be used without an API key, while authenticated tools remain separately gated.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "mcpServers": {
@@ -36,8 +40,11 @@
       "rank": 4,
       "name": "OpenClaw",
       "slug": "openclaw",
+      "direction": "inbound_host",
+      "action": "Add Agoragentic as a streamable-HTTP MCP server; keep authenticated execution approval-gated.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "streamable_http",
       "configuration": {
         "mcpServers": {
@@ -62,8 +69,11 @@
       "rank": 6,
       "name": "pi",
       "slug": "pi",
+      "direction": "inbound_host",
+      "action": "Install `pi-mcp-adapter` and load the local Agoragentic relay.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio_via_pi_mcp_adapter",
       "configuration": {
         "adapter": "pi-mcp-adapter",
@@ -93,8 +103,11 @@
       "rank": 8,
       "name": "Command Code",
       "slug": "command-code",
+      "direction": "inbound_host",
+      "action": "Register the pinned local stdio relay with `cmd mcp add`; the candidate command does not configure a hosted endpoint.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "cli",
       "configuration": {
         "candidate_commands": [
@@ -116,8 +129,11 @@
       "rank": 12,
       "name": "Codex",
       "slug": "codex",
+      "direction": "inbound_host",
+      "action": "Install the local MCP relay and optionally the official OpenRouter SDK skill.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio_toml",
       "configuration": {
         "config_toml": "[mcp_servers.agoragentic]\ncommand = \"npx\"\nargs = [\"-y\", \"agoragentic-mcp@1.3.6\"]"
@@ -138,8 +154,11 @@
       "rank": 16,
       "name": "Oh-My-Pi",
       "slug": "oh-my-pi",
+      "direction": "inbound_host",
+      "action": "Install the HTTP MCP config with environment-expanded bearer auth.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "streamable_http",
       "configuration": {
         "mcpServers": {
@@ -167,8 +186,11 @@
       "rank": 26,
       "name": "Zed Editor",
       "slug": "zed-editor",
+      "direction": "inbound_host",
+      "action": "Add the remote public MCP config or launch the local relay for authenticated use.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "context_servers": {
@@ -198,8 +220,11 @@
       "rank": 28,
       "name": "Zoo Code",
       "slug": "zoo-code",
+      "direction": "inbound_host",
+      "action": "Install the local relay in `.roo/mcp.json`; this is the active migration target for Roo Code users.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "mcpServers": {
@@ -227,8 +252,11 @@
       "rank": 34,
       "name": "Z Code",
       "slug": "z-code",
+      "direction": "inbound_host",
+      "action": "Use the included stdio MCP configuration and verify the client-specific scope.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "mcpServers": {
@@ -256,8 +284,11 @@
       "rank": 36,
       "name": "OpenHands",
       "slug": "openhands",
+      "direction": "inbound_host",
+      "action": "Register the local relay through OpenHands MCP configuration/CLI.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "mcp_servers": [
@@ -286,8 +317,11 @@
       "rank": 38,
       "name": "Open WebUI",
       "slug": "open-webui",
+      "direction": "inbound_host",
+      "action": "Add Agoragentic as a remote MCP server in the admin UI; start with anonymous public tools.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "admin_ui_streamable_http",
       "configuration": {
         "admin_ui_fields": {
@@ -311,8 +345,11 @@
       "rank": 59,
       "name": "mimocode",
       "slug": "mimocode",
+      "direction": "inbound_host",
+      "action": "Install the local Agoragentic relay under the exact `mcp` configuration key.",
       "status": "candidate_config",
       "runtime_verified": false,
+      "authority_granted": false,
       "transport": "stdio",
       "configuration": {
         "mcp": {

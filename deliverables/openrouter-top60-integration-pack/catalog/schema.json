@@ -1,10 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agoragentic.com/schemas/openrouter-top60-review-index.v1.json",
+  "title": "Agoragentic OpenRouter Top-60 Review Index",
   "type": "object",
+  "additionalProperties": false,
   "required": [
+    "$schema",
     "schema",
     "snapshot_date",
+    "source",
+    "ranking_provenance",
+    "repo_snapshot",
     "distribution_status",
     "runtime_verified",
     "catalog_inclusion_requested",
@@ -13,8 +19,55 @@
     "parts"
   ],
   "properties": {
+    "$schema": {
+      "const": "./schema.json"
+    },
     "schema": {
       "const": "agoragentic.openrouter-top60-review-index.v1"
+    },
+    "snapshot_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ranking_provenance": {
+      "const": "catalog/source-evidence.json"
+    },
+    "repo_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "branch",
+        "commit",
+        "manifest_version",
+        "manifest_count"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "manifest_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "manifest_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     },
     "distribution_status": {
       "const": "review_only"
@@ -25,6 +78,9 @@
     "catalog_inclusion_requested": {
       "const": false
     },
+    "authority": {
+      "$ref": "#/$defs/deniedAuthority"
+    },
     "entry_count": {
       "const": 60
     },
@@ -32,14 +88,148 @@
       "type": "array",
       "minItems": 6,
       "maxItems": 6,
+      "uniqueItems": true,
       "items": {
-        "type": "object",
-        "required": [
-          "path",
-          "first_rank",
-          "last_rank",
-          "count"
-        ]
+        "$ref": "#/$defs/catalogPart"
+      }
+    }
+  },
+  "$defs": {
+    "deniedAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execute",
+        "spend",
+        "publish",
+        "deploy",
+        "message",
+        "call",
+        "mutate_trust"
+      ],
+      "properties": {
+        "execute": {
+          "const": false
+        },
+        "spend": {
+          "const": false
+        },
+        "publish": {
+          "const": false
+        },
+        "deploy": {
+          "const": false
+        },
+        "message": {
+          "const": false
+        },
+        "call": {
+          "const": false
+        },
+        "mutate_trust": {
+          "const": false
+        }
+      }
+    },
+    "catalogPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "first_rank",
+        "last_rank",
+        "count"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^catalog/entries-0[1-6]\\.json$"
+        },
+        "first_rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 51
+        },
+        "last_rank": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 60
+        },
+        "count": {
+          "const": 10
+        }
+      }
+    },
+    "catalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rank",
+        "name",
+        "slug",
+        "tokens",
+        "status",
+        "direction",
+        "surface",
+        "action",
+        "artifact",
+        "sources"
+      ],
+      "properties": {
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "tokens": {
+          "type": "string",
+          "pattern": "^\\d+(\\.\\d+)?[BT]$"
+        },
+        "status": {
+          "enum": [
+            "covered_existing",
+            "ready_config",
+            "direct_adapter",
+            "composition_recipe",
+            "provider_recipe",
+            "plugin_scaffold",
+            "vendor_intake",
+            "blocked_no_public_surface",
+            "deprecated",
+            "needs_verification"
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^https://"
+          }
+        }
       }
     }
   }

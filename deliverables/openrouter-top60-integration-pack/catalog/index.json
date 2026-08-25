@@ -2,7 +2,8 @@
   "$schema": "./schema.json",
   "schema": "agoragentic.openrouter-top60-review-index.v1",
   "snapshot_date": "2026-08-09",
-  "source": "user-supplied OpenRouter ranking screenshots",
+  "source": "user-supplied OpenRouter ranking screenshots; original screenshot artifacts and hashes are not preserved in this pack",
+  "ranking_provenance": "catalog/source-evidence.json",
   "repo_snapshot": {
     "repository": "rhein1/agoragentic-integrations",
     "branch": "main",

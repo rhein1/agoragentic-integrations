@@ -6,13 +6,13 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 126,
-    "occurrence_count": 255,
+    "file_count": 129,
+    "occurrence_count": 258,
     "category_file_counts": {
       "installer_or_clone": 22,
-      "machine_discovery": 41,
-      "package_registry_metadata": 19,
-      "public_documentation": 64,
+      "machine_discovery": 42,
+      "package_registry_metadata": 20,
+      "public_documentation": 66,
       "raw_content_url": 2,
       "release_or_provenance": 8,
       "reusable_action": 2,
@@ -612,6 +612,37 @@
       ],
       "categories": [
         "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/AUDIT.md",
+      "occurrences": 1,
+      "line_numbers": [
+        4
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/catalog/index.json",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
         "public_documentation"
       ]
     },
