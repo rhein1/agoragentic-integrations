@@ -26,6 +26,7 @@ import {
   persistE2BLiveQualificationAttempt,
   runE2BLiveQualification,
 } from '../scripts/e2b-live-qualification.mjs';
+import { E2B_WINDOWS_EVIDENCE_DACL_UNVERIFIED } from '../scripts/e2b-evidence-platform.mjs';
 import {
   E2B_BOOT_EVIDENCE_PATH,
   createBootEvidenceEnvelope,
@@ -33,7 +34,11 @@ import {
   e2bBirthRequestPaths,
 } from '../e2b-template/lib/runtime-contract.mjs';
 import { canonicalize, sha256Ref } from '../src/canonical.mjs';
-import { E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS } from '../src/e2b-qualification.mjs';
+import {
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
+  E2B_QUALIFICATION_FAILURE_CLASSES,
+  E2B_QUALIFICATION_FAILURE_STAGES,
+} from '../src/e2b-qualification.mjs';
 
 const contradictory = Object.freeze({
   E2B_API_KEY: 'present-but-never-inspected-by-test',
@@ -292,7 +297,11 @@ test('gates require explicit opaque owner refs, exact hashes, synthetic scope, a
   );
 });
 
-test('template build attempt intent is durable, sanitized, one-shot, and precedes provider I/O', async (t) => {
+test('template build attempt intent is durable, sanitized, one-shot, and precedes provider I/O', {
+  skip: process.platform === 'win32'
+    ? 'Windows evidence writes fail closed until exact DACL validation exists'
+    : false,
+}, async (t) => {
   const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-attempt-'));
   const legacyDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-legacy-'));
   t.after(() => Promise.all([
@@ -423,7 +432,11 @@ test('template build attempt intent is durable, sanitized, one-shot, and precede
   assert.doesNotMatch(source, /\bunlink\b/);
 });
 
-test('live qualification claims approval and run exactly once before provider I/O', async (t) => {
+test('live qualification claims approval and run exactly once before provider I/O', {
+  skip: process.platform === 'win32'
+    ? 'Windows evidence writes fail closed until exact DACL validation exists'
+    : false,
+}, async (t) => {
   const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-live-attempt-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const env = validEnv(evidenceDirectory);
@@ -467,14 +480,42 @@ test('default provider paths bind the exact inspected SDK tree before SDK or pro
     assert.match(source, /loadVerifiedE2BRuntimeSdk/);
     assert.doesNotMatch(source, /async function defaultSdkLoader/);
     assert.doesNotMatch(source, /import\(['"]e2b['"]\)/);
-    const verifiedLoad = source.indexOf('await loadVerifiedE2BRuntimeSdk(');
+    const runStart = source.indexOf(relative.includes('build-template')
+      ? 'export async function runE2BTemplateBuild('
+      : 'export async function runE2BLiveQualification(');
+    const runSource = source.slice(runStart);
+    const verifiedLoad = runSource.indexOf(relative.includes('build-template')
+      ? 'await loadTemplateBuildSdk('
+      : 'await loadLiveQualificationSdk(');
+    const platformGate = runSource.indexOf('assertE2BEvidencePlatformSecurity();');
     const firstProviderOperation = relative.includes('build-template')
-      ? source.indexOf('await Template.build(')
-      : source.indexOf('await runDefaultE2BSingleSandboxCanary(');
+      ? runSource.indexOf('await Template.build(')
+      : runSource.indexOf('await runDefaultE2BSingleSandboxCanary(');
+    assert.notEqual(runStart, -1);
+    assert.notEqual(platformGate, -1);
     assert.notEqual(verifiedLoad, -1);
     assert.notEqual(firstProviderOperation, -1);
+    assert.equal(platformGate < verifiedLoad, true);
     assert.equal(verifiedLoad < firstProviderOperation, true);
   }
+});
+
+test('Windows evidence-producing E2B paths fail closed before claims, SDK, or provider I/O', {
+  skip: process.platform !== 'win32' ? 'Windows-specific DACL boundary' : false,
+}, async (t) => {
+  const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-win32-closed-'));
+  t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
+  const env = validEnv(evidenceDirectory);
+  const rejectsForDacl = (operation) => assert.rejects(
+    operation,
+    (error) => error?.code === E2B_WINDOWS_EVIDENCE_DACL_UNVERIFIED,
+  );
+
+  await rejectsForDacl(runE2BTemplateBuild({ env }));
+  await rejectsForDacl(runE2BLiveQualification({ env }));
+  await rejectsForDacl(persistE2BTemplateBuildAttempt(evidenceDirectory, {}));
+  await rejectsForDacl(persistE2BLiveQualificationAttempt(evidenceDirectory, {}));
+  assert.deepEqual(await readdir(evidenceDirectory), []);
 });
 
 test('the shipped live module does not export its ungated provider runner', async () => {
@@ -482,7 +523,11 @@ test('the shipped live module does not export its ungated provider runner', asyn
   assert.equal(Object.hasOwn(liveModule, 'runDefaultE2BSingleSandboxCanary'), false);
 });
 
-test('default harnesses fail closed on an unmatched SDK tree and live authority stays consumed', async (t) => {
+test('default harnesses fail closed on an unmatched SDK tree and live authority stays consumed', {
+  skip: process.platform === 'win32'
+    ? 'Windows evidence writes stop before SDK integrity validation'
+    : false,
+}, async (t) => {
   const evidenceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-sdk-binding-'));
   t.after(() => rm(evidenceDirectory, { recursive: true, force: true }));
   const env = {
@@ -705,6 +750,8 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
   assert.equal(canary.controls.first_instruction_ipv6_egress_denied, 'unknown');
   assert.equal(canary.controls.cost_within_cap, 'unknown');
   assert.equal(canary.observations.observed_cost_usd, null);
+  assert.equal(canary.observations.failure_stage, 'none');
+  assert.equal(canary.observations.failure_class, 'none');
   assert.equal(canary.cleanup.absence_verified, 'verified');
   assert.equal(canary.cleanup.orphan_reconciliation, 'verified');
   assert.ok(canary.evidenceRefs.some(
@@ -772,6 +819,87 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
       allocation_started_at: '2030-01-01T00:00:10.000Z',
     }),
   );
+});
+
+test('live diagnostics distinguish initial provider absence, transport failure, and contract contradiction without raw errors', async (t) => {
+  const scenarios = [{
+    name: 'typed provider absence',
+    mode: 'absence',
+    failureStage: 'initial_provider_info_fetch',
+    failureClass: 'provider_absence',
+  }, {
+    name: 'generic provider transport failure',
+    mode: 'transport',
+    failureStage: 'initial_provider_info_fetch',
+    failureClass: 'provider_call_failure',
+  }, {
+    name: 'provider info contract contradiction',
+    mode: 'contradiction',
+    failureStage: 'initial_provider_info_validation',
+    failureClass: 'provider_contract_contradiction',
+  }];
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const env = validEnv();
+      const sensitiveDetail = 'api_key=top-secret-provider-detail';
+      let killed = false;
+      let metadata;
+      const child = {
+        sandboxId: `sandbox-initial-diagnostic-${scenario.mode}`,
+        files: {
+          async read() { return ''; },
+          async write() {},
+        },
+        async setTimeout() {},
+        async kill() { killed = true; return true; },
+      };
+      class Sandbox {
+        static async create(_templateId, options) {
+          metadata = options.metadata;
+          return child;
+        }
+        static async getInfo() {
+          if (killed) throw new SandboxNotFoundError('cleanup absence');
+          if (scenario.mode === 'absence') {
+            throw new SandboxNotFoundError(sensitiveDetail);
+          }
+          if (scenario.mode === 'transport') {
+            const error = new Error(sensitiveDetail);
+            error.code = 'SENSITIVE_PROVIDER_CODE';
+            throw error;
+          }
+          return {
+            ...qualificationSandboxInfo(env, child.sandboxId, metadata),
+            allowInternetAccess: true,
+          };
+        }
+        static list() {
+          let delivered = false;
+          return {
+            get hasNext() { return !delivered; },
+            async nextItems() { delivered = true; return []; },
+          };
+        }
+      }
+
+      const canary = await runDefaultE2BSingleSandboxCanary({
+        Sandbox,
+        gate: assertE2BLiveQualificationGate(env),
+        clock: () => new Date('2030-01-01T00:00:10.000Z'),
+        ...freshnessClock(),
+      });
+      assert.equal(canary.observations.failure_stage, scenario.failureStage);
+      assert.equal(canary.observations.failure_class, scenario.failureClass);
+      assert.equal(E2B_QUALIFICATION_FAILURE_STAGES.includes(scenario.failureStage), true);
+      assert.equal(E2B_QUALIFICATION_FAILURE_CLASSES.includes(scenario.failureClass), true);
+      assert.equal(canary.cleanup.absence_verified, 'verified');
+      assert.doesNotMatch(
+        canonicalize(canary),
+        /api_key|top-secret-provider-detail|SENSITIVE_PROVIDER_CODE/,
+      );
+    });
+  }
 });
 
 test('live cleanup requires three freshness-spaced not-found and exact-bound empty observations', async (t) => {
@@ -912,6 +1040,8 @@ test('ambiguous create with no bound sandbox never upgrades an empty list to rec
   assert.equal(canary.cleanup.absence_verified, 'unknown');
   assert.equal(canary.cleanup.orphan_reconciliation, 'unknown');
   assert.equal(canary.controls.orphan_reconciliation_verified, 'unknown');
+  assert.equal(canary.observations.failure_stage, 'sandbox_create');
+  assert.equal(canary.observations.failure_class, 'provider_call_failure');
   assert.equal(listCalls, 4);
 });
 
@@ -1099,6 +1229,8 @@ test('controller timeout aborts a hung provider create and leaves allocation ter
   assert.equal(createAborted, true);
   assert.equal(canary.sandboxCount, 0);
   assert.equal(canary.cleanup.orphan_reconciliation, 'unknown');
+  assert.equal(canary.observations.failure_stage, 'sandbox_create');
+  assert.equal(canary.observations.failure_class, 'provider_timeout');
 });
 
 test('controller deadline reaches cleanup when a birth-handshake write never settles', async (t) => {
@@ -1156,6 +1288,8 @@ test('controller deadline reaches cleanup when a birth-handshake write never set
   assert.equal(killed, true);
   assert.equal(canary.cleanup.kill_requested, 'verified');
   assert.equal(canary.cleanup.absence_verified, 'verified');
+  assert.equal(canary.observations.failure_stage, 'birth_handshake');
+  assert.equal(canary.observations.failure_class, 'provider_timeout');
 });
 
 test('provider kill acknowledgement must be explicit before destruction can verify', async (t) => {

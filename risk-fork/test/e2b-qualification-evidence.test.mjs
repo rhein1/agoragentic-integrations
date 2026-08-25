@@ -21,6 +21,8 @@ import {
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_QUALIFICATION_CONTROLS,
+  E2B_QUALIFICATION_FAILURE_CLASSES,
+  E2B_QUALIFICATION_FAILURE_STAGES,
   applyE2BExternalQualificationObservation,
   createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
@@ -237,6 +239,8 @@ test('qualification evidence is closed, hash-bound, schema-valid, and exact-prof
   const evidence = createE2BQualificationEvidence(input());
   assert.equal(evidence.status, 'unknown');
   assert.equal(evidence.external_observation_receipt, null);
+  assert.equal(Object.hasOwn(evidence.observations, 'failure_stage'), false);
+  assert.equal(Object.hasOwn(evidence.observations, 'failure_class'), false);
   assert.equal(isE2BQualificationEvidenceCanonical(evidence), true);
   assert.equal(isE2BQualificationEvidenceCanonical({
     ...evidence,
@@ -255,6 +259,55 @@ test('qualification evidence is closed, hash-bound, schema-valid, and exact-prof
   addFormats(ajv);
   const validate = ajv.compile(schema);
   assert.equal(validate(evidence), true, ajv.errorsText(validate.errors));
+  const diagnosticEvidence = createE2BQualificationEvidence(input({
+    observations: {
+      ...input().observations,
+      failure_stage: 'none',
+      failure_class: 'none',
+    },
+  }));
+  assert.equal(isE2BQualificationEvidenceCanonical(diagnosticEvidence), true);
+  assert.equal(validate(diagnosticEvidence), true, ajv.errorsText(validate.errors));
+
+  const providerAbsence = createE2BQualificationEvidence(input({
+    observations: {
+      ...input().observations,
+      failure_stage: 'initial_provider_info_fetch',
+      failure_class: 'provider_absence',
+    },
+  }));
+  assert.equal(providerAbsence.status, 'unknown');
+  assert.equal(validate(providerAbsence), true, ajv.errorsText(validate.errors));
+  const signedProviderAbsence = signedExternalObservation(providerAbsence);
+  assert.throws(
+    () => applyE2BExternalQualificationObservation(
+      providerAbsence,
+      signedProviderAbsence.observation,
+      signedProviderAbsence.verifier,
+    ),
+    /verified.*primary canary failure/i,
+  );
+
+  for (const observations of [{
+    ...input().observations,
+    failure_stage: 'initial_provider_info_fetch',
+  }, {
+    ...input().observations,
+    failure_stage: 'none',
+    failure_class: 'provider_call_failure',
+  }, {
+    ...input().observations,
+    failure_stage: 'provider_message_selected_stage',
+    failure_class: 'provider_call_failure',
+  }]) {
+    assert.throws(
+      () => createE2BQualificationEvidence(input({ observations })),
+      /failure_stage|failure_class|appear together|both be none/i,
+    );
+  }
+
+  assert.equal(Object.isFrozen(E2B_QUALIFICATION_FAILURE_STAGES), true);
+  assert.equal(Object.isFrozen(E2B_QUALIFICATION_FAILURE_CLASSES), true);
   const finalized = qualifiedEvidence().evidence;
   assert.equal(validate(finalized), true, ajv.errorsText(validate.errors));
 });

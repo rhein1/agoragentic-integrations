@@ -112,6 +112,30 @@ export const E2B_QUALIFICATION_CONTROLS = Object.freeze([
   'cost_within_cap',
 ]);
 
+export const E2B_QUALIFICATION_FAILURE_STAGES = Object.freeze([
+  'none',
+  'sandbox_create',
+  'sandbox_handle_validation',
+  'initial_provider_info_fetch',
+  'initial_provider_info_validation',
+  'birth_handshake',
+  'execution_lease_set',
+  'execution_lease_info_fetch',
+  'execution_lease_info_validation',
+  'idle_lease_set',
+  'idle_lease_info_fetch',
+  'idle_lease_info_validation',
+]);
+
+export const E2B_QUALIFICATION_FAILURE_CLASSES = Object.freeze([
+  'none',
+  'provider_absence',
+  'provider_timeout',
+  'provider_call_failure',
+  'provider_contract_contradiction',
+  'canary_contract_failure',
+]);
+
 const CONTROL_STATUSES = Object.freeze(['verified', 'failed', 'unknown']);
 const EXTERNAL_OBSERVATION_BINDING_KEYS = Object.freeze([
   'approval_ref_hash',
@@ -354,7 +378,16 @@ function normalizeEvidence(value, { includeComputedFields }) {
     'execution_ms',
     'cleanup_ms',
     'observed_cost_usd',
+    'failure_stage',
+    'failure_class',
   ], 'E2B qualification evidence.observations');
+  const hasFailureStage = Object.hasOwn(observations, 'failure_stage');
+  const hasFailureClass = Object.hasOwn(observations, 'failure_class');
+  if (hasFailureStage !== hasFailureClass) {
+    throw new TypeError(
+      'E2B qualification observations.failure_stage and failure_class must appear together',
+    );
+  }
   const normalizedObservations = {
     fork_start_ms: boundedInteger(
       observations.fork_start_ms,
@@ -378,6 +411,25 @@ function normalizeEvidence(value, { includeComputedFields }) {
           'E2B qualification observations.observed_cost_usd',
         ),
   };
+  if (hasFailureStage) {
+    const failureStage = requireEnum(
+      observations.failure_stage,
+      E2B_QUALIFICATION_FAILURE_STAGES,
+      'E2B qualification observations.failure_stage',
+    );
+    const failureClass = requireEnum(
+      observations.failure_class,
+      E2B_QUALIFICATION_FAILURE_CLASSES,
+      'E2B qualification observations.failure_class',
+    );
+    if ((failureStage === 'none') !== (failureClass === 'none')) {
+      throw new TypeError(
+        'E2B qualification failure_stage and failure_class must both be none or both describe a failure',
+      );
+    }
+    normalizedObservations.failure_stage = failureStage;
+    normalizedObservations.failure_class = failureClass;
+  }
   const observedCost = normalizedObservations.observed_cost_usd === null
     ? null
     : decimalMicros(
@@ -458,6 +510,11 @@ function normalizeEvidence(value, { includeComputedFields }) {
   }
 
   const status = deriveStatus(controls, cleanup);
+  if (status === 'verified'
+    && normalizedObservations.failure_stage !== undefined
+    && normalizedObservations.failure_stage !== 'none') {
+    throw new Error('Verified E2B qualification cannot carry a primary canary failure');
+  }
   if (status === 'verified'
     && (normalizedRun.sandbox_count !== 1 || normalizedRun.synthetic_workspace !== true)) {
     throw new Error('Verified E2B qualification requires exactly one synthetic sandbox');

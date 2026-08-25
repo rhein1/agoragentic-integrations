@@ -14,6 +14,8 @@ import { pathToFileURL } from 'node:url';
 import {
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
+  E2B_QUALIFICATION_FAILURE_CLASSES,
+  E2B_QUALIFICATION_FAILURE_STAGES,
   createE2BRuntimeSdkIntegrityVerifier,
   createE2BQualificationEvidence,
   loadVerifiedE2BRuntimeSdk,
@@ -30,6 +32,7 @@ import {
   requireString,
 } from '../src/util.mjs';
 import { E2B_QUALIFICATION_MAX_CANARY_COST_USD } from './e2b-build-template.mjs';
+import { assertE2BEvidencePlatformSecurity } from './e2b-evidence-platform.mjs';
 
 const ALL_TRAFFIC = '0.0.0.0/0';
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
@@ -41,6 +44,12 @@ const ABSENCE_OBSERVATION_COUNT = 3;
 const ABSENCE_OBSERVATION_INTERVAL_MS = 250;
 const CLEANUP_DISCOVERY_ROUNDS = 3;
 const CLEANUP_RECONCILIATION_ROUNDS = 3;
+const PROVIDER_INFO_FETCH_FAILURE_STAGES = new Set([
+  'initial_provider_info_fetch',
+  'execution_lease_info_fetch',
+  'idle_lease_info_fetch',
+]);
+const PROVIDER_TIMEOUT_ERRORS = new WeakSet();
 const LIVE_ATTEMPT_KEYS = Object.freeze([
   'schema',
   'status',
@@ -208,6 +217,7 @@ function assertExactObjectKeys(value, expectedKeys, field) {
 }
 
 async function prepareEvidenceDirectory(directory) {
+  assertE2BEvidencePlatformSecurity();
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const info = await lstat(directory, { bigint: true });
   if (info.isSymbolicLink()
@@ -215,12 +225,10 @@ async function prepareEvidenceDirectory(directory) {
     || !sameResolvedPath(await realpath(directory), directory)) {
     throw new Error('E2B qualification evidence directory must be a canonical real directory');
   }
-  if (process.platform !== 'win32') {
-    if (typeof process.getuid !== 'function'
-      || info.uid !== BigInt(process.getuid())
-      || (info.mode & 0o7777n) !== 0o700n) {
-      throw new Error('E2B qualification evidence directory ownership or mode is invalid');
-    }
+  if (typeof process.getuid !== 'function'
+    || info.uid !== BigInt(process.getuid())
+    || (info.mode & 0o7777n) !== 0o700n) {
+    throw new Error('E2B qualification evidence directory ownership or mode is invalid');
   }
 }
 
@@ -307,6 +315,7 @@ function createLiveQualificationAttemptIntent(gate, claimedAt) {
 }
 
 export async function persistE2BLiveQualificationAttempt(directory, intent) {
+  assertE2BEvidencePlatformSecurity();
   assertExactObjectKeys(intent, LIVE_ATTEMPT_KEYS, 'E2B live qualification attempt intent');
   if (intent.schema !== LIVE_ATTEMPT_SCHEMA
     || intent.status !== 'attempt_claimed_provider_outcome_unknown'
@@ -402,7 +411,31 @@ function isSandboxNotFound(error, SandboxNotFoundError) {
 function providerTimeout(label) {
   const error = new Error(`E2B provider operation timed out: ${label}`);
   error.code = 'E2B_PROVIDER_OPERATION_TIMEOUT';
+  PROVIDER_TIMEOUT_ERRORS.add(error);
   return error;
+}
+
+function classifyPrimaryCanaryFailure(
+  stage,
+  defaultFailureClass,
+  error,
+  SandboxNotFoundError,
+) {
+  if (!E2B_QUALIFICATION_FAILURE_STAGES.includes(stage) || stage === 'none') {
+    throw new TypeError('E2B primary canary failure stage is invalid');
+  }
+  if (!E2B_QUALIFICATION_FAILURE_CLASSES.includes(defaultFailureClass)
+    || defaultFailureClass === 'none') {
+    throw new TypeError('E2B primary canary failure class is invalid');
+  }
+  let failureClass = defaultFailureClass;
+  if (PROVIDER_INFO_FETCH_FAILURE_STAGES.has(stage)
+    && isSandboxNotFound(error, SandboxNotFoundError)) {
+    failureClass = 'provider_absence';
+  } else if (PROVIDER_TIMEOUT_ERRORS.has(error)) {
+    failureClass = 'provider_timeout';
+  }
+  return Object.freeze({ failureStage: stage, failureClass });
 }
 
 async function withProviderCall(label, timeoutMs, operation) {
@@ -596,6 +629,10 @@ async function runDefaultE2BSingleSandboxCanary({
   let birthAttestationHash = null;
   let sandboxBirthBindingHash = null;
   let providerErrorHash = null;
+  let failureStage = 'none';
+  let failureClass = 'none';
+  let activeFailureStage = 'sandbox_create';
+  let activeFailureClass = 'provider_call_failure';
   let killRequestHash = null;
   let absenceEvidence = null;
   let sandboxLimitExceeded = false;
@@ -670,6 +707,8 @@ async function runDefaultE2BSingleSandboxCanary({
       }),
     );
     createdAt = new Date(clock());
+    activeFailureStage = 'sandbox_handle_validation';
+    activeFailureClass = 'canary_contract_failure';
     id = sandboxId(sandbox);
     knownSandboxIds.add(id);
     if (typeof sandbox?.kill !== 'function'
@@ -678,11 +717,15 @@ async function runDefaultE2BSingleSandboxCanary({
       || typeof sandbox?.files?.write !== 'function') {
       throw new TypeError('E2B qualification sandbox is missing lifecycle or file APIs');
     }
+    activeFailureStage = 'initial_provider_info_fetch';
+    activeFailureClass = 'provider_call_failure';
     const info = await withProviderCall(
       'Sandbox.getInfo:initial',
       providerCallTimeoutMs,
       (request) => Sandbox.getInfo(id, request),
     );
+    activeFailureStage = 'initial_provider_info_validation';
+    activeFailureClass = 'provider_contract_contradiction';
     lifecycleObservations.push(validateE2BSandboxInfo(info, {
       sandboxId: id,
       templateId: gate.templateId,
@@ -691,6 +734,8 @@ async function runDefaultE2BSingleSandboxCanary({
       hardExpiresAtMs: startedAt.getTime() + gate.hardTtlMs,
       field: 'E2B qualification canary',
     }));
+    activeFailureStage = 'birth_handshake';
+    activeFailureClass = 'canary_contract_failure';
     providerTemplateBindingHash = sha256Ref({
       sandbox_id_hash: sha256Ref(id),
       metadata_hash: sha256Ref(metadata),
@@ -754,16 +799,22 @@ async function runDefaultE2BSingleSandboxCanary({
       gate.hardTtlMs,
     );
     const executionLeaseRequestedAt = new Date(clock());
+    activeFailureStage = 'execution_lease_set';
+    activeFailureClass = 'provider_call_failure';
     await withProviderCall(
       'sandbox.setTimeout:execution',
       providerCallTimeoutMs,
       (request) => sandbox.setTimeout(executionLeaseMs, request),
     );
+    activeFailureStage = 'execution_lease_info_fetch';
+    activeFailureClass = 'provider_call_failure';
     const executionInfo = await withProviderCall(
       'Sandbox.getInfo:execution-lease',
       providerCallTimeoutMs,
       (request) => Sandbox.getInfo(id, request),
     );
+    activeFailureStage = 'execution_lease_info_validation';
+    activeFailureClass = 'provider_contract_contradiction';
     lifecycleObservations.push(validateE2BSandboxInfo(executionInfo, {
       sandboxId: id,
       templateId: gate.templateId,
@@ -775,16 +826,22 @@ async function runDefaultE2BSingleSandboxCanary({
       field: 'E2B qualification execution lease',
     }));
     const idleLeaseRequestedAt = new Date(clock());
+    activeFailureStage = 'idle_lease_set';
+    activeFailureClass = 'provider_call_failure';
     await withProviderCall(
       'sandbox.setTimeout:idle',
       providerCallTimeoutMs,
       (request) => sandbox.setTimeout(gate.idleTtlMs, request),
     );
+    activeFailureStage = 'idle_lease_info_fetch';
+    activeFailureClass = 'provider_call_failure';
     const idleInfo = await withProviderCall(
       'Sandbox.getInfo:idle-lease',
       providerCallTimeoutMs,
       (request) => Sandbox.getInfo(id, request),
     );
+    activeFailureStage = 'idle_lease_info_validation';
+    activeFailureClass = 'provider_contract_contradiction';
     lifecycleObservations.push(validateE2BSandboxInfo(idleInfo, {
       sandboxId: id,
       templateId: gate.templateId,
@@ -795,8 +852,16 @@ async function runDefaultE2BSingleSandboxCanary({
       leaseTimeoutMs: gate.idleTtlMs,
       field: 'E2B qualification idle lease',
     }));
+    activeFailureStage = 'none';
+    activeFailureClass = 'none';
     controls.latency_observed = 'verified';
   } catch (error) {
+    ({ failureStage, failureClass } = classifyPrimaryCanaryFailure(
+      activeFailureStage,
+      activeFailureClass,
+      error,
+      SandboxNotFoundError,
+    ));
     providerErrorHash = sha256Ref(String(error?.code ?? error?.name ?? 'provider_error'));
   } finally {
     cleanupStartedAt = new Date(clock());
@@ -902,6 +967,8 @@ async function runDefaultE2BSingleSandboxCanary({
     kill_request_hash: killRequestHash,
     terminal_absence_evidence_hash: absenceEvidence?.evidence_hash ?? null,
     provider_error_hash: providerErrorHash,
+    failure_stage: failureStage,
+    failure_class: failureClass,
     controls,
     cleanup,
   };
@@ -987,6 +1054,8 @@ async function runDefaultE2BSingleSandboxCanary({
       execution_ms: 0,
       cleanup_ms: Math.max(0, completedAt.getTime() - cleanupStartedAt.getTime()),
       observed_cost_usd: null,
+      failure_stage: failureStage,
+      failure_class: failureClass,
     },
     controls,
     cleanup,
@@ -1015,6 +1084,7 @@ async function persistExclusive(directory, evidence) {
 export async function runE2BLiveQualification(options = {}) {
   const gate = assertE2BLiveQualificationGate(options.env ?? process.env);
   rejectEvidenceProducingTestSeams(options);
+  assertE2BEvidencePlatformSecurity();
   const attemptIntent = createLiveQualificationAttemptIntent(gate, new Date());
   const attemptIntentPath = await persistE2BLiveQualificationAttempt(
     gate.evidenceDirectory,

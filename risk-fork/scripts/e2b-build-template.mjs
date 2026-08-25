@@ -21,6 +21,7 @@ import {
   requireSha256Ref,
   requireString,
 } from '../src/util.mjs';
+import { assertE2BEvidencePlatformSecurity } from './e2b-evidence-platform.mjs';
 
 export const E2B_TEMPLATE_BUILD_SCHEMA =
   'agoragentic.risk-fork.e2b-template-build-evidence.v1';
@@ -251,6 +252,7 @@ function assertExactObjectKeys(value, expectedKeys, field) {
 }
 
 async function prepareEvidenceDirectory(directory) {
+  assertE2BEvidencePlatformSecurity();
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const info = await lstat(directory, { bigint: true });
   if (info.isSymbolicLink()
@@ -258,12 +260,10 @@ async function prepareEvidenceDirectory(directory) {
     || !sameResolvedPath(await realpath(directory), directory)) {
     throw new Error('E2B build evidence directory must be a canonical real directory');
   }
-  if (process.platform !== 'win32') {
-    if (typeof process.getuid !== 'function'
-      || info.uid !== BigInt(process.getuid())
-      || (info.mode & 0o7777n) !== 0o700n) {
-      throw new Error('E2B build evidence directory ownership or mode is invalid');
-    }
+  if (typeof process.getuid !== 'function'
+    || info.uid !== BigInt(process.getuid())
+    || (info.mode & 0o7777n) !== 0o700n) {
+    throw new Error('E2B build evidence directory ownership or mode is invalid');
   }
 }
 
@@ -316,6 +316,7 @@ async function writeExclusiveEvidence(target, evidence, duplicateCode) {
 }
 
 export async function persistE2BTemplateBuildAttempt(directory, intent) {
+  assertE2BEvidencePlatformSecurity();
   assertExactObjectKeys(intent, ATTEMPT_INTENT_KEYS, 'E2B template build attempt intent');
   assertExactObjectKeys(intent.sdk, SDK_BINDING_KEYS, 'E2B template build attempt SDK');
   assertExactObjectKeys(intent.runtime, RUNTIME_HASH_KEYS, 'E2B template build attempt runtime');
@@ -449,6 +450,7 @@ function createTemplateBuildAttemptIntent({ gate, sdk, hashes, provenanceHash, c
 export async function runE2BTemplateBuild(options = {}) {
   const gate = assertE2BTemplateBuildGate(options.env ?? process.env);
   rejectEvidenceProducingTestSeams(options);
+  assertE2BEvidencePlatformSecurity();
   const sdkRuntime = await loadTemplateBuildSdk(gate);
   const Template = sdkExport(sdkRuntime.module, 'Template');
   const waitForFile = sdkExport(sdkRuntime.module, 'waitForFile');

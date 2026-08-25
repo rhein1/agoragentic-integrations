@@ -255,6 +255,54 @@ test('E2B qualification schema accepts source evidence and rejects authority cla
   const evidence = makeE2BQualificationEvidence();
   assertSchemaAccepts(ajv, 'e2b-qualification-evidence.v1.json', evidence);
 
+  const noFailureDiagnostic = clone(evidence);
+  noFailureDiagnostic.observations.failure_stage = 'none';
+  noFailureDiagnostic.observations.failure_class = 'none';
+  assertSchemaAccepts(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    noFailureDiagnostic,
+    'E2B qualification evidence with paired no-failure diagnostics',
+  );
+
+  const providerAbsenceDiagnostic = clone(evidence);
+  providerAbsenceDiagnostic.observations.failure_stage = 'initial_provider_info_fetch';
+  providerAbsenceDiagnostic.observations.failure_class = 'provider_absence';
+  assertSchemaAccepts(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    providerAbsenceDiagnostic,
+    'E2B qualification evidence with a closed provider-absence diagnostic',
+  );
+
+  for (const [label, mutate] of [
+    ['an unpaired failure stage', (value) => {
+      value.observations.failure_stage = 'initial_provider_info_fetch';
+    }],
+    ['a mismatched none pair', (value) => {
+      value.observations.failure_stage = 'none';
+      value.observations.failure_class = 'provider_call_failure';
+    }],
+    ['an open-ended failure class', (value) => {
+      value.observations.failure_stage = 'initial_provider_info_fetch';
+      value.observations.failure_class = 'provider_message_derived_failure';
+    }],
+    ['verified status with a primary failure', (value) => {
+      value.status = 'verified';
+      value.observations.failure_stage = 'initial_provider_info_validation';
+      value.observations.failure_class = 'provider_contract_contradiction';
+    }],
+  ]) {
+    const invalidDiagnostic = clone(evidence);
+    mutate(invalidDiagnostic);
+    assertSchemaRejects(
+      ajv,
+      'e2b-qualification-evidence.v1.json',
+      invalidDiagnostic,
+      `E2B qualification evidence with ${label}`,
+    );
+  }
+
   const authorityClaim = clone(evidence);
   authorityClaim.authority_flags.production_activation_granted = true;
   assertSchemaRejects(
