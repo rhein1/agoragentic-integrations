@@ -79,6 +79,9 @@
         },
         "anydoc_document_evidence": {
           "$ref": "#/$defs/package"
+        },
+        "interchange_sam": {
+          "$ref": "#/$defs/package"
         }
       }
     },

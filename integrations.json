@@ -1,6 +1,6 @@
 {
-  "version": "2.47.0",
-  "updated_at": "2026-08-21",
+  "version": "2.48.0",
+  "updated_at": "2026-08-25",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -102,6 +102,15 @@
       "distribution_status": "source_only",
       "source": "examples/anydoc-document-evidence",
       "min_node": "20"
+    },
+    "interchange_sam": {
+      "name": "@agoragentic/interchange-sam-adapter",
+      "install": "cd interchange/sam && npm ci",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/interchange/sam",
+      "distribution_status": "source_only",
+      "source": "interchange/sam",
+      "min_node": "20",
+      "compatibility_scope": "Pinned Google SAM metadata discovery and normalization only; no remote tool invocation, provider authority, publication, payment, settlement, or production activation"
     }
   },
   "env_vars": {
@@ -583,6 +592,16 @@
       "path": "interchange/README.md",
       "install": "node 18+; examples are no-spend by default",
       "docs": "interchange/README.md"
+    },
+    {
+      "id": "interchange-sam",
+      "name": "Google SAM Interchange Metadata Adapter",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "interchange/sam/client.mjs",
+      "install": "cd interchange/sam && npm ci",
+      "docs": "interchange/sam/README.md",
+      "compatibility_scope": "Source-only, fail-closed metadata capture against pinned Google SAM; call_remote_tool and every provider, trust, publication, payment, settlement, and spend authority remain absent"
     },
     {
       "id": "micro-ecf",
@@ -1657,6 +1676,9 @@
     "world_agentkit": "world-agentkit/README.md",
     "world_agentkit_adapter": "world-agentkit/agoragentic_world_agentkit.mjs",
     "interchange": "interchange/README.md",
+    "interchange_sam": "interchange/sam/README.md",
+    "interchange_sam_schema": "interchange/sam/sam-tool-import.schema.json",
+    "interchange_sam_provenance": "interchange/sam/provenance.json",
     "interchange_spec": "interchange/SPEC.md",
     "interchange_status": "interchange/STATUS.md",
     "interchange_compatibility_matrix": "interchange/COMPATIBILITY.md",

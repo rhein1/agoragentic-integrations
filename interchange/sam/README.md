@@ -30,6 +30,7 @@ The live client defaults to `http://127.0.0.1:8080/mcp`, accepts loopback HTTP,
 and rejects non-loopback endpoints unless the operator explicitly opts in. An
 opted-in remote endpoint must use HTTPS. Tokens may come from `SAM_API_TOKEN` or
 `SAM_API_TOKEN_PATH`; credentials embedded in endpoint URLs are rejected.
+Redirects are rejected before the SAM authentication header is attached.
 
 ## Install and validate
 
@@ -76,8 +77,11 @@ node interchange/sam/client.mjs discover
 node interchange/sam/client.mjs discover --service code-reviewer
 ```
 
-Discovery output hashes the MCP endpoint, peer, and tool identifiers by default.
-Remote endpoint origins are emitted only with the same private diagnostic opt-in.
+Discovery output hashes the complete MCP request URL (including query context),
+peer, and tool identifiers by default. `authentication_header_sent` records
+only whether a token header was configured; it does not claim the endpoint
+authenticated that token. Remote endpoint origins are emitted only with the
+same private diagnostic opt-in.
 Use
 `--include-private-topology` only for an owner-controlled local diagnostic; do
 not commit or publish that output.
@@ -101,10 +105,13 @@ node interchange/sam/client.mjs capture \
 
 The live capture requires exactly one matching discovery row for the requested
 peer and tool, describes it, then normalizes the pair. The default packet hashes
-the peer, service, tool, labels, and schemas. It does not emit the raw PeerID or
-tool route. `--include-private-target` exists only for a local, owner-controlled
-handoff and its output must not be committed or published. Private-target output
-intentionally does not validate against the public-safe import schema.
+the peer, service, tool, labels, schemas, and complete observation. Public
+display text is generic and hash-suffixed; provider-supplied descriptions remain
+hash-bound but are not copied into the public packet. It does not emit the raw
+PeerID, service name, tool name, or tool route. `--include-private-target` exists
+only for a local, owner-controlled handoff and its output must not be committed
+or published. Private-target output intentionally does not validate against the
+public-safe import schema.
 
 `capture_evidence.sam_control_calls_made` lists the SAM metadata calls used by a
 live capture. `external_provider_called: false` and `provider_invoked: false`

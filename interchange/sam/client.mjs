@@ -116,7 +116,7 @@ export function authenticatedFetch(token, fetchImpl = globalThis.fetch) {
     const inherited = typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined;
     const headers = new Headers(init.headers || inherited || undefined);
     if (token) headers.set('X-Sam-Authentication', `Bearer ${token}`);
-    return fetchImpl(input, { ...init, headers });
+    return fetchImpl(input, { ...init, headers, redirect: 'error' });
   };
 }
 
@@ -216,7 +216,7 @@ async function withClient(options, dependencies, work) {
     fetchImpl: dependencies.fetch || globalThis.fetch,
   });
   try {
-    return await work(client, { endpoint, authenticated: Boolean(token) });
+    return await work(client, { endpoint, authenticationHeaderSent: Boolean(token) });
   } finally {
     if (!injected && typeof client?.close === 'function') await client.close();
   }
@@ -246,8 +246,10 @@ function asRows(value) {
 }
 
 function redactEndpoint(endpoint, includePrivate = false) {
+  const requestUrl = new URL(endpoint.href);
+  requestUrl.hash = '';
   const output = {
-    endpoint_ref: hashRef({ origin: endpoint.origin, pathname: endpoint.pathname }),
+    endpoint_ref: hashRef({ request_url: requestUrl.href }),
     endpoint_loopback: isLoopback(endpoint.hostname),
   };
   if (includePrivate) output.private_endpoint_origin = endpoint.origin;
@@ -288,7 +290,7 @@ export async function discoverSamTools(options = {}, dependencies = {}) {
       schema: 'agoragentic.interchange.sam-discovery.v1',
       captured_at: dependencies.now?.() || new Date().toISOString(),
       ...redactEndpoint(connection.endpoint, options.includePrivateTopology === true),
-      authenticated: connection.authenticated,
+      authentication_header_sent: connection.authenticationHeaderSent,
       mesh: redactMeshInfo(meshInfo, options.includePrivateTopology === true),
       service_count: asRows(services).length,
       tool_count: rows.filter((row) => !row.error).length,
@@ -361,7 +363,7 @@ export async function captureSamTool({ peerId, toolName }, options = {}, depende
       schema: 'agoragentic.interchange.sam-live-capture.v1',
       captured_at: capturedAt,
       ...redactEndpoint(connection.endpoint, options.includePrivateTarget === true),
-      authenticated: connection.authenticated,
+      authentication_header_sent: connection.authenticationHeaderSent,
       packet,
       capture_evidence: {
         sam_endpoint_called: true,
