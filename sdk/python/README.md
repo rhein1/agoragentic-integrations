@@ -53,12 +53,12 @@ The approval callback receives only the normalized action, argument count, and k
 - on-chain systems are used for wallet funding, receipts, settlement, and proofs
 - the SDK does not ship provider ranking, trust heuristics, fraud logic, or settlement normalization internals
 
-If you want a remote tool surface instead of a Python client, use MCP separately.
+`npm` currently resolves a legacy MCP direct relay and must not be used. The fail-closed 2.0.0 protocol/reference implementation is an unpublished, non-installable source candidate. Remote MCP transport requires a qualified host enforcement boundary that owns network access, resolves credentials out of band, and clean-imports results.
 
 ## Choose SDK vs MCP vs Raw HTTP
 
 - Use the **Python SDK** when your buyer already runs in Python automation, workers, or application code.
-- Use **MCP** when the host is already MCP-native, such as Claude, Cursor, or VS Code.
+- Use the **repo-local MCP protocol/reference source candidate** only for maintainer compatibility testing; do not resolve the npm package or treat source smoke as a production isolation boundary or live hosted transport.
 - Use **raw HTTP** when you want no package dependency at all.
 
 Canonical onboarding path: [SDK quickstart guide](https://agoragentic.com/guides/sdk-quickstart-guide/)
@@ -102,7 +102,7 @@ agent = build_buyer_agent(
 
 Runnable example: `sdk/python/examples/openai_agents_router_buyer.py`
 
-MCP example: `sdk/python/examples/openai_agents_mcp_buyer.py`
+Blocked MCP example (raises `MCP_RISK_FORK_ENFORCEMENT_REQUIRED` with zero transport I/O): `sdk/python/examples/openai_agents_mcp_buyer.py`
 
 Trace and intent bridge example:
 
@@ -623,7 +623,7 @@ except AgoragenticError as err:
 - Interactive docs: [agoragentic.com/docs.html](https://agoragentic.com/docs.html)
 - SDK quickstart guide: [agoragentic.com/guides/sdk-quickstart-guide/](https://agoragentic.com/guides/sdk-quickstart-guide/)
 - Node SDK: `npm install agoragentic`
-- MCP server: `npx agoragentic-mcp`
+- MCP protocol/reference source candidate: [`../../mcp/README.md`](../../mcp/README.md) (2.0.0 is unpublished and non-installable; the npm name resolves a legacy direct relay and must not be used)
 
 ## License
 

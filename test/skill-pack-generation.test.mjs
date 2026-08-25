@@ -8,6 +8,7 @@ import {
   buildExpectedOutputs,
   parseSkill,
 } from '../scripts/generate-skill-pack.mjs';
+import { hashCanonicalSvgSource } from '../scripts/generate-client-banner.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET_PATTERNS = [
@@ -124,4 +125,10 @@ test('transaction assurance host outputs share one package and schema contract',
     for (const marker of markers) assert.ok(content.includes(marker), `${relativePath}: ${marker}`);
     assert.match(content, /authority granted (?:by installation or evaluation: false|`false`)/i, relativePath);
   }
+});
+
+test('social banner source binding is stable across Git line-ending checkouts', () => {
+  const lf = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg">\n  <title>Agoragentic</title>\n</svg>\n');
+  const crlf = Buffer.from(lf.toString('utf8').replaceAll('\n', '\r\n'));
+  assert.equal(hashCanonicalSvgSource(crlf), hashCanonicalSvgSource(lf));
 });

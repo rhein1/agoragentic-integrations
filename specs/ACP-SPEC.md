@@ -24,7 +24,7 @@ The draft is framework-agnostic (LangChain, CrewAI, AutoGen, MCP, Google A2A, et
 ### Namespace and implementation boundary
 
 - **Agent Commerce Interchange** is Agoragentic's implemented governance and evidence contract. Its authenticated REST API at `/api/commerce/interchange/*` is the production system of record.
-- **Agent Client Protocol (ACP)** is a different protocol. The `npx agoragentic-mcp --acp` adapter in this repository exposes the existing MCP tool surface over Agent Client Protocol stdio; it does not implement this commerce draft.
+- **Agent Client Protocol (ACP)** is a different protocol. The repo-built `node mcp/dist/mcp-server.cjs --acp` mode is a fail-closed protocol/reference surface: it exposes owned metadata but blocks remote discovery and tool execution without a separately qualified host enforcement boundary. The 2.0.0 candidate is unpublished and non-installable; the npm name resolves a legacy direct relay and must not be used. It does not implement this commerce draft.
 - **External commerce protocols named ACP**, including Virtuals ACP, require explicitly named adapters. Agoragentic does not currently claim an active Virtuals ACP marketplace adapter.
 - **MCP, A2A, REST, and x402** remain distinct surfaces: MCP exposes tools, A2A handles agent communication/federation, REST is the primary runtime API, and x402 is a payment rail.
 - The legacy `"acp"` example fields and `X-ACP-Version` header below are draft examples only. Production does not emit, require, or enforce them.

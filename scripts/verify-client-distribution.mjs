@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
+import { verifyClientBanner } from './generate-client-banner.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function readText(relativePath) {
@@ -17,14 +19,8 @@ function readJson(relativePath) {
   return JSON.parse(readText(relativePath));
 }
 
-function assertMcpCommand(config, label, packageVersion) {
-  assert.equal(config.command, 'npx', `${label} must launch npx`);
-  assert.deepEqual(
-    config.args,
-    ['-y', `agoragentic-mcp@${packageVersion}`],
-    `${label} must pin the published MCP package`,
-  );
-  assert.equal(config.env, undefined, `${label} must not inject credentials`);
+function assertNoMcpAutoLaunch(config, label) {
+  assert.equal(config, undefined, `${label} must not auto-launch MCP without qualified host enforcement`);
 }
 
 function pngDimensions(relativePath) {
@@ -41,6 +37,9 @@ const packageVersion = mcpPackage.version;
 const manifest = readJson('integrations.json');
 const profile = readJson('docs/catalog-profile.json');
 const skillPack = readJson('skills/skill-pack.v2.json');
+const glama = readJson('glama.json');
+const officialMcpServer = readJson('mcp/server.json');
+const zapierBridge = readJson('zapier-mcp/agoragentic-zapier-mcp.example.json');
 
 const skillGeneration = spawnSync(
   process.execPath,
@@ -51,9 +50,19 @@ assert.equal(skillGeneration.status, 0, skillGeneration.stderr);
 assert.equal(skillPack.schema, 'agoragentic.skill-pack.v2');
 assert.ok(Object.values(skillPack.authority).every((value) => value === false));
 
-assert.equal(profile.mcp.package_version, packageVersion);
+assert.equal(profile.mcp.npm_package, null);
+assert.equal(profile.mcp.package_version, null);
+assert.equal(profile.mcp.source_candidate_version, packageVersion);
+assert.equal(profile.mcp.distribution_status, 'unpublished_noninstallable_source_candidate');
 assert.equal(profile.mcp.static_tool_count_allowed, false);
 assert.equal(profile.mcp.tool_inventory, 'dynamic_and_auth_dependent');
+assert.equal(profile.mcp.command, null, 'catalog profile must not advertise a runnable MCP command');
+assert.equal(profile.mcp.protocol_reference_command, null, 'catalog profile must not advertise a registry-resolving protocol command');
+assert.equal(profile.mcp.transport, 'stdio-protocol-only');
+assert.equal(profile.mcp.operational, false, 'catalog profile must mark MCP non-operational');
+assert.equal(profile.mcp.status, 'blocked_pending_qualified_host_enforcement');
+assert.equal(profile.mcp.remote_endpoint, null, 'catalog profile must not advertise a direct hosted MCP endpoint');
+assert.match(profile.mcp.security_note, /qualified host.*network access.*credentials.*clean-import/is);
 assert.ok(Object.values(profile.authority_boundary).every((value) => value === false));
 
 const channelStatuses = new Set([
@@ -66,6 +75,8 @@ const channelStatuses = new Set([
   'ready_for_submission',
   'submitted_pending_review',
   'support_escalated',
+  'legacy_direct_relay_correction_required',
+  'legacy_direct_relay_withdrawal_required',
 ]);
 for (const channel of profile.channels) {
   assert.ok(channelStatuses.has(channel.status), `unknown channel status: ${channel.status}`);
@@ -111,6 +122,9 @@ assert.match(contextHubDoc, /explicit.*approval.*cost ceiling/is);
 assert.doesNotMatch(contextHubDoc, /amk_[a-z0-9]{8,}/i);
 assert.doesNotMatch(contextHubDoc, /\b\d{2,}\+? (verified )?listings\b/i);
 assert.doesNotMatch(contextHubDoc, /Full ECF/i);
+assert.doesNotMatch(contextHubDoc, /https:\/\/agoragentic\.com\/api\/mcp/i);
+assert.match(contextHubDoc, /fail-closed protocol\/reference surface/i);
+assert.match(contextHubDoc, /qualified host.*network access.*credentials.*clean-import/is);
 
 const availabilitySnippet = contextHubDoc.match(
   /```javascript\r?\n(function assertPaidExecutionAvailable[\s\S]*?\r?\n})\r?\n\r?\nassertPaidExecutionAvailable/,
@@ -183,13 +197,13 @@ const cursor = readJson('.cursor-plugin/plugin.json');
 assert.equal(cursor.name, 'agoragentic');
 assert.equal(cursor.version, skillPack.version);
 assert.equal(cursor.skills, './skills/');
-assertMcpCommand(cursor.mcpServers.agoragentic, 'Cursor plugin', packageVersion);
+assertNoMcpAutoLaunch(cursor.mcpServers, 'Cursor plugin');
 
 const gemini = readJson('gemini-extension.json');
 assert.equal(gemini.name, 'agoragentic');
 assert.equal(gemini.version, skillPack.version);
 assert.equal(gemini.contextFileName, 'GEMINI.md');
-assertMcpCommand(gemini.mcpServers.agoragentic, 'Gemini extension', packageVersion);
+assertNoMcpAutoLaunch(gemini.mcpServers, 'Gemini extension');
 
 const claudeMarketplace = readJson('.claude-plugin/marketplace.json');
 assert.equal(claudeMarketplace.name, 'agoragentic-integrations');
@@ -200,9 +214,16 @@ assert.equal(claudePlugin.name, 'agoragentic');
 assert.equal(claudePlugin.version, skillPack.version);
 assert.equal(claudeMarketplace.version, skillPack.version);
 assert.equal(claudeMarketplace.plugins[0].version, skillPack.version);
-assert.equal(claudePlugin.mcpServers, './.mcp.json');
+assertNoMcpAutoLaunch(claudePlugin.mcpServers, 'Claude Code plugin');
 const claudeMcp = readJson('claude-code/plugin/.mcp.json');
-assertMcpCommand(claudeMcp.mcpServers.agoragentic, 'Claude Code plugin', packageVersion);
+assert.deepEqual(claudeMcp.mcpServers, {}, 'Claude Code MCP compatibility file must not auto-launch a server');
+
+assert.match(glama.description, /legacy direct-relay.*correction or withdrawal.*unpublished.*non-installable/is);
+assert.deepEqual(glama.packages, [], 'Glama metadata must not advertise a registry package coordinate');
+assert.deepEqual(officialMcpServer.packages, [], 'Official MCP metadata must not advertise a registry package coordinate');
+assert.equal(zapierBridge.mcpServers.agoragentic, undefined, 'Zapier template must not launch Agoragentic MCP');
+assert.equal(zapierBridge.agoragentic_mcp.operational, false);
+assert.equal(zapierBridge.agoragentic_mcp.status, 'blocked_pending_qualified_host_enforcement');
 
 const requiredNoSpendDocs = [
   'GEMINI.md',
@@ -236,11 +257,6 @@ for (const id of expectedClientIds) {
   assert.ok(manifest.integrations.some((entry) => entry.id === id), `missing integration: ${id}`);
 }
 
-const bannerSource = readText('assets/agoragentic-agent-commerce-banner.svg');
-assert.match(
-  bannerSource,
-  new RegExp(`${manifest.integrations.length} public surfaces`),
-  'social banner source must match the canonical integration count',
-);
+verifyClientBanner(root);
 
 console.log('client-native distribution surfaces verified');

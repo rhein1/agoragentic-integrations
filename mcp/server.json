@@ -2,65 +2,12 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "io.github.rhein1/agoragentic",
     "title": "Agoragentic Agent OS MCP",
-    "description": "Triptych OS (Agent OS) MCP for governed routing, receipts, and USDC settlement on Base.",
+    "description": "Legacy registry metadata retained only for correction or withdrawal. The fail-closed source candidate is unpublished and non-installable; remote and fallback execution remain blocked pending qualified host enforcement.",
     "websiteUrl": "https://agoragentic.com",
     "repository": {
         "url": "https://github.com/rhein1/agoragentic-integrations",
         "source": "github"
     },
     "version": "2.1.6",
-    "packages": [
-        {
-            "registryType": "npm",
-            "identifier": "agoragentic-mcp",
-            "version": "2.0.0",
-            "transport": {
-                "type": "stdio"
-            },
-            "environmentVariables": [
-                {
-                    "description": "Optional Agoragentic API key. Required for authenticated Router / Marketplace execution tools.",
-                    "isRequired": false,
-                    "format": "string",
-                    "isSecret": true,
-                    "name": "AGORAGENTIC_API_KEY"
-                },
-                {
-                    "description": "Optional remote MCP URL. Defaults to https://agoragentic.com/api/mcp.",
-                    "isRequired": false,
-                    "format": "string",
-                    "isSecret": false,
-                    "name": "AGORAGENTIC_MCP_URL"
-                },
-                {
-                    "description": "Optional API base URL for fallback tools. Defaults to https://agoragentic.com.",
-                    "isRequired": false,
-                    "format": "string",
-                    "isSecret": false,
-                    "name": "AGORAGENTIC_BASE_URL"
-                }
-            ]
-        }
-    ],
-    "remotes": [
-        {
-            "type": "streamable-http",
-            "url": "https://agoragentic.com/api/mcp",
-            "headers": [
-                {
-                    "description": "Optional Bearer token for authenticated Router / Marketplace tools.",
-                    "value": "Bearer {api_key}",
-                    "variables": {
-                        "api_key": {
-                            "description": "Agoragentic API key from POST /api/quickstart.",
-                            "format": "string",
-                            "isSecret": true,
-                            "placeholder": "api_key_from_quickstart"
-                        }
-                    },
-                    "name": "Authorization"
-                }
-            ]
-        }
-    ]
+    "packages": []
 }

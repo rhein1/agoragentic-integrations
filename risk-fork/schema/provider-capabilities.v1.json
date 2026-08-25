@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-provider-capabilities.v1.json",
+  "title": "Agoragentic Risk Fork Provider Capabilities V1",
+  "description": "Provider capability and validation-state metadata. Declared capabilities are not proof of containment.",
+  "type": "object", "additionalProperties": false,
+  "required": ["supports_memory_snapshot", "supports_filesystem_snapshot", "supports_live_fork", "supports_network_policy", "supports_egress_allowlist", "supports_runtime_attestation", "supports_suspend_resume", "supports_verified_destruction", "supports_hard_ttl", "supports_idle_ttl", "supports_max_execution_time", "supports_automatic_credential_expiry", "child_credentials_mode", "isolation_class", "adapter_implementation", "mock_conformance", "credentialed_provider_validation", "containment_claim"],
+  "properties": {
+    "supports_memory_snapshot": { "type": "boolean" }, "supports_filesystem_snapshot": { "type": "boolean" },
+    "supports_live_fork": { "type": "boolean" }, "supports_network_policy": { "type": "boolean" },
+    "supports_egress_allowlist": { "type": "boolean" }, "supports_runtime_attestation": { "type": "boolean" },
+    "supports_suspend_resume": { "type": "boolean" }, "supports_verified_destruction": { "type": "boolean" },
+    "supports_hard_ttl": { "type": "boolean" }, "supports_idle_ttl": { "type": "boolean" },
+    "supports_max_execution_time": { "type": "boolean" }, "supports_automatic_credential_expiry": { "type": "boolean" },
+    "child_credentials_mode": { "enum": ["prohibited", "scoped_expiring", "unknown"] },
+    "isolation_class": { "$ref": "#/$defs/status" }, "adapter_implementation": { "$ref": "#/$defs/status" },
+    "mock_conformance": { "$ref": "#/$defs/status" }, "credentialed_provider_validation": { "$ref": "#/$defs/status" },
+    "containment_claim": { "$ref": "#/$defs/status" }
+  },
+  "$defs": { "status": { "type": "string", "minLength": 1, "maxLength": 100 } }
+}

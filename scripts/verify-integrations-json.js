@@ -377,14 +377,14 @@ function assertRegistryMetadata() {
   const server = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'server.json'), 'utf8'));
   const mcpPackage = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'package.json'), 'utf8'));
   const packageVersion = mcpPackage.version;
-  if (!glama.version || glama.version !== glama.packages?.[0]?.version) {
-    fail('glama.json top-level and npm package versions must match');
-  }
   if (glama.version !== packageVersion) {
-    fail(`glama.json version must match mcp/package.json (${packageVersion})`);
+    fail(`glama.json source-candidate version must match mcp/package.json (${packageVersion})`);
   }
-  if (server.packages?.[0]?.version !== packageVersion) {
-    fail(`mcp/server.json npm package version must match mcp/package.json (${packageVersion})`);
+  if (!Array.isArray(glama.packages) || glama.packages.length !== 0) {
+    fail('glama.json must not advertise a registry package coordinate while the safe build is unpublished');
+  }
+  if (!Array.isArray(server.packages) || server.packages.length !== 0) {
+    fail('mcp/server.json must not advertise a registry package coordinate while the safe build is unpublished');
   }
   if (typeof server.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(server.version)) {
     fail('mcp/server.json registry version must be a semantic version');
@@ -394,6 +394,9 @@ function assertRegistryMetadata() {
   }
   if (/execute paid work/i.test(glama.description || '')) {
     fail('glama.json must not present paid execution as unconditionally available');
+  }
+  if (!/legacy direct-relay.*correction or withdrawal.*unpublished.*non-installable/i.test(glama.description || '')) {
+    fail('glama.json must identify the legacy listing and unpublished, non-installable source candidate');
   }
 }
 

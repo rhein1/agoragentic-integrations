@@ -1,0 +1,204 @@
+name: Risk Fork
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+      - 'risk-fork/**'
+      - 'risk-fork-hosted-mcp/**'
+      - 'transaction-assurance/**'
+      - '.github/workflows/risk-fork.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+      - 'risk-fork/**'
+      - 'risk-fork-hosted-mcp/**'
+      - 'transaction-assurance/**'
+      - '.github/workflows/risk-fork.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+        package:
+          - transaction-assurance
+          - risk-fork
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - name: Install locked test dependencies
+        working-directory: ${{ matrix.package }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Syntax and contract checks
+        working-directory: ${{ matrix.package }}
+        run: npm run check
+      - name: Deterministic tests
+        working-directory: ${{ matrix.package }}
+        run: npm test
+      - name: No-network self-test
+        working-directory: ${{ matrix.package }}
+        run: npm run self-test
+      - name: Package dry run
+        working-directory: ${{ matrix.package }}
+        run: npm run pack:dry
+
+  postgres-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: risk_fork
+          POSTGRES_PASSWORD: risk_fork_ci
+          POSTGRES_DB: risk_fork_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U risk_fork -d risk_fork_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      RISK_FORK_TEST_POSTGRES_URL: postgresql://risk_fork:risk_fork_ci@127.0.0.1:5432/risk_fork_test
+      RISK_FORK_REQUIRE_POSTGRES_TESTS: '1'
+      RISK_FORK_TEST_POSTGRES_TLS_URL: postgresql://risk_fork:risk_fork_ci@127.0.0.1:5432/risk_fork_test
+      RISK_FORK_REQUIRE_POSTGRES_TLS_TESTS: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: risk-fork/package-lock.json
+      - name: Install locked Risk Fork dependencies
+        working-directory: risk-fork
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Enable CA-verified TLS on the ephemeral PostgreSQL service
+        shell: bash
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          tls_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$tls_dir"' EXIT
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$tls_dir/ca.key" \
+            -out "$tls_dir/ca.crt" \
+            -subj '/CN=Risk Fork CI CA'
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout "$tls_dir/server.key" \
+            -out "$tls_dir/server.csr" \
+            -subj '/CN=localhost'
+          cat > "$tls_dir/server.ext" <<'EOF'
+          subjectAltName=DNS:localhost,IP:127.0.0.1
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -days 1 \
+            -in "$tls_dir/server.csr" \
+            -CA "$tls_dir/ca.crt" \
+            -CAkey "$tls_dir/ca.key" \
+            -CAcreateserial \
+            -out "$tls_dir/server.crt" \
+            -extfile "$tls_dir/server.ext"
+          chmod 0600 "$tls_dir/server.key"
+          docker cp "$tls_dir/ca.crt" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/ca.crt"
+          docker cp "$tls_dir/server.crt" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/server.crt"
+          docker cp "$tls_dir/server.key" "$POSTGRES_CONTAINER_ID:/var/lib/postgresql/server.key"
+          docker exec --user root "$POSTGRES_CONTAINER_ID" \
+            chown postgres:postgres \
+              /var/lib/postgresql/ca.crt \
+              /var/lib/postgresql/server.crt \
+              /var/lib/postgresql/server.key
+          docker exec --user root "$POSTGRES_CONTAINER_ID" \
+            chmod 0600 /var/lib/postgresql/server.key
+          docker exec "$POSTGRES_CONTAINER_ID" psql \
+            -U risk_fork -d risk_fork_test -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET ssl = 'on'" \
+            -c "ALTER SYSTEM SET ssl_ca_file = '/var/lib/postgresql/ca.crt'" \
+            -c "ALTER SYSTEM SET ssl_cert_file = '/var/lib/postgresql/server.crt'" \
+            -c "ALTER SYSTEM SET ssl_key_file = '/var/lib/postgresql/server.key'"
+          docker restart "$POSTGRES_CONTAINER_ID"
+          for attempt in $(seq 1 30); do
+            if docker exec "$POSTGRES_CONTAINER_ID" pg_isready \
+              -U risk_fork -d risk_fork_test >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo 'PostgreSQL did not become ready after TLS restart' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          {
+            echo 'RISK_FORK_TEST_POSTGRES_TLS_CA<<RISK_FORK_TLS_CA_EOF'
+            cat "$tls_dir/ca.crt"
+            echo 'RISK_FORK_TLS_CA_EOF'
+          } >> "$GITHUB_ENV"
+      - name: Run mandatory PostgreSQL authority and clean-commit suite
+        working-directory: risk-fork
+        run: npm run test:postgres
+
+  hosted-mcp-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: risk-fork-hosted-mcp/package-lock.json
+      - name: Install locked hosted bundle dependencies
+        working-directory: risk-fork-hosted-mcp
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify committed generated bundle before mutation
+        working-directory: risk-fork-hosted-mcp
+        run: npm run verify:source
+      - name: Check, test, rebuild, and verify the source-bound bundle
+        working-directory: risk-fork-hosted-mcp
+        run: |
+          npm run check
+          npm test
+          npm run build
+          npm run verify
+          npm run verify:source
+          npm run pack:dry
+      - name: Reject generated hosted bundle drift
+        run: |
+          git diff --exit-code -- \
+            risk-fork-hosted-mcp/THIRD_PARTY_NOTICES.txt \
+            risk-fork-hosted-mcp/dist/runtime/index.mjs \
+            risk-fork-hosted-mcp/e2b-context/ \
+            risk-fork-hosted-mcp/integrity-manifest.json \
+            risk-fork-hosted-mcp/migrations/001_distributed_authority.pg.sql \
+            risk-fork-hosted-mcp/ops/postgres/ \
+            risk-fork-hosted-mcp/schema/e2b-qualification-evidence.v1.json

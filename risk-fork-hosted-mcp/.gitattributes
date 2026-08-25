@@ -1,0 +1,5 @@
+# All package text is integrity-bound; force stable bytes across platforms.
+* text eol=lf
+
+# Preserve reviewed upstream template-literal whitespace in the generated bundle.
+dist/runtime/index.mjs linguist-generated=true whitespace=-blank-at-eol

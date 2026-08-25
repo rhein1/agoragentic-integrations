@@ -8,7 +8,6 @@ Repository conformance and community runtime evidence are separate claims. Neith
 
 | Integration | Manifest ID | Repository state | Independent runtime evidence | Guide |
 |---|---|---|---|---|
-| MCP | `mcp` | Ready | Awaiting first report | [MCP README](../mcp/README.md) |
 | Claude Code Plugin | `claude-code-plugin` | Ready | Awaiting first report | [Claude Code README](../claude-code/README.md) |
 | Gemini CLI Extension | `gemini-cli-extension` | Ready | Awaiting first report | [Gemini CLI README](../gemini-cli/README.md) |
 | LangChain | `langchain` | Ready | Awaiting first report | [LangChain README](../langchain/README.md) |
@@ -26,14 +25,16 @@ This path needs no Agoragentic account, API key, wallet, network call from adapt
 ```bash
 git clone --depth 1 https://github.com/rhein1/agoragentic-integrations.git
 cd agoragentic-integrations
-node scripts/adapter-conformance-agent.mjs --adapter mcp
+node scripts/adapter-conformance-agent.mjs --adapter claude-code-plugin
 ```
 
-Replace `mcp` with an ID from the table. A pass proves declared files, syntax, repository containment, static credential checks, and advisory signals. The adapter is not imported or executed. See the [conformance contract](./ADAPTER_CONFORMANCE_AGENT.md).
+Replace `claude-code-plugin` with an ID from the table. A pass proves declared files, syntax, repository containment, static credential checks, and advisory signals. The adapter is not imported or executed. See the [conformance contract](./ADAPTER_CONFORMANCE_AGENT.md).
 
 ## Path B: Optional Free Runtime Check
 
 This path checks actual adapter behavior and is still designed to spend nothing.
+
+MCP is excluded from community runtime testing while hosted interception and qualified host enforcement remain unverified. Do not install or launch the npm MCP package for this campaign; repository-owned fail-closed and loopback tests are the only accepted MCP evidence in this lane.
 
 1. Follow the selected adapter's README in a disposable test project.
 2. Use a separate test agent/API key if registration is required.
