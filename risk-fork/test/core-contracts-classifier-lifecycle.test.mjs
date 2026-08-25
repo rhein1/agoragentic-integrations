@@ -29,6 +29,7 @@ import {
   classifyRisk,
   createTrustedMcpServerVerifier,
   riskDecisionCanonicalBytes,
+  verifyRiskDecision,
 } from '../src/risk-classifier.mjs';
 import { validateCommitCandidate } from '../src/taint-gate.mjs';
 
@@ -288,6 +289,21 @@ test('canonical JSON is deterministic for semantically identical key orderings',
   );
   assert.equal(canonicalize(left), canonicalize(right));
   assert.equal(sha256Ref(left), sha256Ref(right));
+});
+
+test('SHA-256 references bind JSON types without textual cross-type collisions', () => {
+  for (const [text, value] of [
+    ['{}', {}],
+    ['[]', []],
+    ['null', null],
+    ['true', true],
+    ['0', 0],
+  ]) {
+    assert.notEqual(sha256Ref(text), sha256Ref(value), `${text} must remain type-bound`);
+  }
+
+  const decision = classifyRisk({ capabilities: null }, { clock: () => NOW });
+  assert.equal(verifyRiskDecision(decision), true);
 });
 
 test('canonical JSON rejects values that JSON would omit, coerce, or ambiguously encode', () => {
@@ -621,6 +637,7 @@ test('absent or incomplete capability metadata defaults conservatively to HIGH',
   };
   const incomplete = [
     ['absent capabilities', undefined],
+    ['null capabilities', null],
     ['empty capabilities', {}],
     ['partial capabilities', { network_access: false }],
   ];

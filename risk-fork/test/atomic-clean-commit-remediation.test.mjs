@@ -4,6 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+
 import {
   CommitAmbiguousError,
   FileExecutionAuthorizationTransaction,
@@ -919,12 +922,29 @@ test('two concrete parents racing for one authorization produce exactly one exec
     commitPreparedArtifact(makeInput(firstParent)),
     commitPreparedArtifact(makeInput(secondParent)),
   ]);
+  const committed = results.find((entry) => entry.status === 'fulfilled').value;
+  const cleanCommitSchema = JSON.parse(await readFile(
+    new URL('../schema/clean-commit-result.v1.json', import.meta.url),
+    'utf8',
+  ));
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
+  const validateCleanCommit = ajv.compile(cleanCommitSchema);
   const authorizationState = await readAuthorizationState(
     authorization.directory,
     fixture.binding.one_use_authorization_id,
   );
   assert.equal(results.filter((entry) => entry.status === 'fulfilled').length, 1);
   assert.equal(results.filter((entry) => entry.status === 'rejected').length, 1);
+  assert.equal(committed.execution_authorization.observed_at, NOW.toISOString());
+  assert.equal(
+    validateCleanCommit(committed),
+    true,
+    JSON.stringify(validateCleanCommit.errors),
+  );
+  const invalidObservedAt = structuredClone(committed);
+  invalidObservedAt.execution_authorization.observed_at = 'not-a-date';
+  assert.equal(validateCleanCommit(invalidObservedAt), false);
   assert.equal(executions, 1);
   assert.equal(authorizationState.status, 'consumed');
 });

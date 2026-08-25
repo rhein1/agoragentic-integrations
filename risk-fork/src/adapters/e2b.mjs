@@ -30,6 +30,10 @@ import {
 } from '../contracts.mjs';
 import { RiskForkProvider } from '../provider.mjs';
 import {
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  BEARER_CREDENTIAL_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   assertAllowedKeys,
   assertPlainObject,
   boundedInteger,
@@ -112,11 +116,12 @@ function reconciliationRequired(unresolved) {
 const SECRET_KEY_PATTERN = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|private[_-]?key|seed[_-]?phrase|wallet)/i;
 const SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}/,
-  /\bsk-[A-Za-z0-9_-]{16,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
   /[?&](?:api[_-]?key|access[_-]?token|authorization)=[^&\s]{8,}/i,
 ]);
 const DANGEROUS_JSON_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -401,13 +406,16 @@ function assertStrictSecretFreeJson(value, field, limits = {}) {
     } else {
       assertPlainObject(current, currentPath);
       for (const [key, child] of Object.entries(current)) {
+        if (SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+          throw new TypeError(`${currentPath}.<key> contains secret-shaped material`);
+        }
         if (DANGEROUS_JSON_KEYS.has(key)) {
-          throw new TypeError(`${currentPath}.${key} is a forbidden JSON key`);
+          throw new TypeError(`${currentPath}.<key> is a forbidden JSON key`);
         }
         if (SECRET_KEY_PATTERN.test(key)) {
-          throw new TypeError(`${currentPath}.${key} is an authority or secret-bearing field`);
+          throw new TypeError(`${currentPath}.<key> is an authority or secret-bearing field`);
         }
-        walk(child, `${currentPath}.${key}`, depth + 1);
+        walk(child, `${currentPath}.<value>`, depth + 1);
       }
     }
     active.delete(current);

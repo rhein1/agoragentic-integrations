@@ -52,6 +52,26 @@ const BOOTSTRAP_HASH = hash('trusted-bootstrap-artifact-v2');
 const RUNNER_HASH = hash('trusted-runner-artifact-v2');
 const MAX_RESULT_BYTES = 4 * 1024 * 1024;
 const SECRET_TEST_VALUE = 'abcdefghijklmnop';
+const SYNTHETIC_AMK_KEY = `amk_${'a'.repeat(64)}`;
+const EMBEDDED_SYNTHETIC_AMK_KEY = `prefix${SYNTHETIC_AMK_KEY}suffix`;
+const GENERIC_CREDENTIAL_TOKEN = 'ghr-abcdefghijklmnop';
+const EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS = Object.freeze([
+  'prefixghr-abcdefghijklmnop',
+  '_github_pat_abcdefghijklmnop',
+  'prefixxoxb_abcdefghijklmnop',
+  `xAKIA${'A'.repeat(16)}`,
+  '_sk-proj-abcdefghijklmnop',
+  `xsk-${'a'.repeat(32)}`,
+  'prefixBearer abcdefghijklmnop',
+]);
+const DOCUMENTED_AMK_PLACEHOLDERS = Object.freeze([
+  'amk_your_key_here',
+  'amk_your_api_key_here',
+]);
+const NON_SECRET_IDENTIFIER_CONTROLS = Object.freeze([
+  'risk_fork_security_boundary_documentation',
+  'prefixsk_abcdefghijklmnop',
+]);
 
 function createQualificationTrust(evidence, externalObservationVerifier) {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -640,7 +660,12 @@ async function capsuleForCurrentWorkspace(source) {
   return makeCapsule({ workspace: { digest: inspected.workspace_digest } });
 }
 
-async function assertSanitizedExportRejectsContent(t, content, filename = 'config.txt') {
+async function assertSanitizedExportRejectsContent(
+  t,
+  content,
+  filename = 'config.txt',
+  secretValue = SECRET_TEST_VALUE,
+) {
   const value = await fixture(t);
   await writeFile(path.join(value.source, filename), content);
   const capsule = await capsuleForCurrentWorkspace(value.source);
@@ -649,7 +674,7 @@ async function assertSanitizedExportRejectsContent(t, content, filename = 'confi
     (error) => {
       assert.match(error?.message ?? '', /authority or secret-shaped material/i);
       assert.equal(
-        error?.message?.includes(SECRET_TEST_VALUE),
+        error?.message?.includes(secretValue),
         false,
         'error must not log secret bytes',
       );
@@ -992,6 +1017,134 @@ test('runner result is exact-bound to a unique job and stale or substituted evid
   assert.equal(jobWrites.length, 1);
 });
 
+test('runner semantic scans reject exact credentials in values and keys without disclosing them', async (t) => {
+  for (const [index, secretValue] of [
+    EMBEDDED_SYNTHETIC_AMK_KEY,
+    ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS,
+  ].entries()) {
+    await t.test(`embedded credential value variant ${index + 1}`, async (t2) => {
+      const commitCandidate = {
+        type: 'TYPED_RESULT',
+        result: { answer: secretValue },
+        result_schema_hash: hash('schema'),
+      };
+      const prepared = await prepareFork(t2, {
+        resultOverrides: {
+          commit_candidate: commitCandidate,
+          commit_candidate_hash: hash(commitCandidate),
+        },
+      });
+      await assert.rejects(
+        prepared.adapter.executeInFork({
+          fork_ref: prepared.fork.fork_ref,
+          execution_mode: 'isolated_execution',
+          operation: { kind: 'analyze', subject_ref: 'opaque:synthetic-key-result' },
+          timeout_ms: 5_000,
+        }),
+        (error) => {
+          assert.equal(error?.code, 'E2B_EXECUTION_FAILED_CHILD_VERIFIED_ABSENT');
+          assert.match(error?.cause?.message ?? '', /secret-shaped material/i);
+          assert.equal(error?.cause?.message?.includes(secretValue), false);
+          assert.equal(error?.message?.includes(secretValue), false);
+          return true;
+        },
+      );
+      assert.equal(prepared.mock.killed, true);
+    });
+  }
+
+  for (const secretKey of [
+    SYNTHETIC_AMK_KEY,
+    GENERIC_CREDENTIAL_TOKEN,
+    ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS,
+  ]) {
+    await t.test(`credential-shaped result key ${secretKey.slice(0, 3)}`, async (t2) => {
+      const commitCandidate = {
+        type: 'TYPED_RESULT',
+        result: { [secretKey]: 'opaque' },
+        result_schema_hash: hash('schema'),
+      };
+      const prepared = await prepareFork(t2, {
+        resultOverrides: {
+          commit_candidate: commitCandidate,
+          commit_candidate_hash: hash(commitCandidate),
+        },
+      });
+      await assert.rejects(
+        prepared.adapter.executeInFork({
+          fork_ref: prepared.fork.fork_ref,
+          execution_mode: 'isolated_execution',
+          operation: { kind: 'analyze', subject_ref: 'opaque:credential-key-result' },
+          timeout_ms: 5_000,
+        }),
+        (error) => {
+          assert.equal(error?.code, 'E2B_EXECUTION_FAILED_CHILD_VERIFIED_ABSENT');
+          assert.match(error?.cause?.message ?? '', /<key> contains secret-shaped material/i);
+          assert.equal(error?.cause?.message?.includes(secretKey), false);
+          assert.equal(error?.message?.includes(secretKey), false);
+          return true;
+        },
+      );
+      assert.equal(prepared.mock.killed, true);
+    });
+  }
+
+  await t.test('credential-shaped operation key is rejected before runner I/O', async (t2) => {
+    const prepared = await prepareFork(t2);
+    const jobWritesBefore = prepared.mock.events.filter((event) => event.type === 'file-write'
+      && event.path.startsWith(`${E2B_RISK_FORK_PATHS.job}.`)).length;
+    await assert.rejects(
+      prepared.adapter.executeInFork({
+        fork_ref: prepared.fork.fork_ref,
+        execution_mode: 'isolated_execution',
+        operation: {
+          kind: 'analyze',
+          subject_ref: 'opaque:credential-key-operation',
+          [EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS[0]]: 'opaque',
+        },
+        timeout_ms: 5_000,
+      }),
+      (error) => {
+        assert.match(error?.message ?? '', /<key> contains authority or secret-shaped material/i);
+        assert.equal(
+          error?.message?.includes(EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS[0]),
+          false,
+        );
+        return true;
+      },
+    );
+    const jobWritesAfter = prepared.mock.events.filter((event) => event.type === 'file-write'
+      && event.path.startsWith(`${E2B_RISK_FORK_PATHS.job}.`)).length;
+    assert.equal(jobWritesAfter, jobWritesBefore);
+  });
+
+  await t.test('canonical documented placeholders', async (t2) => {
+    const commitCandidate = {
+      type: 'TYPED_RESULT',
+      result: {
+        examples: [...DOCUMENTED_AMK_PLACEHOLDERS, ...NON_SECRET_IDENTIFIER_CONTROLS],
+      },
+      result_schema_hash: hash('schema'),
+    };
+    const prepared = await prepareFork(t2, {
+      resultOverrides: {
+        commit_candidate: commitCandidate,
+        commit_candidate_hash: hash(commitCandidate),
+      },
+    });
+    const result = await prepared.adapter.executeInFork({
+      fork_ref: prepared.fork.fork_ref,
+      execution_mode: 'isolated_execution',
+      operation: { kind: 'analyze', subject_ref: 'opaque:placeholder-result' },
+      timeout_ms: 5_000,
+    });
+    assert.deepEqual(
+      result.commit_candidate.result,
+      { examples: [...DOCUMENTED_AMK_PLACEHOLDERS, ...NON_SECRET_IDENTIFIER_CONTROLS] },
+    );
+  });
+});
+
 test('execution timeout destroys the whole sandbox and independently verifies absence', async (t) => {
   const timeout = new Error('command deadline exceeded');
   timeout.code = 'TIMEOUT';
@@ -1294,6 +1447,15 @@ test('sanitized export rejects whitespace-padded mixed-case credential assignmen
   );
 });
 
+test('sanitized export rejects bare synthetic amk_ material before provider allocation', async (t) => {
+  await assertSanitizedExportRejectsContent(
+    t,
+    `result=${SYNTHETIC_AMK_KEY}\n`,
+    'result.txt',
+    SYNTHETIC_AMK_KEY,
+  );
+});
+
 test('sanitized export scans exact bytes even when surrounding bytes are invalid UTF-8', async (t) => {
   await assertSanitizedExportRejectsContent(
     t,
@@ -1322,6 +1484,13 @@ test('sanitized export does not reject prose, longer metadata keys, or short exa
   });
   await t.test('short example value', async (t2) => {
     await assertSanitizedExportAllowsContent(t2, 'API_KEY="example"\n', 'example.conf');
+  });
+  await t.test('short documented amk_ placeholder', async (t2) => {
+    await assertSanitizedExportAllowsContent(
+      t2,
+      `example=${DOCUMENTED_AMK_PLACEHOLDERS.join(',')}\n`,
+      'placeholder.conf',
+    );
   });
 });
 

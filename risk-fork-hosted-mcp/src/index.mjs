@@ -83,12 +83,16 @@ export {
   verifyPostgresDistributedAuthoritySchema,
 } from '../../risk-fork/src/adapters/postgres-authority-migrator.mjs';
 
+const REVIEWED_SOURCE_INTEGRITY = typeof __AGORAGENTIC_REVIEWED_SOURCE_INTEGRITY__ === 'string'
+  ? __AGORAGENTIC_REVIEWED_SOURCE_INTEGRITY__
+  : null;
+
 export const HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: '@agoragentic/risk-fork-hosted-mcp',
   package_version: '0.1.0-alpha.0',
   mcp_source_version: '2.0.0',
   risk_fork_source_version: '0.1.0-alpha.0',
-  reviewed_source_commit: 'dede3ae3806a03e63660a5772a28433a75573048',
+  reviewed_source_integrity: REVIEWED_SOURCE_INTEGRITY,
   optional_e2b_peer_version: '2.39.0',
   publication_status: 'private_unpublished',
   outbound_mcp_transport_qualified: false,

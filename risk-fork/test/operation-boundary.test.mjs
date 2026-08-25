@@ -134,6 +134,24 @@ test('provider-neutral child operation validation is canonical, authority-free, 
   assert.throws(() => validateChildOperation(accessor), /hidden or accessor field/);
 });
 
+test('child operation scans exact generated credentials in keys without echoing them', () => {
+  const generatedKey = `amk_${'c'.repeat(64)}`;
+  assert.throws(
+    () => validateChildOperation({ kind: 'analyze', [`x${generatedKey}y`]: 'opaque' }),
+    (error) => {
+      assert.match(error.message, /authority or secret-shaped material/);
+      assert.equal(error.message.includes(generatedKey), false);
+      return true;
+    },
+  );
+
+  const documented = validateChildOperation({
+    kind: 'analyze',
+    documentation: 'Use amk_your_api_key_here in examples only',
+  });
+  assert.equal(documented.documentation, 'Use amk_your_api_key_here in examples only');
+});
+
 test('controller rejects authority-bearing child operations before every provider call', async () => {
   const capsule = makeCapsule({ allowed_commit_types: ['TYPED_RESULT'] });
   for (const operation of [

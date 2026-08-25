@@ -6,10 +6,10 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 134,
-    "occurrence_count": 269,
+    "file_count": 136,
+    "occurrence_count": 271,
     "category_file_counts": {
-      "installer_or_clone": 26,
+      "installer_or_clone": 28,
       "machine_discovery": 43,
       "package_registry_metadata": 21,
       "public_documentation": 70,
@@ -1222,6 +1222,26 @@
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/build.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        99
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/verify-integrity.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        88
+      ],
+      "categories": [
+        "installer_or_clone"
       ]
     },
     {

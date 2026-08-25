@@ -7,6 +7,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'mcp/**'
       - 'risk-fork/**'
       - 'risk-fork-hosted-mcp/**'
       - 'transaction-assurance/**'
@@ -14,6 +15,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'mcp/**'
       - 'risk-fork/**'
       - 'risk-fork-hosted-mcp/**'
       - 'transaction-assurance/**'
@@ -170,8 +172,6 @@ jobs:
       AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
@@ -180,11 +180,25 @@ jobs:
       - name: Install locked hosted bundle dependencies
         working-directory: risk-fork-hosted-mcp
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Check and test the source-bound bundle
+      - name: Verify committed generated bundle before mutation
+        working-directory: risk-fork-hosted-mcp
+        run: npm run verify:source
+      - name: Check, test, rebuild, and verify the source-bound bundle
         working-directory: risk-fork-hosted-mcp
         run: |
           npm run check
           npm test
           npm run build
+          npm run verify
           npm run verify:source
           npm run pack:dry
+      - name: Reject generated hosted bundle drift
+        run: |
+          git diff --exit-code -- \
+            risk-fork-hosted-mcp/THIRD_PARTY_NOTICES.txt \
+            risk-fork-hosted-mcp/dist/runtime/index.mjs \
+            risk-fork-hosted-mcp/e2b-context/ \
+            risk-fork-hosted-mcp/integrity-manifest.json \
+            risk-fork-hosted-mcp/migrations/001_distributed_authority.pg.sql \
+            risk-fork-hosted-mcp/ops/postgres/ \
+            risk-fork-hosted-mcp/schema/e2b-qualification-evidence.v1.json
