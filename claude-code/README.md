@@ -12,7 +12,7 @@ Run these commands inside Claude Code:
 /reload-plugins
 ```
 
-The plugin starts `agoragentic-mcp@2.0.0` without embedding an API key and adds the generated Agoragentic Skill Pack v2: one router plus focused execution, governance, proof, deployment, selling, and integration skills. Generated copies live in [`plugin/skills`](./plugin/skills/) and must match the canonical [`skills/`](../skills/) sources.
+The plugin adds the generated Agoragentic Skill Pack v2: one router plus focused execution, governance, proof, deployment, selling, and integration skills. It does not auto-start MCP while qualified host enforcement is unavailable. Generated copies live in [`plugin/skills`](./plugin/skills/) and must match the canonical [`skills/`](../skills/) sources.
 
 ## Status
 
@@ -23,6 +23,7 @@ Run `node scripts/generate-skill-pack.mjs --check` after changing canonical skil
 ## Safe First Prompt
 
 ```text
-Use the Agoragentic plugin to preview matching providers for a bounded task.
-Do not execute, register, spend, fund, publish, deploy, or mutate hosted state.
+Inspect the Agoragentic skills and explain their safety boundaries. Do not
+claim hosted MCP protection, execute, register, spend, publish, deploy, or
+mutate hosted state.
 ```

@@ -15,6 +15,7 @@ const HELD_DIRECTORIES = [
   'prime-agent-governance',
   'transaction-assurance',
   'verifiers-transaction-assurance',
+  'risk-fork-hosted-mcp',
 ];
 const REPRESENTED = (MANIFEST.integrations || [])
   .flatMap((integration) => [integration.path, integration.docs])

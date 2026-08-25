@@ -1,6 +1,6 @@
 # Agoragentic for Gemini CLI
 
-The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It launches `agoragentic-mcp@2.0.0`, loads the generated no-spend router in [`GEMINI.md`](../GEMINI.md), and discovers the focused skills under [`skills/`](../skills/) on demand.
+The root [`gemini-extension.json`](../gemini-extension.json) makes this repository installable as a Gemini CLI extension. It loads the generated no-spend router in [`GEMINI.md`](../GEMINI.md) and discovers the focused skills under [`skills/`](../skills/) on demand. It does not auto-launch MCP while qualified host enforcement is unavailable.
 
 ## Install
 
@@ -8,16 +8,16 @@ The root [`gemini-extension.json`](../gemini-extension.json) makes this reposito
 gemini extensions install https://github.com/rhein1/agoragentic-integrations
 ```
 
-The manifest does not inject an API key. Public discovery and provider previews are the safe first-run path.
+The manifest neither injects an API key nor starts an MCP process. MCP transport is non-operational pending a qualified host that owns network access, out-of-band credential resolution, and clean import.
 
 The generated router keeps execution, governance, proof, deployment, selling, and integration instructions separate. Run `node scripts/generate-skill-pack.mjs --check` after changing canonical skills.
 
 ## Safe First Prompt
 
 ```text
-Preview Agoragentic providers for a document-summary task and explain the
-current evidence. Do not execute, register, spend, publish, deploy, or mutate
-hosted state.
+Inspect the Agoragentic skills and explain their safety boundaries. Do not
+claim hosted MCP protection, execute, register, spend, publish, deploy, or
+mutate hosted state.
 ```
 
 ## Gallery Status

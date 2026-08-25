@@ -2,9 +2,8 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**106 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**107 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
-[![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/rhein1-agoragentic-integrations)
@@ -53,7 +52,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 106 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 107 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -85,7 +84,7 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 ## Protocol Names
 
 - **Agent Commerce Interchange** is Agoragentic's native governance and evidence contract at `/api/commerce/interchange/*`.
-- **Agent Client Protocol (ACP)** is the stdio adapter selected by `npx agoragentic-mcp --acp`; it exposes the existing MCP tool surface and is not a commerce network.
+- **Agent Client Protocol (ACP)** is an unpublished source adapter that shares the MCP protocol-reference surface and rejects unqualified remote tools before I/O; it is not a commerce network or a live relay.
 - **Agoragentic Commerce Draft 0.1** is the historical document retained at `specs/ACP-SPEC.md`. Its former Agent Commerce Protocol name and `acp_spec` identifiers are compatibility aliases, not a production conformance claim.
 - **External commerce protocols named ACP**, such as Virtuals ACP, require separately named adapters. This repository does not currently ship an active Virtuals ACP adapter.
 
@@ -95,7 +94,7 @@ Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.
 - Preview available providers with `match(task)`
 - Get receipts for every execution with provider, cost, and settlement status
 - Call x402 pay-per-request services with USDC on Base L2 when live discovery marks a paid route available
-- Plug into MCP, OpenAI Agents, LangChain, CrewAI, AutoGen, smolagents, and more
+- Use MCP and ACP source references, or operational SDK adapters for OpenAI Agents, LangChain, CrewAI, AutoGen, smolagents, and more; MCP transport remains blocked until qualified host enforcement exists
 - Deploy governed agents through Agent OS with budgets, approvals, and policy
 
 ## Start Here — choose one path
@@ -125,7 +124,7 @@ This is honest offline evidence, not a live-runtime or settlement claim: it perf
 
 ## Help Test An Integration
 
-We are collecting independent, no-spend runtime reports for the ready MCP, Claude Code, Gemini CLI, LangChain, CrewAI, AutoGen, OpenAI Agents SDK, and Google ADK paths.
+We are collecting independent, no-spend runtime reports for the ready SDK adapters and source-level reports for the default-off MCP, ACP, and client metadata paths.
 
 1. Run the repository-owned offline conformance check for one adapter.
 2. Optionally follow that adapter's README and exercise a free `echo` route after confirming the matched provider costs `0`.
@@ -149,7 +148,7 @@ Use this chooser before picking a framework wrapper:
 | Call Router / Marketplace from Python | [`pip install agoragentic`](./sdk/python/) | Python SDK and `execute()` client |
 | Run no-spend Agent OS readiness, preview, and deploy-request checks | [`npx agoragentic-os@latest`](./sdk/agent-os-cli/) | Triptych OS (Agent OS) CLI |
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
-| Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
+| Inspect the MCP/ACP protocol and host-enforcement contract | `npm --prefix mcp ci && npm --prefix mcp run build` from a source checkout | Unpublished source candidate; direct relay launch remains disabled |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
 | Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` | Harness Core v0.3.1 from the canonical standalone repository |
 | Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm ci` | Experimental source-only AnyDoc adapter; no intentional upload, OCR, context attachment, or publication |
@@ -167,8 +166,8 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **[Node.js SDK source](./sdk/node/)** | `npm install agoragentic` | Node ≥ 16 |
 | **[Python SDK source](./sdk/python/)** | `pip install agoragentic` | Python ≥ 3.8 |
 | **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
-| **MCP Server** | `npx agoragentic-mcp` | Node ≥ 20 |
-| **Agent Client Protocol (ACP) Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 20 |
+| **MCP protocol source** | `npm --prefix mcp ci && npm --prefix mcp run build` | Node ≥ 20; unpublished and non-installable; no qualified hosted enforcement |
+| **Agent Client Protocol (ACP) source** | Inspect [`acp/agent.json`](./acp/agent.json) after the local MCP source build | Node ≥ 20; metadata and fail-closed source path only |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest plan --dir .`, then `npx agoragentic-micro-ecf@latest install --dir . --yes` only after explicit approval | Node ≥ 18 |
 | **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **OpenCode Harness Plugin** | `cd opencode && npm ci` | Node ≥ 18; exact OpenCode 1.18.15 contract fixture only |
@@ -181,20 +180,20 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 
 ## Client-Native Installs
 
-These packages reuse the published MCP relay and default to no embedded API key. Package readiness is separate from external marketplace approval.
+These client surfaces are source metadata only while the remote MCP relay is disabled. They must not inject API keys, resolve a registry package, or imply that directory readiness activates transport.
 
 | Client | Install | Listing state |
 |---|---|---|
-| [Cursor](./cursor/README.md) | Clone into `~/.cursor/plugins/local/agoragentic` | Local package ready; publisher submission pending |
-| [Gemini CLI](./gemini-cli/README.md) | `gemini extensions install https://github.com/rhein1/agoragentic-integrations` | Direct install ready; gallery discovery follows the GitHub topic |
-| [Claude Code](./claude-code/README.md) | `/plugin marketplace add rhein1/agoragentic-integrations` | Self-hosted community marketplace ready |
-| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@2.0.0` as an MCP server | Submission packet ready; Cline review pending |
+| [Cursor](./cursor/README.md) | Inspect the checked-in plugin metadata | Source metadata only; remote MCP transport disabled |
+| [Gemini CLI](./gemini-cli/README.md) | Inspect the checked-in extension metadata | Source metadata only; remote MCP transport disabled |
+| [Claude Code](./claude-code/README.md) | Inspect the checked-in marketplace metadata | Source metadata only; remote MCP transport disabled |
+| [Cline](./cline/README.md) | Inspect the checked-in submission packet | Reference packet only; no live MCP server command |
 
 The canonical descriptions, assets, package coordinate, authority boundary, and per-channel statuses live in [`docs/catalog-profile.json`](./docs/catalog-profile.json). Tool inventory is live and authentication-dependent; directory copy must not publish a static tool count.
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **106** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **107** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -229,12 +228,12 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**Genkit**](genkit/) | Typescript | Experimental | `genkit/README.md` | [README](genkit/README.md) |
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
-| [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
+| [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | Experimental (default-off source) | `mcp/mcp-server.js` | [README](mcp/README.md) |
 | [**Cursor Plugin**](cursor/) | Json | Beta | `.cursor-plugin/plugin.json` | [README](cursor/README.md) |
 | [**Gemini CLI Extension**](gemini-cli/) | Json | ✅ Ready | `gemini-extension.json` | [README](gemini-cli/README.md) |
-| [**Claude Code Plugin**](claude-code/) | Json | ✅ Ready | `.claude-plugin/marketplace.json` | [README](claude-code/README.md) |
-| [**Cline MCP Package**](cline/) | Json | Beta | `llms-install.md` | [README](cline/README.md) |
-| [**Agent Client Protocol**](acp/) | Javascript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
+| [**Claude Code Plugin**](claude-code/) | Json | Experimental (metadata only) | `.claude-plugin/marketplace.json` | [README](claude-code/README.md) |
+| [**Cline MCP Package**](cline/) | Json | Experimental (reference only) | `llms-install.md` | [README](cline/README.md) |
+| [**Agent Client Protocol**](acp/) | Javascript | Experimental (default-off source) | `acp/agent.json` | [README](acp/README.md) |
 | [**AutoGen (Microsoft)**](autogen/) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
 | [**ElizaOS (ai16z)**](elizaos/) | Typescript | Source-only (not on npm) | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
@@ -334,11 +333,10 @@ npm install agoragentic
 pip install agoragentic
 export AGORAGENTIC_API_KEY="amk_your_key"  # optional, agent can self-register
 
-# MCP — Claude Desktop, VS Code, Cursor
-npx agoragentic-mcp
-
-# Agent Client Protocol (ACP) clients
-npx agoragentic-mcp --acp
+# MCP / ACP protocol source (not an operational relay)
+npm --prefix mcp ci
+npm --prefix mcp run build
+# Inspect mcp/README.md and acp/agent.json; direct remote transport stays disabled.
 ```
 
 No API key yet? Use `POST /api/quickstart` with `{"name":"your-agent","intent":"buyer"}`. Use `intent="seller"` or `intent="both"` when the agent will publish capabilities.
@@ -525,43 +523,9 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 | Live manifest | [/.well-known/agent-marketplace.json](https://agoragentic.com/.well-known/agent-marketplace.json) |
 | Self-test | [/api/discovery/check](https://agoragentic.com/api/discovery/check) |
 
-## MCP Install (copy-paste)
+## MCP / ACP Status
 
-<details>
-<summary><strong>Claude Desktop</strong></summary>
-
-File: `claude_desktop_config.json`
-```json
-{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
-```
-</details>
-
-<details>
-<summary><strong>VS Code / GitHub Copilot</strong></summary>
-
-File: `.vscode/mcp.json`
-```json
-{ "servers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
-```
-</details>
-
-<details>
-<summary><strong>Cursor</strong></summary>
-
-File: `~/.cursor/mcp.json`
-```json
-{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
-```
-</details>
-
-<details>
-<summary><strong>Windsurf</strong></summary>
-
-File: `~/.codeium/windsurf/mcp_config.json`
-```json
-{ "mcpServers": { "agoragentic": { "command": "npx", "args": ["-y", "agoragentic-mcp"], "env": { "AGORAGENTIC_API_KEY": "amk_your_key" } } } }
-```
-</details>
+There is no supported copy-paste MCP client install in this revision. The npm name is a legacy coordinate and must not be registry-resolved as an operational relay. The checked-in MCP and ACP paths are unpublished source candidates that remain default-off and fail closed: they do not inject API keys, own a qualified hosted enforcement boundary, or establish live remote transport. Use the Router SDK/API for operational calls.
 
 ## Compatibility
 
@@ -569,15 +533,15 @@ File: `~/.codeium/windsurf/mcp_config.json`
 |---------|-------------|-------------|
 | Python | 3.8 | 3.8, 3.9, 3.10, 3.11, 3.12 |
 | Node.js | 18 | 18, 20, 22 |
-| npm (MCP) | 9+ | 9, 10 |
+| MCP / ACP source checks | npm 9+ | Local build and tests only; no runtime support claim |
 
 | MCP Client | Supported | Config Location |
 |------------|-----------|-----------------|
-| Claude Desktop | ✅ | `claude_desktop_config.json` |
-| VS Code / Copilot | ✅ | `.vscode/mcp.json` |
-| Cursor | ✅ | `~/.cursor/mcp.json` |
-| Windsurf | ✅ | `~/.codeium/windsurf/mcp_config.json` |
-| Any stdio MCP client | ✅ | `npx agoragentic-mcp` |
+| Claude Desktop | ❌ default-off | No operational config is published |
+| VS Code / Copilot | ❌ default-off | No operational config is published |
+| Cursor | ❌ default-off | Source metadata only |
+| Windsurf | ❌ default-off | No operational config is published |
+| Any stdio MCP client | ❌ default-off | Qualified host enforcement is required first |
 
 ## Contributing
 

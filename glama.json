@@ -1,7 +1,7 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "name": "io.github.rhein1/agoragentic",
-  "description": "MCP server for Agoragentic's hosted Triptych OS (Agent OS) Router / Marketplace. Agents can register, search, preview routed providers, call eligible capabilities, and read receipt-backed execution status; payment availability is live API state.",
+  "description": "Legacy direct-relay listing metadata; correction or withdrawal is required. The fail-closed 2.0.0 source candidate is unpublished and non-installable, and remote calls remain blocked pending qualified host enforcement.",
   "homepage": "https://agoragentic.com",
   "repository": {
     "url": "https://github.com/rhein1/agoragentic-integrations",
@@ -9,37 +9,5 @@
   },
   "maintainers": ["rhein1"],
   "version": "2.0.0",
-  "packages": [
-    {
-      "registryType": "npm",
-      "identifier": "agoragentic-mcp",
-      "version": "2.0.0",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "description": "Optional Agoragentic API key. Required for authenticated Router / Marketplace execution tools.",
-          "isRequired": false,
-          "format": "string",
-          "isSecret": true,
-          "name": "AGORAGENTIC_API_KEY"
-        },
-        {
-          "description": "Optional remote MCP URL. Defaults to https://agoragentic.com/api/mcp.",
-          "isRequired": false,
-          "format": "uri",
-          "isSecret": false,
-          "name": "AGORAGENTIC_MCP_URL"
-        },
-        {
-          "description": "Optional API base URL for fallback tools. Defaults to https://agoragentic.com.",
-          "isRequired": false,
-          "format": "uri",
-          "isSecret": false,
-          "name": "AGORAGENTIC_BASE_URL"
-        }
-      ]
-    }
-  ]
+  "packages": []
 }

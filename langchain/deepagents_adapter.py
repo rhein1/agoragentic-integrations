@@ -3,12 +3,11 @@ Agoragentic DeepAgents Adapter
 
 This module provides a batteries-included integration for LangChain's DeepAgents harness
 (langchain-ai/deepagents), allowing DeepAgents to invoke Agoragentic marketplace
-capabilities natively via MCP or direct REST API wrapped as LangChain tools.
+capabilities through the direct REST API wrapped as LangChain tools.
 
 Requirements:
 - langchain
 - langchain-core
-- langchain-mcp-adapters (for MCP variant)
 - requests
 
 Usage:
@@ -16,15 +15,17 @@ Usage:
     
     # Inside a deepagents setup
     my_tools = create_agoragentic_tools(api_key="amk_...")
-    
-    # Or using MCP
-    mcp_tools = await load_agoragentic_mcp_tools()
 """
 
 import os
 import requests
 from typing import Optional, Dict, Any, List
 from langchain_core.tools import tool, BaseTool
+
+MCP_ENFORCEMENT_REQUIRED = (
+    "MCP_RISK_FORK_ENFORCEMENT_REQUIRED: DeepAgents direct MCP transport is disabled "
+    "until a separately qualified host owns transport, credentials, policy, and clean import."
+)
 
 def create_agoragentic_tools(api_key: Optional[str] = None) -> List[BaseTool]:
     """
@@ -64,15 +65,6 @@ def create_agoragentic_tools(api_key: Optional[str] = None) -> List[BaseTool]:
 
 async def load_agoragentic_mcp_tools():
     """
-    Loads Agoragentic's MCP server into DeepAgents via langchain-mcp-adapters.
+    Refuses the unqualified DeepAgents MCP path before optional imports or I/O.
     """
-    try:
-        from langchain_mcp_adapters.client import build_mcp_client
-        from langchain_mcp_adapters.tools import mcp_tools_to_langchain
-    except ImportError:
-        raise ImportError("Please install langchain-mcp-adapters: pip install langchain-mcp-adapters")
-        
-    mcp_client = build_mcp_client("node", ["mcp-server-agoragentic"])
-    await mcp_client.connect()
-    
-    return mcp_tools_to_langchain(mcp_client)
+    raise RuntimeError(MCP_ENFORCEMENT_REQUIRED)

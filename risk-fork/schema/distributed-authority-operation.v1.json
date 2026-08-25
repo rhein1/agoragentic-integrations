@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-distributed-authority-operation.v1.json",
+  "title": "Agoragentic Risk Fork Distributed Authority Operation V1",
+  "description": "A PostgreSQL authority operation and effect fence. An effect key is an idempotency/fencing value, not authority or proof of exactly-once external side effects. After effect start, non-success reconciliation remains ambiguous and keeps every reservation unavailable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "operation_ref", "request_hash", "authority_request_hash", "status", "commit_type", "parent_ref", "approval_key", "authorization_id", "previous_head_hash", "next_head_hash", "artifact_hash", "capsule_hash", "governance_hash", "governance_evidence_hash", "approval_evidence_ref", "approval_evidence_hash", "authorization_binding_hash", "capsule_expires_at", "effect_key", "claimant_ref", "result", "result_hash", "transaction_hash", "failure_code", "failure_message", "resolution", "resolution_evidence_ref", "resolution_evidence_hash", "version", "prepared_at", "effect_started_at", "completed_at", "updated_at", "idempotent", "authority_flags"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.distributed-operation.v1" },
+    "operation_ref": { "$ref": "#/$defs/ref" },
+    "request_hash": { "$ref": "#/$defs/sha256" },
+    "authority_request_hash": { "$ref": "#/$defs/sha256" },
+    "status": { "enum": ["prepared", "effect_started", "committed", "ambiguous", "aborted"] },
+    "commit_type": { "enum": ["TYPED_RESULT", "WORKSPACE_DIFF", "CONSEQUENTIAL_ACTION_PROPOSAL"] },
+    "parent_ref": { "$ref": "#/$defs/ref" },
+    "approval_key": { "$ref": "#/$defs/sha256" },
+    "authorization_id": { "$ref": "#/$defs/nullableRef" },
+    "previous_head_hash": { "$ref": "#/$defs/sha256" },
+    "next_head_hash": { "$ref": "#/$defs/nullableSha256" },
+    "artifact_hash": { "$ref": "#/$defs/sha256" },
+    "capsule_hash": { "$ref": "#/$defs/sha256" },
+    "governance_hash": { "$ref": "#/$defs/sha256" },
+    "governance_evidence_hash": { "$ref": "#/$defs/sha256" },
+    "approval_evidence_ref": { "$ref": "#/$defs/ref" },
+    "approval_evidence_hash": { "$ref": "#/$defs/sha256" },
+    "authorization_binding_hash": { "$ref": "#/$defs/nullableSha256" },
+    "capsule_expires_at": { "$ref": "#/$defs/date" },
+    "effect_key": { "$ref": "#/$defs/nullableRef" },
+    "claimant_ref": { "$ref": "#/$defs/nullableRef" },
+    "result": { "$ref": "#/$defs/jsonValue" },
+    "result_hash": { "$ref": "#/$defs/nullableSha256" },
+    "transaction_hash": { "$ref": "#/$defs/nullableSha256" },
+    "failure_code": { "$ref": "#/$defs/nullableRef" },
+    "failure_message": { "type": ["string", "null"], "maxLength": 1000 },
+    "resolution": { "enum": [null, "effect_succeeded"] },
+    "resolution_evidence_ref": { "$ref": "#/$defs/nullableRef" },
+    "resolution_evidence_hash": { "$ref": "#/$defs/nullableSha256" },
+    "version": { "type": "integer", "minimum": 1 },
+    "prepared_at": { "$ref": "#/$defs/date" },
+    "effect_started_at": { "$ref": "#/$defs/nullableDate" },
+    "completed_at": { "$ref": "#/$defs/nullableDate" },
+    "updated_at": { "$ref": "#/$defs/date" },
+    "idempotent": { "type": "boolean" },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation_grants_authority", "automatic_effect_retry_allowed", "reconciliation_requires_trusted_verification"],
+      "properties": {
+        "operation_grants_authority": { "const": false },
+        "automatic_effect_retry_allowed": { "const": false },
+        "reconciliation_requires_trusted_verification": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "nullableSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$" },
+    "nullableRef": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/ref" }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "nullableDate": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/date" }] },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" }, { "type": "boolean" }, { "type": "string", "maxLength": 4194304 }, { "type": "number" },
+        { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "object", "propertyNames": { "maxLength": 1024 }, "additionalProperties": { "$ref": "#/$defs/jsonValue" } }
+      ]
+    }
+  }
+}

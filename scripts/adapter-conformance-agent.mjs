@@ -7,9 +7,16 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { sanitizeWorkerEnv } from "./adapter-conformance-lib.mjs";
+import {
+  ADAPTER_CONFORMANCE_WORKER_PROTOCOL,
+  RESULT_ACK_MESSAGE,
+  VALIDATE_INTEGRATION_MESSAGE,
+  VALIDATION_RESULT_MESSAGE,
+} from "./adapter-conformance-protocol.mjs";
 
 const WORKER_PATH = fileURLToPath(new URL("./adapter-conformance-worker.mjs", import.meta.url));
 const DEFAULT_TIMEOUT_MS = 20_000;
+let workerRequestSequence = 0;
 
 function usage() {
   return `Adapter Conformance Agent
@@ -112,9 +119,11 @@ function workerFailure(integration, summary, evidence = undefined) {
   };
 }
 
-function runForkedWorker(root, integration, options) {
+export function runForkedWorker(root, integration, options) {
   return new Promise((resolve) => {
-    const child = fork(WORKER_PATH, [], {
+    workerRequestSequence += 1;
+    const requestId = `${process.pid}:${workerRequestSequence}`;
+    const child = fork(options.workerPath || WORKER_PATH, [], {
       env: sanitizeWorkerEnv(),
       execArgv: ["--no-warnings"],
       stdio: ["ignore", "pipe", "pipe", "ipc"],
@@ -125,6 +134,10 @@ function runForkedWorker(root, integration, options) {
       if (stderr.length < 16_384) stderr += chunk.toString("utf8");
     });
     let timer;
+    let pendingOutcome = null;
+    let expectedExitCode = null;
+    let ackComplete = false;
+    let exitState = null;
 
     const finish = (result) => {
       if (settled) return;
@@ -133,39 +146,107 @@ function runForkedWorker(root, integration, options) {
       resolve(result);
     };
 
+    const stopAndFinish = (result) => {
+      if (!child.killed) child.kill();
+      finish(result);
+    };
+
+    const finishCompletedProtocol = () => {
+      if (settled || !pendingOutcome || !ackComplete || !exitState) return;
+      if (exitState.signal || exitState.code !== expectedExitCode) {
+        finish(workerFailure(integration, "Forked worker exited inconsistently with its acknowledged evidence.", {
+          code: "worker_protocol_exit",
+          expected_exit_code: expectedExitCode,
+          exit_code: exitState.code,
+          signal: exitState.signal || null,
+          stderr_present: Boolean(stderr.trim()),
+        }));
+        return;
+      }
+      finish(pendingOutcome);
+    };
+
     timer = setTimeout(() => {
       child.kill();
       finish(workerFailure(integration, `Forked worker exceeded ${options.timeoutMs} ms.`, { code: "worker_timeout" }));
     }, options.timeoutMs);
 
     child.once("message", (message) => {
-      if (message?.ok && message.result) finish(message.result);
-      else finish(workerFailure(integration, "Forked worker returned an error.", {
-        code: "worker_error",
-        detail: message?.error || "unknown_worker_error",
-      }));
+      const commonEnvelopeIsValid = message?.type === VALIDATION_RESULT_MESSAGE
+        && message.protocol === ADAPTER_CONFORMANCE_WORKER_PROTOCOL
+        && message.request_id === requestId
+        && typeof message.ok === "boolean";
+      const payloadIsValid = message?.ok
+        ? Boolean(message.result && typeof message.result === "object")
+        : typeof message?.error === "string" && message.error.length > 0;
+      if (!commonEnvelopeIsValid || !payloadIsValid) {
+        stopAndFinish(workerFailure(integration, "Forked worker violated the completion protocol.", {
+          code: "worker_protocol_error",
+        }));
+        return;
+      }
+
+      pendingOutcome = message.ok
+        ? message.result
+        : workerFailure(integration, "Forked worker returned an error.", {
+            code: "worker_error",
+            detail: message.error,
+          });
+      expectedExitCode = message.ok ? 0 : 1;
+
+      try {
+        child.send({
+          type: RESULT_ACK_MESSAGE,
+          protocol: ADAPTER_CONFORMANCE_WORKER_PROTOCOL,
+          request_id: requestId,
+        }, (error) => {
+          if (settled) return;
+          if (error) {
+            stopAndFinish(workerFailure(integration, "Forked worker acknowledgement failed.", {
+              code: "worker_ipc_error",
+            }));
+            return;
+          }
+          ackComplete = true;
+          finishCompletedProtocol();
+        });
+      } catch {
+        stopAndFinish(workerFailure(integration, "Forked worker acknowledgement failed.", {
+          code: "worker_ipc_error",
+        }));
+      }
     });
     child.once("error", (error) => {
       finish(workerFailure(integration, "Forked worker could not start.", { code: "worker_spawn_error", detail: error.message }));
     });
-    child.once("exit", (code) => {
-      if (!settled) finish(workerFailure(integration, "Forked worker exited before returning evidence.", {
-        code: "worker_early_exit",
-        exit_code: code,
-        stderr_present: Boolean(stderr.trim()),
-      }));
+    child.once("exit", (code, signal) => {
+      if (settled) return;
+      exitState = { code, signal };
+      if (!pendingOutcome) {
+        finish(workerFailure(integration, "Forked worker exited before returning evidence.", {
+          code: "worker_early_exit",
+          exit_code: code,
+          signal: signal || null,
+          stderr_present: Boolean(stderr.trim()),
+        }));
+        return;
+      }
+      finishCompletedProtocol();
     });
 
     try {
       child.send({
+        type: VALIDATE_INTEGRATION_MESSAGE,
+        protocol: ADAPTER_CONFORMANCE_WORKER_PROTOCOL,
+        request_id: requestId,
         root,
         integration,
         pythonCommand: process.env.ADAPTER_CONFORMANCE_PYTHON || "python",
       }, (error) => {
-        if (error) finish(workerFailure(integration, "Forked worker IPC failed.", { code: "worker_ipc_error" }));
+        if (error) stopAndFinish(workerFailure(integration, "Forked worker IPC failed.", { code: "worker_ipc_error" }));
       });
     } catch {
-      finish(workerFailure(integration, "Forked worker IPC failed.", { code: "worker_ipc_error" }));
+      stopAndFinish(workerFailure(integration, "Forked worker IPC failed.", { code: "worker_ipc_error" }));
     }
   });
 }

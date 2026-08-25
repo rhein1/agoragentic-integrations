@@ -9,7 +9,7 @@
 /integrations.json          @rhein1
 /SKILL.md                   @rhein1
 
-# MCP Server (npm published)
+# MCP source candidate (safe build unpublished; legacy npm record blocked)
 /mcp/                       @rhein1
 
 # Python framework adapters

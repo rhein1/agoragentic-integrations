@@ -1,7 +1,7 @@
 {
   "schema": "agoragentic.integration-distribution.v1",
-  "version": "1.0.3",
-  "updated_at": "2026-08-09",
+  "version": "1.0.4",
+  "updated_at": "2026-08-14",
   "product": {
     "name": "Agoragentic",
     "display_name": "Agoragentic for Triptych OS",
@@ -19,11 +19,17 @@
   },
   "mcp": {
     "registry_name": "io.github.rhein1/agoragentic",
-    "npm_package": "agoragentic-mcp",
-    "package_version": "2.0.0",
-    "command": "npx -y agoragentic-mcp@2.0.0",
-    "transport": "stdio-relay",
-    "remote_endpoint": "https://agoragentic.com/api/mcp",
+    "npm_package": null,
+    "package_version": null,
+    "source_candidate_version": "2.0.0",
+    "distribution_status": "unpublished_noninstallable_source_candidate",
+    "command": null,
+    "protocol_reference_command": null,
+    "transport": "stdio-protocol-only",
+    "operational": false,
+    "status": "blocked_pending_qualified_host_enforcement",
+    "remote_endpoint": null,
+    "security_note": "The fail-closed 2.0.0 source candidate is unpublished and non-installable from a registry. The npm package currently resolves a legacy direct relay and must not be used. A qualified host must own network access, resolve credentials out of band, and clean-import results.",
     "tool_inventory": "dynamic_and_auth_dependent",
     "static_tool_count_allowed": false
   },
@@ -40,35 +46,39 @@
   "channels": [
     {
       "id": "npm",
-      "status": "active",
-      "url": "https://www.npmjs.com/package/agoragentic-mcp"
+      "status": "legacy_direct_relay_withdrawal_required",
+      "url": "https://www.npmjs.com/package/agoragentic-mcp",
+      "note": "The registry resolves a legacy direct-relay release. Withdrawal or deprecation is required; the fail-closed 2.0.0 source candidate is unpublished and non-installable."
     },
     {
       "id": "official-mcp-registry",
-      "status": "active",
-      "url": "https://registry.modelcontextprotocol.io/"
+      "status": "legacy_direct_relay_correction_required",
+      "url": "https://registry.modelcontextprotocol.io/",
+      "note": "The external record can resolve the legacy direct relay and requires correction or withdrawal before it may describe the current source candidate."
     },
     {
       "id": "smithery",
-      "status": "active",
+      "status": "legacy_direct_relay_correction_required",
       "url": "https://smithery.ai/servers/rhein1/agoragentic-mcp",
-      "note": "Listing metadata is current. Session counts include initialization and listability probes and must not be treated as tool-use evidence."
+      "note": "The listing is a legacy direct-relay record and requires correction or withdrawal. Session counts are not tool-use or containment evidence."
     },
     {
       "id": "glama",
-      "status": "active",
-      "url": "https://glama.ai/mcp/servers/rhein1/agoragentic-integrations"
+      "status": "legacy_direct_relay_correction_required",
+      "url": "https://glama.ai/mcp/servers/rhein1/agoragentic-integrations",
+      "note": "The legacy direct-relay listing requires correction or withdrawal; this repository no longer supplies a registry-installable package coordinate."
     },
     {
       "id": "pulsemcp",
-      "status": "active",
-      "url": "https://www.pulsemcp.com/servers/agoragentic"
+      "status": "legacy_direct_relay_correction_required",
+      "url": "https://www.pulsemcp.com/servers/agoragentic",
+      "note": "The legacy direct-relay listing requires correction or withdrawal and must not be presented as the current build."
     },
     {
       "id": "mcp-so",
-      "status": "support_escalated",
+      "status": "legacy_direct_relay_correction_required",
       "url": "https://mcp.so/servers/agoragentic-integrations",
-      "note": "The owned listing editor did not persist current metadata and the ticket form produced no visible record. Support was emailed on 2026-07-23; repair and duplicate consolidation are not confirmed."
+      "note": "The legacy direct-relay copy requires correction or withdrawal. Prior support contact did not confirm repair or duplicate consolidation."
     },
     {
       "id": "cursor-marketplace",
@@ -90,17 +100,17 @@
     },
     {
       "id": "cline-marketplace",
-      "status": "submitted_pending_review",
+      "status": "legacy_direct_relay_withdrawal_required",
       "url": "https://github.com/cline/mcp-marketplace/issues/808",
       "artifact": "llms-install.md",
-      "note": "The submission issue is open and was refreshed with a Cline CLI 3.0.46 install and tools/list smoke against agoragentic-mcp@1.3.6."
+      "note": "The open submission tested a legacy direct-relay release. It requires withdrawal or explicit correction; no current registry installation is supported."
     },
     {
       "id": "docker-mcp-catalog",
-      "status": "submitted_pending_review",
+      "status": "legacy_direct_relay_withdrawal_required",
       "url": "https://github.com/docker/mcp-registry/pull/4524",
       "artifact": "Dockerfile",
-      "note": "The upstream PR pins source commit 19ffef3c73d0c33aafd17d60c6f7974b1abb4a72 and is mergeable but awaits Docker review."
+      "note": "The upstream PR pins legacy direct-relay source and requires withdrawal or correction before review; it is not a current safe build."
     },
     {
       "id": "openai-plugin-directory",

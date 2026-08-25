@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-distributed-authority-reconciliation.v1.json",
+  "title": "Agoragentic Risk Fork Distributed Authority Reconciliation Input V1",
+  "description": "An explicit trusted-operator reconciliation request for one exact unresolved operation version and externally evidenced outcome. Only exact proven success may finalize; non-success observations keep the operation ambiguous and all reservations unavailable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation_ref", "expected_version", "resolution", "requested_by", "outcome_evidence_ref", "outcome_evidence_hash"],
+  "properties": {
+    "operation_ref": { "$ref": "#/$defs/ref" },
+    "expected_version": { "type": "integer", "minimum": 1 },
+    "resolution": { "enum": ["effect_succeeded", "effect_absent", "effect_failed_terminal"] },
+    "requested_by": { "$ref": "#/$defs/ref" },
+    "outcome_evidence_ref": { "$ref": "#/$defs/ref" },
+    "outcome_evidence_hash": { "$ref": "#/$defs/sha256" },
+    "result": { "$ref": "#/$defs/jsonValue" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "resolution": { "const": "effect_succeeded" } }, "required": ["resolution"] },
+      "then": {
+        "properties": { "result": { "$ref": "#/$defs/jsonValue" } },
+        "required": ["result"]
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$" },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" }, { "type": "boolean" }, { "type": "string", "maxLength": 4194304 }, { "type": "number" },
+        { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "object", "propertyNames": { "maxLength": 1024 }, "additionalProperties": { "$ref": "#/$defs/jsonValue" } }
+      ]
+    }
+  }
+}

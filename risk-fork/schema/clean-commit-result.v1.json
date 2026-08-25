@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-clean-commit-result.v1.json",
+  "title": "Agoragentic Risk Fork Clean Commit Result V1",
+  "description": "The result of a clean-controller commit after exact artifact approval, parent-state revalidation, and verified fork destruction. Automatic retry remains forbidden.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "status", "committed_at", "commit_type", "artifact_hash", "previous_parent_state_hash", "parent_state_hash", "result_hash", "result", "authority_backend", "parent_transaction", "current_governance", "final_commit_authority", "clean_approval", "execution_authorization", "destruction", "authority_flags"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.clean-commit-result.v1" }, "status": { "const": "committed" },
+    "committed_at": { "$ref": "#/$defs/date" }, "commit_type": { "$ref": "#/$defs/commitType" },
+    "artifact_hash": { "$ref": "#/$defs/sha256" }, "previous_parent_state_hash": { "$ref": "#/$defs/sha256" }, "parent_state_hash": { "$ref": "#/$defs/sha256" },
+    "result_hash": { "$ref": "#/$defs/sha256" }, "result": { "$ref": "#/$defs/jsonValue" },
+    "authority_backend": { "enum": ["file_reference", "postgres_distributed"] },
+    "parent_transaction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "transaction_ref", "transaction_hash"],
+      "properties": {
+        "status": { "const": "committed" }, "transaction_ref": { "$ref": "#/$defs/ref" },
+        "transaction_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "current_governance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "epoch", "evidence_ref", "evidence_hash"],
+      "properties": {
+        "status": { "const": "verified" }, "epoch": { "$ref": "#/$defs/ref" },
+        "evidence_ref": { "$ref": "#/$defs/ref" }, "evidence_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "final_commit_authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "atomicity_status", "request_hash", "linearized_at", "observed_at", "linearization_ref", "linearization_hash", "evidence_ref", "evidence_hash"],
+      "properties": {
+        "status": { "const": "verified" }, "atomicity_status": { "const": "verified" },
+        "request_hash": { "$ref": "#/$defs/sha256" }, "linearized_at": { "$ref": "#/$defs/date" },
+        "observed_at": { "$ref": "#/$defs/date" }, "linearization_ref": { "$ref": "#/$defs/ref" },
+        "linearization_hash": { "$ref": "#/$defs/sha256" }, "evidence_ref": { "$ref": "#/$defs/ref" },
+        "evidence_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "clean_approval": {
+      "type": "object", "additionalProperties": false, "required": ["status", "evidence_ref", "evidence_hash"],
+      "properties": { "status": { "const": "verified" }, "evidence_ref": { "$ref": "#/$defs/ref" }, "evidence_hash": { "$ref": "#/$defs/sha256" } }
+    },
+    "execution_authorization": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "authorization_id", "binding_hash", "evidence_ref", "evidence_hash"],
+          "properties": {
+            "status": { "const": "verified_and_consumed" }, "authorization_id": { "$ref": "#/$defs/ref" },
+            "binding_hash": { "$ref": "#/$defs/sha256" }, "evidence_ref": { "$ref": "#/$defs/ref" },
+            "evidence_hash": { "$ref": "#/$defs/sha256" }, "observed_at": { "$ref": "#/$defs/date" }
+          }
+        }
+      ]
+    },
+    "destruction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "provider_ref", "fork_ref", "evidence_ref", "evidence_hash"],
+      "properties": {
+        "status": { "const": "verified" }, "provider_ref": { "$ref": "#/$defs/ref" }, "fork_ref": { "$ref": "#/$defs/ref" },
+        "evidence_ref": { "$ref": "#/$defs/ref" }, "evidence_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "authority_flags": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result_grants_authority", "automatic_retry_allowed"],
+      "properties": { "result_grants_authority": { "const": false }, "automatic_retry_allowed": { "const": false } }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "commit_type": { "const": "CONSEQUENTIAL_ACTION_PROPOSAL" } }, "required": ["commit_type"] },
+      "then": { "properties": { "execution_authorization": { "type": "object" } }, "required": ["execution_authorization"] },
+      "else": { "properties": { "execution_authorization": { "type": "null" } }, "required": ["execution_authorization"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "commit_type": { "const": "CONSEQUENTIAL_ACTION_PROPOSAL" },
+          "authority_backend": { "const": "file_reference" }
+        },
+        "required": ["commit_type", "authority_backend"]
+      },
+      "then": {
+        "properties": {
+          "execution_authorization": {
+            "type": "object",
+            "properties": { "observed_at": { "$ref": "#/$defs/date" } },
+            "required": ["observed_at"]
+          }
+        },
+        "required": ["execution_authorization"]
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "amk_[a-f0-9]{64}" } }, { "not": { "type": "string", "pattern": "(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))" } }, { "not": { "type": "string", "pattern": "\\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "commitType": { "enum": ["TYPED_RESULT", "WORKSPACE_DIFF", "CONSEQUENTIAL_ACTION_PROPOSAL"] },
+    "jsonValue": {
+      "oneOf": [
+        { "type": "null" }, { "type": "boolean" },
+        {
+          "type": "string",
+          "maxLength": 16777216,
+          "$comment": "Structural code-point ceiling only. AJV success alone does not establish clean-commit eligibility; mandatory canonical runtime verification separately enforces the 16 MiB UTF-8 byte limit for result strings."
+        },
+        { "type": "number" },
+        { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/jsonValue" } },
+        { "type": "object", "propertyNames": { "maxLength": 1024 }, "additionalProperties": { "$ref": "#/$defs/jsonValue" } }
+      ]
+    }
+  }
+}

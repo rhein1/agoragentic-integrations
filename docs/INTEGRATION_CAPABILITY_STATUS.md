@@ -4,7 +4,7 @@
 >
 > These records describe bounded implementation and evidence surfaces. They do not grant authority, activate a host adapter, prove deployment, authorize spend, or establish settlement.
 
-Capability records: **10** of **106** catalog entries.
+Capability records: **10** of **107** catalog entries.
 
 ## Capabilities
 
@@ -16,7 +16,7 @@ Capability records: **10** of **106** catalog entries.
 | [CrewAI](../crewai/README.md) | example | none | none | host_observed | none | hosted_execution | none |
 | [Agoragentic Harness Core](../harness-core/README.md) | none | tested | tested | local | host_enforced | local | tested |
 | [LangGraph](../langgraph/README.md) | example | none | none | host_observed | none | hosted_execution | none |
-| [MCP (Claude, VS Code, Cursor)](../mcp/README.md) | tested | none | none | host_observed | none | hosted_execution | preview |
+| [MCP (Claude, VS Code, Cursor)](../mcp/README.md) | none | none | none | none | none | none | none |
 | [n8n Community Node](../n8n/README.md) | example | none | none | host_observed | none | hosted_execution | none |
 | [OpenAI Agents SDK](../openai-agents/README.md) | example | none | none | host_observed | none | hosted_execution | none |
 | [OpenCode Harness Plugin](../opencode/README.md) | none | tested | experimental | local | host_enforced | local | none |
@@ -31,7 +31,7 @@ Capability records: **10** of **106** catalog entries.
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |
 | Agoragentic Harness Core | standalone package 0.3.1 | local | 2026-08-21T03:58:21Z | [harness-core/STANDALONE_RELEASE_EVIDENCE.json](../harness-core/STANDALONE_RELEASE_EVIDENCE.json) | no | no |
 | LangGraph | unknown | static | 2026-08-20T18:45:00Z | [langgraph/agoragentic_langgraph.py](../langgraph/agoragentic_langgraph.py) | yes | yes |
-| MCP (Claude, VS Code, Cursor) | unknown | local | 2026-08-20T18:45:00Z | [mcp/test/v2-remote-relay.test.js](../mcp/test/v2-remote-relay.test.js) | yes | yes |
+| MCP (Claude, VS Code, Cursor) | unknown | local | 2026-08-24T00:00:00Z | [mcp/test/security-enforcement.test.js](../mcp/test/security-enforcement.test.js) | no | no |
 | n8n Community Node | unknown | static | 2026-08-20T18:45:00Z | [n8n/nodes/Agoragentic/Agoragentic.node.ts](../n8n/nodes/Agoragentic/Agoragentic.node.ts) | yes | yes |
 | OpenAI Agents SDK | unknown | static | 2026-08-20T18:45:00Z | [openai-agents/agoragentic_openai.py](../openai-agents/agoragentic_openai.py) | yes | yes |
 | OpenCode Harness Plugin | 1.18.15 contract fixture | local | 2026-08-20T18:45:00Z | [opencode/test/opencode-plugin.test.mjs](../opencode/test/opencode-plugin.test.mjs) | no | no |

@@ -5,7 +5,8 @@ Agoragentic x Haystack
 Honest scope:
 - Haystack is the agent and pipeline framework.
 - Agoragentic is the remote marketplace and settlement layer.
-- Use MCPToolset for search/match/x402 test, then use REST execute for paid calls.
+- Direct hosted MCP is blocked until a qualified host enforcement boundary owns
+  transport, credentials, and clean import. REST helpers remain separate.
 """
 
 from __future__ import annotations
@@ -14,7 +15,11 @@ import requests
 from typing import Any, Dict, Iterable, List, Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
-AGORAGENTIC_MCP_URL = "https://agoragentic.com/api/mcp"
+MCP_ENFORCEMENT_REQUIRED = (
+    "MCP_RISK_FORK_ENFORCEMENT_REQUIRED: direct Haystack MCP transport is disabled; "
+    "a qualified host enforcement boundary must own network access, resolve credentials "
+    "out of band, and return clean-imported results."
+)
 
 
 def recommended_public_tool_names() -> List[str]:
@@ -29,18 +34,16 @@ def recommended_public_tool_names() -> List[str]:
 
 def build_agoragentic_mcp_toolset(
     tool_names: Optional[Iterable[str]] = None,
-    mcp_url: str = AGORAGENTIC_MCP_URL,
+    mcp_url: Optional[str] = None,
 ) -> Any:
     """
-    Build a Haystack MCPToolset over Agoragentic's remote MCP transport.
+    Refuse the legacy direct MCP construction path.
 
-    Keep this toolset narrow. Large MCP tool surfaces tend to degrade model tool selection.
+    The arguments remain for source compatibility but are never inspected or used.
+    In particular, passing a URL or callback cannot self-attest an enforcement boundary.
     """
-    from haystack_integrations.tools.mcp import MCPToolset, StreamableHttpServerInfo
-
-    server_info = StreamableHttpServerInfo(url=mcp_url)
-    selected_names = list(tool_names) if tool_names else recommended_public_tool_names()
-    return MCPToolset(server_info=server_info, tool_names=selected_names)
+    del tool_names, mcp_url
+    raise RuntimeError(MCP_ENFORCEMENT_REQUIRED)
 
 
 def build_execute_request(

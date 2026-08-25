@@ -1,20 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.47.0",
-  "as_of": "2026-08-21",
+  "source_manifest_version": "2.49.0",
+  "as_of": "2026-08-25",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 129,
-    "occurrence_count": 258,
+    "file_count": 139,
+    "occurrence_count": 274,
     "category_file_counts": {
-      "installer_or_clone": 22,
-      "machine_discovery": 42,
-      "package_registry_metadata": 20,
-      "public_documentation": 66,
+      "installer_or_clone": 28,
+      "machine_discovery": 44,
+      "package_registry_metadata": 22,
+      "public_documentation": 72,
       "raw_content_url": 2,
-      "release_or_provenance": 8,
+      "release_or_provenance": 9,
       "reusable_action": 2,
       "source_or_test": 19
     }
@@ -387,7 +387,7 @@
       "path": "ACP_REGISTRY.md",
       "occurrences": 1,
       "line_numbers": [
-        68
+        67
       ],
       "categories": [
         "public_documentation"
@@ -402,6 +402,17 @@
       "categories": [
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "acp/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        14
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
       ]
     },
     {
@@ -608,7 +619,7 @@
       "path": "cursor/README.md",
       "occurrences": 1,
       "line_numbers": [
-        16
+        17
       ],
       "categories": [
         "installer_or_clone",
@@ -671,7 +682,7 @@
       "path": "distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md",
       "occurrences": 1,
       "line_numbers": [
-        171
+        170
       ],
       "categories": [
         "public_documentation"
@@ -692,7 +703,7 @@
       "occurrences": 2,
       "line_numbers": [
         9,
-        60
+        68
       ],
       "categories": [
         "machine_discovery",
@@ -703,8 +714,8 @@
       "path": "docs/COMMUNITY_TESTING.md",
       "occurrences": 2,
       "line_numbers": [
-        27,
-        49
+        26,
+        50
       ],
       "categories": [
         "installer_or_clone",
@@ -927,13 +938,11 @@
     },
     {
       "path": "INTEGRATION_CATALOG_GUIDE.md",
-      "occurrences": 5,
+      "occurrences": 3,
       "line_numbers": [
-        56,
-        132,
-        189,
-        190,
-        411
+        55,
+        131,
+        409
       ],
       "categories": [
         "public_documentation"
@@ -941,25 +950,26 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 14,
+      "occurrences": 16,
       "line_numbers": [
-        60,
+        16,
+        37,
+        46,
         69,
         78,
         87,
-        93,
-        101,
-        362,
-        374,
-        386,
-        398,
-        410,
-        1468,
-        1477,
-        1486
+        96,
+        102,
+        110,
+        119,
+        381,
+        393,
+        405,
+        417,
+        429,
+        441
       ],
       "categories": [
-        "installer_or_clone",
         "machine_discovery"
       ]
     },
@@ -967,7 +977,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        272
+        279
       ],
       "categories": [
         "machine_discovery"
@@ -1074,8 +1084,8 @@
       "path": "llms-full.txt",
       "occurrences": 2,
       "line_numbers": [
-        110,
-        111
+        113,
+        114
       ],
       "categories": [
         "machine_discovery",
@@ -1086,13 +1096,24 @@
       "path": "mcp/package.json",
       "occurrences": 2,
       "line_numbers": [
-        45,
-        50
+        46,
+        51
       ],
       "categories": [
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "mcp/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        105
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
       ]
     },
     {
@@ -1208,6 +1229,107 @@
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/dist/runtime/index.mjs",
+      "occurrences": 2,
+      "line_numbers": [
+        98,
+        103
+      ],
+      "categories": [
+        "installer_or_clone",
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        60
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/build.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        99
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/verify-integrity.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        88
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "risk-fork/ADVERSARIAL_REMEDIATION.md",
+      "occurrences": 3,
+      "line_numbers": [
+        57,
+        58,
+        59
+      ],
+      "categories": [
+        "public_documentation",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "risk-fork/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        86,
+        90
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork/PROVIDER_COMPARISON.md",
+      "occurrences": 2,
+      "line_numbers": [
+        17,
+        87
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/README.md",
+      "occurrences": 3,
+      "line_numbers": [
+        64
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/SECURITY_MODEL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        167
+      ],
+      "categories": [
+        "public_documentation"
       ]
     },
     {
@@ -1451,19 +1573,6 @@
       ]
     },
     {
-      "path": "submit-prs.mjs",
-      "occurrences": 4,
-      "line_numbers": [
-        107,
-        161,
-        242,
-        255
-      ],
-      "categories": [
-        "source_or_test"
-      ]
-    },
-    {
       "path": "syrin/README.md",
       "occurrences": 1,
       "line_numbers": [
@@ -1501,8 +1610,8 @@
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        65,
-        70
+        66,
+        71
       ],
       "categories": [
         "installer_or_clone",
