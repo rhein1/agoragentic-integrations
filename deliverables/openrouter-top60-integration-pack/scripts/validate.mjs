@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -13,9 +13,51 @@ const BLOCKED_HOST_STATUS = 'blocked_pending_qualified_host_enforcement';
 const BLOCKED_HOST_DECISION_PATH = 'decisions/blocked-qualified-host-enforcement.json';
 const MCP_PACKAGE_NAME = `agoragentic-${'mcp'}`;
 const VERSIONED_MCP_COORDINATE = new RegExp(`\\b${MCP_PACKAGE_NAME}@[^\\s\\x60"']+`, 'i');
-const REGISTRY_RESOLVING_MCP_COMMAND = new RegExp(`\\bnpx(?:\\.cmd)?(?:\\s+(?:--|-{1,2}[A-Za-z][\\w-]*(?:=[^\\s\\x60"']+)?))*\\s+(?:${MCP_PACKAGE_NAME}(?:@[^\\s\\x60"']+)?|(?:-p|--package)=${MCP_PACKAGE_NAME}(?:@[^\\s\\x60"']+)?)(?=\\s|$|[\\x60"'])`, 'i');
-const DIRECT_MCP_ENDPOINT = new RegExp(`https://agoragentic\\.com/api/${'mcp'}\\b`, 'i');
 const CREDENTIAL_MATERIAL = /AGORAGENTIC_API_KEY|Bearer\s+[^\s]/i;
+const DIRECT_ADAPTER_ARTIFACTS = {
+  codebuff: 'adapters/codebuff-tools.ts',
+  'oration-ai': 'adapters/oration-client.mjs'
+};
+const STRUCTURED_CONFIG_EXTENSIONS = new Set(['.json', '.yaml', '.yml', '.toml']);
+const TEXT_ARTIFACT_EXTENSIONS = new Set(['', '.gitignore', '.js', '.md', '.mjs', '.ts', '.txt']);
+const EXPECTED_PACK_FILES = [
+  '.gitignore',
+  'AUDIT.md',
+  'PR_BODY.md',
+  'README.md',
+  'adapters/codebuff-tools.ts',
+  'adapters/oration-client.mjs',
+  'catalog/entries-01.json',
+  'catalog/entries-02.json',
+  'catalog/entries-03.json',
+  'catalog/entries-04.json',
+  'catalog/entries-05.json',
+  'catalog/entries-06.json',
+  'catalog/index.json',
+  'catalog/schema.json',
+  'catalog/source-evidence.json',
+  'decisions/blocked-qualified-host-enforcement.json',
+  'decisions/blocked.json',
+  'decisions/composition-recipes.json',
+  'decisions/covered-existing.json',
+  'decisions/deprecated.json',
+  'decisions/needs-verification.json',
+  'decisions/plugin-scaffolds.json',
+  'decisions/provider-recipes.json',
+  'decisions/vendor-intakes.json',
+  'openrouter-agent-sdk/examples/match-only.mjs',
+  'openrouter-agent-sdk/package.json',
+  'openrouter-agent-sdk/src/agoragentic-client.mjs',
+  'openrouter-agent-sdk/src/agoragentic-tools.mjs',
+  'pack-manifest.json',
+  'package-lock.json',
+  'package.json',
+  'scripts/validate.mjs',
+  'test/review-pack.test.mjs',
+  'test/runtime-contracts.test.mjs',
+  'test/validator-contracts.test.mjs',
+  'tsconfig.json'
+];
 const DECISION_COMMON_KEYS = [
   'rank',
   'name',
@@ -107,39 +149,118 @@ function isPlainObject(value) {
 }
 
 function containsCredentialMaterial(value) {
-  try {
-    return CREDENTIAL_MATERIAL.test(JSON.stringify(value));
-  } catch {
-    return false;
+  return collectStringLeaves(value).some(item => CREDENTIAL_MATERIAL.test(item));
+}
+
+function stripOuterQuotes(value) {
+  let token = String(value || '').trim();
+  while (
+    token.length >= 2
+    && ((token.startsWith('"') && token.endsWith('"')) || (token.startsWith("'") && token.endsWith("'")))
+  ) {
+    token = token.slice(1, -1).trim();
   }
+  return token;
 }
 
-function containsRegistryResolvingMcpCommand(value) {
-  if (typeof value === 'string') return REGISTRY_RESOLVING_MCP_COMMAND.test(value);
-  if (!Array.isArray(value)) return false;
-  const tokens = value.filter(item => typeof item === 'string').map(item => item.trim());
-  const npxIndex = tokens.findIndex(token => /^npx(?:\.cmd)?$/i.test(token));
-  return npxIndex >= 0 && tokens.slice(npxIndex + 1).some(token =>
-    token.toLowerCase() === '-y' || token.toLowerCase() === MCP_PACKAGE_NAME || token.toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
-  ) && tokens.slice(npxIndex + 1).some(token =>
-    token.toLowerCase() === MCP_PACKAGE_NAME || token.toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
-  );
+function tokenizeShellLike(value) {
+  return String(value || '').match(/(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"';&|])+|&&|\|\||[\r\n;|&]/g) || [];
 }
 
-function containsMcpPackageToken(value) {
-  return Array.isArray(value) && value.some(item =>
-    typeof item === 'string' && (
-      item.trim().toLowerCase() === MCP_PACKAGE_NAME ||
-      item.trim().toLowerCase().startsWith(`${MCP_PACKAGE_NAME}@`)
-    )
-  );
+function normalizedCommandName(value) {
+  return stripOuterQuotes(value).split(/[\\/]/).at(-1).toLowerCase().replace(/\.(?:bat|cjs|cmd|exe|ps1)$/, '');
+}
+
+function collectStringLeaves(value, output = [], seen = new Set()) {
+  if (typeof value === 'string') {
+    output.push(value);
+    return output;
+  }
+  if (!value || typeof value !== 'object' || seen.has(value)) return output;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach(item => collectStringLeaves(item, output, seen));
+  } else {
+    Object.values(value).forEach(item => collectStringLeaves(item, output, seen));
+  }
+  return output;
+}
+
+function isMcpCoordinateToken(value) {
+  let token = stripOuterQuotes(value).replace(/["']/g, '').toLowerCase();
+  if (token.startsWith('--package=') || token.startsWith('-p=')) token = stripOuterQuotes(token.slice(token.indexOf('=') + 1));
+  const npmAliasIndex = token.indexOf('@npm:');
+  if (npmAliasIndex > 0) token = token.slice(npmAliasIndex + 5);
+  else if (token.startsWith('npm:')) token = token.slice(4);
+  return token === MCP_PACKAGE_NAME || token.startsWith(`${MCP_PACKAGE_NAME}@`);
+}
+
+function registryRunnerArgumentStart(tokens, index) {
+  const command = normalizedCommandName(tokens[index]);
+  if (command === 'npx' || command === 'pnpx' || command === 'bunx') return index + 1;
+  if (!['npm', 'pnpm', 'yarn', 'bun'].includes(command)) return -1;
+  for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
+    const token = stripOuterQuotes(tokens[cursor]).toLowerCase();
+    if (/^(?:&&|\|\||[;&|])$/.test(token)) return -1;
+    if (
+      (command === 'npm' && ['exec', 'x'].includes(token))
+      || (['pnpm', 'yarn'].includes(command) && token === 'dlx')
+      || (command === 'bun' && token === 'x')
+    ) return cursor + 1;
+  }
+  return -1;
+}
+
+export function containsRegistryResolvingMcpCommand(value) {
+  const text = typeof value === 'string' ? value : collectStringLeaves(value).join(' ');
+  if (!text) return false;
+  const tokens = tokenizeShellLike(text);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const argumentStart = registryRunnerArgumentStart(tokens, index);
+    if (argumentStart < 0) continue;
+    for (let cursor = argumentStart; cursor < tokens.length; cursor += 1) {
+      const token = stripOuterQuotes(tokens[cursor]);
+      if (/^(?:&&|\|\||[;&|])$/.test(token)) break;
+      if (isMcpCoordinateToken(token)) return true;
+    }
+  }
+  for (const token of tokens) {
+    const unwrapped = stripOuterQuotes(token);
+    if (unwrapped !== token && unwrapped !== text && containsRegistryResolvingMcpCommand(unwrapped)) return true;
+  }
+  return false;
+}
+
+export function containsVersionedMcpCoordinate(value) {
+  return typeof value === 'string' && VERSIONED_MCP_COORDINATE.test(value);
+}
+
+export function containsDirectMcpEndpoint(value) {
+  if (typeof value !== 'string') return false;
+  const candidates = value.match(/https:[^\s<>{}\[\]\x60"']+/gi) || [];
+  for (const rawCandidate of candidates) {
+    const candidate = rawCandidate.replace(/[),.;:!?]+$/, '');
+    try {
+      const parsed = new URL(candidate);
+      const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+      let pathname = parsed.pathname;
+      try { pathname = decodeURIComponent(pathname); } catch { /* Keep the encoded path for comparison. */ }
+      pathname = pathname.replace(/\/{2,}/g, '/').replace(/\/+$/, '').toLowerCase();
+      if (parsed.protocol === 'https:' && ['agoragentic.com', 'www.agoragentic.com'].includes(hostname) && (pathname === '/api/mcp' || pathname.startsWith('/api/mcp/'))) {
+        return true;
+      }
+    } catch {
+      // Non-URL prose is ignored; explicit unsafe URL candidates are handled above.
+    }
+  }
+  return false;
 }
 
 function validateNoRunnableMcpConfiguration(value, label, fail) {
   if (typeof value === 'string') {
-    if (VERSIONED_MCP_COORDINATE.test(value)) fail(`${label} must not contain a versioned agoragentic-mcp registry coordinate`);
-    if (REGISTRY_RESOLVING_MCP_COMMAND.test(value)) fail(`${label} must not contain a registry-resolving agoragentic-mcp command`);
-    if (DIRECT_MCP_ENDPOINT.test(value)) fail(`${label} must not contain the direct hosted MCP endpoint`);
+    if (containsVersionedMcpCoordinate(value)) fail(`${label} must not contain a versioned agoragentic-mcp registry coordinate`);
+    if (containsRegistryResolvingMcpCommand(value)) fail(`${label} must not contain a registry-resolving agoragentic-mcp command`);
+    if (containsDirectMcpEndpoint(value)) fail(`${label} must not contain the direct hosted MCP endpoint`);
     return;
   }
   if (Array.isArray(value)) {
@@ -149,8 +270,13 @@ function validateNoRunnableMcpConfiguration(value, label, fail) {
   }
   if (!isPlainObject(value)) return;
 
-  const command = value.command ?? value.cmd ?? value.executable;
-  if (typeof command === 'string' && /^npx(?:\.cmd)?$/i.test(command.trim()) && containsMcpPackageToken(value.args)) {
+  const combinedCommand = collectStringLeaves({
+    command: value.command,
+    cmd: value.cmd,
+    executable: value.executable,
+    args: value.args,
+  });
+  if (combinedCommand.length > 0 && containsRegistryResolvingMcpCommand(combinedCommand)) {
     fail(`${label} must not contain split npx arguments for agoragentic-mcp`);
   }
 
@@ -251,6 +377,19 @@ function resolveInside(root, relativePath) {
   return target;
 }
 
+async function assertNoSymlinkComponents(root, relativePath) {
+  let current = root;
+  for (const component of relativePath.split('/')) {
+    current = path.join(current, component);
+    const info = await lstat(current);
+    if (info.isSymbolicLink()) {
+      const error = new Error(`${relativePath} traverses a symbolic link`);
+      error.code = 'PACK_SYMLINK';
+      throw error;
+    }
+  }
+}
+
 async function readJson(root, relativePath, fail) {
   const target = resolveInside(root, relativePath);
   if (!target) {
@@ -258,8 +397,13 @@ async function readJson(root, relativePath, fail) {
     return null;
   }
   try {
+    await assertNoSymlinkComponents(root, relativePath);
     return JSON.parse(await readFile(target, 'utf8'));
   } catch (error) {
+    if (error.code === 'PACK_SYMLINK') {
+      fail(`${relativePath} must not traverse symbolic links`);
+      return null;
+    }
     fail(`${relativePath} could not be read as JSON: ${error.code || error.name}`);
     return null;
   }
@@ -272,19 +416,24 @@ async function validatePackFile(root, relativePath, label, fail) {
     return false;
   }
   try {
+    await assertNoSymlinkComponents(root, relativePath);
     const info = await stat(target);
     if (!info.isFile()) {
       fail(`${label} must reference a file`);
       return false;
     }
     return true;
-  } catch {
+  } catch (error) {
+    if (error.code === 'PACK_SYMLINK') {
+      fail(`${label} must not traverse symbolic links`);
+      return false;
+    }
     fail(`${label} references a missing file: ${relativePath}`);
     return false;
   }
 }
 
-async function collectPackFiles(root) {
+async function collectPackFiles(root, fail) {
   const files = [];
   async function walk(directory, prefix = '') {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -292,12 +441,51 @@ async function collectPackFiles(root) {
     for (const entry of entries) {
       if (entry.isDirectory() && ['.git', 'node_modules', 'coverage'].includes(entry.name)) continue;
       const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) await walk(path.join(directory, entry.name), relativePath);
+      if (entry.isSymbolicLink()) {
+        fail(`pack file inventory must not contain symbolic links: ${relativePath}`);
+        files.push(relativePath);
+      } else if (entry.isDirectory()) await walk(path.join(directory, entry.name), relativePath);
       else files.push(relativePath);
     }
   }
   await walk(root);
   return files.sort();
+}
+
+function shouldInspectPackArtifact(relativePath) {
+  const extension = path.extname(relativePath).toLowerCase();
+  if (STRUCTURED_CONFIG_EXTENSIONS.has(extension)) return true;
+  if (relativePath === 'scripts/validate.mjs' || relativePath.startsWith('test/')) return false;
+  return TEXT_ARTIFACT_EXTENSIONS.has(extension);
+}
+
+async function inspectPackArtifacts(root, files, fail) {
+  for (const relativePath of files) {
+    if (!shouldInspectPackArtifact(relativePath)) continue;
+    const target = resolveInside(root, relativePath);
+    if (!target) {
+      fail(`${relativePath} is not a safe pack-relative path`);
+      continue;
+    }
+    let text;
+    try {
+      await assertNoSymlinkComponents(root, relativePath);
+      text = await readFile(target, 'utf8');
+    } catch (error) {
+      if (error.code === 'PACK_SYMLINK') continue;
+      fail(`${relativePath} could not be inspected: ${error.code || error.name}`);
+      continue;
+    }
+    validateNoRunnableMcpConfiguration(text, relativePath, fail);
+    if (STRUCTURED_CONFIG_EXTENSIONS.has(path.extname(relativePath).toLowerCase())) {
+      try {
+        const structured = path.extname(relativePath).toLowerCase() === '.json' ? JSON.parse(text) : null;
+        if (structured !== null) validateNoRunnableMcpConfiguration(structured, relativePath, fail);
+      } catch (error) {
+        if (path.extname(relativePath).toLowerCase() === '.json') fail(`${relativePath} could not be inspected as JSON: ${error.name}`);
+      }
+    }
+  }
 }
 
 function validateStringArray(value, label, fail, { exact = null, minItems = 0 } = {}) {
@@ -354,7 +542,9 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
   const summary = { entries: 0, decisions: 0, files: 0 };
 
   const declaredSchema = await readJson(root, 'catalog/schema.json', fail);
-  if (isPlainObject(declaredSchema)) {
+  if (!isPlainObject(declaredSchema)) {
+    fail('catalog/schema.json must be an object');
+  } else {
     if (declaredSchema.$schema !== 'https://json-schema.org/draft/2020-12/schema') fail('catalog/schema.json.$schema must use draft 2020-12');
     if (declaredSchema.$id !== 'https://agoragentic.com/schemas/openrouter-top60-review-index.v1.json') fail('catalog/schema.json.$id is invalid');
     if (declaredSchema.additionalProperties !== false) fail('catalog/schema.json must reject additional index properties');
@@ -385,6 +575,7 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
   const catalogDirectory = resolveInside(root, 'catalog');
   if (catalogDirectory) {
     try {
+      await assertNoSymlinkComponents(root, 'catalog');
       const inventory = (await readdir(catalogDirectory)).filter(name => /^entries-\d{2}\.json$/.test(name)).map(name => `catalog/${name}`).sort();
       if (!sameJson(inventory, PART_PATHS)) fail(`catalog part inventory must equal ${JSON.stringify(PART_PATHS)}`);
     } catch (error) {
@@ -506,8 +697,9 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
     if (packet.runtime_verified !== false) fail(`${relativePath}.runtime_verified must be false`);
     if (packet.authority_granted !== false) fail(`${relativePath}.authority_granted must be false`);
     const expectedCount = EXPECTED_STATUS_COUNTS[group];
-    if (!Array.isArray(packet.items) || packet.items.length !== expectedCount) fail(`${relativePath}.items must contain exactly ${expectedCount} entries`);
-    for (const [itemIndex, item] of (packet.items || []).entries()) {
+    const packetItems = Array.isArray(packet.items) ? packet.items : [];
+    if (packetItems.length !== expectedCount) fail(`${relativePath}.items must contain exactly ${expectedCount} entries`);
+    for (const [itemIndex, item] of packetItems.entries()) {
       const label = `${relativePath}.items[${itemIndex}]`;
       validateDecisionItem(item, group, label, fail);
       if (isPlainObject(item) && typeof item.slug === 'string') {
@@ -522,6 +714,9 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
     const label = `catalog entry ${entry.slug}`;
     if (entry.status === 'direct_adapter') {
       if (!/^adapters\/[a-z0-9-]+\.(?:mjs|ts)$/.test(entry.artifact)) fail(`${label}.artifact must be a bounded adapter source file`);
+      const expectedArtifact = DIRECT_ADAPTER_ARTIFACTS[entry.slug];
+      if (!expectedArtifact) fail(`${label} has no exact direct-adapter artifact mapping`);
+      else if (entry.artifact !== expectedArtifact) fail(`${label}.artifact must be ${expectedArtifact}`);
       continue;
     }
     const expectedDecisionPath = DECISION_FILES[entry.status];
@@ -569,8 +764,9 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
         if (!isSafeRelativePath(file)) fail(`pack-manifest.json.files[${fileIndex}] must be a safe pack-relative path`);
       }
       if (manifest.file_count !== manifest.files.length) fail('pack-manifest.json.file_count must equal files.length');
+      if (!sameJson([...manifest.files].sort(), EXPECTED_PACK_FILES)) fail('pack-manifest.json.files must equal the closed review-pack inventory');
       try {
-        const actualFiles = await collectPackFiles(root);
+        const actualFiles = await collectPackFiles(root, fail);
         summary.files = actualFiles.length;
         if (actualFiles.includes('host-configs.json')) fail('host-configs.json is forbidden pending qualified host enforcement');
         const declaredFiles = [...manifest.files].sort();
@@ -578,6 +774,7 @@ export async function validatePack(rootOverride = DEFAULT_ROOT) {
         const stale = declaredFiles.filter(file => !actualFiles.includes(file));
         if (missing.length) fail(`pack-manifest.json.files is missing: ${missing.join(', ')}`);
         if (stale.length) fail(`pack-manifest.json.files references absent files: ${stale.join(', ')}`);
+        await inspectPackArtifacts(root, actualFiles, fail);
       } catch (error) {
         fail(`pack file inventory could not be read: ${error.code || error.name}`);
       }

@@ -5,12 +5,12 @@ import { AgoragenticClient } from './agoragentic-client.mjs';
 const jsonObject = z.record(z.string(), z.unknown());
 const matchConstraints = z.object({
   category: z.string().trim().min(1).optional(),
-  max_cost: z.number().finite().nonnegative().optional(),
+  max_cost: z.number().finite().positive().optional(),
   max_latency_ms: z.number().int().nonnegative().optional(),
   payment_network: z.string().trim().min(1).optional(),
 }).strict();
 const executeConstraints = z.object({
-  max_cost: z.number().finite().nonnegative().optional(),
+  max_cost: z.number().finite().positive().optional(),
   quote_id: z.string().trim().min(1).optional(),
 }).catchall(z.unknown()).superRefine((value, context) => {
   if (value.max_cost === undefined && value.quote_id === undefined) {

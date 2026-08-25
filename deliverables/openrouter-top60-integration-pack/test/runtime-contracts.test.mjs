@@ -48,7 +48,7 @@ test('OpenRouter client uses the live match and receipt routes with exact no-spe
   });
   const constraints = {
     category: 'research',
-    max_cost: 0,
+    max_cost: 0.05,
     max_latency_ms: 750,
     payment_network: 'base',
     unsupported: 'must-not-leak',
@@ -63,7 +63,7 @@ test('OpenRouter client uses the live match and receipt routes with exact no-spe
     assert.equal(call.url.pathname, '/api/execute/match');
     assert.equal(call.init.method, 'GET');
     assert.equal(call.url.searchParams.get('category'), 'research');
-    assert.equal(call.url.searchParams.get('max_cost'), '0');
+    assert.equal(call.url.searchParams.get('max_cost'), '0.05');
     assert.equal(call.url.searchParams.get('max_latency_ms'), '750');
     assert.equal(call.url.searchParams.get('payment_network'), 'base');
     assert.equal(call.url.searchParams.has('unsupported'), false);
@@ -75,7 +75,7 @@ test('OpenRouter client uses the live match and receipt routes with exact no-spe
   assert.equal(calls[2].url.pathname, '/api/commerce/receipts/inv%2Fa');
 });
 
-test('OpenRouter execute rejects missing or invalid bounds before any fetch', () => {
+test('OpenRouter preview and execute reject zero or invalid bounds before any fetch', () => {
   let fetchCount = 0;
   const client = new AgoragenticClient({
     baseUrl: 'https://agoragentic.example/',
@@ -91,10 +91,11 @@ test('OpenRouter execute rejects missing or invalid bounds before any fetch', ()
     [{ task: 'empty', constraints: {} }, 'missing_execution_bound'],
     [{ task: 'nan', constraints: { max_cost: Number.NaN } }, 'invalid_input'],
     [{ task: 'infinity', constraints: { max_cost: Number.POSITIVE_INFINITY } }, 'invalid_input'],
+    [{ task: 'zero', constraints: { max_cost: 0 } }, 'invalid_input'],
     [{ task: 'negative', constraints: { max_cost: -0.01 } }, 'invalid_input'],
     [{ task: 'blank quote', constraints: { quote_id: '   ' } }, 'invalid_input'],
-    [{ task: 'array input', input: [], constraints: { max_cost: 0 } }, 'invalid_input'],
-    [{ task: 'date input', input: new Date(0), constraints: { max_cost: 0 } }, 'invalid_input'],
+    [{ task: 'array input', input: [], constraints: { max_cost: 0.01 } }, 'invalid_input'],
+    [{ task: 'date input', input: new Date(0), constraints: { max_cost: 0.01 } }, 'invalid_input'],
   ];
   for (const [args, code] of invalid) {
     assert.throws(
@@ -102,10 +103,91 @@ test('OpenRouter execute rejects missing or invalid bounds before any fetch', ()
       (error) => error?.code === code && error?.status === 400,
     );
   }
+  for (const preview of [client.match.bind(client), client.quote.bind(client)]) {
+    assert.throws(
+      () => preview({ task: 'zero preview', constraints: { max_cost: 0 } }),
+      (error) => error?.code === 'invalid_input' && error?.status === 400,
+    );
+  }
+  const oversizedSparseInput = new Array(100_000);
+  Object.defineProperty(oversizedSparseInput, 'toJSON', { value: () => ({}) });
+  assert.throws(
+    () => client.execute({ task: 'oversized array input', input: oversizedSparseInput, constraints: { max_cost: 0.01 } }),
+    (error) => error?.code === 'invalid_input' && error?.message === 'input must be a plain object',
+  );
   assert.equal(fetchCount, 0);
 });
 
-test('OpenRouter execute preserves a zero ceiling and promotes quote_id to the wire top level', async () => {
+test('OpenRouter execute rejects non-JSON bodies locally before entering the ambiguous-delivery boundary', async () => {
+  let fetchCount = 0;
+  const client = new AgoragenticClient({
+    baseUrl: 'https://agoragentic.example/',
+    apiKey: 'test-key',
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return jsonResponse();
+    },
+  });
+  const circular = {};
+  circular.self = circular;
+
+  for (const input of [{ value: 1n }, circular]) {
+    assert.throws(
+      () => client.execute({ task: 'invalid local body', input, constraints: { max_cost: 0.01 } }),
+      (error) => error?.code === 'invalid_input'
+        && error?.status === 400
+        && error?.retryable === false
+        && error?.outcomeUnknown === false
+        && error?.reconciliationRequired === false,
+    );
+  }
+  assert.equal(fetchCount, 0);
+});
+
+test('OpenRouter rejects JSON hooks before they can alter a validated spend bound', () => {
+  let fetchCount = 0;
+  const client = new AgoragenticClient({
+    baseUrl: 'https://agoragentic.example/',
+    apiKey: 'test-key',
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return jsonResponse();
+    },
+  });
+  const hookedConstraints = {
+    max_cost: 0.01,
+    toJSON() { return { max_cost: 99 }; },
+  };
+  let getterReads = 0;
+  const accessorConstraints = {};
+  Object.defineProperty(accessorConstraints, 'max_cost', {
+    enumerable: true,
+    get() {
+      getterReads += 1;
+      return getterReads === 1 ? 0.01 : 99;
+    },
+  });
+
+  for (const constraints of [hookedConstraints, accessorConstraints]) {
+    assert.throws(
+      () => client.execute({ task: 'bounded execution', constraints }),
+      (error) => error?.code === 'invalid_input' && error?.status === 400,
+    );
+  }
+  assert.equal(getterReads, 0, 'validation must not invoke payload accessors');
+  assert.equal(fetchCount, 0);
+});
+
+test('OpenRouter transport is private so callers cannot bypass execution bounds', () => {
+  const client = new AgoragenticClient({
+    baseUrl: 'https://agoragentic.example/',
+    apiKey: 'test-key',
+    fetchImpl: async () => jsonResponse(),
+  });
+  assert.equal(client.request, undefined);
+});
+
+test('OpenRouter execute preserves a positive ceiling and promotes quote_id to the wire top level', async () => {
   const calls = [];
   const client = new AgoragenticClient({
     baseUrl: 'https://agoragentic.example/',
@@ -113,13 +195,13 @@ test('OpenRouter execute preserves a zero ceiling and promotes quote_id to the w
     fetchImpl: recordingFetch(calls),
   });
 
-  await client.execute({ task: 'zero ceiling', constraints: { max_cost: 0 } });
+  await client.execute({ task: 'positive ceiling', constraints: { max_cost: 0.01 } });
   await client.execute({ task: 'quoted', constraints: { quote_id: ' quote-123 ', category: 'research' } });
 
-  const zeroBody = JSON.parse(calls[0].init.body);
+  const boundedBody = JSON.parse(calls[0].init.body);
   assert.equal(calls[0].url.pathname, '/api/execute');
   assert.equal(calls[0].init.method, 'POST');
-  assert.equal(zeroBody.constraints.max_cost, 0);
+  assert.equal(boundedBody.constraints.max_cost, 0.01);
 
   const quoteBody = JSON.parse(calls[1].init.body);
   assert.equal(quoteBody.quote_id, 'quote-123');
@@ -141,13 +223,15 @@ test('pinned OpenRouter agent tools keep approval and enforce bounds behaviorall
   assert.equal(execute.inputSchema.safeParse({ task: 'missing', constraints: {} }).success, false);
   assert.equal(execute.inputSchema.safeParse({ task: 'nan', constraints: { max_cost: Number.NaN } }).success, false);
   assert.equal(execute.inputSchema.safeParse({ task: 'infinity', constraints: { max_cost: Number.POSITIVE_INFINITY } }).success, false);
+  assert.equal(execute.inputSchema.safeParse({ task: 'zero', constraints: { max_cost: 0 } }).success, false);
   assert.equal(tools.match.function.inputSchema.safeParse({ task: 'strict', constraints: { unsupported: true } }).success, false);
+  assert.equal(tools.match.function.inputSchema.safeParse({ task: 'zero', constraints: { max_cost: 0 } }).success, false);
 
-  const parsed = execute.inputSchema.parse({ task: 'bounded', constraints: { max_cost: 0 } });
+  const parsed = execute.inputSchema.parse({ task: 'bounded', constraints: { max_cost: 0.01 } });
   await execute.execute(parsed);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url.pathname, '/api/execute');
-  assert.equal(JSON.parse(calls[0].init.body).constraints.max_cost, 0);
+  assert.equal(JSON.parse(calls[0].init.body).constraints.max_cost, 0.01);
 });
 
 test('pinned Codebuff tools remain read-only and use the live methods and paths', async () => {
@@ -158,7 +242,13 @@ test('pinned Codebuff tools remain read-only and use the live methods and paths'
     fetchImpl: recordingFetch(calls),
   });
 
-  await tools.match.execute({ task: 'match', constraints: { max_cost: 0, max_latency_ms: 50 } });
+  assert.equal(tools.match.inputSchema.safeParse({ task: 'zero', constraints: { max_cost: 0 } }).success, false);
+  await assert.rejects(
+    tools.match.execute({ task: 'zero', constraints: { max_cost: 0 } }),
+    (error) => error?.code === 'invalid_input' && error?.status === 400,
+  );
+  assert.equal(calls.length, 0);
+  await tools.match.execute({ task: 'match', constraints: { max_cost: 0.02, max_latency_ms: 50 } });
   await tools.quote.execute({ task: 'quote', constraints: { category: 'research', payment_network: 'base' } });
   await tools.status.execute({ invocationId: 'inv/a' });
   await tools.receipt.execute({ invocationId: 'inv/a' });
@@ -171,7 +261,7 @@ test('pinned Codebuff tools remain read-only and use the live methods and paths'
   ]);
   assert.equal(Object.hasOwn(tools, 'execute'), false);
   assert.equal(calls[0].url.pathname, '/api/execute/match');
-  assert.equal(calls[0].url.searchParams.get('max_cost'), '0');
+  assert.equal(calls[0].url.searchParams.get('max_cost'), '0.02');
   assert.equal(calls[0].url.searchParams.get('max_latency_ms'), '50');
   assert.equal(calls[1].url.pathname, '/api/execute/match');
   assert.equal(calls[1].url.searchParams.get('category'), 'research');
@@ -182,6 +272,28 @@ test('pinned Codebuff tools remain read-only and use the live methods and paths'
     assert.equal(call.init.method ?? 'GET', 'GET');
     assert.equal(call.init.body, undefined);
   }
+});
+
+test('Codebuff captures a supplied match ceiling once before constructing the URL', async () => {
+  const calls = [];
+  const tools = createAgoragenticCodebuffTools({
+    baseUrl: 'https://agoragentic.example/',
+    apiKey: 'test-key',
+    fetchImpl: recordingFetch(calls),
+  });
+  let reads = 0;
+  const constraints = {};
+  Object.defineProperty(constraints, 'max_cost', {
+    enumerable: true,
+    get() {
+      reads += 1;
+      return reads === 1 ? 0.02 : 99;
+    },
+  });
+
+  await tools.match.execute({ task: 'single-read bound', constraints });
+  assert.equal(reads, 1);
+  assert.equal(calls[0].url.searchParams.get('max_cost'), '0.02');
 });
 
 test('Oration normalizes base URLs and auto-selects each supported credential scheme', async () => {
@@ -226,6 +338,16 @@ test('Oration validates conversation types and authority gates before network us
     });
 
     assert.throws(
+      () => client.createConversations({ ownerApproved: true }),
+      (error) => error?.code === 'invalid_conversations',
+    );
+    const oversizedSparseConversations = new Array(11);
+    Object.defineProperty(oversizedSparseConversations, 'toJSON', { value: () => [] });
+    assert.throws(
+      () => client.createConversations({ conversations: oversizedSparseConversations, ownerApproved: true }),
+      (error) => error?.code === 'invalid_conversations',
+    );
+    assert.throws(
       () => client.createConversations({ conversations: [{}], ownerApproved: true }),
       (error) => error?.code === 'invalid_conversation_type',
     );
@@ -248,6 +370,75 @@ test('Oration validates conversation types and authority gates before network us
     assert.equal(calls[0].url.pathname, '/api/v2/conversations');
     assert.equal(calls[0].init.method, 'POST');
     assert.deepEqual(JSON.parse(calls[0].init.body), { conversations: [{ conversationType: 'chat' }] });
+  });
+});
+
+test('Oration rejects non-JSON conversation bodies before entering the ambiguous-delivery boundary', { concurrency: false }, async () => {
+  await withEnvironment({ ORATION_ENABLE_CREATE: 'true' }, async () => {
+    let fetchCount = 0;
+    const client = new OrationClient({
+      baseUrl: 'https://oration.example/api/v2',
+      token: 'bearer-token',
+      fetchImpl: async () => {
+        fetchCount += 1;
+        return jsonResponse();
+      },
+    });
+    const circular = { conversationType: 'chat' };
+    circular.self = circular;
+
+    for (const conversation of [{ conversationType: 'chat', metadata: 1n }, circular]) {
+      assert.throws(
+        () => client.createConversations({ conversations: [conversation], ownerApproved: true }),
+        (error) => error?.code === 'invalid_request_body'
+          && error?.status === 400
+          && error?.retryable === false
+          && error?.outcomeUnknown === false
+          && error?.reconciliationRequired === false,
+      );
+    }
+    assert.equal(fetchCount, 0);
+  });
+});
+
+test('Oration rejects JSON hooks and accessors before authority validation or network use', { concurrency: false }, async () => {
+  await withEnvironment({
+    ORATION_ENABLE_CREATE: 'true',
+    ORATION_ENABLE_TELEPHONY: undefined,
+    ORATION_ALLOW_IGNORE_DND: undefined,
+  }, async () => {
+    let fetchCount = 0;
+    const client = new OrationClient({
+      baseUrl: 'https://oration.example/api/v2',
+      token: 'bearer-token',
+      fetchImpl: async () => {
+        fetchCount += 1;
+        return jsonResponse();
+      },
+    });
+    const hookedConversation = {
+      conversationType: 'chat',
+      toJSON() { return { conversationType: 'telephony', ignoreDND: true }; },
+    };
+    let getterReads = 0;
+    const accessorConversation = { conversationType: 'chat' };
+    Object.defineProperty(accessorConversation, 'ignoreDND', {
+      enumerable: true,
+      get() {
+        getterReads += 1;
+        return getterReads > 1;
+      },
+    });
+
+    for (const conversation of [hookedConversation, accessorConversation]) {
+      assert.throws(
+        () => client.createConversations({ conversations: [conversation], ownerApproved: true }),
+        (error) => error?.code === 'invalid_request_body' && error?.status === 400,
+      );
+    }
+    assert.equal(client.request, undefined);
+    assert.equal(getterReads, 0, 'authority validation must not invoke payload accessors');
+    assert.equal(fetchCount, 0);
   });
 });
 

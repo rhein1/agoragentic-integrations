@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +89,14 @@ test('missing authority is rejected fail closed', async () => {
   assertRejected(await validatePack(root), 'catalog/index.json.authority is required');
 });
 
+test('catalog schema must be an object', async () => {
+  for (const malformed of [[], null, 'not-an-object']) {
+    const root = await copyPack();
+    await writeJson(root, 'catalog/schema.json', malformed);
+    assertRejected(await validatePack(root), 'catalog/schema.json must be an object');
+  }
+});
+
 test('manifest count and file-list contradictions are rejected', async () => {
   const root = await copyPack();
   const manifest = await readJson(root, 'pack-manifest.json');
@@ -128,10 +136,34 @@ test('versioned MCP registry coordinates are rejected from blocker records', asy
 });
 
 test('equivalent npx MCP launch forms are rejected from blocker text', async () => {
-  for (const launcher of ['npx --yes', 'npx --', 'npx.cmd --yes']) {
+  const commands = [
+    `npx --yes ${mcpPackageName}`,
+    `npx -- ${mcpPackageName}`,
+    `npx.cmd --yes ${mcpPackageName}`,
+    `npx "${mcpPackageName}" --stdio`,
+    `npx "agoragentic"-mcp --stdio`,
+    `npx ${mcpPackageName}&& echo unsafe`,
+    `npx --package=${mcpPackageName} harmless`,
+    `npx --package=alias@npm:${mcpPackageName} alias`,
+    `npx -p ${mcpPackageName} harmless`,
+    `npx.ps1 ${mcpPackageName}`,
+    `npm exec ${mcpPackageName}`,
+    `npm --prefix ./tmp exec ${mcpPackageName}`,
+    `pnpm dlx ${mcpPackageName}`,
+    `pnpm --dir ./tmp dlx ${mcpPackageName}`,
+    `yarn dlx ${mcpPackageName}`,
+    `bunx ${mcpPackageName}`,
+    `pnpx ${mcpPackageName}`,
+    `bun x ${mcpPackageName}`,
+    `sh -c 'npx ${mcpPackageName}'`,
+    `bash -lc "npx ${mcpPackageName}"`,
+    `cmd /c "npx ${mcpPackageName}"`,
+    `powershell -Command "npx ${mcpPackageName}"`,
+  ];
+  for (const command of commands) {
     const root = await copyPack();
     const packet = await readJson(root, blockedHostDecisionPath);
-    packet.items[0].required_controls[0] = `Run ${launcher} ${mcpPackageName}`;
+    packet.items[0].required_controls[0] = `Run ${command}`;
     await writeJson(root, blockedHostDecisionPath, packet);
     assertRejected(
       await validatePack(root),
@@ -141,25 +173,39 @@ test('equivalent npx MCP launch forms are rejected from blocker text', async () 
 });
 
 test('split npx MCP arguments are rejected structurally', async () => {
-  const root = await copyPack();
-  const packet = await readJson(root, blockedHostDecisionPath);
-  packet.items[0].configuration = { command: 'npx.cmd', args: ['--yes', mcpPackageName] };
-  await writeJson(root, blockedHostDecisionPath, packet);
-  assertRejected(
-    await validatePack(root),
-    `${blockedHostDecisionPath}.items[0].configuration must not contain split npx arguments for agoragentic-mcp`
-  );
+  for (const configuration of [
+    { command: 'npx.cmd', args: ['--yes', mcpPackageName] },
+    { command: 'npx', args: { nested: ['--yes', mcpPackageName] } },
+  ]) {
+    const root = await copyPack();
+    const packet = await readJson(root, blockedHostDecisionPath);
+    packet.items[0].configuration = configuration;
+    await writeJson(root, blockedHostDecisionPath, packet);
+    assertRejected(
+      await validatePack(root),
+      `${blockedHostDecisionPath}.items[0].configuration must not contain split npx arguments for agoragentic-mcp`
+    );
+  }
 });
 
 test('direct MCP endpoints are rejected from blocker records', async () => {
-  const root = await copyPack();
-  const packet = await readJson(root, blockedHostDecisionPath);
-  packet.items[0].required_controls[0] = `Configure https://agoragentic.com/api/${'mcp'} in this host`;
-  await writeJson(root, blockedHostDecisionPath, packet);
-  assertRejected(
-    await validatePack(root),
-    `${blockedHostDecisionPath}.items[0].required_controls[0] must not contain the direct hosted MCP endpoint`
-  );
+  for (const endpoint of [
+    `https://agoragentic.com/api/${'mcp'}`,
+    `https://agoragentic.com:443/api/${'mcp'}`,
+    `https://agoragentic.com/api/%6dcp`,
+    `https://agoragentic.com/API/${'MCP'}`,
+    `https://www.agoragentic.com/api/${'mcp'}`,
+    String.raw`https:\agoragentic.com\api\mcp`,
+  ]) {
+    const root = await copyPack();
+    const packet = await readJson(root, blockedHostDecisionPath);
+    packet.items[0].required_controls[0] = `Configure ${endpoint} in this host`;
+    await writeJson(root, blockedHostDecisionPath, packet);
+    assertRejected(
+      await validatePack(root),
+      `${blockedHostDecisionPath}.items[0].required_controls[0] must not contain the direct hosted MCP endpoint`
+    );
+  }
 });
 
 test('credential and authorization forwarding are rejected from blocker records', async () => {
@@ -197,6 +243,62 @@ test('restored ready_config status and host-configs artifact are rejected', asyn
   assertRejected(result, 'catalog/entries-01.json[2].status ready_config is forbidden pending qualified host enforcement');
   assert.ok(result.errors.includes('catalog/entries-01.json[2].artifact must not reference host-configs.json'));
   assert.ok(result.errors.includes('host-configs.json is forbidden pending qualified host enforcement'));
+});
+
+test('renamed manifest-declared MCP configurations are inspected and rejected', async () => {
+  const root = await copyPack();
+  await writeJson(root, 'mcp-host.json', {
+    enabled: true,
+    url: `https://agoragentic.com:443/api/${'mcp'}`,
+    headers: { Authorization: `Bearer \${AGORAGENTIC_${'API_KEY'}}` },
+  });
+  await reconcileManifest(root);
+  const result = await validatePack(root);
+  assertRejected(result, 'pack-manifest.json.files must equal the closed review-pack inventory');
+  assert.ok(result.errors.includes('mcp-host.json.enabled must not enable an MCP configuration'));
+  assert.ok(result.errors.includes('mcp-host.json.url must not contain the direct hosted MCP endpoint'));
+  assert.ok(result.errors.includes('mcp-host.json.headers must not forward MCP credentials or authorization headers'));
+});
+
+test('pack files may not escape through symbolic links', async () => {
+  const root = await copyPack();
+  const externalRoot = await mkdtemp(path.join(tmpdir(), 'agoragentic-openrouter-outside-'));
+  temporaryRoots.push(externalRoot);
+  const outside = path.join(externalRoot, 'catalog');
+  const target = path.join(root, 'catalog');
+  await cp(target, outside, { recursive: true });
+  await rm(target, { recursive: true, force: true });
+  await symlink(outside, target, 'junction');
+  const result = await validatePack(root);
+  assertRejected(result, 'catalog/entries-01.json must not traverse symbolic links');
+  assert.ok(result.errors.includes('pack file inventory must not contain symbolic links: catalog'));
+});
+
+test('direct adapters are pinned to their exact catalog artifacts', async () => {
+  const root = await copyPack();
+  const entries02 = await readJson(root, 'catalog/entries-02.json');
+  const entries06 = await readJson(root, 'catalog/entries-06.json');
+  const codebuff = entries02.find((entry) => entry.slug === 'codebuff');
+  const oration = entries06.find((entry) => entry.slug === 'oration-ai');
+  [codebuff.artifact, oration.artifact] = [oration.artifact, codebuff.artifact];
+  await writeJson(root, 'catalog/entries-02.json', entries02);
+  await writeJson(root, 'catalog/entries-06.json', entries06);
+  const result = await validatePack(root);
+  assertRejected(result, 'catalog entry codebuff.artifact must be adapters/codebuff-tools.ts');
+  assert.ok(result.errors.includes('catalog entry oration-ai.artifact must be adapters/oration-client.mjs'));
+});
+
+test('malformed decision collections return structured validation errors instead of throwing', async () => {
+  for (const malformed of [{}, 'not-an-array', null]) {
+    const root = await copyPack();
+    const packet = await readJson(root, 'decisions/covered-existing.json');
+    packet.items = malformed;
+    await writeJson(root, 'decisions/covered-existing.json', packet);
+    assertRejected(
+      await validatePack(root),
+      'decisions/covered-existing.json.items must contain exactly 5 entries',
+    );
+  }
 });
 
 test('mismatched blocker records are rejected', async () => {

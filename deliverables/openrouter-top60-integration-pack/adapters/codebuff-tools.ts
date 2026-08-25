@@ -13,7 +13,7 @@ class AgoragenticCodebuffError extends Error {
 const jsonResult = (value: unknown) => [{ type: 'json' as const, value }];
 const matchConstraints = z.object({
   category: z.string().trim().min(1).optional(),
-  max_cost: z.number().finite().nonnegative().optional(),
+  max_cost: z.number().finite().positive().optional(),
   max_latency_ms: z.number().int().nonnegative().optional(),
   payment_network: z.string().trim().min(1).optional(),
 }).strict();
@@ -41,7 +41,13 @@ const invocationInputSchema: z.ZodType<InvocationToolArgs, InvocationToolArgs> =
 function matchPath(task: string, constraints: MatchConstraints = {}) {
   const params = new URLSearchParams({ task });
   if (constraints.category !== undefined) params.set('category', constraints.category);
-  if (constraints.max_cost !== undefined) params.set('max_cost', String(constraints.max_cost));
+  const maxCost = constraints.max_cost;
+  if (maxCost !== undefined) {
+    if (typeof maxCost !== 'number' || !Number.isFinite(maxCost) || maxCost <= 0) {
+      throw new AgoragenticCodebuffError('constraints.max_cost must be a finite positive number', 'invalid_input', 400, false);
+    }
+    params.set('max_cost', String(maxCost));
+  }
   if (constraints.max_latency_ms !== undefined) params.set('max_latency_ms', String(constraints.max_latency_ms));
   if (constraints.payment_network !== undefined) params.set('payment_network', constraints.payment_network);
   return `/api/execute/match?${params}`;
