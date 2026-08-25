@@ -287,6 +287,10 @@
   ],
   "exports": [
     "E2BRiskForkAdapter",
+    "E2B_EXTERNAL_BIRTH_CONTROLS",
+    "E2B_EXTERNAL_PROVIDER_CONTROLS",
+    "E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS",
+    "E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA",
     "E2B_INDEPENDENT_SOURCE_ATTESTATION_SCHEMA",
     "E2B_QUALIFICATION_CONTROLS",
     "E2B_QUALIFICATION_SCHEMA",
@@ -307,6 +311,7 @@
     "RiskForkPreparationError",
     "RiskForkProvider",
     "acquirePostgresAuthorityClient",
+    "applyE2BExternalQualificationObservation",
     "assertHostCanEnforce",
     "assertPreparedForCleanCommit",
     "assertRiskForkProvider",
@@ -319,6 +324,7 @@
     "computeMcpCleanImportEvidenceHash",
     "connectRemoteClient",
     "createE2BAuthorityFreeSourceVerifier",
+    "createE2BExternalQualificationObservationVerifier",
     "createE2BQualificationEvidence",
     "createE2BQualificationTrustVerifier",
     "createE2BRuntimeSdkIntegrityVerifier",
@@ -350,6 +356,7 @@
     "validateCommitCandidate",
     "validateE2BQualificationEvidence",
     "verifyCommitArtifact",
+    "verifyE2BExternalQualificationObservation",
     "verifyE2BQualificationTrust",
     "verifyExecutionBinding",
     "verifyPostgresAuthorityClientTransport",
@@ -2197,8 +2204,8 @@
     {
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
-      "bytes": 3511,
-      "sha256": "sha256:cdc70739d3fc315136791dfad252cba09cfea894a084836bb343219d06fa6eef"
+      "bytes": 3811,
+      "sha256": "sha256:007c59e041ff1195d3dd7b3a80c2fffb52d490c08070602ee8e0121a31c481f0"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
@@ -2638,8 +2645,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2286057,
-    "sha256": "sha256:a105af7a0427de0656514afb3d4610e4f1ae6335fe78ecc17872a91a02abe7b1"
+    "bytes": 2298017,
+    "sha256": "sha256:b6d403a44db721fc50db323133382544ff960f94388054a352478c171c092e4d"
   },
   "packaged_assets": [
     {

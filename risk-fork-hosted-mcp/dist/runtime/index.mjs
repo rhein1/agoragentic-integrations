@@ -51746,6 +51746,7 @@ var MAX_RUNTIME_SDK_FILES = 8192;
 var MAX_RUNTIME_SDK_BYTES_PER_PACKAGE = 64 * 1024 * 1024;
 var MAX_RUNTIME_SDK_BYTES = 256 * 1024 * 1024;
 var MAX_RUNTIME_DEPENDENCIES_PER_PACKAGE = 256;
+var MIN_EXTERNAL_OBSERVATION_LIFETIME_MS = 1e3;
 var MAX_EXTERNAL_OBSERVATION_LIFETIME_MS = 24 * 60 * 60 * 1e3;
 var E2B_EXTERNAL_QUALIFICATION_AUDIENCE = "agoragentic.risk-fork.e2b-qualification";
 var E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS = Object.freeze({
@@ -52279,6 +52280,59 @@ function requireBoolean2(value, field) {
   if (typeof value !== "boolean") throw new TypeError(`${field} must be boolean`);
   return value;
 }
+function requireEvidenceRefHash(evidence, ref, field) {
+  const entry = evidence.evidence_refs.find((candidate) => candidate.ref === ref);
+  if (!entry) throw new Error(`${field} is missing from provisional E2B qualification evidence`);
+  return entry.hash;
+}
+function assertExternalObservationProvisional(evidence) {
+  if (evidence.external_observation_receipt !== null) {
+    throw new Error("E2B external observation requires provisional evidence without a receipt");
+  }
+  for (const control of [
+    "first_instruction_ipv4_egress_denied",
+    "first_instruction_ipv6_egress_denied",
+    "cost_within_cap",
+    ...E2B_EXTERNAL_BIRTH_CONTROLS,
+    ...E2B_EXTERNAL_PROVIDER_CONTROLS
+  ]) {
+    if (evidence.controls[control] !== "unknown") {
+      throw new Error(`E2B external observation requires provisional ${control}=unknown`);
+    }
+  }
+  if (evidence.observations.observed_cost_usd !== null) {
+    throw new Error("E2B external observation requires provisional observed cost to be null");
+  }
+  for (const ref of [
+    ...Object.values(EXTERNAL_QUALIFICATION_RESULT_REFS),
+    ...Object.values(EXTERNAL_BIRTH_CONTROL_RESULT_REFS),
+    ...Object.values(EXTERNAL_PROVIDER_CONTROL_RESULT_REFS)
+  ]) {
+    if (evidence.evidence_refs.some((entry) => entry.ref === ref)) {
+      throw new Error("E2B external observation cannot be applied more than once");
+    }
+  }
+}
+function externalObservationBindings(evidence) {
+  return Object.fromEntries([
+    ["approval_ref_hash", evidence.run.approval_ref_hash],
+    ["run_ref_hash", evidence.run.run_ref_hash],
+    ["project_ref_hash", evidence.provider.project_ref_hash],
+    ["sdk_integrity_hash", evidence.sdk.integrity_hash],
+    ["template_id_hash", evidence.template.template_id_hash],
+    ["template_build_id_hash", evidence.template.build_id_hash],
+    ["template_evidence_hash", evidence.template.template_evidence_hash],
+    ["template_provenance_hash", evidence.template.provenance_hash],
+    ["bootstrap_artifact_hash", evidence.runtime.bootstrap_artifact_hash],
+    ["runner_artifact_hash", evidence.runtime.runner_artifact_hash],
+    ["boot_guard_artifact_hash", evidence.runtime.boot_guard_artifact_hash],
+    ["limits_hash", sha256Ref2(evidence.limits)],
+    ...Object.entries(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map(([field, ref]) => [
+      field,
+      requireEvidenceRefHash(evidence, ref, `E2B external observation ${field}`)
+    ])
+  ]);
+}
 function normalizeExternalProviderControls(value) {
   assertPlainObject(value, "E2B external qualification provider controls");
   assertAllowedKeys(
@@ -52326,6 +52380,15 @@ function normalizeObserverIdentity(value) {
     public_key_hash: publicKeyHash
   };
 }
+function externalObservationAudience(evidence) {
+  return {
+    profile: E2B_EXTERNAL_QUALIFICATION_AUDIENCE,
+    project_ref_hash: evidence.provider.project_ref_hash,
+    run_ref_hash: evidence.run.run_ref_hash,
+    template_id_hash: evidence.template.template_id_hash,
+    template_build_id_hash: evidence.template.build_id_hash
+  };
+}
 function normalizeExternalObservationAudience(value) {
   const field = "E2B external qualification observation audience";
   assertPlainObject(value, field);
@@ -52350,6 +52413,24 @@ function normalizeExternalObservationAudience(value) {
     )
   };
 }
+function assertExternalObservationAudience(actual, expected) {
+  if (canonicalize2(actual) !== canonicalize2(expected)) {
+    throw new Error("E2B external qualification observation audience mismatch");
+  }
+}
+function trustedObservationNow(clock) {
+  let value;
+  try {
+    value = clock();
+  } catch {
+    throw new Error("E2B external qualification trusted clock failed");
+  }
+  const now = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (!Number.isFinite(now.getTime())) {
+    throw new TypeError("E2B external qualification trusted clock returned an invalid time");
+  }
+  return now;
+}
 function normalizeObservationTimes(value, field) {
   const observedAt = requireIsoDate(value.observed_at, `${field}.observed_at`);
   const issuedAt = requireIsoDate(value.issued_at, `${field}.issued_at`);
@@ -52361,6 +52442,21 @@ function normalizeObservationTimes(value, field) {
     throw new Error(`${field} observed/issued/expires ordering is invalid`);
   }
   return { observed_at: observedAt, issued_at: issuedAt, expires_at: expiresAt };
+}
+function assertExternalObservationCurrent(times, policy) {
+  const observedMs = Date.parse(times.observed_at);
+  const issuedMs = Date.parse(times.issued_at);
+  const expiresMs = Date.parse(times.expires_at);
+  if (expiresMs - observedMs > policy.maxReceiptAgeMs) {
+    throw new Error("E2B external qualification observation lifetime exceeds pinned policy");
+  }
+  const nowMs = trustedObservationNow(policy.clock).getTime();
+  if (issuedMs > nowMs) {
+    throw new Error("E2B external qualification observation is future-issued");
+  }
+  if (nowMs >= expiresMs) {
+    throw new Error("E2B external qualification observation is expired");
+  }
 }
 function normalizeStatusEvidence(value, field) {
   assertPlainObject(value, field);
@@ -52538,6 +52634,64 @@ function normalizeExternalNetwork(value) {
       `${field}.ipv6_provider_denial`
     )
   };
+}
+function externalObservationPayload(evidence, input, observer, policy) {
+  assertExternalObservationProvisional(evidence);
+  assertPlainObject(input, "E2B external qualification observation input");
+  assertAllowedKeys(input, [
+    "observed_at",
+    "issued_at",
+    "expires_at",
+    "observer_boundary",
+    "birth_controls",
+    "first_instruction_ipv4_egress_denied",
+    "first_instruction_ipv6_egress_denied",
+    "ipv6_provider_denial",
+    "provider_controls",
+    "cost"
+  ], "E2B external qualification observation input");
+  const times = normalizeObservationTimes(
+    input,
+    "E2B external qualification observation"
+  );
+  if (Date.parse(times.observed_at) < Date.parse(evidence.run.completed_at)) {
+    throw new Error("E2B external qualification observation precedes run completion");
+  }
+  const audience = externalObservationAudience(evidence);
+  assertExternalObservationAudience(audience, policy.audience);
+  assertExternalObservationCurrent(times, policy);
+  const normalizedObserver = normalizeObserverIdentity(observer);
+  const observerBoundary = normalizeExternalObserverBoundary(input.observer_boundary);
+  const payload = {
+    schema: E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA,
+    base_evidence_hash: evidence.evidence_hash,
+    observer: normalizedObserver,
+    audience,
+    ...times,
+    observer_boundary: observerBoundary,
+    bindings: externalObservationBindings(evidence),
+    requested_limits: { ...evidence.limits },
+    birth_controls: normalizeExternalBirthControls(input.birth_controls, observerBoundary),
+    network: {
+      first_instruction_ipv4_egress_denied: requireBoolean2(
+        input.first_instruction_ipv4_egress_denied,
+        "E2B external qualification observation IPv4 claim"
+      ),
+      first_instruction_ipv6_egress_denied: requireBoolean2(
+        input.first_instruction_ipv6_egress_denied,
+        "E2B external qualification observation IPv6 claim"
+      ),
+      ipv6_provider_denial: normalizeStatusEvidence(
+        input.ipv6_provider_denial,
+        "E2B external qualification observation IPv6 provider denial"
+      )
+    },
+    provider_controls: normalizeExternalProviderControls(input.provider_controls),
+    cost: normalizeExternalCost({ currency: "USD", ...input.cost }),
+    observation_hash: null
+  };
+  payload.observation_hash = sha256Ref2(payload);
+  return deepFreeze(payload);
 }
 function normalizeExternalObservationReceipt(value) {
   const field = "E2B external qualification observation receipt";
@@ -53096,6 +53250,114 @@ function parseExternalObservationPublicKey(value) {
   }
   return publicKey;
 }
+function createE2BExternalQualificationObservationVerifier(options = {}) {
+  assertPlainObject(options, "E2B external qualification observation verifier options");
+  assertAllowedKeys(
+    options,
+    ["publicKey", "publicKeyHash", "clock", "maxReceiptAgeMs", "audience"],
+    "E2B external qualification observation verifier options"
+  );
+  let publicKey;
+  try {
+    publicKey = parseExternalObservationPublicKey(options.publicKey);
+  } catch {
+    throw new TypeError("E2B external qualification observation publicKey is invalid");
+  }
+  if (publicKey.asymmetricKeyType !== "ed25519") {
+    throw new TypeError("E2B external qualification observation requires an Ed25519 public key");
+  }
+  const publicKeyDer = publicKey.export({ type: "spki", format: "der" });
+  const keyHash = sha256BytesRef(publicKeyDer);
+  const expectedKeyHash = requireSha256Ref(
+    options.publicKeyHash,
+    "E2B external qualification observation publicKeyHash"
+  );
+  if (!safeEqual(keyHash, expectedKeyHash)) {
+    throw new Error("E2B external qualification observation public key hash mismatch");
+  }
+  const observer = deepFreeze({
+    algorithm: "Ed25519",
+    public_key_spki_base64url: publicKeyDer.toString("base64url"),
+    public_key_hash: keyHash
+  });
+  if (typeof options.clock !== "function") {
+    throw new TypeError("E2B external qualification observation requires a trusted clock");
+  }
+  const policy = Object.freeze({
+    clock: options.clock,
+    maxReceiptAgeMs: boundedInteger(
+      options.maxReceiptAgeMs,
+      "E2B external qualification observation maxReceiptAgeMs",
+      {
+        min: MIN_EXTERNAL_OBSERVATION_LIFETIME_MS,
+        max: MAX_EXTERNAL_OBSERVATION_LIFETIME_MS
+      }
+    ),
+    audience: deepFreeze(normalizeExternalObservationAudience(options.audience))
+  });
+  const verifier = {
+    key_hash: keyHash,
+    observer,
+    audience: policy.audience,
+    max_receipt_age_ms: policy.maxReceiptAgeMs,
+    createPayload(value, input = {}) {
+      const evidence = validateE2BQualificationEvidence(value);
+      return externalObservationPayload(evidence, input, observer, policy);
+    },
+    verify(value, observation) {
+      const evidence = validateE2BQualificationEvidence(value);
+      const normalizedObservation = normalizeExternalObservationReceipt(observation);
+      if (!safeEqual(normalizedObservation.observer.public_key_hash, keyHash) || normalizedObservation.observer.public_key_spki_base64url !== observer.public_key_spki_base64url) {
+        throw new Error("E2B external qualification observer does not match pinned policy");
+      }
+      assertExternalObservationAudience(normalizedObservation.audience, policy.audience);
+      const payload = externalObservationPayload(evidence, {
+        observed_at: normalizedObservation.observed_at,
+        issued_at: normalizedObservation.issued_at,
+        expires_at: normalizedObservation.expires_at,
+        observer_boundary: normalizedObservation.observer_boundary,
+        birth_controls: normalizedObservation.birth_controls,
+        first_instruction_ipv4_egress_denied: normalizedObservation.network.first_instruction_ipv4_egress_denied,
+        first_instruction_ipv6_egress_denied: normalizedObservation.network.first_instruction_ipv6_egress_denied,
+        ipv6_provider_denial: normalizedObservation.network.ipv6_provider_denial,
+        provider_controls: normalizedObservation.provider_controls,
+        cost: {
+          provider_cap: normalizedObservation.cost.provider_cap,
+          derived_estimate: normalizedObservation.cost.derived_estimate,
+          aggregate_console_delta: normalizedObservation.cost.aggregate_console_delta,
+          actual_sandbox: normalizedObservation.cost.actual_sandbox
+        }
+      }, observer, policy);
+      const { signature: signatureValue, ...actualPayload } = normalizedObservation;
+      if (canonicalize2(actualPayload) !== canonicalize2(payload)) {
+        throw new Error("E2B external qualification observation binding mismatch");
+      }
+      const signature = requireEd25519Signature(
+        signatureValue,
+        "E2B external qualification observation signature"
+      );
+      if (!verifySignature(
+        null,
+        Buffer.from(canonicalize2(payload), "utf8"),
+        publicKey,
+        signature
+      )) {
+        throw new Error("E2B external qualification observation signature is invalid");
+      }
+      return normalizedObservation;
+    }
+  };
+  EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.add(verifier);
+  return Object.freeze(verifier);
+}
+function verifyE2BExternalQualificationObservation(value, observation, verifier) {
+  if (!verifier || !EXTERNAL_QUALIFICATION_OBSERVATION_VERIFIERS.has(verifier)) {
+    throw new TypeError(
+      "E2B external qualification observation requires a trusted verifier created by createE2BExternalQualificationObservationVerifier"
+    );
+  }
+  return verifier.verify(value, observation);
+}
 function createE2BQualificationTrustVerifier(options = {}) {
   assertPlainObject(options, "E2B qualification trust verifier options");
   assertAllowedKeys(
@@ -53170,6 +53432,15 @@ function verifyE2BQualificationTrust(value, trust, verifier, expected = {}, exte
     );
   }
   return verifier.verify(value, trust, expected, externalObservationVerifier);
+}
+function applyE2BExternalQualificationObservation(value, observation, verifier) {
+  const evidence = validateE2BQualificationEvidence(value);
+  const verified = verifyE2BExternalQualificationObservation(
+    evidence,
+    observation,
+    verifier
+  );
+  return finalizeE2BQualificationEvidence(evidence, verified);
 }
 function computedEvidence(input) {
   const evidence = normalizeEvidence2(input, { includeComputedFields: false });
@@ -57806,6 +58077,10 @@ var {
 } = import_mcp_server.default;
 export {
   E2BRiskForkAdapter,
+  E2B_EXTERNAL_BIRTH_CONTROLS,
+  E2B_EXTERNAL_PROVIDER_CONTROLS,
+  E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
+  E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA,
   E2B_INDEPENDENT_SOURCE_ATTESTATION_SCHEMA,
   E2B_QUALIFICATION_CONTROLS,
   E2B_QUALIFICATION_SCHEMA,
@@ -57826,6 +58101,7 @@ export {
   RiskForkPreparationError,
   RiskForkProvider,
   acquirePostgresAuthorityClient,
+  applyE2BExternalQualificationObservation,
   assertHostCanEnforce,
   assertPreparedForCleanCommit,
   assertRiskForkProvider,
@@ -57838,6 +58114,7 @@ export {
   computeMcpCleanImportEvidenceHash,
   connectRemoteClient,
   createE2BAuthorityFreeSourceVerifier,
+  createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
   createE2BQualificationTrustVerifier,
   createE2BRuntimeSdkIntegrityVerifier,
@@ -57869,6 +58146,7 @@ export {
   validateCommitCandidate,
   validateE2BQualificationEvidence,
   verifyCommitArtifact,
+  verifyE2BExternalQualificationObservation,
   verifyE2BQualificationTrust,
   verifyExecutionBinding,
   verifyPostgresAuthorityClientTransport,
