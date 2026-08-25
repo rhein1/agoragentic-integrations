@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 44,
-    "sha256": "sha256:6a06817e4bfa4cb6636553845bf17c90e7c941b9152a033485d3c1b993ea697d"
+    "sha256": "sha256:c0096968d13d1fdb21563a262bd2eb8d1b1c9e3c1122220231f11cc5ab18ed42"
   },
   "reviewed_sources": [
     {
@@ -69,8 +69,8 @@
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
-      "bytes": 18323,
-      "sha256": "sha256:22e149558add4aea3e16b82b701c38dfbc7e9d3756134539c77c6d47e6cb171b"
+      "bytes": 22323,
+      "sha256": "sha256:d7b32b5799be9e0fd9ade54b88cbfd3f6b7e7bfcba2c464150d1642583b6a77f"
     },
     {
       "path": "risk-fork/src/adapters/e2b-cleanup-journal.mjs",
@@ -149,13 +149,13 @@
     },
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
-      "bytes": 72414,
-      "sha256": "sha256:e2449bf186ca80784eb09d4c0cc239b5a3ee05d618a5aa99b193ad3a71809eb0"
+      "bytes": 77804,
+      "sha256": "sha256:be31c080e15204f3c2f57aa6e2a7700436b8bb751b186401abc28255b8cc655a"
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 3386,
-      "sha256": "sha256:71ea1b93d0d05c3796c2968d94056c287e0f9bb7ce0965fb12479f37c4a631c7"
+      "bytes": 3417,
+      "sha256": "sha256:37af91b4c8345a49ab29ec2c66d1d5aee3fc988af42b9be56e29970eee0e1f9a"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -2257,8 +2257,8 @@
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
       "source": "reviewed_source",
-      "bytes": 18323,
-      "sha256": "sha256:22e149558add4aea3e16b82b701c38dfbc7e9d3756134539c77c6d47e6cb171b"
+      "bytes": 22323,
+      "sha256": "sha256:d7b32b5799be9e0fd9ade54b88cbfd3f6b7e7bfcba2c464150d1642583b6a77f"
     },
     {
       "path": "risk-fork/src/adapters/e2b-cleanup-journal.mjs",
@@ -2341,8 +2341,8 @@
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
       "source": "reviewed_source",
-      "bytes": 72414,
-      "sha256": "sha256:e2449bf186ca80784eb09d4c0cc239b5a3ee05d618a5aa99b193ad3a71809eb0"
+      "bytes": 77804,
+      "sha256": "sha256:be31c080e15204f3c2f57aa6e2a7700436b8bb751b186401abc28255b8cc655a"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -2638,8 +2638,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2281133,
-    "sha256": "sha256:291b8ea69d37e399fbed3458c5aab6598ad08199e2c48396529310149fc368e8"
+    "bytes": 2286057,
+    "sha256": "sha256:a105af7a0427de0656514afb3d4610e4f1ae6335fe78ecc17872a91a02abe7b1"
   },
   "packaged_assets": [
     {
@@ -2722,8 +2722,8 @@
     {
       "path": "schema/e2b-qualification-evidence.v1.json",
       "source_path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
-      "bytes": 18323,
-      "sha256": "sha256:22e149558add4aea3e16b82b701c38dfbc7e9d3756134539c77c6d47e6cb171b"
+      "bytes": 22323,
+      "sha256": "sha256:d7b32b5799be9e0fd9ade54b88cbfd3f6b7e7bfcba2c464150d1642583b6a77f"
     }
   ]
 }
