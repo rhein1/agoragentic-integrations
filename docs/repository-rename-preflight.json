@@ -1228,9 +1228,9 @@
       "path": "risk-fork/ADVERSARIAL_REMEDIATION.md",
       "occurrences": 3,
       "line_numbers": [
-        51,
-        52,
-        53
+        57,
+        58,
+        59
       ],
       "categories": [
         "public_documentation",
@@ -1265,7 +1265,7 @@
       "path": "risk-fork/README.md",
       "occurrences": 3,
       "line_numbers": [
-        60
+        62
       ],
       "categories": [
         "public_documentation"
