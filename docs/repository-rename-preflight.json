@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.48.0",
-  "as_of": "2026-08-24",
+  "source_manifest_version": "2.49.0",
+  "as_of": "2026-08-25",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
@@ -1275,7 +1275,7 @@
       "occurrences": 2,
       "line_numbers": [
         17,
-        85
+        87
       ],
       "categories": [
         "public_documentation"
@@ -1295,7 +1295,7 @@
       "path": "risk-fork/SECURITY_MODEL.md",
       "occurrences": 3,
       "line_numbers": [
-        166
+        167
       ],
       "categories": [
         "public_documentation"

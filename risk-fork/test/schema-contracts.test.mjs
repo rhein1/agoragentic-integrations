@@ -10,6 +10,7 @@ import addFormats from 'ajv-formats';
 
 import { LocalReferenceRiskForkAdapter } from '../src/adapters/local-reference.mjs';
 import {
+  E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
@@ -235,6 +236,7 @@ function makeE2BQualificationEvidence() {
     'first_instruction_ipv4_egress_denied',
     'first_instruction_ipv6_egress_denied',
     'cost_within_cap',
+    ...E2B_EXTERNAL_BIRTH_CONTROLS,
     ...E2B_EXTERNAL_PROVIDER_CONTROLS,
   ]);
   return createE2BQualificationEvidence({
@@ -450,6 +452,15 @@ test('E2B qualification schema accepts source evidence and rejects authority cla
     'e2b-qualification-evidence.v1.json',
     missingReceiptField,
     'E2B qualification evidence omitting explicit observer receipt state',
+  );
+
+  const selfPromotedBirthControl = clone(evidence);
+  selfPromotedBirthControl.controls.inherited_environment_absent = 'verified';
+  assertSchemaRejects(
+    ajv,
+    'e2b-qualification-evidence.v1.json',
+    selfPromotedBirthControl,
+    'provisional E2B qualification evidence self-promoting a birth control',
   );
 
   for (const spelling of ['0', '0.25', '0.25000', '0.2500000']) {

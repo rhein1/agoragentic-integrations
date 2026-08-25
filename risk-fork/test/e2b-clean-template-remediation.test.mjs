@@ -32,6 +32,7 @@ import {
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import {
+  E2B_EXTERNAL_BIRTH_CONTROLS,
   E2B_EXTERNAL_PROVIDER_CONTROLS,
   E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS,
   E2B_QUALIFICATION_CONTROLS,
@@ -97,6 +98,7 @@ function createQualificationEvidenceForSdk(integrityHash) {
     'first_instruction_ipv4_egress_denied',
     'first_instruction_ipv6_egress_denied',
     'cost_within_cap',
+    ...E2B_EXTERNAL_BIRTH_CONTROLS,
     ...E2B_EXTERNAL_PROVIDER_CONTROLS,
   ]);
   const provisional = createE2BQualificationEvidence({
@@ -176,6 +178,17 @@ function createQualificationEvidenceForSdk(integrityHash) {
     expires_at: new Date(NOW.getTime() + 2 * 60_000).toISOString(),
     first_instruction_ipv4_egress_denied: true,
     first_instruction_ipv6_egress_denied: true,
+    observer_boundary: {
+      producer_class: 'privileged_host_supervisor',
+      status: 'verified',
+      evidence_hash: hash('synthetic-observer-privilege-boundary'),
+      child_write_access: false,
+      reusable_signing_authority_in_child: false,
+    },
+    birth_controls: Object.fromEntries(E2B_EXTERNAL_BIRTH_CONTROLS.map((control) => [
+      control,
+      { status: 'verified', evidence_hash: hash(`synthetic-${control}`) },
+    ])),
     ipv6_provider_denial: {
       status: 'verified',
       evidence_hash: hash('synthetic-provider-ipv6-denial'),
