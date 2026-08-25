@@ -6,14 +6,14 @@
 - Canonical manifest: `2.48.0` as of `2026-08-24`
 - Safe to rename now: **false**
 - Authorized target: **none**
-- Affected tracked files: **134**
-- Exact repository references: **269**
+- Affected tracked files: **136**
+- Exact repository references: **271**
 
 ## Reference Classes
 
 | Class | Files |
 |---|---:|
-| `installer_or_clone` | 26 |
+| `installer_or_clone` | 28 |
 | `machine_discovery` | 43 |
 | `package_registry_metadata` | 21 |
 | `public_documentation` | 70 |

@@ -51,7 +51,7 @@
           "properties": {
             "status": { "const": "verified_and_consumed" }, "authorization_id": { "$ref": "#/$defs/ref" },
             "binding_hash": { "$ref": "#/$defs/sha256" }, "evidence_ref": { "$ref": "#/$defs/ref" },
-            "evidence_hash": { "$ref": "#/$defs/sha256" }
+            "evidence_hash": { "$ref": "#/$defs/sha256" }, "observed_at": { "$ref": "#/$defs/date" }
           }
         }
       ]
@@ -70,14 +70,46 @@
       "properties": { "result_grants_authority": { "const": false }, "automatic_retry_allowed": { "const": false } }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "commit_type": { "const": "CONSEQUENTIAL_ACTION_PROPOSAL" } }, "required": ["commit_type"] },
+      "then": { "properties": { "execution_authorization": { "type": "object" } }, "required": ["execution_authorization"] },
+      "else": { "properties": { "execution_authorization": { "type": "null" } }, "required": ["execution_authorization"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "commit_type": { "const": "CONSEQUENTIAL_ACTION_PROPOSAL" },
+          "authority_backend": { "const": "file_reference" }
+        },
+        "required": ["commit_type", "authority_backend"]
+      },
+      "then": {
+        "properties": {
+          "execution_authorization": {
+            "type": "object",
+            "properties": { "observed_at": { "$ref": "#/$defs/date" } },
+            "required": ["observed_at"]
+          }
+        },
+        "required": ["execution_authorization"]
+      }
+    }
+  ],
   "$defs": {
     "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "\\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "amk_[a-f0-9]{64}" } }, { "not": { "type": "string", "pattern": "(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))" } }, { "not": { "type": "string", "pattern": "\\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
     "date": { "type": "string", "format": "date-time", "maxLength": 64 },
     "commitType": { "enum": ["TYPED_RESULT", "WORKSPACE_DIFF", "CONSEQUENTIAL_ACTION_PROPOSAL"] },
     "jsonValue": {
       "oneOf": [
-        { "type": "null" }, { "type": "boolean" }, { "type": "string", "maxLength": 4194304 }, { "type": "number" },
+        { "type": "null" }, { "type": "boolean" },
+        {
+          "type": "string",
+          "maxLength": 16777216,
+          "$comment": "Structural code-point ceiling only. AJV success alone does not establish clean-commit eligibility; mandatory canonical runtime verification separately enforces the 16 MiB UTF-8 byte limit for result strings."
+        },
+        { "type": "number" },
         { "type": "array", "maxItems": 100000, "items": { "$ref": "#/$defs/jsonValue" } },
         { "type": "object", "propertyNames": { "maxLength": 1024 }, "additionalProperties": { "$ref": "#/$defs/jsonValue" } }
       ]

@@ -5,6 +5,10 @@ import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
 import { ACTION_OPERATIONS, COMMIT_TYPES } from './constants.mjs';
 import { verifyExecutionBinding } from './contracts.mjs';
 import {
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  BEARER_CREDENTIAL_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   assertAllowedKeys,
   assertPlainObject,
   boundedInteger,
@@ -23,7 +27,10 @@ import {
 
 const SECRET_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
-  /\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[:=]\s*['\"]?[^\s'\"]{8,}/i,
   /\b(?:seed phrase|wallet phrase)\s*[:=]/i,
 ]);
@@ -36,7 +43,7 @@ const PROMPT_INJECTION_PATTERNS = Object.freeze([
   /you are now (?:the )?(?:system|developer|administrator)/i,
 ]);
 
-const FORBIDDEN_CHILD_KEYS = new Set([
+const FORBIDDEN_CHILD_KEY_FINGERPRINTS = new Set([
   'approval',
   'approved',
   'authorization',
@@ -52,7 +59,14 @@ const FORBIDDEN_CHILD_KEYS = new Set([
   'messages',
   'parent_memory',
   'memory_update',
-]);
+].map((key) => key.replace(/[^a-z0-9]+/g, '')));
+
+function normalizeChildKey(value) {
+  return value
+    .normalize('NFKC')
+    .replace(/[^A-Za-z0-9]+/g, '')
+    .toLowerCase();
+}
 
 function makeAjv() {
   const ajv = new Ajv({
@@ -87,10 +101,14 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', d
   }
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
-    if (FORBIDDEN_CHILD_KEYS.has(key.toLowerCase())) {
-      throw new Error(`Child artifact cannot carry trusted authority or memory field: ${path}.${key}`);
+    if (Buffer.byteLength(key, 'utf8') > limits.max_string_bytes) {
+      throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path}.<key>`);
     }
-    walkStrings(child, visitor, limits, state, `${path}.${key}`, depth + 1);
+    visitor(key, `${path}.<key>`);
+    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizeChildKey(key))) {
+      throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path}.<key>`);
+    }
+    walkStrings(child, visitor, limits, state, `${path}.<value>`, depth + 1);
   }
 }
 
@@ -191,7 +209,7 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
   const artifact = {
     schema: 'agoragentic.risk-fork.commit-artifact.v1',
     commit_type: commitType,
-    source_fork_id: requireString(sourceForkId, 'source_fork_id'),
+    source_fork_id: requireOpaqueRef(sourceForkId, 'source_fork_id', { maxLength: 4096 }),
     taint_status: 'TAINTED_SOURCE_VALIDATED',
     validated_at: validatedAt,
     body,
@@ -210,6 +228,14 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
 function validateTypedResult(candidate, context) {
   assertAllowedKeys(candidate, ['type', 'payload', 'payload_schema'], 'typed result candidate');
   assertPlainObject(candidate.payload_schema, 'typed result payload_schema');
+  const schemaFindings = scanText(candidate.payload_schema, context.policy);
+  if (schemaFindings.length > 0) {
+    throw new Error(`Typed result schema taint scan failed: ${schemaFindings[0].code}`);
+  }
+  const payloadFindings = scanText(candidate.payload, context.policy);
+  if (payloadFindings.length > 0) {
+    throw new Error(`Typed result taint scan failed: ${payloadFindings[0].code}`);
+  }
   assertClosedLocalSchema(candidate.payload_schema);
   const schemaHash = sha256Ref(candidate.payload_schema);
   if (context.policy.typed_result_schema_hash
@@ -227,8 +253,6 @@ function validateTypedResult(candidate, context) {
   if (payloadBytes > context.policy.max_typed_result_bytes) {
     throw new Error(`Typed result exceeds ${context.policy.max_typed_result_bytes} bytes`);
   }
-  const findings = scanText(candidate.payload, context.policy);
-  if (findings.length > 0) throw new Error(`Typed result taint scan failed: ${findings[0].code}`);
   return buildArtifact({
     commitType: 'TYPED_RESULT',
     sourceForkId: context.sourceForkId,
@@ -296,6 +320,10 @@ function validateWorkspaceDiff(candidate, context) {
       'after_content',
     ], `workspace diff files[${index}]`);
     const relativePath = normalizeRelativePath(file.path, `workspace diff files[${index}].path`);
+    const pathFindings = scanText(relativePath, context.policy);
+    if (pathFindings.length > 0) {
+      throw new Error(`Workspace diff path taint scan failed: ${pathFindings[0].code}`);
+    }
     if (relativePath === '.git' || relativePath.startsWith('.git/')) {
       throw new Error('Workspace diff cannot modify Git control metadata');
     }
@@ -479,7 +507,7 @@ export function validateCommitCandidate(input = {}) {
   assertPlainObject(input.candidate, 'candidate');
   const type = requireEnum(input.candidate.type, COMMIT_TYPES, 'candidate.type');
   const context = {
-    sourceForkId: requireString(input.source_fork_id, 'source_fork_id'),
+    sourceForkId: requireOpaqueRef(input.source_fork_id, 'source_fork_id', { maxLength: 4096 }),
     policy: normalizePolicy(input.policy),
     expectedBinding: input.expected_binding ?? {},
     executionBinding: input.execution_binding ?? null,
@@ -807,7 +835,11 @@ export function verifyCommitArtifact(artifact) {
     throw new TypeError('commit artifact schema is invalid');
   }
   requireEnum(artifact.commit_type, COMMIT_TYPES, 'commit artifact.commit_type');
-  requireString(artifact.source_fork_id, 'commit artifact.source_fork_id');
+  requireOpaqueRef(
+    artifact.source_fork_id,
+    'commit artifact.source_fork_id',
+    { maxLength: 4096 },
+  );
   requireIsoDate(artifact.validated_at, 'commit artifact.validated_at');
   if (artifact.taint_status !== 'TAINTED_SOURCE_VALIDATED') {
     throw new Error('Commit artifact must preserve its tainted-source provenance');

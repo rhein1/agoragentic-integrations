@@ -14,6 +14,10 @@ import path from 'node:path';
 import { canonicalize, sha256Ref } from '../canonical.mjs';
 import { sha256BytesRef, sha256FileRef } from '../e2b-qualification.mjs';
 import {
+  AGORAGENTIC_API_KEY_PATTERN,
+  BEARER_CREDENTIAL_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   assertAllowedKeys,
   assertPlainObject,
   boundedInteger,
@@ -54,7 +58,10 @@ const SECRET_PATH_PATTERN = /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.azure|\.config\/g
 const SECRET_CONTENT_PATTERNS = Object.freeze([
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /-----BEGIN PGP PRIVATE KEY BLOCK-----/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}/,
   /\bsk-[A-Za-z0-9_-]{16,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
@@ -68,6 +75,8 @@ const SECRET_ASSIGNMENT_PATTERN = new RegExp(
   'gi',
 );
 const MIN_SECRET_ASSIGNMENT_BYTES = 8;
+const BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
+const MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
 
 function containsSecretAssignment(exactBytesText) {
   SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
@@ -76,6 +85,60 @@ function containsSecretAssignment(exactBytesText) {
     match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText)) {
     const value = match[1] ?? match[2] ?? match[3] ?? '';
     if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) return true;
+  }
+  return false;
+}
+
+function decodedTextViews(content) {
+  const views = new Set([
+    content.toString('latin1'),
+    content.toString('utf8'),
+  ]);
+  for (const offset of [0, 1]) {
+    const available = content.byteLength - offset;
+    const evenBytes = available - (available % 2);
+    if (evenBytes <= 0) continue;
+    const aligned = content.subarray(offset, offset + evenBytes);
+    views.add(aligned.toString('utf16le'));
+    const bigEndian = Buffer.from(aligned);
+    bigEndian.swap16();
+    views.add(bigEndian.toString('utf16le'));
+  }
+  return [...views];
+}
+
+function decodeCanonicalBase64(candidate) {
+  const normalized = candidate.replaceAll('-', '+').replaceAll('_', '/').replace(/=+$/, '');
+  if (normalized.length % 4 === 1) return null;
+  const padded = `${normalized}${'='.repeat((4 - (normalized.length % 4)) % 4)}`;
+  const decoded = Buffer.from(padded, 'base64');
+  if (decoded.toString('base64').replace(/=+$/, '') !== normalized) return null;
+  return decoded;
+}
+
+function containsRecognizedSecretText(text) {
+  return SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(text))
+    || containsSecretAssignment(text);
+}
+
+function containsRecognizedSecretBytes(content) {
+  const rawViews = decodedTextViews(content);
+  if (rawViews.some(containsRecognizedSecretText)) return true;
+  for (const text of rawViews) {
+    BASE64_CANDIDATE_PATTERN.lastIndex = 0;
+    for (let match = BASE64_CANDIDATE_PATTERN.exec(text);
+      match;
+      match = BASE64_CANDIDATE_PATTERN.exec(text)) {
+      const decoded = decodeCanonicalBase64(match[0]);
+      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+    }
+    MIME_BASE64_BLOCK_PATTERN.lastIndex = 0;
+    for (let match = MIME_BASE64_BLOCK_PATTERN.exec(text);
+      match;
+      match = MIME_BASE64_BLOCK_PATTERN.exec(text)) {
+      const decoded = decodeCanonicalBase64(match[0].replace(/\s/g, ''));
+      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+    }
   }
   return false;
 }
@@ -183,7 +246,7 @@ function validateRequest(value) {
 
 export function scanE2BStagedBytesAuthorityFree(files) {
   for (const file of files) {
-    if (SECRET_PATH_PATTERN.test(file.path)) {
+    if (SECRET_PATH_PATTERN.test(file.path) || containsRecognizedSecretText(file.path)) {
       throw new Error('E2B staged export contains a secret-shaped path');
     }
     const content = Buffer.from(file.data_base64, 'base64');
@@ -191,9 +254,7 @@ export function scanE2BStagedBytesAuthorityFree(files) {
       || !safeEqual(sha256Ref(content.toString('base64')), file.content_hash)) {
       throw new Error('E2B staged export exact-byte binding mismatch');
     }
-    const exactText = content.toString('latin1');
-    if (SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(exactText))
-      || containsSecretAssignment(exactText)) {
+    if (containsRecognizedSecretBytes(content)) {
       throw new Error('E2B staged export contains authority or secret-shaped material');
     }
   }

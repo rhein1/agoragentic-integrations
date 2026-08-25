@@ -1,5 +1,6 @@
-// Risk Fork intentionally reuses Transaction Assurance's canonical JSON and
-// SHA-256 reference semantics instead of creating a second receipt universe.
+// Risk Fork reuses Transaction Assurance's canonical key sorting and SHA-256
+// digest helper, then binds every accepted JSON type to its canonical JSON
+// bytes so textual JSON cannot collide with the value it represents.
 // The stricter validation below is a fail-closed boundary: Transaction
 // Assurance accepts ordinary JavaScript values for ergonomic local evidence,
 // while security bindings must reject values that JSON would omit or coerce.
@@ -86,6 +87,8 @@ export function canonicalize(value) {
 }
 
 export function sha256Ref(value) {
-  if (typeof value !== 'string') assertCanonicalJson(value);
-  return transactionAssuranceSha256Ref(value);
+  // Hash canonical JSON bytes for every supported type. Passing strings
+  // through raw made textual JSON collide with the value it represented
+  // (for example, "{}" and {}, or "null" and null).
+  return transactionAssuranceSha256Ref(canonicalize(value));
 }

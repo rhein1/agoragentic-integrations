@@ -1,5 +1,9 @@
 import { canonicalize } from './canonical.mjs';
 import {
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  BEARER_CREDENTIAL_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   assertAllowedKeys,
   assertPlainObject,
   deepFreeze,
@@ -18,8 +22,10 @@ const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|a
 
 const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
-  /\b(?:sk|amk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|authorisation|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))\s*[=:]\s*[^&\s"']{8,}/i,
@@ -57,13 +63,16 @@ function scanAuthorityFreeJson(value, field) {
     }
     for (const [key, child] of Object.entries(current)) {
       const normalized = normalizedKey(key);
+      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+        throw new TypeError(`${path}.<key> contains authority or secret-shaped material`);
+      }
       if (DANGEROUS_KEYS.has(key)) {
-        throw new TypeError(`${path}.${key} is a forbidden JSON key`);
+        throw new TypeError(`${path}.<key> is a forbidden JSON key`);
       }
       if (AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)) {
-        throw new TypeError(`${path}.${key} is an authority or secret-bearing field`);
+        throw new TypeError(`${path}.<key> is an authority or secret-bearing field`);
       }
-      walk(child, `${path}.${key}`, depth + 1);
+      walk(child, `${path}.<value>`, depth + 1);
     }
   }
 

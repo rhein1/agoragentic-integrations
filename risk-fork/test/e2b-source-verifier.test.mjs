@@ -23,6 +23,10 @@ import {
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectLocalWorkspace } from '../src/adapters/local-reference.mjs';
 import { sha256BytesRef, sha256FileRef } from '../src/e2b-qualification.mjs';
+import { requireExternalEndpoint, requireOpaqueRef } from '../src/util.mjs';
+
+const SYNTHETIC_AMK_KEY = `amk_${'a'.repeat(64)}`;
+const DOCUMENTED_AMK_PLACEHOLDER = 'amk_your_api_key_here';
 
 function independentTrust(options = {}) {
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
@@ -104,10 +108,10 @@ async function fixture(t) {
   };
 }
 
-async function replaceExportWithExactBytes(value, exactText) {
+async function replaceExportWithExactBytes(value, exactValue) {
   const payload = path.join(value.exported.payload_directory, 'input.txt');
   const manifestPath = path.join(value.exported.export_directory, 'manifest.json');
-  const bytes = Buffer.from(exactText, 'utf8');
+  const bytes = Buffer.isBuffer(exactValue) ? exactValue : Buffer.from(exactValue, 'utf8');
   const file = {
     path: 'input.txt',
     bytes: bytes.byteLength,
@@ -236,6 +240,107 @@ test('independent exact-byte second pass rejects quoted JSON and shell secret as
       );
     });
   }
+});
+
+test('synthetic amk_ material is rejected at opaque-ref, origin, and exact-byte boundaries', () => {
+  assert.throws(
+    () => requireOpaqueRef(`evidence:${SYNTHETIC_AMK_KEY}`, 'synthetic evidence ref'),
+    /secret material/i,
+  );
+  assert.throws(
+    () => requireExternalEndpoint(
+      `https://example.invalid/${SYNTHETIC_AMK_KEY}`,
+      'synthetic origin',
+    ),
+    /secret material/i,
+  );
+
+  const bytes = Buffer.from(`result=${SYNTHETIC_AMK_KEY}\n`, 'utf8');
+  assert.throws(
+    () => scanE2BStagedBytesAuthorityFree([{
+      path: 'input.txt',
+      bytes: bytes.byteLength,
+      content_hash: sha256Ref(bytes.toString('base64')),
+      data_base64: bytes.toString('base64'),
+    }]),
+    /authority|secret/i,
+  );
+});
+
+test('exact-byte second pass rejects embedded, UTF-16, and base64 generated keys', () => {
+  const utf16le = Buffer.from(`x${SYNTHETIC_AMK_KEY}y`, 'utf16le');
+  const utf16be = Buffer.from(utf16le);
+  utf16be.swap16();
+  const encoded = Buffer.from(`x${SYNTHETIC_AMK_KEY}y`, 'utf8').toString('base64');
+  const mimeEncoded = `${encoded.slice(0, 76)}\r\n${encoded.slice(76)}`;
+  const paddedMimeVariants = [
+    `${'p'.repeat(47)}${SYNTHETIC_AMK_KEY}`,
+    `${'p'.repeat(47)}${SYNTHETIC_AMK_KEY}s`,
+    `${'p'.repeat(48)}${SYNTHETIC_AMK_KEY}`,
+  ].map((value) => {
+    const base64 = Buffer.from(value, 'utf8').toString('base64');
+    return Buffer.from(base64.match(/.{1,76}/g).join('\r\n'), 'ascii');
+  });
+  const variants = [
+    Buffer.from(`x${SYNTHETIC_AMK_KEY}y`, 'utf8'),
+    utf16le,
+    utf16be,
+    Buffer.from(encoded, 'ascii'),
+    Buffer.from(mimeEncoded, 'ascii'),
+    Buffer.concat([Buffer.from([0x58]), utf16le]),
+    Buffer.concat([utf16be, Buffer.from([0x58])]),
+    ...paddedMimeVariants,
+  ];
+
+  for (const bytes of variants) {
+    assert.throws(
+      () => scanE2BStagedBytesAuthorityFree([{
+        path: 'input.txt',
+        bytes: bytes.byteLength,
+        content_hash: sha256Ref(bytes.toString('base64')),
+        data_base64: bytes.toString('base64'),
+      }]),
+      /authority|secret/i,
+    );
+  }
+});
+
+test('exact-byte second pass rejects generated keys in paths without echoing them', () => {
+  const bytes = Buffer.from('sanitized content', 'utf8');
+  assert.throws(
+    () => scanE2BStagedBytesAuthorityFree([{
+      path: `src/x${SYNTHETIC_AMK_KEY}y.txt`,
+      bytes: bytes.byteLength,
+      content_hash: sha256Ref(bytes.toString('base64')),
+      data_base64: bytes.toString('base64'),
+    }]),
+    (error) => {
+      assert.match(error.message, /secret-shaped path/i);
+      assert.equal(error.message.includes(SYNTHETIC_AMK_KEY), false);
+      return true;
+    },
+  );
+});
+
+test('short documented amk_ placeholders remain valid non-secret examples', () => {
+  assert.equal(
+    requireOpaqueRef(`example:${DOCUMENTED_AMK_PLACEHOLDER}`, 'placeholder ref'),
+    `example:${DOCUMENTED_AMK_PLACEHOLDER}`,
+  );
+  assert.equal(
+    requireExternalEndpoint(
+      `https://example.invalid/${DOCUMENTED_AMK_PLACEHOLDER}`,
+      'placeholder origin',
+    ),
+    `https://example.invalid/${DOCUMENTED_AMK_PLACEHOLDER}`,
+  );
+  const bytes = Buffer.from(`example=${DOCUMENTED_AMK_PLACEHOLDER}\n`, 'utf8');
+  assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([{
+    path: 'input.txt',
+    bytes: bytes.byteLength,
+    content_hash: sha256Ref(bytes.toString('base64')),
+    data_base64: bytes.toString('base64'),
+  }]));
 });
 
 test('defense-in-depth scan rejects common authority material outside the original regex set', () => {

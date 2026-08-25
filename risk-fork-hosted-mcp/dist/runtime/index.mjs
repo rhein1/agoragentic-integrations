@@ -35055,6 +35055,7 @@ var require_mcp_server = __commonJS({
     var MAX_REMOTE_TOOL_CURSOR_LENGTH = 4096;
     var MAX_ACP_SESSIONS = 1e3;
     var MAX_ACP_CWD_LENGTH = 4096;
+    var CANONICAL_INVOCATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
     var MIN_CREDENTIAL_ASSIGNMENT_VALUE_LENGTH = 8;
     var enforcementBoundaryAdapters = /* @__PURE__ */ new WeakMap();
     var enforcedSessionRecords = /* @__PURE__ */ new WeakMap();
@@ -35099,11 +35100,20 @@ var require_mcp_server = __commonJS({
       "setcookie",
       "paymentsignature"
     ]);
+    var AGORAGENTIC_GENERATED_API_KEY_PATTERN2 = /amk_[a-f0-9]{64}/;
+    var EMBEDDED_CREDENTIAL_TOKEN_PATTERN2 = /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
+    var BEARER_CREDENTIAL_PATTERN2 = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
+    var GENERIC_CREDENTIAL_TOKEN_PATTERN2 = /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
     var CREDENTIAL_VALUE_PATTERNS = Object.freeze([
-      /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
-      /\bamk_[A-Za-z0-9_-]{12,}\b/,
+      BEARER_CREDENTIAL_PATTERN2,
+      AGORAGENTIC_GENERATED_API_KEY_PATTERN2,
+      EMBEDDED_CREDENTIAL_TOKEN_PATTERN2,
+      GENERIC_CREDENTIAL_TOKEN_PATTERN2,
       /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i
     ]);
+    function containsCredentialMaterial(value) {
+      return typeof value === "string" && CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+    }
     var McpEnforcementError = class extends Error {
       constructor(code, message) {
         super(message);
@@ -35129,10 +35139,16 @@ var require_mcp_server = __commonJS({
         throw new TypeError(`${field} contains a symbol key`);
       }
       for (const key of Object.getOwnPropertyNames(value)) {
-        if (!allowed.has(key)) throw new TypeError(`${field}.${key} is not allowed`);
+        if (containsCredentialMaterial(key)) {
+          throw new McpEnforcementError(
+            "MCP_CREDENTIAL_MATERIAL_REJECTED",
+            `${field}.<key> contains credential-shaped material`
+          );
+        }
+        if (!allowed.has(key)) throw new TypeError(`${field}.<key> is not allowed`);
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (!descriptor?.enumerable || descriptor.get || descriptor.set) {
-          throw new TypeError(`${field}.${key} is hidden or accessor-backed`);
+          throw new TypeError(`${field}.<key> is hidden or accessor-backed`);
         }
       }
     }
@@ -35179,7 +35195,7 @@ var require_mcp_server = __commonJS({
           for (const [key, descriptor] of Object.entries(descriptors)) {
             if (Array.isArray(current) && key === "length") continue;
             if (!descriptor.enumerable || descriptor.get || descriptor.set) {
-              throw new TypeError(`${path8}.${key} is hidden or accessor-backed`);
+              throw new TypeError(`${path8}.<key> is hidden or accessor-backed`);
             }
           }
           if (Array.isArray(current)) {
@@ -35202,10 +35218,16 @@ var require_mcp_server = __commonJS({
           assertPlainRecord(current, path8);
           const output = {};
           for (const key of Object.keys(current).sort()) {
-            if (["__proto__", "constructor", "prototype"].includes(key)) {
-              throw new TypeError(`${path8}.${key} is forbidden`);
+            if (containsCredentialMaterial(key)) {
+              throw new McpEnforcementError(
+                "MCP_CREDENTIAL_MATERIAL_REJECTED",
+                `${path8}.<key> contains credential-shaped material`
+              );
             }
-            output[key] = walk(current[key], `${path8}.${key}`, depth + 1);
+            if (["__proto__", "constructor", "prototype"].includes(key)) {
+              throw new TypeError(`${path8}.<key> is forbidden`);
+            }
+            output[key] = walk(current[key], `${path8}.<value>`, depth + 1);
           }
           return output;
         } finally {
@@ -35285,7 +35307,7 @@ var require_mcp_server = __commonJS({
           `${path8} must be an opaque credential reference`
         );
       }
-      if (CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
+      if (containsCredentialMaterial(value)) {
         throw new McpEnforcementError(
           "MCP_CREDENTIAL_MATERIAL_REJECTED",
           `${path8} contains credential-shaped material`
@@ -35386,10 +35408,16 @@ var require_mcp_server = __commonJS({
           skipWhitespace();
           const key = readString();
           const normalizedKey2 = key.normalize("NFC");
+          if (containsCredentialMaterial(key)) {
+            throw new McpEnforcementError(
+              "MCP_CREDENTIAL_MATERIAL_REJECTED",
+              `${field} contains a credential-shaped JSON object key`
+            );
+          }
           if (keys.has(normalizedKey2)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
-              `${field} contains duplicate JSON object key ${JSON.stringify(key)}`
+              `${field} contains a duplicate JSON object key`
             );
           }
           keys.add(normalizedKey2);
@@ -35569,7 +35597,7 @@ var require_mcp_server = __commonJS({
           if (classification.referenceKind) {
             assertOpaqueCredentialReference(
               assignmentValue || null,
-              `${path8}<assignment:${rawKey}>`,
+              `${path8}<assignment>`,
               classification.referenceKind
             );
             continue;
@@ -35584,7 +35612,7 @@ var require_mcp_server = __commonJS({
       }
       function walk(current, path8, pathTokens = [], state = {}) {
         if (typeof current === "string") {
-          if (CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(current))) {
+          if (containsCredentialMaterial(current)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${path8} contains credential-shaped material`
@@ -35613,7 +35641,13 @@ var require_mcp_server = __commonJS({
           return;
         }
         for (const [key, child] of Object.entries(current)) {
-          const childPath = `${path8}.${key}`;
+          if (containsCredentialMaterial(key)) {
+            throw new McpEnforcementError(
+              "MCP_CREDENTIAL_MATERIAL_REJECTED",
+              `${path8}.<key> contains credential-shaped material`
+            );
+          }
+          const childPath = `${path8}.<value>`;
           const childTokens = [...pathTokens, key];
           if (state.sensitiveSchemaDefinition && ["default", "const", "example", "examples", "enum"].includes(key) && child !== null && !(Array.isArray(child) && child.length === 0)) {
             throw new McpEnforcementError(
@@ -35657,6 +35691,12 @@ var require_mcp_server = __commonJS({
       if (typeof evidenceRef !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,499}$/.test(evidenceRef)) {
         throw new TypeError(`${field} must be a canonical evidence reference`);
       }
+      if (containsCredentialMaterial(evidenceRef)) {
+        throw new McpEnforcementError(
+          "MCP_CREDENTIAL_MATERIAL_REJECTED",
+          `${field} must not contain credential material`
+        );
+      }
       return evidenceRef;
     }
     function computeMcpCleanImportEvidenceHash2(requestHash, result, evidenceRef) {
@@ -35682,8 +35722,20 @@ var require_mcp_server = __commonJS({
           "remoteUrl must be an absolute credential-free HTTP(S) URL without query, fragment, or userinfo"
         );
       }
+      let decodedPathname;
+      try {
+        decodedPathname = decodeURIComponent(url.pathname);
+      } catch {
+        throw new TypeError("remoteUrl path encoding is invalid");
+      }
+      if ([url.hostname, url.pathname, decodedPathname].some(containsCredentialMaterial)) {
+        throw new McpEnforcementError(
+          "MCP_CREDENTIAL_MATERIAL_REJECTED",
+          "remoteUrl must not contain credential material"
+        );
+      }
       for (const [key, entry] of url.searchParams) {
-        if (credentialKeyClassification(key).sensitive || CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(entry))) {
+        if (credentialKeyClassification(key).sensitive || containsCredentialMaterial(key) || containsCredentialMaterial(entry)) {
           throw new McpEnforcementError(
             "MCP_CREDENTIAL_MATERIAL_REJECTED",
             "remoteUrl must not contain credential material"
@@ -35962,12 +36014,15 @@ var require_mcp_server = __commonJS({
         },
         {
           name: "agoragentic_execute_status",
-          description: 'Check the status, output, cost, and receipt of a previous agoragentic_execute invocation. Use this to poll for results of async executions or to retrieve receipt metadata after completion. This is a read-only operation with no side effects and no USDC spend. Any required credential must be resolved out of band by the embedding enforcement host; it is never included in the request descriptor or imported result. Returns JSON with: status ("pending", "completed", or "failed"), output (provider result), cost_usdc, provider_id, receipt_id, and timestamps. Returns ok:false with error "invalid_invocation_id" if the ID is empty or contains disallowed characters.',
+          description: 'Check the status, output, cost, and receipt of a previous agoragentic_execute invocation. Use this to poll for results of async executions or to retrieve receipt metadata after completion. This is a read-only operation with no side effects and no USDC spend. Any required credential must be resolved out of band by the embedding enforcement host; it is never included in the request descriptor or imported result. Returns JSON with: status ("pending", "completed", or "failed"), output (provider result), cost_usdc, provider_id, receipt_id, and timestamps. Returns ok:false with error "invalid_invocation_id" unless the ID is a 1-256 character ASCII string containing only letters, digits, hyphens, or underscores.',
           inputSchema: {
             type: "object",
             properties: {
               invocation_id: {
                 type: "string",
+                minLength: 1,
+                maxLength: 256,
+                pattern: "^[A-Za-z0-9_-]{1,256}$",
                 description: 'The invocation_id string returned by a prior agoragentic_execute call, e.g. "inv_abc123def456"'
               }
             },
@@ -36249,8 +36304,10 @@ var require_mcp_server = __commonJS({
         });
       }
       if (name === "agoragentic_execute_status") {
-        const invocationId = String(safeArgs.invocation_id || "").replace(/[^a-zA-Z0-9\-_]/g, "");
-        if (!invocationId) return buildJsonContent({ ok: false, error: "invalid_invocation_id" });
+        const invocationId = safeArgs.invocation_id;
+        if (typeof invocationId !== "string" || !CANONICAL_INVOCATION_ID_PATTERN.test(invocationId)) {
+          return buildJsonContent({ ok: false, error: "invalid_invocation_id" });
+        }
         const path8 = `/api/execute/status/${invocationId}`;
         return enforced({ name, args: safeArgs, method: "GET", path: path8 });
       }
@@ -41993,8 +42050,7 @@ function canonicalize2(value) {
   return canonicalize(value);
 }
 function sha256Ref2(value) {
-  if (typeof value !== "string") assertCanonicalJson(value);
-  return sha256Ref(value);
+  return sha256Ref(canonicalize2(value));
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
@@ -42013,6 +42069,9 @@ function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
   const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
   if (unexpected.length > 0) {
+    if (unexpected.some((key) => containsSecretShapedText(key))) {
+      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+    }
     throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(", ")}`);
   }
 }
@@ -42037,16 +42096,26 @@ function requireIsoDate(value, field) {
 function requireSha256Ref(value, field) {
   return requireString(value, field, { pattern: /^sha256:[a-f0-9]{64}$/ });
 }
+var AGORAGENTIC_GENERATED_API_KEY_PATTERN = /amk_[a-f0-9]{64}/;
+var AGORAGENTIC_API_KEY_PATTERN = AGORAGENTIC_GENERATED_API_KEY_PATTERN;
+var EMBEDDED_CREDENTIAL_TOKEN_PATTERN = /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
+var BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
+var GENERIC_CREDENTIAL_TOKEN_PATTERN = /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
 var SECRET_SHAPED_TEXT = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i,
-  /\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i
 ]);
+function containsSecretShapedText(value) {
+  return typeof value === "string" && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+}
 function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
-  if (SECRET_SHAPED_TEXT.some((pattern) => pattern.test(normalized))) {
+  if (containsSecretShapedText(normalized)) {
     throw new TypeError(`${field} appears to contain secret material`);
   }
   return normalized;
@@ -42155,8 +42224,10 @@ var DANGEROUS_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "proto
 var AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
 var AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
-  /\b(?:sk|amk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|authorisation|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))\s*[=:]\s*[^&\s"']{8,}/i,
@@ -42186,13 +42257,16 @@ function scanAuthorityFreeJson(value, field) {
     }
     for (const [key, child] of Object.entries(current)) {
       const normalized = normalizedKey(key);
+      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+        throw new TypeError(`${path8}.<key> contains authority or secret-shaped material`);
+      }
       if (DANGEROUS_KEYS.has(key)) {
-        throw new TypeError(`${path8}.${key} is a forbidden JSON key`);
+        throw new TypeError(`${path8}.<key> is a forbidden JSON key`);
       }
       if (AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)) {
-        throw new TypeError(`${path8}.${key} is an authority or secret-bearing field`);
+        throw new TypeError(`${path8}.<key> is an authority or secret-bearing field`);
       }
-      walk(child, `${path8}.${key}`, depth + 1);
+      walk(child, `${path8}.<value>`, depth + 1);
     }
   }
   walk(value, field, 0);
@@ -46797,7 +46871,10 @@ var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 var SECRET_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
-  /\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[:=]\s*['\"]?[^\s'\"]{8,}/i,
   /\b(?:seed phrase|wallet phrase)\s*[:=]/i
 ]);
@@ -46808,7 +46885,7 @@ var PROMPT_INJECTION_PATTERNS = Object.freeze([
   /bypass (?:policy|approval|authorization|guardrail)/i,
   /you are now (?:the )?(?:system|developer|administrator)/i
 ]);
-var FORBIDDEN_CHILD_KEYS = /* @__PURE__ */ new Set([
+var FORBIDDEN_CHILD_KEY_FINGERPRINTS = new Set([
   "approval",
   "approved",
   "authorization",
@@ -46824,7 +46901,10 @@ var FORBIDDEN_CHILD_KEYS = /* @__PURE__ */ new Set([
   "messages",
   "parent_memory",
   "memory_update"
-]);
+].map((key) => key.replace(/[^a-z0-9]+/g, "")));
+function normalizeChildKey(value) {
+  return value.normalize("NFKC").replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+}
 function makeAjv() {
   const ajv = new import_ajv.default({
     allErrors: true,
@@ -46857,10 +46937,14 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
   }
   if (!value || typeof value !== "object") return;
   for (const [key, child] of Object.entries(value)) {
-    if (FORBIDDEN_CHILD_KEYS.has(key.toLowerCase())) {
-      throw new Error(`Child artifact cannot carry trusted authority or memory field: ${path8}.${key}`);
+    if (Buffer.byteLength(key, "utf8") > limits.max_string_bytes) {
+      throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path8}.<key>`);
     }
-    walkStrings(child, visitor, limits, state, `${path8}.${key}`, depth + 1);
+    visitor(key, `${path8}.<key>`);
+    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizeChildKey(key))) {
+      throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path8}.<key>`);
+    }
+    walkStrings(child, visitor, limits, state, `${path8}.<value>`, depth + 1);
   }
 }
 function scanText(value, policy) {
@@ -46954,7 +47038,7 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
   const artifact = {
     schema: "agoragentic.risk-fork.commit-artifact.v1",
     commit_type: commitType,
-    source_fork_id: requireString(sourceForkId, "source_fork_id"),
+    source_fork_id: requireOpaqueRef(sourceForkId, "source_fork_id", { maxLength: 4096 }),
     taint_status: "TAINTED_SOURCE_VALIDATED",
     validated_at: validatedAt,
     body,
@@ -46972,6 +47056,14 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
 function validateTypedResult(candidate, context) {
   assertAllowedKeys(candidate, ["type", "payload", "payload_schema"], "typed result candidate");
   assertPlainObject(candidate.payload_schema, "typed result payload_schema");
+  const schemaFindings = scanText(candidate.payload_schema, context.policy);
+  if (schemaFindings.length > 0) {
+    throw new Error(`Typed result schema taint scan failed: ${schemaFindings[0].code}`);
+  }
+  const payloadFindings = scanText(candidate.payload, context.policy);
+  if (payloadFindings.length > 0) {
+    throw new Error(`Typed result taint scan failed: ${payloadFindings[0].code}`);
+  }
   assertClosedLocalSchema(candidate.payload_schema);
   const schemaHash = sha256Ref2(candidate.payload_schema);
   if (context.policy.typed_result_schema_hash && !safeEqual(schemaHash, context.policy.typed_result_schema_hash)) {
@@ -46986,8 +47078,6 @@ function validateTypedResult(candidate, context) {
   if (payloadBytes > context.policy.max_typed_result_bytes) {
     throw new Error(`Typed result exceeds ${context.policy.max_typed_result_bytes} bytes`);
   }
-  const findings = scanText(candidate.payload, context.policy);
-  if (findings.length > 0) throw new Error(`Typed result taint scan failed: ${findings[0].code}`);
   return buildArtifact({
     commitType: "TYPED_RESULT",
     sourceForkId: context.sourceForkId,
@@ -47053,6 +47143,10 @@ function validateWorkspaceDiff(candidate, context) {
       "after_content"
     ], `workspace diff files[${index}]`);
     const relativePath = normalizeRelativePath(file.path, `workspace diff files[${index}].path`);
+    const pathFindings = scanText(relativePath, context.policy);
+    if (pathFindings.length > 0) {
+      throw new Error(`Workspace diff path taint scan failed: ${pathFindings[0].code}`);
+    }
     if (relativePath === ".git" || relativePath.startsWith(".git/")) {
       throw new Error("Workspace diff cannot modify Git control metadata");
     }
@@ -47222,7 +47316,7 @@ function validateCommitCandidate(input = {}) {
   assertPlainObject(input.candidate, "candidate");
   const type = requireEnum(input.candidate.type, COMMIT_TYPES, "candidate.type");
   const context = {
-    sourceForkId: requireString(input.source_fork_id, "source_fork_id"),
+    sourceForkId: requireOpaqueRef(input.source_fork_id, "source_fork_id", { maxLength: 4096 }),
     policy: normalizePolicy(input.policy),
     expectedBinding: input.expected_binding ?? {},
     executionBinding: input.execution_binding ?? null,
@@ -47534,7 +47628,11 @@ function verifyCommitArtifact(artifact) {
     throw new TypeError("commit artifact schema is invalid");
   }
   requireEnum(artifact.commit_type, COMMIT_TYPES, "commit artifact.commit_type");
-  requireString(artifact.source_fork_id, "commit artifact.source_fork_id");
+  requireOpaqueRef(
+    artifact.source_fork_id,
+    "commit artifact.source_fork_id",
+    { maxLength: 4096 }
+  );
   requireIsoDate(artifact.validated_at, "commit artifact.validated_at");
   if (artifact.taint_status !== "TAINTED_SOURCE_VALIDATED") {
     throw new Error("Commit artifact must preserve its tainted-source provenance");
@@ -50184,11 +50282,12 @@ function authoritativeClockTime(clock) {
   return requireIsoDate(value, "risk classifier clock result");
 }
 function normalizeCapabilities(value = {}) {
-  assertAllowedKeys(value, CAPABILITY_KEYS, "capabilities");
   const incomplete = value === null || CAPABILITY_KEYS.some((key) => !Object.hasOwn(value, key));
+  const capabilities = value ?? {};
+  assertAllowedKeys(capabilities, CAPABILITY_KEYS, "capabilities");
   return Object.fromEntries(CAPABILITY_KEYS.map((key) => [
     key,
-    key === "unknown_or_unclassified" ? optionalBoolean(value[key], `capabilities.${key}`, incomplete) || incomplete : optionalBoolean(value[key], `capabilities.${key}`, false)
+    key === "unknown_or_unclassified" ? optionalBoolean(capabilities[key], `capabilities.${key}`, incomplete) || incomplete : optionalBoolean(capabilities[key], `capabilities.${key}`, false)
   ]));
 }
 function normalizeAnnotations(value = {}) {
@@ -51704,6 +51803,28 @@ var E2B_QUALIFICATION_CONTROLS = Object.freeze([
   "latency_observed",
   "cost_within_cap"
 ]);
+var E2B_QUALIFICATION_FAILURE_STAGES = Object.freeze([
+  "none",
+  "sandbox_create",
+  "sandbox_handle_validation",
+  "initial_provider_info_fetch",
+  "initial_provider_info_validation",
+  "birth_handshake",
+  "execution_lease_set",
+  "execution_lease_info_fetch",
+  "execution_lease_info_validation",
+  "idle_lease_set",
+  "idle_lease_info_fetch",
+  "idle_lease_info_validation"
+]);
+var E2B_QUALIFICATION_FAILURE_CLASSES = Object.freeze([
+  "none",
+  "provider_absence",
+  "provider_timeout",
+  "provider_call_failure",
+  "provider_contract_contradiction",
+  "canary_contract_failure"
+]);
 var CONTROL_STATUSES = Object.freeze(["verified", "failed", "unknown"]);
 var EXTERNAL_OBSERVATION_BINDING_KEYS = Object.freeze([
   "approval_ref_hash",
@@ -51927,8 +52048,17 @@ function normalizeEvidence2(value, { includeComputedFields }) {
     "fork_start_ms",
     "execution_ms",
     "cleanup_ms",
-    "observed_cost_usd"
+    "observed_cost_usd",
+    "failure_stage",
+    "failure_class"
   ], "E2B qualification evidence.observations");
+  const hasFailureStage = Object.hasOwn(observations, "failure_stage");
+  const hasFailureClass = Object.hasOwn(observations, "failure_class");
+  if (hasFailureStage !== hasFailureClass) {
+    throw new TypeError(
+      "E2B qualification observations.failure_stage and failure_class must appear together"
+    );
+  }
   const normalizedObservations = {
     fork_start_ms: boundedInteger(
       observations.fork_start_ms,
@@ -51950,6 +52080,25 @@ function normalizeEvidence2(value, { includeComputedFields }) {
       "E2B qualification observations.observed_cost_usd"
     )
   };
+  if (hasFailureStage) {
+    const failureStage = requireEnum(
+      observations.failure_stage,
+      E2B_QUALIFICATION_FAILURE_STAGES,
+      "E2B qualification observations.failure_stage"
+    );
+    const failureClass = requireEnum(
+      observations.failure_class,
+      E2B_QUALIFICATION_FAILURE_CLASSES,
+      "E2B qualification observations.failure_class"
+    );
+    if (failureStage === "none" !== (failureClass === "none")) {
+      throw new TypeError(
+        "E2B qualification failure_stage and failure_class must both be none or both describe a failure"
+      );
+    }
+    normalizedObservations.failure_stage = failureStage;
+    normalizedObservations.failure_class = failureClass;
+  }
   const observedCost = normalizedObservations.observed_cost_usd === null ? null : decimalMicros(
     normalizedObservations.observed_cost_usd,
     "E2B qualification observations.observed_cost_usd"
@@ -52019,6 +52168,9 @@ function normalizeEvidence2(value, { includeComputedFields }) {
     }
   }
   const status = deriveStatus(controls, cleanup);
+  if (status === "verified" && normalizedObservations.failure_stage !== void 0 && normalizedObservations.failure_stage !== "none") {
+    throw new Error("Verified E2B qualification cannot carry a primary canary failure");
+  }
   if (status === "verified" && (normalizedRun.sandbox_count !== 1 || normalizedRun.synthetic_workspace !== true)) {
     throw new Error("Verified E2B qualification requires exactly one synthetic sandbox");
   }
@@ -53968,7 +54120,10 @@ var EXPORT_SCHEMA = "agoragentic.risk-fork.immutable-workspace-export.v1";
 var SECRET_PATH_PATTERN = /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.azure|\.config\/gcloud|\.docker\/config\.json|\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.ssh|credentials?(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|private[_-]?key(?:\.[^/]*)?|secrets?(?:\.[^/]*)?|wallet(?:\.[^/]*)?)(?:$|\/)/i;
 var SECRET_CONTENT_PATTERNS = Object.freeze([
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}/,
   /\bsk-[A-Za-z0-9_-]{16,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
@@ -53980,6 +54135,8 @@ var SECRET_ASSIGNMENT_PATTERN = new RegExp(
   "gi"
 );
 var MIN_SECRET_ASSIGNMENT_BYTES = 8;
+var BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
+var MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
 var MAX_WORKSPACE_ENTRIES = 2e5;
 var MAX_WORKSPACE_DEPTH = 512;
 var MAX_CLEANUP_ENTRIES = MAX_WORKSPACE_ENTRIES + 2;
@@ -53990,6 +54147,51 @@ function containsSecretAssignment(exactBytesText) {
   for (let match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText); match; match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText)) {
     const value = match[1] ?? match[2] ?? match[3] ?? "";
     if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) return true;
+  }
+  return false;
+}
+function decodedTextViews(content) {
+  const views = /* @__PURE__ */ new Set([
+    content.toString("latin1"),
+    content.toString("utf8")
+  ]);
+  for (const offset of [0, 1]) {
+    const available = content.byteLength - offset;
+    const evenBytes = available - available % 2;
+    if (evenBytes <= 0) continue;
+    const aligned = content.subarray(offset, offset + evenBytes);
+    views.add(aligned.toString("utf16le"));
+    const bigEndian = Buffer.from(aligned);
+    bigEndian.swap16();
+    views.add(bigEndian.toString("utf16le"));
+  }
+  return [...views];
+}
+function decodeCanonicalBase64(candidate) {
+  const normalized = candidate.replaceAll("-", "+").replaceAll("_", "/").replace(/=+$/, "");
+  if (normalized.length % 4 === 1) return null;
+  const padded = `${normalized}${"=".repeat((4 - normalized.length % 4) % 4)}`;
+  const decoded = Buffer.from(padded, "base64");
+  if (decoded.toString("base64").replace(/=+$/, "") !== normalized) return null;
+  return decoded;
+}
+function containsRecognizedSecretText(text) {
+  return SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(text)) || containsSecretAssignment(text);
+}
+function containsRecognizedSecretBytes(content) {
+  const rawViews = decodedTextViews(content);
+  if (rawViews.some(containsRecognizedSecretText)) return true;
+  for (const text of rawViews) {
+    BASE64_CANDIDATE_PATTERN.lastIndex = 0;
+    for (let match = BASE64_CANDIDATE_PATTERN.exec(text); match; match = BASE64_CANDIDATE_PATTERN.exec(text)) {
+      const decoded = decodeCanonicalBase64(match[0]);
+      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+    }
+    MIME_BASE64_BLOCK_PATTERN.lastIndex = 0;
+    for (let match = MIME_BASE64_BLOCK_PATTERN.exec(text); match; match = MIME_BASE64_BLOCK_PATTERN.exec(text)) {
+      const decoded = decodeCanonicalBase64(match[0].replace(/\s/g, ""));
+      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+    }
   }
   return false;
 }
@@ -54025,13 +54227,15 @@ async function lstatIfPresent(target, options) {
     throw error;
   }
 }
-function assertNoSecretMaterial(relative, content) {
-  if (SECRET_PATH_PATTERN.test(relative)) {
-    throw new Error(`Workspace export rejects credential or secret-shaped path: ${relative}`);
+function assertNoSecretPath(relative) {
+  if (SECRET_PATH_PATTERN.test(relative) || containsRecognizedSecretText(relative)) {
+    throw new Error("Workspace export rejects a credential or secret-shaped path");
   }
-  const exactBytesText = content.toString("latin1");
-  if (SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(exactBytesText)) || containsSecretAssignment(exactBytesText)) {
-    throw new Error(`Workspace export rejects authority or secret-shaped material: ${relative}`);
+}
+function assertNoSecretMaterial(relative, content) {
+  assertNoSecretPath(relative);
+  if (containsRecognizedSecretBytes(content)) {
+    throw new Error("Workspace export rejects authority or secret-shaped material");
   }
 }
 function stableIdentity(info) {
@@ -54117,6 +54321,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
         rawRelative,
         "workspace export path"
       );
+      assertNoSecretPath(relative);
       if (relative === ".git" || relative.startsWith(".git/")) {
         throw new Error("Workspace exports exclude .git metadata");
       }
@@ -54701,11 +54906,12 @@ function reconciliationRequired(unresolved) {
 var SECRET_KEY_PATTERN = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|private[_-]?key|seed[_-]?phrase|wallet)/i;
 var SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}/,
-  /\bsk-[A-Za-z0-9_-]{16,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
   /[?&](?:api[_-]?key|access[_-]?token|authorization)=[^&\s]{8,}/i
 ]);
 var DANGEROUS_JSON_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
@@ -54956,13 +55162,16 @@ function assertStrictSecretFreeJson(value, field, limits = {}) {
     } else {
       assertPlainObject(current, currentPath);
       for (const [key, child] of Object.entries(current)) {
+        if (SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+          throw new TypeError(`${currentPath}.<key> contains secret-shaped material`);
+        }
         if (DANGEROUS_JSON_KEYS.has(key)) {
-          throw new TypeError(`${currentPath}.${key} is a forbidden JSON key`);
+          throw new TypeError(`${currentPath}.<key> is a forbidden JSON key`);
         }
         if (SECRET_KEY_PATTERN.test(key)) {
-          throw new TypeError(`${currentPath}.${key} is an authority or secret-bearing field`);
+          throw new TypeError(`${currentPath}.<key> is an authority or secret-bearing field`);
         }
-        walk(child, `${currentPath}.${key}`, depth + 1);
+        walk(child, `${currentPath}.<value>`, depth + 1);
       }
     }
     active.delete(current);
@@ -57075,7 +57284,10 @@ var SECRET_PATH_PATTERN2 = /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.azure|\.config\/gc
 var SECRET_CONTENT_PATTERNS2 = Object.freeze([
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   /-----BEGIN PGP PRIVATE KEY BLOCK-----/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\be2b_[A-Za-z0-9_-]{12,}/,
   /\bsk-[A-Za-z0-9_-]{16,}/,
   /\bAKIA[0-9A-Z]{16}\b/,
@@ -57089,11 +57301,58 @@ var SECRET_ASSIGNMENT_PATTERN2 = new RegExp(
   "gi"
 );
 var MIN_SECRET_ASSIGNMENT_BYTES2 = 8;
+var BASE64_CANDIDATE_PATTERN2 = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
+var MIME_BASE64_BLOCK_PATTERN2 = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
 function containsSecretAssignment2(exactBytesText) {
   SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
   for (let match = SECRET_ASSIGNMENT_PATTERN2.exec(exactBytesText); match; match = SECRET_ASSIGNMENT_PATTERN2.exec(exactBytesText)) {
     const value = match[1] ?? match[2] ?? match[3] ?? "";
     if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES2) return true;
+  }
+  return false;
+}
+function decodedTextViews2(content) {
+  const views = /* @__PURE__ */ new Set([
+    content.toString("latin1"),
+    content.toString("utf8")
+  ]);
+  for (const offset of [0, 1]) {
+    const available = content.byteLength - offset;
+    const evenBytes = available - available % 2;
+    if (evenBytes <= 0) continue;
+    const aligned = content.subarray(offset, offset + evenBytes);
+    views.add(aligned.toString("utf16le"));
+    const bigEndian = Buffer.from(aligned);
+    bigEndian.swap16();
+    views.add(bigEndian.toString("utf16le"));
+  }
+  return [...views];
+}
+function decodeCanonicalBase642(candidate) {
+  const normalized = candidate.replaceAll("-", "+").replaceAll("_", "/").replace(/=+$/, "");
+  if (normalized.length % 4 === 1) return null;
+  const padded = `${normalized}${"=".repeat((4 - normalized.length % 4) % 4)}`;
+  const decoded = Buffer.from(padded, "base64");
+  if (decoded.toString("base64").replace(/=+$/, "") !== normalized) return null;
+  return decoded;
+}
+function containsRecognizedSecretText2(text) {
+  return SECRET_CONTENT_PATTERNS2.some((pattern) => pattern.test(text)) || containsSecretAssignment2(text);
+}
+function containsRecognizedSecretBytes2(content) {
+  const rawViews = decodedTextViews2(content);
+  if (rawViews.some(containsRecognizedSecretText2)) return true;
+  for (const text of rawViews) {
+    BASE64_CANDIDATE_PATTERN2.lastIndex = 0;
+    for (let match = BASE64_CANDIDATE_PATTERN2.exec(text); match; match = BASE64_CANDIDATE_PATTERN2.exec(text)) {
+      const decoded = decodeCanonicalBase642(match[0]);
+      if (decoded && decodedTextViews2(decoded).some(containsRecognizedSecretText2)) return true;
+    }
+    MIME_BASE64_BLOCK_PATTERN2.lastIndex = 0;
+    for (let match = MIME_BASE64_BLOCK_PATTERN2.exec(text); match; match = MIME_BASE64_BLOCK_PATTERN2.exec(text)) {
+      const decoded = decodeCanonicalBase642(match[0].replace(/\s/g, ""));
+      if (decoded && decodedTextViews2(decoded).some(containsRecognizedSecretText2)) return true;
+    }
   }
   return false;
 }
@@ -57194,15 +57453,14 @@ function validateRequest(value) {
 }
 function scanE2BStagedBytesAuthorityFree(files) {
   for (const file of files) {
-    if (SECRET_PATH_PATTERN2.test(file.path)) {
+    if (SECRET_PATH_PATTERN2.test(file.path) || containsRecognizedSecretText2(file.path)) {
       throw new Error("E2B staged export contains a secret-shaped path");
     }
     const content = Buffer.from(file.data_base64, "base64");
     if (content.byteLength !== file.bytes || !safeEqual(sha256Ref2(content.toString("base64")), file.content_hash)) {
       throw new Error("E2B staged export exact-byte binding mismatch");
     }
-    const exactText = content.toString("latin1");
-    if (SECRET_CONTENT_PATTERNS2.some((pattern) => pattern.test(exactText)) || containsSecretAssignment2(exactText)) {
+    if (containsRecognizedSecretBytes2(content)) {
       throw new Error("E2B staged export contains authority or secret-shaped material");
     }
   }
@@ -57390,12 +57648,13 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:6a06817e4bfa4cb6636553845bf17c90e7c941b9152a033485d3c1b993ea697d" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
   mcp_source_version: "2.0.0",
   risk_fork_source_version: "0.1.0-alpha.0",
-  reviewed_source_commit: "dede3ae3806a03e63660a5772a28433a75573048",
+  reviewed_source_integrity: REVIEWED_SOURCE_INTEGRITY,
   optional_e2b_peer_version: "2.39.0",
   publication_status: "private_unpublished",
   outbound_mcp_transport_qualified: false,

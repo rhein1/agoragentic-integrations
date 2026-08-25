@@ -16,6 +16,34 @@ const { toNodeHandler } = require('@modelcontextprotocol/node');
 process.env.AGORAGENTIC_API_KEY = 'amk_security_enforcement_fixture_key';
 const mcp = require('../mcp-server.js');
 const MCP_ENTRYPOINT = path.resolve(__dirname, '..', 'mcp-server.js');
+const SYNTHETIC_AMK_KEY = `amk_${'a'.repeat(64)}`;
+const EMBEDDED_SYNTHETIC_AMK_KEY = `prefix${SYNTHETIC_AMK_KEY}suffix`;
+const GENERIC_CREDENTIAL_TOKENS = Object.freeze([
+    'sk_abcdefghijklmnop',
+    'ghr-abcdefghijklmnop',
+    'github_pat_abcdefghijklmnop',
+    'xoxs-abcdefghijklmnop',
+]);
+const EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS = Object.freeze([
+    'prefixghr-abcdefghijklmnop',
+    '_github_pat_abcdefghijklmnop',
+    'prefixxoxb_abcdefghijklmnop',
+    `xAKIA${'A'.repeat(16)}`,
+    '_sk-proj-abcdefghijklmnop',
+    `xsk-${'a'.repeat(32)}`,
+    'prefixBearer abcdefghijklmnop',
+]);
+const DOCUMENTED_AMK_PLACEHOLDERS = Object.freeze([
+    'amk_your_key_here',
+    'amk_your_api_key_here',
+]);
+const OPAQUE_IDENTIFIER_CONTROLS = Object.freeze([
+    'risk_fork_security_boundary_documentation',
+    'prefixsk_abcdefghijklmnop',
+    'e2b_cleanup_12345678-1234-4123-8123-123456789abc',
+    'e2b_cleanup_ref_12345678-1234-4123-8123-123456789abc',
+    'e2b_export_12345678-1234-4123-8123-123456789abc',
+]);
 
 function createFixtureServer() {
     const requests = [];
@@ -197,7 +225,7 @@ test('remote discovery requires the exact factory-created host capability before
     }
 });
 
-test('MCP session targets reject query, fragment, and userinfo before the host can perform I/O', async () => {
+test('MCP session targets reject authority-bearing URL components before the host can perform I/O', async () => {
     let openCalls = 0;
     const boundary = mcp.createMcpEnforcementBoundary({
         async openSession() {
@@ -217,6 +245,34 @@ test('MCP session targets reject query, fragment, and userinfo before the host c
         await assert.rejects(
             mcp.connectRemoteClient({ remoteUrl, enforcementBoundary: boundary }),
             /credential-free HTTP\(S\) URL without query, fragment, or userinfo/,
+            remoteUrl,
+        );
+    }
+    for (const { remoteUrl, secret } of [
+        {
+            remoteUrl: `https://relay.example.invalid/api/${SYNTHETIC_AMK_KEY}/mcp`,
+            secret: SYNTHETIC_AMK_KEY,
+        },
+        {
+            remoteUrl: `https://relay.example.invalid/api/amk_%61${'a'.repeat(63)}/mcp`,
+            secret: SYNTHETIC_AMK_KEY,
+        },
+        ...[
+            ...GENERIC_CREDENTIAL_TOKENS,
+            ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS.filter((secret) => !secret.includes(' ')),
+        ].map((secret) => ({
+            remoteUrl: `https://relay.example.invalid/api/${secret}/mcp`,
+            secret,
+        })),
+    ]) {
+        await assert.rejects(
+            mcp.connectRemoteClient({ remoteUrl, enforcementBoundary: boundary }),
+            (error) => {
+                assert.equal(error?.code, 'MCP_CREDENTIAL_MATERIAL_REJECTED');
+                assert.match(error?.message ?? '', /must not contain credential material/);
+                assert.equal(error?.message?.includes(secret), false);
+                return true;
+            },
             remoteUrl,
         );
     }
@@ -596,6 +652,53 @@ test('invalid clean-import and negotiation claims close the host session before 
             error: (value) => value?.code === 'MCP_CREDENTIAL_MATERIAL_REJECTED',
         },
         {
+            label: 'embedded exact generated amk in imported response',
+            discovery: {
+                protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                stateless: true,
+            },
+            request: async (request) => cleanImported(request, {
+                tools: [{ name: 'generated_amk_bypass', description: EMBEDDED_SYNTHETIC_AMK_KEY }],
+            }),
+            error: (value) => value?.code === 'MCP_CREDENTIAL_MATERIAL_REJECTED'
+                && !value?.message?.includes(SYNTHETIC_AMK_KEY),
+        },
+        {
+            label: 'exact generated amk in imported object key',
+            discovery: {
+                protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                stateless: true,
+            },
+            request: async (request) => cleanImported(request, {
+                tools: [{
+                    name: 'generated_amk_key_bypass',
+                    metadata: { [SYNTHETIC_AMK_KEY]: 'opaque' },
+                }],
+            }),
+            error: (value) => value?.code === 'MCP_CREDENTIAL_MATERIAL_REJECTED'
+                && /<key>|object key/.test(value?.message ?? '')
+                && !value?.message?.includes(SYNTHETIC_AMK_KEY),
+        },
+        ...[
+            ...GENERIC_CREDENTIAL_TOKENS,
+            ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS,
+        ].map((token, index) => ({
+            label: `credential token variant ${index + 1} in imported object key`,
+            discovery: {
+                protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                stateless: true,
+            },
+            request: async (request) => cleanImported(request, {
+                tools: [{
+                    name: 'generic_token_key_bypass',
+                    metadata: { [token]: 'opaque' },
+                }],
+            }),
+            error: (value) => value?.code === 'MCP_CREDENTIAL_MATERIAL_REJECTED'
+                && /<key>|object key/.test(value?.message ?? '')
+                && !value?.message?.includes(token),
+        })),
+        {
             label: 'generic token-bearing imported response',
             discovery: {
                 protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
@@ -731,6 +834,22 @@ test('evidence references are canonical and hash-bound for discovery and later r
         () => mcp.computeMcpCleanImportEvidenceHash(requestHash, {}, ' evidence:noncanonical'),
         /canonical evidence reference/,
     );
+    for (const secret of [
+        SYNTHETIC_AMK_KEY,
+        ...GENERIC_CREDENTIAL_TOKENS,
+        ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS.filter((value) => !value.includes(' ')),
+    ]) {
+        const embeddedEvidenceRef = `evidence:${secret}`;
+        assert.throws(
+            () => mcp.computeMcpCleanImportEvidenceHash(requestHash, {}, embeddedEvidenceRef),
+            (error) => {
+                assert.equal(error?.code, 'MCP_CREDENTIAL_MATERIAL_REJECTED');
+                assert.equal(error?.message?.includes(secret), false);
+                return true;
+            },
+            secret,
+        );
+    }
 
     let discoveryCloses = 0;
     const discoveryBoundary = mcp.createMcpEnforcementBoundary({
@@ -1161,6 +1280,139 @@ test('fallback register/search/preview/match/execute/status all block with zero 
     } finally {
         global.fetch = originalFetch;
     }
+});
+
+test('clean import permits documented placeholders and internal opaque identifiers', async () => {
+    const boundary = mcp.createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    return cleanImported(request, {
+                        tools: [{
+                            name: 'placeholder_probe',
+                            description: [
+                                ...DOCUMENTED_AMK_PLACEHOLDERS,
+                                ...OPAQUE_IDENTIFIER_CONTROLS,
+                            ].join(' and '),
+                            metadata: {
+                                examples: [
+                                    ...DOCUMENTED_AMK_PLACEHOLDERS,
+                                    ...OPAQUE_IDENTIFIER_CONTROLS,
+                                ],
+                                ...Object.fromEntries(
+                                    OPAQUE_IDENTIFIER_CONTROLS.map((value) => [value, 'opaque']),
+                                ),
+                            },
+                        }],
+                    });
+                },
+                async close() {},
+            };
+        },
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    const session = await mcp.connectRemoteClient({
+        remoteUrl: 'https://placeholder-control.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    try {
+        const directory = mcp.createRemoteToolDirectory(session);
+        assert.equal(await directory.has('placeholder_probe'), true);
+    } finally {
+        await session.close();
+    }
+});
+
+test('fallback execution status rejects noncanonical invocation IDs before host I/O and preserves valid IDs', async () => {
+    const statusTool = mcp.buildFallbackToolList().find(
+        (tool) => tool.name === 'agoragentic_execute_status',
+    );
+    assert.deepEqual(statusTool.inputSchema.properties.invocation_id, {
+        type: 'string',
+        minLength: 1,
+        maxLength: 256,
+        pattern: '^[A-Za-z0-9_-]{1,256}$',
+        description: 'The invocation_id string returned by a prior agoragentic_execute call, e.g. "inv_abc123def456"',
+    });
+    assert.deepEqual(statusTool.inputSchema.required, ['invocation_id']);
+
+    const invalidIds = [
+        '',
+        'inv_a/b',
+        ' inv_abc',
+        'inv_abc ',
+        'inv_abc\tdef',
+        'inv_abc\ndef',
+        'inv_\u00e9',
+        'inv_e\u0301',
+        'inv_\uff41',
+        1234,
+        true,
+        null,
+        { value: 'inv_object' },
+        'x'.repeat(257),
+    ];
+    let fallbackCalls = 0;
+    const boundary = mcp.createMcpEnforcementBoundary({
+        async openSession() {
+            throw new Error('remote session must not run');
+        },
+        async executeFallback(request) {
+            fallbackCalls += 1;
+            return cleanImported(request, { ok: true, path: request.fallback_http.path });
+        },
+    });
+
+    const missing = await mcp.executeFallbackTool(
+        'agoragentic_execute_status',
+        {},
+        { enforcementBoundary: boundary },
+    );
+    assert.deepEqual(JSON.parse(missing.content[0].text), {
+        ok: false,
+        error: 'invalid_invocation_id',
+    });
+    assert.equal(fallbackCalls, 0);
+
+    for (const invocationId of invalidIds) {
+        const result = await mcp.executeFallbackTool(
+            'agoragentic_execute_status',
+            { invocation_id: invocationId },
+            { enforcementBoundary: boundary },
+        );
+        assert.deepEqual(JSON.parse(result.content[0].text), {
+            ok: false,
+            error: 'invalid_invocation_id',
+        }, String(invocationId));
+        assert.equal(fallbackCalls, 0, String(invocationId));
+    }
+
+    const validIds = [
+        'inv_AbC-123_xyz',
+        '_legacy-leading-underscore',
+        '-legacy-leading-hyphen',
+        'A',
+        'Z'.repeat(256),
+    ];
+    for (const validId of validIds) {
+        const accepted = await mcp.executeFallbackTool(
+            'agoragentic_execute_status',
+            { invocation_id: validId },
+            { enforcementBoundary: boundary },
+        );
+        assert.deepEqual(JSON.parse(accepted.content[0].text), {
+            ok: true,
+            path: `/api/execute/status/${validId}`,
+        });
+    }
+    assert.equal(fallbackCalls, validIds.length);
 });
 
 test('ACP parsing is bounded, duplicate-safe, and remains usable after invalid input', async () => {

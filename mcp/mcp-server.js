@@ -50,6 +50,7 @@ const MAX_REMOTE_TOOL_DIRECTORY_BYTES = MAX_ENFORCEMENT_JSON_BYTES;
 const MAX_REMOTE_TOOL_CURSOR_LENGTH = 4096;
 const MAX_ACP_SESSIONS = 1000;
 const MAX_ACP_CWD_LENGTH = 4096;
+const CANONICAL_INVOCATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 const MIN_CREDENTIAL_ASSIGNMENT_VALUE_LENGTH = 8;
 const enforcementBoundaryAdapters = new WeakMap();
 const enforcedSessionRecords = new WeakMap();
@@ -94,11 +95,24 @@ const SENSITIVE_CREDENTIAL_JOINED_KEYS = Object.freeze([
     'setcookie',
     'paymentsignature',
 ]);
+const AGORAGENTIC_GENERATED_API_KEY_PATTERN = /amk_[a-f0-9]{64}/;
+const EMBEDDED_CREDENTIAL_TOKEN_PATTERN =
+    /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
+const BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
+const GENERIC_CREDENTIAL_TOKEN_PATTERN =
+    /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
 const CREDENTIAL_VALUE_PATTERNS = Object.freeze([
-    /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/i,
-    /\bamk_[A-Za-z0-9_-]{12,}\b/,
+    BEARER_CREDENTIAL_PATTERN,
+    AGORAGENTIC_GENERATED_API_KEY_PATTERN,
+    EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+    GENERIC_CREDENTIAL_TOKEN_PATTERN,
     /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
 ]);
+
+function containsCredentialMaterial(value) {
+    return typeof value === 'string'
+        && CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 class McpEnforcementError extends Error {
     constructor(code, message) {
@@ -127,10 +141,16 @@ function assertExactKeys(value, keys, field) {
         throw new TypeError(`${field} contains a symbol key`);
     }
     for (const key of Object.getOwnPropertyNames(value)) {
-        if (!allowed.has(key)) throw new TypeError(`${field}.${key} is not allowed`);
+        if (containsCredentialMaterial(key)) {
+            throw new McpEnforcementError(
+                'MCP_CREDENTIAL_MATERIAL_REJECTED',
+                `${field}.<key> contains credential-shaped material`,
+            );
+        }
+        if (!allowed.has(key)) throw new TypeError(`${field}.<key> is not allowed`);
         const descriptor = Object.getOwnPropertyDescriptor(value, key);
         if (!descriptor?.enumerable || descriptor.get || descriptor.set) {
-            throw new TypeError(`${field}.${key} is hidden or accessor-backed`);
+            throw new TypeError(`${field}.<key> is hidden or accessor-backed`);
         }
     }
 }
@@ -179,7 +199,7 @@ function cloneBoundedJson(value, field = 'value') {
             for (const [key, descriptor] of Object.entries(descriptors)) {
                 if (Array.isArray(current) && key === 'length') continue;
                 if (!descriptor.enumerable || descriptor.get || descriptor.set) {
-                    throw new TypeError(`${path}.${key} is hidden or accessor-backed`);
+                    throw new TypeError(`${path}.<key> is hidden or accessor-backed`);
                 }
             }
             if (Array.isArray(current)) {
@@ -203,10 +223,16 @@ function cloneBoundedJson(value, field = 'value') {
             assertPlainRecord(current, path);
             const output = {};
             for (const key of Object.keys(current).sort()) {
-                if (['__proto__', 'constructor', 'prototype'].includes(key)) {
-                    throw new TypeError(`${path}.${key} is forbidden`);
+                if (containsCredentialMaterial(key)) {
+                    throw new McpEnforcementError(
+                        'MCP_CREDENTIAL_MATERIAL_REJECTED',
+                        `${path}.<key> contains credential-shaped material`,
+                    );
                 }
-                output[key] = walk(current[key], `${path}.${key}`, depth + 1);
+                if (['__proto__', 'constructor', 'prototype'].includes(key)) {
+                    throw new TypeError(`${path}.<key> is forbidden`);
+                }
+                output[key] = walk(current[key], `${path}.<value>`, depth + 1);
             }
             return output;
         } finally {
@@ -298,7 +324,7 @@ function assertOpaqueCredentialReference(value, path, kind) {
             `${path} must be an opaque credential reference`,
         );
     }
-    if (CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(value))) {
+    if (containsCredentialMaterial(value)) {
         throw new McpEnforcementError(
             'MCP_CREDENTIAL_MATERIAL_REJECTED',
             `${path} contains credential-shaped material`,
@@ -405,10 +431,16 @@ function assertNoDuplicateJsonObjectKeys(text, field) {
             skipWhitespace();
             const key = readString();
             const normalizedKey = key.normalize('NFC');
+            if (containsCredentialMaterial(key)) {
+                throw new McpEnforcementError(
+                    'MCP_CREDENTIAL_MATERIAL_REJECTED',
+                    `${field} contains a credential-shaped JSON object key`,
+                );
+            }
             if (keys.has(normalizedKey)) {
                 throw new McpEnforcementError(
                     'MCP_CREDENTIAL_MATERIAL_REJECTED',
-                    `${field} contains duplicate JSON object key ${JSON.stringify(key)}`,
+                    `${field} contains a duplicate JSON object key`,
                 );
             }
             keys.add(normalizedKey);
@@ -632,7 +664,7 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
             if (classification.referenceKind) {
                 assertOpaqueCredentialReference(
                     assignmentValue || null,
-                    `${path}<assignment:${rawKey}>`,
+                    `${path}<assignment>`,
                     classification.referenceKind,
                 );
                 continue;
@@ -648,7 +680,7 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
 
     function walk(current, path, pathTokens = [], state = {}) {
         if (typeof current === 'string') {
-            if (CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(current))) {
+            if (containsCredentialMaterial(current)) {
                 throw new McpEnforcementError(
                     'MCP_CREDENTIAL_MATERIAL_REJECTED',
                     `${path} contains credential-shaped material`,
@@ -677,7 +709,13 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
             return;
         }
         for (const [key, child] of Object.entries(current)) {
-            const childPath = `${path}.${key}`;
+            if (containsCredentialMaterial(key)) {
+                throw new McpEnforcementError(
+                    'MCP_CREDENTIAL_MATERIAL_REJECTED',
+                    `${path}.<key> contains credential-shaped material`,
+                );
+            }
+            const childPath = `${path}.<value>`;
             const childTokens = [...pathTokens, key];
             if (state.sensitiveSchemaDefinition
                 && ['default', 'const', 'example', 'examples', 'enum'].includes(key)
@@ -730,6 +768,12 @@ function assertCanonicalEvidenceRef(evidenceRef, field = 'evidenceRef') {
         || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,499}$/.test(evidenceRef)) {
         throw new TypeError(`${field} must be a canonical evidence reference`);
     }
+    if (containsCredentialMaterial(evidenceRef)) {
+        throw new McpEnforcementError(
+            'MCP_CREDENTIAL_MATERIAL_REJECTED',
+            `${field} must not contain credential material`,
+        );
+    }
     return evidenceRef;
 }
 
@@ -761,9 +805,22 @@ function normalizeRemoteTarget(value, { allowQuery = false } = {}) {
             'remoteUrl must be an absolute credential-free HTTP(S) URL without query, fragment, or userinfo',
         );
     }
+    let decodedPathname;
+    try {
+        decodedPathname = decodeURIComponent(url.pathname);
+    } catch {
+        throw new TypeError('remoteUrl path encoding is invalid');
+    }
+    if ([url.hostname, url.pathname, decodedPathname].some(containsCredentialMaterial)) {
+        throw new McpEnforcementError(
+            'MCP_CREDENTIAL_MATERIAL_REJECTED',
+            'remoteUrl must not contain credential material',
+        );
+    }
     for (const [key, entry] of url.searchParams) {
         if (credentialKeyClassification(key).sensitive
-            || CREDENTIAL_VALUE_PATTERNS.some((pattern) => pattern.test(entry))) {
+            || containsCredentialMaterial(key)
+            || containsCredentialMaterial(entry)) {
             throw new McpEnforcementError(
                 'MCP_CREDENTIAL_MATERIAL_REJECTED',
                 'remoteUrl must not contain credential material',
@@ -1104,12 +1161,15 @@ function buildFallbackToolList() {
                 'This is a read-only operation with no side effects and no USDC spend. ' +
                 'Any required credential must be resolved out of band by the embedding enforcement host; it is never included in the request descriptor or imported result. ' +
                 'Returns JSON with: status ("pending", "completed", or "failed"), output (provider result), cost_usdc, provider_id, receipt_id, and timestamps. ' +
-                'Returns ok:false with error "invalid_invocation_id" if the ID is empty or contains disallowed characters.',
+                'Returns ok:false with error "invalid_invocation_id" unless the ID is a 1-256 character ASCII string containing only letters, digits, hyphens, or underscores.',
             inputSchema: {
                 type: 'object',
                 properties: {
                     invocation_id: {
                         type: 'string',
+                        minLength: 1,
+                        maxLength: 256,
+                        pattern: '^[A-Za-z0-9_-]{1,256}$',
                         description: 'The invocation_id string returned by a prior agoragentic_execute call, e.g. "inv_abc123def456"',
                     },
                 },
@@ -1417,8 +1477,11 @@ async function executeFallbackTool(name, args = {}, options = {}) {
     }
 
     if (name === 'agoragentic_execute_status') {
-        const invocationId = String(safeArgs.invocation_id || '').replace(/[^a-zA-Z0-9\-_]/g, '');
-        if (!invocationId) return buildJsonContent({ ok: false, error: 'invalid_invocation_id' });
+        const invocationId = safeArgs.invocation_id;
+        if (typeof invocationId !== 'string'
+            || !CANONICAL_INVOCATION_ID_PATTERN.test(invocationId)) {
+            return buildJsonContent({ ok: false, error: 'invalid_invocation_id' });
+        }
         const path = `/api/execute/status/${invocationId}`;
         return enforced({ name, args: safeArgs, method: 'GET', path });
     }

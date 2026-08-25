@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TextDecoder } from 'node:util';
 
-import { sha256Ref } from '../canonical.mjs';
+import { canonicalize, sha256Ref } from '../canonical.mjs';
 import { validateLocalReferenceOperation } from '../child-operation.mjs';
 import {
   assertFreshForkIdentity,
@@ -26,6 +26,7 @@ import {
 import { RiskForkProvider } from '../provider.mjs';
 import {
   assertAllowedKeys,
+  assertPlainObject,
   boundedInteger,
   cloneJson,
   deepFreeze,
@@ -39,6 +40,9 @@ import {
 
 const runnerPath = fileURLToPath(new URL('./local-runner.mjs', import.meta.url));
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
+// Constructor injection is a trusted test seam, never a production provider boundary.
+const testOperationRunners = new WeakMap();
 
 async function exists(target) {
   try {
@@ -229,66 +233,239 @@ async function verifyLocalAuthorityFreeSnapshot({
   };
 }
 
-async function runClosedOperation({ workspace, forkId, operation, timeoutMs }) {
-  return new Promise((resolve, reject) => {
-    const minimalEnv = {
-      RISK_FORK_NETWORK: 'blocked',
-      RISK_FORK_ID: forkId,
-    };
-    for (const key of ['SystemRoot', 'WINDIR']) {
-      if (typeof process.env[key] === 'string') minimalEnv[key] = process.env[key];
-    }
-    const child = spawn(process.execPath, [runnerPath, workspace], {
-      cwd: workspace,
-      env: minimalEnv,
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      child.kill();
-      settled = true;
-      reject(new Error(`Local reference operation exceeded ${timeoutMs}ms`));
-    }, timeoutMs);
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-      if (Buffer.byteLength(stdout, 'utf8') > 2 * 1024 * 1024) child.kill();
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      if (Buffer.byteLength(stderr, 'utf8') > 256 * 1024) child.kill();
-    });
-    child.on('error', (error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (code !== 0) {
-        reject(new Error(`Local reference operation failed: ${stderr.trim().slice(0, 2000)}`));
-        return;
-      }
-      try {
-        resolve({ parsed: JSON.parse(stdout), stdout_bytes: Buffer.byteLength(stdout, 'utf8') });
-      } catch {
-        reject(new Error('Local reference runner returned invalid JSON'));
-      }
-    });
-    child.stdin.end(JSON.stringify(operation));
+function startClosedOperation({ workspace, forkId, operation }) {
+  const minimalEnv = {
+    RISK_FORK_NETWORK: 'blocked',
+    RISK_FORK_ID: forkId,
+  };
+  for (const key of ['SystemRoot', 'WINDIR']) {
+    if (typeof process.env[key] === 'string') minimalEnv[key] = process.env[key];
+  }
+  const child = spawn(process.execPath, [runnerPath, workspace], {
+    cwd: workspace,
+    env: minimalEnv,
+    windowsHide: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
+  let stdout = '';
+  let stderr = '';
+  let spawnError = null;
+  let terminationError = null;
+  let closed = false;
+  let resolveClosed;
+  const closedPromise = new Promise((resolve) => { resolveClosed = resolve; });
+
+  function requestTermination(error) {
+    terminationError ??= error;
+    if (closed) return;
+    try {
+      child.kill();
+    } catch (killError) {
+      spawnError ??= killError;
+    }
+  }
+
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    if (terminationError) return;
+    stdout += chunk;
+    if (Buffer.byteLength(stdout, 'utf8') > 2 * 1024 * 1024) {
+      stdout = '';
+      requestTermination(new Error('Local reference runner stdout exceeded 2097152 bytes'));
+    }
+  });
+  child.stderr.on('data', (chunk) => {
+    if (terminationError) return;
+    stderr += chunk;
+    if (Buffer.byteLength(stderr, 'utf8') > 256 * 1024) {
+      stderr = '';
+      requestTermination(new Error('Local reference runner stderr exceeded 262144 bytes'));
+    }
+  });
+  child.once('error', (error) => { spawnError = error; });
+  child.once('close', (code) => {
+    closed = true;
+    resolveClosed(code);
+  });
+  child.stdin.once('error', (error) => requestTermination(error));
+  child.stdin.end(JSON.stringify(operation));
+
+  const result = closedPromise.then((code) => {
+    if (terminationError) throw terminationError;
+    if (spawnError) throw spawnError;
+    if (code !== 0) {
+      throw new Error(`Local reference operation failed: ${stderr.trim().slice(0, 2000)}`);
+    }
+    try {
+      return { parsed: JSON.parse(stdout), stdout_bytes: Buffer.byteLength(stdout, 'utf8') };
+    } catch {
+      throw new Error('Local reference runner returned invalid JSON');
+    }
+  });
+
+  return {
+    result,
+    async terminate(reason) {
+      requestTermination(
+        reason instanceof Error ? reason : new Error('Local reference runner terminated'),
+      );
+      await closedPromise;
+    },
+  };
+}
+
+function normalizeOperationHandle(value) {
+  if (!value || typeof value !== 'object'
+    || typeof value.result?.then !== 'function'
+    || typeof value.terminate !== 'function') {
+    throw new TypeError('Local reference operation runner must return a cancellable handle');
+  }
+  const result = Promise.resolve(value.result).then((rawResult) => {
+    const normalized = JSON.parse(canonicalize(rawResult));
+    assertAllowedKeys(
+      normalized,
+      ['parsed', 'stdout_bytes'],
+      'Local reference operation runner result',
+    );
+    const parsed = assertPlainObject(
+      normalized.parsed,
+      'Local reference operation runner result.parsed',
+    );
+    assertAllowedKeys(parsed, [
+      'schema',
+      'status',
+      'network_contract',
+      'observations',
+      'commit_candidate',
+    ], 'Local reference operation runner result.parsed');
+    if (parsed.schema !== 'agoragentic.risk-fork.local-runner-result.v1'
+      || parsed.status !== 'completed'
+      || parsed.network_contract !== 'blocked_by_closed_operation_set_not_kernel_firewall'
+      || !Array.isArray(parsed.observations)
+      || (parsed.commit_candidate !== null
+        && (!parsed.commit_candidate
+          || typeof parsed.commit_candidate !== 'object'
+          || Array.isArray(parsed.commit_candidate)))) {
+      throw new TypeError('Local reference operation runner returned an invalid result envelope');
+    }
+    normalized.stdout_bytes = boundedInteger(
+      normalized.stdout_bytes,
+      'Local reference operation runner result.stdout_bytes',
+      { min: 0, max: MAX_LOCAL_RUNNER_STDOUT_BYTES },
+    );
+    return deepFreeze(normalized);
+  });
+  let terminationPromise = null;
+  return {
+    result,
+    terminate(reason) {
+      if (!terminationPromise) {
+        const attempt = (async () => {
+          let terminationFailure = null;
+          try {
+            await value.terminate(reason);
+          } catch (error) {
+            terminationFailure = error;
+          }
+          await result.catch(() => {});
+          if (terminationFailure) throw terminationFailure;
+        })();
+        terminationPromise = attempt;
+        attempt.catch(() => {
+          if (terminationPromise === attempt) terminationPromise = null;
+        });
+      }
+      return terminationPromise;
+    },
+  };
+}
+
+function executionTimeoutError(timeoutMs) {
+  const error = new Error(`Local reference operation exceeded ${timeoutMs}ms`);
+  error.code = 'LOCAL_REFERENCE_EXECUTION_TIMEOUT';
+  return error;
+}
+
+function forkExpiredError() {
+  const error = new Error('Cannot execute in an expired local reference fork');
+  error.code = 'LOCAL_REFERENCE_FORK_EXPIRED';
+  return error;
+}
+
+async function waitForOperation(handle, timeoutMs, executionDeadlineMs, forkDeadlineMs) {
+  let timer;
+  const outcome = handle.result.then(
+    (value) => ({ status: 'completed', value }),
+    (error) => ({ status: 'failed', error }),
+  );
+  const forkDeadlineFirst = forkDeadlineMs <= executionDeadlineMs;
+  const nearestDeadlineMs = Math.min(executionDeadlineMs, forkDeadlineMs);
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(
+      () => resolve({ status: 'timeout' }),
+      Math.max(0, Math.ceil(nearestDeadlineMs - performance.now())),
+    );
+  });
+  const selected = await Promise.race([outcome, timeout]);
+  clearTimeout(timer);
+  const observedAtMs = performance.now();
+  if ((selected.status === 'timeout' && forkDeadlineFirst)
+    || observedAtMs >= forkDeadlineMs) {
+    const error = forkExpiredError();
+    try {
+      await handle.terminate(error);
+    } catch (terminationError) {
+      error.cause = terminationError;
+    }
+    throw error;
+  }
+  if (selected.status === 'timeout' || observedAtMs >= executionDeadlineMs) {
+    const error = executionTimeoutError(timeoutMs);
+    await handle.terminate(error);
+    throw error;
+  }
+  if (selected.status === 'completed') return selected.value;
+  if (selected.status === 'failed') throw selected.error;
+  throw new Error('Local reference operation returned an impossible wait outcome');
+}
+
+function assertForkExecutionReady(record) {
+  const state = record.destroyed ? 'destroyed' : record.status;
+  if (state !== 'ready') throw new Error(`Cannot execute from fork state ${state}`);
+}
+
+function isForkExpired(record, now) {
+  return performance.now() >= record.hard_deadline_ms
+    || Date.parse(record.expires_at) <= now.getTime();
+}
+
+function claimForkExecution(record, clock) {
+  assertForkExecutionReady(record);
+  if (isForkExpired(record, clock())) throw forkExpiredError();
+  record.execution_generation += 1;
+  record.status = 'executing';
+  return record.execution_generation;
+}
+
+function publishForkExecution(record, lease, generation, lastExecution, clock) {
+  const publicationTime = clock();
+  if (record.active_execution !== lease
+    || record.execution_generation !== generation
+    || record.status !== 'executing') {
+    const error = new Error('Local reference execution lease was cancelled');
+    error.code = 'LOCAL_REFERENCE_EXECUTION_CANCELLED';
+    throw error;
+  }
+  if (isForkExpired(record, publicationTime)) throw forkExpiredError();
+  record.last_execution = lastExecution;
+  record.status = 'tainted';
+  return lastExecution;
 }
 
 export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   constructor(options = {}) {
+    const hasTestOperationRunner = options.operationRunner !== undefined;
     super({
       id: 'local-reference-v1',
       capabilities: {
@@ -298,16 +475,16 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         supports_network_policy: false,
         supports_egress_allowlist: false,
         supports_runtime_attestation: false,
-        supports_suspend_resume: true,
-        supports_verified_destruction: true,
-        supports_hard_ttl: true,
+        supports_suspend_resume: false,
+        supports_verified_destruction: !hasTestOperationRunner,
+        supports_hard_ttl: !hasTestOperationRunner,
         supports_idle_ttl: false,
-        supports_max_execution_time: true,
+        supports_max_execution_time: !hasTestOperationRunner,
         supports_automatic_credential_expiry: false,
         child_credentials_mode: 'prohibited',
         isolation_class: 'local_reference_protocol_simulator',
-        adapter_implementation: 'complete',
-        mock_conformance: 'passed',
+        adapter_implementation: hasTestOperationRunner ? 'test_only_injected_runner' : 'complete',
+        mock_conformance: hasTestOperationRunner ? 'test_only' : 'passed',
         credentialed_provider_validation: 'not_applicable',
         containment_claim: 'not_isolation',
       },
@@ -326,7 +503,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       && typeof options.verifyAuthorityFreeSource !== 'function') {
       throw new TypeError('verifyAuthorityFreeSource must be a function');
     }
+    if (options.operationRunner !== undefined && typeof options.operationRunner !== 'function') {
+      throw new TypeError('operationRunner trusted test seam must be a function');
+    }
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource ?? null;
+    testOperationRunners.set(this, options.operationRunner ?? startClosedOperation);
     this.savepoints = new Map();
     this.forks = new Map();
     this.initialized = false;
@@ -452,6 +633,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       throw error;
     }
     const createdAt = this.clock();
+    const hardDeadlineMs = performance.now() + ttlMs;
     const record = {
       ref,
       directory,
@@ -461,17 +643,20 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       network_policy_hash: policy.policy_hash,
       created_at: createdAt.toISOString(),
       expires_at: new Date(createdAt.getTime() + ttlMs).toISOString(),
+      hard_deadline_ms: hardDeadlineMs,
       status: 'ready',
       last_execution: null,
       destroyed: false,
+      execution_generation: 0,
+      active_execution: null,
+      destroy_promise: null,
       ttl_timer: null,
     };
     this.forks.set(ref, record);
     record.ttl_timer = setTimeout(() => {
-      this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {
-        record.status = 'destroy_failed';
-      });
-    }, ttlMs);
+      record.ttl_timer = null;
+      this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {});
+    }, Math.max(0, Math.ceil(hardDeadlineMs - performance.now())));
     record.ttl_timer.unref?.();
     return {
       fork_ref: ref,
@@ -490,7 +675,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
 
   async getForkStatus(input = {}) {
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
-    if (!record.destroyed && Date.parse(record.expires_at) <= this.clock().getTime()) {
+    if (!record.destroyed && isForkExpired(record, this.clock())) {
       await this.destroyFork({ fork_ref: record.ref, reason: 'provider_ttl_expired' });
     }
     return {
@@ -507,8 +692,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       'local executeInFork input',
     );
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
-    if (record.destroyed) throw new Error('Cannot execute in a destroyed fork');
-    if (record.status === 'suspended') throw new Error('Cannot execute in a suspended fork');
+    if (!record.destroyed && isForkExpired(record, this.clock())) {
+      await this.destroyFork({ fork_ref: record.ref, reason: 'provider_ttl_expired' });
+      throw forkExpiredError();
+    }
+    assertForkExecutionReady(record);
     if (input.scoped_credentials && Object.keys(input.scoped_credentials).length > 0) {
       throw new Error('Local reference adapter does not accept credentials');
     }
@@ -523,18 +711,38 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       { min: 100, max: 10 * 60 * 1000 },
     );
     const operation = validateLocalReferenceOperation(input.operation);
-    record.status = 'executing';
-    const started = this.clock();
+    let generation;
     try {
-      const execution = await runClosedOperation({
+      generation = claimForkExecution(record, () => this.clock());
+    } catch (error) {
+      if (error?.code === 'LOCAL_REFERENCE_FORK_EXPIRED') {
+        await this.destroyFork({ fork_ref: record.ref, reason: 'provider_ttl_expired' });
+      }
+      throw error;
+    }
+    const executionDeadlineMs = performance.now() + timeoutMs;
+    const started = this.clock();
+    let finishExecution;
+    const lease = {
+      generation,
+      handle: null,
+      finished: new Promise((resolve) => { finishExecution = resolve; }),
+    };
+    record.active_execution = lease;
+    try {
+      lease.handle = normalizeOperationHandle(testOperationRunners.get(this)({
         workspace: record.directory,
         forkId: record.ref,
         operation: cloneJson(operation),
+      }));
+      const execution = await waitForOperation(
+        lease.handle,
         timeoutMs,
-      });
+        executionDeadlineMs,
+        record.hard_deadline_ms,
+      );
       const completed = this.clock();
-      record.status = 'tainted';
-      record.last_execution = {
+      const lastExecution = {
         started_at: started.toISOString(),
         completed_at: completed.toISOString(),
         duration_ms: Math.max(0, completed.getTime() - started.getTime()),
@@ -542,16 +750,36 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         stdout_bytes: execution.stdout_bytes,
         execution_mode: executionMode,
       };
+      publishForkExecution(
+        record,
+        lease,
+        generation,
+        lastExecution,
+        () => this.clock(),
+      );
       return {
         status: 'completed',
         taint_status: 'TAINTED',
         commit_candidate: execution.parsed.commit_candidate,
-        result_hash: record.last_execution.result_hash,
-        measurements: cloneJson(record.last_execution),
+        result_hash: lastExecution.result_hash,
+        measurements: cloneJson(lastExecution),
       };
     } catch (error) {
-      record.status = 'failed';
+      if (error?.code === 'LOCAL_REFERENCE_FORK_EXPIRED') {
+        finishExecution();
+        await this.destroyFork({ fork_ref: record.ref, reason: 'provider_ttl_expired' });
+      } else if (record.active_execution === lease
+        && record.execution_generation === generation
+        && record.status === 'executing') {
+        record.status = 'failed';
+      }
       throw error;
+    } finally {
+      if (record.active_execution === lease
+        && !['destroying', 'destroy_failed'].includes(record.status)) {
+        record.active_execution = null;
+      }
+      finishExecution();
     }
   }
 
@@ -632,25 +860,60 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
 
   async suspendFork(input = {}) {
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
-    if (record.destroyed) throw new Error('Cannot suspend a destroyed fork');
-    record.status = 'suspended';
-    return { fork_ref: record.ref, status: 'suspended', evidence_status: 'observed' };
+    throw new Error(
+      `Local reference adapter does not support suspend/resume; fork remains ${record.status}`,
+    );
+  }
+
+  async #destroyForkRecord(record) {
+    record.execution_generation += 1;
+    record.status = 'destroying';
+    if (record.ttl_timer) {
+      clearTimeout(record.ttl_timer);
+      record.ttl_timer = null;
+    }
+    try {
+      const activeExecution = record.active_execution;
+      if (activeExecution) {
+        const cancellation = new Error('Local reference execution cancelled for fork destruction');
+        cancellation.code = 'LOCAL_REFERENCE_EXECUTION_CANCELLED';
+        await activeExecution.handle.terminate(cancellation);
+        await activeExecution.finished;
+        if (record.active_execution === activeExecution) record.active_execution = null;
+      }
+      const target = assertOwnedPath(this.baseDirectory, record.directory);
+      await rm(target, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 25,
+      });
+      record.destroyed = true;
+      record.status = 'destroyed';
+      return {
+        fork_ref: record.ref,
+        status: 'destroy_requested_observed',
+        evidence_hash: sha256Ref({ fork_ref: record.ref, request: 'destroy' }),
+      };
+    } catch (error) {
+      record.status = 'destroy_failed';
+      throw error;
+    }
   }
 
   async destroyFork(input = {}) {
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
-    if (!record.destroyed) {
-      if (record.ttl_timer) clearTimeout(record.ttl_timer);
-      const target = assertOwnedPath(this.baseDirectory, record.directory);
-      await rm(target, { recursive: true, force: true });
-      record.destroyed = true;
-      record.status = 'destroyed';
+    if (!record.destroy_promise) {
+      const attempt = this.#destroyForkRecord(record);
+      record.destroy_promise = attempt;
+      try {
+        return await attempt;
+      } catch (error) {
+        if (record.destroy_promise === attempt) record.destroy_promise = null;
+        throw error;
+      }
     }
-    return {
-      fork_ref: record.ref,
-      status: 'destroy_requested_observed',
-      evidence_hash: sha256Ref({ fork_ref: record.ref, request: 'destroy' }),
-    };
+    return record.destroy_promise;
   }
 
   async verifyDestroyed(input = {}) {

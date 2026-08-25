@@ -21,11 +21,13 @@ import {
   commitPreparedArtifact,
   deriveParentAuthorityRef,
 } from '../src/clean-commit.mjs';
+import { assertCanonicalJson, canonicalize } from '../src/canonical.mjs';
 import { networkPolicy } from '../src/contracts.mjs';
 import { createMcpInterceptionPlan } from '../src/interception.mjs';
 import { createRiskForkReceipt } from '../src/receipt.mjs';
 import { classifyRisk } from '../src/risk-classifier.mjs';
 import { validateCommitCandidate } from '../src/taint-gate.mjs';
+import { requireOpaqueRef } from '../src/util.mjs';
 import {
   NOW,
   advanceToCommitting,
@@ -39,6 +41,7 @@ import {
 
 const SCHEMA_DIRECTORY = fileURLToPath(new URL('../schema/', import.meta.url));
 const SCHEMA_ID_BASE = 'https://agoragentic.com/schema/';
+const CANONICAL_RUNTIME_MAX_BYTES = 16 * 1024 * 1024;
 const EXPECTED_SCHEMA_FILES = Object.freeze([
   'clean-commit-result.v1.json',
   'commit-artifact.v1.json',
@@ -54,6 +57,54 @@ const EXPECTED_SCHEMA_FILES = Object.freeze([
   'receipt.v1.json',
   'risk-decision.v1.json',
   'savepoint-capsule.v1.json',
+]);
+const SECRET_FILTERED_REF_SCHEMA_FILES = Object.freeze([
+  'clean-commit-result.v1.json',
+  'commit-artifact.v1.json',
+  'execution-binding.v1.json',
+  'fork-identity.v1.json',
+  'lifecycle.v1.json',
+  'receipt.v1.json',
+  'risk-decision.v1.json',
+  'savepoint-capsule.v1.json',
+]);
+const SYNTHETIC_GENERATED_AMK = `amk_${'a'.repeat(64)}`;
+const EMBEDDED_SYNTHETIC_GENERATED_AMK = `prefix${SYNTHETIC_GENERATED_AMK}suffix`;
+const GENERIC_CREDENTIAL_TOKENS = Object.freeze([
+  'sk-abcdefghijklmnop',
+  'sk_abcdefghijklmnop',
+  'ghp-abcdefghijklmnop',
+  'gho_abcdefghijklmnop',
+  'ghu-abcdefghijklmnop',
+  'ghs_abcdefghijklmnop',
+  'ghr-abcdefghijklmnop',
+  'github_pat_abcdefghijklmnop',
+  'xoxa-abcdefghijklmnop',
+  'xoxb_abcdefghijklmnop',
+  'xoxp-abcdefghijklmnop',
+  'xoxr_abcdefghijklmnop',
+  'xoxs-abcdefghijklmnop',
+]);
+const EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS = Object.freeze([
+  'prefixghr-abcdefghijklmnop',
+  '_github_pat_abcdefghijklmnop',
+  'prefixxoxb_abcdefghijklmnop',
+  `xAKIA${'A'.repeat(16)}`,
+  '_sk-proj-abcdefghijklmnop',
+  `xsk-${'a'.repeat(32)}`,
+]);
+const DOCUMENTED_AMK_PLACEHOLDERS = Object.freeze([
+  'amk_your_key_here',
+  'amk_your_api_key_here',
+]);
+const NON_GENERATED_AMK_CONTROLS = Object.freeze([
+  `amk_${'A'.repeat(64)}`,
+  `amk-${'a'.repeat(64)}`,
+  'risk_fork_security_boundary_documentation',
+  'prefixsk_abcdefghijklmnop',
+  'e2b_cleanup_12345678-1234-4123-8123-123456789abc',
+  'e2b_cleanup_ref_12345678-1234-4123-8123-123456789abc',
+  'e2b_export_12345678-1234-4123-8123-123456789abc',
 ]);
 
 function clone(value) {
@@ -248,6 +299,77 @@ function makeE2BQualificationEvidence() {
 test('all public Risk Fork schemas compile under strict AJV 2020', async () => {
   const ajv = await loadSchemaRegistry();
   assert.equal(Object.keys(ajv.schemas).length >= EXPECTED_SCHEMA_FILES.length, true);
+});
+
+test('clean-result schema remains a structural superset of runtime UTF-8 byte enforcement', async () => {
+  const ajv = await loadSchemaRegistry();
+  const cleanResultValidator = ajv.getSchema(schemaId('clean-commit-result.v1.json'));
+  assert.ok(cleanResultValidator);
+  const jsonValueSchema = clone(cleanResultValidator.schema.$defs.jsonValue);
+  const validateJsonValue = ajv.compile({
+    $defs: { jsonValue: jsonValueSchema },
+    $ref: '#/$defs/jsonValue',
+  });
+  const stringSchema = jsonValueSchema.oneOf.find((branch) => branch.type === 'string');
+  assert.match(stringSchema.$comment, /AJV success alone does not establish clean-commit eligibility/);
+  assert.match(stringSchema.$comment, /16 MiB UTF-8 byte limit/);
+
+  const nearLimitAscii = 'x'.repeat(CANONICAL_RUNTIME_MAX_BYTES - (64 * 1024));
+  assert.equal(validateJsonValue(nearLimitAscii), true);
+  assert.doesNotThrow(() => assertCanonicalJson(nearLimitAscii));
+  assert.equal(
+    Buffer.byteLength(canonicalize(nearLimitAscii), 'utf8') < CANONICAL_RUNTIME_MAX_BYTES,
+    true,
+  );
+
+  const schemaValidRuntimeOversize = '😀'.repeat((CANONICAL_RUNTIME_MAX_BYTES / 4) + 1);
+  assert.equal(
+    validateJsonValue(schemaValidRuntimeOversize),
+    true,
+    'JSON Schema counts code points, so structural validity alone is not commit eligibility',
+  );
+  assert.throws(
+    () => assertCanonicalJson(schemaValidRuntimeOversize),
+    /Canonical JSON string is too large/,
+  );
+});
+
+test('generic ref schemas match exact runtime token filters without rejecting canonical placeholders', async () => {
+  const ajv = await loadSchemaRegistry();
+  const rejectedSecrets = [
+    SYNTHETIC_GENERATED_AMK,
+    EMBEDDED_SYNTHETIC_GENERATED_AMK,
+    ...GENERIC_CREDENTIAL_TOKENS,
+    ...EMBEDDED_DISTINCTIVE_CREDENTIAL_TOKENS,
+  ];
+  const allowedControls = [
+    ...DOCUMENTED_AMK_PLACEHOLDERS,
+    ...NON_GENERATED_AMK_CONTROLS,
+  ];
+
+  for (const secret of rejectedSecrets) {
+    assert.throws(
+      () => requireOpaqueRef(secret, 'synthetic_ref'),
+      /appears to contain secret material/,
+      `runtime opaque-ref guard must reject ${secret.slice(0, 8)} shaped material`,
+    );
+  }
+  for (const control of allowedControls) {
+    assert.equal(requireOpaqueRef(control, 'documented_placeholder'), control);
+  }
+
+  for (const name of SECRET_FILTERED_REF_SCHEMA_FILES) {
+    const rootValidator = ajv.getSchema(schemaId(name));
+    assert.ok(rootValidator, `schema is not registered: ${name}`);
+    const validateRef = ajv.compile(clone(rootValidator.schema.$defs.ref));
+
+    for (const secret of rejectedSecrets) {
+      assert.equal(validateRef(secret), false, `${name} must reject ${secret.slice(0, 8)}`);
+    }
+    for (const control of allowedControls) {
+      assert.equal(validateRef(control), true, `${name} must allow ${control.slice(0, 16)}`);
+    }
+  }
 });
 
 test('E2B qualification schema accepts source evidence and rejects authority claims', async () => {
@@ -520,9 +642,63 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
   });
 
   const typedLifecycle = makePreparedLifecycle(typedArtifact.artifact_hash);
+  const typedDestructionEvent = typedLifecycle.events.find(
+    (event) => event.to === 'CLEAN_COMMIT_READY',
+  );
+  assert.ok(typedDestructionEvent?.evidence?.ref);
+  assert.ok(typedDestructionEvent?.evidence?.hash);
+  const typedDestructionClaim = {
+    status: 'verified',
+    outcome: 'success',
+    evidence_ref: typedDestructionEvent.evidence.ref,
+    evidence_hash: typedDestructionEvent.evidence.hash,
+  };
+  const createTypedReceipt = ({ receiptCapsule, receiptIdentity }) => createRiskForkReceipt({
+    created_at: NOW,
+    capsule: receiptCapsule,
+    risk_decision: decision,
+    lifecycle: typedLifecycle,
+    fork_identity: receiptIdentity,
+    fork_ref: typedArtifact.source_fork_id,
+    provider_ref: binding.provider_ref,
+    provider_capabilities_hash: hash(provider.capabilities),
+    savepoint_claim: evidenceClaim('savepoint'),
+    fork_start_claim: evidenceClaim('fork-start'),
+    execution_claim: evidenceClaim('execution'),
+    result_digest: typedLifecycle.events.find((event) => event.to === 'TAINTED').evidence.hash,
+    commit_artifact: typedArtifact,
+    accepted_commit_digest: null,
+    validation_evidence_refs: ['validation:taint-gate'],
+    credential_revocation_claim: {
+      status: 'not_applicable',
+      outcome: 'not_applicable',
+    },
+    destruction_claim: typedDestructionClaim,
+    destruction_evidence: {
+      status: 'verified',
+      provider_ref: binding.provider_ref,
+      fork_ref: typedArtifact.source_fork_id,
+      evidence_ref: typedDestructionClaim.evidence_ref,
+      evidence_hash: typedDestructionClaim.evidence_hash,
+    },
+    transaction_assurance_evidence_refs: [],
+    measurements: { total_ms: 10 },
+  });
+  const typedReceiptWithCarriedAuthorization = createTypedReceipt({
+    receiptCapsule: capsule,
+    receiptIdentity: identity,
+  });
+  const capsuleWithoutAuthorization = makeCapsule({
+    execution_authorization: { ref: null, hash: null },
+  });
+  const typedReceiptWithoutAuthorization = createTypedReceipt({
+    receiptCapsule: capsuleWithoutAuthorization,
+    receiptIdentity: makeForkIdentity(capsuleWithoutAuthorization),
+  });
   const governance = currentGovernance(capsule, {
     typed_result_schema_hash: capsule.authorized_result_schema_hash,
   });
+  const nearLimitAsciiResult = 'x'.repeat(CANONICAL_RUNTIME_MAX_BYTES - (64 * 1024));
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-schema-authority-'));
   let cleanCommitResult;
   try {
@@ -560,7 +736,7 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
         evidence_ref: 'approval:verified',
         evidence_hash: hash('approval'),
       }),
-      acceptTypedResult: async (payload) => ({ accepted: payload.answer }),
+      acceptTypedResult: async () => nearLimitAsciiResult,
     }, { clock: () => NOW });
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -578,13 +754,22 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
     ['commit-artifact.v1.json', typedArtifact, 'typed commit artifact'],
     ['commit-artifact.v1.json', actionArtifact, 'consequential action artifact'],
     ['clean-commit-result.v1.json', cleanCommitResult],
-    ['receipt.v1.json', receipt],
+    ['receipt.v1.json', receipt, 'consequential-action receipt'],
+    ['receipt.v1.json', typedReceiptWithCarriedAuthorization, 'typed-result receipt carrying capsule authorization provenance'],
+    ['receipt.v1.json', typedReceiptWithoutAuthorization, 'typed-result receipt without authorization provenance'],
   ];
   for (const [name, value, label] of artifacts) {
     assertSchemaAccepts(ajv, name, value, label);
   }
   assert.equal(cleanCommitResult.final_commit_authority.status, 'verified');
   assert.equal(cleanCommitResult.final_commit_authority.atomicity_status, 'verified');
+  assert.equal(cleanCommitResult.result, nearLimitAsciiResult);
+  assert.equal(Buffer.byteLength(cleanCommitResult.result, 'utf8') > 4 * 1024 * 1024, true);
+  assert.equal(
+    Buffer.byteLength(canonicalize(cleanCommitResult.result), 'utf8')
+      < CANONICAL_RUNTIME_MAX_BYTES,
+    true,
+  );
   const missingFinalAuthority = clone(cleanCommitResult);
   delete missingFinalAuthority.final_commit_authority;
   assertSchemaRejects(
@@ -593,7 +778,99 @@ test('schemas accept representative source-generated Risk Fork artifacts', async
     missingFinalAuthority,
     'clean commit result without atomic final-authority evidence',
   );
+
+  const fileActionResult = clone(cleanCommitResult);
+  fileActionResult.commit_type = 'CONSEQUENTIAL_ACTION_PROPOSAL';
+  fileActionResult.execution_authorization = {
+    status: 'verified_and_consumed',
+    authorization_id: 'authorization:schema-action',
+    binding_hash: hash('schema-action-binding'),
+    evidence_ref: 'authorization-evidence:schema-action',
+    evidence_hash: hash('schema-action-evidence'),
+    observed_at: cleanCommitResult.committed_at,
+  };
+  assertSchemaAccepts(
+    ajv,
+    'clean-commit-result.v1.json',
+    fileActionResult,
+    'file-authority consequential result with observed authorization consumption',
+  );
+
+  const actionWithoutAuthorization = clone(fileActionResult);
+  actionWithoutAuthorization.execution_authorization = null;
+  assertSchemaRejects(
+    ajv,
+    'clean-commit-result.v1.json',
+    actionWithoutAuthorization,
+    'consequential result without execution authorization',
+  );
+
+  const fileActionWithoutObservedAt = clone(fileActionResult);
+  delete fileActionWithoutObservedAt.execution_authorization.observed_at;
+  assertSchemaRejects(
+    ajv,
+    'clean-commit-result.v1.json',
+    fileActionWithoutObservedAt,
+    'file-authority consequential result without trusted observation time',
+  );
+
+  const postgresActionResult = clone(fileActionWithoutObservedAt);
+  postgresActionResult.authority_backend = 'postgres_distributed';
+  assertSchemaAccepts(
+    ajv,
+    'clean-commit-result.v1.json',
+    postgresActionResult,
+    'PostgreSQL consequential result whose transaction proof carries authority timing',
+  );
+
+  const typedResultWithAuthorization = clone(cleanCommitResult);
+  typedResultWithAuthorization.execution_authorization = fileActionResult.execution_authorization;
+  assertSchemaRejects(
+    ajv,
+    'clean-commit-result.v1.json',
+    typedResultWithAuthorization,
+    'non-consequential result carrying execution authorization',
+  );
+
   assert.equal(receipt.interaction.action_operation, 'mcp_tool_call');
+  assert.notEqual(receipt.execution_authorization.ref, null);
+  assert.notEqual(receipt.execution_authorization.hash, null);
+
+  const actionReceiptWithoutOperation = clone(receipt);
+  actionReceiptWithoutOperation.interaction.action_operation = null;
+  assertSchemaRejects(
+    ajv,
+    'receipt.v1.json',
+    actionReceiptWithoutOperation,
+    'consequential receipt without a concrete action operation',
+  );
+
+  const actionReceiptWithoutAuthorization = clone(receipt);
+  actionReceiptWithoutAuthorization.execution_authorization.ref = null;
+  actionReceiptWithoutAuthorization.execution_authorization.hash = null;
+  assertSchemaRejects(
+    ajv,
+    'receipt.v1.json',
+    actionReceiptWithoutAuthorization,
+    'consequential receipt without concrete authorization provenance',
+  );
+
+  assert.equal(typedReceiptWithCarriedAuthorization.interaction.action_operation, null);
+  assert.notEqual(typedReceiptWithCarriedAuthorization.execution_authorization.ref, null);
+  assert.notEqual(typedReceiptWithCarriedAuthorization.execution_authorization.hash, null);
+  assert.equal(typedReceiptWithoutAuthorization.interaction.action_operation, null);
+  assert.equal(typedReceiptWithoutAuthorization.execution_authorization.ref, null);
+  assert.equal(typedReceiptWithoutAuthorization.execution_authorization.hash, null);
+
+  const nonConsequentialReceiptWithOperation = clone(typedReceiptWithoutAuthorization);
+  nonConsequentialReceiptWithOperation.interaction.action_operation = 'mcp_tool_call';
+  assertSchemaRejects(
+    ajv,
+    'receipt.v1.json',
+    nonConsequentialReceiptWithOperation,
+    'non-consequential receipt carrying an action operation',
+  );
+
 });
 
 test('schemas reject boundary weakening and contract drift', async () => {
@@ -723,7 +1000,11 @@ test('schemas reject boundary weakening and contract drift', async () => {
     'capsule carrying a process-memory runtime snapshot',
   );
 
-  for (const secret of ['api_key=abcdefghijklmnop', 'sk-abcdefghijklmnop']) {
+  for (const secret of [
+    'api_key=abcdefghijklmnop',
+    'sk-abcdefghijklmnop',
+    SYNTHETIC_GENERATED_AMK,
+  ]) {
     const capsuleSecretKind = clone(capsule);
     capsuleSecretKind.memory_roots = [{
       ref: 'memory:root:1',
@@ -913,7 +1194,11 @@ test('schemas reject boundary weakening and contract drift', async () => {
     'committed receipt without committed timestamp',
   );
 
-  for (const secret of ['api_key=abcdefghijklmnop', 'sk-abcdefghijklmnop']) {
+  for (const secret of [
+    'api_key=abcdefghijklmnop',
+    'sk-abcdefghijklmnop',
+    SYNTHETIC_GENERATED_AMK,
+  ]) {
     const secretDetail = clone(receipt);
     secretDetail.claims.execution.detail = secret;
     assertSchemaRejects(

@@ -73,14 +73,15 @@ function authoritativeClockTime(clock) {
 }
 
 function normalizeCapabilities(value = {}) {
-  assertAllowedKeys(value, CAPABILITY_KEYS, 'capabilities');
   const incomplete = value === null
     || CAPABILITY_KEYS.some((key) => !Object.hasOwn(value, key));
+  const capabilities = value ?? {};
+  assertAllowedKeys(capabilities, CAPABILITY_KEYS, 'capabilities');
   return Object.fromEntries(CAPABILITY_KEYS.map((key) => [
     key,
     key === 'unknown_or_unclassified'
-      ? optionalBoolean(value[key], `capabilities.${key}`, incomplete) || incomplete
-      : optionalBoolean(value[key], `capabilities.${key}`, false),
+      ? optionalBoolean(capabilities[key], `capabilities.${key}`, incomplete) || incomplete
+      : optionalBoolean(capabilities[key], `capabilities.${key}`, false),
   ]));
 }
 

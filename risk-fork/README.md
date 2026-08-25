@@ -97,7 +97,7 @@ Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verif
 
 | Classification | Primitive | Treatment in Risk Fork |
 | --- | --- | --- |
-| **REUSE** | Transaction Assurance canonical JSON and `sha256:` reference semantics | Shared hashing keeps evidence references compatible; Transaction Assurance evidence is not treated as authority, certification, or settlement proof |
+| **EXTEND** | Transaction Assurance canonical JSON ordering and SHA-256 helper | Risk Fork first validates and canonicalizes every JSON type, including strings, before hashing. Object/array canonical ordering is reused, but Risk Fork string references intentionally differ from Transaction Assurance's raw-string convenience references so textual JSON cannot collide with the value it represents; neither namespace's evidence is authority, certification, or settlement proof |
 | **REUSE** | Existing authoritative policy, approval, revocation, credential, and action-execution subsystems | Consumed through clean-side verifier/executor callbacks; Risk Fork does not replace or mint their authority |
 | **NEW** | Local file-backed parent-head and execution-authorization transactions | Demonstrates fail-closed, under-lock reference semantics in demonstration mode only; production mode rejects it |
 | **NEW** | PostgreSQL distributed commit authority | One shared authority owns parent/governance/approval/authorization state, DB-time row ordering, effect fencing, reconciliation, and a serialized append-only audit chain. Runtime verification, DDL migration, and owner/migrator/runtime provisioning are separate surfaces; production managed-service qualification remains open |

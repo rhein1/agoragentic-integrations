@@ -78,6 +78,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["fork_start_ms", "execution_ms", "cleanup_ms", "observed_cost_usd"],
+      "dependentRequired": {
+        "failure_stage": ["failure_class"],
+        "failure_class": ["failure_stage"]
+      },
       "properties": {
         "fork_start_ms": { "$ref": "#/$defs/duration" },
         "execution_ms": { "$ref": "#/$defs/duration" },
@@ -87,8 +91,26 @@
             { "$ref": "#/$defs/decimal" },
             { "type": "null" }
           ]
+        },
+        "failure_stage": { "$ref": "#/$defs/failureStage" },
+        "failure_class": { "$ref": "#/$defs/failureClass" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["failure_stage"],
+            "properties": { "failure_stage": { "const": "none" } }
+          },
+          "then": { "properties": { "failure_class": { "const": "none" } } }
+        },
+        {
+          "if": {
+            "required": ["failure_class"],
+            "properties": { "failure_class": { "const": "none" } }
+          },
+          "then": { "properties": { "failure_stage": { "const": "none" } } }
         }
-      }
+      ]
     },
     "controls": {
       "type": "object",
@@ -161,6 +183,25 @@
     },
     "evidence_hash": { "$ref": "#/$defs/hash" }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "verified" } }
+      },
+      "then": {
+        "properties": {
+          "observations": {
+            "not": {
+              "type": "object",
+              "required": ["failure_stage"],
+              "properties": { "failure_stage": { "not": { "const": "none" } } }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "opaque": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$" },
@@ -168,6 +209,12 @@
     "duration": { "type": "integer", "minimum": 0, "maximum": 86400000 },
     "control": { "enum": ["verified", "failed", "unknown"] },
     "status": { "enum": ["verified", "failed", "unknown"] },
+    "failureStage": {
+      "enum": ["none", "sandbox_create", "sandbox_handle_validation", "initial_provider_info_fetch", "initial_provider_info_validation", "birth_handshake", "execution_lease_set", "execution_lease_info_fetch", "execution_lease_info_validation", "idle_lease_set", "idle_lease_info_fetch", "idle_lease_info_validation"]
+    },
+    "failureClass": {
+      "enum": ["none", "provider_absence", "provider_timeout", "provider_call_failure", "provider_contract_contradiction", "canary_contract_failure"]
+    },
     "nullableHash": {
       "oneOf": [
         { "$ref": "#/$defs/hash" },

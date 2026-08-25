@@ -16,6 +16,9 @@ export function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
   const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
   if (unexpected.length > 0) {
+    if (unexpected.some((key) => containsSecretShapedText(key))) {
+      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+    }
     throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(', ')}`);
   }
 }
@@ -47,17 +50,44 @@ export function requireSha256Ref(value, field) {
   return requireString(value, field, { pattern: /^sha256:[a-f0-9]{64}$/ });
 }
 
+// Production Agoragentic API keys are generated as `amk_` plus 64 lowercase
+// hexadecimal characters. Match that exact generated form without word
+// boundaries so embedding the complete key inside another string cannot hide
+// it. Deliberately do not classify documentation placeholders such as
+// `amk_your_api_key_here` as credentials.
+export const AGORAGENTIC_GENERATED_API_KEY_PATTERN = /amk_[a-f0-9]{64}/;
+export const AGORAGENTIC_API_KEY_PATTERN = AGORAGENTIC_GENERATED_API_KEY_PATTERN;
+
+// These provider prefixes are distinctive enough to detect without a leading
+// word boundary. That closes recoverable prefix wrapping while avoiding the
+// false positives that an unbounded generic `sk_` matcher would create in
+// ordinary identifiers such as `risk_fork_*`.
+export const EMBEDDED_CREDENTIAL_TOKEN_PATTERN =
+  /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
+
+export const BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
+
+export const GENERIC_CREDENTIAL_TOKEN_PATTERN =
+  /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
+
 const SECRET_SHAPED_TEXT = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i,
-  /\b(?:sk|amk|ghp|github_pat|xox[baprs])-[_a-zA-Z0-9-]{12,}\b/,
+  BEARER_CREDENTIAL_PATTERN,
+  AGORAGENTIC_API_KEY_PATTERN,
+  EMBEDDED_CREDENTIAL_TOKEN_PATTERN,
+  GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
 ]);
 
+export function containsSecretShapedText(value) {
+  return typeof value === 'string'
+    && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+}
+
 export function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
-  if (SECRET_SHAPED_TEXT.some((pattern) => pattern.test(normalized))) {
+  if (containsSecretShapedText(normalized)) {
     throw new TypeError(`${field} appears to contain secret material`);
   }
   return normalized;
