@@ -1,6 +1,6 @@
 ## Summary
 
-Adds a review-only OpenRouter top-60 integration pack under `deliverables/`.
+Adds a source-packaged, review-only OpenRouter top-60 integration pack under `deliverables/`. It is not published as an installable Agoragentic runtime integration and is not activated.
 
 The ranking mixes MCP hosts, coding agents, model gateways, remote services, plugin ecosystems, closed consumer apps, ambiguous products, and retired targets. This PR accounts for all 60 while avoiding unsupported active-manifest claims. The user-supplied ranking screenshots are not preserved in this PR, so rank/token transcription remains non-reproducible from repository contents.
 
@@ -15,7 +15,7 @@ The ranking mixes MCP hosts, coding agents, model gateways, remote services, plu
 - consolidated composition/provider/plugin/vendor/blocked/deprecated decisions;
 - hermetic machine-surface validator plus semantic/adversarial tests.
 
-There is no current Agoragentic MCP relay configuration in this pack. The registry relay is legacy and must not be used; repository source is unpublished, non-installable protocol/reference material; and remote MCP work awaits a separately qualified host-enforcement boundary. Hosts that can embed code may instead use the supported SDK or REST match path.
+There is no current Agoragentic MCP relay configuration in this pack. The registry relay is legacy and must not be used; this source-packaged review artifact is not published as an installable runtime integration; and remote MCP work awaits a separately qualified host-enforcement boundary. Hosts that can embed code may instead use the supported SDK or REST match path.
 
 ## Validation
 

@@ -2,7 +2,7 @@
 
 Reconciled against `rhein1/agoragentic-integrations@27aa21c613ee6ad5ae69e49659e3fd75ba2eccad`. The ranking transcription came from user-supplied screenshots. Those screenshots are not preserved in this PR, so the rank and token transcription is not independently reproducible from repository contents.
 
-This compact review pack accounts for all 60 targets without inflating the active integration catalog. It contains 12 host assessments blocked pending qualified host enforcement, an OpenRouter Agent SDK candidate, bounded Codebuff and Oration adapters, and consolidated decision packets for existing coverage, composition, providers, plugins, vendor intake, blocked targets, uncertain identities, and deprecations.
+This compact review pack accounts for all 60 targets without inflating the active integration catalog. It contains 12 host assessments blocked pending qualified host enforcement, an OpenRouter Agent SDK candidate, bounded Codebuff and Oration adapters, and consolidated decision packets for existing coverage, composition, providers, plugins, vendor intake, blocked targets, uncertain identities, and deprecations. It is a **source-packaged review artifact** with manifests, tests, validation commands, and examples; it is not published as an installable Agoragentic runtime integration and is not activated.
 
 ## Validate
 
@@ -27,6 +27,6 @@ As of 2026-08-25, `npm audit` reports six vulnerable dependency packages (4 low,
 
 The candidate SDK treats an interrupted or server-failed `POST /api/execute` as outcome-unknown and non-retryable because the public contract does not provide a client-bound idempotency key. The Oration adapter applies the same rule to conversation creation. Reconcile platform activity or provider state with an operator before starting another execution or conversation. The match-only example validates both OpenRouter and Agoragentic credentials before making a model call.
 
-There is no current Agoragentic MCP relay configuration. The registry relay is legacy and must not be used; repository source is an unpublished, non-installable protocol/reference surface; and remote MCP work remains blocked pending a qualified host-enforcement boundary. Hosts that can embed code may use the supported SDK or REST match path without treating that path as MCP qualification.
+There is no current Agoragentic MCP relay configuration. The registry relay is legacy and must not be used; this source-packaged review artifact is not published as an installable runtime integration; and remote MCP work remains blocked pending a qualified host-enforcement boundary. Hosts that can embed code may use the supported SDK or REST match path without treating that path as MCP qualification.
 
 Promote a candidate into `integrations.json` only after a pinned primary contract, exact host/package version, focused tests, owner-approved external no-spend evidence, secret handling review, and truthful maturity labels exist.
