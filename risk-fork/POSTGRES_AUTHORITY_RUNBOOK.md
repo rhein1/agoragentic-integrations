@@ -1,6 +1,6 @@
 # PostgreSQL distributed authority operator runbook
 
-This is a source-only runbook for the reviewed Risk Fork PostgreSQL authority. It is not deployment approval, a managed-service qualification, or permission to route production traffic. PR #298's source-only/default-off merge is gated separately by exact-head CI and genuine independent human approval. Production deployment and activation remain blocked until the managed PostgreSQL, hosted interception, and execution-provider gates documented in [SECURITY_MODEL.md](./SECURITY_MODEL.md) are independently closed.
+This is a source-only runbook for the reviewed Risk Fork PostgreSQL authority. It is not deployment approval, a managed-service qualification, or permission to route production traffic. PR #298 and its source-only/default-off security follow-up PR #346 are merged; those source merges granted no database deployment or activation authority. Production deployment and activation remain blocked until the managed PostgreSQL, hosted interception, and execution-provider gates documented in [SECURITY_MODEL.md](./SECURITY_MODEL.md) are independently closed.
 
 Use this sequence only in an owner-approved environment with no production traffic until every deployment-specific drill and evidence item below has passed. Do not run the migration command as a routine health check.
 
