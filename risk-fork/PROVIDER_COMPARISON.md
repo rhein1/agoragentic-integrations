@@ -60,7 +60,7 @@ The current v1 adapter fails closed at savepoint allocation, child allocation, a
 - forces all seven provisional inherited-state/fresh-entropy controls `unknown` and derives them only from a signed external receipt whose closed observer boundary and per-control evidence validate;
 - treats the evidence self-hash as integrity only, never as qualification authority;
 - compares the installed SDK package bytes with the signed integrity binding before SDK/provider use;
-- retains the provider-observed `setTimeout` lease implementation for a future separately authorized activation design, but the hard-false source gate prevents every checked-in state from arming or renewing it;
+- retains the provider-observed `setTimeout` lease implementation as dormant source; future use requires both exact signed/pinned qualification and a separately reviewed source-activation change, while the hard-false source gate prevents every checked-in state from arming or renewing it;
 - runs fixed controller-supplied bootstrap commands rather than child-supplied shell commands;
 - passes bounded job data through a fixed file/transport contract and streams imported results under byte and time limits;
 - treats child result/evidence files as tainted input;
