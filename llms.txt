@@ -10,7 +10,7 @@
 - MCP: `npm --prefix mcp ci && npm --prefix mcp run build` from this source checkout (unpublished, non-installable 2.0.0 protocol/reference candidate; remote calls fail closed without a separately qualified host boundary; the npm name resolves a legacy direct relay and must not be used)
 - Agent Client Protocol (ACP): `node mcp/dist/mcp-server.cjs --acp` after that source build (owned metadata only; remote calls blocked)
 - Micro ECF: run `npx agoragentic-micro-ecf@latest plan --dir .` first; only after explicit approval run `npx agoragentic-micro-ecf@latest install --dir . --yes` (local context CLI, Node ≥18)
-- Harness Core: `npx agoragentic-harness-core@latest init` (published standalone local no-spend CLI; canonical source `https://github.com/rhein1/agoragentic-harness-core`, current release v0.3.1, Node ≥18)
+- Harness Core: `npx agoragentic-harness-core@latest init` (published standalone local no-spend CLI; canonical source `https://github.com/rhein1/agoragentic-harness-core`, current release v0.4.2, Node ≥18)
 - OpenCode Harness plugin: `cd opencode && npm ci` from a source checkout (experimental `@agoragentic/opencode` candidate; exact OpenCode 1.18.15 contract fixture only; not published)
 - gstack Harness bridge: `cd gstack && npm install` from a source checkout (experimental explicit-artifact adapter; does not run gstack, retain raw workflow content, call providers, publish, or spend)
 - HyperFrames receipt video workflow: `cd hyperframes && npm install` from a source checkout (experimental local-only receipt/evidence renderer; deterministic sanitized scenes and hash-bound MP4 receipt, with no external rendering, hosted deployment, provider, publication, listing, x402, or spend authority)
@@ -26,7 +26,7 @@
 - The unpublished MCP/ACP source candidate does not consume or forward this key. The npm package is a legacy direct relay and must not be used. Use SDK/REST auth only; never inject the key into either MCP surface.
 
 ## Integrations
-- Canonical inventory: `integrations.json` (107 indexed surfaces as of 2026-08-25).
+- Canonical inventory: `integrations.json` (107 indexed surfaces as of 2026-08-28).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), Cline (`llms-install.md`), and the experimental OpenCode Harness source plugin (`opencode/`). Package readiness does not imply external marketplace approval or live host compatibility.
 - Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include the fail-closed MCP/ACP protocol reference, Risk Fork, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.

@@ -1,6 +1,6 @@
 {
-  "version": "2.49.0",
-  "updated_at": "2026-08-25",
+  "version": "2.50.0",
+  "updated_at": "2026-08-28",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -58,6 +58,7 @@
     },
     "harness_core": {
       "name": "agoragentic-harness-core",
+      "version": "0.4.2",
       "install": "npx agoragentic-harness-core@latest init",
       "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
       "distribution_status": "published",
@@ -645,10 +646,10 @@
           "agent_os_export": "tested"
         },
         "evidence": {
-          "host_version_tested": "standalone package 0.3.1",
+          "host_version_tested": "standalone package 0.4.2",
           "proof_class": "local",
-          "last_verified_at": "2026-08-21T03:58:21Z",
-          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
+          "last_verified_at": "2026-08-28T03:31:00Z",
+          "evidence_ref": "harness-core/CURRENT_RELEASE_EVIDENCE.json"
         },
         "requirements": {
           "network_required": false,
@@ -678,8 +679,8 @@
         "evidence": {
           "host_version_tested": "unknown",
           "proof_class": "static",
-          "last_verified_at": "2026-08-21T03:58:21Z",
-          "evidence_ref": "harness-core/STANDALONE_RELEASE_EVIDENCE.json"
+          "last_verified_at": "2026-08-28T03:31:00Z",
+          "evidence_ref": "harness-core/CURRENT_RELEASE_EVIDENCE.json"
         },
         "requirements": {
           "network_required": false,
@@ -1749,8 +1750,10 @@
     "harness_core": "harness-core/README.md",
     "harness_core_canonical_repository": "https://github.com/rhein1/agoragentic-harness-core",
     "harness_core_npm": "https://www.npmjs.com/package/agoragentic-harness-core",
-    "harness_core_release": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1",
-    "harness_core_release_evidence": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
+    "harness_core_release": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.4.2",
+    "harness_core_release_evidence": "harness-core/CURRENT_RELEASE_EVIDENCE.json",
+    "harness_core_cutover_release": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1",
+    "harness_core_cutover_evidence": "harness-core/STANDALONE_RELEASE_EVIDENCE.json",
     "harness_core_memory_skillopt": "https://github.com/rhein1/agoragentic-harness-core/blob/main/MEMORY_SKILLOPT.md",
     "harness_core_memory_skillopt_selection_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-selection.v1.json",
     "harness_core_memory_skillopt_task_draft_schema": "https://raw.githubusercontent.com/rhein1/agoragentic-harness-core/main/schema/memory-skillopt-task-draft.v1.json",

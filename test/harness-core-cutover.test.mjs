@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   EXPECTED_POINTER_FILES,
+  validateAllFalseAuthority,
   validateHarnessPointerFiles,
   verifyHarnessCoreCutover,
 } from '../scripts/verify-harness-core-cutover.mjs';
@@ -21,4 +22,12 @@ test('a duplicate package implementation fails the pointer-only contract', () =>
     validateHarnessPointerFiles([...EXPECTED_POINTER_FILES, 'src/index.mjs'])[0],
     /must contain only/,
   );
+});
+
+test('missing or non-false authority evidence fails closed', () => {
+  const expectedKeys = ['read', 'spend'];
+  assert.match(validateAllFalseAuthority(undefined, expectedKeys, 'fixture')[0], /keys must equal/);
+  assert.match(validateAllFalseAuthority({ read: false, spend: true }, expectedKeys, 'fixture')[0], /spend/);
+  assert.match(validateAllFalseAuthority({ placeholder: false, spend: false }, expectedKeys, 'fixture')[0], /keys must equal/);
+  assert.deepEqual(validateAllFalseAuthority({ read: false, spend: false }, expectedKeys, 'fixture'), []);
 });

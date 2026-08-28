@@ -150,7 +150,7 @@ Use this chooser before picking a framework wrapper:
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Inspect the MCP/ACP protocol and host-enforcement contract | `npm --prefix mcp ci && npm --prefix mcp run build` from a source checkout | Unpublished source candidate; direct relay launch remains disabled |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` | Harness Core v0.3.1 from the canonical standalone repository |
+| Build no-spend local configuration proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` | Harness Core v0.4.2 from the canonical standalone repository |
 | Convert local office documents into process-isolated, coverage-accounted evidence handoffs | `cd examples/anydoc-document-evidence && npm ci` | Experimental source-only AnyDoc adapter; no intentional upload, OCR, context attachment, or publication |
 | Apply Harness allow/ask/deny policy inside the exact pinned OpenCode tool hooks | `cd opencode && npm ci` from a source checkout | Experimental `@agoragentic/opencode` source candidate; OpenCode 1.18.15 contract fixture only, not published |
 | Convert explicit gstack planning/review/QA/release files into bounded Harness evidence | `cd gstack && npm install` | Experimental source-only artifact bridge; does not run gstack or retain raw workflow content |

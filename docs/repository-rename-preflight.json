@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.49.0",
-  "as_of": "2026-08-25",
+  "source_manifest_version": "2.50.0",
+  "as_of": "2026-08-28",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
@@ -453,8 +453,6 @@
       "path": "CHANGELOG.md",
       "occurrences": 14,
       "line_numbers": [
-        225,
-        226,
         227,
         228,
         229,
@@ -466,7 +464,9 @@
         235,
         236,
         237,
-        238
+        238,
+        239,
+        240
       ],
       "categories": [
         "public_documentation"
@@ -955,19 +955,19 @@
         16,
         37,
         46,
-        69,
-        78,
-        87,
-        96,
-        102,
-        110,
-        119,
-        381,
-        393,
-        405,
-        417,
-        429,
-        441
+        70,
+        79,
+        88,
+        97,
+        103,
+        111,
+        120,
+        382,
+        394,
+        406,
+        418,
+        430,
+        442
       ],
       "categories": [
         "machine_discovery"

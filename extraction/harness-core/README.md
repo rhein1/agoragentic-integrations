@@ -8,9 +8,10 @@ release surfaces.
 Current canonical state:
 
 - Source: <https://github.com/rhein1/agoragentic-harness-core>
-- Release: <https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1>
+- Current release: <https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.4.2>
 - npm: <https://www.npmjs.com/package/agoragentic-harness-core>
-- Cutover evidence: [`../../harness-core/STANDALONE_RELEASE_EVIDENCE.json`](../../harness-core/STANDALONE_RELEASE_EVIDENCE.json)
+- Historical `0.3.1` cutover evidence: [`../../harness-core/STANDALONE_RELEASE_EVIDENCE.json`](../../harness-core/STANDALONE_RELEASE_EVIDENCE.json)
+- Current `0.4.2` release evidence: [`../../harness-core/CURRENT_RELEASE_EVIDENCE.json`](../../harness-core/CURRENT_RELEASE_EVIDENCE.json)
 - Legacy source pointer: [`../../harness-core/README.md`](../../harness-core/README.md)
 
 The standalone package keeps the existing package name, CLI aliases, exports, schemas, and

@@ -231,7 +231,8 @@ Do not install `agoragentic-mcp` from npm or inject `AGORAGENTIC_API_KEY` into i
 | [Repository rename preflight](./docs/REPOSITORY_RENAME_PREFLIGHT.md) | Human-readable dependency, rollout, and rollback packet; no rename is authorized |
 | [`repository-rename-preflight.json`](./docs/repository-rename-preflight.json) | Deterministic per-file rename dependency inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
-| [Harness Core standalone release evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Exact repository, release, npm integrity, provenance, clean-room, and authority-boundary cutover record |
+| [Harness Core current release evidence](./harness-core/CURRENT_RELEASE_EVIDENCE.json) | Current `0.4.2` release, npm integrity, protected publication, provenance, clean-room exports, and observer-only AHP proof |
+| [Harness Core standalone cutover evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Immutable historical `0.3.1` repository-cutover record |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
 | [Interchange publication evidence gaps](./interchange/research/EVIDENCE_GAPS.md) | Explicit blockers and unsupported claims that remain open |
