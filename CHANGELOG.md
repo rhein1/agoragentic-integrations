@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
 
 ### Changed
+- Bumped the canonical manifest to `2.50.0`, synchronized current Harness Core discovery and source-only consumers to published `0.4.2`, and added exact protected-publish, npm provenance, clean-room export, and observer-only AHP evidence while preserving the immutable `0.3.1` cutover record.
+- Updated the gstack clean-room compatibility regression and the OpenCode source package lock to exact Harness Core `0.4.2`; no provider, host-runtime, payment, x402, deployment, publication, or authority claim was added.
 - Bumped the canonical manifest to `2.47.0` and completed the Harness Core standalone cutover. The canonical source is now `rhein1/agoragentic-harness-core`; release `v0.3.1` is published through the standalone trusted-publishing workflow with npm provenance, and the legacy monorepo path is a durable migration pointer with exact release evidence.
 - Updated the source-only OpenCode and gstack consumers to exact published Harness Core `0.3.1`; gstack compatibility now installs the registry package in a clean temporary consumer instead of packing sibling source.
 - Bumped the canonical manifest to `2.41.0` and reconciled the Interchange

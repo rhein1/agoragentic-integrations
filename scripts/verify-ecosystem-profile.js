@@ -198,14 +198,18 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
       .map((claim) => `docs/BRAND_SYSTEM.md unsupported Harness Core claim: ${claim}`));
 
     const harnessReadmePath = path.join(root, 'harness-core', 'README.md');
-    const harnessEvidencePath = path.join(root, 'harness-core', 'STANDALONE_RELEASE_EVIDENCE.json');
+    const harnessCutoverEvidencePath = path.join(root, 'harness-core', 'STANDALONE_RELEASE_EVIDENCE.json');
+    const harnessCurrentEvidencePath = path.join(root, 'harness-core', 'CURRENT_RELEASE_EVIDENCE.json');
     const harnessReadme = fs.readFileSync(harnessReadmePath, 'utf8');
-    const harnessEvidence = readJson(harnessEvidencePath, errors, root);
+    const harnessCutoverEvidence = readJson(harnessCutoverEvidencePath, errors, root);
+    const harnessCurrentEvidence = readJson(harnessCurrentEvidencePath, errors, root);
 
     for (const required of [
       'https://github.com/rhein1/agoragentic-harness-core',
       'https://www.npmjs.com/package/agoragentic-harness-core',
-      'releases/tag/v0.3.1',
+      'releases/tag/v0.4.2',
+      'CURRENT_RELEASE_EVIDENCE.json',
+      'STANDALONE_RELEASE_EVIDENCE.json',
       'thin pointer',
       'not settlement receipts',
     ]) {
@@ -218,15 +222,43 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
     if (harnessProduct?.repository !== 'https://github.com/rhein1/agoragentic-harness-core') {
       errors.push('ecosystem.json Harness Core product must point to the standalone repository');
     }
-    if (harnessEvidence?.source_cutover?.duplicate_canonical_implementation_removed !== true) {
-      errors.push('Harness Core release evidence must record duplicate source removal');
+    if (harnessCutoverEvidence?.source_cutover?.duplicate_canonical_implementation_removed !== true) {
+      errors.push('Harness Core cutover evidence must record duplicate source removal');
     }
-    if (harnessEvidence?.npm?.version !== '0.3.1') {
-      errors.push('Harness Core release evidence must record npm 0.3.1');
+    if (harnessCutoverEvidence?.npm?.version !== '0.3.1') {
+      errors.push('Harness Core cutover evidence must remain pinned to npm 0.3.1');
     }
-    if (harnessEvidence?.authority
-      && !Object.values(harnessEvidence.authority).every((value) => value === false)) {
-      errors.push('Harness Core release evidence must not grant authority');
+    const cutoverAuthorityKeys = [
+      'deployment', 'hosted_memory', 'marketplace_publication', 'owner_approval_bypass',
+      'provider_dispatch', 'spend', 'trust_mutation', 'wallet', 'x402',
+    ];
+    const currentAuthorityKeys = [
+      'deployment', 'hosted_memory', 'marketplace_publication', 'owner_approval_bypass',
+      'provider_dispatch', 'spend', 'trust_mutation', 'wallet_mutation', 'x402_settlement',
+    ];
+    if (JSON.stringify(Object.keys(harnessCutoverEvidence?.authority || {}).sort())
+      !== JSON.stringify(cutoverAuthorityKeys)) {
+      errors.push('Harness Core cutover authority evidence must be complete');
+    } else if (!Object.values(harnessCutoverEvidence.authority).every((value) => value === false)) {
+      errors.push('Harness Core cutover evidence must not grant authority');
+    }
+    if (harnessCurrentEvidence?.npm?.version !== '0.4.2'
+      || harnessCurrentEvidence?.npm?.latest !== '0.4.2') {
+      errors.push('Harness Core current release evidence must record npm latest 0.4.2');
+    }
+    if (harnessCurrentEvidence?.publishing?.workflow_run_id !== 33138725802
+      || harnessCurrentEvidence?.publishing?.github_environment !== 'npm-publish') {
+      errors.push('Harness Core current release evidence must record the protected publish run');
+    }
+    if (harnessCurrentEvidence?.ahp_observer?.authority_flags_false !== 20
+      || harnessCurrentEvidence?.ahp_observer?.base_authority_booleans_false !== 30) {
+      errors.push('Harness Core current release evidence must preserve observer-only AHP authority counts');
+    }
+    if (JSON.stringify(Object.keys(harnessCurrentEvidence?.authority || {}).sort())
+      !== JSON.stringify(currentAuthorityKeys)) {
+      errors.push('Harness Core current release authority evidence must be complete');
+    } else if (!Object.values(harnessCurrentEvidence.authority).every((value) => value === false)) {
+      errors.push('Harness Core current release evidence must not grant authority');
     }
   }
 
