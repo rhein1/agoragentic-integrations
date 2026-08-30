@@ -1,0 +1,32 @@
+{
+  "schema": "agoragentic.prime-agent.integrity-profile.v1",
+  "profile_version": 1,
+  "host_release_asset_sha256": "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e",
+  "dependency_lock_digest": "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
+  "extension_manifest_digest": "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5",
+  "dependency_closures": [
+    {
+      "platform": "linux",
+      "architecture": "x64",
+      "materialization_method": "npm_ci_exact_platform",
+      "materialization_environment": "WSL Ubuntu 24.04 x64",
+      "materialization_network_status": "not_recorded",
+      "node_version": "v24.13.0",
+      "npm_version": "11.6.2",
+      "dependency_file_count": 19863,
+      "dependency_tree_digest": "sha256:cfdbb4f400241fc9683b2ac95f5c9aa29ac65419cfca9c4d25d3f191beff2f97"
+    },
+    {
+      "platform": "win32",
+      "architecture": "x64",
+      "materialization_method": "exact_release_runtime",
+      "materialization_environment": "Windows win32 x64 exact released host",
+      "materialization_network_status": "not_recorded",
+      "node_version": "v24.13.0",
+      "npm_version": "11.6.2",
+      "dependency_file_count": 19887,
+      "dependency_tree_digest": "sha256:a82b4affa2cdad38596b5cc3b5f9f8da62c42874a2f5609b81381ae5a3433bfa"
+    }
+  ],
+  "profile_hash": "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8"
+}

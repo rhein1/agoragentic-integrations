@@ -1,0 +1,47 @@
+{
+  "schema": "agoragentic.prime-agent.dependency-audit.v1",
+  "observed_at": "2026-08-30T15:32:09.395Z",
+  "capture_method": "npm_audit_omit_dev_json",
+  "package_manager": {
+    "name": "npm",
+    "version": "11.6.2",
+    "audit_report_version": 2,
+    "command": "npm audit --omit=dev --json",
+    "exit_code": 1
+  },
+  "dependency_closure": {
+    "lock_ref": "prime-agent-governance/evidence/prime-agent-v0.7.2-package-lock.json",
+    "lock_digest": "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
+    "dependency_name": "extract-zip",
+    "dependency_direct": true,
+    "requested_range": "^2.0.1",
+    "resolved_version": "2.0.1",
+    "affected_node": "node_modules/extract-zip",
+    "production_dependency_count": 186,
+    "total_dependency_count": 200
+  },
+  "advisory": {
+    "id": "GHSA-jmr9-qjv8-65gv",
+    "url": "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+    "title": "extract-zip unvalidated symlink path traversal",
+    "severity": "high",
+    "cwe": "CWE-22",
+    "cvss_score": 8.1,
+    "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N",
+    "vulnerable_range": "<=2.0.1",
+    "first_patched_version": null,
+    "published_at": "2026-06-26T18:34:00Z",
+    "updated_at": "2026-08-12T19:22:04Z"
+  },
+  "result": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 1,
+    "critical": 0,
+    "total": 1,
+    "fix_available": false,
+    "promotion_blocking": true
+  },
+  "audit_hash": "sha256:302fc6f7e1a9aee1547e931a6ef492d3bb66f05447aa86d16cec588142cc5e04"
+}

@@ -16,7 +16,7 @@ import {
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(TEST_DIR, '..');
-const UPSTREAM = JSON.parse(readFileSync(resolve(TEST_DIR, 'fixtures', 'prime-agent-v0.7.1.json'), 'utf8'));
+const UPSTREAM = JSON.parse(readFileSync(resolve(TEST_DIR, 'fixtures', 'prime-agent-v0.7.2.json'), 'utf8'));
 const FIXED_NOW = '2026-08-08T12:00:00.000Z';
 
 function fakePi() {
@@ -85,17 +85,17 @@ function authorizedCall(event, options = {}) {
   };
 }
 
-test('package follows the exact Prime Agent v0.7.1 discovery contract', () => {
+test('package follows the exact Prime Agent v0.7.2 extension discovery contract', () => {
   const packageJson = JSON.parse(readFileSync(resolve(PACKAGE_ROOT, 'package.json'), 'utf8'));
-  assert.equal(UPSTREAM.tag, 'v0.7.1');
-  assert.equal(UPSTREAM.commit, '95afd319a78ae017a41241d50b013d656a0685ce');
+  assert.equal(UPSTREAM.tag, 'v0.7.2');
+  assert.equal(UPSTREAM.commit, '83a0f9f9566219551fcb6ffaf7f519a815749a58');
   assert.equal(packageJson.engines.node, UPSTREAM.node_engine);
-  assert.ok(packageJson.keywords.includes(UPSTREAM.package_contract.discovery_keyword));
+  assert.ok(packageJson.keywords.includes(UPSTREAM.extension_package_contract.discovery_keyword));
   assert.deepEqual(packageJson.pi.extensions, ['./index.mjs']);
   assert.ok(existsSync(resolve(PACKAGE_ROOT, packageJson.pi.extensions[0])));
 });
 
-test('classifies exact v0.7.1 IPython event shapes conservatively', () => {
+test('classifies exact v0.7.2 IPython event shapes conservatively', () => {
   const events = UPSTREAM.events;
   assert.equal(classifyPrimeToolCall(events.ipython_read).side_effect_class, 'read');
   assert.equal(classifyPrimeToolCall(events.ipython_network).side_effect_class, 'network');
@@ -326,7 +326,7 @@ test('redacts common credential fields', () => {
   assert.equal(safe.value, 'ok');
 });
 
-test('extension resolves and verifies exact per-action authority through the v0.7.1 host shape', async () => {
+test('extension resolves and verifies exact per-action authority through the v0.7.2 host shape', async () => {
   const pi = fakePi();
   const installed = createAgoragenticPrimeExtension({
     principalRef: 'owner:1',

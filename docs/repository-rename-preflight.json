@@ -1,20 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.50.0",
-  "as_of": "2026-08-28",
+  "source_manifest_version": "2.51.0",
+  "as_of": "2026-08-30",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 139,
-    "occurrence_count": 274,
+    "file_count": 141,
+    "occurrence_count": 277,
     "category_file_counts": {
       "installer_or_clone": 28,
-      "machine_discovery": 44,
+      "machine_discovery": 45,
       "package_registry_metadata": 22,
       "public_documentation": 72,
       "raw_content_url": 2,
-      "release_or_provenance": 9,
+      "release_or_provenance": 11,
       "reusable_action": 2,
       "source_or_test": 19
     }
@@ -950,7 +950,7 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 16,
+      "occurrences": 17,
       "line_numbers": [
         16,
         37,
@@ -967,7 +967,8 @@
         406,
         418,
         430,
-        442
+        442,
+        454
       ],
       "categories": [
         "machine_discovery"
@@ -1229,6 +1230,27 @@
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "prime-agent-governance/evidence/build-evidence.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        236
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "prime-agent-governance/evidence/prime-agent-v0.7.2-qualification.v1.json",
+      "occurrences": 1,
+      "line_numbers": [
+        137
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
       ]
     },
     {

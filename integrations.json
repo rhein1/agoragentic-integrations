@@ -1,6 +1,6 @@
 {
-  "version": "2.50.0",
-  "updated_at": "2026-08-28",
+  "version": "2.51.0",
+  "updated_at": "2026-08-30",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -399,11 +399,23 @@
       "authority_granted": false
     },
     {
+      "directory": "integration-qualification",
+      "status": "unpublished_alpha",
+      "reason": "The provider-neutral qualification evaluator, closed evidence schema, fail-closed regression handling, and no-auto-promotion tests are source-visible. It is not published, deployed, authorized to execute integrations, or sufficient by itself to prove runtime compatibility, hosted availability, production activation, or human promotion.",
+      "owner": "repository-maintainers",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/323",
+      "review_by": "2026-09-08",
+      "published": false,
+      "external_compatibility_verified": false,
+      "ready_for_manifest": false,
+      "authority_granted": false
+    },
+    {
       "directory": "prime-agent-governance",
       "status": "unpublished_alpha",
-      "reason": "Exact Prime Agent v0.7.1 package and event fixtures pass, but an external host run is still required before public catalog inclusion.",
+      "reason": "A hash-bound, provider-free run against exact Prime Agent v0.7.2 records verified release bytes, a pinned dependency closure, the loaded source extension, and a passed RPC matrix as runtime-compatibility evidence. Promotion is blocked because the exact closure includes direct extract-zip 2.0.1, affected by high-severity GHSA-jmr9-qjv8-65gv with no patched version reported at capture time. A public compatibility claim, real host tool-call interception, restricted exact-runtime containment, hosted availability, and production activation remain unapproved or unverified, so the effective level stays source_adapter and the package stays held from public catalog inclusion.",
       "owner": "repository-maintainers",
-      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/pull/258",
+      "tracking_ref": "https://github.com/rhein1/agoragentic-integrations/issues/323",
       "review_by": "2026-09-08",
       "published": false,
       "external_compatibility_verified": false,
