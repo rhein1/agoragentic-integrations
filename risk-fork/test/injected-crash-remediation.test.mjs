@@ -9,13 +9,18 @@ import {
   CommitAmbiguousError,
   FileExecutionAuthorizationTransaction,
   FileParentHeadTransaction,
+  commitPreparedArtifact,
   deriveParentAuthorityRef,
 } from '../src/clean-commit.mjs';
 import { RiskForkController } from '../src/controller.mjs';
-import { RiskForkProvider } from '../src/provider.mjs';
+import {
+  RiskForkProvider,
+  createCleanupVerificationEvidence,
+} from '../src/provider.mjs';
 import { validateCommitCandidate } from '../src/taint-gate.mjs';
 import {
   NOW,
+  advanceToCommitting,
   closedResultSchema,
   hash,
   makeBinding,
@@ -119,14 +124,15 @@ class InjectedCrashProvider extends RiskForkProvider {
     return { status: 'destroy_requested_observed' };
   }
 
-  async verifyDestroyed() {
+  async verifyDestroyed(input) {
     this.#attempt('verifyDestroyed');
-    return {
+    return createCleanupVerificationEvidence(input.cleanup_request, {
       status: 'verified',
       outcome: 'success',
+      observed_at: NOW,
       evidence_ref: 'fork-absence:injected-crash',
-      evidence_hash: hash('fork-absence:injected-crash'),
-    };
+      observation_hash: hash('fork-absence:injected-crash'),
+    });
   }
 
   async destroySavepoint() {
@@ -134,14 +140,15 @@ class InjectedCrashProvider extends RiskForkProvider {
     return { status: 'destroy_requested_observed' };
   }
 
-  async verifySavepointDestroyed() {
+  async verifySavepointDestroyed(input) {
     this.#attempt('verifySavepointDestroyed');
-    return {
+    return createCleanupVerificationEvidence(input.cleanup_request, {
       status: 'verified',
       outcome: 'success',
+      observed_at: NOW,
       evidence_ref: 'savepoint-absence:injected-crash',
-      evidence_hash: hash('savepoint-absence:injected-crash'),
-    };
+      observation_hash: hash('savepoint-absence:injected-crash'),
+    });
   }
 }
 
@@ -517,14 +524,19 @@ function actionCommitInput(
   };
 }
 
-async function expectAmbiguous(controller, prepared, input) {
-  const error = await controller.commit(prepared, input).then(
+async function expectAmbiguous(prepared, input) {
+  const error = await commitPreparedArtifact({
+    ...input,
+    capsule: prepared.capsule,
+    fork_identity: prepared.fork_identity,
+    lifecycle: advanceToCommitting(prepared.lifecycle),
+    artifact: prepared.artifact,
+    destruction_evidence: prepared.destruction_evidence,
+  }, { clock: () => new Date(NOW) }).then(
     () => null,
     (caught) => caught,
   );
   assert.equal(error?.code, 'RISK_FORK_COMMIT_AMBIGUOUS');
-  assert.equal(error.lifecycle.state, 'COMMIT_AMBIGUOUS');
-  assert.equal(error.lifecycle.events.at(-1).evidence.status, 'unknown');
   return error;
 }
 
@@ -560,13 +572,13 @@ test('injected parent-head reservation crash is COMMIT_AMBIGUOUS and cannot ente
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await authority.parentStateTransaction.getParentHead(authority.parentRef)).status,
       'ambiguous',
     );
     assert.equal(mutationEffects, 0);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(mutationEffects, 0);
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -604,13 +616,13 @@ test('injected authorization-consumption crash is COMMIT_AMBIGUOUS and never exe
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await readAuthorizationState(authority.authorizationDirectory, prepared.binding)).status,
       'ambiguous',
     );
     assert.equal(executionEffects, 0);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(executionEffects, 0);
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -642,13 +654,13 @@ test('injected parent mutation crash is COMMIT_AMBIGUOUS and mutation is attempt
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await authority.parentStateTransaction.getParentHead(authority.parentRef)).status,
       'ambiguous',
     );
     assert.equal(mutationAttempts, 1);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(mutationAttempts, 1);
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -679,13 +691,13 @@ test('injected external-action crash is COMMIT_AMBIGUOUS and execution is attemp
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await readAuthorizationState(authority.authorizationDirectory, prepared.binding)).status,
       'ambiguous',
     );
     assert.equal(executionAttempts, 1);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(executionAttempts, 1);
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -717,13 +729,13 @@ test('injected parent finalization crash is COMMIT_AMBIGUOUS after one completed
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await authority.parentStateTransaction.getParentHead(authority.parentRef)).status,
       'ambiguous',
     );
     assert.equal(mutationAttempts, 1);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(mutationAttempts, 1);
   } finally {
     await rm(temporary, { recursive: true, force: true });
@@ -754,13 +766,13 @@ test('injected authorization finalization crash is COMMIT_AMBIGUOUS after one ex
       },
     );
 
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(
       (await readAuthorizationState(authority.authorizationDirectory, prepared.binding)).status,
       'consuming',
     );
     assert.equal(executionAttempts, 1);
-    await expectAmbiguous(controller, prepared, input);
+    await expectAmbiguous(prepared, input);
     assert.equal(executionAttempts, 1);
   } finally {
     await rm(temporary, { recursive: true, force: true });

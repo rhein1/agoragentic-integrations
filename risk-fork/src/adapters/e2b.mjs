@@ -28,7 +28,12 @@ import {
   networkPolicy,
   verifySavepointCapsule,
 } from '../contracts.mjs';
-import { RiskForkProvider } from '../provider.mjs';
+import {
+  RiskForkProvider,
+  createCleanupVerificationEvidence,
+  createCleanupVerificationRequest,
+  verifyCleanupVerificationRequest,
+} from '../provider.mjs';
 import {
   AGORAGENTIC_GENERATED_API_KEY_PATTERN,
   BEARER_CREDENTIAL_PATTERN,
@@ -2444,8 +2449,19 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.#requireConfigured('destroyFork');
     this.#requireForkRuntimeEnabled('destroyFork');
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ['fork_ref', 'reason'], 'E2B destroyFork input');
+    assertAllowedKeys(
+      input,
+      ['fork_ref', 'reason', 'cleanup_request'],
+      'E2B destroyFork input',
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: 'fork',
+        resource_ref: record.ref,
+      });
+    }
     if (record.destroyed_verified) {
       return deepFreeze({
         fork_ref: record.ref,
@@ -2491,8 +2507,25 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     this.#requireConfigured('verifyDestroyed');
     this.#requireForkRuntimeEnabled('verifyDestroyed');
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ['fork_ref'], 'E2B verifyDestroyed input');
+    assertAllowedKeys(
+      input,
+      ['fork_ref', 'cleanup_request'],
+      'E2B verifyDestroyed input',
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
+    const cleanupRequest = input.cleanup_request
+      ? verifyCleanupVerificationRequest(input.cleanup_request, {
+          provider_id: this.id,
+          resource_kind: 'fork',
+          resource_ref: record.ref,
+        })
+      : createCleanupVerificationRequest({
+          provider_id: this.id,
+          resource_kind: 'fork',
+          resource_ref: record.ref,
+          requested_at: this.clock(),
+          request_nonce: randomUUID(),
+        });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
     const result = await this.#verifySandboxAbsent(Sandbox, record.record_id, record.sandbox_id);
@@ -2501,25 +2534,39 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       record.destruction_status = 'verified_destroyed';
       record.status = 'destroyed';
     }
-    return deepFreeze({
+    const observationHash = result.evidence_hash ?? sha256Ref({
+      provider_id: this.id,
       fork_ref: record.ref,
+      sandbox_id_hash: sha256Ref(record.sandbox_id),
       status: result.status,
       outcome: result.outcome,
-      evidence_status: result.status === 'verified'
-        ? 'verified'
-        : result.status === 'failed'
-          ? 'verified_present'
-          : 'unknown',
-      ...(result.evidence_ref ? { evidence_ref: result.evidence_ref } : {}),
-      ...(result.evidence_hash ? { evidence_hash: result.evidence_hash } : {}),
+      destruction_status: record.destruction_status,
+    });
+    return createCleanupVerificationEvidence(cleanupRequest, {
+      status: result.status,
+      outcome: result.outcome,
+      evidence_ref: result.evidence_ref ?? null,
+      observation_hash: observationHash,
+      observed_at: this.clock(),
     });
   }
 
   async destroySavepoint(input = {}) {
     this.#requireConfigured('destroySavepoint');
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ['savepoint_ref'], 'E2B destroySavepoint input');
+    assertAllowedKeys(
+      input,
+      ['savepoint_ref', 'cleanup_request'],
+      'E2B destroySavepoint input',
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: 'savepoint',
+        resource_ref: record.ref,
+      });
+    }
     if (record.destroyed) {
       return deepFreeze({
         savepoint_ref: record.ref,
@@ -2561,8 +2608,25 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
   async verifySavepointDestroyed(input = {}) {
     this.#requireConfigured('verifySavepointDestroyed');
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ['savepoint_ref'], 'E2B verifySavepointDestroyed input');
+    assertAllowedKeys(
+      input,
+      ['savepoint_ref', 'cleanup_request'],
+      'E2B verifySavepointDestroyed input',
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
+    const cleanupRequest = input.cleanup_request
+      ? verifyCleanupVerificationRequest(input.cleanup_request, {
+          provider_id: this.id,
+          resource_kind: 'savepoint',
+          resource_ref: record.ref,
+        })
+      : createCleanupVerificationRequest({
+          provider_id: this.id,
+          resource_kind: 'savepoint',
+          resource_ref: record.ref,
+          requested_at: this.clock(),
+          request_nonce: randomUUID(),
+        });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
     try {
@@ -2576,22 +2640,32 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         record.record_id,
         errorCode(error, 'EXPORT_ABSENCE_CHECK_FAILED'),
       ).catch(() => {});
-      return deepFreeze({
-        savepoint_ref: record.ref,
+      return createCleanupVerificationEvidence(cleanupRequest, {
         status: 'unknown',
         outcome: 'unknown',
-        evidence_status: 'unknown',
-        error_code: 'E2B_LOCAL_EXPORT_ABSENCE_UNKNOWN',
+        evidence_ref: null,
+        observation_hash: sha256Ref({
+          provider_id: this.id,
+          savepoint_ref: record.ref,
+          status: 'unknown',
+          error_code: errorCode(error, 'EXPORT_ABSENCE_CHECK_FAILED'),
+        }),
+        observed_at: this.clock(),
       });
     }
     if (!absent) {
       this.#poisonAllocationUntilReconciled(record.record_id);
       await this.cleanupJournal.markExportUnknown(record.record_id, 'EXPORT_STILL_PRESENT');
-      return deepFreeze({
-        savepoint_ref: record.ref,
+      return createCleanupVerificationEvidence(cleanupRequest, {
         status: 'failed',
         outcome: 'failure',
-        evidence_status: 'verified_present',
+        evidence_ref: null,
+        observation_hash: sha256Ref({
+          provider_id: this.id,
+          savepoint_ref: record.ref,
+          absent: false,
+        }),
+        observed_at: this.clock(),
       });
     }
     record.destroyed = true;
@@ -2602,13 +2676,12 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       absent: true,
       provider_snapshot_created: false,
     };
-    return deepFreeze({
-      savepoint_ref: record.ref,
+    return createCleanupVerificationEvidence(cleanupRequest, {
       status: 'verified',
       outcome: 'success',
-      evidence_status: 'verified',
       evidence_ref: `e2b-export-absence:${evidence.export_ref_hash.slice(7, 23)}`,
-      evidence_hash: sha256Ref(evidence),
+      observation_hash: sha256Ref(evidence),
+      observed_at: this.clock(),
     });
   }
 }

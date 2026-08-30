@@ -22,8 +22,9 @@ const enforcementBoundary = createMcpEnforcementBoundary({
     // Return exactly { schema, discovery, request, close }.
   },
   async executeFallback(fallbackRequest) {
-    // Risk Fork preparation and host-owned fallback execution happen here.
-    // Return a clean-import envelope bound to fallbackRequest.request_hash.
+    // Required adapter shape only. Current source hard-blocks every fallback
+    // before this callback and must never invoke it.
+    throw new Error('fallback execution is not qualified');
   },
 });
 
@@ -33,13 +34,13 @@ const session = await connectRemoteClient({
 });
 ```
 
-`openSession` receives `MCP_ENFORCEMENT_SCHEMAS.sessionOpenRequest` for `server/discover` before any host connection. Its result must use `MCP_ENFORCEMENT_SCHEMAS.hostSession`, provide a clean-imported discovery envelope, and expose `request(phaseRequest)` plus idempotent `close()` functions. Each phase and fallback result must use `MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult`, preserve `authority_granted: false`, and bind the exact request and result using `computeMcpCleanImportEvidenceHash`.
+`openSession` receives `MCP_ENFORCEMENT_SCHEMAS.sessionOpenRequest` for `server/discover` before any host connection. Its result must use `MCP_ENFORCEMENT_SCHEMAS.hostSession`, provide a clean-imported discovery envelope, and expose `request(phaseRequest)` plus idempotent `close()` functions. Each remote-session phase result must use `MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult`, preserve `authority_granted: false`, and bind the exact request and result using `computeMcpCleanImportEvidenceHash`. There is currently no fallback result contract in use: every fallback is rejected before request construction or callback invocation until a durable host effect fence with exact idempotency and terminal reconciliation is qualified.
 
 The host owns all network transport, redirect policy, credentials, isolation, cleanup, evidence, and kill-switch behavior. There is no direct network fallback in this package.
 
 ## E2B and PostgreSQL host surfaces
 
-The main export also includes the reviewed E2B adapter, paths, qualification evidence/trust functions, exact SDK dependency-closure verifier/loader, authority-free source verifier, PostgreSQL authority class and production predicate, and PostgreSQL migration/schema-verification functions. `e2b` is the only unbundled package surface: it is an optional, exact `e2b@2.39.0` peer. Qualified use must verify its installed dependency closure and load it with `loadVerifiedE2BRuntimeSdk`; merely installing that peer does not qualify E2B or grant execution authority.
+The main export also includes the framework-neutral Risk Fork host-boundary/import constructors, cleanup verification request/evidence validators, reviewed E2B adapter, paths, qualification evidence/trust functions, exact SDK dependency-closure verifier/loader, authority-free source verifier, PostgreSQL authority class and production predicate, and PostgreSQL migration/schema-verification functions. These are library contracts only: they do not provide a production host, provider authority, or live activation. `e2b` is the only unbundled package surface: it is an optional, exact `e2b@2.39.0` peer. Qualified use must verify its installed dependency closure and load it with `loadVerifiedE2BRuntimeSdk`; merely installing that peer does not qualify E2B or grant execution authority.
 
 The E2B build context preserves its reviewed repository-relative layout and is importable from:
 

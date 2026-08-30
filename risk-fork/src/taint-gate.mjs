@@ -4,6 +4,7 @@ import addFormats from 'ajv-formats';
 import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
 import { ACTION_OPERATIONS, COMMIT_TYPES } from './constants.mjs';
 import { verifyExecutionBinding } from './contracts.mjs';
+import { containsObviousCapabilityLikeText, isForbiddenAuthorityShapeKey } from './authority-shape.mjs';
 import {
   AGORAGENTIC_GENERATED_API_KEY_PATTERN,
   BEARER_CREDENTIAL_PATTERN,
@@ -105,7 +106,9 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', d
       throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path}.<key>`);
     }
     visitor(key, `${path}.<key>`);
-    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizeChildKey(key))) {
+    const normalizedKey = normalizeChildKey(key);
+    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKey)
+      || isForbiddenAuthorityShapeKey(key)) {
       throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path}.<key>`);
     }
     walkStrings(child, visitor, limits, state, `${path}.<value>`, depth + 1);
@@ -118,6 +121,7 @@ function scanText(value, policy) {
     for (const pattern of SECRET_PATTERNS) {
       if (pattern.test(text)) findings.push({ code: 'secret_pattern', path });
     }
+    if (containsObviousCapabilityLikeText(text)) findings.push({ code: 'authority_shape', path });
     if (!policy.allow_prompt_injection_text) {
       for (const pattern of PROMPT_INJECTION_PATTERNS) {
         if (pattern.test(text)) findings.push({ code: 'prompt_injection_pattern', path });

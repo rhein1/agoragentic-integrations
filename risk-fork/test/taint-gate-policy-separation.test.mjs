@@ -225,16 +225,17 @@ test('source fork IDs share the schema secret-filtered opaque-reference boundary
   );
 });
 
-test('authority-field normalization does not reject bounded absence metadata', () => {
+test('authority-field normalization conservatively rejects bounded absence metadata', () => {
   const payload = {
     authorizationGrantStatus: 'absent',
     privateKeyScanStatus: 'passed',
     parentMemoryRedactionStatus: 'passed',
     memoryUpdatePolicy: 'deny',
   };
-  const artifact = typedArtifact(payload, closedStringPayloadSchema(Object.keys(payload)));
-
-  assert.deepEqual(artifact.body.payload, payload);
+  assert.throws(
+    () => typedArtifact(payload, closedStringPayloadSchema(Object.keys(payload))),
+    /cannot carry trusted authority or memory field/i,
+  );
 });
 
 test('public artifact verification does not invent an allowlist from child paths', () => {

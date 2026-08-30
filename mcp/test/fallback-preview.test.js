@@ -7,31 +7,10 @@ delete process.env.AGORAGENTIC_API_KEY;
 process.env.AGORAGENTIC_BASE_URL = 'https://router.example.invalid';
 
 const {
-    MCP_ENFORCEMENT_SCHEMAS,
     buildFallbackToolList,
-    computeMcpCleanImportEvidenceHash,
     createMcpEnforcementBoundary,
     executeFallbackTool,
 } = require('../mcp-server.js');
-
-function cleanImported(request, result) {
-    const evidenceRef = `fallback-test:${request.request_id}`;
-    return {
-        schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
-        request_id: request.request_id,
-        request_hash: request.request_hash,
-        phase: request.phase,
-        clean_imported: true,
-        authority_granted: false,
-        evidence_ref: evidenceRef,
-        evidence_hash: computeMcpCleanImportEvidenceHash(
-            request.request_hash,
-            result,
-            evidenceRef,
-        ),
-        result,
-    };
-}
 
 function parseToolContent(result) {
     assert.equal(result.content.length, 1);
@@ -67,7 +46,7 @@ test('fallback preview rejects a missing task without any network or tool execut
     }
 });
 
-test('fallback preview delegates one closed anonymous GET descriptor to the factory-created host capability', async () => {
+test('fallback preview never invokes the host callback despite its preview name and descriptor', async () => {
     const originalFetch = global.fetch;
     const calls = [];
     let directFetchCalls = 0;
@@ -81,11 +60,7 @@ test('fallback preview delegates one closed anonymous GET descriptor to the fact
         },
         async executeFallback(request) {
             calls.push(request);
-            return cleanImported(request, {
-                selected_provider: null,
-                payment_required: false,
-                quote: null,
-            });
+            throw new Error('preview fallback callback must remain hard-disabled');
         },
     });
 
@@ -100,33 +75,10 @@ test('fallback preview delegates one closed anonymous GET descriptor to the fact
             payment_asset: 'USDC',
         }, { enforcementBoundary: boundary }));
 
-        assert.equal(calls.length, 1);
-        const call = calls[0];
-        const url = new URL(call.mcp_server_ref);
-        assert.equal(call.fallback_http.method, 'GET');
-        assert.equal(call.fallback_http.body, null);
-        assert.deepEqual(call.fallback_http.authentication, {
-            mode: 'host_resolved_out_of_band',
-        });
-        assert.equal(url.origin, 'https://router.example.invalid');
-        assert.equal(url.pathname, '/api/x402/execute/match');
-        assert.equal(url.searchParams.get('task'), 'receipt reconciliation');
-        assert.equal(url.searchParams.get('max_cost'), '0');
-        assert.equal(url.searchParams.get('category'), 'audit');
-        assert.equal(url.searchParams.get('max_latency_ms'), '500');
-        assert.equal(url.searchParams.get('prefer_trusted'), 'true');
-        assert.equal(url.searchParams.get('payment_network'), 'base');
-        assert.equal(url.searchParams.get('payment_asset'), 'USDC');
-        assert.doesNotMatch(url.pathname, /\/api\/(?:execute|invoke)(?:\/|$)/);
-        assert.equal(call.phase, 'tools/call');
-        assert.equal(call.tool_name, 'agoragentic_preview_x402');
-        assert.equal(call.risk_profile.minimum_level, 'IRREVERSIBLE');
-        assert.equal(call.risk_profile.prepare_only, true);
-        assert.equal(call.transport_constraints.redirects, 'error');
-        assert.equal(call.transport_constraints.direct_network_permitted, false);
-        assert.equal(call.transport_constraints.response_acceptance, 'clean_import_only');
+        assert.equal(calls.length, 0);
         assert.equal(directFetchCalls, 0);
-        assert.equal(result.payment_required, false);
+        assert.equal(result.ok, false);
+        assert.equal(result.error, 'risk_fork_effect_fence_required');
     } finally {
         global.fetch = originalFetch;
     }
