@@ -202,7 +202,7 @@ test('Risk Fork hackathon onboarding is pinned-local and preserves the demo trut
   }
   assert.equal(status.supported_node, '>=20');
   assert.equal(capability.supported_node, '>=20');
-  assert.equal(capability.allowed_scenario_ids.length, 17);
+  assert.equal(capability.allowed_scenario_ids.length, 18);
   assert.equal(capability.limits.active_runs, 1);
   assert.equal(capability.limits.completed_runs_before_cleanup_reset, 10);
   assert.equal(capability.limits.daily_limit, null);

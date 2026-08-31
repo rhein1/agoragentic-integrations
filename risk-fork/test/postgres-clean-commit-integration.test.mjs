@@ -91,7 +91,7 @@ function hermeticProvider(fixture, tag) {
   provider.executeInFork = async () => ({ result_hash: hash(`result:${tag}`), commit_candidate: { type: 'TYPED_RESULT', payload: { answer: `postgres-${tag}` }, payload_schema: fixture.schema } });
   provider.destroyFork = async () => ({ status: 'destroy_requested' });
   provider.destroySavepoint = async () => ({ status: 'destroy_requested' });
-  const verified = (request, kind) => createCleanupVerificationEvidence(request, { status: 'verified', outcome: 'success', observed_at: NOW, evidence_ref: `absence:${kind}:${tag}`, observation_hash: hash(`absence:${kind}:${tag}`) });
+  const verified = (request, kind) => createCleanupVerificationEvidence(request, { status: 'verified', outcome: 'success', evidence_ref: `absence:${kind}:${tag}`, observation_hash: hash(`absence:${kind}:${tag}`) });
   provider.verifyDestroyed = async ({ cleanup_request }) => verified(cleanup_request, 'fork');
   provider.verifySavepointDestroyed = async ({ cleanup_request }) => verified(cleanup_request, 'savepoint');
   return provider;
@@ -134,7 +134,9 @@ async function harness(t, fixture) {
     head_hash: fixture.capsule.parent.state_hash,
   });
   await authority.setCurrentGovernance({ parent_ref: parentRef, governance: fixture.governance });
-  return authority;
+  const databaseClock = await inspection.query('SELECT clock_timestamp() AS now');
+  const now = databaseClock.rows[0].now;
+  return { authority, clock: () => new Date(now) };
 }
 
 async function registerApproval(authority, fixture) {
@@ -202,11 +204,11 @@ test('demonstration controller exercises PostgreSQL clean authority and invokes 
   skip: POSTGRES_SKIP,
 }, async (t) => {
   const fixture = typedFixture('success');
-  const authority = await harness(t, fixture);
+  const { authority, clock } = await harness(t, fixture);
   const controller = new RiskForkController({
     provider: hermeticProvider(fixture, 'success'),
     mode: 'demonstration',
-    clock: () => new Date(NOW),
+    clock,
     distributedCommitAuthority: authority,
     distributedClaimantRef: 'claimant:postgres-clean-success',
   });
@@ -238,11 +240,11 @@ test('a failed demonstration PostgreSQL effect maps to COMMIT_AMBIGUOUS and is n
   skip: POSTGRES_SKIP,
 }, async (t) => {
   const fixture = typedFixture('ambiguous');
-  const authority = await harness(t, fixture);
+  const { authority, clock } = await harness(t, fixture);
   const controller = new RiskForkController({
     provider: hermeticProvider(fixture, 'ambiguous'),
     mode: 'demonstration',
-    clock: () => new Date(NOW),
+    clock,
     distributedCommitAuthority: authority,
     distributedClaimantRef: 'claimant:postgres-clean-ambiguous',
   });
