@@ -4,13 +4,14 @@
 >
 > These records describe bounded implementation and evidence surfaces. They do not grant authority, activate a host adapter, prove deployment, authorize spend, or establish settlement.
 
-Capability records: **10** of **107** catalog entries.
+Capability records: **11** of **108** catalog entries.
 
 ## Capabilities
 
 | Integration | Router client | Manifest mapping | Pre-action enforcement | Post-action evidence | Approval support | Receipt support | Agent OS export |
 |---|---|---|---|---|---|---|---|
 | [Agent OS Control Plane](../agent-os/README.md) | example | none | none | host_observed | record_only | hosted_execution | none |
+| [Anchor Safe Pay + Harness Core Reference](../anchor-safe-pay/README.md) | none | none | tested | local | host_enforced | local | none |
 | [Claude Code Plugin](../claude-code/README.md) | none | documented | none | none | none | none | none |
 | [Codex Harness Mapping Stub](../harness-core/README.md) | none | documented | none | none | none | none | none |
 | [CrewAI](../crewai/README.md) | example | none | none | host_observed | none | hosted_execution | none |
@@ -26,6 +27,7 @@ Capability records: **10** of **107** catalog entries.
 | Integration | Host version tested | Proof class | Last verified | Evidence | Network required | Spend capable |
 |---|---|---|---|---|---|---|
 | Agent OS Control Plane | unknown | static | 2026-08-20T18:45:00Z | [agent-os/agent_os_node.mjs](../agent-os/agent_os_node.mjs) | yes | yes |
+| Anchor Safe Pay + Harness Core Reference | anchor-x402-safe-pay 0.3.0 + Harness Core 0.4.2 fixture contract | local | 2026-08-31T23:32:32Z | [anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs](../anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs) | no | no |
 | Claude Code Plugin | unknown | static | 2026-08-20T18:45:00Z | [claude-code/README.md](../claude-code/README.md) | no | no |
 | Codex Harness Mapping Stub | unknown | static | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |

@@ -1,0 +1,9 @@
+{
+  "schema": "agoragentic.anchor-safe-pay.owner-approval.v1",
+  "approval_ref": "approval:fixture-send-0001",
+  "status": "approved",
+  "action_digest": "sha256:2f39a84a82842888b31a08d4fcd90253517d9171036b306e0b275d8a92d5fdea",
+  "approved_at": "2029-12-31T23:59:30.000Z",
+  "expires_at": "2030-01-01T00:10:00.000Z",
+  "approved_by": "owner:fixture"
+}

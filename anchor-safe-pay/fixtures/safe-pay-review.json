@@ -1,0 +1,19 @@
+{
+  "wallet": "0x1111111111111111111111111111111111111111",
+  "recommendation": "review",
+  "risk_score": 55,
+  "sanctions_match": false,
+  "sanctioned_lists": [],
+  "address_type": "evm",
+  "signals": [
+    {
+      "code": "fixture_elevated_risk",
+      "severity": "medium",
+      "source": "fixture"
+    }
+  ],
+  "corpus_version": "fixture-2030-01",
+  "partial": false,
+  "checked_at": 1893455940,
+  "notes": "Local fixture only; owner review is required."
+}

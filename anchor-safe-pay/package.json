@@ -1,0 +1,38 @@
+{
+  "name": "@agoragentic/anchor-safe-pay-reference",
+  "version": "0.1.0-alpha.0",
+  "description": "Default-off, fixture-only reference adapter that composes anchor-x402 Safe Pay evidence with exact Harness Core authority, approval, budget, and replay gates.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./safe-pay-harness-adapter.js"
+  },
+  "dependencies": {
+    "agoragentic-harness-core": "0.4.2",
+    "anchor-x402-safe-pay": "0.3.0"
+  },
+  "scripts": {
+    "check": "node --check safe-pay-harness-adapter.js && node --check example-governed-send.mjs && node --check tests/safe-pay-harness-adapter.test.mjs",
+    "example": "node example-governed-send.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "pretest": "npm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
+    "directory": "anchor-safe-pay"
+  },
+  "keywords": [
+    "agoragentic",
+    "harness-core",
+    "anchor-x402",
+    "safe-pay",
+    "x402",
+    "approval",
+    "no-spend"
+  ]
+}
