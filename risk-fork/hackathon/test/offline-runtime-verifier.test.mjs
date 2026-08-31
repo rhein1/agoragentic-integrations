@@ -11,9 +11,10 @@ test('offline runtime verifier exercises decision, lifecycle, receipt, recorder,
   assert.equal(result.verified, true);
   assert.equal(result.absolute_path_redacted, true);
   assert.deepEqual(result.representative_scenarios, [...REPRESENTATIVE_SCENARIOS]);
-  assert.equal(result.results.length, 7);
+  assert.equal(result.results.length, 8);
   assert.equal(result.results.find((item) => item.scenario_id === 'high-filesystem-write').final_state, 'prepared_not_committed');
   assert.equal(result.results.find((item) => item.scenario_id === 'irreversible-deployment-proposal').final_state, 'prepared_not_committed');
+  assert.equal(result.results.find((item) => item.scenario_id === 'e2b-malicious-mcp-containment').final_state, 'prepared_not_committed');
   for (const id of ['cleanup-unknown', 'malformed-lifecycle-receipt', 'attack-secret']) {
     assert.notEqual(result.results.find((item) => item.scenario_id === id).exit_code, 0);
   }

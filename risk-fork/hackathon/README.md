@@ -8,6 +8,12 @@ without contacting a provider. It accepts only named synthetic fixtures. It is
 not a VM, container security product, kernel network control, arbitrary-code
 sandbox, hosted service, or production MCP protection layer.
 
+The flagship `e2b-malicious-mcp-containment` fixture composes the real
+provider-neutral controller and E2B adapter with an injected in-memory SDK that
+models the pinned `e2b` `2.39.0` contract. It is labelled **FAKE E2B — LOCAL
+CONTRACT SIMULATION — NOT AN ISOLATION BOUNDARY**. Fake success is not E2B
+qualification and makes no E2B call.
+
 The demo entrypoint is pinned to this checkout:
 
 ```text
@@ -47,6 +53,9 @@ A verified offline kit already bundles that dependency closure. Do not run
 | Production qualified | `false` |
 | Live Agoragentic traffic protected | `false` |
 
+Product claim: **Hackathon demonstration only. Not production-qualified. No
+live Agoragentic traffic is protected.**
+
 The machine-readable form is [demo-status.json](./demo-status.json). If a run
 cannot preserve these claims, it must fail instead of weakening them.
 
@@ -57,7 +66,8 @@ agent or attendee
   -> local stdio connector
   -> closed, host-owned fixture lookup
   -> deterministic Risk Fork classification
-  -> local reference fork when the policy requires one
+  -> host-owned provider profile from the closed fixture
+  -> local reference copy or injected fake-E2B contract when policy requires one
   -> tainted candidate and bounded import checks
   -> destruction request and separate absence verification
   -> prepared-not-committed result and sanitized receipt
@@ -70,8 +80,9 @@ classifier requires a fork. No prompt may grant execution authority, select a
 provider, supply a risk label, add a remote target, or bypass cleanup.
 
 LOW and DENY fixtures do not allocate a fork. HIGH fixtures use the constrained
-local reference adapter. IRREVERSIBLE fixtures are prepare-only. The demo never
-performs a clean commit or the represented external action.
+local reference adapter except the closed flagship fixture, which uses the
+injected fake-E2B contract. IRREVERSIBLE fixtures are prepare-only. The demo
+never performs a clean commit or the represented external action.
 
 ## Commands
 
@@ -79,8 +90,8 @@ All examples run from the repository root:
 
 ```powershell
 node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor
-node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario high-filesystem-write
-node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario high-filesystem-write
+node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario e2b-malicious-mcp-containment
+node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario e2b-malicious-mcp-containment
 node risk-fork/hackathon/bin/risk-fork-demo.mjs serve
 node risk-fork/hackathon/bin/risk-fork-demo.mjs config --client codex
 node risk-fork/hackathon/bin/risk-fork-demo.mjs config --client codex --yes
@@ -126,6 +137,7 @@ The closed catalog contains:
 - `high-incomplete-metadata`
 - `high-untrusted-discovery`
 - `high-prompt-injection`
+- `e2b-malicious-mcp-containment` (flagship fake-E2B malicious stdio MCP)
 - `irreversible-deployment-proposal`
 - `deny-owner-policy`
 - `cleanup-unknown`
@@ -151,6 +163,9 @@ fixture IDs.
 - 256 KiB per synthetic write.
 - 50 actions.
 - 60-second fork TTL.
+- The closed fake-E2B flagship instead requests one 180-second sandbox timeout,
+  one allocation, no retry, no fallback, no inherited environment, no mounts,
+  no public ingress, and no external/provider network.
 - 10-second execution timeout.
 - 4 MiB cumulative recorder history, enforced against marker-bound owned-tree
   evidence before the next record is persisted.
@@ -203,8 +218,19 @@ use local loopback transport. It binds only to
 `127.0.0.1` on an operating-system-selected port, requires its run token, uses a
 restrictive Content Security Policy and origin checks, and loads no external
 assets. The recorder labels execution as `local_reference_protocol_execution`
-and shows `isolation_boundary: false`; it does not create a hosted dashboard or
-make the local adapter more isolated.
+or `fake_e2b_protocol_execution` and always shows `isolation_boundary: false`.
+For the flagship it also shows parent before/after hashes, Savepoint Capsule,
+synthetic sandbox ID, eight boundary-evaluated synthetic attack outcomes, typed
+result, separate kill and absence evidence, runtime, the prompt-pinned maximum
+estimate `$0.005850`, and
+provider-finalized cost `unknown`. It does not create a hosted dashboard or
+make either local profile more isolated.
+
+The exact proposed one-shot live canary is documented in
+[E2B_LIVE_CANARY_PLAN.json](./docs/E2B_LIVE_CANARY_PLAN.json). It remains blocked
+by a compile-time false source gate and requires a separate owner approval. The
+offline tranche contains no executable provider path and does not read an E2B
+key.
 
 ## Attendee safety
 
@@ -214,6 +240,7 @@ secret. Do not point the demo at live MCP servers or other remote targets.
 
 Start with the [five-minute quickstart](./docs/QUICKSTART.md). For cleanup and
 recovery, use [CLEANUP_TROUBLESHOOTING.md](./docs/CLEANUP_TROUBLESHOOTING.md).
+For the talk track, use [PRESENTER_SCRIPT.md](./docs/PRESENTER_SCRIPT.md).
 The public machine card is
 [risk-fork-capability.json](../discovery/risk-fork-capability.json), and the
 agent-use boundary is [skill.md](../discovery/skill.md).

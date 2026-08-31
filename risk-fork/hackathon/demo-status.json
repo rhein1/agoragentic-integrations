@@ -4,6 +4,7 @@
   "status": "source_demo_available",
   "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
   "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",
+  "product_claim": "Hackathon demonstration only. Not production-qualified. No live Agoragentic traffic is protected.",
   "truth": {
     "source_available": true,
     "demo_available": true,
@@ -26,7 +27,26 @@
   "hosted_execution_enabled": false,
   "provider_qualification": {
     "local_reference": "protocol_simulator_not_isolation",
-    "e2b": "not_live_qualified"
+    "e2b": "not_live_qualified",
+    "fake_e2b": "local_contract_simulation_not_isolation"
+  },
+  "flagship_scenario": "e2b-malicious-mcp-containment",
+  "e2b_demo_profile": {
+    "mode": "fake_e2b_local_contract_simulation",
+    "sdk_contract_version": "2.39.0",
+    "maximum_active_sandboxes": 1,
+    "maximum_allocations_per_run": 1,
+    "sandbox_timeout_ms": 180000,
+    "automatic_retry": false,
+    "fallback_provider": null,
+    "persistent_volumes": false,
+    "inherited_environment": false,
+    "public_ingress": false,
+    "external_side_effects": false,
+    "ipv4_containment": "fake_observation_only_not_live_qualified",
+    "ipv6_containment": "fake_observation_only_not_live_qualified",
+    "estimated_maximum_cost_usd": 0.00585,
+    "provider_finalized_cost_usd": null
   },
   "supported_node": ">=20",
   "commands": [
@@ -77,6 +97,7 @@
     "readme": "risk-fork/hackathon/README.md",
     "quickstart": "risk-fork/hackathon/docs/QUICKSTART.md",
     "cleanup": "risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md",
+    "live_canary_plan": "risk-fork/hackathon/docs/E2B_LIVE_CANARY_PLAN.json",
     "capability": "risk-fork/discovery/risk-fork-capability.json",
     "agent_skill": "risk-fork/discovery/skill.md"
   }

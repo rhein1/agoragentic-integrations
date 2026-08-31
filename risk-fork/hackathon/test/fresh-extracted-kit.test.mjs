@@ -32,15 +32,6 @@ const REQUIRED_FILES = Object.freeze([
   'risk-fork/hackathon/README.md',
   'risk-fork/hackathon/demo-status.json',
 ]);
-const REQUIRED_DEPENDENCIES = Object.freeze([
-  'ajv',
-  'ajv-formats',
-  'fast-deep-equal',
-  'fast-uri',
-  'json-schema-traverse',
-  'require-from-string',
-]);
-
 function minimalEnvironment(extra = {}) {
   return {
     SystemRoot: process.env.SystemRoot,
@@ -69,15 +60,6 @@ async function createCommittedRuntimeSource(temporary) {
       force: false,
     });
   }
-  for (const dependency of REQUIRED_DEPENDENCIES) {
-    const relative = path.join('risk-fork', 'node_modules', dependency);
-    await cp(path.join(repositoryRoot, relative), path.join(repository, relative), {
-      recursive: true,
-      errorOnExist: true,
-      force: false,
-    });
-  }
-
   await execFileAsync('git', ['init', '--initial-branch=main'], { cwd: repository, windowsHide: true });
   await execFileAsync('git', ['config', 'user.email', 'offline-runtime@example.invalid'], {
     cwd: repository,

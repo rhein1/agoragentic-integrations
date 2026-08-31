@@ -18,6 +18,7 @@ import {
 const REPRESENTATIVE_SCENARIOS = Object.freeze([
   'low-read-only',
   'high-filesystem-write',
+  'e2b-malicious-mcp-containment',
   'irreversible-deployment-proposal',
   'deny-owner-policy',
   'cleanup-unknown',
@@ -83,6 +84,17 @@ function assertRepresentativeResults(results) {
     || high.core_receipt_verified !== true
     || high.cleanup?.status !== 'verified') {
     throw new Error('HIGH representative did not produce verified prepare-only evidence');
+  }
+  const fakeE2B = byId.get('e2b-malicious-mcp-containment');
+  if (fakeE2B?.execution_mode !== 'fake_e2b_protocol_execution'
+    || fakeE2B.provider_calls !== 0
+    || fakeE2B.provider_evidence?.allocation_count !== 1
+    || fakeE2B.provider_evidence?.retry_count !== 0
+    || fakeE2B.provider_evidence?.sandbox_running !== false
+    || fakeE2B.parent_state_unchanged !== true
+    || fakeE2B.attack_attempts?.length !== 8
+    || fakeE2B.cleanup?.status !== 'verified') {
+    throw new Error('Fake E2B representative did not prove the offline containment contract');
   }
   const irreversible = byId.get('irreversible-deployment-proposal');
   if (irreversible?.execution_mode !== 'prepare_only'

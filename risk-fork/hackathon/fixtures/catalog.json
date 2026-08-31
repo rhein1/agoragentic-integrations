@@ -10,6 +10,7 @@
     "high-incomplete-metadata",
     "high-untrusted-discovery",
     "high-prompt-injection",
+    "e2b-malicious-mcp-containment",
     "irreversible-deployment-proposal",
     "deny-owner-policy",
     "cleanup-unknown",

@@ -2,13 +2,15 @@
 
 > **DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION**
 
-This walkthrough uses only named synthetic fixtures on the local machine. It
-makes no provider call, uses no external network or credential, grants no
-authority, and performs no clean commit. Use Node.js 20 or newer.
+This walkthrough uses only named synthetic fixtures on the local machine. Demo
+runtime makes no provider or external-network call, uses no credential, grants
+no authority, and performs no clean commit. Use Node.js 20 or newer.
 
 Run every command from the root of the pinned source checkout or the equivalent
-root inside the verified offline kit. For a source checkout, first install the
-locked Risk Fork dependencies:
+root inside the verified offline kit. A source checkout needs the locked Risk
+Fork dependencies. The ordinary setup command below may contact the npm
+registry on a cold machine; that setup is outside the zero-network demo-runtime
+claim:
 
 ```powershell
 npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
@@ -16,6 +18,10 @@ npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
 
 A verified offline kit already bundles the dependency closure. Do not run
 `npm install` or `npm ci` inside a kit extraction.
+
+For a strictly zero-network walkthrough, use the verified offline kit. A source
+checkout with a prewarmed integrity-addressed npm cache may instead use the same
+command with `--offline`; it fails closed on a cache miss.
 
 ## 1. Check the local demo
 
@@ -31,18 +37,22 @@ provider/external-network authority, and this banner:
 DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION
 ```
 
-## 2. Preview and run a HIGH fixture
+## 2. Preview and run the flagship fake-E2B fixture
 
 ```powershell
-node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario high-filesystem-write
-node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario high-filesystem-write
+node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario e2b-malicious-mcp-containment
+node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario e2b-malicious-mcp-containment
 ```
 
 `plan` writes nothing. The run should show deterministic HIGH classification,
-local savepoint/fork lifecycle evidence, a tainted candidate, bounded validation,
-destruction plus separate absence verification, and a final
+the real controller and E2B adapter composed only with an injected fake SDK,
+one synthetic sandbox, eight boundary-evaluated synthetic stdio MCP attack
+outcomes, a tainted candidate,
+one accepted typed result, identical parent before/after hashes, destruction
+plus separate simulated provider-API absence evidence, and a final
 `prepared_not_committed` result. It must not perform the represented action in
-the parent workspace.
+the parent workspace. `provider_calls` remains `0`; this is a local contract
+simulation, not an E2B sandbox, OS containment test, or isolation claim.
 
 Every result must include:
 
@@ -74,7 +84,7 @@ external/provider traffic; the recorder explicitly uses local loopback
 transport. For the HIGH record, confirm that the replay shows the deterministic
 classifier name and `v1` version, exactly four lanes in this order: Clean
 Parent, Policy and Risk Decision, Disposable Fork, and Evidence and Cleanup.
-Confirm the local execution label is `local_reference_protocol_execution`,
+Confirm the execution label is `fake_e2b_protocol_execution`,
 `isolation_boundary` is `false`, and the receipt hash and outer-record bindings
 are verified. The Evidence and Cleanup lane includes every active-run, completed-run,
 workspace-file, workspace-byte, write-byte, action, fork-TTL, execution-timeout,
@@ -115,7 +125,8 @@ node risk-fork/hackathon/bin/risk-fork-demo.mjs config --client codex --yes
 This command does not edit the selected client's real configuration. Manually
 merge the reviewed artifact into that client's current documented local MCP
 configuration, then restart the client if required. The connector exposes a
-closed named-fixture surface. Ask the agent to run `high-filesystem-write`; do
+closed named-fixture surface. Ask the agent to run
+`e2b-malicious-mcp-containment`; do
 not give it a real command, path, URL, secret, or workspace.
 
 ## 5. Inspect and clean up

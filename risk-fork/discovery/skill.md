@@ -26,12 +26,14 @@ token-protected local loopback transport. E2B is `not_live_qualified`.
 
 The local host exposes a closed scenario interface through the pinned stdio
 connector. The agent may select one enumerated fixture ID. It must not decide or
-supply its own risk level: the host owns the fixture metadata and deterministic
-classifier input, then decides whether a local reference fork is required.
+supply its own risk level or provider: the host owns the fixture metadata,
+provider profile, and deterministic classifier input, then decides whether a
+local reference copy or injected fake-E2B contract is required.
 
 Use it for requests such as:
 
 - “Show me how Risk Fork handles the HIGH filesystem-write fixture.”
+- “Run the fake-E2B malicious MCP containment fixture.”
 - “Replay the irreversible prepare-only lifecycle.”
 - “Inspect cleanup evidence for the cleanup-unknown fixture.”
 
@@ -76,6 +78,7 @@ configuration `generated_not_client_verified`.
 - `high-incomplete-metadata`
 - `high-untrusted-discovery`
 - `high-prompt-injection`
+- `e2b-malicious-mcp-containment`
 - `irreversible-deployment-proposal`
 - `deny-owner-policy`
 - `cleanup-unknown`
@@ -109,12 +112,17 @@ Every result must retain all of these values:
 ```
 
 Treat any missing or weakened value as failure. LOW and DENY paths do not
-allocate a fork. HIGH uses only the local reference protocol simulator.
+allocate a fork. HIGH uses only the local reference protocol simulator, except
+the single `e2b-malicious-mcp-containment` fixture, which uses the real E2B
+adapter with an injected fake SDK. It remains a local contract simulation with
+zero provider calls.
 IRREVERSIBLE remains prepare-only. Cleanup requires both a destruction request
 and separate absence verification; `unknown` or `failed` cleanup is not success.
-The recorder must label HIGH execution `local_reference_protocol_execution`,
-show `isolation_boundary: false`, and derive receipt verification by recomputing
-the hash and binding it to the replay record.
+The recorder must label ordinary HIGH execution
+`local_reference_protocol_execution` and the flagship execution
+`fake_e2b_protocol_execution`. Every profile must show
+`isolation_boundary: false` and derive receipt verification by recomputing the
+hash and binding it to the replay record.
 
 Runtime fixture data stays under the marker-bound owned local demo root
 identified only by the redacted reference from `doctor`. The Git repository

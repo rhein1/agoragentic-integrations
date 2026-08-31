@@ -55,6 +55,13 @@ import {
   sanitizeDemoError,
   validateDemoOperation,
 } from './security.mjs';
+import {
+  FAKE_E2B_DEMO_LABEL,
+  FAKE_E2B_DEMO_PROFILE,
+  HackathonFakeE2BAdapter,
+  RISK_FORK_HACKATHON_PRODUCT_CLAIM,
+} from './fake-e2b-profile.mjs';
+import { MALICIOUS_MCP_PARENT_CREDENTIAL_REF } from '../fixtures/malicious-stdio-mcp.mjs';
 
 const DEMO_RESULT_SCHEMA = 'agoragentic.risk-fork.hackathon-demo-result.v1';
 const DEMO_PLAN_SCHEMA = 'agoragentic.risk-fork.hackathon-demo-plan.v1';
@@ -102,6 +109,7 @@ const RUN_ID_PATTERN = /^run_[a-f0-9]{24}$/;
 const LOCK_ID_PATTERN = /^lock_[a-f0-9]{32}$/;
 const RECOVERY_ID_PATTERN = /^recovery_[a-f0-9]{32}$/;
 const DEMO_LOCAL_EXECUTION_MODE = 'local_reference_protocol_execution';
+const DEMO_FAKE_E2B_EXECUTION_MODE = 'fake_e2b_protocol_execution';
 
 function demoFacingExecutionMode(value) {
   return value === 'isolated_execution' || value === 'isolated_execution_timeout_probe'
@@ -659,9 +667,17 @@ function baseComponent({ scenario, plan, runId }) {
     run_id: runId,
     scenario: { id: scenario.id, title: scenario.title },
     action_summary: scenario.title,
+    provider_profile: scenario.provider_profile ?? 'local-reference',
+    provider_label: scenario.provider_profile === 'fake-e2b' ? FAKE_E2B_DEMO_LABEL : null,
+    product_claim: RISK_FORK_HACKATHON_PRODUCT_CLAIM,
     decision: cleanSummary(plan),
     parent_state_hash: null,
+    parent_state_hash_before: null,
+    parent_state_hash_after: null,
+    parent_state_unchanged: null,
+    savepoint_capsule_hash: null,
     savepoint_status: 'not_allocated',
+    sandbox_id: null,
     fork_identity_hash: null,
     execution_mode: 'not_executed',
     isolation_boundary: false,
@@ -674,6 +690,12 @@ function baseComponent({ scenario, plan, runId }) {
     final_state: 'blocked',
     exit_code: 2,
     local_adapter_calls: 0,
+    simulated_sdk_events: 0,
+    provider_evidence: null,
+    accepted_typed_result: null,
+    cost: scenario.provider_profile === 'fake-e2b'
+      ? structuredClone(FAKE_E2B_DEMO_PROFILE.compute)
+      : null,
     observer_records: [],
     core_receipt: null,
     core_receipt_verified: false,
@@ -721,10 +743,12 @@ async function createRunWorkspace(rootHandle, runId) {
   const runRelative = `${RUNS_DIRECTORY}/${runId}`;
   const run = await ensureDirectory(rootHandle, runRelative);
   const source = await ensureDirectory(rootHandle, `${runRelative}/source`);
+  const parent = await ensureDirectory(rootHandle, `${runRelative}/parent`);
   const adapter = await ensureDirectory(rootHandle, `${runRelative}/adapter`);
   return {
     run_relative: run.relative_path,
     source_absolute: source.absolute_path,
+    parent_absolute: parent.absolute_path,
     adapter_absolute: adapter.absolute_path,
   };
 }
@@ -1247,12 +1271,14 @@ async function writeCompletedRuns(rootHandle, completedRuns) {
 
 function observerSummary(adapter) {
   const records = adapter.observations();
-  const forkRecord = records.find((record) => record.stage === 'fork_requested');
+  const forkRecord = records.find((record) => (
+    record.stage === 'fork_requested' || record.stage === 'allocation_requested'
+  ));
   const executionRecord = records.find((record) => record.stage === 'execution_requested');
   const taintRecord = records.find((record) => record.stage === 'tainted_result_produced');
   return {
     records,
-    fork_identity_hash: forkRecord?.fork_identity_hash ?? null,
+    fork_identity_hash: forkRecord?.fork_identity_hash ?? forkRecord?.identity_hash ?? null,
     execution_mode: executionRecord?.execution_mode ?? 'not_executed',
     taint_status: taintRecord?.taint_status ?? 'not_produced',
     tainted_output_evidence: taintedOutputEvidence(taintRecord?.result_hash ?? null),
@@ -1261,6 +1287,7 @@ function observerSummary(adapter) {
 
 function prepareInputForScenario({ scenario, capsule, sourceWorkspace }) {
   const expectedCommitType = scenario.expected_commit_type;
+  const fakeE2B = scenario.provider_profile === 'fake-e2b';
   return {
     risk_input: scenario.risk_input,
     capsule,
@@ -1283,8 +1310,10 @@ function prepareInputForScenario({ scenario, capsule, sourceWorkspace }) {
           }),
         }
       : {}),
-    fork_ttl_ms: RISK_FORK_DEMO_LIMITS.fork_ttl_ms,
-    idle_ttl_ms: RISK_FORK_DEMO_LIMITS.fork_ttl_ms,
+    fork_ttl_ms: fakeE2B
+      ? FAKE_E2B_DEMO_PROFILE.sandbox_timeout_ms
+      : RISK_FORK_DEMO_LIMITS.fork_ttl_ms,
+    ...(!fakeE2B ? { idle_ttl_ms: RISK_FORK_DEMO_LIMITS.fork_ttl_ms } : {}),
     max_execution_ms: RISK_FORK_DEMO_LIMITS.execution_timeout_ms,
     network_policy: { mode: 'blocked' },
     force_optional_fork: false,
@@ -1293,22 +1322,52 @@ function prepareInputForScenario({ scenario, capsule, sourceWorkspace }) {
 
 async function executeControllerScenario({ scenario, plan, runId, workspace, runtime }) {
   const component = baseComponent({ scenario, plan, runId });
+  const fakeE2B = scenario.provider_profile === 'fake-e2b';
+  let parentBefore = null;
+  if (fakeE2B) {
+    await writeFile(
+      path.join(workspace.parent_absolute, MALICIOUS_MCP_PARENT_CREDENTIAL_REF),
+      'synthetic parent-only canary; never exported to the child\n',
+      { encoding: 'utf8', mode: 0o600, flag: 'wx' },
+    );
+    await writeFile(
+      path.join(workspace.source_absolute, 'sanitized-task.txt'),
+      'bounded synthetic malicious-MCP containment task\n',
+      { encoding: 'utf8', mode: 0o600, flag: 'wx' },
+    );
+    parentBefore = await inspectLocalWorkspace({
+      source_workspace: workspace.parent_absolute,
+      max_files: RISK_FORK_DEMO_LIMITS.max_workspace_files,
+      max_bytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
+    });
+    component.parent_state_hash_before = parentBefore.workspace_digest;
+  }
   const workspaceInfo = await inspectLocalWorkspace({
     source_workspace: workspace.source_absolute,
     max_files: RISK_FORK_DEMO_LIMITS.max_workspace_files,
     max_bytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
   });
-  const capsule = createScenarioCapsule(scenario, workspaceInfo.workspace_digest);
-  component.parent_state_hash = capsule.parent.state_hash;
-  const adapter = new DemoObservingLocalAdapter({
-    baseDirectory: workspace.adapter_absolute,
-    maxFiles: RISK_FORK_DEMO_LIMITS.max_workspace_files,
-    maxBytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
-    clock: STATIC_CLOCK,
-    observationClock: STATIC_CLOCK,
-    verifyAuthorityFreeSource: createAuthorityFreeSourceVerifier,
-    cleanupUnknown: scenario.kind === 'cleanup_unknown',
+  const capsule = createScenarioCapsule(scenario, workspaceInfo.workspace_digest, {
+    ...(parentBefore ? { parent_state_hash: parentBefore.workspace_digest } : {}),
   });
+  component.parent_state_hash = capsule.parent.state_hash;
+  component.savepoint_capsule_hash = capsule.capsule_hash;
+  const adapter = fakeE2B
+    ? new HackathonFakeE2BAdapter({
+        baseDirectory: workspace.adapter_absolute,
+        maxFiles: RISK_FORK_DEMO_LIMITS.max_workspace_files,
+        maxBytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
+        clock: STATIC_CLOCK,
+      })
+    : new DemoObservingLocalAdapter({
+        baseDirectory: workspace.adapter_absolute,
+        maxFiles: RISK_FORK_DEMO_LIMITS.max_workspace_files,
+        maxBytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
+        clock: STATIC_CLOCK,
+        observationClock: STATIC_CLOCK,
+        verifyAuthorityFreeSource: createAuthorityFreeSourceVerifier,
+        cleanupUnknown: scenario.kind === 'cleanup_unknown',
+      });
   runtime.adapter = adapter;
   const controller = new RiskForkController({
     provider: adapter,
@@ -1329,6 +1388,12 @@ async function executeControllerScenario({ scenario, plan, runId, workspace, run
     component.execution_mode = observer.execution_mode;
     component.taint_status = observer.taint_status;
     component.tainted_output_evidence = observer.tainted_output_evidence;
+    if (fakeE2B) {
+      const providerEvidence = adapter.providerEvidence();
+      component.provider_evidence = providerEvidence;
+      component.simulated_sdk_events = providerEvidence.events.length;
+      component.sandbox_id = providerEvidence.sandbox_id;
+    }
     if (prepared.mode === 'denied') {
       component.final_state = 'denied';
       component.exit_code = 0;
@@ -1355,7 +1420,9 @@ async function executeControllerScenario({ scenario, plan, runId, workspace, run
     component.fork_identity_hash = prepared.fork_identity.identity_hash;
     component.execution_mode = prepared.risk_decision.level === 'IRREVERSIBLE'
       ? 'prepare_only'
-      : DEMO_LOCAL_EXECUTION_MODE;
+      : fakeE2B
+        ? DEMO_FAKE_E2B_EXECUTION_MODE
+        : DEMO_LOCAL_EXECUTION_MODE;
     component.taint_status = prepared.artifact.taint_status;
     const taintedEvent = prepared.lifecycle.events.find((event) => event.to === 'TAINTED');
     component.tainted_output_evidence = taintedOutputEvidence(
@@ -1378,6 +1445,33 @@ async function executeControllerScenario({ scenario, plan, runId, workspace, run
       artifact_hash: prepared.artifact.artifact_hash,
       clean_commit_required: prepared.artifact.authority_flags.clean_commit_required,
     };
+    if (fakeE2B) {
+      const parentAfter = await inspectLocalWorkspace({
+        source_workspace: workspace.parent_absolute,
+        max_files: RISK_FORK_DEMO_LIMITS.max_workspace_files,
+        max_bytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
+      });
+      component.parent_state_hash_after = parentAfter.workspace_digest;
+      component.parent_state_unchanged = parentAfter.workspace_digest === parentBefore.workspace_digest;
+      if (!component.parent_state_unchanged) {
+        throw new Error('Synthetic parent fixture changed during fake E2B execution');
+      }
+      const providerEvidence = adapter.providerEvidence();
+      component.provider_evidence = providerEvidence;
+      component.simulated_sdk_events = providerEvidence.events.length;
+      component.sandbox_id = providerEvidence.sandbox_id;
+      component.attack_attempts = providerEvidence.attack_attempts;
+      component.accepted_typed_result = structuredClone(
+        prepared.artifact.body.payload,
+      );
+      component.cost = {
+        ...structuredClone(FAKE_E2B_DEMO_PROFILE.compute),
+        observed_elapsed_ms: Math.round(Object.values(prepared.measurements)
+          .filter((value) => Number.isFinite(value))
+          .reduce((sum, value) => sum + value, 0)),
+        estimate_kind: 'prompt_pinned_demo_estimate_not_a_bill_or_provider_receipt',
+      };
+    }
 
     if (scenario.kind === 'tamper') {
       const tamperedLifecycle = structuredClone(prepared.lifecycle);
@@ -1420,6 +1514,20 @@ async function executeControllerScenario({ scenario, plan, runId, workspace, run
     component.execution_mode = demoFacingExecutionMode(observer.execution_mode);
     component.taint_status = observer.taint_status;
     component.tainted_output_evidence = observer.tainted_output_evidence;
+    if (fakeE2B) {
+      const providerEvidence = adapter.providerEvidence();
+      component.provider_evidence = providerEvidence;
+      component.simulated_sdk_events = providerEvidence.events.length;
+      component.sandbox_id = providerEvidence.sandbox_id;
+      component.attack_attempts = providerEvidence.attack_attempts;
+      const parentAfter = await inspectLocalWorkspace({
+        source_workspace: workspace.parent_absolute,
+        max_files: RISK_FORK_DEMO_LIMITS.max_workspace_files,
+        max_bytes: RISK_FORK_DEMO_LIMITS.max_workspace_bytes,
+      });
+      component.parent_state_hash_after = parentAfter.workspace_digest;
+      component.parent_state_unchanged = parentAfter.workspace_digest === parentBefore.workspace_digest;
+    }
     component.lifecycle = lifecycleSummary(failure.lifecycle);
     component.cleanup = failure.cleanup;
     component.savepoint_status = observer.records.some((record) => (

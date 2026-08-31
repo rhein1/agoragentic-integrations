@@ -2,8 +2,41 @@
   "schema": "agoragentic.risk-fork.capability-card.v1",
   "id": "risk-fork-hackathon-demo",
   "name": "Risk Fork Hackathon Demo",
-  "description": "Local deterministic visualization of fork-before-risk protocol behavior over closed synthetic fixtures.",
-  "status": "experimental_source_demo",
+  "kind": "agent_security_boundary",
+  "description": "Local deterministic visualization of fork-before-risk behavior, including a fake-E2B malicious-MCP contract simulation over closed synthetic fixtures.",
+  "status": "demo_only",
+  "intercepts": [
+    "mcp",
+    "tool_call",
+    "code_execution"
+  ],
+  "intercepts_live_traffic": false,
+  "risk_levels": [
+    "HIGH",
+    "IRREVERSIBLE"
+  ],
+  "commit_modes": [
+    "typed_result",
+    "workspace_diff",
+    "consequential_action_proposal"
+  ],
+  "providers": [
+    {
+      "id": "e2b",
+      "status": "hackathon_demo_only",
+      "qualification_status": "not_live_qualified",
+      "hackathon_mode": "injected_fake_sdk_local_contract_simulation",
+      "provider_calls": 0
+    }
+  ],
+  "read_only_discovery_tools": [
+    "risk_fork_assess",
+    "risk_fork_preview",
+    "risk_fork_status",
+    "risk_fork_receipt"
+  ],
+  "read_only_discovery_tool_status": "review_only_not_production_served_or_registered",
+  "public_execute_tool_exposed": false,
   "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
   "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",
   "use_when": [
@@ -92,6 +125,7 @@
     "high-incomplete-metadata",
     "high-untrusted-discovery",
     "high-prompt-injection",
+    "e2b-malicious-mcp-containment",
     "irreversible-deployment-proposal",
     "deny-owner-policy",
     "cleanup-unknown",
@@ -116,6 +150,19 @@
     "recorder_bytes": 4194304,
     "owned_demo_root_bytes": 67108864,
     "daily_limit": null
+  },
+  "fake_e2b_profile": {
+    "scenario_id": "e2b-malicious-mcp-containment",
+    "sdk_contract_version": "2.39.0",
+    "maximum_active_sandboxes": 1,
+    "maximum_allocations": 1,
+    "sandbox_timeout_ms": 180000,
+    "retry": false,
+    "fallback_provider": null,
+    "estimated_maximum_cost_usd": 0.00585,
+    "provider_finalized_cost_usd": null,
+    "provider_calls": 0,
+    "isolation_boundary": false
   },
   "storage": {
     "runtime_location": "marker-bound owned local demo root identified by a redacted doctor reference",

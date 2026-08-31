@@ -3,6 +3,10 @@ import {
   createTrustedMcpServerVerifier,
   sha256Ref,
 } from '../../src/index.mjs';
+import {
+  MALICIOUS_MCP_CALL_ARGUMENTS,
+  MALICIOUS_MCP_TOOL_NAME,
+} from '../fixtures/malicious-stdio-mcp.mjs';
 
 export const DEMO_NOW = '2030-01-01T00:10:00.000Z';
 export const DEMO_EXPIRES_AT = '2030-01-01T00:20:00.000Z';
@@ -98,6 +102,7 @@ function riskInput({
   annotations = BASE_ANNOTATIONS,
   injection = [],
   policy = {},
+  toolName = null,
 }) {
   return {
     request_id: `request:${id}`,
@@ -106,7 +111,9 @@ function riskInput({
     mcp_server_origin: DEMO_ORIGIN,
     mcp_server_trust: trust,
     ...(trust === 'verified' ? { mcp_server_attestation: serverAttestation() } : {}),
-    ...(phase === 'tools/call' ? { tool_name: `synthetic_${id.replaceAll('-', '_')}` } : {}),
+    ...(phase === 'tools/call'
+      ? { tool_name: toolName ?? `synthetic_${id.replaceAll('-', '_')}` }
+      : {}),
     tool_annotations: { ...annotations },
     capabilities: { ...capabilities },
     prompt_injection_indicators: [...injection],
@@ -114,13 +121,13 @@ function riskInput({
   };
 }
 
-function typedOperation(id, actions = []) {
+function typedOperation(id, actions = [], payload = null) {
   return {
     kind: 'bounded_file_batch',
     actions,
     commit_candidate: {
       type: 'TYPED_RESULT',
-      payload: {
+      payload: payload ?? {
         summary: `Synthetic fixture ${id} completed inside the local protocol simulator.`,
         fixture_id: id,
       },
@@ -229,6 +236,35 @@ const SCENARIOS = Object.freeze([
     expected_commit_type: 'TYPED_RESULT',
   },
   {
+    id: 'e2b-malicious-mcp-containment',
+    title: 'Malicious stdio MCP exercised against the fake E2B contract',
+    kind: 'e2b_mock',
+    provider_profile: 'fake-e2b',
+    expected_level: 'HIGH',
+    risk_input: riskInput({
+      id: 'e2b-malicious-mcp-containment',
+      phase: 'tools/call',
+      trust: 'untrusted',
+      toolName: MALICIOUS_MCP_TOOL_NAME,
+      annotations: { ...BASE_ANNOTATIONS, openWorldHint: true },
+      capabilities: {
+        ...NO_CAPABILITIES,
+        network_access: true,
+        filesystem_read: true,
+        filesystem_write: true,
+        credential_access: true,
+        unknown_or_unclassified: true,
+      },
+      injection: ['synthetic_hostile_tools_list_instruction'],
+    }),
+    arguments: MALICIOUS_MCP_CALL_ARGUMENTS,
+    operation: typedOperation('e2b-malicious-mcp-containment', [], {
+      summary: 'One bounded synthetic result passed exact validation.',
+      fixture_id: 'e2b-malicious-mcp-containment',
+    }),
+    expected_commit_type: 'TYPED_RESULT',
+  },
+  {
     id: 'irreversible-deployment-proposal',
     title: 'IRREVERSIBLE deployment remains a prepare-only proposal',
     kind: 'irreversible',
@@ -321,12 +357,20 @@ const SCENARIO_MAP = new Map(SCENARIOS.map((scenario) => [scenario.id, scenario]
 export const SCENARIO_IDS = Object.freeze([...SCENARIO_MAP.keys()]);
 
 export function listScenarios() {
-  return SCENARIOS.map(({ id, title, expected_level, expected_action, expected_failure }) => ({
+  return SCENARIOS.map(({
+    id,
+    title,
+    expected_level,
+    expected_action,
+    expected_failure,
+    provider_profile,
+  }) => ({
     id,
     title,
     expected_level,
     expected_action: expected_action ?? null,
     expected_failure: expected_failure === true,
+    provider_profile: provider_profile ?? 'local-reference',
   }));
 }
 
@@ -337,7 +381,7 @@ export function getScenario(id) {
   return structuredClone(SCENARIO_MAP.get(id));
 }
 
-export function createScenarioCapsule(scenario, workspaceDigest) {
+export function createScenarioCapsule(scenario, workspaceDigest, options = {}) {
   const effectiveArguments = scenario.arguments ?? { fixture_id: scenario.id };
   const expectedCommitType = scenario.expected_commit_type;
   const executionAuthorization = expectedCommitType === 'CONSEQUENTIAL_ACTION_PROPOSAL'
@@ -352,7 +396,8 @@ export function createScenarioCapsule(scenario, workspaceDigest) {
     parent: {
       agent_id: 'agent:risk-fork-demo-parent',
       session_id: 'session:risk-fork-demo-parent',
-      state_hash: sha256Ref({ scenario_id: scenario.id, state: 'clean-parent' }),
+      state_hash: options.parent_state_hash
+        ?? sha256Ref({ scenario_id: scenario.id, state: 'clean-parent' }),
       lineage_ref: 'lineage:risk-fork-demo',
       lineage_hash: sha256Ref('risk-fork-demo-lineage'),
     },

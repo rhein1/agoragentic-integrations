@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   appendFile,
+  cp,
   copyFile,
   link,
+  lstat,
   mkdir,
   readFile,
   rm,
@@ -24,6 +27,7 @@ import {
   OFFLINE_KIT_TRUTH,
   assertSafeArchivePath,
   buildOfflineKit,
+  createDeterministicZip,
   extractAndVerifyOfflineKit,
   validateArchiveEntryNames,
   verifyOfflineKit,
@@ -32,36 +36,29 @@ import {
 
 const execFileAsync = promisify(execFile);
 const testRoot = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(testRoot, '..', '..', '..');
 const networkGuard = path.resolve(testRoot, '../scripts/network-guard.mjs');
 const networkScope = path.resolve(testRoot, '../scripts/network-scope.mjs');
-
-const SCENARIO_IDS = Object.freeze([
-  'low-read-only',
-  'elevated-owner-policy',
-  'high-filesystem-write',
-  'high-incomplete-metadata',
-  'high-untrusted-discovery',
-  'high-prompt-injection',
-  'irreversible-deployment-proposal',
-  'deny-owner-policy',
-  'cleanup-unknown',
-  'stale-governance-binding',
-  'malformed-lifecycle-receipt',
-  'attack-traversal',
-  'attack-link',
-  'attack-secret',
-  'attack-oversized-write',
-  'attack-timeout',
-  'attack-concurrency',
+const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const SOURCE_TREES = Object.freeze([
+  'risk-fork/src',
+  'risk-fork/schema',
+  'risk-fork/e2b-template/lib',
+  'risk-fork/hackathon/bin',
+  'risk-fork/hackathon/src',
+  'risk-fork/hackathon/scripts',
+  'risk-fork/hackathon/docs',
+  'risk-fork/hackathon/recorder',
+  'risk-fork/hackathon/fixtures',
 ]);
-
-const DEPENDENCIES = Object.freeze([
-  ['ajv', '8.20.0'],
-  ['ajv-formats', '3.0.1'],
-  ['fast-deep-equal', '3.1.3'],
-  ['fast-uri', '3.1.0'],
-  ['json-schema-traverse', '1.0.0'],
-  ['require-from-string', '2.0.2'],
+const SOURCE_FILES = Object.freeze([
+  'risk-fork/package.json',
+  'risk-fork/package-lock.json',
+  'risk-fork/LICENSE',
+  'risk-fork/hackathon/package.json',
+  'risk-fork/hackathon/package-lock.json',
+  'risk-fork/hackathon/README.md',
+  'risk-fork/hackathon/demo-status.json',
 ]);
 
 const STANDARD_DNS_RESOLVER_QUERY_METHODS = Object.freeze([
@@ -90,79 +87,50 @@ async function writeFixture(root, relative, content) {
 
 async function makeSourceRepository(parent) {
   const repository = path.join(parent, 'public-source');
+  const tamperedMarker = 'TAMPERED-SOURCE-NODE-MODULES-MUST-NOT-BE-PACKAGED.txt';
+  const ignoredTreeMarker = 'IGNORED-WORKTREE-BYTES-MUST-NOT-BE-PACKAGED.mjs';
   await mkdir(repository);
-  const packageLock = {
-    name: '@agoragentic/risk-fork',
-    version: '0.1.0-alpha.0',
-    lockfileVersion: 3,
-    packages: Object.fromEntries([
-      ['', { name: '@agoragentic/risk-fork', version: '0.1.0-alpha.0' }],
-      ...DEPENDENCIES.map(([name, version]) => [`node_modules/${name}`, { version }]),
-    ]),
-  };
-  const catalog = {
-    schema: 'agoragentic.risk-fork.hackathon-fixture-catalog.v1',
-    banner: OFFLINE_KIT_BANNER,
-    synthetic_only: true,
-    arbitrary_input_allowed: false,
-    scenario_ids: SCENARIO_IDS,
-  };
-  await writeFixture(repository, 'risk-fork/package.json', `${JSON.stringify({
-    name: '@agoragentic/risk-fork',
-    version: '0.1.0-alpha.0',
-    private: true,
-    type: 'module',
-  }, null, 2)}\n`);
-  await writeFixture(repository, 'risk-fork/package-lock.json', `${JSON.stringify(packageLock, null, 2)}\n`);
-  await writeFixture(repository, 'risk-fork/LICENSE', 'MIT License\n');
-  await writeFixture(repository, 'risk-fork/src/index.mjs', 'export const fixture = true;\n');
-  await writeFixture(repository, 'risk-fork/schema/receipt.v1.json', '{"type":"object"}\n');
-  await writeFixture(repository, 'risk-fork/e2b-template/lib/runtime-contract.mjs', 'export const providerCalls = 0;\n');
-  await writeFixture(repository, 'risk-fork/hackathon/package.json', `${JSON.stringify({
-    name: '@agoragentic/risk-fork-hackathon-demo',
-    version: '0.0.0-hackathon.1',
-    private: true,
-    type: 'module',
-  }, null, 2)}\n`);
-  await writeFixture(repository, 'risk-fork/hackathon/package-lock.json', `${JSON.stringify({
-    name: '@agoragentic/risk-fork-hackathon-demo',
-    version: '0.0.0-hackathon.1',
-    lockfileVersion: 3,
-    packages: { '': { private: true } },
-  }, null, 2)}\n`);
-  await writeFixture(repository, 'risk-fork/hackathon/README.md', `# Demo\n\n${OFFLINE_KIT_BANNER}\n`);
-  await writeFixture(repository, 'risk-fork/hackathon/demo-status.json', `${JSON.stringify({
-    banner: OFFLINE_KIT_BANNER,
-    ...OFFLINE_KIT_TRUTH,
-  }, null, 2)}\n`);
+  for (const relative of SOURCE_TREES) {
+    await cp(path.join(repositoryRoot, relative), path.join(repository, relative), {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+  }
+  for (const relative of SOURCE_FILES) {
+    const destination = path.join(repository, relative);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await copyFile(path.join(repositoryRoot, relative), destination, 1);
+  }
   await writeFixture(
     repository,
-    'risk-fork/hackathon/src/scenarios.mjs',
-    `export const SCENARIO_IDS = Object.freeze(${JSON.stringify(SCENARIO_IDS, null, 2)});\n`,
+    '.gitignore',
+    `risk-fork/node_modules/\nrisk-fork/hackathon/src/${ignoredTreeMarker}\n`,
   );
-  await writeFixture(repository, 'risk-fork/hackathon/src/connector.mjs', 'export const arbitraryInput = false;\n');
-  await writeFixture(repository, 'risk-fork/hackathon/bin/risk-fork-demo.mjs', '#!/usr/bin/env node\n');
-  await writeFixture(repository, 'risk-fork/hackathon/scripts/network-guard.mjs', 'globalThis.fetch = () => { throw new Error("blocked"); };\n');
-  await writeFixture(repository, 'risk-fork/hackathon/docs/QUICKSTART.md', `${OFFLINE_KIT_BANNER}\n`);
-  await writeFixture(repository, 'risk-fork/hackathon/recorder/index.html', '<!doctype html><title>REPLAY</title>\n');
-  await writeFixture(repository, 'risk-fork/hackathon/fixtures/catalog.json', `${JSON.stringify(catalog, null, 2)}\n`);
-  for (const [name, version] of DEPENDENCIES) {
-    await writeFixture(
-      repository,
-      `risk-fork/node_modules/${name}/package.json`,
-      `${JSON.stringify({ name, version, license: 'MIT', type: 'module' }, null, 2)}\n`,
-    );
-    await writeFixture(repository, `risk-fork/node_modules/${name}/index.js`, 'export default {};\n');
-  }
 
   await execFileAsync('git', ['init', '--initial-branch=main'], { cwd: repository, windowsHide: true });
   await execFileAsync('git', ['config', 'user.email', 'offline-kit@example.invalid'], { cwd: repository, windowsHide: true });
   await execFileAsync('git', ['config', 'user.name', 'Offline Kit Test'], { cwd: repository, windowsHide: true });
   await execFileAsync('git', ['config', 'commit.gpgsign', 'false'], { cwd: repository, windowsHide: true });
-  await execFileAsync('git', ['add', '--', 'risk-fork'], { cwd: repository, windowsHide: true });
+  await execFileAsync('git', ['add', '--', '.gitignore', 'risk-fork'], { cwd: repository, windowsHide: true });
   await execFileAsync('git', ['commit', '--no-gpg-sign', '-m', 'fixture'], { cwd: repository, windowsHide: true });
   const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: repository, windowsHide: true });
-  return { repository, sourceCommit: stdout.trim() };
+  await writeFixture(
+    repository,
+    `risk-fork/node_modules/ajv/${tamperedMarker}`,
+    'untrusted ignored source dependency bytes\n',
+  );
+  await writeFixture(
+    repository,
+    `risk-fork/hackathon/src/${ignoredTreeMarker}`,
+    'throw new Error("ignored worktree bytes entered the commit-pinned kit");\n',
+  );
+  return {
+    repository,
+    sourceCommit: stdout.trim(),
+    tamperedMarker,
+    ignoredTreeMarker,
+  };
 }
 
 function minimalSpawnEnvironment(extra = {}) {
@@ -191,7 +159,12 @@ async function runGuardProbe(source, extraEnv = {}) {
 test('offline kit is commit-pinned, deterministic, extractable, and self-verifying', async (t) => {
   const temporary = await import('node:fs/promises').then(({ mkdtemp }) => mkdtemp(path.join(os.tmpdir(), 'risk-fork-kit-')));
   t.after(() => rm(temporary, { recursive: true, force: true }));
-  const { repository, sourceCommit } = await makeSourceRepository(temporary);
+  const {
+    repository,
+    sourceCommit,
+    tamperedMarker,
+    ignoredTreeMarker,
+  } = await makeSourceRepository(temporary);
   const validationSummary = {
     status: 'passed',
     representative_scenarios: ['low-read-only', 'high-filesystem-write', 'irreversible-deployment-proposal'],
@@ -212,6 +185,8 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   });
 
   assert.equal(first.source_commit, sourceCommit);
+  assert.equal(first.source_copy.source_materialization, 'exact_git_blobs');
+  assert.equal(first.source_copy.ignored_worktree_files_included, false);
   assert.equal(first.zip_sha256, second.zip_sha256);
   assert.deepEqual(await readFile(first.zip_path), await readFile(second.zip_path));
   for (const [key, value] of Object.entries(OFFLINE_KIT_TRUTH)) assert.equal(first[key], value);
@@ -219,6 +194,8 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   const manifest = JSON.parse(await readFile(path.join(first.kit_directory, 'MANIFEST.json'), 'utf8'));
   assert.equal(manifest.banner, OFFLINE_KIT_BANNER);
   assert.equal(manifest.source_commit, sourceCommit);
+  assert.equal(manifest.source_materialization, 'exact_git_blobs');
+  assert.equal(manifest.ignored_worktree_files_included, false);
   assert.equal(manifest.file_count, manifest.files.length);
   assert.deepEqual(
     manifest.files.map((entry) => entry.path),
@@ -226,6 +203,46 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/fixtures/catalog.json'));
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/node_modules/ajv/package.json'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'DEPENDENCY_PROVENANCE.json'));
+  assert.ok(!manifest.files.some((entry) => entry.path.endsWith(`/${tamperedMarker}`)));
+  assert.ok(!manifest.files.some((entry) => entry.path.endsWith(`/${ignoredTreeMarker}`)));
+  await assert.rejects(
+    readFile(path.join(first.kit_directory, 'risk-fork/node_modules/ajv', tamperedMarker)),
+    (error) => error?.code === 'ENOENT',
+  );
+  await assert.rejects(
+    readFile(path.join(first.kit_directory, 'risk-fork/hackathon/src', ignoredTreeMarker)),
+    (error) => error?.code === 'ENOENT',
+  );
+  const dependencyProvenance = JSON.parse(
+    await readFile(path.join(first.kit_directory, 'DEPENDENCY_PROVENANCE.json'), 'utf8'),
+  );
+  assert.equal(
+    dependencyProvenance.schema,
+    'agoragentic.risk-fork.offline-dependency-provenance.v1',
+  );
+  assert.equal(dependencyProvenance.materialization, 'npm_ci_offline_from_lock_cache');
+  assert.equal(dependencyProvenance.source_node_modules_used, false);
+  assert.equal(dependencyProvenance.network_used, false);
+  assert.equal(dependencyProvenance.install_scripts_executed, false);
+  assert.match(dependencyProvenance.lockfile_sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(
+    dependencyProvenance.packages.map((entry) => entry.name),
+    [
+      'ajv',
+      'ajv-formats',
+      'fast-deep-equal',
+      'fast-uri',
+      'json-schema-traverse',
+      'require-from-string',
+    ],
+  );
+  assert.ok(dependencyProvenance.packages.every((entry) => (
+    /^sha512-[A-Za-z0-9+/]+={0,2}$/.test(entry.integrity)
+    && /^[0-9a-f]{64}$/.test(entry.tree_sha256)
+    && entry.file_count > 0
+    && entry.total_bytes > 0
+  )));
   assert.equal(manifest.configuration_status.templates_generated, 4);
   assert.equal(manifest.configuration_status.templates_client_verified, 0);
   assert.equal(
@@ -255,6 +272,8 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   const directoryVerification = await verifyOfflineKit({ kitDirectory: first.kit_directory });
   const zipVerification = await verifyZipArchive({ zipPath: first.zip_path });
   assert.equal(directoryVerification.verified, true);
+  assert.equal(directoryVerification.dependency_provenance.verified, true);
+  assert.equal(directoryVerification.dependency_provenance.package_count, 6);
   assert.equal(zipVerification.verified, true);
   assert.equal(zipVerification.sha256, first.zip_sha256);
 
@@ -279,6 +298,64 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   await assert.rejects(
     extractAndVerifyOfflineKit({ zipPath: first.zip_path, destination: extracted }),
     /already exists/,
+  );
+});
+
+test('offline dependency reification fails closed on an empty cache and leaves no artifact', async (t) => {
+  const { mkdtemp } = await import('node:fs/promises');
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-kit-cache-miss-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const { repository, sourceCommit } = await makeSourceRepository(temporary);
+  const emptyCache = path.join(temporary, 'empty-cache');
+  const outputBase = path.join(temporary, 'artifacts');
+  await mkdir(emptyCache);
+
+  await assert.rejects(
+    buildOfflineKit({
+      repositoryRoot: repository,
+      sourceCommit,
+      outputBase,
+      npmCacheDirectory: emptyCache,
+    }),
+    /Offline npm lock-integrity reification failed closed/,
+  );
+  const shortCommit = sourceCommit.slice(0, 12);
+  await assert.rejects(lstat(path.join(outputBase, shortCommit)), (error) => error?.code === 'ENOENT');
+  await assert.rejects(
+    lstat(path.join(outputBase, `.${shortCommit}.building`)),
+    (error) => error?.code === 'ENOENT',
+  );
+});
+
+test('offline dependency reification rejects lock integrity drift before packaging', async (t) => {
+  const { mkdtemp } = await import('node:fs/promises');
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-kit-integrity-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const { repository } = await makeSourceRepository(temporary);
+  const lockPath = path.join(repository, 'risk-fork/package-lock.json');
+  const lock = JSON.parse(await readFile(lockPath, 'utf8'));
+  lock.packages['node_modules/ajv'].integrity = `sha512-${Buffer.alloc(64, 0xa5).toString('base64')}`;
+  await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+  await execFileAsync('git', ['add', '--', 'risk-fork/package-lock.json'], {
+    cwd: repository,
+    windowsHide: true,
+  });
+  await execFileAsync('git', ['commit', '--no-gpg-sign', '-m', 'mutated integrity fixture'], {
+    cwd: repository,
+    windowsHide: true,
+  });
+  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
+    cwd: repository,
+    windowsHide: true,
+  });
+
+  await assert.rejects(
+    buildOfflineKit({
+      repositoryRoot: repository,
+      sourceCommit: stdout.trim(),
+      outputBase: path.join(temporary, 'artifacts'),
+    }),
+    /Offline npm lock-integrity reification failed closed/,
   );
 });
 
@@ -393,6 +470,48 @@ test('ZIP verifier rejects tampering and forged link metadata before extraction'
     extractAndVerifyOfflineKit({ zipPath: forgedPath, destination: path.join(temporary, 'must-not-extract') }),
     /link\/special entry/,
   );
+});
+
+test('failed semantic extraction removes the exact owned stage and leaves no destination', async (t) => {
+  const { mkdtemp } = await import('node:fs/promises');
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-extraction-rollback-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const { repository, sourceCommit } = await makeSourceRepository(temporary);
+  const build = await buildOfflineKit({
+    repositoryRoot: repository,
+    sourceCommit,
+    outputBase: path.join(temporary, 'artifacts'),
+  });
+  const forgedSource = path.join(temporary, 'forged-source');
+  await extractAndVerifyOfflineKit({ zipPath: build.zip_path, destination: forgedSource });
+
+  const provenancePath = path.join(forgedSource, 'DEPENDENCY_PROVENANCE.json');
+  const provenance = JSON.parse(await readFile(provenancePath, 'utf8'));
+  provenance.materialization = 'forged_unverified_materialization';
+  const provenanceBytes = Buffer.from(`${JSON.stringify(provenance, null, 2)}\n`, 'utf8');
+  await writeFile(provenancePath, provenanceBytes);
+
+  const manifestPath = path.join(forgedSource, 'MANIFEST.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  const provenanceEntry = manifest.files.find((entry) => entry.path === 'DEPENDENCY_PROVENANCE.json');
+  assert.ok(provenanceEntry);
+  manifest.total_bytes += provenanceBytes.length - provenanceEntry.bytes;
+  provenanceEntry.bytes = provenanceBytes.length;
+  provenanceEntry.sha256 = sha256(provenanceBytes);
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const forgedZip = path.join(temporary, 'forged-semantic.zip');
+  await createDeterministicZip({ sourceDirectory: forgedSource, outputPath: forgedZip });
+  const destination = path.join(temporary, 'must-remain-absent');
+  const stage = path.join(temporary, '.must-remain-absent.risk-fork-extracting');
+  const owner = `${stage}.risk-fork-extraction-owner.json`;
+  await assert.rejects(
+    extractAndVerifyOfflineKit({ zipPath: forgedZip, destination }),
+    /dependency provenance boundary is invalid/i,
+  );
+  for (const absent of [destination, stage, owner]) {
+    await assert.rejects(lstat(absent), (error) => error?.code === 'ENOENT');
+  }
 });
 
 test('network guard blocks outbound socket, HTTP, fetch, and DNS without attempting external I/O', async () => {

@@ -50,7 +50,9 @@ export const OFFLINE_KIT_LIMITS = Object.freeze({
 });
 
 const MANIFEST_NAME = 'MANIFEST.json';
+const DEPENDENCY_PROVENANCE_NAME = 'DEPENDENCY_PROVENANCE.json';
 const BUILD_OWNER_NAME = '.risk-fork-offline-kit-owner.json';
+const EXTRACTION_OWNER_SUFFIX = '.risk-fork-extraction-owner.json';
 const ZIP_UTF8_FLAG = 0x0800;
 const ZIP_STORE_METHOD = 0;
 const ZIP_DOS_TIME = 0;
@@ -66,6 +68,7 @@ const REQUIRED_DEPENDENCIES = Object.freeze([
   'json-schema-traverse',
   'require-from-string',
 ]);
+const OFFLINE_RUNTIME_ROOT_DEPENDENCIES = Object.freeze(['ajv', 'ajv-formats']);
 
 const EXPECTED_SCENARIO_IDS = Object.freeze([
   'low-read-only',
@@ -74,6 +77,7 @@ const EXPECTED_SCENARIO_IDS = Object.freeze([
   'high-incomplete-metadata',
   'high-untrusted-discovery',
   'high-prompt-injection',
+  'e2b-malicious-mcp-containment',
   'irreversible-deployment-proposal',
   'deny-owner-policy',
   'cleanup-unknown',
@@ -404,6 +408,108 @@ async function copyRegularFile(source, destination) {
   if (copiedStat.size !== sourceStat.size) throw new Error(`Copy size mismatch for ${source}`);
 }
 
+async function writeRegularBytes(destination, bytes) {
+  if (!Buffer.isBuffer(bytes)) throw new TypeError('Git blob bytes must be a Buffer');
+  if (bytes.length > OFFLINE_KIT_LIMITS.max_file_bytes) {
+    throw new Error(`Committed source file exceeds the offline-kit file limit: ${destination}`);
+  }
+  await mkdir(path.dirname(destination), { recursive: true, mode: 0o755 });
+  await writeFile(destination, bytes, { flag: 'wx', mode: 0o644 });
+  await chmod(destination, 0o644);
+  const copiedStat = await lstat(destination);
+  assertRegularFile(copiedStat, destination);
+  if (copiedStat.size !== bytes.length) {
+    throw new Error(`Committed Git blob copy size mismatch: ${destination}`);
+  }
+}
+
+async function readCommittedTreeEntries(repositoryRoot, sourceCommit, pathspec) {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['ls-tree', '-r', '-z', sourceCommit, '--', pathspec],
+    {
+      cwd: repositoryRoot,
+      windowsHide: true,
+      encoding: 'buffer',
+      maxBuffer: OFFLINE_KIT_LIMITS.max_archive_bytes,
+    },
+  );
+  const records = UTF8_FATAL.decode(stdout).split('\0').filter(Boolean);
+  return records.map((record) => {
+    const match = /^([0-7]{6}) (blob|commit) ([0-9a-f]{40})\t(.+)$/.exec(record);
+    if (!match) throw new Error('Committed source tree contains an unsupported Git entry');
+    const [, mode, type, objectId, relative] = match;
+    const safeRelative = assertSafeArchivePath(relative);
+    if (type !== 'blob' || !['100644', '100755'].includes(mode)) {
+      throw new Error(`Committed source entry is not a regular blob: ${safeRelative}`);
+    }
+    return Object.freeze({ mode, object_id: objectId, path: safeRelative });
+  });
+}
+
+async function copyCommittedBlob(repositoryRoot, entry, destination) {
+  const { stdout } = await execFileAsync('git', ['cat-file', 'blob', entry.object_id], {
+    cwd: repositoryRoot,
+    windowsHide: true,
+    encoding: 'buffer',
+    maxBuffer: OFFLINE_KIT_LIMITS.max_file_bytes + 1,
+  });
+  await writeRegularBytes(destination, stdout);
+}
+
+async function copyPinnedSource({ repositoryRoot, sourceCommit, destinationRoot }) {
+  const destinations = new Set();
+  let copiedFiles = 0;
+  for (const [sourceRelative, destinationRelative] of REQUIRED_TREES) {
+    const entries = await readCommittedTreeEntries(repositoryRoot, sourceCommit, sourceRelative);
+    if (entries.length === 0) {
+      throw new Error(`Required committed source tree is empty or missing: ${sourceRelative}`);
+    }
+    for (const entry of entries) {
+      const prefix = `${sourceRelative}/`;
+      if (!entry.path.startsWith(prefix)) {
+        throw new Error(`Committed source escaped required tree: ${entry.path}`);
+      }
+      const suffix = entry.path.slice(prefix.length);
+      const destination = assertSafeArchivePath(`${destinationRelative}/${suffix}`);
+      if (destinations.has(destination)) {
+        throw new Error(`Committed source destination is duplicated: ${destination}`);
+      }
+      destinations.add(destination);
+      await copyCommittedBlob(
+        repositoryRoot,
+        entry,
+        path.join(destinationRoot, ...destination.split('/')),
+      );
+      copiedFiles += 1;
+    }
+  }
+  for (const [sourceRelative, destinationRelative] of REQUIRED_FILES) {
+    const entries = await readCommittedTreeEntries(repositoryRoot, sourceCommit, sourceRelative);
+    if (entries.length !== 1 || entries[0].path !== sourceRelative) {
+      throw new Error(`Required committed source file is missing or ambiguous: ${sourceRelative}`);
+    }
+    const destination = assertSafeArchivePath(destinationRelative);
+    if (destinations.has(destination)) {
+      throw new Error(`Committed source destination is duplicated: ${destination}`);
+    }
+    destinations.add(destination);
+    await copyCommittedBlob(
+      repositoryRoot,
+      entries[0],
+      path.join(destinationRoot, ...destination.split('/')),
+    );
+    copiedFiles += 1;
+  }
+  return Object.freeze({
+    schema: 'agoragentic.risk-fork.offline-kit-committed-source-copy.v1',
+    source_commit: sourceCommit,
+    source_materialization: 'exact_git_blobs',
+    ignored_worktree_files_included: false,
+    copied_files: copiedFiles,
+  });
+}
+
 async function copyCuratedTree(sourceRoot, destinationRoot) {
   const sourceStat = await lstat(sourceRoot);
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
@@ -429,27 +535,244 @@ async function copyCuratedTree(sourceRoot, destinationRoot) {
   }
 }
 
-async function readDependencyMetadata(repositoryRoot) {
-  const lock = JSON.parse(await readFile(path.join(repositoryRoot, 'risk-fork/package-lock.json'), 'utf8'));
-  const dependencies = [];
-  for (const name of REQUIRED_DEPENDENCIES) {
-    const lockEntry = lock?.packages?.[`node_modules/${name}`];
-    if (!lockEntry || typeof lockEntry.version !== 'string') {
+function parseLockedDependencyPlan(lockBytes) {
+  let lock;
+  try {
+    lock = JSON.parse(UTF8_FATAL.decode(lockBytes));
+  } catch {
+    throw new Error('Risk Fork package lock is not valid UTF-8 JSON');
+  }
+  if (lock?.lockfileVersion !== 3 || !lock.packages || typeof lock.packages !== 'object') {
+    throw new Error('Risk Fork package lock must use the exact lockfile v3 package inventory');
+  }
+  const closure = new Set(OFFLINE_RUNTIME_ROOT_DEPENDENCIES);
+  const pending = [...OFFLINE_RUNTIME_ROOT_DEPENDENCIES];
+  while (pending.length > 0) {
+    const name = pending.shift();
+    const entry = lock.packages[`node_modules/${name}`];
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       throw new Error(`Package lock does not pin required offline dependency ${name}`);
     }
-    const packageRoot = path.join(repositoryRoot, 'risk-fork/node_modules', ...name.split('/'));
-    const packageJson = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
-    if (packageJson.name !== name || packageJson.version !== lockEntry.version) {
-      throw new Error(`Installed dependency ${name} does not match the exact package lock`);
+    for (const dependency of Object.keys(entry.dependencies ?? {}).sort(rawPathCompare)) {
+      if (!closure.has(dependency)) {
+        closure.add(dependency);
+        pending.push(dependency);
+      }
     }
-    dependencies.push(Object.freeze({
+  }
+  const orderedClosure = [...closure].sort(rawPathCompare);
+  const expectedClosure = [...REQUIRED_DEPENDENCIES].sort(rawPathCompare);
+  if (canonicalizeArray(orderedClosure) !== canonicalizeArray(expectedClosure)) {
+    throw new Error('Risk Fork offline dependency closure drifted from the reviewed allowlist');
+  }
+  const rootDependencies = lock.packages['']?.dependencies ?? {};
+  const packages = REQUIRED_DEPENDENCIES.map((name) => {
+    const entry = lock.packages[`node_modules/${name}`];
+    if (!entry
+      || typeof entry.version !== 'string'
+      || typeof entry.resolved !== 'string'
+      || typeof entry.integrity !== 'string'
+      || entry.link === true
+      || entry.hasInstallScript === true) {
+      throw new Error(`Locked dependency ${name} lacks immutable no-script provenance`);
+    }
+    let resolved;
+    try {
+      resolved = new URL(entry.resolved);
+    } catch {
+      throw new Error(`Locked dependency ${name} has an invalid registry URL`);
+    }
+    if (resolved.protocol !== 'https:' || resolved.hostname !== 'registry.npmjs.org') {
+      throw new Error(`Locked dependency ${name} is not pinned to the npm registry`);
+    }
+    const integrityMatch = /^sha512-([A-Za-z0-9+/]+={0,2})$/.exec(entry.integrity);
+    if (!integrityMatch) {
+      throw new Error(`Locked dependency ${name} does not have SHA-512 integrity`);
+    }
+    const digest = Buffer.from(integrityMatch[1], 'base64');
+    if (digest.length !== 64 || digest.toString('base64') !== integrityMatch[1]) {
+      throw new Error(`Locked dependency ${name} has noncanonical SHA-512 integrity`);
+    }
+    if (OFFLINE_RUNTIME_ROOT_DEPENDENCIES.includes(name)
+      && rootDependencies[name] !== entry.version) {
+      throw new Error(`Root dependency ${name} does not exactly match its lock entry`);
+    }
+    return Object.freeze({
       name,
-      version: lockEntry.version,
+      version: entry.version,
+      resolved: entry.resolved,
+      integrity: entry.integrity,
+    });
+  });
+  return Object.freeze({
+    lock_sha256: sha256(lockBytes),
+    packages: Object.freeze(packages),
+  });
+}
+
+function canonicalizeArray(value) {
+  return JSON.stringify(value);
+}
+
+async function resolveNpmCli() {
+  const candidates = [
+    process.env.npm_execpath,
+    path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
+    path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js'),
+  ].filter((value) => typeof value === 'string' && path.isAbsolute(value));
+  for (const candidate of candidates) {
+    const resolved = await realpath(candidate).catch(() => null);
+    if (!resolved) continue;
+    const info = await lstat(resolved);
+    if (info.isFile() && !info.isSymbolicLink() && info.nlink === 1) return resolved;
+  }
+  throw new Error('A canonical local npm CLI is required for offline dependency reification');
+}
+
+async function resolveNpmCache(explicitCache) {
+  const configured = explicitCache
+    ?? process.env.npm_config_cache
+    ?? (process.platform === 'win32'
+      ? (process.env.LOCALAPPDATA
+        ? path.join(process.env.LOCALAPPDATA, 'npm-cache')
+        : null)
+      : (process.env.HOME ? path.join(process.env.HOME, '.npm') : null));
+  if (typeof configured !== 'string' || !path.isAbsolute(configured)) {
+    throw new Error('An absolute local npm cache is required for offline dependency reification');
+  }
+  const resolved = await realpath(configured);
+  const info = await lstat(resolved);
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('The offline npm cache must be a canonical real directory');
+  }
+  return resolved;
+}
+
+async function dependencyTreeEvidence(packageRoot) {
+  const tree = await enumerateTree(packageRoot, { includeBytes: true });
+  const files = tree.files.map((entry) => ({
+    path: entry.path,
+    bytes: entry.bytes,
+    sha256: sha256(entry.content),
+  }));
+  return Object.freeze({
+    tree_sha256: sha256(Buffer.from(stableJson(files), 'utf8')),
+    file_count: files.length,
+    total_bytes: tree.total_bytes,
+  });
+}
+
+async function materializeLockedDependenciesOffline({
+  repositoryRoot,
+  stageContainer,
+  npmCacheDirectory = null,
+}) {
+  const lockSource = path.join(repositoryRoot, 'risk-fork/package-lock.json');
+  const packageSource = path.join(repositoryRoot, 'risk-fork/package.json');
+  const lockBytes = await readFile(lockSource);
+  const plan = parseLockedDependencyPlan(lockBytes);
+  const reificationRoot = path.join(stageContainer, '.dependency-reification');
+  await mkdir(reificationRoot, { mode: 0o700 });
+  await copyRegularFile(packageSource, path.join(reificationRoot, 'package.json'));
+  await copyRegularFile(lockSource, path.join(reificationRoot, 'package-lock.json'));
+  const emptyNpmConfig = path.join(reificationRoot, '.npmrc');
+  const emptyGlobalNpmConfig = path.join(reificationRoot, '.npmrc-global');
+  await writeFile(emptyNpmConfig, '', { flag: 'wx', mode: 0o600 });
+  await writeFile(emptyGlobalNpmConfig, '', { flag: 'wx', mode: 0o600 });
+  const npmCli = await resolveNpmCli();
+  const npmCache = await resolveNpmCache(npmCacheDirectory);
+  const networkGuard = path.join(
+    repositoryRoot,
+    'risk-fork/hackathon/scripts/network-guard.mjs',
+  );
+  const childEnvironment = Object.fromEntries(Object.entries({
+    SystemRoot: process.env.SystemRoot,
+    WINDIR: process.env.WINDIR,
+    ComSpec: process.env.ComSpec,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    npm_config_cache: npmCache,
+    npm_config_userconfig: emptyNpmConfig,
+    npm_config_globalconfig: emptyGlobalNpmConfig,
+    npm_config_offline: 'true',
+    npm_config_ignore_scripts: 'true',
+    npm_config_audit: 'false',
+    npm_config_fund: 'false',
+    npm_config_update_notifier: 'false',
+    npm_config_loglevel: 'error',
+    RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
+  }).filter(([, value]) => typeof value === 'string' && value.length > 0));
+  try {
+    await execFileAsync(process.execPath, [
+      '--import',
+      pathToFileURL(networkGuard).href,
+      npmCli,
+      'ci',
+      '--offline',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--omit=dev',
+      '--omit=optional',
+      '--omit=peer',
+      '--install-strategy=hoisted',
+      '--no-bin-links',
+    ], {
+      cwd: reificationRoot,
+      env: childEnvironment,
+      windowsHide: true,
+      timeout: 120_000,
+      maxBuffer: 1024 * 1024,
+    });
+  } catch (error) {
+    const npmDetail = String(error?.stderr ?? error?.message ?? 'unknown npm failure')
+      .replaceAll(reificationRoot, '<owned-reification>')
+      .replaceAll(npmCache, '<local-npm-cache>')
+      .trim()
+      .slice(0, 2_048);
+    throw new Error(`Offline npm lock-integrity reification failed closed: ${npmDetail}`);
+  }
+  const reifiedLockBytes = await readFile(path.join(reificationRoot, 'package-lock.json'));
+  if (!lockBytes.equals(reifiedLockBytes)) {
+    throw new Error('Offline dependency reification changed the committed package lock');
+  }
+  const dependencies = [];
+  for (const locked of plan.packages) {
+    const packageRoot = path.join(reificationRoot, 'node_modules', ...locked.name.split('/'));
+    const packageJson = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+    if (packageJson.name !== locked.name || packageJson.version !== locked.version) {
+      throw new Error(`Reified dependency ${locked.name} does not match the exact package lock`);
+    }
+    const tree = await dependencyTreeEvidence(packageRoot);
+    dependencies.push(Object.freeze({
+      ...locked,
       license: typeof packageJson.license === 'string' ? packageJson.license : 'SEE_PACKAGE',
       root: packageRoot,
+      ...tree,
     }));
   }
-  return dependencies;
+  return Object.freeze({
+    reification_root: reificationRoot,
+    dependencies: Object.freeze(dependencies),
+    provenance: Object.freeze({
+      schema: 'agoragentic.risk-fork.offline-dependency-provenance.v1',
+      materialization: 'npm_ci_offline_from_lock_cache',
+      lockfile: 'risk-fork/package-lock.json',
+      lockfile_sha256: plan.lock_sha256,
+      source_node_modules_used: false,
+      network_used: false,
+      install_scripts_executed: false,
+      packages: Object.freeze(dependencies.map((item) => Object.freeze({
+        name: item.name,
+        version: item.version,
+        resolved: item.resolved,
+        integrity: item.integrity,
+        tree_sha256: item.tree_sha256,
+        file_count: item.file_count,
+        total_bytes: item.total_bytes,
+      }))),
+    }),
+  });
 }
 
 async function validateFixtureCatalog(repositoryRoot) {
@@ -885,6 +1208,9 @@ function assertManifestTruth(manifest) {
   if (manifest.source_commits?.public_integrations !== manifest.source_commit) {
     throw new Error('Offline-kit source commit metadata is inconsistent');
   }
+  if (manifest.source_materialization !== 'exact_git_blobs') {
+    throw new Error('Offline-kit source materialization is not exact-commit Git blobs');
+  }
   if (manifest.provider !== 'e2b'
     || manifest.provider_status !== 'not_live_qualified'
     || manifest.production_qualified !== false
@@ -945,6 +1271,61 @@ function validateManifestEntries(manifest) {
   return { names, directories, total };
 }
 
+async function verifyDependencyProvenance(root) {
+  const provenancePath = path.join(root, DEPENDENCY_PROVENANCE_NAME);
+  const provenanceBytes = await readFile(provenancePath);
+  let provenance;
+  try {
+    provenance = JSON.parse(UTF8_FATAL.decode(provenanceBytes));
+  } catch {
+    throw new Error('Offline dependency provenance is not valid UTF-8 JSON');
+  }
+  if (provenance?.schema !== 'agoragentic.risk-fork.offline-dependency-provenance.v1'
+    || provenance.materialization !== 'npm_ci_offline_from_lock_cache'
+    || provenance.lockfile !== 'risk-fork/package-lock.json'
+    || provenance.source_node_modules_used !== false
+    || provenance.network_used !== false
+    || provenance.install_scripts_executed !== false
+    || !Array.isArray(provenance.packages)) {
+    throw new Error('Offline dependency provenance boundary is invalid');
+  }
+  const lockBytes = await readFile(path.join(root, 'risk-fork/package-lock.json'));
+  const plan = parseLockedDependencyPlan(lockBytes);
+  if (provenance.lockfile_sha256 !== plan.lock_sha256
+    || provenance.packages.length !== plan.packages.length) {
+    throw new Error('Offline dependency provenance does not bind the included package lock');
+  }
+  for (let index = 0; index < plan.packages.length; index += 1) {
+    const locked = plan.packages[index];
+    const observed = provenance.packages[index];
+    if (!observed
+      || observed.name !== locked.name
+      || observed.version !== locked.version
+      || observed.resolved !== locked.resolved
+      || observed.integrity !== locked.integrity
+      || !/^[0-9a-f]{64}$/.test(observed.tree_sha256)
+      || !Number.isSafeInteger(observed.file_count)
+      || observed.file_count < 1
+      || !Number.isSafeInteger(observed.total_bytes)
+      || observed.total_bytes < 1) {
+      throw new Error(`Offline dependency provenance is invalid for ${locked.name}`);
+    }
+    const packageRoot = path.join(root, 'risk-fork/node_modules', ...locked.name.split('/'));
+    const actual = await dependencyTreeEvidence(packageRoot);
+    if (actual.tree_sha256 !== observed.tree_sha256
+      || actual.file_count !== observed.file_count
+      || actual.total_bytes !== observed.total_bytes) {
+      throw new Error(`Offline dependency tree provenance mismatch: ${locked.name}`);
+    }
+  }
+  return Object.freeze({
+    verified: true,
+    materialization: provenance.materialization,
+    lockfile_sha256: provenance.lockfile_sha256,
+    package_count: provenance.packages.length,
+  });
+}
+
 export async function verifyOfflineKit({ kitDirectory }) {
   const root = await realpath(normalizeAbsolute(kitDirectory, 'kitDirectory'));
   const rootStat = await lstat(root);
@@ -989,6 +1370,7 @@ export async function verifyOfflineKit({ kitDirectory }) {
     }
     assertNoSensitiveBytes(actual.content, expectedEntry.path);
   }
+  const dependencyProvenance = await verifyDependencyProvenance(root);
   assertNoSensitiveBytes(manifestBytes, MANIFEST_NAME);
   return withTruth({
     schema: 'agoragentic.risk-fork.offline-kit-verification.v1',
@@ -1001,6 +1383,7 @@ export async function verifyOfflineKit({ kitDirectory }) {
     total_bytes: manifest.total_bytes,
     configuration_status: manifest.configuration_status,
     validation_summary: manifest.validation_summary,
+    dependency_provenance: dependencyProvenance,
   });
 }
 
@@ -1034,44 +1417,99 @@ async function createSafeExtractionDirectory(root, relativeDirectory) {
   }
 }
 
+async function writeExtractionOwner(ownerPath, stage, target) {
+  await writeFile(ownerPath, stableJson({
+    schema: 'agoragentic.risk-fork.offline-kit-extraction-owner.v1',
+    owned_stage: true,
+    stage_hash: sha256(Buffer.from(stage, 'utf8')),
+    destination_hash: sha256(Buffer.from(target, 'utf8')),
+  }), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+}
+
+async function removeOwnedExtractionStage({ ownerPath, stage, target }) {
+  const parent = path.dirname(target);
+  if (!isSameOrInside(parent, stage)
+    || comparisonPath(parent) === comparisonPath(stage)
+    || comparisonPath(target) === comparisonPath(stage)) {
+    throw new Error('Refusing to clean an extraction stage outside its exact parent');
+  }
+  const owner = JSON.parse(await readFile(ownerPath, 'utf8'));
+  if (owner?.schema !== 'agoragentic.risk-fork.offline-kit-extraction-owner.v1'
+    || owner.owned_stage !== true
+    || owner.stage_hash !== sha256(Buffer.from(stage, 'utf8'))
+    || owner.destination_hash !== sha256(Buffer.from(target, 'utf8'))) {
+    throw new Error('Refusing to clean an unowned extraction stage');
+  }
+  if (await lstatOrNull(stage)) {
+    await rm(stage, { recursive: true, force: false, maxRetries: 0 });
+  }
+  await rm(ownerPath, { force: false, maxRetries: 0 });
+}
+
 export async function extractAndVerifyOfflineKit({ zipPath, destination }) {
   const parsed = await readCanonicalZip(zipPath);
   const target = normalizeAbsolute(destination, 'destination');
   if (await lstatOrNull(target)) throw new Error('Extraction destination already exists');
   await ensureExtractionParent(target);
-  await mkdir(target, { mode: 0o755 });
-  const targetReal = await realpath(target);
-  if (comparisonPath(targetReal) !== comparisonPath(target)) {
-    throw new Error('Extraction destination resolved unexpectedly');
+  const extractionParent = path.dirname(target);
+  const stage = path.join(extractionParent, `.${path.basename(target)}.risk-fork-extracting`);
+  const ownerPath = `${stage}${EXTRACTION_OWNER_SUFFIX}`;
+  if (await lstatOrNull(stage) || await lstatOrNull(ownerPath)) {
+    throw new Error('Offline-kit extraction stage already exists');
   }
-  for (const entry of parsed.entries) {
-    const parent = path.posix.dirname(entry.name);
-    await createSafeExtractionDirectory(target, parent === '.' ? '' : parent);
-    const output = path.join(target, ...entry.name.split('/'));
-    if (!isSameOrInside(target, output) || comparisonPath(output) === comparisonPath(target)) {
-      throw new Error(`Archive entry escapes extraction destination: ${entry.name}`);
+  await mkdir(stage, { mode: 0o700 });
+  let ownerWritten = false;
+  let finalized = false;
+  try {
+    await writeExtractionOwner(ownerPath, stage, target);
+    ownerWritten = true;
+    const stageReal = await realpath(stage);
+    if (comparisonPath(stageReal) !== comparisonPath(stage)) {
+      throw new Error('Extraction stage resolved unexpectedly');
     }
-    const handle = await open(output, 'wx', 0o644);
-    try {
-      await handle.writeFile(entry.content);
-      await handle.sync();
-    } finally {
-      await handle.close();
+    for (const entry of parsed.entries) {
+      const parent = path.posix.dirname(entry.name);
+      await createSafeExtractionDirectory(stage, parent === '.' ? '' : parent);
+      const output = path.join(stage, ...entry.name.split('/'));
+      if (!isSameOrInside(stage, output) || comparisonPath(output) === comparisonPath(stage)) {
+        throw new Error(`Archive entry escapes extraction stage: ${entry.name}`);
+      }
+      const handle = await open(output, 'wx', 0o644);
+      try {
+        await handle.writeFile(entry.content);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await chmod(output, 0o644);
+      const outputStat = await lstat(output);
+      assertRegularFile(outputStat, entry.name);
     }
-    await chmod(output, 0o644);
-    const outputStat = await lstat(output);
-    assertRegularFile(outputStat, entry.name);
+    const verification = await verifyOfflineKit({ kitDirectory: stage });
+    await rename(stage, target);
+    finalized = true;
+    await rm(ownerPath, { force: false, maxRetries: 0 });
+    return withTruth({
+      schema: 'agoragentic.risk-fork.offline-kit-extraction.v1',
+      extracted: true,
+      destination: target,
+      zip_sha256: sha256(parsed.bytes),
+      zip_bytes: parsed.bytes.length,
+      entry_count: parsed.entries.length,
+      verification,
+    });
+  } catch (error) {
+    if (!finalized) {
+      if (ownerWritten) {
+        await removeOwnedExtractionStage({ ownerPath, stage, target });
+      } else if (await lstatOrNull(stage)) {
+        // The directory was exclusively created by this call, and no caller data
+        // was written before the ownership-marker attempt failed.
+        await rm(stage, { recursive: true, force: false, maxRetries: 0 });
+      }
+    }
+    throw error;
   }
-  const verification = await verifyOfflineKit({ kitDirectory: target });
-  return withTruth({
-    schema: 'agoragentic.risk-fork.offline-kit-extraction.v1',
-    extracted: true,
-    destination: target,
-    zip_sha256: sha256(parsed.bytes),
-    zip_bytes: parsed.bytes.length,
-    entry_count: parsed.entries.length,
-    verification,
-  });
 }
 
 export const verifyExtractedOfflineKit = verifyOfflineKit;
@@ -1093,7 +1531,7 @@ function rootReadme(sourceCommit) {
     '',
     '```text',
     'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs doctor',
-    'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario high-filesystem-write',
+    'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario e2b-malicious-mcp-containment',
     'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs serve',
     '```',
     '',
@@ -1127,6 +1565,7 @@ async function writeGeneratedKitMetadata({
   kitRoot,
   sourceCommit,
   dependencies,
+  dependencyProvenance,
   validationSummary,
   generatedConfigurations,
 }) {
@@ -1144,12 +1583,16 @@ async function writeGeneratedKitMetadata({
     banner: OFFLINE_KIT_BANNER,
     ...OFFLINE_KIT_TRUTH,
     public_integrations: sourceCommit,
+    source_materialization: 'exact_git_blobs',
+    ignored_worktree_files_included: false,
     provider: 'e2b',
     provider_status: 'not_live_qualified',
     production_qualified: false,
     live_agoragentic_traffic_protected: false,
     hosted_execution_enabled: false,
+    dependency_provenance: DEPENDENCY_PROVENANCE_NAME,
   }));
+  await write(DEPENDENCY_PROVENANCE_NAME, stableJson(dependencyProvenance));
   const notices = [
     '# Third-party notices',
     '',
@@ -1157,7 +1600,9 @@ async function writeGeneratedKitMetadata({
     '',
     'The offline demo includes the following exact runtime dependency closure:',
     '',
-    ...dependencies.map((item) => `- ${item.name} ${item.version} — ${item.license}`),
+    ...dependencies.map((item) => (
+      `- ${item.name} ${item.version} — ${item.license} — lock SHA-512 verified offline`
+    )),
     '',
     'See each copied package directory for its package metadata and license notices.',
     '',
@@ -1200,6 +1645,8 @@ async function createManifest({
     ...OFFLINE_KIT_TRUTH,
     source_commit: sourceCommit,
     source_commits: { public_integrations: sourceCommit },
+    source_materialization: 'exact_git_blobs',
+    ignored_worktree_files_included: false,
     deterministic_created_at: FIXED_CREATED_AT,
     supported_node: '>=20',
     package_mode: 'private_unpublished_offline_directory',
@@ -1265,6 +1712,7 @@ export async function buildOfflineKit({
   repositoryRoot,
   sourceCommit,
   outputBase,
+  npmCacheDirectory = null,
   validationSummary = null,
   generatedConfigurations = null,
 }) {
@@ -1293,32 +1741,39 @@ export async function buildOfflineKit({
   const zipName = `${kitName}-${shortCommit}.zip`;
   const zipStage = path.join(stageContainer, zipName);
   try {
-    await validateFixtureCatalog(repo);
     await mkdir(kitStage, { mode: 0o755 });
-    for (const [sourceRelative, destinationRelative] of REQUIRED_TREES) {
-      await copyCuratedTree(
-        path.join(repo, ...sourceRelative.split('/')),
-        path.join(kitStage, ...destinationRelative.split('/')),
-      );
-    }
-    for (const [sourceRelative, destinationRelative] of REQUIRED_FILES) {
-      await copyRegularFile(
-        path.join(repo, ...sourceRelative.split('/')),
-        path.join(kitStage, ...destinationRelative.split('/')),
-      );
-    }
+    const sourceCopy = await copyPinnedSource({
+      repositoryRoot: repo,
+      sourceCommit,
+      destinationRoot: kitStage,
+    });
 
-    const dependencies = await readDependencyMetadata(repo);
+    const materialized = await materializeLockedDependenciesOffline({
+      repositoryRoot: kitStage,
+      stageContainer,
+      npmCacheDirectory,
+    });
+    const dependencies = materialized.dependencies;
     for (const dependency of dependencies) {
       await copyCuratedTree(
         dependency.root,
         path.join(kitStage, 'risk-fork/node_modules', ...dependency.name.split('/')),
       );
     }
+    await validateFixtureCatalog(kitStage);
+    if (!isSameOrInside(stageContainer, materialized.reification_root)
+      || comparisonPath(stageContainer) === comparisonPath(materialized.reification_root)) {
+      throw new Error('Refusing to remove dependency reification outside the owned build stage');
+    }
+    await rm(materialized.reification_root, { recursive: true, force: false, maxRetries: 0 });
+    if (await lstatOrNull(materialized.reification_root)) {
+      throw new Error('Owned dependency reification was not removed before artifact finalization');
+    }
     const configurationRecords = await writeGeneratedKitMetadata({
       kitRoot: kitStage,
       sourceCommit,
       dependencies,
+      dependencyProvenance: materialized.provenance,
       validationSummary,
       generatedConfigurations,
     });
@@ -1357,6 +1812,7 @@ export async function buildOfflineKit({
         verified: zipVerification.verified,
         entry_count: zipVerification.entry_count,
       },
+      source_copy: sourceCopy,
       scenario_orchestration: 'caller_must_run_cli_suite_from_fresh_extraction',
     });
   } catch (error) {
