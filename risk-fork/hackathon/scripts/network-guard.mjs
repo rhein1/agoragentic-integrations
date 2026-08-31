@@ -7,8 +7,9 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import net from 'node:net';
 import tls from 'node:tls';
 
+import { isRiskForkDemoLoopbackAllowed } from './network-scope.mjs';
+
 const INSTALL_MARKER = Symbol.for('agoragentic.risk-fork.demo.network-guard.v1');
-const LOOPBACK_ENV = 'RISK_FORK_DEMO_ALLOW_LOOPBACK';
 const originalFetch = typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null;
 const require = createRequire(import.meta.url);
 const DNS_RESOLUTION_METHODS = Object.freeze([
@@ -42,17 +43,41 @@ export class RiskForkDemoNetworkBlockedError extends Error {
   }
 }
 
-export function isLoopbackHost(value) {
+export function isLoopbackHost(value, { allowUrlBrackets = false } = {}) {
   if (typeof value !== 'string') return false;
-  const host = value.trim().toLowerCase();
-  if (host === '::1' || host === '[::1]') return true;
-  const match = /^(?:\[?::ffff:)?(127)\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\]?$/.exec(host);
-  if (!match) return false;
-  return match.slice(2).every((part) => Number(part) <= 255);
+  const host = value.toLowerCase();
+  return host === '127.0.0.1'
+    || host === '::1'
+    || (allowUrlBrackets && host === '[::1]');
+}
+
+function inspectLoopbackUrl(input) {
+  const raw = typeof input === 'string' ? input : null;
+  let url;
+  try {
+    if (raw !== null && raw !== raw.trim()) {
+      return { allowed: false, host: 'non-literal-url' };
+    }
+    url = input instanceof URL ? input : new URL(input);
+  } catch {
+    return { allowed: false, host: 'invalid-or-relative-url' };
+  }
+  const host = url.hostname;
+  if (url.username || url.password || !isLoopbackHost(host, { allowUrlBrackets: true })) {
+    return { allowed: false, host };
+  }
+  if (raw !== null) {
+    const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i.exec(raw)?.[1] ?? null;
+    const exactAuthority = host === '127.0.0.1'
+      ? /^127\.0\.0\.1(?::\d+)?$/.test(authority ?? '')
+      : /^\[::1\](?::\d+)?$/.test(authority ?? '');
+    if (!exactAuthority) return { allowed: false, host };
+  }
+  return { allowed: true, host };
 }
 
 function loopbackAllowed() {
-  return process.env[LOOPBACK_ENV] === '1';
+  return isRiskForkDemoLoopbackAllowed();
 }
 
 function hostFromConnectArguments(args) {
@@ -99,16 +124,16 @@ function guardHttpRequest(original, transport) {
   return function riskForkDemoGuardedHttpRequest(...args) {
     const first = args[0];
     let host = 'localhost';
+    let allowed = false;
     if (typeof first === 'string' || first instanceof URL) {
-      const url = new URL(first);
-      host = url.hostname;
+      const inspected = inspectLoopbackUrl(first);
+      host = inspected.host;
+      allowed = inspected.allowed;
     } else if (first && typeof first === 'object') {
       host = first.hostname ?? first.host ?? 'localhost';
-      if (typeof host === 'string' && host.includes(':') && !host.startsWith('[')) {
-        host = host.split(':')[0];
-      }
+      allowed = isLoopbackHost(host);
     }
-    if (!(loopbackAllowed() && isLoopbackHost(String(host)))) {
+    if (!(loopbackAllowed() && allowed)) {
       throw new RiskForkDemoNetworkBlockedError(transport, String(host));
     }
     return Reflect.apply(original, this, args);
@@ -269,14 +294,9 @@ export function installNetworkGuard() {
     enumerable: true,
     writable: false,
     value: async function riskForkDemoGuardedFetch(input, init = undefined) {
-      let host = null;
-      try {
-        host = new URL(input instanceof Request ? input.url : input).hostname;
-      } catch {
-        throw new RiskForkDemoNetworkBlockedError('fetch', 'invalid-or-relative-url');
-      }
-      if (!(loopbackAllowed() && isLoopbackHost(host))) {
-        throw new RiskForkDemoNetworkBlockedError('fetch', host);
+      const inspected = inspectLoopbackUrl(input instanceof Request ? new URL(input.url) : input);
+      if (!(loopbackAllowed() && inspected.allowed)) {
+        throw new RiskForkDemoNetworkBlockedError('fetch', inspected.host);
       }
       if (!originalFetch) throw new RiskForkDemoNetworkBlockedError('fetch', 'unavailable');
       const guardedInit = init && typeof init === 'object'
@@ -296,7 +316,7 @@ export function installNetworkGuard() {
     os_egress_enforced: false,
     guarded_surfaces: Object.freeze([...guardedSurfaces].sort()),
     loopback_allowed: loopbackAllowed(),
-    loopback_scope: loopbackAllowed() ? ['127.0.0.0/8', '::1'] : [],
+    loopback_scope: loopbackAllowed() ? ['127.0.0.1', '::1'] : [],
     demo_only: true,
     local_protocol_simulator: true,
     production_ready: false,

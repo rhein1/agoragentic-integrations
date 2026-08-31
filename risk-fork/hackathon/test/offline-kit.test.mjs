@@ -33,6 +33,7 @@ import {
 const execFileAsync = promisify(execFile);
 const testRoot = path.dirname(fileURLToPath(import.meta.url));
 const networkGuard = path.resolve(testRoot, '../scripts/network-guard.mjs');
+const networkScope = path.resolve(testRoot, '../scripts/network-scope.mjs');
 
 const SCENARIO_IDS = Object.freeze([
   'low-read-only',
@@ -619,41 +620,49 @@ test('network guard blocks HTTP/2, WebSocket, EventSource, and direct Undici API
   assert.ok(status.guarded_surfaces.includes('undici.EventSource'));
 });
 
-test('network guard allows an explicit literal-loopback recorder smoke only when enabled', async () => {
+test('network guard allows literal loopback only inside its explicit async command scope', async () => {
   const source = `
     import http from 'node:http';
-    const server = http.createServer((request, response) => {
-      if (request.url === '/redirect') {
-        response.writeHead(302, { location: 'http://example.invalid/must-not-follow' });
-        response.end();
-        return;
-      }
-      response.writeHead(200, { 'content-type': 'text/plain' });
-      response.end('REPLAY');
+    const { runWithRiskForkDemoLoopback } = await import(${JSON.stringify(pathToFileURL(networkScope).href)});
+    const result = await runWithRiskForkDemoLoopback(async () => {
+      const server = http.createServer((request, response) => {
+        if (request.url === '/redirect') {
+          response.writeHead(302, { location: 'http://example.invalid/must-not-follow' });
+          response.end();
+          return;
+        }
+        response.writeHead(200, { 'content-type': 'text/plain' });
+        response.end('REPLAY');
+      });
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = server.address();
+      const value = await new Promise((resolve, reject) => {
+        http.get({ host: '127.0.0.1', port, path: '/' }, (response) => {
+          let body = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk) => { body += chunk; });
+          response.on('end', () => resolve(body));
+        }).once('error', reject);
+      });
+      const fetchValue = await (await fetch('http://127.0.0.1:' + port + '/')).text();
+      const redirect = await fetch('http://127.0.0.1:' + port + '/redirect');
+      let externalCode = null;
+      try { http.get('http://example.invalid/'); }
+      catch (error) { externalCode = error.code; }
+      await new Promise((resolve) => server.close(resolve));
+      return { value, fetchValue, redirectStatus: redirect.status, externalCode };
     });
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', resolve);
-    });
-    const { port } = server.address();
-    const value = await new Promise((resolve, reject) => {
-      http.get({ host: '127.0.0.1', port, path: '/' }, (response) => {
-        let body = '';
-        response.setEncoding('utf8');
-        response.on('data', (chunk) => { body += chunk; });
-        response.on('end', () => resolve(body));
-      }).once('error', reject);
-    });
-    const fetchValue = await (await fetch('http://127.0.0.1:' + port + '/')).text();
-    const redirect = await fetch('http://127.0.0.1:' + port + '/redirect');
-    await new Promise((resolve) => server.close(resolve));
-    process.stdout.write(JSON.stringify({ value, fetchValue, redirectStatus: redirect.status }));
+    process.stdout.write(JSON.stringify(result));
   `;
-  const { stdout } = await runGuardProbe(source, { RISK_FORK_DEMO_ALLOW_LOOPBACK: '1' });
+  const { stdout } = await runGuardProbe(source);
   assert.deepEqual(JSON.parse(stdout), {
     value: 'REPLAY',
     fetchValue: 'REPLAY',
     redirectStatus: 302,
+    externalCode: 'RISK_FORK_DEMO_NETWORK_BLOCKED',
   });
 
   const blocked = `
@@ -661,6 +670,6 @@ test('network guard allows an explicit literal-loopback recorder smoke only when
     try { http.get({ host: '127.0.0.1', port: 9, path: '/' }); }
     catch (error) { process.stdout.write(error.code); }
   `;
-  const result = await runGuardProbe(blocked);
+  const result = await runGuardProbe(blocked, { RISK_FORK_DEMO_ALLOW_LOOPBACK: '1' });
   assert.equal(result.stdout, 'RISK_FORK_DEMO_NETWORK_BLOCKED');
 });

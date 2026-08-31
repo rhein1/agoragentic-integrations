@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import '../scripts/network-guard.mjs';
-
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +29,13 @@ import {
 } from '../src/demo-engine.mjs';
 import { verifyOfflineKit } from '../src/offline-kit.mjs';
 import { runOfflineRuntimeVerification } from '../src/offline-runtime-verifier.mjs';
+import { runWithRiskForkDemoLoopback } from '../scripts/network-scope.mjs';
+
+const LOOPBACK_COMMANDS = new Set(['serve', 'verify-offline-kit']);
+const bootstrapCommand = process.argv[2] ?? null;
+await (LOOPBACK_COMMANDS.has(bootstrapCommand)
+  ? runWithRiskForkDemoLoopback(() => import('../scripts/network-guard.mjs'))
+  : import('../scripts/network-guard.mjs'));
 
 const entrypoint = fileURLToPath(import.meta.url);
 const packageRoot = path.resolve(path.dirname(entrypoint), '..');
@@ -298,29 +303,34 @@ export async function runCli(argv = process.argv.slice(2)) {
   const command = argv[0];
   const args = argv.slice(1);
   const engine = createDemoEngine({ rootDirectory: getDefaultDemoRoot() });
-  if (command === 'mcp') {
-    if (args.length !== 0) throw new TypeError('mcp accepts no arguments');
-    await serveMcp(engine);
-    return null;
-  }
-  if (command === 'doctor' && args.length === 0) return doctor(engine);
-  if (command === 'plan') {
-    if (args.length === 0) {
-      return baseResult('agoragentic.risk-fork.demo-plan-list.v1', {
-        writes_performed: false,
-        plans: await Promise.all(SCENARIO_IDS.map((scenario) => engine.plan(scenario))),
-        exit_code: 0,
-      });
+  const dispatch = async () => {
+    if (command === 'mcp') {
+      if (args.length !== 0) throw new TypeError('mcp accepts no arguments');
+      await serveMcp(engine);
+      return null;
     }
-    return engine.plan(exactOption(args, '--scenario', SCENARIO_IDS));
-  }
-  if (command === 'run') return runScenario(engine, exactOption(args, '--scenario', SCENARIO_IDS));
-  if (command === 'serve' && args.length === 0) return serveRecorder();
-  if (command === 'config') return configure(args);
-  if (command === 'cleanup' && args.length === 0) return engine.cleanup();
-  if (command === 'verify-offline-kit' && args.length === 0) return verifyCurrentKit();
-  if (['help', '--help', '-h'].includes(command) && args.length === 0) return usage();
-  return usage();
+    if (command === 'doctor' && args.length === 0) return doctor(engine);
+    if (command === 'plan') {
+      if (args.length === 0) {
+        return baseResult('agoragentic.risk-fork.demo-plan-list.v1', {
+          writes_performed: false,
+          plans: await Promise.all(SCENARIO_IDS.map((scenario) => engine.plan(scenario))),
+          exit_code: 0,
+        });
+      }
+      return engine.plan(exactOption(args, '--scenario', SCENARIO_IDS));
+    }
+    if (command === 'run') return runScenario(engine, exactOption(args, '--scenario', SCENARIO_IDS));
+    if (command === 'serve' && args.length === 0) return serveRecorder();
+    if (command === 'config') return configure(args);
+    if (command === 'cleanup' && args.length === 0) return engine.cleanup();
+    if (command === 'verify-offline-kit' && args.length === 0) return verifyCurrentKit();
+    if (['help', '--help', '-h'].includes(command) && args.length === 0) return usage();
+    return usage();
+  };
+  return LOOPBACK_COMMANDS.has(command)
+    ? runWithRiskForkDemoLoopback(dispatch)
+    : dispatch();
 }
 
 async function main() {

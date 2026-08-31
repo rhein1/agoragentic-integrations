@@ -4,6 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
+import { runWithRiskForkDemoLoopback } from '../scripts/network-scope.mjs';
 import { createDemoEngine, verifyDemoEnvelope } from './demo-engine.mjs';
 import { createFlightRecorderServer, writeRecorderRecord } from './flight-recorder.mjs';
 import {
@@ -109,60 +110,58 @@ function hasExactDemoLimits(value) {
 }
 
 async function verifyRecorder(highResult, rootHandle) {
-  await writeRecorderRecord(rootHandle, highResult);
-  const server = await createFlightRecorderServer({ records: [highResult] });
-  const previousLoopback = process.env.RISK_FORK_DEMO_ALLOW_LOOPBACK;
-  process.env.RISK_FORK_DEMO_ALLOW_LOOPBACK = '1';
-  try {
-    const page = await requestLocalRecorder({ server, pathname: '/' });
-    if (page.status !== 200
-      || !page.body.includes('REPLAY')
-      || !page.body.includes(RISK_FORK_DEMO_BANNER)
-      || page.body.includes(server.token)
-      || !String(page.headers['content-security-policy'] ?? '').includes("default-src 'none'")) {
-      throw new Error('Flight Recorder page failed its loopback/CSP/token smoke contract');
+  return runWithRiskForkDemoLoopback(async () => {
+    await writeRecorderRecord(rootHandle, highResult);
+    const server = await createFlightRecorderServer({ records: [highResult] });
+    try {
+      const page = await requestLocalRecorder({ server, pathname: '/' });
+      if (page.status !== 200
+        || !page.body.includes('REPLAY')
+        || !page.body.includes(RISK_FORK_DEMO_BANNER)
+        || page.body.includes(server.token)
+        || !String(page.headers['content-security-policy'] ?? '').includes("default-src 'none'")) {
+        throw new Error('Flight Recorder page failed its loopback/CSP/token smoke contract');
+      }
+      const api = await requestLocalRecorder({
+        server,
+        pathname: '/api/records',
+        token: server.token,
+      });
+      const payload = JSON.parse(api.body);
+      const replay = payload.records?.[0];
+      if (api.status !== 200
+        || payload.mode !== 'REPLAY'
+        || replay?.receipt_hash_verified !== true
+        || replay?.receipt_binding_verified !== true
+        || replay?.decision?.classifier_version !== 'v1'
+        || !hasExactDemoLimits(replay?.limits)
+        || replay?.tainted_output_evidence?.status !== 'sanitized_hash_only'
+        || replay?.tainted_output_evidence?.sanitized !== true
+        || replay?.tainted_output_evidence?.raw_output_included !== false
+        || replay?.tainted_output_evidence?.reference_bytes
+          > replay?.tainted_output_evidence?.max_reference_bytes
+        || replay?.tainted_output_evidence?.hash_bytes
+          !== replay?.tainted_output_evidence?.max_hash_bytes
+        || api.body.includes(server.token)) {
+        throw new Error('Flight Recorder record replay failed its sanitized receipt smoke contract');
+      }
+      return {
+        mode: 'REPLAY',
+        loopback_transport_used: true,
+        external_network_used: false,
+        token_redacted: true,
+        csp_verified: true,
+        receipt_visible: true,
+        receipt_hash_verified_visible: true,
+        receipt_binding_verified_visible: true,
+        classifier_version_visible: true,
+        all_demo_limits_visible: true,
+        bounded_tainted_output_evidence_visible: true,
+      };
+    } finally {
+      await server.close();
     }
-    const api = await requestLocalRecorder({
-      server,
-      pathname: '/api/records',
-      token: server.token,
-    });
-    const payload = JSON.parse(api.body);
-    const replay = payload.records?.[0];
-    if (api.status !== 200
-      || payload.mode !== 'REPLAY'
-      || replay?.receipt_hash_verified !== true
-      || replay?.receipt_binding_verified !== true
-      || replay?.decision?.classifier_version !== 'v1'
-      || !hasExactDemoLimits(replay?.limits)
-      || replay?.tainted_output_evidence?.status !== 'sanitized_hash_only'
-      || replay?.tainted_output_evidence?.sanitized !== true
-      || replay?.tainted_output_evidence?.raw_output_included !== false
-      || replay?.tainted_output_evidence?.reference_bytes
-        > replay?.tainted_output_evidence?.max_reference_bytes
-      || replay?.tainted_output_evidence?.hash_bytes
-        !== replay?.tainted_output_evidence?.max_hash_bytes
-      || api.body.includes(server.token)) {
-      throw new Error('Flight Recorder record replay failed its sanitized receipt smoke contract');
-    }
-    return {
-      mode: 'REPLAY',
-      loopback_transport_used: true,
-      external_network_used: false,
-      token_redacted: true,
-      csp_verified: true,
-      receipt_visible: true,
-      receipt_hash_verified_visible: true,
-      receipt_binding_verified_visible: true,
-      classifier_version_visible: true,
-      all_demo_limits_visible: true,
-      bounded_tainted_output_evidence_visible: true,
-    };
-  } finally {
-    await server.close();
-    if (previousLoopback === undefined) delete process.env.RISK_FORK_DEMO_ALLOW_LOOPBACK;
-    else process.env.RISK_FORK_DEMO_ALLOW_LOOPBACK = previousLoopback;
-  }
+  });
 }
 
 async function removeVerifiedTemporaryParent(parent, ownedRoot) {
