@@ -1,0 +1,83 @@
+{
+  "schema": "agoragentic.risk-fork.hackathon-demo-status.v1",
+  "name": "Risk Fork Hackathon Demo",
+  "status": "source_demo_available",
+  "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
+  "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",
+  "truth": {
+    "source_available": true,
+    "demo_available": true,
+    "demo_only": true,
+    "local_protocol_simulator": true,
+    "production_ready": false,
+    "live_traffic_protected": false,
+    "authority_granted": false,
+    "provider_calls": 0,
+    "network_used": false,
+    "credentials_used": false,
+    "clean_commit_performed": false,
+    "npm_published": false,
+    "hosted_enabled": false
+  },
+  "provider": "e2b",
+  "provider_status": "not_live_qualified",
+  "production_qualified": false,
+  "live_agoragentic_traffic_protected": false,
+  "hosted_execution_enabled": false,
+  "provider_qualification": {
+    "local_reference": "protocol_simulator_not_isolation",
+    "e2b": "not_live_qualified"
+  },
+  "supported_node": ">=20",
+  "commands": [
+    "doctor",
+    "plan --scenario <id>",
+    "run --scenario <id>",
+    "serve",
+    "config --client <client>",
+    "config --client <client> --yes",
+    "cleanup",
+    "verify-offline-kit"
+  ],
+  "configuration": {
+    "transport": "local_stdio",
+    "command": "node",
+    "display_command": "node",
+    "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
+    "registry_resolution_allowed": false,
+    "write_requires_yes": true,
+    "write_target": "owned_demo_root_review_artifact_only",
+    "client_configuration_modified": false,
+    "unverified_client_status": "generated_not_client_verified",
+    "client_verification_details": {
+      "codex": "codex_config_generated_not_live_client_verified"
+    }
+  },
+  "limits": {
+    "active_runs": 1,
+    "completed_runs_before_reset": 10,
+    "workspace_files": 128,
+    "workspace_bytes": 4194304,
+    "synthetic_write_bytes": 262144,
+    "actions": 50,
+    "fork_ttl_ms": 60000,
+    "execution_timeout_ms": 10000,
+    "recorder_bytes": 4194304,
+    "owned_demo_root_bytes": 67108864
+  },
+  "storage": {
+    "runtime": "marker_bound_local_owned_demo_root",
+    "github_stores_runtime_forks": false,
+    "hosted_storage_used": false,
+    "cleanup_requires_separate_absence_verification": true,
+    "local_cleanup_is_production_deletion_sla": false
+  },
+  "source_commit_binding": "The offline-kit manifest must record the exact public source commit used to build it.",
+  "docs": {
+    "readme": "risk-fork/hackathon/README.md",
+    "quickstart": "risk-fork/hackathon/docs/QUICKSTART.md",
+    "cleanup": "risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md",
+    "capability": "risk-fork/discovery/risk-fork-capability.json",
+    "agent_skill": "risk-fork/discovery/skill.md"
+  }
+}

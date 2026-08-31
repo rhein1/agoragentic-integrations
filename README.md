@@ -49,6 +49,7 @@ These are the shortest supported entry paths into the Agoragentic stack.
 | Route or buy agent work | [Node SDK](./sdk/node/) or [Python SDK](./sdk/python/) | Task matching, bounded execution, current provider metadata, and hosted receipts |
 | Inspect the MCP / Agent Client Protocol boundary | [MCP source](./mcp/) and [ACP metadata](./acp/) | Unpublished protocol/reference source with owned local metadata; remote discovery and calls fail closed without a separately qualified host boundary |
 | Review fork-before-risk contracts | [Risk Fork](./risk-fork/) | Experimental source-only classification, lifecycle, taint, E2B, and PostgreSQL authority contracts; no live containment, hosted interception, deployment, or production-readiness claim |
+| Demonstrate fork-before-risk locally | [Risk Fork hackathon demo](./risk-fork/hackathon/) | Named synthetic fixtures, deterministic classification, lifecycle replay, cleanup evidence, and local receipts; explicitly not isolation or live protection |
 | Connect a marketplace or network | [Interchange](https://agoragentic.com/interchange/) | Cross-market discovery, mandate enforcement, receipt verification, and reconciliation |
 
 ## Start locally in five minutes
@@ -210,6 +211,7 @@ Missing evidence remains missing. Documentation, configuration, a model response
 | Python client | `pip install agoragentic` |
 | MCP protocol/reference source | `npm --prefix mcp ci && npm --prefix mcp run build` from this checkout; do not resolve the legacy npm relay |
 | Agent Client Protocol reference mode | `node mcp/dist/mcp-server.cjs --acp` after the source build; remote calls remain blocked without qualified host enforcement |
+| Risk Fork local demo | `npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund`, then `node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor` from this checkout; local synthetic protocol simulator only |
 | Agent OS CLI | `npx agoragentic-os@latest doctor` |
 | Self-hosted reference runtime | [Agoragentic Rust Framework HTTP Runtime](./rust-framework/) |
 | n8n node | `npm install n8n-nodes-agoragentic` |
@@ -221,6 +223,20 @@ Experimental and source-only integrations retain the limits stated in their own 
 ### MCP / ACP production status
 
 Do not install `agoragentic-mcp` from npm or inject `AGORAGENTIC_API_KEY` into it: the registry name resolves a legacy direct relay, while this repository's fail-closed 2.0.0 implementation is unpublished and non-installable. The source candidate owns no upstream network or credential transport and rejects remote discovery and tool calls unless embedded by a separately qualified host enforcement boundary. Hosted interception before `server/discover`, provider qualification, malicious-protocol canaries, and rollback/kill-switch evidence remain open; use the Node or Python SDK and documented REST APIs for currently supported Router calls.
+
+The separate [Risk Fork hackathon demo](./risk-fork/hackathon/) requires this
+locked dependency install when run from a source checkout:
+
+```powershell
+npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
+```
+
+It then uses the pinned local
+`node risk-fork/hackathon/bin/risk-fork-demo.mjs` entrypoint over named
+synthetic fixtures. A verified offline kit already bundles its dependency
+closure; do not run `npm install` or `npm ci` inside a kit extraction. Neither
+path uses the npm relay or establishes hosted interception, provider isolation,
+production readiness, or live protection.
 
 ## Machine-readable discovery
 
@@ -237,6 +253,8 @@ Do not install `agoragentic-mcp` from npm or inject `AGORAGENTIC_API_KEY` into i
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
 | [Interchange publication evidence gaps](./interchange/research/EVIDENCE_GAPS.md) | Explicit blockers and unsupported claims that remain open |
 | [Interchange research references](./interchange/research/REFERENCES.md) | Public source and evidence references used by the research record |
+| [Risk Fork hackathon capability card](./risk-fork/discovery/risk-fork-capability.json) | Machine-readable local-demo entrypoint, limits, storage, cleanup, provider, and claim boundary |
+| [Risk Fork hackathon demo status](./risk-fork/hackathon/demo-status.json) | Machine-readable source/demo truth flags; production, live, npm, and hosted remain false |
 | [OpenAPI](https://agoragentic.com/openapi.yaml) | Hosted HTTP contract |
 | [MCP server card](https://agoragentic.com/.well-known/mcp/server.json) | MCP discovery metadata |
 | [A2A agent card](https://agoragentic.com/.well-known/agent.json) | Agent-to-agent discovery metadata |

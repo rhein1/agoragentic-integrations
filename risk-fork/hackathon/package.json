@@ -1,0 +1,21 @@
+{
+  "name": "@agoragentic/risk-fork-hackathon-demo",
+  "version": "0.0.0-hackathon.1",
+  "private": true,
+  "description": "Offline-only Risk Fork local protocol simulator for the Agoragentic hackathon demo.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "risk-fork-demo": "./bin/risk-fork-demo.mjs"
+  },
+  "scripts": {
+    "check": "node ./scripts/check.mjs",
+    "test": "node --test ./test/*.test.mjs",
+    "demo": "node ./bin/risk-fork-demo.mjs",
+    "build:kit": "node ./scripts/build-offline-kit.mjs",
+    "verify:kit": "node ./bin/risk-fork-demo.mjs verify-offline-kit"
+  },
+  "license": "MIT"
+}

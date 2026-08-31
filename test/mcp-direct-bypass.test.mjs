@@ -140,6 +140,86 @@ test('current source, docs, manifests, generated files, scripts, examples, and C
   assert.match(read('mcp/README.md'), /2\.0\.0.*unpublished.*non-installable/is);
 });
 
+test('Risk Fork hackathon onboarding is pinned-local and preserves the demo truth boundary', () => {
+  const entrypoint = 'risk-fork/hackathon/bin/risk-fork-demo.mjs';
+  const banner = 'DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION';
+  const onboardingSurfaces = [
+    'README.md',
+    'llms.txt',
+    'llms-full.txt',
+    'risk-fork/hackathon/README.md',
+    'risk-fork/hackathon/docs/QUICKSTART.md',
+    'risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md',
+    'risk-fork/discovery/skill.md',
+  ];
+
+  for (const relativePath of onboardingSurfaces) {
+    const text = read(relativePath);
+    assert.match(text, new RegExp(entrypoint.replaceAll('/', '\\/')), `${relativePath} must name the local demo entrypoint`);
+    assert.equal(containsRegistryResolvingMcpCommand(text), false, `${relativePath} contains a registry-resolving MCP command`);
+    assert.doesNotMatch(text, /npx\s+(?:--yes\s+)?agoragentic-mcp/i, `${relativePath} contains stale Risk Fork MCP onboarding`);
+  }
+
+  for (const relativePath of [
+    'risk-fork/hackathon/README.md',
+    'risk-fork/hackathon/docs/QUICKSTART.md',
+    'risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md',
+    'risk-fork/discovery/skill.md',
+  ]) {
+    assert.match(read(relativePath), new RegExp(banner), `${relativePath} must display the exact demo banner`);
+  }
+
+  const expectedTruth = {
+    source_available: true,
+    demo_available: true,
+    demo_only: true,
+    local_protocol_simulator: true,
+    production_ready: false,
+    live_traffic_protected: false,
+    authority_granted: false,
+    provider_calls: 0,
+    network_used: false,
+    credentials_used: false,
+    clean_commit_performed: false,
+    npm_published: false,
+    hosted_enabled: false,
+  };
+  const status = readJson('risk-fork/hackathon/demo-status.json');
+  const capability = readJson('risk-fork/discovery/risk-fork-capability.json');
+  assert.equal(status.entrypoint, entrypoint);
+  assert.equal(capability.entrypoint, entrypoint);
+  assert.equal(status.banner, banner);
+  assert.equal(capability.banner, banner);
+  assert.deepEqual(status.truth, expectedTruth);
+  assert.deepEqual(capability.truth, expectedTruth);
+  for (const surface of [status, capability]) {
+    assert.equal(surface.provider, 'e2b');
+    assert.equal(surface.provider_status, 'not_live_qualified');
+    assert.equal(surface.production_qualified, false);
+    assert.equal(surface.live_agoragentic_traffic_protected, false);
+    assert.equal(surface.hosted_execution_enabled, false);
+    assert.equal(surface.provider_qualification.e2b, 'not_live_qualified');
+  }
+  assert.equal(status.supported_node, '>=20');
+  assert.equal(capability.supported_node, '>=20');
+  assert.equal(capability.allowed_scenario_ids.length, 17);
+  assert.equal(capability.limits.active_runs, 1);
+  assert.equal(capability.limits.completed_runs_before_cleanup_reset, 10);
+  assert.equal(capability.limits.daily_limit, null);
+  assert.equal(status.configuration.command, 'node');
+  assert.equal(capability.configuration.command, 'node');
+  assert.equal(status.configuration.registry_resolution_allowed, false);
+  assert.equal(status.configuration.write_requires_yes, true);
+  assert.equal(status.configuration.client_configuration_modified, false);
+  assert.equal(capability.configuration.client_configuration_modified, false);
+
+  const manifest = readJson('integrations.json');
+  assert.equal(manifest.discovery.risk_fork_hackathon_demo, 'risk-fork/hackathon/README.md');
+  assert.equal(manifest.discovery.risk_fork_hackathon_status, 'risk-fork/hackathon/demo-status.json');
+  assert.equal(manifest.discovery.risk_fork_capability_card, 'risk-fork/discovery/risk-fork-capability.json');
+  assert.equal(manifest.discovery.risk_fork_agent_skill, 'risk-fork/discovery/skill.md');
+});
+
 test('shared MCP policy matcher rejects command and endpoint spelling variants', () => {
   const packageName = `agoragentic-${'mcp'}`;
   for (const command of [
