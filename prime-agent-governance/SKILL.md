@@ -17,3 +17,13 @@ description: Govern Prime Agent tool calls with bounded policy, principal-author
 10. Reconcile ambiguous paid outcomes before retrying.
 
 A Prime Agent extension is an application policy layer. Prime Agent's worker and kernel processes are not security sandboxes. Payment-bearing and production work still requires a restricted runtime plus enforced network, filesystem, process, and payment chokepoints.
+
+## Qualification boundary
+
+- Bind compatibility claims to Prime Agent `v0.7.2`, commit `83a0f9f9566219551fcb6ffaf7f519a815749a58`, and release SHA-256 `bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e`.
+- Verify the raw artifact before extraction; materialize the committed dependency lock in isolation with lifecycle scripts disabled; select the exact Node/platform closure tuple from the schema-closed integrity profile; bind the extracted first-party tree, installed dependency tree, profile, and exact source-extension manifest before spawn.
+- Run with `PI_OFFLINE=1`, `PRIME_AGENT_TELEMETRY=0`, `--offline`, `--no-session`, `--no-builtin-tools`, `--no-extensions`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, and `--no-context-files`, loading only the exact local extension with `-e`.
+- Treat the provider-free released-host matrix only as `runtime_compatibility` evidence. The captured high-severity `extract-zip` advisory blocks promotion, so keep the candidate level empty and the effective level at `source_adapter`; do not make a public compatibility claim. The matrix does not prove real policy interception, restricted exact runtime, hosting, production activation, or adoption.
+- Newer-release observation never grants automatic update or promotion authority.
+- Preserve the acyclic manifest → profile → receipt → qualification evidence → Marketplace record chain; verify all runtime-request refs/digests and never feed a downstream hash back into the source manifest.
+- Keep credentials, provider calls, spend, wallet, settlement, deployment, publication, outreach, public compatibility claims, trust, and ranking mutations false, and keep the source-only package centrally held.

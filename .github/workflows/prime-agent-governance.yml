@@ -8,21 +8,25 @@ on:
     branches: [main]
     paths:
       - 'prime-agent-governance/**'
+      - 'integration-qualification/**'
       - 'integrations.json'
       - 'integrations.schema.json'
       - 'scripts/integration-inventory-holds.js'
       - 'scripts/verify-integrations-json.js'
       - 'test/integration-inventory-holds.test.mjs'
+      - '.gitattributes'
       - '.github/workflows/prime-agent-governance.yml'
   push:
     branches: [main]
     paths:
       - 'prime-agent-governance/**'
+      - 'integration-qualification/**'
       - 'integrations.json'
       - 'integrations.schema.json'
       - 'scripts/integration-inventory-holds.js'
       - 'scripts/verify-integrations-json.js'
       - 'test/integration-inventory-holds.test.mjs'
+      - '.gitattributes'
       - '.github/workflows/prime-agent-governance.yml'
   workflow_dispatch:
 
@@ -30,6 +34,35 @@ permissions:
   contents: read
 
 jobs:
+  hash-bound-line-endings:
+    name: Hash-bound LF bytes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify attributes and raw worktree bytes
+        shell: pwsh
+        run: |
+          $taskFiles = @(git ls-files -- prime-agent-governance integration-qualification)
+          if ($taskFiles.Count -eq 0) { throw 'No hash-bound integration files were found.' }
+          foreach ($taskFile in $taskFiles) {
+            $taskTextAttr = (git check-attr text -- $taskFile) -join "`n"
+            $taskEolAttr = (git check-attr eol -- $taskFile) -join "`n"
+            if ($taskTextAttr -notmatch ': text: set$') {
+              throw "Missing text attribute for $taskFile"
+            }
+            if ($taskEolAttr -notmatch ': eol: lf$') {
+              throw "Missing LF attribute for $taskFile"
+            }
+            $taskBytes = [System.IO.File]::ReadAllBytes((Join-Path $PWD $taskFile))
+            if ($taskBytes -contains 13) {
+              throw "CR byte found in hash-bound file $taskFile"
+            }
+          }
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -45,6 +78,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
+      - name: Generic integration qualification contract tests
+        run: npm test --prefix integration-qualification
       - name: Syntax checks
         working-directory: prime-agent-governance
         run: npm run check
@@ -58,3 +93,36 @@ jobs:
         run: node --test test/integration-inventory-holds.test.mjs
       - name: Root machine-surface verifier
         run: node scripts/verify-integrations-json.js
+
+  released-compatibility:
+    runs-on: ubuntu-latest
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      PI_OFFLINE: '1'
+      PI_SKIP_VERSION_CHECK: '1'
+      PRIME_AGENT_TELEMETRY: '0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.13.0'
+      - name: Download and verify immutable v0.7.2 artifact
+        shell: bash
+        run: |
+          artifact="$RUNNER_TEMP/prime-agent-0.7.2.tgz"
+          curl --fail --location --silent --show-error --output "$artifact" https://github.com/PrimeIntellect-ai/prime-agent/releases/download/v0.7.2/prime-agent-0.7.2.tgz
+          node prime-agent-governance/release-verifier.mjs --artifact "$artifact"
+          mkdir -p "$RUNNER_TEMP/prime-agent-v0.7.2"
+          tar -xzf "$artifact" -C "$RUNNER_TEMP/prime-agent-v0.7.2"
+      - name: Materialize the pinned dependency closure without lifecycle scripts
+        working-directory: ${{ runner.temp }}/prime-agent-v0.7.2/package
+        run: |
+          cp "$GITHUB_WORKSPACE/prime-agent-governance/evidence/prime-agent-v0.7.2-package-lock.json" package-lock.json
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify evidence and released-host compatibility
+        env:
+          PRIME_AGENT_V072_TGZ: ${{ runner.temp }}/prime-agent-0.7.2.tgz
+          PRIME_AGENT_V072_ROOT: ${{ runner.temp }}/prime-agent-v0.7.2/package
+        run: node --test prime-agent-governance/test/qualification-evidence.test.mjs prime-agent-governance/test/release-verifier.test.mjs prime-agent-governance/test/released-compatibility.test.mjs

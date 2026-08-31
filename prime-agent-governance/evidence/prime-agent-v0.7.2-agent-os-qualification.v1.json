@@ -1,0 +1,78 @@
+{
+  "schema": "agoragentic.agent-os.integration-qualification-record.v1",
+  "integration_id": "prime-agent-governance",
+  "upstream": {
+    "repository": "PrimeIntellect-ai/prime-agent",
+    "tag": "v0.7.2",
+    "version": "0.7.2",
+    "commit": "83a0f9f9566219551fcb6ffaf7f519a815749a58",
+    "release_url": "https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.7.2",
+    "artifact": "prime-agent-0.7.2.tgz",
+    "artifact_url": "https://github.com/PrimeIntellect-ai/prime-agent/releases/download/v0.7.2/prime-agent-0.7.2.tgz",
+    "artifact_sha256": "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e"
+  },
+  "declared_level": "source_adapter",
+  "evidence_level": "runtime_compatibility",
+  "effective_level": "source_adapter",
+  "promotion_candidate_level": null,
+  "promotion_blocked": true,
+  "promotion_blockers": [
+    "dependency_security_audit"
+  ],
+  "human_promotion_required": true,
+  "human_promotion_approved": false,
+  "auto_promoted": false,
+  "evidence_ref": "prime-agent-governance/evidence/prime-agent-v0.7.2-qualification.v1.json",
+  "evidence_digest": "sha256:4e13ee6fd3bf91cd6745dc5b975f4e43cf851f10f581694105718f1183c80e9e",
+  "compatibility_receipt_ref": "prime-agent-governance/evidence/prime-agent-v0.7.2-released-compatibility.v1.json",
+  "compatibility_receipt_digest": "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1",
+  "integrity_profile_ref": "prime-agent-governance/evidence/prime-agent-v0.7.2-integrity-profile.v1.json",
+  "integrity_profile_digest": "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8",
+  "dependency_audit_ref": "prime-agent-governance/evidence/prime-agent-v0.7.2-dependency-audit.v1.json",
+  "dependency_audit_digest": "sha256:302fc6f7e1a9aee1547e931a6ef492d3bb66f05447aa86d16cec588142cc5e04",
+  "generated_at": "2026-08-30T16:41:55.129Z",
+  "checks": {
+    "immutable_release_pinned": true,
+    "source_adapter_present": true,
+    "policy_enforcement_passed": false,
+    "release_artifact_verified": true,
+    "extension_loaded": true,
+    "compatibility_matrix_passed": true,
+    "dependency_security_audit_passed": false,
+    "exact_runtime_verified": false,
+    "hosted_available": false,
+    "production_activated": false
+  },
+  "artifacts": {
+    "source_adapter_digest": "sha256:7128b6025bffd5ea765567cbd124c286e44b0bb629914e9fa7ba7f0ae5f1eac8",
+    "extension_package_digest": "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5",
+    "materialized_host_tree_digest": "sha256:355a235390ce870a1abbce9e27ad0efceb1d9c5da97bd9106f66b7c18d1831ee",
+    "dependency_lock_digest": "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
+    "dependency_tree_digest": "sha256:a82b4affa2cdad38596b5cc3b5f9f8da62c42874a2f5609b81381ae5a3433bfa",
+    "compatibility_matrix_digest": "sha256:450728172e771bedc15539e9ea0317df2191e04a7dbc9f30e14504db82c2f7cd",
+    "case_results_digest": "sha256:312859c5fa0ffff3b7d3c82fc3ac8a0ffe8ceb6eaccd4bb0c448af17206cd3a1"
+  },
+  "authority": {
+    "credentials_used": false,
+    "provider_calls_made": false,
+    "network_authority_granted": false,
+    "spend_occurred": false,
+    "wallet_activity": false,
+    "settlement_activity": false,
+    "deployment_changed": false,
+    "publication_changed": false,
+    "public_compatibility_claimed": false,
+    "trust_or_ranking_mutated": false
+  },
+  "known_limitations": [
+    "Policy behavior is covered by deterministic source and adversarial tests, but policy_enforcement_passed remains false because the provider-free released-host run did not exercise real tool-call interception.",
+    "The raw release tarball is not standalone and requires its declared dependency graph to be materialized before the CLI can load.",
+    "The provider-free Windows x64 run is bound to a committed dependency lock and the observed first-party, installed dependency, and source-extension tree digests; the integrity profile separately pins the independently reproduced Linux x64 dependency tuple. This is compatibility evidence, not an owner-approved public compatibility claim.",
+    "Promotion is blocked because the exact production dependency closure includes direct extract-zip 2.0.1, affected by high-severity GHSA-jmr9-qjv8-65gv with no patched version reported at the captured audit time.",
+    "Prime Agent v0.7.2 publishes a ./hooks export whose declared dist/core/hooks/index.js target is absent from the release artifact.",
+    "No restricted Linux canary, active cancellation, stale-worker recovery, hosted endpoint, or production activation was observed.",
+    "The source-only extension package is unpublished; extension_package_digest binds the reviewed source manifest, not an npm registry artifact.",
+    "Prime Agent v0.8.1 was observed as newer; this record keeps the historical v0.7.2 pin and does not auto-update or auto-promote."
+  ],
+  "record_hash": "sha256:58f65eee9c6833c335966d179345e3bb75d8d5cb9c5243c6eeea19ea885ab86c"
+}

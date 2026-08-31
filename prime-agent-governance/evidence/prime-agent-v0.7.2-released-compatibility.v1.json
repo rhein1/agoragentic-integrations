@@ -1,0 +1,139 @@
+{
+  "schema": "agoragentic.prime-agent.released-compatibility-receipt.v1",
+  "receipt_version": 1,
+  "integration_id": "prime-agent-governance",
+  "observed_at": "2026-08-30T16:41:55.129Z",
+  "platform": "win32",
+  "architecture": "x64",
+  "node_version": "v24.13.0",
+  "host_identity": {
+    "repository": "PrimeIntellect-ai/prime-agent",
+    "tag": "v0.7.2",
+    "version": "0.7.2",
+    "commit": "83a0f9f9566219551fcb6ffaf7f519a815749a58",
+    "release_asset": "prime-agent-0.7.2.tgz",
+    "release_asset_sha256": "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e",
+    "identity_hash": "sha256:9656959973471e5c42f3c7e7c98420d2212ef1634864c6a715b7307e503d979e"
+  },
+  "host_contract_hash": "sha256:0ee5e5be3283506f5680700ed40d2a1c29b099d4fb8cfe19699d1ba2197010d7",
+  "integrity_profile_hash": "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8",
+  "artifact": {
+    "asset_name": "prime-agent-0.7.2.tgz",
+    "asset_size_bytes": 9387295,
+    "asset_sha256": "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e",
+    "first_party_file_count": 1381,
+    "first_party_tree_digest": "sha256:355a235390ce870a1abbce9e27ad0efceb1d9c5da97bd9106f66b7c18d1831ee"
+  },
+  "dependency_closure": {
+    "lock_digest": "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
+    "dependency_file_count": 19887,
+    "dependency_tree_digest": "sha256:a82b4affa2cdad38596b5cc3b5f9f8da62c42874a2f5609b81381ae5a3433bfa"
+  },
+  "extension": {
+    "package_name": "@agoragentic/prime-agent",
+    "package_version": "0.2.0-alpha.0",
+    "distribution_status": "source_only",
+    "manifest_digest": "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5"
+  },
+  "compatibility": {
+    "process_executed": true,
+    "matrix_passed": true,
+    "matrix": [
+      {
+        "id": "jsonl_lf_framing",
+        "status": "passed",
+        "summary": "Every stdout record was valid JSON with LF-only framing."
+      },
+      {
+        "id": "get_state",
+        "status": "passed",
+        "summary": "Provider-free state was returned idle."
+      },
+      {
+        "id": "extension_discovery",
+        "status": "passed",
+        "summary": "Released host reported the Agoragentic command as an extension."
+      },
+      {
+        "id": "extension_command_load",
+        "status": "passed",
+        "summary": "The loaded extension command ran without granting authority."
+      },
+      {
+        "id": "abort_idle",
+        "status": "passed",
+        "summary": "Idle abort returned a truthful successful response."
+      },
+      {
+        "id": "observe_missing",
+        "status": "passed",
+        "summary": "Missing observed session failed explicitly."
+      },
+      {
+        "id": "unobserve_missing",
+        "status": "passed",
+        "summary": "Unobserving a missing session was idempotent."
+      },
+      {
+        "id": "malformed_frame",
+        "status": "passed",
+        "summary": "Malformed JSON failed closed."
+      },
+      {
+        "id": "unknown_command",
+        "status": "passed",
+        "summary": "Unknown RPC commands failed explicitly."
+      },
+      {
+        "id": "eof_shutdown",
+        "status": "passed",
+        "summary": "EOF produced a clean process exit."
+      }
+    ],
+    "matrix_digest": "sha256:450728172e771bedc15539e9ea0317df2191e04a7dbc9f30e14504db82c2f7cd",
+    "observed_rpc_commands": [
+      "get_state",
+      "get_commands",
+      "prompt_extension_command",
+      "abort_idle",
+      "observe_missing",
+      "unobserve_missing",
+      "malformed_frame",
+      "unknown_command",
+      "eof_shutdown"
+    ],
+    "message_count": 9,
+    "invalid_stdout_record_count": 0,
+    "carriage_return_count": 0,
+    "process_exit_code": 0,
+    "process_signal": null,
+    "stdout_digest": "sha256:4b2c45477ea1b8e974d478408e30f460f8d9a62a5b5bfb8535011b7dd01536be",
+    "stderr_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_present": false
+  },
+  "evidence_limits": {
+    "policy_boundary_observed": false,
+    "active_abort_observed": false,
+    "stale_worker_recovery_observed": false,
+    "restricted_exact_runtime_observed": false,
+    "runtime_verified": false,
+    "exact_runtime_verified": false,
+    "hosted_available": false,
+    "production_activated": false
+  },
+  "boundaries": {
+    "credentials_used": false,
+    "paid_provider_calls": false,
+    "network_authority_granted": false,
+    "spend_authorized": false,
+    "wallet_mutated": false,
+    "settlement_mutated": false,
+    "production_deployed": false,
+    "package_published": false,
+    "outreach_performed": false,
+    "public_compatibility_claimed": false,
+    "trust_mutated": false,
+    "ranking_mutated": false
+  },
+  "receipt_hash": "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1"
+}

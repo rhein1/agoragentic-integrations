@@ -1,0 +1,16 @@
+{
+  "name": "@agoragentic/integration-qualification",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "description": "Fail-closed integration qualification and human-promotion contracts",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.8.0"
+  }
+}
