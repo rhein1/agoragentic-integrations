@@ -1,0 +1,81 @@
+{
+  "schema": "agoragentic.ard-provenance.v1",
+  "profile_status": "source_only_default_off",
+  "upstream": {
+    "repository": "https://github.com/ards-project/ard-spec",
+    "proposal_version": "0.91",
+    "commit": "aa3e598bb7752a9175897823234311216acfa864",
+    "license": "Apache-2.0",
+    "notice_file_present": false,
+    "vendored_files_unmodified": true,
+    "files": [
+      {
+        "path": "vendor/ard-v0.91/ard-entry.schema.json",
+        "upstream_path": "spec/schemas/ard-entry.schema.json",
+        "bytes": 8373,
+        "sha256": "011b86d55fd5d2883dffae3f0577d26f5efb56ca866eb079edbc78a628f95499"
+      },
+      {
+        "path": "vendor/ard-v0.91/ard.context.jsonld",
+        "upstream_path": "spec/schemas/ard.context.jsonld",
+        "bytes": 899,
+        "sha256": "bd80a73de23c4279409a429f43edcf944e07c09511678511bc9467924067c093"
+      },
+      {
+        "path": "vendor/ard-v0.91/ai-catalog.schema.json",
+        "upstream_path": "spec/schemas/ai-catalog.schema.json",
+        "bytes": 8203,
+        "sha256": "c55238483a4738e08b250bdd6af1f4dc05a91afe882c649d224d09c19cd8fe09"
+      },
+      {
+        "path": "vendor/ard-v0.91/LICENSE",
+        "upstream_path": "LICENSE",
+        "bytes": 11363,
+        "sha256": "dfe0e2a538e0e9004d43d1f57598177793109f5662706ccd1b1cb93c7fa34ce5"
+      }
+    ],
+    "reviewed_unvendored_files": [
+      {
+        "upstream_path": "spec/schemas/ard.openapi.yaml",
+        "bytes": 11910,
+        "sha256": "7a0fdf7b7874d63db24b27de56565486a72e30697ff3e8d5742e99daba4e5fed"
+      },
+      {
+        "upstream_path": "spec/schemas/ard.cddl",
+        "bytes": 4409,
+        "sha256": "e49936cbc2c99363716a11ef2e238517984fc42cab64558dcfcbc65fc3eb96b3"
+      }
+    ]
+  },
+  "local_artifacts": {
+    "context": {
+      "uri": "https://agoragentic.com/ns/ard/v1",
+      "namespace": "https://agoragentic.com/ns/ard#",
+      "path": "context/agoragentic.v1.jsonld",
+      "bytes": 1801,
+      "sha256": "101836857e9a7863ca4b2f38b6c79779b26a1ba79cb5694d1446cf59e17164f7"
+    }
+  },
+  "official_draft_defects_preserved_as_notes": [
+    "The pinned identifier regex does not prove a valid FQDN and permits fewer than the documented namespace plus terminal-name segments; the local profile requires both.",
+    "The pinned schema exposes capitalized TrustManifest while normative text, CDDL, and JSON-LD use lower-case trustManifest; the local profile rejects the capitalized form and validates lower-case explicitly.",
+    "The pinned schema describes @id equivalence but does not enforce it; the local profile requires @id to equal identifier.",
+    "The byte-identical pinned schema retains a mutable main-branch $id; the local loader identifies it by vendored path and verified content hash instead of resolving that URL.",
+    "The pinned OpenAPI document still reports info.version 0.5.0; this package pins behavior by commit rather than trusting that field.",
+    "Official federation defaults to auto in the proposal; this package implements no federation behavior and grants no network dereference authority.",
+    "The registry URL examples are ambiguous between a base and a search endpoint; these examples advertise repository artifacts only and do not claim a deployed registry endpoint."
+  ],
+  "media_type_notes": {
+    "application/a2a-agent-card+json": "Provisional profile token. The pinned spec says formal registration is pending and the format may change.",
+    "application/mcp-server-card+json": "Provisional profile token. The pinned spec says formal registration is pending and the format may change.",
+    "application/ai-registry+json": "Provisional local profile token; the pinned spec does not make the same explicit registration-status statement.",
+    "application/ai-skill+md": "Provisional local profile token; the pinned spec does not make the same explicit registration-status statement."
+  },
+  "authority": {
+    "network_fetch": false,
+    "execution": false,
+    "payment": false,
+    "trust_promotion": false,
+    "publication": false
+  }
+}

@@ -19,6 +19,7 @@ The published packages and repo-local source/CLI surfaces are:
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 - **AnyDoc Document Evidence Adapter**: `examples/anydoc-document-evidence/` is an experimental source-only Node >=20 package for process-isolated local office-document parsing, explicit evidence coverage, semantic-loss warnings, and completeness-blocked handoff. It is not published to npm and does not intentionally upload, invoke OCR, attach context, publish, or spend.
 - **Risk Fork**: `risk-fork/` is an experimental source-only fork-before-risk protocol and adapter package. From a source checkout, first run `npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund`, then start the named-fixture hackathon demo with `node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor`. A verified offline kit bundles the dependency closure and needs no install. The demo is a local protocol simulator, not isolation or live protection. Local and disposable evidence does not establish live E2B containment, hosted MCP interception, managed PostgreSQL operations, deployment, npm publication, spend authority, or production readiness.
+- **ARD v0.91 source profile**: `ard/` pins upstream schemas and context, adds a local JSON-LD vocabulary, and generates offline repository candidates from one canonical source. It never dereferences contexts, serves a route, executes, pays, verifies trust, publishes, or deploys.
 
 ## Authentication
 
@@ -65,7 +66,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 107 integration surfaces as of 2026-08-30. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 108 integration surfaces as of 2026-08-31. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -140,6 +141,7 @@ The canonical inventory is `integrations.json` and contains 107 integration surf
 | AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/agoragentic-anydoc.mjs | cd examples/anydoc-document-evidence && npm ci |
 | Risk Fork | risk-fork/src/index.mjs | npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund; experimental source only |
 | Risk Fork hackathon demo | risk-fork/hackathon/bin/risk-fork-demo.mjs | same locked source install; verified offline kit needs no install; local Node entrypoint over named synthetic fixtures; no provider/external network, credential, clean commit, npm, hosted, production, or live-protection claim; Flight Recorder loopback is local transport only |
+| ARD v0.91 source profile | ard/src/profile.mjs | cd ard && npm ci --ignore-scripts; offline and default-off |
 
 ### Config-Only Integrations
 
@@ -200,6 +202,7 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Asset | Location |
 |-------|----------|
 | Machine index | integrations.json |
+| ARD v0.91 source profile | ard/README.md |
 | JSON Schema | integrations.schema.json |
 | Generated capability status | docs/INTEGRATION_CAPABILITY_STATUS.md |
 | Repository rename preflight | docs/REPOSITORY_RENAME_PREFLIGHT.md |

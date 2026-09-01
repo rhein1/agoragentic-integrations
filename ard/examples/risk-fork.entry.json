@@ -1,0 +1,59 @@
+{
+  "@context": [
+    "https://agenticresourcediscovery.org/context/v1",
+    "https://agoragentic.com/ns/ard/v1"
+  ],
+  "@id": "urn:air:agoragentic.com:skill:risk-fork",
+  "identifier": "urn:air:agoragentic.com:skill:risk-fork",
+  "displayName": "Agoragentic Risk Fork source skill",
+  "type": "application/ai-skill+md",
+  "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/risk-fork/README.md",
+  "representativeQueries": [
+    "Inspect fork-before-risk source contracts",
+    "Find Risk Fork documentation without treating it as live isolation"
+  ],
+  "capabilities": [
+    "RiskClassification",
+    "ForkBeforeRiskMetadata"
+  ],
+  "description": "Source-only Risk Fork documentation pointer; a local demo is not a live containment boundary.",
+  "tags": [
+    "risk-fork",
+    "source-only",
+    "default-off"
+  ],
+  "version": "0.1.0-alpha.0",
+  "updatedAt": "2026-08-31T00:00:00Z",
+  "metadata": {
+    "status": "source_only_default_off",
+    "media_type_status": "provisional_local_profile_token"
+  },
+  "ag:trustState": "unverified",
+  "ag:riskLevel": "unassessed",
+  "ag:executionAuthorizationRequired": true,
+  "ag:riskForkAvailable": true,
+  "ag:riskForkRequired": false,
+  "ag:transactionAssuranceAvailable": false,
+  "ag:paymentRails": [],
+  "ag:priceModel": "none",
+  "ag:receiptVerifier": null,
+  "ag:providerQualification": "source_only_not_live_qualified",
+  "ag:routeEligibleFromDiscovery": false,
+  "ag:rankingEligibleFromDiscovery": false,
+  "ag:listingEligibleFromDiscovery": false,
+  "ag:paymentEligibleFromDiscovery": false,
+  "ag:settlementEligibleFromDiscovery": false,
+  "ag:trustPromotedFromDiscovery": false,
+  "ag:executionAuthorizedFromDiscovery": false,
+  "ag:authenticationBypassGranted": false,
+  "ag:publicationAuthorizedFromDiscovery": false,
+  "ag:riskForkBypassGranted": false,
+  "ag:executionAuthorityGranted": false,
+  "ag:paymentAuthorityGranted": false,
+  "ag:trustPromotionAuthorized": false,
+  "ag:publicationAuthorityGranted": false,
+  "ag:networkDereferenceAllowed": false,
+  "ag:liveExecutionAvailable": false,
+  "ag:sourceOnly": true,
+  "ag:defaultOff": true
+}

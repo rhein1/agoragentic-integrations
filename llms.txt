@@ -18,6 +18,7 @@
 - Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
 - AnyDoc Document Evidence Adapter: `cd examples/anydoc-document-evidence && npm ci` (experimental source-only Node >=20 package; local process-isolated parsing with explicit evidence coverage and completeness blockers)
 - Risk Fork: `npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund` for the source contracts and named-fixture local demo; then `node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor` (experimental source only; verified offline kits already bundle the closure and need no install; the demo is not isolation, live protection, hosted interception, provider qualification, deployment, npm publication, or spend authority)
+- ARD v0.91 source profile: `cd ard && npm ci --ignore-scripts && npm test` (pinned local schemas/contexts and offline generator/normalizer only; no network dereference, well-known route, execution, payment, trust-promotion, publication, or deployment authority)
 
 ## Auth
 - Env: AGORAGENTIC_API_KEY=amk_<key>
@@ -26,7 +27,7 @@
 - The unpublished MCP/ACP source candidate does not consume or forward this key. The npm package is a legacy direct relay and must not be used. Use SDK/REST auth only; never inject the key into either MCP surface.
 
 ## Integrations
-- Canonical inventory: `integrations.json` (107 indexed surfaces as of 2026-08-30).
+- Canonical inventory: `integrations.json` (108 indexed surfaces as of 2026-08-31).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), Cline (`llms-install.md`), and the experimental OpenCode Harness source plugin (`opencode/`). Package readiness does not imply external marketplace approval or live host compatibility.
 - Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include the fail-closed MCP/ACP protocol reference, Risk Fork, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.
@@ -44,10 +45,12 @@
 - Premortem Golden Loop Agent: premortem-golden-loop/README.md and premortem-golden-loop/PROMPT.md (free local six-month failure-frame premortem reports plus OSS agent release premortem, no-spend Golden Loop readiness receipt, and safe self-heal scaffolds)
 - Buzz Signed Workspace Evidence: examples/buzz-signed-workspace-evidence/README.md (experimental local compiler for exported events; exact source pin, hash-only metadata by default, typed but unverified attestation references, and no relay/signing/posting/payment/listing authority)
 - AnyDoc Document Evidence Adapter: examples/anydoc-document-evidence/README.md (experimental local parser boundary; no intentional upload, OCR fallback, context attachment, publication, or spend)
+- ARD v0.91 source profile: ard/README.md (source-only/default-off proposal pin, local JSON-LD vocabulary, compatibility generator, and adversarial fixtures)
 
 ## Machine Index
 - integrations.json — structured index of all integrations, tools, packages
 - integrations.schema.json — JSON Schema for validation
+- ard/generated/ard.json and ard/generated/ai-catalog.json — identical repository-only ARD candidates generated from one local source; not deployed
 - docs/INTEGRATION_CAPABILITY_STATUS.md — generated human-readable capability and evidence table
 - docs/REPOSITORY_RENAME_PREFLIGHT.md — no-authority repository rename dependency and rollback packet
 - docs/repository-rename-preflight.json — deterministic per-file rename dependency inventory

@@ -48,6 +48,7 @@ These are the shortest supported entry paths into the Agoragentic stack.
 | Operate a deployed agent | [Agent OS](https://agoragentic.com/agent-os/) | Mandates, budgets, approvals, stop controls, runtime state, receipts, and reconciliation |
 | Route or buy agent work | [Node SDK](./sdk/node/) or [Python SDK](./sdk/python/) | Task matching, bounded execution, current provider metadata, and hosted receipts |
 | Inspect the MCP / Agent Client Protocol boundary | [MCP source](./mcp/) and [ACP metadata](./acp/) | Unpublished protocol/reference source with owned local metadata; remote discovery and calls fail closed without a separately qualified host boundary |
+| Inspect ARD discovery metadata offline | [ARD v0.91 source profile](./ard/) | Pinned schemas and contexts, a deterministic compatibility generator, and a fail-closed normalizer; no deployed well-known endpoint, network dereference, execution, payment, trust, or publication authority |
 | Review fork-before-risk contracts | [Risk Fork](./risk-fork/) | Experimental source-only classification, lifecycle, taint, E2B, and PostgreSQL authority contracts; no live containment, hosted interception, deployment, or production-readiness claim |
 | Demonstrate fork-before-risk locally | [Risk Fork hackathon demo](./risk-fork/hackathon/) | Named synthetic fixtures, deterministic classification, lifecycle replay, cleanup evidence, and local receipts; explicitly not isolation or live protection |
 | Connect a marketplace or network | [Interchange](https://agoragentic.com/interchange/) | Cross-market discovery, mandate enforcement, receipt verification, and reconciliation |
@@ -115,7 +116,7 @@ custom Node.js  ─┘
 
 Browse the machine-readable catalog in [`integrations.json`](./integrations.json). A catalog entry does not automatically mean live enforcement, deployed compatibility, or payment readiness.
 
-At this revision, the canonical `integrations.json` manifest contains **107** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
+At this revision, the canonical `integrations.json` manifest contains **108** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
 
 ### Govern what the agent may know
 
@@ -247,6 +248,7 @@ production readiness, or live protection.
 | [Repository rename preflight](./docs/REPOSITORY_RENAME_PREFLIGHT.md) | Human-readable dependency, rollout, and rollback packet; no rename is authorized |
 | [`repository-rename-preflight.json`](./docs/repository-rename-preflight.json) | Deterministic per-file rename dependency inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
+| [ARD v0.91 source profile](./ard/) | Pinned proposal artifacts, local extension vocabulary, deterministic repository candidates, and offline fail-closed validation; not a live discovery route |
 | [Harness Core current release evidence](./harness-core/CURRENT_RELEASE_EVIDENCE.json) | Current `0.4.2` release, npm integrity, protected publication, provenance, clean-room exports, and observer-only AHP proof |
 | [Harness Core standalone cutover evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Immutable historical `0.3.1` repository-cutover record |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |

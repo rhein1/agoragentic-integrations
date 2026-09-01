@@ -1,6 +1,6 @@
 {
-  "version": "2.51.0",
-  "updated_at": "2026-08-30",
+  "version": "2.52.0",
+  "updated_at": "2026-08-31",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -122,6 +122,16 @@
       "source": "risk-fork",
       "min_node": "20",
       "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and dormant renewable idle-lease source behind a hard-false activation gate; same-UID boot claims are diagnostic only, and seven inherited-state/fresh-entropy controls remain unknown until a signed external receipt proves a closed privilege-separated observer boundary plus exact per-control evidence; no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, and detached pinned Ed25519 trust plus an exact signed e2b@2.39.0 SDK-integrity match can establish qualification but cannot enable provider use without a separately reviewed source-activation change; the public hosted MCP enforcement bundle has source/loopback ordering evidence before server/discover, while this repository contains no immutable public-safe evidence ref/hash establishing a separate private host-control release, its interface inventory, or current deployment/runtime state, so those private states remain unknown here and the public source grants no production interception authority; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
+    },
+    "ard_profile": {
+      "name": "@agoragentic/ard-profile",
+      "version": "0.1.0-alpha.0",
+      "install": "cd ard && npm ci --ignore-scripts",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/ard",
+      "distribution_status": "source_only",
+      "source": "ard",
+      "min_node": "20",
+      "compatibility_scope": "Pinned ARD v0.91 schemas, local contexts, deterministic compatibility manifests, and offline normalizer only; default-off with no network dereference, execution, payment, trust-promotion, publication, deployment, or live-route authority"
     }
   },
   "env_vars": {
@@ -1638,6 +1648,37 @@
       "install": "cd risk-fork && npm ci",
       "docs": "risk-fork/README.md",
       "compatibility_scope": "Source-only alpha: the local adapter is a protocol reference, not isolation; E2B includes reviewed template/runtime artifacts, an independent exact-byte source verifier requiring detached pinned signatures, default-off owner-gated harnesses, and dormant renewable idle-lease source behind a hard-false activation gate; same-UID boot claims are diagnostic only, and seven inherited-state/fresh-entropy controls remain unknown until a signed external receipt proves a closed privilege-separated observer boundary plus exact per-control evidence; no credentialed live containment, lifecycle, latency, or cost proof is checked in; serialized self-hashes are not qualification, and detached pinned Ed25519 trust plus an exact signed e2b@2.39.0 SDK-integrity match can establish qualification but cannot enable provider use without a separately reviewed source-activation change; the public hosted MCP enforcement bundle has source/loopback ordering evidence before server/discover, while this repository contains no immutable public-safe evidence ref/hash establishing a separate private host-control release, its interface inventory, or current deployment/runtime state, so those private states remain unknown here and the public source grants no production interception authority; PostgreSQL production runtime is CA-TLS and verify-only with a separate migrator, exact schema/catalog/privilege attestation, executable least-privilege role templates, and disposable local TLS/role evidence, but no managed HA/failover, backup/restore, retention, monitoring, credential-rotation, or deployment qualification; production remains blocked; no live traffic, spend, deployment, publication, or package-registry claim is made"
+    },
+    {
+      "id": "ard-profile",
+      "name": "Agentic Resource Discovery v0.91 source profile",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "ard/src/profile.mjs",
+      "install": "cd ard && npm ci --ignore-scripts",
+      "docs": "ard/README.md",
+      "compatibility_scope": "Source-only/default-off pinned ARD metadata, offline normalization, and generated repository examples; not a deployed well-known endpoint, network client, registry, trust verifier, execution path, payment path, or publication workflow",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "none",
+          "approval_support": "none",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "ARD proposal v0.91 at aa3e598bb7752a9175897823234311216acfa864",
+          "proof_class": "local",
+          "last_verified_at": "2026-08-31T00:00:00Z",
+          "evidence_ref": "ard/test/ard-profile.test.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     }
   ],
   "specs": [
@@ -1677,6 +1718,14 @@
     "hyperframes_upstream_provenance": "hyperframes/upstream-provenance.json",
     "hyperframes_sanitized_timeline_schema": "hyperframes/schemas/sanitized-timeline.schema.json",
     "hyperframes_local_render_receipt_schema": "hyperframes/schemas/local-render-receipt.schema.json",
+    "ard_profile": "ard/README.md",
+    "ard_v091_schema": "ard/vendor/ard-v0.91/ard-entry.schema.json",
+    "ard_v091_context": "ard/vendor/ard-v0.91/ard.context.jsonld",
+    "ard_local_profile_schema": "ard/schema/agoragentic-ard-profile.v0.91.schema.json",
+    "ard_local_context": "ard/context/agoragentic.v1.jsonld",
+    "ard_manifest_candidate": "ard/generated/ard.json",
+    "ard_compatibility_manifest_candidate": "ard/generated/ai-catalog.json",
+    "ard_upstream_provenance": "ard/provenance.json",
     "risk_fork": "risk-fork/README.md",
     "risk_fork_hackathon_demo": "risk-fork/hackathon/README.md",
     "risk_fork_hackathon_quickstart": "risk-fork/hackathon/docs/QUICKSTART.md",

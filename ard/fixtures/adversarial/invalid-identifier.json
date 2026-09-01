@@ -1,0 +1,21 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "@context": ["https://agenticresourcediscovery.org/context/v1"],
+      "@id": "urn:air:not_a_domain:onlyone",
+      "identifier": "urn:air:not_a_domain:onlyone",
+      "displayName": "Invalid identifier",
+      "type": "application/mcp-server-card+json",
+      "data": {},
+      "ag:executionAuthorityGranted": false,
+      "ag:paymentAuthorityGranted": false,
+      "ag:trustPromotionAuthorized": false,
+      "ag:publicationAuthorityGranted": false,
+      "ag:networkDereferenceAllowed": false,
+      "ag:liveExecutionAvailable": false,
+      "ag:sourceOnly": true,
+      "ag:defaultOff": true
+    }
+  ]
+}

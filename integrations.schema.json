@@ -82,6 +82,9 @@
         },
         "risk_fork": {
           "$ref": "#/$defs/package"
+        },
+        "ard_profile": {
+          "$ref": "#/$defs/package"
         }
       }
     },
