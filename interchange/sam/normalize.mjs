@@ -186,7 +186,11 @@ export function normalizeSamTool({
     throw new Error('sam_description_input_schema_required');
   }
   const inputSchema = description.input_schema;
-  const outputSchema = isRecord(description.output_schema) ? description.output_schema : null;
+  const hasOutputSchema = Object.prototype.hasOwnProperty.call(description, 'output_schema');
+  if (hasOutputSchema && description.output_schema !== null && !isRecord(description.output_schema)) {
+    throw new Error('sam_description_output_schema_invalid');
+  }
+  const outputSchema = hasOutputSchema ? description.output_schema : null;
   assertJsonSize({ input_schema: inputSchema, output_schema: outputSchema }, MAX_SAM_SCHEMA_BYTES, 'sam_tool_schema_too_large');
   const labels = normalizeLabels(discovery.labels);
   const peerRef = hashRef({ peer_id: peerId });
@@ -231,7 +235,6 @@ export function normalizeSamTool({
       tool_ref: toolRef,
       schema_hash: schemaHash,
       labels_hash: labelsHash,
-      observed_label_keys: Object.keys(labels),
       authorization_verified_by_normalizer: false,
       reachability_verified_by_normalizer: false,
       provider_account_bound: false,
@@ -257,7 +260,7 @@ export function normalizeSamTool({
     },
   };
 
-  if (includePrivateTarget) {
+  if (includePrivateTarget === true) {
     packet.private_transport_target = {
       peer_id: peerId,
       service_name: parsed.serviceName,

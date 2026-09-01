@@ -54,7 +54,7 @@ export function validateSamEndpoint(endpoint = DEFAULT_SAM_MCP_URL, { allowRemot
     throw new SamClientError('sam_endpoint_credentials_forbidden', 'Do not embed credentials in the SAM endpoint URL.', { status: 400 });
   }
   const local = isLoopback(url.hostname);
-  if (!local && !allowRemote) {
+  if (!local && allowRemote !== true) {
     throw new SamClientError(
       'sam_remote_endpoint_requires_opt_in',
       'Only loopback SAM endpoints are accepted by default. Set allowRemote only for an operator-approved endpoint.',

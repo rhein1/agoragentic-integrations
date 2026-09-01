@@ -44,6 +44,15 @@ test('endpoint policy is loopback-first and HTTPS-only for opted-in remotes', ()
   assert.equal(validateSamEndpoint('https://mesh.example/mcp', { allowRemote: true }).origin, 'https://mesh.example');
 });
 
+test('remote endpoint opt-in requires literal boolean true', () => {
+  for (const allowRemote of ['true', 1, {}, Object(true)]) {
+    assert.throws(
+      () => validateSamEndpoint('https://mesh.example/mcp', { allowRemote }),
+      (error) => error instanceof SamClientError && error.code === 'sam_remote_endpoint_requires_opt_in',
+    );
+  }
+});
+
 test('authenticated fetch injects the SAM-specific header and rejects redirects', async () => {
   const requests = [];
   const wrapped = authenticatedFetch('secret-value', async (input, init) => {

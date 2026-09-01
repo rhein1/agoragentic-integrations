@@ -37,7 +37,7 @@ test('normalizes a SAM tool without leaking the raw transport target', () => {
   assert.equal(packet.authority_flags.payment_enabled, false);
   assert.equal(packet.authority_flags.public_execute_enabled, false);
   assert.equal(packet.transport_evidence.authorization_verified_by_normalizer, false);
-  assert.deepEqual(packet.transport_evidence.observed_label_keys, ['region', 'team']);
+  assert.equal(packet.transport_evidence.observed_label_keys, undefined);
   assert.equal(packet.private_transport_target, undefined);
   assert.equal(serialized.includes(PEER_ID), false);
   assert.equal(serialized.includes(TOOL_NAME), false);
@@ -56,6 +56,30 @@ test('includes the private target only after explicit opt-in', () => {
     region: 'us-east-1',
     team: 'platform',
   });
+
+  for (const includePrivateTarget of ['true', 1, {}, Object(true)]) {
+    const publicPacket = normalizeSamTool({ ...fixture(), includePrivateTarget });
+    assert.equal(publicPacket.private_transport_target, undefined);
+  }
+});
+
+test('default packet hash-binds labels without exposing provider-controlled keys or values', () => {
+  const privateLabelKey = 'tenant-alpha-control-plane';
+  const privateLabelValue = 'payments-prod-7';
+  const first = fixture();
+  first.discovery.labels = { [privateLabelKey]: privateLabelValue };
+  const packet = normalizeSamTool(first);
+  const serialized = JSON.stringify(packet);
+  assert.equal(serialized.includes(privateLabelKey), false);
+  assert.equal(serialized.includes(privateLabelValue), false);
+  assert.match(packet.transport_evidence.labels_hash, /^sha256:[a-f0-9]{64}$/);
+
+  const changed = fixture();
+  changed.discovery.labels = { [privateLabelKey]: `${privateLabelValue}-changed` };
+  assert.notEqual(
+    packet.transport_evidence.labels_hash,
+    normalizeSamTool(changed).transport_evidence.labels_hash,
+  );
 });
 
 test('rejects a description for a different peer or tool', () => {
@@ -99,6 +123,22 @@ test('rejects error-bearing or schema-less describe results', () => {
   const schemaLess = fixture();
   delete schemaLess.description.input_schema;
   assert.throws(() => normalizeSamTool(schemaLess), /sam_description_input_schema_required/);
+});
+
+test('rejects present non-object output schemas while allowing omission or null', () => {
+  const omitted = normalizeSamTool(fixture());
+  const explicitNull = fixture();
+  explicitNull.description.output_schema = null;
+  assert.equal(normalizeSamTool(explicitNull).transport_evidence.schema_hash, omitted.transport_evidence.schema_hash);
+
+  for (const outputSchema of ['not-a-schema', [], 7, false]) {
+    const invalid = fixture();
+    invalid.description.output_schema = outputSchema;
+    assert.throws(
+      () => normalizeSamTool(invalid),
+      /sam_description_output_schema_invalid/,
+    );
+  }
 });
 
 test('rejects unbounded or malformed remote metadata', () => {
