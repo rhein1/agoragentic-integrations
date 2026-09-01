@@ -126,9 +126,9 @@ hash and binding it to the replay record.
 
 Runtime fixture data stays under the marker-bound owned local demo root
 identified only by the redacted reference from `doctor`. The Git repository
-stores source, not runtime forks, and this tranche stays local until a separate
-publication action is authorized. Do not broaden cleanup or claim a production
-deletion SLA.
+stores public draft source, not runtime forks; generated kits remain local until
+a separate publication action is authorized. Do not broaden cleanup or claim a
+production deletion SLA.
 
 The official local demo permits one active run and ten completed runs between
 explicit cleanup resets; it is not a daily allowance. Its MIT source can be

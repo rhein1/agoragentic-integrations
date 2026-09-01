@@ -186,9 +186,9 @@ may still be created, and its removal is independently reported by
 
 ## Storage and deletion
 
-The Git repository stores source, not runtime forks. This unpushed tranche and
-its generated kit remain local until a separate publication action is
-authorized. A later GitHub push would publish only explicitly committed source;
+The Git repository stores source, not runtime forks. This draft source branch is
+public on GitHub; its generated kit remains local until a separate publication
+action is authorized. GitHub contains only explicitly committed source;
 synthetic savepoint, fork, recorder, and receipt data stays on the participant's
 machine beneath the marker-bound demo root identified by the redacted reference
 from `doctor`. It is not saved to AWS, E2B, Agoragentic, a VM, or a hosted

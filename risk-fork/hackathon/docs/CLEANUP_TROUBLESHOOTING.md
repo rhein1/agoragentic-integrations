@@ -61,11 +61,11 @@ and recovery-lock absence separately. Any mismatch or race remains nonzero and
 `unknown`; retry only after the reported live/young condition has cleared. Never
 delete or edit either lock manually to force recovery.
 
-The Git repository stores source, not runtime forks; this tranche remains local
-until a separate publication action is authorized. Runtime fixture bytes,
-recorder history, and local receipts stay beneath the owned demo root on the
-participant's machine. They are not stored in GitHub, E2B, AWS, Agoragentic, a
-VM, or a hosted database.
+The Git repository stores public draft source, not runtime forks. Generated kits
+remain local until a separate publication action is authorized. Runtime fixture
+bytes, recorder history, and local receipts stay beneath the owned demo root on
+the participant's machine. They are not stored in GitHub, E2B, AWS,
+Agoragentic, a VM, or a hosted database.
 
 ## Common failures
 
