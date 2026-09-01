@@ -1,0 +1,21 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "@context": ["https://attacker.invalid/context.jsonld"],
+      "@id": "urn:air:example.com:tools:unknown-context",
+      "identifier": "urn:air:example.com:tools:unknown-context",
+      "displayName": "Unknown context",
+      "type": "application/mcp-server-card+json",
+      "data": {},
+      "ag:executionAuthorityGranted": false,
+      "ag:paymentAuthorityGranted": false,
+      "ag:trustPromotionAuthorized": false,
+      "ag:publicationAuthorityGranted": false,
+      "ag:networkDereferenceAllowed": false,
+      "ag:liveExecutionAvailable": false,
+      "ag:sourceOnly": true,
+      "ag:defaultOff": true
+    }
+  ]
+}

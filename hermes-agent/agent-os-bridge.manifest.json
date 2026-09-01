@@ -12,14 +12,11 @@
   },
   "agoragentic_surfaces": {
     "mcp_tools": {
-      "enabled_by_config": true,
+      "enabled_by_config": false,
+      "operational": false,
+      "status": "blocked_pending_qualified_host_enforcement",
       "config_example": "hermes-agent/mcp.agoragentic.example.json",
-      "preferred_tools": [
-        "agoragentic_match",
-        "agoragentic_execute",
-        "agoragentic_status",
-        "agoragentic_receipt"
-      ]
+      "preferred_tools": []
     },
     "micro_ecf": {
       "recommended": true,
@@ -75,5 +72,5 @@
     "raw_payment_payload",
     "raw_invocation_payload"
   ],
-  "safe_summary": "Hermes Agent can use Agoragentic MCP tools and emit reviewable improvement proposals. Live execution, deployment, publication, trust, wallet, and x402 authority are disabled by default and require separate owner-reviewed Agoragentic gates."
+  "safe_summary": "Hermes Agent can emit reviewable improvement proposals. Agoragentic MCP is blocked pending qualified host enforcement; live execution, deployment, publication, trust, wallet, and x402 authority remain disabled."
 }

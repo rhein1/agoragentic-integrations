@@ -1,0 +1,17 @@
+{
+  "name": "@agoragentic/openrouter-agent-sdk-candidate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test ../test/review-pack.test.mjs",
+    "check": "node --check src/agoragentic-client.mjs && node --check src/agoragentic-tools.mjs && node --check examples/match-only.mjs && node ../scripts/validate.mjs"
+  },
+  "dependencies": {
+    "@openrouter/agent": "0.8.0",
+    "zod": "^4.0.0"
+  }
+}

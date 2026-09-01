@@ -10,6 +10,8 @@ export const DEFAULT_SAM_MCP_URL = 'http://127.0.0.1:8080/mcp';
 const MAX_SAM_TOKEN_BYTES = 16_384;
 const MAX_SAM_TOOL_RESULT_BYTES = 1_048_576;
 const MAX_SAM_DISCOVERY_ROWS = 512;
+const PUBLIC_SAM_DISCOVERY_DESCRIPTION =
+  'Metadata-only SAM-discovered MCP tool. Provider-supplied descriptive text remains private pending operator review.';
 
 export class SamClientError extends Error {
   constructor(code, message, { status = 500, retryable = false, cause } = {}) {
@@ -269,6 +271,25 @@ function redactMeshInfo(value, includePrivate = false) {
   return output;
 }
 
+function optionalHashRef(field, value) {
+  if (value === undefined || value === null || value === '') return null;
+  return hashRef({ [field]: value });
+}
+
+function publicToolObservation(row) {
+  const labels = isRecord(row.labels) ? row.labels : {};
+  const hasError = row.error !== undefined && row.error !== null && row.error !== '';
+  return {
+    peer_ref: optionalHashRef('peer_id', row.peer_id),
+    tool_ref: optionalHashRef('tool_name', row.tool_name),
+    description: PUBLIC_SAM_DISCOVERY_DESCRIPTION,
+    description_hash: optionalHashRef('description', row.description),
+    labels_hash: hashRef({ labels }),
+    error: hasError ? 'sam_discovery_row_error' : null,
+    error_hash: hasError ? hashRef({ error: row.error }) : null,
+  };
+}
+
 /**
  * Inspect local mesh state and discover remote MCP tools. This path does not
  * call any remote provider tool.
@@ -294,20 +315,16 @@ export async function discoverSamTools(options = {}, dependencies = {}) {
       mesh: redactMeshInfo(meshInfo, options.includePrivateTopology === true),
       service_count: asRows(services).length,
       tool_count: rows.filter((row) => !row.error).length,
-      tools: options.includePrivateTopology
+      tools: options.includePrivateTopology === true
         ? rows
-        : rows.map((row) => ({
-            peer_ref: row.peer_id ? hashRef({ peer_id: row.peer_id }) : null,
-            tool_ref: row.tool_name ? hashRef({ tool_name: row.tool_name }) : null,
-            description: String(row.description || ''),
-            observed_label_keys: isRecord(row.labels) ? Object.keys(row.labels).sort() : [],
-            error: row.error || null,
-          })),
+        : rows.map(publicToolObservation),
       safety: {
         provider_invoked: false,
         funds_moved: false,
         marketplace_publication: false,
         raw_topology_public: false,
+        provider_description_public: false,
+        raw_label_fields_public: false,
       },
     };
   });

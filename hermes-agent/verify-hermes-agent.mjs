@@ -58,16 +58,14 @@ assertFalseFlags(policy.authority_boundary, 'policy.authority_boundary');
 assertFalseFlags(reflection.authority_boundary, 'reflection.authority_boundary');
 assertFalseFlags(reflection.public_safe, 'reflection.public_safe');
 
-if (manifest.agoragentic_surfaces?.mcp_tools?.enabled_by_config !== true) {
-  fail('manifest must describe MCP tools as config-enabled');
+if (manifest.agoragentic_surfaces?.mcp_tools?.enabled_by_config !== false) {
+  fail('manifest must keep MCP tools disabled by config');
 }
-
-if (mcp.mcpServers?.agoragentic?.command !== 'npx') fail('MCP example must use npx');
-if (!mcp.mcpServers?.agoragentic?.args?.includes('agoragentic-mcp')) {
-  fail('MCP example must reference agoragentic-mcp');
-}
-if (mcp.mcpServers?.agoragentic?.env?.AGORAGENTIC_API_KEY !== 'amk_your_key') {
-  fail('MCP example must use the placeholder AGORAGENTIC_API_KEY only');
+if (manifest.agoragentic_surfaces?.mcp_tools?.operational !== false) fail('manifest MCP must be non-operational');
+if (Object.keys(mcp.mcpServers || {}).length !== 0) fail('MCP example must not auto-launch a server');
+if (mcp.agoragentic_mcp?.operational !== false) fail('MCP example must be explicitly non-operational');
+if (mcp.agoragentic_mcp?.status !== 'blocked_pending_qualified_host_enforcement') {
+  fail('MCP example must expose the qualified-host blocker');
 }
 
 for (const [label, value] of Object.entries({ manifest, mcp, policy, reflection })) {

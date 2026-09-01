@@ -78,10 +78,12 @@ node interchange/sam/client.mjs discover --service code-reviewer
 ```
 
 Discovery output hashes the complete MCP request URL (including query context),
-peer, and tool identifiers by default. `authentication_header_sent` records
-only whether a token header was configured; it does not claim the endpoint
-authenticated that token. Remote endpoint origins are emitted only with the
-same private diagnostic opt-in.
+peer and tool identifiers, provider descriptions, label objects, and
+provider-supplied errors by default. Public descriptions are generic; raw label
+keys and values are omitted. `authentication_header_sent` records only whether
+a token header was configured; it does not claim the endpoint authenticated
+that token. Remote endpoint origins and raw discovery rows are emitted only
+with the same private diagnostic opt-in.
 Use
 `--include-private-topology` only for an owner-controlled local diagnostic; do
 not commit or publish that output.

@@ -1,0 +1,85 @@
+-- Migrator-applied post-migration grants for the Risk Fork PostgreSQL authority.
+-- Replace every placeholder with a separately provisioned, validated PostgreSQL
+-- identifier before execution. Do not put passwords or connection URLs here.
+--
+-- Required provisioning order:
+--   1. Create separate NOINHERIT LOGIN roles using the managed secret workflow.
+--   2. Apply owner-bootstrap.sql.template as the database owner.
+--   3. Run migrations while authenticated as __RISK_FORK_MIGRATOR_ROLE__.
+--   4. Apply this file while authenticated as __RISK_FORK_MIGRATOR_ROLE__.
+--   5. Prove the runtime role's denied privileges before activation.
+
+BEGIN;
+
+REVOKE ALL ON ALL TABLES IN SCHEMA __RISK_FORK_SCHEMA__ FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA __RISK_FORK_SCHEMA__ FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __RISK_FORK_SCHEMA__
+FROM PUBLIC, __RISK_FORK_RUNTIME_ROLE__;
+
+-- Table-level REVOKE does not clear separately granted column ACLs. Remove every
+-- possible column grant before installing the reviewed table-level runtime set.
+DO $revoke_column_acl$
+DECLARE
+  target record;
+BEGIN
+  FOR target IN
+    SELECT table_name,
+           string_agg(format('%I', column_name), ', ' ORDER BY ordinal_position)
+             AS column_names
+      FROM information_schema.columns
+     WHERE table_schema = '__RISK_FORK_SCHEMA__'
+     GROUP BY table_name
+  LOOP
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES (%s) ON TABLE %I.%I FROM %I',
+      target.column_names,
+      '__RISK_FORK_SCHEMA__',
+      target.table_name,
+      '__RISK_FORK_RUNTIME_ROLE__'
+    );
+  END LOOP;
+END
+$revoke_column_acl$;
+
+GRANT SELECT ON TABLE
+  __RISK_FORK_SCHEMA__.authority_schema_migrations
+TO __RISK_FORK_RUNTIME_ROLE__;
+
+GRANT SELECT, INSERT, UPDATE ON TABLE
+  __RISK_FORK_SCHEMA__.authority_meta,
+  __RISK_FORK_SCHEMA__.parent_heads,
+  __RISK_FORK_SCHEMA__.commit_approvals,
+  __RISK_FORK_SCHEMA__.execution_authorizations,
+  __RISK_FORK_SCHEMA__.operations
+TO __RISK_FORK_RUNTIME_ROLE__;
+
+GRANT SELECT, INSERT ON TABLE __RISK_FORK_SCHEMA__.audit_events
+TO __RISK_FORK_RUNTIME_ROLE__;
+
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  __RISK_FORK_SCHEMA__.authority_schema_migrations
+FROM __RISK_FORK_RUNTIME_ROLE__;
+
+REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  __RISK_FORK_SCHEMA__.authority_meta,
+  __RISK_FORK_SCHEMA__.parent_heads,
+  __RISK_FORK_SCHEMA__.commit_approvals,
+  __RISK_FORK_SCHEMA__.execution_authorizations,
+  __RISK_FORK_SCHEMA__.operations
+FROM __RISK_FORK_RUNTIME_ROLE__;
+
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE
+  __RISK_FORK_SCHEMA__.audit_events
+FROM __RISK_FORK_RUNTIME_ROLE__;
+
+REVOKE ALL ON FUNCTION __RISK_FORK_SCHEMA__.reject_audit_mutation()
+FROM PUBLIC, __RISK_FORK_RUNTIME_ROLE__;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_SCHEMA__
+  REVOKE ALL ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_SCHEMA__
+  REVOKE ALL ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_SCHEMA__
+  REVOKE ALL ON FUNCTIONS FROM PUBLIC;
+
+COMMIT;

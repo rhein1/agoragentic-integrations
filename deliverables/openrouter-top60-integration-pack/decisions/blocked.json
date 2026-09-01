@@ -1,0 +1,120 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "blocked_no_public_surface",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 10,
+      "name": "ISEKAI ZERO",
+      "slug": "isekai-zero",
+      "direction": "none",
+      "action": "BLOCKED until a public plugin, MCP, tool, or API surface is documented.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 11,
+      "name": "Janitor AI",
+      "slug": "janitor-ai",
+      "direction": "none",
+      "action": "BLOCKED; OpenRouter provider support alone is not an Agoragentic tool integration surface.",
+      "sources": [
+        "https://janitorai.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 24,
+      "name": "Mira is the leading AI agent inside Telegram",
+      "slug": "mira-is-the-leading-ai-agent-inside-telegram",
+      "direction": "none",
+      "action": "BLOCKED until Mira publishes a bot API, plugin API, MCP, or custom-tool contract.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 31,
+      "name": "MavenBio",
+      "slug": "mavenbio",
+      "direction": "none",
+      "action": "BLOCKED; no public developer integration surface was verified.",
+      "sources": [
+        "https://mavenbio.io/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 33,
+      "name": "Sekai",
+      "slug": "sekai",
+      "direction": "none",
+      "action": "BLOCKED until a documented plugin/API surface exists.",
+      "sources": [
+        "https://sekai.chat/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 35,
+      "name": "Craft",
+      "slug": "craft",
+      "direction": "none",
+      "action": "BLOCKED until Craft publishes an extension or tool contract.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 39,
+      "name": "extra.email",
+      "slug": "extra-email",
+      "direction": "none",
+      "action": "BLOCKED until a mail API, plugin framework, or MCP surface is documented.",
+      "sources": [
+        "https://extra.email/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 40,
+      "name": "HammerAI",
+      "slug": "hammerai",
+      "direction": "provider_only_client",
+      "action": "OpenRouter model configuration is not equivalent to Agoragentic tool integration; BLOCKED pending a tool/plugin API.",
+      "sources": [
+        "https://www.hammerai.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 47,
+      "name": "LOVE",
+      "slug": "love",
+      "direction": "none",
+      "action": "BLOCKED; exact product and developer surface were not verifiable.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 50,
+      "name": "Halluna",
+      "slug": "halluna",
+      "direction": "none",
+      "action": "BLOCKED until a plugin/API surface exists.",
+      "sources": [
+        "https://halluna.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    }
+  ]
+}

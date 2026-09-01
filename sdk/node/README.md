@@ -40,7 +40,7 @@ console.log('Private receipt id:', result.receipt_id || result.invocation_id);
 console.log('Public receipt proof:', result.receipt_url);
 ```
 
-Prefer MCP when the host is MCP-native (`npx agora mcp`). Prefer x402 when an anonymous agent should pay with its own external Base wallet (`client.x402ExecuteMatch(...)` then `client.x402Execute(...)`) without Agoragentic wallet funding.
+`npm` currently resolves a legacy MCP direct relay and must not be used. The fail-closed 2.0.0 protocol/reference implementation is an unpublished, non-installable source candidate; `npx agora mcp` reports the blocked status and emits no runnable configuration. Prefer x402 when an anonymous agent should pay with its own external Base wallet (`client.x402ExecuteMatch(...)` then `client.x402Execute(...)`) without Agoragentic wallet funding.
 
 ## Package Provenance
 
@@ -52,7 +52,7 @@ Run the no-spend Agent OS doctor without installing globally:
 
 ```sh
 npx agora toolkit
-npx agora mcp
+npx agora mcp # security status only; direct launch is blocked
 npx agoragentic-os doctor
 AGORAGENTIC_API_KEY=amk_your_api_key npx agoragentic-os doctor
 ```
@@ -103,7 +103,7 @@ The approval callback receives only the normalized action and argument count. Re
 - on-chain systems are used for wallet funding, receipts, settlement, and proofs
 - the SDK does not ship provider ranking, trust heuristics, fraud logic, or settlement normalization internals
 
-If you want a remote tool surface instead of an SDK, use MCP separately.
+Remote MCP transport is non-operational from this public SDK until a qualified host enforcement boundary owns network access, resolves credentials out of band, and clean-imports results.
 
 ## Choose SDK vs MCP vs Raw HTTP
 
@@ -112,7 +112,7 @@ If you want a remote tool surface instead of an SDK, use MCP separately.
 - Use **`agoragentic/agent-os-harness`** when you need the generic Micro ECF -> Agent OS deployment-packet contract without importing server internals.
 - Use **`agoragentic/rust-framework`** when you need the thin public HTTP/JSON compatibility contract for the Agoragentic Rust Framework.
 - Use the **Agent OS CLI** when you want a terminal-first readiness check, quote/procurement preflight, approval inspection, receipt lookup, or reconciliation without writing code.
-- Use **MCP** when the host is already MCP-native, such as Claude, Cursor, or VS Code.
+- Use the **repo-local MCP protocol/reference source candidate** only for maintainer compatibility testing. Do not resolve the npm package or treat source smoke as an isolation boundary or live hosted transport.
 - Use **raw HTTP** when you want no package dependency at all.
 
 Canonical onboarding path: [SDK quickstart guide](https://agoragentic.com/guides/sdk-quickstart-guide/)
@@ -368,8 +368,11 @@ npx agora toolkit mcp
 # Local env binding helper; does not persist secrets.
 npx agora env live --key-file ./key.json
 
-# MCP config helper.
+# MCP security status (no runnable config or credentials).
 npx agora mcp
+
+# Refused with MCP_RISK_FORK_ENFORCEMENT_REQUIRED; no child process is launched.
+npx agora mcp --run
 
 # No API key required: validates public discovery only.
 npx agoragentic-os doctor
@@ -769,7 +772,7 @@ const result = await client.execute('summarize', { text: 'hello' }, { max_cost: 
 - SDK quickstart guide: [agoragentic.com/guides/sdk-quickstart-guide/](https://agoragentic.com/guides/sdk-quickstart-guide/)
 - Agent OS CLI: `npx agoragentic-os doctor`
 - Python SDK: `pip install agoragentic`
-- MCP server: `npx agoragentic-mcp`
+- MCP protocol/reference source candidate: [`../../mcp/README.md`](../../mcp/README.md) (2.0.0 is unpublished and non-installable; the npm name resolves a legacy direct relay and must not be used)
 
 ## License
 

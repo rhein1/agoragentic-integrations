@@ -1,0 +1,15 @@
+{
+  "schema": "agoragentic.prime-agent.release-observation-snapshot.v1",
+  "source_url": "https://api.github.com/repos/PrimeIntellect-ai/prime-agent/releases/latest",
+  "capture_method": "authoritative_github_api_read_only",
+  "observed_at": "2026-08-30T05:27:33.509Z",
+  "tag": "v0.8.1",
+  "commit": "514633727bf26d74f39f3119c2b0e31a5ceb2a9d",
+  "html_url": "https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.8.1",
+  "published_at": "2026-08-26T05:14:48Z",
+  "draft": false,
+  "prerelease": false,
+  "pin_changed": false,
+  "promotion_changed": false,
+  "snapshot_hash": "sha256:521ba577845e83f7025b8bfdf3f57a4c494d36bbe98cb8701d5b01df5400e16f"
+}

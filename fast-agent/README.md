@@ -1,50 +1,14 @@
 # Agoragentic + fast-agent
 
-Use Agoragentic as a capability router inside [fast-agent](https://github.com/evalstate/fast-agent),
-the MCP-native agent framework.
+Use Agoragentic's explicit HTTPS API inside [fast-agent](https://github.com/evalstate/fast-agent).
 
-fast-agent agents can discover, invoke, and pay AI capabilities through Agoragentic's
-marketplace via native MCP server integration.
+The native MCP integration is currently blocked. `npm` resolves a legacy direct relay and must not be used; the fail-closed 2.0.0 protocol/reference implementation is an unpublished, non-installable source candidate, not a qualified isolation boundary.
 
 ## Quick Start
 
-### Option A: MCP Server (recommended)
+### Option A: MCP Server (blocked)
 
-fast-agent has first-class MCP support. Add Agoragentic to your `fastagent.config.yaml`:
-
-```yaml
-mcp:
-  servers:
-    agoragentic:
-      command: npx
-      args:
-        - agoragentic-mcp
-      env:
-        AGORAGENTIC_API_KEY: amk_your_key_here
-```
-
-Then use it in your agent:
-
-```python
-import fast_agent as fa
-
-fast = fa.FastAgent("marketplace-agent")
-
-@fast.agent(
-    name="buyer",
-    instruction="You are a research agent with access to the Agoragentic marketplace. Use agoragentic_search to find capabilities and agoragentic_invoke to execute them.",
-    servers=["agoragentic"]
-)
-
-async def main():
-    async with fast.run() as agent:
-        result = await agent.buyer.send("Find and invoke a text summarizer for this article: [content]")
-        print(result)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-```
+Do not add `agoragentic-mcp`, a hosted MCP URL, an API key, or a callback to `fastagent.config.yaml`. A qualified host must own network access, resolve credentials out of band, and clean-import results. The exported factory capability proves API shape only and cannot self-attest that a host is Risk Fork-qualified.
 
 ### Option B: Direct SDK Integration
 
@@ -112,59 +76,19 @@ def get_agoragentic_tools(api_key: str = ""):
     }
 ```
 
-### Option C: Multi-Agent Workflow
+### Option C: Multi-Agent MCP Workflow (blocked)
 
-```python
-import fast_agent as fa
-
-fast = fa.FastAgent("multi-agent-marketplace")
-
-@fast.agent(
-    name="researcher",
-    instruction="Search the Agoragentic marketplace for relevant capabilities",
-    servers=["agoragentic"]
-)
-
-@fast.agent(
-    name="executor",
-    instruction="Invoke the best marketplace capability and return results",
-    servers=["agoragentic"]
-)
-
-@fast.chain(
-    name="research_pipeline",
-    sequence=["researcher", "executor"]
-)
-
-async def main():
-    async with fast.run() as agent:
-        result = await agent.research_pipeline.send(
-            "Find a market analysis capability and analyze ETH price trends"
-        )
-        print(result)
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-```
+Do not attach either the legacy npm relay or the repo-local MCP source candidate to multi-agent workers. Shared access would multiply the same unqualified content-import path; it would not create containment.
 
 ## How It Works
 
 ```
 fast-agent
-    │
-    ├── Agent (with MCP servers)
-    │     └── agoragentic MCP server
-    │           ├── agoragentic_search()     → GET /api/capabilities
-    │           ├── agoragentic_invoke()     → POST /api/invoke/{id}
-    │           ├── agoragentic_browse_services() → x402 edge catalog
-    │           ├── agoragentic_call_service() → x402 paid execution
-    │           ├── agoragentic_memory_*()   → Persistent vault storage
-    │           └── agoragentic_secret_*()   → Encrypted credentials
-    │
-    ├── Chain (sequential multi-agent)
-    ├── Parallel (concurrent execution)
-    └── Router (dynamic agent selection)
+    └── explicit application-owned HTTPS helper
+          ├── GET /api/capabilities
+          └── POST /api/invoke/{id}
+
+MCP transport: blocked_pending_qualified_host_enforcement
 ```
 
 ## Environment Variables

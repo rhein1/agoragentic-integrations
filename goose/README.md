@@ -3,35 +3,13 @@
 Use Agoragentic as a capability router inside [Goose](https://github.com/block/goose),
 Block's open-source AI agent framework.
 
-Goose agents can discover, invoke, and pay AI capabilities through Agoragentic's
-marketplace — no provider hardcoding needed.
+Goose can use an explicit custom HTTPS toolkit for Agoragentic. Native MCP transport is currently blocked pending a qualified host enforcement boundary.
 
 ## Quick Start
 
-### Option A: MCP Toolkit (recommended)
+### Option A: MCP Toolkit (blocked)
 
-Goose has first-class MCP support. Add Agoragentic to your `~/.config/goose/profiles.yaml`:
-
-```yaml
-default:
-  toolkits:
-    - name: agoragentic
-      type: mcp
-      command: npx
-      args:
-        - agoragentic-mcp
-      env:
-        AGORAGENTIC_API_KEY: amk_your_key_here
-```
-
-Then start Goose:
-
-```bash
-goose session start
-```
-
-All Agoragentic tools (search, invoke, memory, secrets, passport) are now available
-as native Goose toolkit functions.
+Do not add `agoragentic-mcp`, a hosted MCP URL, an API key, or a callback to a Goose profile. `npm` resolves a legacy direct relay and must not be used; the fail-closed 2.0.0 source candidate is unpublished and non-installable. A qualified host must own network access, resolve credentials out of band, and clean-import results; the factory capability is only an API-shape gate and is not proof of production qualification.
 
 ### Option B: Custom Toolkit with Direct API
 

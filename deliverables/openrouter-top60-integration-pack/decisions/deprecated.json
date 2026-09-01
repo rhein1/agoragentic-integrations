@@ -1,0 +1,32 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "deprecated",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 43,
+      "name": "Roo Code",
+      "slug": "roo-code",
+      "direction": "migration",
+      "action": "Retain a retirement tombstone; do not redirect users to Zoo Code or Cline as a live Agoragentic MCP path while qualified host enforcement remains unavailable.",
+      "sources": [
+        "https://github.com/RooCodeInc/Roo-Code"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    },
+    {
+      "rank": 44,
+      "name": "shapes inc",
+      "slug": "shapes-inc",
+      "direction": "none",
+      "action": "Do not implement against a sunset API; retain a tombstone to prevent future duplicate work.",
+      "sources": [
+        "https://github.com/shapesinc"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false
+    }
+  ]
+}

@@ -1,0 +1,234 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/ns/ard/profile/v0.91/schema",
+  "title": "Agoragentic source-only ARD v0.91 profile",
+  "description": "Local hardening overlay. It is not the upstream ARD schema and grants no runtime authority.",
+  "type": "object",
+  "required": ["specVersion", "entries"],
+  "properties": {
+    "specVersion": { "const": "1.0" },
+    "host": { "$ref": "#/$defs/host" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "host": {
+      "type": "object",
+      "required": ["displayName"],
+      "properties": {
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "identifier": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "documentationUrl": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "logoUrl": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "trustManifest": { "$ref": "#/$defs/hostTrustManifest" }
+      },
+      "additionalProperties": false
+    },
+    "hostTrustManifest": {
+      "type": "object",
+      "required": ["identity"],
+      "properties": {
+        "identity": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "identityType": { "enum": ["spiffe", "did", "https", "other"] },
+        "trustSchema": {
+          "type": "object",
+          "required": ["identifier", "version"],
+          "properties": {
+            "identifier": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "version": { "type": "string", "minLength": 1, "maxLength": 2048 },
+            "governanceUri": { "type": "string", "format": "uri", "maxLength": 2048 },
+            "verificationMethods": {
+              "type": "array",
+              "maxItems": 64,
+              "items": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "attestations": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["type", "uri", "mediaType"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1, "maxLength": 2048 },
+              "uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+              "mediaType": { "type": "string", "minLength": 1, "maxLength": 2048 },
+              "digest": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "provenance": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "required": ["relation", "sourceId"],
+            "properties": {
+              "relation": { "enum": ["derivedFrom", "publishedFrom", "copiedFrom"] },
+              "sourceId": { "type": "string", "minLength": 1, "maxLength": 2048 },
+              "sourceDigest": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "signature": { "type": "string", "minLength": 1, "maxLength": 2048 }
+      },
+      "additionalProperties": false
+    },
+    "entry": {
+      "type": "object",
+      "required": [
+        "@context",
+        "@id",
+        "identifier",
+        "displayName",
+        "type",
+        "ag:trustState",
+        "ag:riskLevel",
+        "ag:executionAuthorizationRequired",
+        "ag:riskForkAvailable",
+        "ag:riskForkRequired",
+        "ag:transactionAssuranceAvailable",
+        "ag:paymentRails",
+        "ag:priceModel",
+        "ag:receiptVerifier",
+        "ag:providerQualification",
+        "ag:routeEligibleFromDiscovery",
+        "ag:rankingEligibleFromDiscovery",
+        "ag:listingEligibleFromDiscovery",
+        "ag:paymentEligibleFromDiscovery",
+        "ag:settlementEligibleFromDiscovery",
+        "ag:trustPromotedFromDiscovery",
+        "ag:executionAuthorizedFromDiscovery",
+        "ag:authenticationBypassGranted",
+        "ag:publicationAuthorizedFromDiscovery",
+        "ag:riskForkBypassGranted",
+        "ag:executionAuthorityGranted",
+        "ag:paymentAuthorityGranted",
+        "ag:trustPromotionAuthorized",
+        "ag:publicationAuthorityGranted",
+        "ag:networkDereferenceAllowed",
+        "ag:liveExecutionAvailable",
+        "ag:sourceOnly",
+        "ag:defaultOff"
+      ],
+      "properties": {
+        "@context": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "const": "https://agenticresourcediscovery.org/context/v1" },
+            { "const": "https://agoragentic.com/ns/ard/v1" }
+          ],
+          "items": false
+        },
+        "@id": { "type": "string" },
+        "identifier": {
+          "type": "string",
+          "pattern": "^urn:air:(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?::[A-Za-z0-9._-]+){2,}$"
+        },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "type": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "url": { "type": "string", "pattern": "^https://" },
+        "data": { "type": "object" },
+        "representativeQueries": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 280 }
+        },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 2048 }
+        },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 2048 }
+        },
+        "version": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "boolean", "null"] }
+        },
+        "trustManifest": {
+          "type": "object",
+          "required": ["identity"],
+          "properties": { "identity": { "type": "string", "minLength": 1, "maxLength": 2048 } },
+          "additionalProperties": true
+        },
+        "ag:trustState": { "const": "unverified" },
+        "ag:riskLevel": { "const": "unassessed" },
+        "ag:executionAuthorizationRequired": { "const": true },
+        "ag:riskForkAvailable": { "const": true },
+        "ag:riskForkRequired": { "const": false },
+        "ag:transactionAssuranceAvailable": { "type": "boolean" },
+        "ag:paymentRails": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["internal_usdc_wallet", "x402"] }
+        },
+        "ag:priceModel": {
+          "enum": ["separate_execution_contract", "tool_specific", "capability_specific", "none"]
+        },
+        "ag:receiptVerifier": {
+          "oneOf": [
+            { "const": "https://agoragentic.com/api/commerce/interchange/receipts/verify" },
+            { "type": "null" }
+          ]
+        },
+        "ag:providerQualification": {
+          "enum": ["snapshot_unverified", "source_only_not_live_qualified"]
+        },
+        "ag:routeEligibleFromDiscovery": { "const": false },
+        "ag:rankingEligibleFromDiscovery": { "const": false },
+        "ag:listingEligibleFromDiscovery": { "const": false },
+        "ag:paymentEligibleFromDiscovery": { "const": false },
+        "ag:settlementEligibleFromDiscovery": { "const": false },
+        "ag:trustPromotedFromDiscovery": { "const": false },
+        "ag:executionAuthorizedFromDiscovery": { "const": false },
+        "ag:authenticationBypassGranted": { "const": false },
+        "ag:publicationAuthorizedFromDiscovery": { "const": false },
+        "ag:riskForkBypassGranted": { "const": false },
+        "ag:executionAuthorityGranted": { "const": false },
+        "ag:paymentAuthorityGranted": { "const": false },
+        "ag:trustPromotionAuthorized": { "const": false },
+        "ag:publicationAuthorityGranted": { "const": false },
+        "ag:networkDereferenceAllowed": { "const": false },
+        "ag:liveExecutionAvailable": { "const": false },
+        "ag:sourceOnly": { "const": true },
+        "ag:defaultOff": { "const": true }
+      },
+      "propertyNames": {
+        "not": {
+          "anyOf": [
+            {
+              "pattern": "^(?:trustState|riskLevel|executionAuthorizationRequired|riskForkAvailable|riskForkRequired|transactionAssuranceAvailable|paymentRails|priceModel|receiptVerifier|providerQualification|routeEligibleFromDiscovery|rankingEligibleFromDiscovery|listingEligibleFromDiscovery|paymentEligibleFromDiscovery|settlementEligibleFromDiscovery|trustPromotedFromDiscovery|executionAuthorizedFromDiscovery|authenticationBypassGranted|publicationAuthorizedFromDiscovery|riskForkBypassGranted|executionAuthorityGranted|paymentAuthorityGranted|trustPromotionAuthorized|publicationAuthorityGranted|networkDereferenceAllowed|liveExecutionAvailable|sourceOnly|defaultOff)$"
+            },
+            {
+              "pattern": "^https://agoragentic\\.com/ns/ard#(?:trustState|riskLevel|executionAuthorizationRequired|riskForkAvailable|riskForkRequired|transactionAssuranceAvailable|paymentRails|priceModel|receiptVerifier|providerQualification|routeEligibleFromDiscovery|rankingEligibleFromDiscovery|listingEligibleFromDiscovery|paymentEligibleFromDiscovery|settlementEligibleFromDiscovery|trustPromotedFromDiscovery|executionAuthorizedFromDiscovery|authenticationBypassGranted|publicationAuthorizedFromDiscovery|riskForkBypassGranted|executionAuthorityGranted|paymentAuthorityGranted|trustPromotionAuthorized|publicationAuthorityGranted|networkDereferenceAllowed|liveExecutionAvailable|sourceOnly|defaultOff)$"
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        { "required": ["url"], "not": { "required": ["data"] } },
+        { "required": ["data"], "not": { "required": ["url"] } }
+      ],
+      "not": { "required": ["TrustManifest"] },
+      "additionalProperties": true
+    }
+  }
+}

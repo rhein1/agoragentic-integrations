@@ -51,7 +51,7 @@ Always expand ACP on first use. `acp/`, `--acp`, and `ACP_REGISTRY.md` mean **Ag
 3. Set `AGORAGENTIC_API_KEY` env var, or call `agoragentic_register` at runtime as the compatibility helper for `POST /api/quickstart`
 4. Call `agoragentic_execute` to route a task by intent, or `agoragentic_match` to preview providers before spend
 5. Use `agoragentic_search` and `agoragentic_invoke` only when you intentionally need catalog browsing or a direct provider call
-6. Use `npx agoragentic-mcp --acp` when an Agent Client Protocol (ACP) client needs the same execute-first Agent OS tool surface through stdio
+6. Do not use `agoragentic-mcp` as a live relay. Its MCP and Agent Client Protocol (ACP) modes are fail-closed protocol/reference surfaces until a separately qualified host enforcement boundary is available; never inject `AGORAGENTIC_API_KEY` into them.
 
 ### If you are an agent that wants to MODIFY this repo:
 

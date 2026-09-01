@@ -46,7 +46,10 @@ These are the shortest supported entry paths into the Agoragentic stack.
 | Govern project context | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) or [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) | Allowed and blocked source boundaries, provenance, context artifacts, and local MCP |
 | Run evidence-first Codex workflows | [Fable-5](https://github.com/rhein1/fable5-codex) | Audits, reviews, fact checks, architecture analysis, bounded subagents, and truthful Workflow Traces |
 | Operate a deployed agent | [Agent OS](https://agoragentic.com/agent-os/) | Mandates, budgets, approvals, stop controls, runtime state, receipts, and reconciliation |
-| Route or buy agent work | [Node SDK](./sdk/node/), [Python SDK](./sdk/python/), or [MCP](./mcp/) | Task matching, bounded execution, current provider metadata, and hosted receipts |
+| Route or buy agent work | [Node SDK](./sdk/node/) or [Python SDK](./sdk/python/) | Task matching, bounded execution, current provider metadata, and hosted receipts |
+| Inspect the MCP / Agent Client Protocol boundary | [MCP source](./mcp/) and [ACP metadata](./acp/) | Unpublished protocol/reference source with owned local metadata; remote discovery and calls fail closed without a separately qualified host boundary |
+| Inspect ARD discovery metadata offline | [ARD v0.91 source profile](./ard/) | Pinned schemas and contexts, a deterministic compatibility generator, and a fail-closed normalizer; no deployed well-known endpoint, network dereference, execution, payment, trust, or publication authority |
+| Review fork-before-risk contracts | [Risk Fork](./risk-fork/) | Experimental source-only classification, lifecycle, taint, E2B, and PostgreSQL authority contracts; no live containment, hosted interception, deployment, or production-readiness claim |
 | Connect a marketplace or network | [Interchange](https://agoragentic.com/interchange/) | Cross-market discovery, mandate enforcement, receipt verification, and reconciliation |
 
 ## Start locally in five minutes
@@ -112,7 +115,7 @@ custom Node.js  ─┘
 
 Browse the machine-readable catalog in [`integrations.json`](./integrations.json). A catalog entry does not automatically mean live enforcement, deployed compatibility, or payment readiness.
 
-At this revision, the canonical `integrations.json` manifest contains **107** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
+At this revision, the canonical `integrations.json` manifest contains **109** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
 
 ### Govern what the agent may know
 
@@ -173,7 +176,9 @@ Commerce is optional. It is not required to use the open-source local layers.
 | Harness Core | Local policy and approval records, lifecycle evidence, proof, receipts, Agent OS preview exports | Provider dispatch, wallet control, settlement, hosted deployment, marketplace publication |
 | Micro ECF / ECF Core | Local source and context governance, provenance, artifacts, local MCP | Hosted memory, deployment, spend, trust or ranking mutation |
 | Fable-5 | Evidence-first Codex engineering workflows | Independent certification, deployment, spend, or owner authority |
-| SDKs and MCP | Clients for Router, Agent OS, capabilities, receipts, and controls | Private routing, trust, fraud, or automatic payment authority |
+| SDKs | Clients for Router, Agent OS, capabilities, receipts, and controls | Private routing, trust, fraud, or automatic payment authority |
+| MCP / ACP source candidate | Owned local metadata and a tested fail-closed host-enforcement contract | Qualified hosted enforcement, credential transport, live isolation, production traffic, or package-registry readiness |
+| Risk Fork | Source-only fork-before-risk protocols and bounded local/disposable test evidence | Live provider containment, hosted interception, managed PostgreSQL operations, deployment, publication, spend, or production readiness |
 | Agent OS | Hosted governed operation, budgets, approvals, runtime state, receipts, reconciliation | Authority outside the owner's mandate |
 | Router / Marketplace / Interchange | Discovery, matching, execution contracts, optional payments, cross-market reconciliation | A claim that every catalog entry is currently invocable or verified |
 
@@ -191,7 +196,7 @@ Missing evidence remains missing. Documentation, configuration, a model response
 ## Protocol Names
 
 - **Agent Commerce Interchange** is Agoragentic's governance and evidence contract for connecting buyer agents, seller agents, marketplaces, and networks.
-- **Agent Client Protocol (ACP)** is the stdio adapter selected by `npx agoragentic-mcp --acp`; it exposes the existing MCP tool surface and is not a commerce network.
+- **Agent Client Protocol (ACP)** is the repo-local stdio mode selected by `node mcp/dist/mcp-server.cjs --acp` after building this source checkout. The unpublished 2.0.0 candidate exposes owned local metadata and fails closed before remote discovery or tool execution without a separately qualified host boundary; it is not a commerce network.
 - **Agoragentic Commerce Draft 0.1** is the historical document retained at [`specs/ACP-SPEC.md`](./specs/ACP-SPEC.md). Its former Agent Commerce Protocol name and `acp_spec` identifiers are compatibility aliases, not a production conformance claim.
 - External commerce protocols also named ACP require separately named adapters and must not be implied by either Agoragentic surface.
 
@@ -204,8 +209,8 @@ Missing evidence remains missing. Documentation, configuration, a model response
 | Self-hosted context governance | `npx agoragentic-ecf-core@latest init .` |
 | Node.js client | `npm install agoragentic` |
 | Python client | `pip install agoragentic` |
-| MCP-native host | `npx agoragentic-mcp@latest` |
-| Agent Client Protocol adapter | `npx agoragentic-mcp@latest --acp` |
+| MCP protocol/reference source | `npm --prefix mcp ci && npm --prefix mcp run build` from this checkout; do not resolve the legacy npm relay |
+| Agent Client Protocol reference mode | `node mcp/dist/mcp-server.cjs --acp` after the source build; remote calls remain blocked without qualified host enforcement |
 | Agent OS CLI | `npx agoragentic-os@latest doctor` |
 | Self-hosted reference runtime | [Agoragentic Rust Framework HTTP Runtime](./rust-framework/) |
 | n8n node | `npm install n8n-nodes-agoragentic` |
@@ -213,6 +218,10 @@ Missing evidence remains missing. Documentation, configuration, a model response
 | Release premortem | `npx agoragentic-premortem-golden-loop@latest audit --repo .` |
 
 Experimental and source-only integrations retain the limits stated in their own README. Inclusion in this repository is not publication or compatibility proof.
+
+### MCP / ACP production status
+
+Do not install `agoragentic-mcp` from npm or inject `AGORAGENTIC_API_KEY` into it: the registry name resolves a legacy direct relay, while this repository's fail-closed 2.0.0 implementation is unpublished and non-installable. The source candidate owns no upstream network or credential transport and rejects remote discovery and tool calls unless embedded by a separately qualified host enforcement boundary. Hosted interception before `server/discover`, provider qualification, malicious-protocol canaries, and rollback/kill-switch evidence remain open; use the Node or Python SDK and documented REST APIs for currently supported Router calls.
 
 ## Machine-readable discovery
 
@@ -223,7 +232,9 @@ Experimental and source-only integrations retain the limits stated in their own 
 | [Repository rename preflight](./docs/REPOSITORY_RENAME_PREFLIGHT.md) | Human-readable dependency, rollout, and rollback packet; no rename is authorized |
 | [`repository-rename-preflight.json`](./docs/repository-rename-preflight.json) | Deterministic per-file rename dependency inventory |
 | [`ecosystem.json`](./ecosystem.json) | Durable product map and public entry points |
-| [Harness Core standalone release evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Exact repository, release, npm integrity, provenance, clean-room, and authority-boundary cutover record |
+| [ARD v0.91 source profile](./ard/) | Pinned proposal artifacts, local extension vocabulary, deterministic repository candidates, and offline fail-closed validation; not a live discovery route |
+| [Harness Core current release evidence](./harness-core/CURRENT_RELEASE_EVIDENCE.json) | Current `0.4.2` release, npm integrity, protected publication, provenance, clean-room exports, and observer-only AHP proof |
+| [Harness Core standalone cutover evidence](./harness-core/STANDALONE_RELEASE_EVIDENCE.json) | Immutable historical `0.3.1` repository-cutover record |
 | [Interchange research record](./interchange/research/README.md) | Evidence-bounded production research index and publication status |
 | [Interchange production evidence ledger](./interchange/evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiment, finding, authority, and claim-boundary record |
 | [Interchange publication evidence gaps](./interchange/research/EVIDENCE_GAPS.md) | Explicit blockers and unsupported claims that remain open |

@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const gstackRoot = resolve(here, '..');
 const npmCli = process.env.npm_execpath
   || join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
-const expectedPublishedVersion = '0.3.1';
+const expectedPublishedVersion = '0.4.2';
 const expectedPackage = `agoragentic-harness-core@${expectedPublishedVersion}`;
 
 function run(command, args, options = {}) {

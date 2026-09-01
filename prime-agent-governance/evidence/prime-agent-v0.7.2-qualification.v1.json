@@ -1,0 +1,289 @@
+{
+  "schema": "agoragentic.integration-qualification-evidence.v1",
+  "packet_version": 1,
+  "integration_id": "prime-agent-governance",
+  "generated_at": "2026-08-30T16:41:55.129Z",
+  "subject": {
+    "project": "Prime Agent",
+    "repository": "https://github.com/PrimeIntellect-ai/prime-agent"
+  },
+  "release": {
+    "tag": "v0.7.2",
+    "commit": "83a0f9f9566219551fcb6ffaf7f519a815749a58",
+    "asset_name": "prime-agent-0.7.2.tgz",
+    "asset_sha256": "bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e",
+    "asset_size_bytes": 9387295,
+    "asset_url": "https://github.com/PrimeIntellect-ai/prime-agent/releases/download/v0.7.2/prime-agent-0.7.2.tgz"
+  },
+  "release_observation": {
+    "status": "update_available",
+    "pinned_tag": "v0.7.2",
+    "pinned_commit": "83a0f9f9566219551fcb6ffaf7f519a815749a58",
+    "observed_latest_tag": "v0.8.1",
+    "observed_latest_commit": "514633727bf26d74f39f3119c2b0e31a5ceb2a9d",
+    "observed_at": "2026-08-30T05:27:33.509Z",
+    "auto_update": false,
+    "pin_changed": false,
+    "binary_executed": false,
+    "promotion_changed": false
+  },
+  "observations": {
+    "official_project_identified": {
+      "status": "passed",
+      "proof_class": "official_metadata",
+      "evidence_refs": [
+        "https://github.com/PrimeIntellect-ai/prime-agent/releases/tag/v0.7.2",
+        "https://api.github.com/repos/PrimeIntellect-ai/prime-agent/releases/latest",
+        "sha256:521ba577845e83f7025b8bfdf3f57a4c494d36bbe98cb8701d5b01df5400e16f"
+      ],
+      "summary": "Official repository, official tag, release asset, and commit were identified."
+    },
+    "metadata_mapping_tested": {
+      "status": "passed",
+      "proof_class": "local_test",
+      "evidence_refs": [
+        "prime-agent-governance/test/release-verifier.test.mjs"
+      ],
+      "summary": "Released package name, version, Node floor, CLI entry, exports, and piConfig are checked exactly."
+    },
+    "source_adapter_tested": {
+      "status": "passed",
+      "proof_class": "local_test",
+      "evidence_refs": [
+        "prime-agent-governance/test/extension.test.mjs",
+        "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5"
+      ],
+      "summary": "The source extension policy and evidence adapter passes deterministic unit and adversarial tests."
+    },
+    "policy_boundary_observed": {
+      "status": "unknown",
+      "proof_class": "local_test",
+      "evidence_refs": [
+        "prime-agent-governance/test/extension.test.mjs"
+      ],
+      "summary": "Policy behavior is unit-tested, but a real host tool-call interception was not exercised without a provider action."
+    },
+    "immutable_release_pin_verified": {
+      "status": "passed",
+      "proof_class": "artifact_digest",
+      "evidence_refs": [
+        "prime-agent-governance/evidence/prime-agent-v0.7.2-released-compatibility.v1.json",
+        "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1",
+        "sha256:bc5471f2a626d727b88a45eb745fff93b10c554a3c4fc5912f25d8c64b987f5e"
+      ],
+      "summary": "The observed 9,387,295-byte release artifact recomputed to the pinned SHA-256 and exact package metadata."
+    },
+    "exact_host_artifact_loaded": {
+      "status": "passed",
+      "proof_class": "host_runtime",
+      "evidence_refs": [
+        "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1",
+        "sha256:bdcd560aad47f5322c1fd1a60ce55eec6f836125691d646eb44b436f61f01ca8",
+        "sha256:355a235390ce870a1abbce9e27ad0efceb1d9c5da97bd9106f66b7c18d1831ee",
+        "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8",
+        "sha256:a82b4affa2cdad38596b5cc3b5f9f8da62c42874a2f5609b81381ae5a3433bfa",
+        "sha256:f005e3d9ebe829355783711109e6c54213454f202c321a7034ebca7b7fc7e5e5"
+      ],
+      "summary": "The Windows x64 v0.7.2 first-party tree, pinned dependency closure, and exact source extension were integrity-checked before the released CLI loaded the extension in offline RPC mode; the profile separately records the independently reproduced Linux x64 closure."
+    },
+    "compatibility_matrix_passed": {
+      "status": "passed",
+      "proof_class": "host_runtime",
+      "evidence_refs": [
+        "sha256:82f69e2e552c5761d39fd8a0d22c8314a16c79acec79155b82ca69573060e7a1",
+        "sha256:450728172e771bedc15539e9ea0317df2191e04a7dbc9f30e14504db82c2f7cd"
+      ],
+      "summary": "Provider-free JSONL, state, discovery, extension command, idle abort, observe, malformed input, unknown command, and EOF cases passed."
+    },
+    "dependency_security_audit": {
+      "status": "failed",
+      "proof_class": "official_metadata",
+      "evidence_refs": [
+        "prime-agent-governance/evidence/prime-agent-v0.7.2-dependency-audit.v1.json",
+        "sha256:302fc6f7e1a9aee1547e931a6ef492d3bb66f05447aa86d16cec588142cc5e04",
+        "https://github.com/advisories/GHSA-jmr9-qjv8-65gv",
+        "sha256:924b09f57185f045d5ec941d45460181f4ddd1d1876dace7ed50bd63cf0147e8"
+      ],
+      "summary": "The exact production dependency closure includes direct extract-zip 2.0.1, which the observed GitHub/npm advisory classifies as high severity with no patched version; promotion is blocked without changing the compatibility result."
+    },
+    "restricted_exact_runtime_observed": {
+      "status": "unknown",
+      "proof_class": "restricted_runtime",
+      "evidence_refs": [
+        "prime-agent-governance/RUNTIME_INTEGRATION.md"
+      ],
+      "summary": "No restricted Linux canary, active cancellation, stale-worker recovery, or external policy chokepoint proof exists."
+    },
+    "hosted_endpoint_observed": {
+      "status": "unknown",
+      "proof_class": "hosted_observation",
+      "evidence_refs": [
+        "prime-agent-governance/RUNTIME_INTEGRATION.md"
+      ],
+      "summary": "No hosted Prime runtime endpoint was observed."
+    },
+    "production_activation_observed": {
+      "status": "unknown",
+      "proof_class": "production_observation",
+      "evidence_refs": [
+        "prime-agent-governance/RUNTIME_INTEGRATION.md"
+      ],
+      "summary": "No production deployment or activation occurred."
+    },
+    "owner_promotion_approved": {
+      "status": "unknown",
+      "proof_class": "human_decision",
+      "evidence_refs": [
+        "https://github.com/rhein1/agoragentic-integrations/issues/323"
+      ],
+      "summary": "Human promotion remains pending and cannot be inferred from this packet."
+    }
+  },
+  "promotion_blockers": [
+    "dependency_security_audit"
+  ],
+  "qualification": {
+    "declared_level": "source_adapter",
+    "evidence_level": "runtime_compatibility",
+    "evidence_levels": [
+      "runtime_compatibility"
+    ],
+    "effective_level": "source_adapter",
+    "qualified_levels": [
+      "research_only",
+      "metadata_mapping",
+      "source_adapter",
+      "runtime_compatibility"
+    ],
+    "level_results": {
+      "research_only": {
+        "qualified": true,
+        "unmet": []
+      },
+      "metadata_mapping": {
+        "qualified": true,
+        "unmet": []
+      },
+      "source_adapter": {
+        "qualified": true,
+        "unmet": []
+      },
+      "policy_enforcement": {
+        "qualified": false,
+        "unmet": [
+          {
+            "observation_id": "policy_boundary_observed",
+            "allowed_proof_classes": [
+              "host_runtime",
+              "restricted_runtime"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "local_test"
+          }
+        ]
+      },
+      "runtime_compatibility": {
+        "qualified": true,
+        "unmet": []
+      },
+      "exact_runtime_verification": {
+        "qualified": false,
+        "unmet": [
+          {
+            "observation_id": "restricted_exact_runtime_observed",
+            "allowed_proof_classes": [
+              "restricted_runtime"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "restricted_runtime"
+          }
+        ]
+      },
+      "hosted_availability": {
+        "qualified": false,
+        "unmet": [
+          {
+            "observation_id": "restricted_exact_runtime_observed",
+            "allowed_proof_classes": [
+              "restricted_runtime"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "restricted_runtime"
+          },
+          {
+            "observation_id": "hosted_endpoint_observed",
+            "allowed_proof_classes": [
+              "hosted_observation",
+              "production_observation"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "hosted_observation"
+          }
+        ]
+      },
+      "production_activation": {
+        "qualified": false,
+        "unmet": [
+          {
+            "observation_id": "restricted_exact_runtime_observed",
+            "allowed_proof_classes": [
+              "restricted_runtime"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "restricted_runtime"
+          },
+          {
+            "observation_id": "hosted_endpoint_observed",
+            "allowed_proof_classes": [
+              "hosted_observation",
+              "production_observation"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "hosted_observation"
+          },
+          {
+            "observation_id": "production_activation_observed",
+            "allowed_proof_classes": [
+              "production_observation"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "production_observation"
+          },
+          {
+            "observation_id": "owner_promotion_approved",
+            "allowed_proof_classes": [
+              "human_decision"
+            ],
+            "observed_status": "unknown",
+            "observed_proof_class": "human_decision"
+          }
+        ]
+      }
+    },
+    "promotion_candidate_level": null,
+    "promotion_candidate_levels": [],
+    "promotion_blocked": true,
+    "promotion_blockers": [
+      "dependency_security_audit"
+    ],
+    "human_promotion_required": true,
+    "auto_promoted": false,
+    "regression_detected": false,
+    "hard_stop_violated": false,
+    "violated_boundaries": [],
+    "validation_errors": []
+  },
+  "boundaries": {
+    "credentials_used": false,
+    "paid_provider_calls": false,
+    "production_deployed": false,
+    "package_published": false,
+    "outreach_performed": false,
+    "public_compatibility_claimed": false,
+    "wallet_mutated": false,
+    "settlement_mutated": false,
+    "trust_mutated": false,
+    "ranking_mutated": false
+  },
+  "evidence_hash": "sha256:4e13ee6fd3bf91cd6745dc5b975f4e43cf851f10f581694105718f1183c80e9e"
+}

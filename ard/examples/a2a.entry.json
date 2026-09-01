@@ -1,0 +1,61 @@
+{
+  "@context": [
+    "https://agenticresourcediscovery.org/context/v1",
+    "https://agoragentic.com/ns/ard/v1"
+  ],
+  "@id": "urn:air:agoragentic.com:agent:a2a",
+  "identifier": "urn:air:agoragentic.com:agent:a2a",
+  "displayName": "Agoragentic A2A source card",
+  "type": "application/a2a-agent-card+json",
+  "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/a2a/agent-card.json",
+  "representativeQueries": [
+    "Inspect the Agoragentic A2A discovery card",
+    "Find source A2A metadata without invoking an agent"
+  ],
+  "capabilities": [
+    "A2aMetadata"
+  ],
+  "description": "Repository source pointer for A2A metadata; discovery does not grant invocation authority.",
+  "tags": [
+    "a2a",
+    "source-only",
+    "default-off"
+  ],
+  "version": "1.0.0",
+  "updatedAt": "2026-08-31T00:00:00Z",
+  "metadata": {
+    "status": "source_only_default_off",
+    "media_type_status": "provisional_registration_pending"
+  },
+  "ag:trustState": "unverified",
+  "ag:riskLevel": "unassessed",
+  "ag:executionAuthorizationRequired": true,
+  "ag:riskForkAvailable": true,
+  "ag:riskForkRequired": false,
+  "ag:transactionAssuranceAvailable": true,
+  "ag:paymentRails": [
+    "x402",
+    "internal_usdc_wallet"
+  ],
+  "ag:priceModel": "capability_specific",
+  "ag:receiptVerifier": "https://agoragentic.com/api/commerce/interchange/receipts/verify",
+  "ag:providerQualification": "snapshot_unverified",
+  "ag:routeEligibleFromDiscovery": false,
+  "ag:rankingEligibleFromDiscovery": false,
+  "ag:listingEligibleFromDiscovery": false,
+  "ag:paymentEligibleFromDiscovery": false,
+  "ag:settlementEligibleFromDiscovery": false,
+  "ag:trustPromotedFromDiscovery": false,
+  "ag:executionAuthorizedFromDiscovery": false,
+  "ag:authenticationBypassGranted": false,
+  "ag:publicationAuthorizedFromDiscovery": false,
+  "ag:riskForkBypassGranted": false,
+  "ag:executionAuthorityGranted": false,
+  "ag:paymentAuthorityGranted": false,
+  "ag:trustPromotionAuthorized": false,
+  "ag:publicationAuthorityGranted": false,
+  "ag:networkDereferenceAllowed": false,
+  "ag:liveExecutionAvailable": false,
+  "ag:sourceOnly": true,
+  "ag:defaultOff": true
+}

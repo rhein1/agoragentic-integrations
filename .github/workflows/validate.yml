@@ -22,6 +22,9 @@ on:
       - 'assets/**'
       - 'acp/**'
       - 'mcp/**'
+      - 'deepagents/**'
+      - 'langchain/**'
+      - 'glama.json'
       - 'micro-ecf/**'
       - 'harness-core/**'
       - 'agent-payments-assurance-challenge/**'
@@ -30,10 +33,12 @@ on:
       - 'coinbase-agentic-wallets/**'
       - 'x402/**'
       - 'interchange/**'
+      - 'ard/**'
       - 'crawl4ai/**'
       - 'zoneless/**'
       - 'scripts/**'
       - 'docs/**'
+      - 'deliverables/openrouter-top60-integration-pack/**'
       - 'examples/buzz-signed-workspace-evidence/**'
       - 'examples/governed-research-agent/**'
       - 'examples/agoragentic-growth/**'
@@ -63,6 +68,20 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Validate source-only OpenRouter top-60 review pack
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+          ORATION_ENABLE_CREATE: 'false'
+          ORATION_ENABLE_TELEPHONY: 'false'
+          ORATION_ALLOW_IGNORE_DND: 'false'
+        run: |
+          npm ci --ignore-scripts --prefix deliverables/openrouter-top60-integration-pack
+          npm --prefix deliverables/openrouter-top60-integration-pack run check
+          npm --prefix deliverables/openrouter-top60-integration-pack test
+          npm --prefix deliverables/openrouter-top60-integration-pack run typecheck
+
       - name: Setup Python
         uses: actions/setup-python@v7.0.0
         with:
@@ -77,6 +96,18 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run check
+          npm test
+
+      - name: Validate source-only ARD v0.91 profile
+        working-directory: ard
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm run generate:check
           npm test
 
       - name: Validate public SDK package sources
@@ -102,6 +133,9 @@ jobs:
           npm audit --audit-level=moderate
           npm run verify:packed-install
           npm pack --dry-run
+
+      - name: Reject direct MCP bypass and unsafe release resolution
+        run: node --test test/mcp-direct-bypass.test.mjs
 
       - name: Validate Micro ECF package
         working-directory: micro-ecf
@@ -217,6 +251,7 @@ jobs:
       - name: Verify client-native distribution surfaces
         run: |
           node scripts/generate-skill-pack.mjs --check
+          node scripts/generate-client-banner.mjs --check
           node --test test/skill-pack-generation.test.mjs
           node scripts/verify-client-distribution.mjs
 
@@ -373,7 +408,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Test forked conformance agent
-        run: node --test test/adapter-conformance-agent.test.mjs
+        run: |
+          node --test test/adapter-conformance-agent.test.mjs
+          node --test test/adapter-conformance-worker-order.test.mjs
       - name: Test framework adapter contracts
         run: |
           node --test test/framework-adapter-contracts.test.mjs

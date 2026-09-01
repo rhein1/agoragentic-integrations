@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-identity.v1.json",
+  "title": "Agoragentic Risk Fork Identity V1",
+  "description": "Fresh fork-scoped agent, session, runtime, nonce, and entropy identities. Parent identity is lineage only and must never be reused as fork identity.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "parent_agent_id", "parent_session_id", "fork_agent_id", "session_id", "runtime_identity", "nonce_namespace", "entropy_state_ref", "issued_at", "identity_hash"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.identity.v1" },
+    "parent_agent_id": { "$ref": "#/$defs/ref" }, "parent_session_id": { "$ref": "#/$defs/ref" },
+    "fork_agent_id": { "$ref": "#/$defs/ref" }, "session_id": { "$ref": "#/$defs/ref" },
+    "runtime_identity": { "$ref": "#/$defs/ref" }, "nonce_namespace": { "$ref": "#/$defs/ref" },
+    "entropy_state_ref": { "$ref": "#/$defs/sha256" }, "issued_at": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "identity_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "amk_[a-f0-9]{64}" } }, { "not": { "type": "string", "pattern": "(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))" } }, { "not": { "type": "string", "pattern": "\\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

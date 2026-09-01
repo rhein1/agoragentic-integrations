@@ -1,1 +1,6 @@
 /hyperframes/fixtures/receipt-reconciliation.json text eol=lf
+/risk-fork/migrations/*.sql text eol=lf
+/risk-fork-hosted-mcp/migrations/*.sql text eol=lf
+/risk-fork-hosted-mcp/ops/postgres/*.sql.template text eol=lf
+/integration-qualification/** text eol=lf
+/prime-agent-governance/** text eol=lf

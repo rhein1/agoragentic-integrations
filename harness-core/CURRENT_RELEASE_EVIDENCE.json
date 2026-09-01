@@ -1,0 +1,163 @@
+{
+  "schema": "agoragentic.harness-core.current-release-evidence.v1",
+  "recorded_at": "2026-08-28T03:31:00Z",
+  "canonical_repository": "https://github.com/rhein1/agoragentic-harness-core",
+  "release": {
+    "tag": "v0.4.2",
+    "url": "https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.4.2",
+    "target_commit": "d858f955023df8094855e36ca23d8399d9460000",
+    "published_at": "2026-08-28T03:30:10Z",
+    "draft": false,
+    "prerelease": false
+  },
+  "npm": {
+    "package": "agoragentic-harness-core",
+    "version": "0.4.2",
+    "latest": "0.4.2",
+    "published_at": "2026-08-28T03:25:21.623Z",
+    "tarball": "https://registry.npmjs.org/agoragentic-harness-core/-/agoragentic-harness-core-0.4.2.tgz",
+    "tarball_bytes": 122546,
+    "shasum": "085288174ab553e81e1dd8e41159c97b81dccb98",
+    "integrity": "sha512-lrY8wUIzLev8lJzA7XKPBOAvT2tcs/G5dHkHCzFY8ummcpbi2MI+Fi9knqd+rXszSowWPn5HnRi0qNGcgtHHqg==",
+    "sha512_hex": "96b63cc142332debfc949cc0ed728f04e02f4f6b5cb3f1b97479070b3158f2e9a67296e2d8c23e162f649ea77ead7b334a8c163e7e479d18b4a8d19c82d1c7aa",
+    "file_count": 83,
+    "unpacked_bytes": 541822,
+    "attestations": "https://registry.npmjs.org/-/npm/v1/attestations/agoragentic-harness-core@0.4.2",
+    "attestation_count": 2,
+    "provenance_predicate": "https://slsa.dev/provenance/v1",
+    "repository": "git+https://github.com/rhein1/agoragentic-harness-core.git"
+  },
+  "publishing": {
+    "trusted_publisher_repository": "rhein1/agoragentic-harness-core",
+    "trusted_publisher_workflow": "publish.yml",
+    "github_environment": "npm-publish",
+    "github_environment_id": 20608341669,
+    "workflow_run": "https://github.com/rhein1/agoragentic-harness-core/actions/runs/33138725802",
+    "workflow_run_id": 33138725802,
+    "verify_job_id": 98744526958,
+    "publish_job_id": 98744549242,
+    "deployment_id": 6135032091,
+    "event": "push",
+    "ref": "refs/tags/v0.4.2",
+    "conclusion": "success",
+    "environment_approval": {
+      "approved_at": "2026-08-28T03:23:40Z",
+      "approver": "jmborden1112-beep",
+      "classification": "owner_authorized_mechanical_solo_maintainer_separation",
+      "independent_human_review": false
+    }
+  },
+  "protected_main_ci": {
+    "commit": "d858f955023df8094855e36ca23d8399d9460000",
+    "run": "https://github.com/rhein1/agoragentic-harness-core/actions/runs/32921588959",
+    "conclusion": "success",
+    "required_checks": [
+      { "context": "test (18)", "job_id": 98036063571, "github_app_id": 15368 },
+      { "context": "test (20)", "job_id": 98036063558, "github_app_id": 15368 },
+      { "context": "test (22)", "job_id": 98036063518, "github_app_id": 15368 },
+      { "context": "test (24)", "job_id": 98036063412, "github_app_id": 15368 }
+    ]
+  },
+  "clean_room": {
+    "published_package_installed": true,
+    "version": "0.4.2",
+    "dependencies": {
+      "@microsoft/agent-host-protocol": "0.8.0",
+      "ws": "8.21.3",
+      "yaml": "2.9.0"
+    },
+    "declared_exports": 38,
+    "javascript_exports_loaded": 15,
+    "json_schema_exports_loaded": 23,
+    "declared_bin_aliases_present": 4,
+    "unique_bin_targets_syntax_checked": 2,
+    "help_aliases_exit_zero": 3,
+    "memory_skillopt_help": {
+      "exit_code": 1,
+      "classification": "expected_usage_for_cli_without_help_command",
+      "mutating_subcommand_executed": false
+    },
+    "registry_signature_audit": "passed",
+    "content_manifest_sha256": "a875a97c3cb93d824aacea23f4d966840cee3c7fac3b5e6a4b665cea38c532ed",
+    "result": "passed"
+  },
+  "ahp_observer": {
+    "adapter_version": "1.0.0",
+    "protocol_version": "0.8.0",
+    "mode": "local_no_spend_observation_only",
+    "allowed_outbound_methods": [
+      "initialize",
+      "subscribe",
+      "unsubscribe"
+    ],
+    "prohibited_method_count": 26,
+    "authority_flags_false": 20,
+    "authority_flags": {
+      "dispatch_action": false,
+      "create_session": false,
+      "dispose_session": false,
+      "create_chat": false,
+      "terminal_input": false,
+      "terminal_claim": false,
+      "resource_write": false,
+      "resource_delete": false,
+      "resource_move": false,
+      "authenticate": false,
+      "provide_client_tools": false,
+      "approve_tool_calls": false,
+      "run_automation": false,
+      "mutate_automation": false,
+      "provider_dispatch": false,
+      "wallet_mutation": false,
+      "x402_settlement": false,
+      "marketplace_publication": false,
+      "trust_mutation": false,
+      "owner_approval_bypass": false
+    },
+    "base_authority_booleans_false": 30,
+    "base_authority": {
+      "mode": "local_no_spend",
+      "wallet_spend": false,
+      "wallet_mutation": false,
+      "deploy_runtime": false,
+      "hosted_runtime_provisioning": false,
+      "marketplace_publication": false,
+      "x402_settlement": false,
+      "x402_route_activation": false,
+      "trust_mutation": false,
+      "ranking_mutation": false,
+      "provider_dispatch": false,
+      "public_execute_mutation": false,
+      "public_invoke_mutation": false,
+      "private_ecf_export": false,
+      "owner_approval_bypass": false,
+      "process_control": false,
+      "arbitrary_shell": false,
+      "dispatch_action": false,
+      "create_session": false,
+      "dispose_session": false,
+      "create_chat": false,
+      "terminal_input": false,
+      "terminal_claim": false,
+      "resource_write": false,
+      "resource_delete": false,
+      "resource_move": false,
+      "authenticate": false,
+      "provide_client_tools": false,
+      "approve_tool_calls": false,
+      "run_automation": false,
+      "mutate_automation": false
+    }
+  },
+  "authority": {
+    "provider_dispatch": false,
+    "wallet_mutation": false,
+    "spend": false,
+    "x402_settlement": false,
+    "deployment": false,
+    "marketplace_publication": false,
+    "trust_mutation": false,
+    "hosted_memory": false,
+    "owner_approval_bypass": false
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-execution-binding.v1.json",
+  "title": "Agoragentic Risk Fork Execution Binding V1",
+  "description": "An exact-action binding to separately verified one-use authority. The binding itself grants no authority.",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "principal_ref", "fork_agent_id", "session_id", "action_operation", "mcp", "provider_ref", "target_ref", "commercial", "governance", "validity", "nonce", "one_use_authorization_id", "audience", "authorization_ref", "authorization_hash", "binding_hash", "authority_flags"],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.execution-binding.v1" },
+    "principal_ref": { "$ref": "#/$defs/ref" }, "fork_agent_id": { "$ref": "#/$defs/ref" }, "session_id": { "$ref": "#/$defs/ref" },
+    "action_operation": { "$ref": "#/$defs/actionOperation" },
+    "mcp": {
+      "type": "object", "additionalProperties": false,
+      "required": ["server_ref", "server_origin", "method", "raw_method", "tool_name", "effective_arguments_hash"],
+      "properties": {
+        "server_ref": { "$ref": "#/$defs/ref" }, "server_origin": { "$ref": "#/$defs/httpEndpoint" },
+        "method": { "$ref": "#/$defs/mcpPhase" }, "raw_method": { "$ref": "#/$defs/nullableMcpRawMethod" },
+        "tool_name": { "$ref": "#/$defs/nullableRef" },
+        "effective_arguments_hash": { "$ref": "#/$defs/sha256" }
+      },
+      "allOf": [{
+        "if": { "properties": { "method": { "const": "UNKNOWN" } }, "required": ["method"] },
+        "then": { "properties": { "raw_method": { "$ref": "#/$defs/mcpRawMethod" } } },
+        "else": { "properties": { "raw_method": { "type": "null" } } }
+      }]
+    },
+    "provider_ref": { "$ref": "#/$defs/ref" }, "target_ref": { "$ref": "#/$defs/nullableRef" },
+    "commercial": {
+      "type": "object", "additionalProperties": false,
+      "required": ["amount", "currency", "payment_rail"],
+      "properties": {
+        "amount": { "oneOf": [{ "type": "string", "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$", "maxLength": 100 }, { "type": "null" }] },
+        "currency": { "oneOf": [{ "type": "string", "pattern": "^[A-Z][A-Z0-9]{1,11}$", "maxLength": 30 }, { "type": "null" }] },
+        "payment_rail": { "$ref": "#/$defs/nullableRef" }
+      },
+      "oneOf": [
+        { "properties": { "amount": { "type": "null" }, "currency": { "type": "null" }, "payment_rail": { "type": "null" } } },
+        { "properties": { "amount": { "type": "string" }, "currency": { "type": "string" }, "payment_rail": { "$ref": "#/$defs/ref" } } }
+      ]
+    },
+    "governance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy_ref", "policy_version", "policy_hash", "mandate_ref", "mandate_version", "mandate_hash", "budget_policy_ref", "budget_version", "budget_hash", "epoch"],
+      "properties": {
+        "policy_ref": { "$ref": "#/$defs/ref" }, "policy_version": { "$ref": "#/$defs/ref" }, "policy_hash": { "$ref": "#/$defs/sha256" },
+        "mandate_ref": { "$ref": "#/$defs/nullableRef" }, "mandate_version": { "$ref": "#/$defs/nullableRef" }, "mandate_hash": { "$ref": "#/$defs/nullableSha256" },
+        "budget_policy_ref": { "$ref": "#/$defs/nullableRef" }, "budget_version": { "$ref": "#/$defs/nullableRef" }, "budget_hash": { "$ref": "#/$defs/nullableSha256" },
+        "epoch": { "$ref": "#/$defs/ref" }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            { "properties": { "mandate_ref": { "type": "null" }, "mandate_version": { "type": "null" }, "mandate_hash": { "type": "null" } } },
+            { "properties": { "mandate_ref": { "$ref": "#/$defs/ref" }, "mandate_version": { "$ref": "#/$defs/ref" }, "mandate_hash": { "$ref": "#/$defs/sha256" } } }
+          ]
+        },
+        {
+          "oneOf": [
+            { "properties": { "budget_policy_ref": { "type": "null" }, "budget_version": { "type": "null" }, "budget_hash": { "type": "null" } } },
+            { "properties": { "budget_policy_ref": { "$ref": "#/$defs/ref" }, "budget_version": { "$ref": "#/$defs/ref" }, "budget_hash": { "$ref": "#/$defs/sha256" } } }
+          ]
+        }
+      ]
+    },
+    "validity": {
+      "type": "object", "additionalProperties": false, "required": ["issued_at", "not_before", "expires_at"],
+      "properties": { "issued_at": { "$ref": "#/$defs/date" }, "not_before": { "$ref": "#/$defs/date" }, "expires_at": { "$ref": "#/$defs/date" } }
+    },
+    "nonce": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 500 }] },
+    "one_use_authorization_id": { "$ref": "#/$defs/ref" }, "audience": { "$ref": "#/$defs/ref" },
+    "authorization_ref": { "$ref": "#/$defs/ref" }, "authorization_hash": { "$ref": "#/$defs/sha256" },
+    "binding_hash": { "$ref": "#/$defs/sha256" },
+    "authority_flags": {
+      "type": "object", "additionalProperties": false,
+      "required": ["binding_grants_authority", "signature_verified", "one_use_consumed"],
+      "properties": { "binding_grants_authority": { "const": false }, "signature_verified": { "const": false }, "one_use_consumed": { "const": false } }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "ref": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$", "allOf": [{ "not": { "type": "string", "pattern": "amk_[a-f0-9]{64}" } }, { "not": { "type": "string", "pattern": "(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))" } }, { "not": { "type": "string", "pattern": "\\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\\b" } }, { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } }, { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }] },
+    "nullableRef": { "oneOf": [{ "$ref": "#/$defs/ref" }, { "type": "null" }] },
+    "mcpRawMethod": { "type": "string", "minLength": 1, "maxLength": 300, "pattern": "^[^\\u0000-\\u001f\\u007f]+$" },
+    "nullableMcpRawMethod": { "oneOf": [{ "$ref": "#/$defs/mcpRawMethod" }, { "type": "null" }] },
+    "nullableSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "httpEndpoint": { "type": "string", "format": "uri", "pattern": "^https?://(?![^/?#]*@)[^?#]+$", "maxLength": 4096 },
+    "mcpPhase": { "enum": ["server/discover", "initialize", "tools/list", "resources/list", "resources/read", "prompts/list", "prompts/get", "tools/call", "UNKNOWN"] },
+    "actionOperation": { "enum": ["mcp_tool_call", "payment", "send", "publish", "deploy", "database_mutation", "trust_mutation", "git_push"] }
+  }
+}

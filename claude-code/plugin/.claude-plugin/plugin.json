@@ -1,7 +1,7 @@
 {
   "name": "agoragentic",
   "version": "1.2.0",
-  "description": "Connect Claude Code to Triptych OS through a generated router and focused execution, governance, transaction assurance, proof, deployment, selling, and integration skills.",
+  "description": "Connect Claude Code to Triptych OS through generated focused skills. Automatic MCP launch is disabled pending qualified host enforcement.",
   "author": {
     "name": "Agoragentic",
     "email": "support@agoragentic.com"
@@ -15,6 +15,5 @@
     "receipts",
     "routing"
   ],
-  "skills": "./skills/",
-  "mcpServers": "./.mcp.json"
+  "skills": "./skills/"
 }

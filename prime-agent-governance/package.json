@@ -1,7 +1,7 @@
 {
   "name": "@agoragentic/prime-agent",
-  "version": "0.1.0-alpha.0",
-  "description": "Bounded Prime Agent policy, principal-authority, evidence, and local receipt extension.",
+  "version": "0.2.0-alpha.0",
+  "description": "Bounded Prime Agent policy plus exact-release runtime compatibility and evidence contracts.",
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
@@ -20,17 +20,31 @@
     ]
   },
   "exports": {
-    ".": "./index.mjs"
+    ".": "./index.mjs",
+    "./host-contract": "./host-contract.mjs",
+    "./runtime-contract": "./runtime-contract.mjs",
+    "./artifact-integrity": "./artifact-integrity.mjs",
+    "./release-verifier": "./release-verifier.mjs",
+    "./compatibility-runner": "./compatibility-runner.mjs"
   },
   "files": [
     "index.mjs",
+    "artifact-integrity.mjs",
+    "host-contract.mjs",
+    "runtime-contract.mjs",
+    "release-verifier.mjs",
+    "compatibility-runner.mjs",
     "SKILL.md",
     "README.md",
+    "RUNTIME_INTEGRATION.md",
+    "evidence/",
     "examples/"
   ],
   "scripts": {
-    "check": "node --check index.mjs && node --check test/extension.test.mjs",
+    "check": "node --check index.mjs && node --check artifact-integrity.mjs && node --check host-contract.mjs && node --check runtime-contract.mjs && node --check release-verifier.mjs && node --check compatibility-runner.mjs && node --check evidence/build-dependency-audit.mjs && node --check evidence/build-evidence.mjs && node --check evidence/build-marketplace-record.mjs && node --check test/extension.test.mjs && node --check test/runtime-contract.test.mjs && node --check test/release-verifier.test.mjs && node --check test/released-compatibility.test.mjs && node --check test/qualification-evidence.test.mjs",
     "test": "node --test test/*.test.mjs",
-    "pack:dry": "npm pack --dry-run"
+    "pack:dry": "npm pack --dry-run",
+    "verify:release": "node release-verifier.mjs",
+    "test:compatibility": "node --test test/released-compatibility.test.mjs"
   }
 }

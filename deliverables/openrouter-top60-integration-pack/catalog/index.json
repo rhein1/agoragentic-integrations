@@ -1,0 +1,65 @@
+{
+  "$schema": "./schema.json",
+  "schema": "agoragentic.openrouter-top60-review-index.v1",
+  "snapshot_date": "2026-08-09",
+  "source": "user-supplied OpenRouter ranking screenshots; original screenshot artifacts and hashes are not preserved in this pack",
+  "ranking_provenance": "catalog/source-evidence.json",
+  "repo_snapshot": {
+    "repository": "rhein1/agoragentic-integrations",
+    "branch": "main",
+    "commit": "27aa21c613ee6ad5ae69e49659e3fd75ba2eccad",
+    "manifest_version": "2.49.0",
+    "manifest_count": 107
+  },
+  "distribution_status": "review_only",
+  "runtime_verified": false,
+  "catalog_inclusion_requested": false,
+  "authority": {
+    "execute": false,
+    "spend": false,
+    "publish": false,
+    "deploy": false,
+    "message": false,
+    "call": false,
+    "mutate_trust": false
+  },
+  "entry_count": 60,
+  "parts": [
+    {
+      "path": "catalog/entries-01.json",
+      "first_rank": 1,
+      "last_rank": 10,
+      "count": 10
+    },
+    {
+      "path": "catalog/entries-02.json",
+      "first_rank": 11,
+      "last_rank": 20,
+      "count": 10
+    },
+    {
+      "path": "catalog/entries-03.json",
+      "first_rank": 21,
+      "last_rank": 30,
+      "count": 10
+    },
+    {
+      "path": "catalog/entries-04.json",
+      "first_rank": 31,
+      "last_rank": 40,
+      "count": 10
+    },
+    {
+      "path": "catalog/entries-05.json",
+      "first_rank": 41,
+      "last_rank": 50,
+      "count": 10
+    },
+    {
+      "path": "catalog/entries-06.json",
+      "first_rank": 51,
+      "last_rank": 60,
+      "count": 10
+    }
+  ]
+}

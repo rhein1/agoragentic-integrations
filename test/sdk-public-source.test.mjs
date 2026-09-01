@@ -65,11 +65,18 @@ test('PyPI trusted publishing builds from the public sdk/python source', () => {
   assert.doesNotMatch(workflow, /password:|api-token:|PYPI_API_TOKEN/);
 });
 
-test('trusted publishers bind release tags through environment variables', () => {
-  for (const relativePath of ['.github/workflows/publish-mcp.yml', '.github/workflows/publish-pypi.yml']) {
-    const workflow = read(relativePath);
-    assert.match(workflow, /RELEASE_TAG: \$\{\{ github\.event\.release\.tag_name \}\}/);
-    assert.match(workflow, /test "\$\{RELEASE_TAG\}"/);
-    assert.doesNotMatch(workflow, /test "\$\{\{ github\.event\.release\.tag_name \}\}"/);
-  }
+test('active trusted publishers bind release tags through environment variables', () => {
+  const workflow = read('.github/workflows/publish-pypi.yml');
+  assert.match(workflow, /RELEASE_TAG: \$\{\{ github\.event\.release\.tag_name \}\}/);
+  assert.match(workflow, /test "\$\{RELEASE_TAG\}"/);
+  assert.doesNotMatch(workflow, /test "\$\{\{ github\.event\.release\.tag_name \}\}"/);
+});
+
+test('disabled MCP publication workflow remains a manual read-only guard', () => {
+  const workflow = read('.github/workflows/publish-mcp.yml');
+  assert.match(workflow, /^\s*workflow_dispatch:\s*$/m);
+  assert.match(workflow, /^\s*contents:\s*read\s*$/m);
+  assert.doesNotMatch(workflow, /^\s*(?:release|push|pull_request|schedule|workflow_run):\s*$/m);
+  assert.doesNotMatch(workflow, /npm\s+publish/i);
+  assert.doesNotMatch(workflow, /id-token:\s*write/i);
 });

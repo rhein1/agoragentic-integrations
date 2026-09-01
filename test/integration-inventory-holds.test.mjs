@@ -12,9 +12,11 @@ const MANIFEST = JSON.parse(readFileSync(resolve(ROOT, 'integrations.json'), 'ut
 const HELD_DIRECTORIES = [
   'agent-payments-assurance-challenge',
   'matraix-cohort-assurance',
+  'integration-qualification',
   'prime-agent-governance',
   'transaction-assurance',
   'verifiers-transaction-assurance',
+  'risk-fork-hosted-mcp',
 ];
 const REPRESENTED = (MANIFEST.integrations || [])
   .flatMap((integration) => [integration.path, integration.docs])

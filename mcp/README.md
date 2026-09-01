@@ -1,155 +1,137 @@
 # agoragentic-mcp
 
-`agoragentic-mcp` is a local stdio relay for the Agoragentic MCP server at `https://agoragentic.com/api/mcp`.
+`agoragentic-mcp` is a fail-closed local protocol adapter for Agoragentic's Triptych OS (Agent OS) MCP surface.
 
-When the remote MCP endpoint is reachable, the package mirrors the same live tool, prompt, and resource surface that Agoragentic serves remotely. If the remote endpoint is unavailable, the package fails open to a small local fallback tool surface so registries such as Glama can still discover the core Router / Marketplace tools instead of seeing `tools: []`.
+## Security and readiness status
 
-Use this package when your host is already MCP-native. It does not download the hosted Triptych OS (Agent OS) control plane; it gives local agents a stdio bridge into hosted routing, receipts, stable x402 edge services, and deployment/control-plane checks they are authorized to see.
+Version 2.0.0 is an unpublished, non-installable source candidate. Do not resolve the `agoragentic-mcp` name from npm: the registry currently serves a legacy direct relay that predates this fail-closed boundary.
 
-## Protocol behavior
+The standalone commands expose locally owned protocol responses and fallback tool metadata, but they perform no remote MCP or fallback REST network execution. Remote work requires a programmatic embedding host to provide an enforcement capability created by `createMcpEnforcementBoundary()`.
 
-Version 2.0.0 pins the outbound relay connection to MCP `2026-07-28`. The hosted leg is stateless: the relay uses `server/discover`, lets the official client derive `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name`, and does not create or terminate an `mcp-session-id` upstream.
+That factory validates API shape and prevents a duck-typed callback from being accepted accidentally. It does **not** prove that the supplied callbacks use Risk Fork, provide isolation, protect credentials, or satisfy a production containment gate. The embedding host remains trusted and must be independently qualified.
 
-The local stdio side retains the established `initialize` flow for existing desktop hosts. That compatibility layer is local only; it does not restore a remote MCP session. A remote endpoint that cannot establish the pinned v2 protocol leaves the relay on its bounded local fallback surface instead of silently downgrading the hosted connection.
+This package therefore does not, by itself:
 
-## Quick Start
+- protect the hosted `https://agoragentic.com/api/mcp` endpoint;
+- prove that live Agoragentic MCP traffic passes through Risk Fork;
+- turn the local adapter into a security isolation boundary; or
+- qualify a provider, lifecycle policy, clean-import implementation, or distributed authority store for production.
 
-### Claude Desktop
+The direct remote advertisement has been removed from `server.json` so registry consumers are not invited to bypass the package boundary. Closing the hosted interception blocker still requires private runtime wiring, deployment, and independent live evidence.
 
-File: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
+## Fail-closed behavior
 
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key_here"
-      }
-    }
-  }
+Without an enforcement capability:
+
+- `server/discover` is not sent;
+- no remote `tools`, `resources`, or `prompts` request is sent;
+- fallback registration, search, preview, match, execute, and status calls make zero HTTP requests;
+- the stdio adapter can still answer `initialize` and `tools/list` with locally owned metadata;
+- a fallback `tools/call` returns `risk_fork_enforcement_required`; and
+- ACP can answer its local session methods and `tools/list`, but advertised network-backed calls fail before remote discovery and unadvertised tools are rejected.
+
+This is intentional. A green package smoke test proves fail-closed orchestration and loopback protocol compatibility, not live containment.
+
+## Protocol contract
+
+The package accepts a host session only when its clean discovery envelope reports stateless MCP `2026-07-28`. The trusted embedding host must actually pin and verify that protocol on the network leg. It must own all network activity for:
+
+- `server/discover`;
+- `tools/list` and `tools/call`;
+- `resources/list` and `resources/read`;
+- `prompts/list` and `prompts/get`; and
+- consequential fallback REST operations.
+
+Each request descriptor is immutable and binds the phase, target URL and origin, parameters, tool name, risk profile, transport constraints, request hash, and—after discovery—the session binding hash. The package requests `redirects: "error"`, forbids direct package network access, and accepts only a request-bound clean-import envelope. If a session closes while a host request is pending, the late result is discarded before import.
+
+Accepted imported JSON is copied into bounded plain JSON and recursively frozen. Envelopes must echo the exact request ID, request hash, and phase; assert `clean_imported: true` and `authority_granted: false`; and carry an evidence reference. `evidence_hash` must equal `computeMcpCleanImportEvidenceHash(request.request_hash, result, evidence_ref)`. The helper domain-separates and hashes canonical bounded JSON that binds `{ request_hash, evidence_ref, result }`; changing any one invalidates the envelope. Credential-shaped keys and values—including nested, camel-case, and plural credential containers—bearer material, `amk_` keys, private keys, credential query parameters, accessors, non-plain prototypes, sparse arrays, excessive depth, excessive nodes, and oversized JSON are rejected. A credential-shaped property name is allowed only as a `tools/list` input/output schema definition, and that schema may not embed `default`, `const`, `example(s)`, or `enum` values.
+
+No API key, bearer token, payment signature, raw client, or transport is included in an enforcement request or accepted imported result. A qualified host must resolve credentials out of band, ideally at a privileged request broker that does not expose them to the disposable child.
+
+## Embedding API
+
+```js
+const {
+  MCP_ENFORCEMENT_SCHEMAS,
+  computeMcpCleanImportEvidenceHash,
+  createMcpEnforcementBoundary,
+  runMcpRelay,
+} = require('./dist/mcp-server.cjs');
+
+function cleanImported(request, result, evidenceRef) {
+  return {
+    schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+    request_id: request.request_id,
+    request_hash: request.request_hash,
+    phase: request.phase,
+    clean_imported: true,
+    authority_granted: false,
+    evidence_ref: evidenceRef,
+    evidence_hash: computeMcpCleanImportEvidenceHash(
+      request.request_hash,
+      result,
+      evidenceRef,
+    ),
+    result,
+  };
 }
+
+const enforcementBoundary = createMcpEnforcementBoundary({
+  async openSession(openRequest) {
+    // Trusted host implementation only:
+    // 1. execute server/discover inside the independently qualified boundary;
+    // 2. return the exact closed host-session contract;
+    // 3. execute each later request in that same bound session; and
+    // 4. return only request-bound clean-import envelopes.
+    return qualifiedHost.openMcpSession(openRequest);
+  },
+  async executeFallback(fallbackRequest) {
+    // Trusted host implementation only. It owns policy, credentials, network,
+    // lifecycle, clean import, and evidence for this one fallback action.
+    return qualifiedHost.executeMcpFallback(fallbackRequest);
+  },
+});
+
+await runMcpRelay({ enforcementBoundary });
 ```
 
-### VS Code / GitHub Copilot
+The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
 
-File: `.vscode/mcp.json` in your project, or `~/Library/Application Support/Code/User/globalStorage/github.copilot/mcp.json` (global)
+Do not use the example as production qualification. The host implementation must additionally demonstrate fresh child identity, no inherited authority or parent-writable state, target and argument revalidation, atomic one-use authorization/CAS, taint handling, clean commit, crash/retry safety, provider failure cleanup, and verified lifecycle enforcement.
 
-```json
-{
-  "servers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key_here"
-      }
-    }
-  }
-}
-```
-
-### Cursor
-
-File: `~/.cursor/mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key_here"
-      }
-    }
-  }
-}
-```
-
-### Windsurf
-
-File: `~/.codeium/windsurf/mcp_config.json`
-
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key_here"
-      }
-    }
-  }
-}
-```
-
-### Standalone
+## Standalone protocol smoke
 
 ```bash
-npx agoragentic-mcp
+git clone --depth 1 https://github.com/rhein1/agoragentic-integrations.git
+cd agoragentic-integrations
+npm --prefix mcp ci
+npm --prefix mcp run build
+node mcp/dist/mcp-server.cjs
 ```
 
-### Agent Client Protocol
+The source-checkout command above is useful for checking local stdio compatibility and inspecting owned fallback tool metadata. It is not a live relay unless a separate embedding process supplies the enforcement capability programmatically.
 
-ACP-compatible clients can launch the same relay through stdio:
+For ACP-local compatibility:
 
 ```bash
-npx agoragentic-mcp --acp
+node mcp/dist/mcp-server.cjs --acp
 ```
 
-ACP mode supports the baseline local session flow (`initialize`, `session/new`, `session/prompt`, `session/cancel`) plus `tools/list`, then forwards `tools/call` to the same live Agoragentic MCP surface.
+ACP mode supports `initialize`, `session/new`, `session/prompt`, `session/cancel`, `tools/list`, and `shutdown` locally. `tools/call` is restricted to the advertised ACP tool names and remains fail-closed without an embedding host capability.
 
-## First 60 Seconds After Connect
+## Target configuration
 
-Confirm the connection with prompts that cannot spend money or execute a provider. These work without an API key when the public tool surface is available:
+`AGORAGENTIC_MCP_URL` selects the desired MCP target placed in enforcement descriptors. It defaults to `https://agoragentic.com/api/mcp`.
 
-```text
-Use agoragentic_search to find up to three text-summarization capabilities. Show each capability's name, category, and price_usdc. Do not register, match, quote, or execute anything.
-```
+`AGORAGENTIC_BASE_URL` selects the desired fallback REST origin placed in enforcement descriptors. It defaults to the origin of `AGORAGENTIC_MCP_URL`.
 
-Expected evidence: a list of public capabilities, or an empty list when none match. No agent, quote, invocation, wallet action, or receipt is created.
+Neither variable grants network authority. Credential-bearing URL user information, fragments, and credential-shaped query parameters are rejected.
 
-The search prompt above works in both standard MCP relay mode and ACP mode. The preview prompt below is for standard MCP relay mode only, and only when `tools/list` advertises `agoragentic_preview_x402`; ACP mode does not advertise or locally implement that tool.
+`AGORAGENTIC_API_KEY` is not consumed or forwarded by the package. Do not place a raw credential in the standalone adapter. A qualified embedding host must resolve any required credential out of band and must not copy it into a request descriptor, disposable child state, log, evidence envelope, or imported result.
 
-```text
-Use agoragentic_preview_x402 for the task "summarize a public article" with max_cost 0. Show the selected provider, quoted price, payment_required state, and expiry. Stop after the preview; do not execute, sign, retry, or pay.
-```
+## Locally advertised fallback tools
 
-Expected evidence: a preview response or a clear no-match result. The preview may mint an expiring `quote_id`, but it does not register an agent, call a provider, move funds, or settle payment.
-
-If the server advertises `agoragentic_x402_test`, you can also ask:
-
-```text
-Call agoragentic_x402_test once and summarize the free canary result. Do not select or call any paid service.
-```
-
-After those checks, add `AGORAGENTIC_API_KEY` only when you need authenticated tools. `agoragentic_match` remains a no-spend preview; `agoragentic_execute` may spend USDC and should only be called after its provider, price, budget, and authority are explicit.
-
-## Environment
-
-`AGORAGENTIC_API_KEY`
-
-- Optional.
-- When set, the relay forwards `Authorization: Bearer <key>` on every remote MCP request.
-- This unlocks authenticated Agent OS routing, receipt, approval, seller, and legacy vault surfaces when your agent is allowed to see them.
-- `agoragentic_register` may return a new `amk_` key, but the relay never retains, reuses, logs, writes, or adds it to `process.env`. Store it only in your own secret manager, then start a new relay process with `AGORAGENTIC_API_KEY` configured.
-
-`AGORAGENTIC_MCP_URL`
-
-- Optional override for self-hosted or staging MCP endpoints.
-- Defaults to `https://agoragentic.com/api/mcp`.
-
-`AGORAGENTIC_BASE_URL`
-
-- Optional base URL for local fallback tools.
-- Defaults to the origin of `AGORAGENTIC_MCP_URL` (`https://agoragentic.com` with the default hosted endpoint), so a custom hosted endpoint never silently forwards its bearer key to a different origin. Set it explicitly only when that separate fallback origin is intended.
-
-## Live Tool Surface
-
-The package relays the remote MCP server when possible, so the exact tool list is whatever the live Agoragentic server advertises for your current auth state. If the relay cannot connect, the fallback tool list includes:
+The fail-closed metadata surface includes:
 
 - `agoragentic_register`
 - `agoragentic_search`
@@ -158,72 +140,34 @@ The package relays the remote MCP server when possible, so the exact tool list i
 - `agoragentic_execute`
 - `agoragentic_execute_status`
 
-The full remote anonymous sessions currently get the public tool set:
+Listing these tools is not evidence that their network operations are enabled. Every corresponding HTTP operation is handed to the enforcement host as a new bound request; with no host capability, it is blocked with zero I/O.
 
-- `agoragentic_browse_services`
-- `agoragentic_quote_service`
-- `agoragentic_call_service`
-- `agoragentic_edge_receipt`
-- `agoragentic_quote`
-- `agoragentic_search` (compatibility/catalog browsing)
-- `agoragentic_register` (compatibility helper for `POST /api/quickstart`)
-- `agoragentic_categories`
-- `agoragentic_x402_test`
-- `agoragentic_validation_status`
+`agoragentic_execute`, registration, quote-like preview operations, and other consequential actions receive the strictest request risk profile. The package does not authorize spend, sign payments, or import child authority.
 
-Authenticated sessions can expose additional router and vault tools depending on agent state and policy, including:
+## Host qualification checklist
 
-- `agoragentic_execute`
-- `agoragentic_match`
-- `agoragentic_status`
-- `agoragentic_receipt`
-- `agoragentic_invoke` (direct-provider compatibility path)
-- `agoragentic_vault` (legacy inventory path)
+Before enabling remote traffic, verify that the embedding host:
 
-## Stable x402 Flow
+1. runs untrusted MCP content in the intended isolated child before the parent observes it;
+2. prevents inherited credentials, sockets, writable mounts, process tokens, nonce state, and parent-writable state;
+3. attaches credentials only out of band and never exposes them to imported JSON;
+4. enforces the exact target, method, parameters, session binding, and request hash;
+5. rejects redirects, protocol downgrade, stateful sessions, and unadvertised ACP tools;
+6. independently reconstructs and authorizes any clean commit rather than trusting child metadata;
+7. makes one-use authorization and CAS transitions atomic across concurrency, crashes, retries, and provider failure; and
+8. has verified idle TTL and cleanup behavior on the real provider, not just mocks.
 
-The anonymous paid flow is:
+Until those checks have live evidence, keep production/live provider gates disabled and describe this package as a protocol/reference implementation.
 
-1. `agoragentic_browse_services`
-2. `agoragentic_quote_service`
-3. `agoragentic_call_service`
+## Release integrity
 
-The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive the JSON result plus `Payment-Receipt`.
+No fail-closed MCP release is currently published. The 2.0.0 source candidate is non-installable from a registry. Its package metadata is marked private, its prepublish hook refuses publication, and the former release workflow is a read-only manual guard with no publish permission or command. A future release requires an explicit reviewed change that removes those guards only after qualification. CI installs from `package-lock.json`, runs fail-closed adversarial tests and loopback-only host-boundary protocol tests, rejects high or critical production dependency advisories, and verifies the packed consumer install with zero runtime dependencies.
 
-## Keyless Route Preview
-
-When the remote MCP server is unavailable, agents can still preview route-first x402 providers without an API key:
-
-1. `agoragentic_preview_x402`
-2. inspect `selected_provider`, `quote`, `payment_required`, and `execute`
-3. complete the paid call with an x402-capable HTTP client, or use authenticated Router tools after registration
-
-This preview path does not register an agent, execute a provider, or spend USDC. It may return an expiring `quote_id` for a later x402 payment flow.
-
-## Release Integrity
-
-The npm release uses trusted publishing and an exact `mcp-v<package-version>` tag gate. CI installs from `package-lock.json`, runs both the fallback and loopback-only v2 relay regressions, rejects high or critical production dependency advisories, and inspects the package tarball before publication.
-
-## Router Flow
-
-With an API key set, the router-first flow is:
-
-1. `agoragentic_match`
-2. `agoragentic_quote`
-3. `agoragentic_execute`
-
-Use `agoragentic_status` and `agoragentic_receipt` for follow-up execution tracking.
+Those checks do not prove hosted routing, provider containment, deployment, enablement, or live traffic interception.
 
 ## What is Agoragentic?
 
-Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms plus a Router / Marketplace transaction network. The MCP surface gives agents a live tool bridge into routing, receipts, stable x402 edge services, Seller OS, and governed deployment/control-plane checks.
-
-- Agent OS routing and deployment/control-plane checks for registered agents
-- Stable x402 edge for anonymous paid resources
-- Receipts, policy gates, and validation surfaces around paid execution
-- USDC settlement on Base
-
-Learn more at [agoragentic.com](https://agoragentic.com)
+Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms plus a Router / Marketplace transaction network. Learn more at [agoragentic.com](https://agoragentic.com).
 
 ## License
 

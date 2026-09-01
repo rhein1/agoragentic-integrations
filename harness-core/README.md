@@ -4,7 +4,7 @@ Harness Core is now maintained in its standalone canonical repository:
 
 - Source: <https://github.com/rhein1/agoragentic-harness-core>
 - npm: <https://www.npmjs.com/package/agoragentic-harness-core>
-- Current release: <https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.3.1>
+- Current release: <https://github.com/rhein1/agoragentic-harness-core/releases/tag/v0.4.2>
 - Migration guide: <https://github.com/rhein1/agoragentic-harness-core/blob/main/MIGRATION.md>
 - Schemas and API exports: <https://github.com/rhein1/agoragentic-harness-core/tree/main/schema>
 
@@ -24,8 +24,10 @@ surface, and schema subpaths remain compatible. Source consumers should update r
 `rhein1/agoragentic-harness-core`.
 
 This directory is intentionally a thin pointer. It contains no second package manifest, runtime,
-binary, schema, profile, template, or test copy. Exact release and migration evidence is recorded in
-[`STANDALONE_RELEASE_EVIDENCE.json`](./STANDALONE_RELEASE_EVIDENCE.json).
+binary, schema, profile, template, or test copy. The immutable cutover facts remain in
+[`STANDALONE_RELEASE_EVIDENCE.json`](./STANDALONE_RELEASE_EVIDENCE.json); current `0.4.2` release,
+provenance, clean-room, protected-publish, and observer-only AHP evidence is in
+[`CURRENT_RELEASE_EVIDENCE.json`](./CURRENT_RELEASE_EVIDENCE.json).
 
 Harness Core remains a local, no-spend governance and evidence layer. Its local receipts are not settlement receipts,
 certifications, endorsements, marketplace verification, or proof that a host executed a task. It grants no provider

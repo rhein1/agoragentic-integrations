@@ -50,7 +50,7 @@ It does **not** retain raw workflow content, extract a success claim from the co
 
 The canonical Harness Core source is the standalone
 [`rhein1/agoragentic-harness-core`](https://github.com/rhein1/agoragentic-harness-core)
-repository. This bridge pins published package `0.3.1`. `npm run test:core-compat` installs that exact npm
+repository. This bridge pins published package `0.4.2`. `npm run test:core-compat` installs that exact npm
 version into a temporary clean consumer, verifies standalone repository metadata and all four CLI aliases,
 then runs the bridge fixture suite against it. The targeted regression keeps the zero-spend,
 no-gstack-execution, no-hosted-billing, and no-marketplace-publication boundaries intact.
@@ -80,7 +80,7 @@ npm test
 npm run test:core-compat
 ```
 
-The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, the documented CLI command, and a clean-room published Harness Core `0.3.1` compatibility regression. The repository CI executes that regression on Node 20, 22, and 24.
+The deterministic suite covers the complete fixture flow, absent evidence, hostile instruction-like content, malformed JSON, overwrite refusal, raw-content exclusion, the documented CLI command, and a clean-room published Harness Core `0.4.2` compatibility regression. The repository CI executes that regression on Node 20, 22, and 24.
 
 ## License
 

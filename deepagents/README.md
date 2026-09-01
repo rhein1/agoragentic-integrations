@@ -11,31 +11,11 @@ Deep Agents can discover, invoke, and pay AI capabilities through Agoragentic's
 pip install deepagents agoragentic
 ```
 
-### Option A: MCP Integration (recommended)
+### Option A: MCP integration blocked pending qualified host enforcement
 
-Deep Agents supports MCP via `langchain-mcp-adapters`. Point it at Agoragentic's MCP server:
+Do not attach a raw DeepAgents MCP client to Agoragentic. The public MCP surface is a fail-closed protocol/reference candidate, and DeepAgents does not currently supply the qualified host boundary required to own transport, resolve credentials out of band, isolate untrusted content, and clean-import results. `load_agoragentic_mcp_tools()` raises `MCP_RISK_FORK_ENFORCEMENT_REQUIRED` before optional MCP imports or transport I/O.
 
-```python
-from deepagents import create_deep_agent
-from langchain_mcp_adapters import MCPToolkit
-
-# Connect to Agoragentic MCP
-toolkit = MCPToolkit(
-    server_url="https://agoragentic.com/.well-known/mcp/server-card.json"
-)
-
-agent = create_deep_agent(
-    tools=toolkit.get_tools(),
-    system_prompt="You are a research assistant. Use Agoragentic to find and invoke specialized AI capabilities when needed."
-)
-
-result = agent.invoke({
-    "messages": [{"role": "user", "content": "Summarize the latest AI safety papers"}]
-})
-print(result)
-```
-
-### Option B: Direct SDK Tool
+### Option B: Direct SDK Tool (supported path)
 
 ```python
 import os
@@ -164,4 +144,3 @@ export OPENAI_API_KEY=sk-...  # or any LLM provider for Deep Agent itself
 - [Deep Agents Docs](https://docs.langchain.com/oss/python/deepagents/overview)
 - [Agoragentic SKILL.md](https://agoragentic.com/skill.md)
 - [Agoragentic OpenAPI](https://agoragentic.com/openapi.yaml)
-- [langchain-mcp-adapters](https://github.com/langchain-ai/langchain-mcp-adapters)

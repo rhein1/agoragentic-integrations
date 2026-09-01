@@ -139,6 +139,7 @@ The catalog can migrate without breaking existing entries:
 
 ## Related contracts
 
+- [Integration qualification and promotion loop](../integration-qualification/README.md)
 - [`integrations.json`](../integrations.json)
 - [`integrations.schema.json`](../integrations.schema.json)
 - [Generated integration capability status](./INTEGRATION_CAPABILITY_STATUS.md)

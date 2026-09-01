@@ -6,27 +6,31 @@
 
 This repository contains integration paths connecting agent frameworks, protocol adapters, Micro ECF harness packets, Harness Core no-spend proof/export tooling, and Agent OS deployment examples to Agoragentic. Agoragentic is Triptych OS (Agent OS) for deployed agents and swarms. Micro ECF is the local context wedge. Agent OS is the technical/API alias. Full ECF is the private enterprise runtime engine. The Router / Marketplace is the transaction rail; paid execution is available only when current live discovery and policy mark a route available.
 
-The published packages and repo-local CLIs are:
+The published packages and repo-local source/CLI surfaces are:
 - **Python SDK**: `pip install agoragentic` (PyPI, Python ≥3.8)
 - **Node.js SDK**: `npm install agoragentic` (npm, Node ≥16)
-- **MCP Server**: `npx agoragentic-mcp` (npm, Node ≥20)
+- **MCP / Agent Client Protocol reference**: `npm --prefix mcp ci && npm --prefix mcp run build` from this checkout, then optionally `node mcp/dist/mcp-server.cjs --acp` (unpublished, non-installable 2.0.0 source; the npm name resolves a legacy direct relay and must not be used; remote work fails closed without qualified host enforcement)
 - **Micro ECF**: run `npx agoragentic-micro-ecf@latest plan --dir .` first; only after explicit approval run `npx agoragentic-micro-ecf@latest install --dir . --yes` (npm, Node ≥18)
-- **Harness Core**: `npx agoragentic-harness-core@latest init` (standalone package v0.3.1 from `https://github.com/rhein1/agoragentic-harness-core`, Node ≥18)
+- **Harness Core**: `npx agoragentic-harness-core@latest init` (standalone package v0.4.2 from `https://github.com/rhein1/agoragentic-harness-core`, Node ≥18)
 - **OpenCode Harness plugin**: `cd opencode && npm ci` from a source checkout (experimental `@agoragentic/opencode` candidate; exact OpenCode 1.18.15 contract fixture only; not published)
 - **gstack Harness bridge**: `cd gstack && npm install` from a source checkout (experimental explicit-artifact adapter; no gstack execution, raw-content retention, hosted authority, or spend)
 - **HyperFrames receipt video workflow**: `cd hyperframes && npm install` from a source checkout (experimental local-only receipt/evidence renderer; deterministic sanitized scenes and hash-bound MP4 receipt, with external rendering, hosted deployment, provider calls, publication, listing, x402, and spend disabled)
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 - **AnyDoc Document Evidence Adapter**: `examples/anydoc-document-evidence/` is an experimental source-only Node >=20 package for process-isolated local office-document parsing, explicit evidence coverage, semantic-loss warnings, and completeness-blocked handoff. It is not published to npm and does not intentionally upload, invoke OCR, attach context, publish, or spend.
+- **Risk Fork**: `risk-fork/` is an experimental source-only fork-before-risk protocol and adapter package. Its local and disposable PostgreSQL evidence does not establish live E2B containment, hosted MCP interception, managed PostgreSQL operations, deployment, publication, spend authority, or production readiness.
+- **ARD v0.91 source profile**: `ard/` pins upstream schemas and context, adds a local JSON-LD vocabulary, and generates offline repository candidates from one canonical source. It never dereferences contexts, serves a route, executes, pays, verifies trust, publishes, or deploys.
 
 ## Authentication
 
-Every integration uses the same auth pattern:
+Authenticated SDK and REST integrations use the same auth pattern:
 - Environment variable: `AGORAGENTIC_API_KEY=amk_<your_key>`
 - HTTP header: `Authorization: Bearer amk_<your_key>`
 - Key format: always starts with `amk_`
 - How to get one: `POST https://agoragentic.com/api/quickstart` with `{"name": "your-agent", "intent": "buyer"}`
 - Or: call the `agoragentic_register` compatibility helper at runtime
+
+The unpublished MCP/ACP source candidate does not consume or forward `AGORAGENTIC_API_KEY`. Never inject that key into the source candidate or the legacy npm relay; use supported SDK/REST authentication instead.
 
 ## Tool Catalog
 
@@ -62,7 +66,7 @@ The canonical tool list is `integrations.json#tools`. The table below highlights
 
 ## Selected Integration Matrix
 
-The canonical inventory is `integrations.json` and contains 107 integration surfaces as of 2026-08-25. These tables are representative entry points, not a complete count.
+The canonical inventory is `integrations.json` and contains 109 integration surfaces as of 2026-09-01. These tables are representative entry points, not a complete count.
 
 ### Python Integrations
 
@@ -104,12 +108,12 @@ The canonical inventory is `integrations.json` and contains 107 integration surf
 
 | Framework | File | Install |
 |-----------|------|---------|
-| MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | npx agoragentic-mcp |
+| MCP (Claude, VS Code, Cursor) | mcp/mcp-server.js | protocol/reference only; remote calls fail closed |
 | World AgentKit | world-agentkit/agoragentic_world_agentkit.mjs | npm install @worldcoin/agentkit@0.2.0; server support remains review-gated |
 | Cursor Plugin | .cursor-plugin/plugin.json | clone the repository into Cursor's local plugin directory |
 | Gemini CLI Extension | gemini-extension.json | gemini extensions install https://github.com/rhein1/agoragentic-integrations |
 | Claude Code Plugin | .claude-plugin/marketplace.json | /plugin marketplace add rhein1/agoragentic-integrations |
-| Cline MCP Package | llms-install.md | add npx -y agoragentic-mcp@2.0.0 as an MCP server |
+| Cline MCP Package | llms-install.md | blocked as a live relay; protocol/reference metadata only |
 | OpenCode Harness Plugin | opencode/src/server.mjs | cd opencode && npm ci from a source checkout; exact OpenCode 1.18.15 contract fixture only |
 | gstack Harness Bridge | gstack/gstack-harness.mjs | cd gstack && npm install from a source checkout; explicit artifact paths only |
 | HyperFrames Receipt Video Workflow | hyperframes/receipt-video.mjs | cd hyperframes && npm install from a source checkout; local browser and FFmpeg only |
@@ -120,7 +124,7 @@ The canonical inventory is `integrations.json` and contains 107 integration surf
 | ElizaOS (ai16z) | elizaos/agoragentic_eliza.ts | npm install |
 | n8n Community Node | n8n/nodes/Agoragentic/Agoragentic.node.ts | cd n8n && npm install && npm run build |
 | LangSmith | langsmith/README.md | npm install agoragentic langsmith |
-| oh-my-claudecode | oh-my-claudecode/README.md | npx agoragentic-mcp |
+| oh-my-claudecode | oh-my-claudecode/README.md | remote MCP disabled pending qualified host enforcement |
 | DashClaw | dashclaw/agoragentic_dashclaw.mjs | npm install dashclaw agoragentic |
 | OpenFang | openfang/agoragentic_openfang.mjs | node 18+ with a local OpenFang Hand manifest |
 | Premortem Golden Loop Agent | premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs | node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo . |
@@ -135,6 +139,8 @@ The canonical inventory is `integrations.json` and contains 107 integration surf
 | Superfluid | superfluid/agoragentic_superfluid.ts | copy the reference client into your project |
 | Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | copy the reference client into your project |
 | AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/agoragentic-anydoc.mjs | cd examples/anydoc-document-evidence && npm ci |
+| Risk Fork | risk-fork/src/index.mjs | cd risk-fork && npm ci; experimental source only |
+| ARD v0.91 source profile | ard/src/profile.mjs | cd ard && npm ci --ignore-scripts; offline and default-off |
 
 ### Config-Only Integrations
 
@@ -142,7 +148,7 @@ The canonical inventory is `integrations.json` and contains 107 integration surf
 |-----------|------|---------|
 | Dify | dify/agoragentic_provider.json | Import JSON into Dify provider settings |
 | Flowise | flowise/agoragentic-flowise-tool.json | Import as a Flowise custom HTTP tool |
-| Zapier MCP | zapier-mcp/agoragentic-zapier-mcp.example.json | Configure Zapier MCP and agoragentic-mcp in one client |
+| Zapier MCP | zapier-mcp/agoragentic-zapier-mcp.example.json | metadata/reference only; Agoragentic remote calls disabled |
 | A2A Protocol (Google) | a2a/agent-card.json | No install — discovery spec |
 | RepoBrain Local Provider | repobrain/repobrain.retrieve_context.manifest.json | Use RepoBrain locally with Micro ECF; no hosted install required |
 | claude-view Local Provider | claude-view/claude_view.get_live_summary.manifest.json | Run claude-view locally; no hosted endpoint required |
@@ -177,63 +183,9 @@ The experimental HyperFrames workflow compiles an explicitly supplied local rece
 
 The Premortem Golden Loop Agent is the local release safety agent for plans and installable repositories. It runs six-month failure-frame premortem sessions, repo release audits, no-spend Golden Loop readiness checks, and a conservative self-heal loop. `heal --repo .` writes only a plan; `heal --repo . --apply-safe-fixes` may create missing additive goals, workflows, safety-boundary docs, `agent.json`, `.env.example`, or a no-spend GitHub Actions workflow. It is free to use, requires no API key or wallet, makes no network calls by default, sends no repo contents anywhere, and does not overwrite files, delete files, rotate secrets, deploy, publish, or call paid `execute()`.
 
-## MCP Client Install Configs
+## MCP / ACP production status
 
-### Claude Desktop
-File: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows)
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
-    }
-  }
-}
-```
-
-### VS Code / GitHub Copilot
-File: `.vscode/mcp.json`
-```json
-{
-  "servers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
-    }
-  }
-}
-```
-
-### Cursor
-File: `~/.cursor/mcp.json`
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
-    }
-  }
-}
-```
-
-### Windsurf
-File: `~/.codeium/windsurf/mcp_config.json`
-```json
-{
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": { "AGORAGENTIC_API_KEY": "amk_your_key" }
-    }
-  }
-}
-```
+Do not install `agoragentic-mcp` or inject `AGORAGENTIC_API_KEY` into it. Npm currently resolves a legacy direct relay that requires withdrawal or correction. The fail-closed 2.0.0 implementation in this checkout is an unpublished, non-installable source candidate; it owns no upstream network or credential transport and fails closed before remote discovery or tool execution unless embedded by a separately qualified host enforcement boundary. Hosted interception, provider qualification, malicious-protocol canaries, and rollback/kill-switch evidence remain open. Use the Node or Python SDK and documented REST APIs for supported Router calls.
 
 ## Agoragentic Commerce Draft 0.1 (legacy ACP-SPEC path)
 
@@ -242,13 +194,14 @@ This historical draft, formerly named Agent Commerce Protocol (ACP), explores th
 2. **Invocation Envelope** — Standard request/response for calling a service
 3. **Settlement Receipt** — Verifiable payment record with chain, txHash, fee split
 
-Compatibility document: specs/ACP-SPEC.md. It is not the production wire contract; Agent Commerce Interchange at `/api/commerce/interchange/*` is the implemented system of record. `npx agoragentic-mcp --acp` is separately the Agent Client Protocol adapter, and no Virtuals ACP adapter is active.
+Compatibility document: specs/ACP-SPEC.md. It is not the production wire contract; Agent Commerce Interchange at `/api/commerce/interchange/*` is the implemented system of record. The repo-built `node mcp/dist/mcp-server.cjs --acp` mode is separately a fail-closed Agent Client Protocol reference mode, not a live relay, and no Virtuals ACP adapter is active.
 
 ## Discovery Surfaces
 
 | Asset | Location |
 |-------|----------|
 | Machine index | integrations.json |
+| ARD v0.91 source profile | ard/README.md |
 | JSON Schema | integrations.schema.json |
 | Generated capability status | docs/INTEGRATION_CAPABILITY_STATUS.md |
 | Repository rename preflight | docs/REPOSITORY_RENAME_PREFLIGHT.md |
@@ -307,6 +260,9 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Pipecat | pipecat/README.md |
 | AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/README.md |
 | AnyDoc Semantic Conformance | examples/anydoc-document-evidence/conformance/README.md |
+| Risk Fork | risk-fork/README.md |
+| Risk Fork security model | risk-fork/SECURITY_MODEL.md |
+| Risk Fork hosted MCP source bundle | risk-fork-hosted-mcp/README.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |

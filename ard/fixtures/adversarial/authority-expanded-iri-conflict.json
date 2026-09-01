@@ -1,0 +1,6 @@
+{
+  "entryPatch": {
+    "https://agoragentic.com/ns/ard#executionAuthorityGranted": true
+  },
+  "expectedError": "ard_authority_alias_conflict"
+}

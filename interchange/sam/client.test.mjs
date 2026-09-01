@@ -92,6 +92,69 @@ test('read-only discovery never calls a remote provider and redacts raw topology
   assert.equal(JSON.stringify(output).includes(TOOL), false);
 });
 
+test('public discovery hashes provider-controlled descriptions, labels, and errors by default', async () => {
+  const privateDescription = `private-marker ${PEER} ${TOOL} tenant-alpha-control-plane`;
+  const privateLabelKey = `route-${PEER}`;
+  const privateLabelValue = `target-${TOOL}`;
+  const privateError = `dial failed through ${PEER} for ${TOOL}`;
+  const rows = [
+    {
+      peer_id: PEER,
+      tool_name: TOOL,
+      description: privateDescription,
+      labels: { [privateLabelKey]: privateLabelValue },
+    },
+    {
+      peer_id: PEER,
+      tool_name: TOOL,
+      error: privateError,
+      labels: { 'internal-service-name': 'payments-prod-7' },
+    },
+  ];
+  const responses = {
+    get_mesh_info: text({ connected_peers: [PEER] }),
+    discover_remote_services: text([]),
+    find_remote_tools: text(rows),
+  };
+
+  const output = await discoverSamTools({}, {
+    client: new FakeClient(responses),
+    env: {},
+    now: () => '2026-08-19T20:00:00.000Z',
+  });
+  const serialized = JSON.stringify(output);
+  assert.equal(serialized.includes(PEER), false);
+  assert.equal(serialized.includes(TOOL), false);
+  assert.equal(serialized.includes('tenant-alpha-control-plane'), false);
+  assert.equal(serialized.includes(privateLabelKey), false);
+  assert.equal(serialized.includes(privateLabelValue), false);
+  assert.equal(serialized.includes('internal-service-name'), false);
+  assert.equal(serialized.includes('payments-prod-7'), false);
+  assert.equal(serialized.includes(privateError), false);
+  assert.equal(output.tools[0].observed_label_keys, undefined);
+  assert.match(output.tools[0].description, /^Metadata-only SAM-discovered MCP tool\./);
+  assert.match(output.tools[0].description_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.match(output.tools[0].labels_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(output.tools[1].error, 'sam_discovery_row_error');
+  assert.match(output.tools[1].error_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(output.safety.provider_description_public, false);
+  assert.equal(output.safety.raw_label_fields_public, false);
+
+  const nonBooleanOptIn = await discoverSamTools(
+    { includePrivateTopology: 'true' },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateDescription), false);
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateLabelKey), false);
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateError), false);
+
+  const privateOutput = await discoverSamTools(
+    { includePrivateTopology: true },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.deepEqual(privateOutput.tools, rows);
+});
+
 test('default output hashes a remote endpoint and only private diagnostics reveal its origin', async () => {
   const responses = {
     get_mesh_info: text({ connected_peers: [] }),

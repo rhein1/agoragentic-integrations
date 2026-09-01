@@ -14,7 +14,7 @@ Upstream:
 
 Hermes Agent is a local/personal agent surface with persistent memory, skills, tool access, and self-improvement workflows. Agoragentic should treat Hermes as a self-hosted agent that can:
 
-- use Agoragentic MCP tools to call `execute(task, input, constraints)`;
+- prepare for a future qualified Agoragentic MCP host boundary without enabling transport today;
 - use Micro ECF to describe local source, tool, memory, and approval boundaries;
 - use Agent OS Harness artifacts to preview a hosted deployment posture;
 - emit reviewable improvement packets for owner/admin review.
@@ -27,9 +27,7 @@ Agoragentic should not treat Hermes metadata, skills, prompts, tool output, memo
 Hermes Agent
   -> local owner policy
   -> optional Micro ECF context/policy packet
-  -> agoragentic-mcp tools
-  -> Agoragentic Agent OS / Router API
-  -> receipts and reconciliation
+  -> Agoragentic MCP blocked_pending_qualified_host_enforcement
 ```
 
 Self-improvement packets follow a separate path:
@@ -47,40 +45,34 @@ Hermes run outcome
 | File | Purpose |
 |------|---------|
 | `agent-os-bridge.manifest.json` | Machine-readable bridge contract and authority boundary |
-| `mcp.agoragentic.example.json` | Example MCP client config for exposing Agoragentic tools to Hermes-compatible MCP hosts |
+| `mcp.agoragentic.example.json` | Fail-closed MCP status config with no command, endpoint, or credentials |
 | `self-improvement-policy.example.json` | Review-gated lifecycle policy for Hermes-style improvement candidates |
 | `reflection-packet.example.json` | Public-safe example of a Hermes run reflection packet |
 | `verify-hermes-agent.mjs` | Local validation for bridge paths, placeholder-only config, and false authority flags |
 
 ## MCP tool surface
 
-If the Hermes environment supports stdio MCP client config, add Agoragentic as a bounded MCP server:
+Do not add Agoragentic as an MCP server merely because Hermes supports stdio. The checked-in example is deliberately empty:
 
 ```json
 {
-  "mcpServers": {
-    "agoragentic": {
-      "command": "npx",
-      "args": ["-y", "agoragentic-mcp"],
-      "env": {
-        "AGORAGENTIC_API_KEY": "amk_your_key"
-      }
-    }
+  "mcpServers": {},
+  "agoragentic_mcp": {
+    "operational": false,
+    "status": "blocked_pending_qualified_host_enforcement"
   }
 }
 ```
 
-Use this for Agoragentic tools only. Do not put Robinhood, wallet, cloud, provider, GitHub, broker, or private Full ECF credentials in this example config.
+A qualified host must own network access, resolve credentials out of band, and clean-import results. Do not add Robinhood, wallet, cloud, provider, GitHub, broker, Agoragentic, or private Full ECF credentials to this config. A callback or factory-shaped value cannot self-attest production qualification.
 
 ## Recommended flow
 
 1. Run Hermes locally under the owner's normal policy.
 2. Install Micro ECF in the Hermes project or workspace when source/tool boundaries need to persist.
-3. Add the Agoragentic MCP config only after the owner approves the target workspace.
-4. Use `agoragentic_match` before paid work.
-5. Use `agoragentic_execute` only when spend is allowed by the owner policy.
-6. Save `invocation_id` and `receipt_id` for reconciliation.
-7. Emit reflection packets as proposals, not automatic memory or skill changes.
+3. Keep Agoragentic MCP disabled until an independently qualified host boundary is integrated.
+4. Do not pass API keys or other credentials through MCP configuration.
+5. Emit reflection packets as proposals, not automatic memory or skill changes.
 
 ## Self-improvement boundary
 

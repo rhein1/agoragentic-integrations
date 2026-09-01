@@ -15,6 +15,8 @@ const manifestPath = path.join(root, 'integrations.json');
 const machineSurfacePaths = [
   manifestPath,
   path.join(root, 'a2a', 'agent-card.json'),
+  path.join(root, 'ard', 'generated', 'ard.json'),
+  path.join(root, 'ard', 'generated', 'ai-catalog.json'),
   path.join(root, 'dify', 'agoragentic_provider.json'),
 ];
 
@@ -377,14 +379,14 @@ function assertRegistryMetadata() {
   const server = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'server.json'), 'utf8'));
   const mcpPackage = JSON.parse(fs.readFileSync(path.join(root, 'mcp', 'package.json'), 'utf8'));
   const packageVersion = mcpPackage.version;
-  if (!glama.version || glama.version !== glama.packages?.[0]?.version) {
-    fail('glama.json top-level and npm package versions must match');
-  }
   if (glama.version !== packageVersion) {
-    fail(`glama.json version must match mcp/package.json (${packageVersion})`);
+    fail(`glama.json source-candidate version must match mcp/package.json (${packageVersion})`);
   }
-  if (server.packages?.[0]?.version !== packageVersion) {
-    fail(`mcp/server.json npm package version must match mcp/package.json (${packageVersion})`);
+  if (!Array.isArray(glama.packages) || glama.packages.length !== 0) {
+    fail('glama.json must not advertise a registry package coordinate while the safe build is unpublished');
+  }
+  if (!Array.isArray(server.packages) || server.packages.length !== 0) {
+    fail('mcp/server.json must not advertise a registry package coordinate while the safe build is unpublished');
   }
   if (typeof server.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(server.version)) {
     fail('mcp/server.json registry version must be a semantic version');
@@ -395,6 +397,9 @@ function assertRegistryMetadata() {
   if (/execute paid work/i.test(glama.description || '')) {
     fail('glama.json must not present paid execution as unconditionally available');
   }
+  if (!/legacy direct-relay.*correction or withdrawal.*unpublished.*non-installable/i.test(glama.description || '')) {
+    fail('glama.json must identify the legacy listing and unpublished, non-installable source candidate');
+  }
 }
 
 function assertDifyRouterFirst() {
@@ -402,6 +407,26 @@ function assertDifyRouterFirst() {
   const toolNames = (provider.tools || []).map((tool) => tool.name);
   if (toolNames[0] !== 'agoragentic_execute') fail('Dify first tool must be agoragentic_execute');
   if (toolNames[1] !== 'agoragentic_match') fail('Dify second tool must be agoragentic_match');
+}
+
+function assertArdSourceOnly(manifest) {
+  const integration = (manifest.integrations || []).find((entry) => entry.id === 'ard-profile');
+  if (integration?.status !== 'experimental' || integration?.capability_record?.requirements?.network_required !== false
+    || integration?.capability_record?.requirements?.spend_capable !== false) {
+    fail('ard-profile must remain experimental, offline, and no-spend');
+  }
+  const required = {
+    ard_profile: 'ard/README.md',
+    ard_manifest_candidate: 'ard/generated/ard.json',
+    ard_compatibility_manifest_candidate: 'ard/generated/ai-catalog.json',
+    ard_upstream_provenance: 'ard/provenance.json',
+  };
+  for (const [key, value] of Object.entries(required)) {
+    if (manifest.discovery?.[key] !== value) fail(`discovery.${key} must point to ${value}`);
+  }
+  const canonical = fs.readFileSync(path.join(root, 'ard', 'generated', 'ard.json'), 'utf8');
+  const compatibility = fs.readFileSync(path.join(root, 'ard', 'generated', 'ai-catalog.json'), 'utf8');
+  if (canonical !== compatibility) fail('ARD canonical and predecessor candidate artifacts must remain byte-identical');
 }
 
 const rawManifest = fs.readFileSync(manifestPath, 'utf8');
@@ -418,5 +443,6 @@ assertProtocolNamespaces(manifest);
 assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
+assertArdSourceOnly(manifest);
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ integrations machine-surface verification passed');

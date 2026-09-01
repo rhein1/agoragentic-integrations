@@ -82,6 +82,12 @@
         },
         "interchange_sam": {
           "$ref": "#/$defs/package"
+        },
+        "risk_fork": {
+          "$ref": "#/$defs/package"
+        },
+        "ard_profile": {
+          "$ref": "#/$defs/package"
         }
       }
     },
@@ -173,6 +179,10 @@
         "name": {
           "type": "string",
           "description": "Canonical package name."
+        },
+        "version": {
+          "type": "string",
+          "description": "Declared package version, including prerelease versions for source-only packages."
         },
         "install": {
           "type": "string",

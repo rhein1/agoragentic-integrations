@@ -1,0 +1,140 @@
+[
+  {
+    "rank": 21,
+    "name": "Pieces.app: Ambient Artificial Memory",
+    "slug": "pieces-app-ambient-artificial-memory",
+    "tokens": "452B",
+    "status": "composition_recipe",
+    "direction": "outbound_mcp_service",
+    "surface": "Pieces memory MCP",
+    "action": "Compose Pieces memory with Agoragentic routing, keeping memory evidence separate from settlement receipts.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://docs.pieces.app/products/mcp"
+    ]
+  },
+  {
+    "rank": 22,
+    "name": "Cursor",
+    "slug": "cursor",
+    "tokens": "442B",
+    "status": "covered_existing",
+    "direction": "inbound_host",
+    "surface": "Cursor plugin + MCP",
+    "action": "Retain the existing Cursor documentation as a protocol/reference surface only; do not present remote Agoragentic MCP as enabled before qualified host enforcement.",
+    "artifact": "decisions/covered-existing.json",
+    "sources": [
+      "https://docs.cursor.com/context/model-context-protocol"
+    ]
+  },
+  {
+    "rank": 23,
+    "name": "HackerAI",
+    "slug": "hackerai",
+    "tokens": "415B",
+    "status": "composition_recipe",
+    "direction": "outbound_mcp_service",
+    "surface": "HackerAI remote MCP",
+    "action": "Compose HackerAI as an external MCP security tool beside a supported Agoragentic SDK or REST match-only client; require explicit authorization for penetration-testing actions and do not imply that Agoragentic MCP is live.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://mcp.hackerai.co/mcp"
+    ]
+  },
+  {
+    "rank": 24,
+    "name": "Mira is the leading AI agent inside Telegram",
+    "slug": "mira-is-the-leading-ai-agent-inside-telegram",
+    "tokens": "411B",
+    "status": "blocked_no_public_surface",
+    "direction": "none",
+    "surface": "Telegram consumer assistant",
+    "action": "BLOCKED until Mira publishes a bot API, plugin API, MCP, or custom-tool contract.",
+    "artifact": "decisions/blocked.json",
+    "sources": []
+  },
+  {
+    "rank": 25,
+    "name": "LangChain",
+    "slug": "langchain",
+    "tokens": "410B",
+    "status": "covered_existing",
+    "direction": "framework_adapter",
+    "surface": "LangChain tools",
+    "action": "Retain existing adapter and avoid creating an OpenRouter-specific duplicate.",
+    "artifact": "decisions/covered-existing.json",
+    "sources": [
+      "https://python.langchain.com/docs/integrations/providers/openrouter/"
+    ]
+  },
+  {
+    "rank": 26,
+    "name": "Zed Editor",
+    "slug": "zed-editor",
+    "tokens": "367B",
+    "status": "blocked_pending_qualified_host_enforcement",
+    "direction": "inbound_host",
+    "surface": "Zed context server/MCP",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
+    "sources": [
+      "https://zed.dev/docs/assistant/model-context-protocol"
+    ]
+  },
+  {
+    "rank": 27,
+    "name": "HighLevel",
+    "slug": "highlevel",
+    "tokens": "350B",
+    "status": "composition_recipe",
+    "direction": "crm_api_and_mcp",
+    "surface": "HighLevel API/MCP",
+    "action": "Treat HighLevel as a seller/workflow connector with owner-approved messaging and CRM mutation.",
+    "artifact": "decisions/composition-recipes.json",
+    "sources": [
+      "https://marketplace.gohighlevel.com/docs/"
+    ]
+  },
+  {
+    "rank": 28,
+    "name": "Zoo Code",
+    "slug": "zoo-code",
+    "tokens": "342B",
+    "status": "blocked_pending_qualified_host_enforcement",
+    "direction": "inbound_host",
+    "surface": "Zoo Code MCP host",
+    "action": "Do not install the legacy registry relay, configure the live Agoragentic MCP endpoint, or pass a platform credential to an MCP process. Use the supported Agoragentic SDK or REST client for match-only integration when this host can embed code; otherwise remain unintegrated until a qualified host enforcement boundary exists.",
+    "artifact": "decisions/blocked-qualified-host-enforcement.json",
+    "sources": [
+      "https://zoo.dev/docs"
+    ]
+  },
+  {
+    "rank": 29,
+    "name": "GDevelop",
+    "slug": "gdevelop",
+    "tokens": "335B",
+    "status": "plugin_scaffold",
+    "direction": "embedded_plugin",
+    "surface": "GDevelop JavaScript extension",
+    "action": "Use the server-side extension scaffold; never ship an Agoragentic API key in a game/client bundle.",
+    "artifact": "decisions/plugin-scaffolds.json",
+    "sources": [
+      "https://wiki.gdevelop.io/gdevelop5/extensions/"
+    ]
+  },
+  {
+    "rank": 30,
+    "name": "SillyTavern",
+    "slug": "sillytavern",
+    "tokens": "297B",
+    "status": "plugin_scaffold",
+    "direction": "embedded_plugin",
+    "surface": "SillyTavern extension/function calling",
+    "action": "Expose only no-spend tools in the extension; route paid execution through a separate owner-controlled backend.",
+    "artifact": "decisions/plugin-scaffolds.json",
+    "sources": [
+      "https://docs.sillytavern.app/for-contributors/writing-extensions/"
+    ]
+  }
+]

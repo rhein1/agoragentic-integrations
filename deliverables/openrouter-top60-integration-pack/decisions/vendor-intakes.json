@@ -1,0 +1,164 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "vendor_intake",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 9,
+      "name": "Hello Minds, powered by Ethoswarm",
+      "slug": "hello-minds-powered-by-ethoswarm",
+      "direction": "proprietary_agent_platform",
+      "action": "Use the generated vendor intake to request a supported custom-tool or MCP registration contract.",
+      "sources": [
+        "https://www.hellominds.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 14,
+      "name": "Lemonade",
+      "slug": "lemonade",
+      "direction": "embedded_plugin",
+      "action": "Request a documented plugin/tool extension contract before implementation.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 37,
+      "name": "Ito",
+      "slug": "ito",
+      "direction": "github_workflow",
+      "action": "Integrate through GitHub checks/webhooks or a vendor API; do not pretend Ito is an MCP host.",
+      "sources": [
+        "https://ito.dev/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 41,
+      "name": "CSS AI Pro",
+      "slug": "css-ai-pro",
+      "direction": "crm_application",
+      "action": "Use the HighLevel connector path or obtain a separate vendor API contract.",
+      "sources": [],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 46,
+      "name": "SquadStack AI",
+      "slug": "squadstack-ai",
+      "direction": "enterprise_voice_api",
+      "action": "Request API documentation, scopes, sandbox, webhook schema, and consent controls before implementation.",
+      "sources": [
+        "https://www.squadstack.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 54,
+      "name": "Sirius AI Multilingual Data Pipeline",
+      "slug": "sirius-ai-multilingual-data-pipeline",
+      "direction": "data_pipeline",
+      "action": "Request an API, job schema, data-retention policy, and callback/receipt contract.",
+      "sources": [
+        "https://siriusec.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 55,
+      "name": "Landingsite",
+      "slug": "landingsite",
+      "direction": "website_builder",
+      "action": "Request a documented plugin/API surface before implementation.",
+      "sources": [
+        "https://app.landingsite.ai/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    },
+    {
+      "rank": 57,
+      "name": "Letaido",
+      "slug": "letaido",
+      "direction": "marketing_connector",
+      "action": "Use vendor intake for connector scopes, job submission, callback, and proof semantics.",
+      "sources": [
+        "https://letaido.com/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "required_contract": [
+        "versioned developer docs",
+        "auth/scopes/revocation",
+        "sandbox/no-side-effect mode",
+        "request/result/error/idempotency schemas",
+        "retention/subprocessor policy",
+        "publication review path"
+      ]
+    }
+  ]
+}

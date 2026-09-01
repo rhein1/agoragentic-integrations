@@ -1,20 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.48.0",
-  "as_of": "2026-08-25",
+  "source_manifest_version": "2.53.0",
+  "as_of": "2026-09-01",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 126,
-    "occurrence_count": 256,
+    "file_count": 147,
+    "occurrence_count": 291,
     "category_file_counts": {
-      "installer_or_clone": 22,
-      "machine_discovery": 41,
-      "package_registry_metadata": 19,
-      "public_documentation": 64,
+      "installer_or_clone": 28,
+      "machine_discovery": 51,
+      "package_registry_metadata": 22,
+      "public_documentation": 72,
       "raw_content_url": 2,
-      "release_or_provenance": 8,
+      "release_or_provenance": 11,
       "reusable_action": 2,
       "source_or_test": 19
     }
@@ -387,7 +387,7 @@
       "path": "ACP_REGISTRY.md",
       "occurrences": 1,
       "line_numbers": [
-        68
+        67
       ],
       "categories": [
         "public_documentation"
@@ -402,6 +402,17 @@
       "categories": [
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "acp/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        14
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
       ]
     },
     {
@@ -428,6 +439,72 @@
       ]
     },
     {
+      "path": "ard/examples/a2a.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/mcp.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/risk-fork.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ai-catalog.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ard.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/source/manifest.source.json",
+      "occurrences": 3,
+      "line_numbers": [
+        59,
+        102,
+        145
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
       "path": "autogen/README.md",
       "occurrences": 1,
       "line_numbers": [
@@ -442,8 +519,6 @@
       "path": "CHANGELOG.md",
       "occurrences": 14,
       "line_numbers": [
-        225,
-        226,
         227,
         228,
         229,
@@ -455,7 +530,9 @@
         235,
         236,
         237,
-        238
+        238,
+        239,
+        240
       ],
       "categories": [
         "public_documentation"
@@ -608,10 +685,41 @@
       "path": "cursor/README.md",
       "occurrences": 1,
       "line_numbers": [
-        16
+        17
       ],
       "categories": [
         "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/AUDIT.md",
+      "occurrences": 1,
+      "line_numbers": [
+        4
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/catalog/index.json",
+      "occurrences": 1,
+      "line_numbers": [
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "deliverables/openrouter-top60-integration-pack/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
         "public_documentation"
       ]
     },
@@ -640,7 +748,7 @@
       "path": "distribution/context-hub/content/agoragentic/docs/agent-os-api/javascript/DOC.md",
       "occurrences": 1,
       "line_numbers": [
-        171
+        170
       ],
       "categories": [
         "public_documentation"
@@ -661,7 +769,7 @@
       "occurrences": 2,
       "line_numbers": [
         9,
-        60
+        68
       ],
       "categories": [
         "machine_discovery",
@@ -672,8 +780,8 @@
       "path": "docs/COMMUNITY_TESTING.md",
       "occurrences": 2,
       "line_numbers": [
-        27,
-        49
+        26,
+        50
       ],
       "categories": [
         "installer_or_clone",
@@ -896,12 +1004,10 @@
     },
     {
       "path": "INTEGRATION_CATALOG_GUIDE.md",
-      "occurrences": 5,
+      "occurrences": 3,
       "line_numbers": [
-        56,
-        132,
-        189,
-        190,
+        55,
+        131,
         411
       ],
       "categories": [
@@ -910,26 +1016,29 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 15,
+      "occurrences": 19,
       "line_numbers": [
-        60,
-        69,
-        78,
-        87,
-        93,
-        101,
-        109,
-        371,
-        383,
-        395,
-        407,
-        419,
-        1487,
-        1496,
-        1505
+        16,
+        37,
+        46,
+        70,
+        79,
+        88,
+        97,
+        103,
+        111,
+        119,
+        129,
+        139,
+        401,
+        413,
+        425,
+        437,
+        449,
+        461,
+        473
       ],
       "categories": [
-        "installer_or_clone",
         "machine_discovery"
       ]
     },
@@ -937,7 +1046,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        275
+        285
       ],
       "categories": [
         "machine_discovery"
@@ -1044,8 +1153,8 @@
       "path": "llms-full.txt",
       "occurrences": 2,
       "line_numbers": [
-        110,
-        111
+        114,
+        115
       ],
       "categories": [
         "machine_discovery",
@@ -1056,13 +1165,24 @@
       "path": "mcp/package.json",
       "occurrences": 2,
       "line_numbers": [
-        45,
-        50
+        46,
+        51
       ],
       "categories": [
         "installer_or_clone",
         "machine_discovery",
         "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "mcp/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        105
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
       ]
     },
     {
@@ -1181,6 +1301,128 @@
       ]
     },
     {
+      "path": "prime-agent-governance/evidence/build-evidence.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        236
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "prime-agent-governance/evidence/prime-agent-v0.7.2-qualification.v1.json",
+      "occurrences": 1,
+      "line_numbers": [
+        137
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/dist/runtime/index.mjs",
+      "occurrences": 2,
+      "line_numbers": [
+        98,
+        103
+      ],
+      "categories": [
+        "installer_or_clone",
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        60
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/build.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        99
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "risk-fork-hosted-mcp/scripts/verify-integrity.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        88
+      ],
+      "categories": [
+        "installer_or_clone"
+      ]
+    },
+    {
+      "path": "risk-fork/ADVERSARIAL_REMEDIATION.md",
+      "occurrences": 3,
+      "line_numbers": [
+        57,
+        58,
+        59
+      ],
+      "categories": [
+        "public_documentation",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "risk-fork/package.json",
+      "occurrences": 2,
+      "line_numbers": [
+        86,
+        90
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
+      ]
+    },
+    {
+      "path": "risk-fork/PROVIDER_COMPARISON.md",
+      "occurrences": 2,
+      "line_numbers": [
+        17,
+        87
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/README.md",
+      "occurrences": 3,
+      "line_numbers": [
+        64
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/SECURITY_MODEL.md",
+      "occurrences": 3,
+      "line_numbers": [
+        167
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "scripts/generate-skill-pack.mjs",
       "occurrences": 3,
       "line_numbers": [
@@ -1204,7 +1446,7 @@
       "path": "scripts/verify-integrations-json.js",
       "occurrences": 1,
       "line_numbers": [
-        296
+        298
       ],
       "categories": [
         "source_or_test"
@@ -1421,19 +1663,6 @@
       ]
     },
     {
-      "path": "submit-prs.mjs",
-      "occurrences": 4,
-      "line_numbers": [
-        107,
-        161,
-        242,
-        255
-      ],
-      "categories": [
-        "source_or_test"
-      ]
-    },
-    {
       "path": "syrin/README.md",
       "occurrences": 1,
       "line_numbers": [
@@ -1471,8 +1700,8 @@
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        65,
-        70
+        66,
+        71
       ],
       "categories": [
         "installer_or_clone",

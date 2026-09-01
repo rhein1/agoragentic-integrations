@@ -1,0 +1,65 @@
+{
+  "schema": "agoragentic.openrouter-top60-decision-group.v1",
+  "group": "plugin_scaffold",
+  "runtime_verified": false,
+  "authority_granted": false,
+  "items": [
+    {
+      "rank": 13,
+      "name": "Framer",
+      "slug": "framer",
+      "direction": "embedded_plugin",
+      "action": "Use the scaffold to call `match` from a server-side plugin action; do not expose keys in browser code.",
+      "sources": [
+        "https://www.framer.com/developers/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "pattern": "server_side_match_only",
+      "boundary": "Never place AGORAGENTIC_API_KEY in a browser, game, extension, or client bundle."
+    },
+    {
+      "rank": 29,
+      "name": "GDevelop",
+      "slug": "gdevelop",
+      "direction": "embedded_plugin",
+      "action": "Use the server-side extension scaffold; never ship an Agoragentic API key in a game/client bundle.",
+      "sources": [
+        "https://wiki.gdevelop.io/gdevelop5/extensions/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "pattern": "server_side_match_only",
+      "boundary": "Never place AGORAGENTIC_API_KEY in a browser, game, extension, or client bundle."
+    },
+    {
+      "rank": 30,
+      "name": "SillyTavern",
+      "slug": "sillytavern",
+      "direction": "embedded_plugin",
+      "action": "Expose only no-spend tools in the extension; route paid execution through a separate owner-controlled backend.",
+      "sources": [
+        "https://docs.sillytavern.app/for-contributors/writing-extensions/"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "pattern": "server_side_match_only",
+      "boundary": "Never place AGORAGENTIC_API_KEY in a browser, game, extension, or client bundle."
+    },
+    {
+      "rank": 48,
+      "name": "Chub AI",
+      "slug": "chub-ai",
+      "direction": "embedded_plugin_and_gateway",
+      "action": "Use the extension scaffold for no-spend discovery or compose Chub as a separate gateway; keep credentials server-side.",
+      "sources": [
+        "https://docs.chub.ai/",
+        "https://github.com/Chub-AI/stages"
+      ],
+      "runtime_verified": false,
+      "authority_granted": false,
+      "pattern": "server_side_match_only",
+      "boundary": "Never place AGORAGENTIC_API_KEY in a browser, game, extension, or client bundle."
+    }
+  ]
+}
