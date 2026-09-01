@@ -59,7 +59,7 @@ npm ci
 npm run check
 ```
 
-The 0.1.3 source candidate uses the stable `@n8n/node-cli` 0.42.2 toolchain, Prettier 3.9.6, and a committed lockfile. It keeps n8n's compatible ESLint 9 and TypeScript 5 pins, and requires Node.js 20.19 or newer. npm still serves 0.1.2 until the candidate is reviewed, merged, tagged exactly as `n8n-v0.1.3`, and published through the trusted-publishing workflow.
+The 0.1.3 source candidate uses the official n8n community lint rules directly, a repository-local TypeScript/asset build, Prettier 3.9.6, and a committed lockfile. It pins the compatible ESLint 9 and TypeScript 5 lines, keeps Node.js 20.19 as the consumer floor, runs locked development and publishing checks on Node.js 24, and has a clean complete npm audit. The all-in-one `@n8n/node-cli` is intentionally absent because every available line tested pulls an AI/template-only LangChain branch with vulnerable `uuid@10`, while n8n correctly forbids dependency overrides. This direct toolchain matches the prior lint rules and build output, but closed Creator Portal acceptance remains unverified; do not claim n8n Cloud eligibility until a provenance-published artifact passes the real scanner and Portal review. npm still serves 0.1.2 until the candidate is reviewed, merged, tagged exactly as `n8n-v0.1.3`, and published through the trusted-publishing workflow.
 
 See [Toolchain Audit](TOOLCHAIN_AUDIT.md) for the reproducibility and dependency-advisory record.
 
