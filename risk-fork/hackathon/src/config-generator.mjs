@@ -1,9 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   RISK_FORK_DEMO_BANNER,
   assertDemoSecretFree,
+  assertDemoTruth,
+  createDemoTruth,
   resolveOwnedDemoPath,
 } from './security.mjs';
 
@@ -17,6 +20,21 @@ export const DEMO_CLIENT_VERIFICATION_DETAILS = Object.freeze({
   cursor: 'cursor_config_generated_not_live_client_verified',
 });
 
+const issuedConfigurations = new WeakSet();
+const expectedDemoEntrypoint = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'bin',
+  'risk-fork-demo.mjs',
+);
+
+function assertIssuedConfiguration(configuration) {
+  if (!configuration || typeof configuration !== 'object' || !issuedConfigurations.has(configuration)) {
+    throw new TypeError('A module-issued demo client configuration is required');
+  }
+  return configuration;
+}
+
 function validateClient(client) {
   if (typeof client !== 'string' || !DEMO_CLIENTS.includes(client)) {
     throw new TypeError(`Unknown client. Allowed: ${DEMO_CLIENTS.join(', ')}`);
@@ -29,7 +47,10 @@ function assertAbsoluteEntrypoint(entrypoint) {
     throw new TypeError('Demo entrypoint must be an absolute local path');
   }
   if (!entrypoint.endsWith('.mjs')) throw new TypeError('Demo entrypoint must be an .mjs file');
-  return path.resolve(entrypoint);
+  if (entrypoint !== expectedDemoEntrypoint) {
+    throw new TypeError('Demo entrypoint must be the exact local Risk Fork controller');
+  }
+  return entrypoint;
 }
 
 function jsonConfig(entrypoint, client) {
@@ -73,11 +94,13 @@ export function generateClientConfiguration({ client, entrypoint }) {
   const content = normalizedClient === 'codex'
     ? codexConfig(absoluteEntrypoint)
     : jsonConfig(absoluteEntrypoint, normalizedClient);
-  assertDemoSecretFree(content, 'generated client configuration');
+  assertDemoSecretFree(content, 'generated client configuration', {
+    allowedAbsolutePaths: [absoluteEntrypoint],
+  });
   if (/\bnpx(?:\.cmd)?\b/i.test(content) || /agoragentic-mcp/i.test(content)) {
     throw new Error('Generated Risk Fork configuration must not use the legacy registry relay');
   }
-  return Object.freeze({
+  const generated = Object.freeze({
     schema: 'agoragentic.risk-fork.demo-client-config.v1',
     banner: RISK_FORK_DEMO_BANNER,
     client: normalizedClient,
@@ -92,12 +115,12 @@ export function generateClientConfiguration({ client, entrypoint }) {
     content,
     writes_performed: false,
   });
+  issuedConfigurations.add(generated);
+  return generated;
 }
 
 export async function writeClientConfiguration(rootHandle, generated, { yes = false } = {}) {
-  if (!generated || generated.schema !== 'agoragentic.risk-fork.demo-client-config.v1') {
-    throw new TypeError('A generated demo client configuration is required');
-  }
+  assertIssuedConfiguration(generated);
   if (yes !== true) return generated;
   const directory = await resolveOwnedDemoPath(rootHandle, 'configs');
   if (!directory.exists) await mkdir(directory.absolute_path, { recursive: false });
@@ -111,10 +134,62 @@ export async function writeClientConfiguration(rootHandle, generated, { yes = fa
     flag: 'wx',
     mode: 0o600,
   });
-  return Object.freeze({
+  const written = Object.freeze({
     ...generated,
     content: generated.content,
     output_ref: `owned-demo-root:${target.relative_path}`,
     writes_performed: true,
   });
+  issuedConfigurations.add(written);
+  return written;
+}
+
+export function createClientConfigurationResult(configuration, mode) {
+  assertIssuedConfiguration(configuration);
+  const expectedMode = configuration.writes_performed
+    ? 'written_to_owned_demo_root'
+    : 'preview';
+  if (mode !== expectedMode) {
+    throw new TypeError('Demo client configuration result mode does not match its write state');
+  }
+  if (
+    configuration.writes_performed
+    && configuration.output_ref !== `owned-demo-root:configs/${configuration.filename}`
+  ) {
+    throw new TypeError('Written demo client configuration is missing its exact owned-root reference');
+  }
+  const truth = createDemoTruth({
+    schema: 'agoragentic.risk-fork.demo-config-result.v1',
+    mode,
+    writes_performed: configuration.writes_performed,
+    exit_code: 0,
+  });
+  const result = Object.freeze({ ...truth, configuration });
+  assertClientConfigurationResult(result);
+  return result;
+}
+
+function assertClientConfigurationResult(result) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new TypeError('A demo client configuration result is required');
+  }
+  const { configuration, ...truth } = result;
+  assertIssuedConfiguration(configuration);
+  assertDemoTruth(truth);
+  const expectedMode = configuration.writes_performed
+    ? 'written_to_owned_demo_root'
+    : 'preview';
+  if (
+    result.schema !== 'agoragentic.risk-fork.demo-config-result.v1'
+    || result.mode !== expectedMode
+    || result.writes_performed !== configuration.writes_performed
+    || result.exit_code !== 0
+  ) {
+    throw new TypeError('Demo client configuration result does not match its issued configuration');
+  }
+  const absoluteEntrypoint = configuration.args[0];
+  assertDemoSecretFree(result, 'generated client configuration result', {
+    allowedAbsolutePaths: [absoluteEntrypoint],
+  });
+  return true;
 }

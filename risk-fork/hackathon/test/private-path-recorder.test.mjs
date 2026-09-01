@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,8 +54,11 @@ test('private absolute paths in values and object keys are rejected and cannot p
     '/opt/private-demo/private.txt',
     String.raw`\\server\share\private.txt`,
     'file:///C:/Users/Alice/private.txt',
+    String.raw`C:\projects\demo\risk-fork\hackathon\bin\risk-fork-demo.mjs`,
+    '/opt/risk-fork/hackathon/bin/risk-fork-demo.mjs',
   ];
   const runIds = [];
+  const persistedPaths = [];
 
   for (const [index, privatePath] of privatePaths.entries()) {
     const baseResult = await engine.run('low-read-only');
@@ -85,7 +88,9 @@ test('private absolute paths in values and object keys are rejected and cannot p
     assert.equal(Object.keys(redacted).length, Object.keys(input).length);
 
     const persisted = await writeRecorderRecord(handle, input);
-    const raw = await readFile(path.join(handle.root_path, ...persisted.relative_path.split('/')), 'utf8');
+    const persistedPath = path.join(handle.root_path, ...persisted.relative_path.split('/'));
+    persistedPaths.push(persistedPath);
+    const raw = await readFile(persistedPath, 'utf8');
     assert.equal(raw.includes(JSON.stringify(privatePath).slice(1, -1)), false);
     const parsed = JSON.parse(raw);
     assert.equal(Object.hasOwn(parsed, privatePath), false);
@@ -107,6 +112,17 @@ test('private absolute paths in values and object keys are rejected and cannot p
     assert.equal(record.private_location, '[REDACTED_PRIVATE_PATH]');
     assert.equal(record['[REDACTED_FIELD_1]'], 'ordinary-key-preserved');
   }
+
+  const tamperedRecord = {
+    ...loaded[0],
+    private_location: '/opt/risk-fork/hackathon/bin/risk-fork-demo.mjs',
+  };
+  await writeFile(persistedPaths[0], `${JSON.stringify(tamperedRecord, null, 2)}\n`, 'utf8');
+  await assert.rejects(loadRecorderRecords(handle), (error) => {
+    assert.equal(error.code, 'DEMO_SECRET_SHAPED_INPUT');
+    assert.equal(error.message.includes(tamperedRecord.private_location), false);
+    return true;
+  });
 });
 
 test('punctuation-embedded POSIX paths are redacted before recorder persistence and replay', async (t) => {

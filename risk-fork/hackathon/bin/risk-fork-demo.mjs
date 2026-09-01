@@ -5,7 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { sha256Ref } from '../../src/canonical.mjs';
-import { generateClientConfiguration, writeClientConfiguration } from '../src/config-generator.mjs';
+import {
+  createClientConfigurationResult,
+  generateClientConfiguration,
+  writeClientConfiguration,
+} from '../src/config-generator.mjs';
 import {
   createFlightRecorderServer,
   loadRecorderRecords,
@@ -234,21 +238,11 @@ async function configure(args) {
   const { client, yes } = configArguments(args);
   const generated = generateClientConfiguration({ client, entrypoint: path.resolve(entrypoint) });
   if (!yes) {
-    return baseResult('agoragentic.risk-fork.demo-config-result.v1', {
-      mode: 'preview',
-      writes_performed: false,
-      configuration: generated,
-      exit_code: 0,
-    });
+    return createClientConfigurationResult(generated, 'preview');
   }
   const root = await initializeOwnedDemoRoot(getDefaultDemoRoot());
   const written = await writeClientConfiguration(root, generated, { yes: true });
-  return baseResult('agoragentic.risk-fork.demo-config-result.v1', {
-    mode: 'written_to_owned_demo_root',
-    writes_performed: true,
-    configuration: written,
-    exit_code: 0,
-  });
+  return createClientConfigurationResult(written, 'written_to_owned_demo_root');
 }
 
 async function verifyCurrentKit() {

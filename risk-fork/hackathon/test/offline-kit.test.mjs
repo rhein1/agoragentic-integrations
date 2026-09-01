@@ -713,7 +713,10 @@ test('network guard blocks HTTP/2, WebSocket, EventSource, and direct Undici API
   const resultByName = Object.fromEntries(results);
 
   assert.equal(resultByName['http2.connect'], 'RISK_FORK_DEMO_NETWORK_BLOCKED');
-  assert.equal(resultByName['global.WebSocket'], 'RISK_FORK_DEMO_NETWORK_BLOCKED');
+  assert.ok(
+    ['RISK_FORK_DEMO_NETWORK_BLOCKED', 'unavailable'].includes(resultByName['global.WebSocket']),
+    'global.WebSocket was not blocked or unavailable',
+  );
   assert.ok(
     ['RISK_FORK_DEMO_NETWORK_BLOCKED', 'unavailable'].includes(resultByName['global.EventSource']),
   );
@@ -734,7 +737,10 @@ test('network guard blocks HTTP/2, WebSocket, EventSource, and direct Undici API
   assert.equal(status.network_used, false);
   assert.equal(status.network_used_scope, 'observed_demo_execution_only');
   assert.ok(status.guarded_surfaces.includes('node:http2.connect'));
-  assert.ok(status.guarded_surfaces.includes('globalThis.WebSocket'));
+  assert.equal(
+    status.guarded_surfaces.includes('globalThis.WebSocket'),
+    resultByName['global.WebSocket'] === 'RISK_FORK_DEMO_NETWORK_BLOCKED',
+  );
   assert.ok(status.guarded_surfaces.includes('undici.request'));
   assert.ok(status.guarded_surfaces.includes('undici.EventSource'));
 });

@@ -131,7 +131,9 @@ const PRIVATE_PATH_PATTERNS = Object.freeze([
 ]);
 const POSIX_PRIVATE_PATH_PATTERN = /(^|[^\p{L}\p{N}\p{M}._~-])(\/{1,2}(?!\/)[^\r\n\s"'`<>]*)/gu;
 const POSIX_TRAILING_PUNCTUATION_PATTERN = /([,.;:)\]}|]+)$/u;
-const PINNED_DEMO_ENTRYPOINT_SUFFIX = '/risk-fork/hackathon/bin/risk-fork-demo.mjs';
+const MAX_ALLOWED_ABSOLUTE_PATHS = 4;
+const MAX_ALLOWED_ABSOLUTE_PATH_BYTES = 4 * 1024;
+const ALLOWED_ABSOLUTE_PATH_PLACEHOLDER = 'risk-fork-approved-absolute-path';
 const WINDOWS_RESERVED_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 
 export class DemoSecurityError extends Error {
@@ -203,17 +205,89 @@ function secretBearingKey(value) {
     || SECRET_FIELD_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-function normalizedCandidatePath(value) {
-  return value
-    .replace(/^file:\/+/i, '/')
-    .replace(/\\+/g, '/')
-    .replace(/\/{2,}/g, '/')
-    .replace(/[\s,.;:)\]}]+$/g, '')
-    .toLowerCase();
+function failAllowedAbsolutePath() {
+  fail(
+    'DEMO_ALLOWED_ABSOLUTE_PATH_INVALID',
+    'allowedAbsolutePaths must contain only bounded canonical absolute paths',
+  );
 }
 
-function allowedPinnedDemoEntrypoint(value) {
-  return normalizedCandidatePath(value).endsWith(PINNED_DEMO_ENTRYPOINT_SUFFIX);
+function canonicalAllowedAbsolutePath(value) {
+  if (
+    typeof value !== 'string'
+    || value === ''
+    || value !== value.trim()
+    || Buffer.byteLength(value, 'utf8') > MAX_ALLOWED_ABSOLUTE_PATH_BYTES
+    || /[\u0000-\u001f\u007f]/.test(value)
+    || /^file:/i.test(value)
+    || /^(?:\\\\|\/\/)[?.](?:\\|\/)/.test(value)
+  ) {
+    failAllowedAbsolutePath();
+  }
+  const segments = value.split(/[\\/]/u);
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    failAllowedAbsolutePath();
+  }
+  const canonicalPosix = value.startsWith('/')
+    && !value.startsWith('//')
+    && !value.includes('\\')
+    && path.posix.isAbsolute(value)
+    && path.posix.normalize(value) === value;
+  const canonicalWindows = (
+    /^[A-Za-z]:\\/u.test(value)
+    || /^\\\\[^\\/]+\\[^\\/]+/u.test(value)
+  )
+    && path.win32.isAbsolute(value)
+    && path.win32.normalize(value) === value;
+  if (!canonicalPosix && !canonicalWindows) failAllowedAbsolutePath();
+  return value;
+}
+
+function allowedAbsolutePathsOption(value) {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || value.length > MAX_ALLOWED_ABSOLUTE_PATHS) {
+    failAllowedAbsolutePath();
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const allowed = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !Object.hasOwn(descriptor, 'value')) failAllowedAbsolutePath();
+    const candidate = canonicalAllowedAbsolutePath(descriptor.value);
+    if (allowed.includes(candidate)) failAllowedAbsolutePath();
+    allowed.push(candidate);
+  }
+  return Object.freeze(allowed);
+}
+
+function maskAllowedAbsolutePaths(value, allowedAbsolutePaths) {
+  if (allowedAbsolutePaths.length === 0) return value;
+  if (allowedAbsolutePaths.includes(value)) return ALLOWED_ABSOLUTE_PATH_PLACEHOLDER;
+  let masked = value;
+  for (const allowedPath of allowedAbsolutePaths) {
+    const quoted = JSON.stringify(allowedPath);
+    const replacement = JSON.stringify(ALLOWED_ABSOLUTE_PATH_PLACEHOLDER);
+    let cursor = 0;
+    let transformed = '';
+    while (cursor < masked.length) {
+      const tokenIndex = masked.indexOf(quoted, cursor);
+      if (tokenIndex === -1) break;
+      const afterToken = tokenIndex + quoted.length;
+      let delimiterIndex = afterToken;
+      while (
+        delimiterIndex < masked.length
+        && /[\t\n\r ]/u.test(masked[delimiterIndex])
+      ) {
+        delimiterIndex += 1;
+      }
+      const keyPosition = [':', '='].includes(masked[delimiterIndex]);
+      transformed += masked.slice(cursor, tokenIndex);
+      transformed += keyPosition ? quoted : replacement;
+      cursor = afterToken;
+    }
+    masked = `${transformed}${masked.slice(cursor)}`;
+  }
+  return masked;
 }
 
 function isHttpUrlCandidate(source, candidateStart, candidate) {
@@ -235,7 +309,6 @@ function transformPrivateAbsolutePaths(value, { redact = false } = {}) {
   let transformed = value;
   for (const pattern of PRIVATE_PATH_PATTERNS) {
     transformed = transformed.replace(pattern, (match, prefix, candidate) => {
-      if (!redact && allowedPinnedDemoEntrypoint(candidate)) return match;
       findings += 1;
       return `${prefix}${redact ? PRIVATE_PATH_REDACTION : candidate}`;
     });
@@ -279,6 +352,7 @@ export function scanDemoSecrets(value, options = {}) {
     16 * 1024 * 1024,
   );
   const maxFindings = requireInteger(options.maxFindings ?? 100, 'maxFindings', 1, 1_000);
+  const allowedAbsolutePaths = allowedAbsolutePathsOption(options.allowedAbsolutePaths);
   const findings = [];
   const seen = new WeakSet();
   let nodes = 0;
@@ -300,7 +374,10 @@ export function scanDemoSecrets(value, options = {}) {
     if (typeof current === 'string') {
       if (Buffer.byteLength(current, 'utf8') > maxStringBytes) record('string_too_large', location);
       if (containsSecretShapedText(current)) record('secret_pattern', location);
-      if (transformPrivateAbsolutePaths(current).findings > 0) record('private_absolute_path', location);
+      const pathScanValue = maskAllowedAbsolutePaths(current, allowedAbsolutePaths);
+      if (transformPrivateAbsolutePaths(pathScanValue).findings > 0) {
+        record('private_absolute_path', location);
+      }
       return;
     }
     if (current === null || ['boolean', 'number'].includes(typeof current)) return;
@@ -340,8 +417,8 @@ export function scanDemoSecrets(value, options = {}) {
   return deepFreeze({ safe: findings.length === 0, findings });
 }
 
-export function assertDemoSecretFree(value, field = 'value') {
-  const scan = scanDemoSecrets(value);
+export function assertDemoSecretFree(value, field = 'value', options = {}) {
+  const scan = scanDemoSecrets(value, options);
   if (!scan.safe) {
     fail('DEMO_SECRET_SHAPED_INPUT', `${field} was rejected by the deterministic secret scan`, {
       finding_codes: [...new Set(scan.findings.map((finding) => finding.code))].sort(),

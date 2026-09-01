@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -31,11 +32,11 @@ function minimalEnvironment(extra = {}) {
   };
 }
 
-async function cli(...args) {
+async function cliWithEnvironment(extraEnvironment, ...args) {
   try {
     const result = await execFileAsync(process.execPath, [entrypoint, ...args], {
       cwd: repositoryRoot,
-      env: minimalEnvironment(),
+      env: minimalEnvironment(extraEnvironment),
       windowsHide: true,
       timeout: 15_000,
       maxBuffer: 4 * 1024 * 1024,
@@ -47,6 +48,10 @@ async function cli(...args) {
     }
     throw error;
   }
+}
+
+async function cli(...args) {
+  return cliWithEnvironment({}, ...args);
 }
 
 function cliActiveLock(handle, {
@@ -113,20 +118,57 @@ test('verify-offline-kit composes the same Node support evidence before manifest
   assert.equal(verification.value.node.supported, true);
 });
 
-test('CLI config preview is write-free and --yes writes only a cleanup-owned review artifact', async () => {
-  await cli('cleanup');
-  const preview = await cli('config', '--client', 'codex');
+test('CLI config preview is write-free and --yes writes only a cleanup-owned review artifact', async (t) => {
+  const isolatedTemp = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-config-cli-'));
+  t.after(() => rm(isolatedTemp, { recursive: true, force: true }));
+  const isolatedEnvironment = {
+    TEMP: isolatedTemp,
+    TMP: isolatedTemp,
+    TMPDIR: isolatedTemp,
+  };
+  const isolatedRoot = path.join(isolatedTemp, path.basename(getDefaultDemoRoot()));
+  await assert.rejects(lstat(isolatedRoot), { code: 'ENOENT' });
+
+  const preview = await cliWithEnvironment(isolatedEnvironment, 'config', '--client', 'codex');
   assert.equal(preview.code, 0);
   assert.equal(preview.value.mode, 'preview');
   assert.equal(preview.value.writes_performed, false);
   assert.equal(preview.value.configuration.command, 'node');
   assert.doesNotMatch(preview.value.configuration.content, /\bnpx(?:\.cmd)?\b/i);
+  await assert.rejects(lstat(isolatedRoot), { code: 'ENOENT' });
 
-  const written = await cli('config', '--client', 'codex', '--yes');
+  const written = await cliWithEnvironment(
+    isolatedEnvironment,
+    'config',
+    '--client',
+    'codex',
+    '--yes',
+  );
   assert.equal(written.code, 0);
   assert.equal(written.value.mode, 'written_to_owned_demo_root');
   assert.equal(written.value.configuration.output_ref, 'owned-demo-root:configs/codex-risk-fork-demo.toml');
-  assert.equal((await cli('cleanup')).value.cleanup.status, 'verified');
+  const ownedRoot = await openOwnedDemoRoot(isolatedRoot);
+  const afterWrite = await inspectOwnedDemoTree(ownedRoot);
+  assert.deepEqual(
+    afterWrite.entries.map(({ path: entryPath, type }) => [entryPath, type]),
+    [
+      ['configs', 'directory'],
+      ['configs/codex-risk-fork-demo.toml', 'file'],
+    ],
+  );
+  const writtenConfig = await resolveOwnedDemoPath(
+    ownedRoot,
+    'configs/codex-risk-fork-demo.toml',
+    { mustExist: true, expectedType: 'file' },
+  );
+  assert.equal(
+    (await readFile(writtenConfig.absolute_path, 'utf8')).includes(JSON.stringify(entrypoint)),
+    true,
+  );
+  const cleanup = await cliWithEnvironment(isolatedEnvironment, 'cleanup');
+  assert.equal(cleanup.value.cleanup.status, 'verified');
+  const cleanedRoot = await openOwnedDemoRoot(isolatedRoot);
+  assert.deepEqual((await inspectOwnedDemoTree(cleanedRoot)).entries, []);
 });
 
 test('CLI interruption invokes shared abort/cleanup and exits nonzero', async () => {

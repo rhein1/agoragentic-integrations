@@ -193,9 +193,101 @@ test('private absolute paths are rejected before truth persistence and redacted 
     assert.match(redacted.location, /REDACTED_PRIVATE_PATH/);
   }
 
-  const pinnedEntrypoint = String.raw`C:\projects\demo\risk-fork\hackathon\bin\risk-fork-demo.mjs`;
-  assert.equal(scanDemoSecrets({ entrypoint: pinnedEntrypoint }).safe, true);
-  assert.equal(redactDemoValue({ entrypoint: pinnedEntrypoint }).entrypoint, '[REDACTED_PRIVATE_PATH]');
+  const approvedEntrypoints = [
+    String.raw`C:\projects\demo\risk-fork\hackathon\bin\risk-fork-demo.mjs`,
+    '/opt/risk-fork/hackathon/bin/risk-fork-demo.mjs',
+  ];
+  for (const approvedEntrypoint of approvedEntrypoints) {
+    assert.equal(scanDemoSecrets({ entrypoint: approvedEntrypoint }).safe, false);
+    assert.throws(() => createDemoTruth({ entrypoint: approvedEntrypoint }), {
+      code: 'DEMO_SECRET_SHAPED_INPUT',
+    });
+    assert.equal(
+      scanDemoSecrets(
+        { entrypoint: approvedEntrypoint },
+        { allowedAbsolutePaths: [approvedEntrypoint] },
+      ).safe,
+      true,
+    );
+    assert.equal(
+      scanDemoSecrets(
+        JSON.stringify({ entrypoint: approvedEntrypoint }),
+        { allowedAbsolutePaths: [approvedEntrypoint] },
+      ).safe,
+      true,
+    );
+    assert.equal(
+      redactDemoValue({ entrypoint: approvedEntrypoint }).entrypoint,
+      '[REDACTED_PRIVATE_PATH]',
+    );
+    assert.equal(
+      scanDemoSecrets(
+        { [approvedEntrypoint]: 'opaque' },
+        { allowedAbsolutePaths: [approvedEntrypoint] },
+      ).safe,
+      false,
+    );
+    const serializedKey = JSON.stringify({ [approvedEntrypoint]: 'opaque' });
+    assert.equal(
+      scanDemoSecrets(serializedKey, { allowedAbsolutePaths: [approvedEntrypoint] }).safe,
+      false,
+    );
+    assert.equal(redactDemoValue(serializedKey).includes(approvedEntrypoint), false);
+  }
+
+  const [approvedWindowsEntrypoint, approvedPosixEntrypoint] = approvedEntrypoints;
+  for (const nearOrDifferentPath of [
+    String.raw`D:\projects\demo\risk-fork\hackathon\bin\risk-fork-demo.mjs`,
+    `${approvedWindowsEntrypoint}.backup`,
+    `${approvedWindowsEntrypoint}\\child`,
+    `${approvedWindowsEntrypoint}\\..\\private.mjs`,
+    '/srv/risk-fork/hackathon/bin/risk-fork-demo.mjs',
+    `${approvedPosixEntrypoint}.backup`,
+    `${approvedPosixEntrypoint}/child`,
+    `${approvedPosixEntrypoint}/../private.mjs`,
+  ]) {
+    const allowedAbsolutePaths = nearOrDifferentPath.includes('\\')
+      ? [approvedWindowsEntrypoint]
+      : [approvedPosixEntrypoint];
+    assert.equal(
+      scanDemoSecrets({ entrypoint: nearOrDifferentPath }, { allowedAbsolutePaths }).safe,
+      false,
+      nearOrDifferentPath,
+    );
+    const redacted = redactDemoValue({ entrypoint: nearOrDifferentPath });
+    assert.equal(JSON.stringify(redacted).includes(nearOrDifferentPath), false);
+    assert.equal(redacted.entrypoint, '[REDACTED_PRIVATE_PATH]');
+  }
+  assert.equal(
+    scanDemoSecrets(
+      JSON.stringify({
+        args: [approvedPosixEntrypoint, 'mcp'],
+        private_location: '/home/alice/private.txt',
+      }),
+      { allowedAbsolutePaths: [approvedPosixEntrypoint] },
+    ).safe,
+    false,
+  );
+  for (const invalidAllowedPath of [
+    '/opt/risk-fork/../private.mjs',
+    String.raw`C:\projects\risk-fork\..\private.mjs`,
+    'file:///opt/risk-fork/hackathon/bin/risk-fork-demo.mjs',
+  ]) {
+    assert.throws(
+      () => scanDemoSecrets('relative-safe-value', { allowedAbsolutePaths: [invalidAllowedPath] }),
+      (error) => {
+        assert.equal(error.code, 'DEMO_ALLOWED_ABSOLUTE_PATH_INVALID');
+        assert.equal(error.message.includes(invalidAllowedPath), false);
+        return true;
+      },
+    );
+  }
+  assert.throws(
+    () => scanDemoSecrets('relative-safe-value', {
+      allowedAbsolutePaths: ['/a', '/b', '/c', '/d', '/e'],
+    }),
+    { code: 'DEMO_ALLOWED_ABSOLUTE_PATH_INVALID' },
+  );
 
   const privateKey = '/tmp/private-demo/object-key';
   const keyScan = scanDemoSecrets({ [privateKey]: 'opaque' });

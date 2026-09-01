@@ -4,6 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   FLIGHT_RECORDER_STATIC_ASSETS,
@@ -15,6 +16,7 @@ import {
   DEMO_CLIENT_VERIFICATION_DETAILS,
   DEMO_CLIENTS,
   GENERATED_NOT_CLIENT_VERIFIED_STATUS,
+  createClientConfigurationResult,
   generateClientConfiguration,
   writeClientConfiguration,
 } from '../src/config-generator.mjs';
@@ -347,7 +349,24 @@ test('recorder serializes concurrent writers and rejects cumulative overflow wit
 });
 
 test('generated configurations use only local node plus the absolute pinned entrypoint', async (t) => {
-  const entrypoint = path.resolve('risk-fork', 'hackathon', 'bin', 'risk-fork-demo.mjs');
+  const entrypoint = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'bin',
+    'risk-fork-demo.mjs',
+  );
+  const differentRootEntrypoint = path.join(
+    path.dirname(entrypoint),
+    'different-root',
+    'risk-fork-demo.mjs',
+  );
+  const traversalEntrypoint = `${path.dirname(entrypoint)}${path.sep}..${path.sep}bin${path.sep}risk-fork-demo.mjs`;
+  for (const rejectedEntrypoint of [differentRootEntrypoint, traversalEntrypoint]) {
+    assert.throws(
+      () => generateClientConfiguration({ client: 'codex', entrypoint: rejectedEntrypoint }),
+      /exact local Risk Fork controller/,
+    );
+  }
   assert.equal(
     DEMO_CLIENT_VERIFICATION_DETAILS.codex,
     'codex_config_generated_not_live_client_verified',
@@ -364,6 +383,11 @@ test('generated configurations use only local node plus the absolute pinned entr
     assert.doesNotMatch(generated.content, /\bnpx(?:\.cmd)?\b/i);
     assert.doesNotMatch(generated.content, /agoragentic-mcp/i);
     assert.equal(generated.writes_performed, false);
+    const result = createClientConfigurationResult(generated, 'preview');
+    assert.equal(result.schema, 'agoragentic.risk-fork.demo-config-result.v1');
+    assert.equal(result.mode, 'preview');
+    assert.equal(result.writes_performed, false);
+    assert.equal(result.configuration, generated);
   }
 
   const parent = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-config-test-'));
@@ -375,12 +399,25 @@ test('generated configurations use only local node plus the absolute pinned entr
   }));
   const handle = await initializeOwnedDemoRoot(path.join(parent, 'owned'));
   const preview = generateClientConfiguration({ client: 'codex', entrypoint });
+  const forgedPreview = Object.freeze({ ...preview });
+  assert.throws(
+    () => createClientConfigurationResult(forgedPreview, 'preview'),
+    /module-issued demo client configuration/,
+  );
+  await assert.rejects(
+    writeClientConfiguration(handle, forgedPreview, { yes: true }),
+    /module-issued demo client configuration/,
+  );
   assert.equal((await writeClientConfiguration(handle, preview)).writes_performed, false);
   const written = await writeClientConfiguration(handle, preview, { yes: true });
   assert.equal(written.writes_performed, true);
   assert.equal(written.verification_status, GENERATED_NOT_CLIENT_VERIFIED_STATUS);
   assert.equal(written.verification_detail, DEMO_CLIENT_VERIFICATION_DETAILS.codex);
   assert.equal(written.output_ref, 'owned-demo-root:configs/codex-risk-fork-demo.toml');
+  const writtenResult = createClientConfigurationResult(written, 'written_to_owned_demo_root');
+  assert.equal(writtenResult.configuration, written);
+  assert.equal(writtenResult.writes_performed, true);
+  assert.equal(writtenResult.mode, 'written_to_owned_demo_root');
 });
 
 test('MCP exposes only enumerated synthetic tools and rejects caller-added fields', async () => {
@@ -416,4 +453,13 @@ test('MCP exposes only enumerated synthetic tools and rejects caller-added field
   }));
   assert.equal(rejected.error.code, -32602);
   assert.equal(JSON.stringify(rejected).includes('whoami'), false);
+  const privateEntrypoint = '/opt/risk-fork/hackathon/bin/risk-fork-demo.mjs';
+  const rejectedPrivatePath = await handle(JSON.stringify({
+    jsonrpc: '2.0',
+    id: privateEntrypoint,
+    method: 'tools/list',
+  }));
+  assert.equal(rejectedPrivatePath.error.code, -32600);
+  assert.equal(rejectedPrivatePath.id, null);
+  assert.equal(JSON.stringify(rejectedPrivatePath).includes(privateEntrypoint), false);
 });
