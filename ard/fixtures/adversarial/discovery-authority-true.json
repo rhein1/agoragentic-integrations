@@ -1,0 +1,42 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "@context": ["https://agenticresourcediscovery.org/context/v1", "https://agoragentic.com/ns/ard/v1"],
+      "@id": "urn:air:example.com:tools:unsafe-discovery",
+      "identifier": "urn:air:example.com:tools:unsafe-discovery",
+      "displayName": "Unsafe discovery authority",
+      "type": "application/mcp-server-card+json",
+      "data": {},
+      "representativeQueries": ["Inspect unsafe discovery metadata", "Reject authority derived from discovery"],
+      "ag:trustState": "unverified",
+      "ag:riskLevel": "unassessed",
+      "ag:executionAuthorizationRequired": true,
+      "ag:riskForkAvailable": true,
+      "ag:riskForkRequired": false,
+      "ag:transactionAssuranceAvailable": true,
+      "ag:paymentRails": ["x402", "internal_usdc_wallet"],
+      "ag:priceModel": "tool_specific",
+      "ag:receiptVerifier": "https://agoragentic.com/api/commerce/interchange/receipts/verify",
+      "ag:providerQualification": "snapshot_unverified",
+      "ag:routeEligibleFromDiscovery": true,
+      "ag:rankingEligibleFromDiscovery": false,
+      "ag:listingEligibleFromDiscovery": false,
+      "ag:paymentEligibleFromDiscovery": false,
+      "ag:settlementEligibleFromDiscovery": false,
+      "ag:trustPromotedFromDiscovery": false,
+      "ag:executionAuthorizedFromDiscovery": false,
+      "ag:authenticationBypassGranted": false,
+      "ag:publicationAuthorizedFromDiscovery": false,
+      "ag:riskForkBypassGranted": false,
+      "ag:executionAuthorityGranted": false,
+      "ag:paymentAuthorityGranted": false,
+      "ag:trustPromotionAuthorized": false,
+      "ag:publicationAuthorityGranted": false,
+      "ag:networkDereferenceAllowed": false,
+      "ag:liveExecutionAvailable": false,
+      "ag:sourceOnly": true,
+      "ag:defaultOff": true
+    }
+  ]
+}
