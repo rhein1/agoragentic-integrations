@@ -9,7 +9,7 @@ const root = path.join(__dirname, '..');
 const readJson = (relativePath) =>
 	JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
 
-test('0.1.3 release metadata is locked to the audited direct toolchain', () => {
+test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 	const pkg = readJson('package.json');
 	const lock = readJson('package-lock.json');
 	const expectedDevDependencies = {
@@ -26,7 +26,7 @@ test('0.1.3 release metadata is locked to the audited direct toolchain', () => {
 		zod: '3.25.76',
 	};
 
-	assert.equal(pkg.version, '0.1.3');
+	assert.equal(pkg.version, '0.1.4');
 	assert.deepEqual(pkg.devDependencies, expectedDevDependencies);
 	assert.equal(pkg.peerDependencies['n8n-workflow'], '*');
 	assert.equal(pkg.overrides, undefined);
@@ -36,6 +36,7 @@ test('0.1.3 release metadata is locked to the audited direct toolchain', () => {
 	assert.equal(pkg.scripts.lint, 'eslint .');
 	assert.equal(pkg.engines.node, '>=20.19.0');
 	assert.equal(pkg.repository.directory, 'n8n');
+	assert.equal(lock.version, pkg.version);
 	assert.equal(lock.packages[''].version, pkg.version);
 	assert.deepEqual(lock.packages[''].devDependencies, expectedDevDependencies);
 	assert.equal(lock.packages[''].peerDependencies['n8n-workflow'], '*');

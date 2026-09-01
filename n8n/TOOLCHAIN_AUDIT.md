@@ -4,7 +4,7 @@ Audit date: 2026-09-01 (supersedes 2026-08-20)
 
 ## Candidate
 
-- Package: `n8n-nodes-agoragentic@0.1.3`
+- Package: `n8n-nodes-agoragentic@0.1.4`
 - Builder: repository-local `scripts/build.mjs`
 - Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.29.0`
 - Linter: `eslint@9.29.0`
@@ -15,6 +15,11 @@ Audit date: 2026-09-01 (supersedes 2026-08-20)
 - Minimum consumer Node.js: 20.19
 - Locked development and publishing Node.js: 24
 - Install mode: committed lockfile plus `npm ci`
+
+npm currently serves `n8n-nodes-agoragentic@0.1.3` from the existing
+`n8n-v0.1.3` release. This audited source candidate is 0.1.4 and must be
+reviewed and merged before the exact `n8n-v0.1.4` tag can invoke the trusted
+publishing workflow.
 
 ## Coordinated compatibility decision
 
