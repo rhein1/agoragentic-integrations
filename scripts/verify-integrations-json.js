@@ -15,6 +15,8 @@ const manifestPath = path.join(root, 'integrations.json');
 const machineSurfacePaths = [
   manifestPath,
   path.join(root, 'a2a', 'agent-card.json'),
+  path.join(root, 'ard', 'generated', 'ard.json'),
+  path.join(root, 'ard', 'generated', 'ai-catalog.json'),
   path.join(root, 'dify', 'agoragentic_provider.json'),
 ];
 
@@ -407,6 +409,26 @@ function assertDifyRouterFirst() {
   if (toolNames[1] !== 'agoragentic_match') fail('Dify second tool must be agoragentic_match');
 }
 
+function assertArdSourceOnly(manifest) {
+  const integration = (manifest.integrations || []).find((entry) => entry.id === 'ard-profile');
+  if (integration?.status !== 'experimental' || integration?.capability_record?.requirements?.network_required !== false
+    || integration?.capability_record?.requirements?.spend_capable !== false) {
+    fail('ard-profile must remain experimental, offline, and no-spend');
+  }
+  const required = {
+    ard_profile: 'ard/README.md',
+    ard_manifest_candidate: 'ard/generated/ard.json',
+    ard_compatibility_manifest_candidate: 'ard/generated/ai-catalog.json',
+    ard_upstream_provenance: 'ard/provenance.json',
+  };
+  for (const [key, value] of Object.entries(required)) {
+    if (manifest.discovery?.[key] !== value) fail(`discovery.${key} must point to ${value}`);
+  }
+  const canonical = fs.readFileSync(path.join(root, 'ard', 'generated', 'ard.json'), 'utf8');
+  const compatibility = fs.readFileSync(path.join(root, 'ard', 'generated', 'ai-catalog.json'), 'utf8');
+  if (canonical !== compatibility) fail('ARD canonical and predecessor candidate artifacts must remain byte-identical');
+}
+
 const rawManifest = fs.readFileSync(manifestPath, 'utf8');
 const duplicates = topLevelDuplicateKeys(rawManifest);
 if (duplicates.length) fail(`integrations.json has duplicate top-level keys: ${duplicates.join(', ')}`);
@@ -421,5 +443,6 @@ assertProtocolNamespaces(manifest);
 assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
+assertArdSourceOnly(manifest);
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ integrations machine-surface verification passed');

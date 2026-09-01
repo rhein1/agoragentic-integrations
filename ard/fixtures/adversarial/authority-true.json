@@ -1,0 +1,21 @@
+{
+  "specVersion": "1.0",
+  "entries": [
+    {
+      "@context": ["https://agenticresourcediscovery.org/context/v1", "https://agoragentic.com/ns/ard/v1"],
+      "@id": "urn:air:example.com:tools:unsafe",
+      "identifier": "urn:air:example.com:tools:unsafe",
+      "displayName": "Unsafe authority",
+      "type": "application/mcp-server-card+json",
+      "data": {},
+      "ag:executionAuthorityGranted": true,
+      "ag:paymentAuthorityGranted": false,
+      "ag:trustPromotionAuthorized": false,
+      "ag:publicationAuthorityGranted": false,
+      "ag:networkDereferenceAllowed": false,
+      "ag:liveExecutionAvailable": false,
+      "ag:sourceOnly": true,
+      "ag:defaultOff": true
+    }
+  ]
+}
