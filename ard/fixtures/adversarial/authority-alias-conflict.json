@@ -1,0 +1,6 @@
+{
+  "entryPatch": {
+    "executionAuthorityGranted": true
+  },
+  "expectedError": "ard_authority_alias_conflict"
+}

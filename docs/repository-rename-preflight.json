@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.51.0",
-  "as_of": "2026-08-30",
+  "source_manifest_version": "2.52.0",
+  "as_of": "2026-08-31",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 141,
-    "occurrence_count": 277,
+    "file_count": 147,
+    "occurrence_count": 290,
     "category_file_counts": {
       "installer_or_clone": 28,
-      "machine_discovery": 45,
+      "machine_discovery": 51,
       "package_registry_metadata": 22,
       "public_documentation": 72,
       "raw_content_url": 2,
@@ -436,6 +436,72 @@
       ],
       "categories": [
         "public_documentation"
+      ]
+    },
+    {
+      "path": "ard/examples/a2a.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/mcp.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/risk-fork.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ai-catalog.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ard.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/source/manifest.source.json",
+      "occurrences": 3,
+      "line_numbers": [
+        59,
+        102,
+        145
+      ],
+      "categories": [
+        "machine_discovery"
       ]
     },
     {
@@ -942,7 +1008,7 @@
       "line_numbers": [
         55,
         131,
-        409
+        411
       ],
       "categories": [
         "public_documentation"
@@ -950,7 +1016,7 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 17,
+      "occurrences": 18,
       "line_numbers": [
         16,
         37,
@@ -962,13 +1028,14 @@
         103,
         111,
         120,
-        382,
-        394,
-        406,
-        418,
-        430,
-        442,
-        454
+        130,
+        392,
+        404,
+        416,
+        428,
+        440,
+        452,
+        464
       ],
       "categories": [
         "machine_discovery"
@@ -978,7 +1045,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        279
+        282
       ],
       "categories": [
         "machine_discovery"
@@ -1085,8 +1152,8 @@
       "path": "llms-full.txt",
       "occurrences": 2,
       "line_numbers": [
-        113,
-        114
+        114,
+        115
       ],
       "categories": [
         "machine_discovery",
@@ -1378,7 +1445,7 @@
       "path": "scripts/verify-integrations-json.js",
       "occurrences": 1,
       "line_numbers": [
-        296
+        298
       ],
       "categories": [
         "source_or_test"

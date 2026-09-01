@@ -1,0 +1,16 @@
+{
+  "name": "@agoragentic/ard-profile",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "description": "Source-only, default-off ARD v0.91 profile, offline normalizer, and deterministic manifest generator.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "check": "node --check src/profile.mjs && node --check src/generate.mjs",
+    "generate": "node src/generate.mjs --write",
+    "generate:check": "node src/generate.mjs --check",
+    "test": "node --test test/*.test.mjs"
+  }
+}
