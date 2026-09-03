@@ -5,6 +5,7 @@ const { spawnSync } = require('node:child_process');
 const ALLOWED_ADVISORIES = new Set([
 	'https://github.com/advisories/GHSA-28wg-ghj8-5hjv',
 	'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
+	'https://github.com/advisories/GHSA-xwg4-73v4-xw9w',
 ]);
 const ALLOWED_PACKAGES = new Set([
 	'@n8n/ai-utilities',
@@ -82,6 +83,7 @@ function main() {
 		: ['audit', '--json', '--audit-level=high'];
 	const result = spawnSync(command, args, {
 		encoding: 'utf8',
+		shell: process.platform === 'win32',
 	});
 	if (result.error) throw result.error;
 	if (![0, 1].includes(result.status)) {

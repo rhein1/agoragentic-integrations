@@ -110,7 +110,9 @@ var require_package = __commonJS({
         esbuild: "0.28.2"
       },
       overrides: {
-        "@hono/node-server": "2.0.11"
+        "@hono/node-server": "2.0.11",
+        "fast-uri": "3.1.7",
+        qs: "6.16.0"
       },
       engines: {
         node: ">=20.0.0"
@@ -59799,7 +59801,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:2b7629c8b83d1ead23b5c089c0a68760488606149d432d8dd0e5753d647e12c9" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:70d957f412f5fd0f1ed9b3e3f705bf49efa17b0f4fe87530b33a1a40ab1faf36" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
