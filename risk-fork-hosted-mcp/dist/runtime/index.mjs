@@ -35684,7 +35684,7 @@ var require_mcp_server = __commonJS({
       }
       walk(value, field);
     }
-    function sha256Ref3(value) {
+    function sha256Ref2(value) {
       return `sha256:${crypto.createHash("sha256").update(stableJson(value)).digest("hex")}`;
     }
     function assertCanonicalEvidenceRef(evidenceRef, field = "evidenceRef") {
@@ -35704,7 +35704,7 @@ var require_mcp_server = __commonJS({
         throw new TypeError("requestHash must be a sha256 reference");
       }
       const canonicalEvidenceRef = assertCanonicalEvidenceRef(evidenceRef);
-      return sha256Ref3({
+      return sha256Ref2({
         evidence_ref: canonicalEvidenceRef,
         request_hash: requestHash,
         result
@@ -35806,7 +35806,7 @@ var require_mcp_server = __commonJS({
       if (phase === "UNKNOWN" && !request.raw_method) {
         throw new TypeError("UNKNOWN MCP enforcement requests require raw_method");
       }
-      request.request_hash = sha256Ref3({ ...request, request_hash: null });
+      request.request_hash = sha256Ref2({ ...request, request_hash: null });
       if (sessionBindingHash !== null && !/^sha256:[a-f0-9]{64}$/.test(sessionBindingHash)) {
         throw new TypeError("sessionBindingHash must be a sha256 reference");
       }
@@ -36384,10 +36384,10 @@ var require_mcp_server = __commonJS({
       const record = {
         remote_url: openRequest.mcp_server_ref,
         remote_origin: openRequest.mcp_server_origin,
-        session_binding_hash: sha256Ref3({
+        session_binding_hash: sha256Ref2({
           open_request_hash: openRequest.request_hash,
           discovery_evidence_hash: discoveryEnvelope.evidence_hash,
-          discovery_result_hash: sha256Ref3(discovery),
+          discovery_result_hash: sha256Ref2(discovery),
           protocol_version: discovery.protocol_version,
           stateless: discovery.stateless
         }),
@@ -41958,7 +41958,7 @@ var import_mcp_server = __toESM(require_mcp_server(), 1);
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/controller.mjs
 import { randomUUID as randomUUID4 } from "node:crypto";
 
-// risk-fork-hosted-mcp/.build/upstream/transaction-assurance/src/canonical.mjs
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/canonical.mjs
 import { createHash } from "node:crypto";
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -41970,15 +41970,13 @@ function sortForCanonicalization(value) {
     Object.keys(value).sort().map((key) => [key, sortForCanonicalization(value[key])])
   );
 }
-function canonicalize(value) {
+function rawCanonicalize(value) {
   return JSON.stringify(sortForCanonicalization(value));
 }
-function sha256Ref(value) {
-  const input = typeof value === "string" ? value : canonicalize(value);
+function rawSha256Ref(value) {
+  const input = typeof value === "string" ? value : rawCanonicalize(value);
   return `sha256:${createHash("sha256").update(input, "utf8").digest("hex")}`;
 }
-
-// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/canonical.mjs
 var MAX_DEPTH = 64;
 var MAX_NODES = 1e5;
 var MAX_STRING_BYTES = 16 * 1024 * 1024;
@@ -42045,12 +42043,12 @@ function assertCanonicalJson(value) {
   assertJsonValue(value, { ancestors: /* @__PURE__ */ new WeakSet(), nodes: 0 }, "$", 0);
   return value;
 }
-function canonicalize2(value) {
+function canonicalize(value) {
   assertCanonicalJson(value);
-  return canonicalize(value);
+  return rawCanonicalize(value);
 }
-function sha256Ref2(value) {
-  return sha256Ref(canonicalize2(value));
+function sha256Ref(value) {
+  return rawSha256Ref(canonicalize(value));
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
@@ -42273,7 +42271,7 @@ function scanAuthorityFreeJson(value, field) {
 }
 function validateChildOperation(value, field = "child operation") {
   assertPlainObject(value, field);
-  const serialized = canonicalize2(value);
+  const serialized = canonicalize(value);
   if (Buffer.byteLength(serialized, "utf8") > MAX_OPERATION_BYTES) {
     throw new TypeError(`${field} exceeds ${MAX_OPERATION_BYTES} bytes`);
   }
@@ -42516,7 +42514,7 @@ function normalizeGovernance(value = {}) {
     budget_policy_ref: value.budget_policy_ref == null ? budgetHash == null ? null : defaultGovernanceRef("budget-policy", budgetHash) : requireOpaqueRef(value.budget_policy_ref, "governance.budget_policy_ref"),
     budget_version: value.budget_version == null ? null : requireOpaqueRef(value.budget_version, "governance.budget_version"),
     budget_hash: budgetHash,
-    epoch: value.epoch == null ? `governance:${sha256Ref2({
+    epoch: value.epoch == null ? `governance:${sha256Ref({
       policy_hash: policyHash,
       mandate_hash: mandateHash,
       budget_hash: budgetHash
@@ -42686,11 +42684,11 @@ function createSavepointCapsule(input = {}) {
     }
   }
   if (!capsule.capsule_id) {
-    const identitySeed = sha256Ref2({ ...capsule, capsule_hash: null });
+    const identitySeed = sha256Ref({ ...capsule, capsule_hash: null });
     capsule.capsule_id = `rfc_${identitySeed.slice(7, 23)}`;
   }
-  capsule.capsule_hash = sha256Ref2({ ...capsule, capsule_hash: null });
-  const capsuleBytes = Buffer.byteLength(canonicalize2(capsule), "utf8");
+  capsule.capsule_hash = sha256Ref({ ...capsule, capsule_hash: null });
+  const capsuleBytes = Buffer.byteLength(canonicalize(capsule), "utf8");
   if (capsuleBytes > MAX_CAPSULE_BYTES) {
     throw new TypeError(`Savepoint Capsule exceeds ${MAX_CAPSULE_BYTES} bytes`);
   }
@@ -42722,7 +42720,7 @@ function verifySavepointCapsule(capsule, options = {}) {
   if (capsule.schema !== "agoragentic.risk-fork.savepoint-capsule.v1") {
     throw new TypeError("capsule must use agoragentic.risk-fork.savepoint-capsule.v1");
   }
-  const directHash = sha256Ref2({ ...cloneJson(capsule), capsule_hash: null });
+  const directHash = sha256Ref({ ...cloneJson(capsule), capsule_hash: null });
   if (!safeEqual(directHash, capsule.capsule_hash)) {
     throw new Error("Savepoint Capsule hash mismatch");
   }
@@ -42777,11 +42775,11 @@ function createForkIdentity(input = {}) {
     session_id: `fork_session_${randomUUID()}`,
     runtime_identity: `fork_runtime_${randomUUID()}`,
     nonce_namespace: `fork_nonce_${randomBytes(24).toString("hex")}`,
-    entropy_state_ref: sha256Ref2(randomBytes(64).toString("hex")),
+    entropy_state_ref: sha256Ref(randomBytes(64).toString("hex")),
     issued_at: requireIsoDate(input.issued_at ?? /* @__PURE__ */ new Date(), "issued_at"),
     identity_hash: null
   };
-  identity.identity_hash = sha256Ref2({ ...identity, identity_hash: null });
+  identity.identity_hash = sha256Ref({ ...identity, identity_hash: null });
   return deepFreeze(identity);
 }
 function assertFreshForkIdentity(identity) {
@@ -42815,7 +42813,7 @@ function assertFreshForkIdentity(identity) {
   if (identity.fork_agent_id === identity.parent_agent_id || identity.session_id === identity.parent_session_id) {
     throw new Error("A fork must not inherit parent agent or session identity");
   }
-  const expected = sha256Ref2({ ...identity, identity_hash: null });
+  const expected = sha256Ref({ ...identity, identity_hash: null });
   if (!safeEqual(identity.identity_hash, expected)) throw new Error("Fork identity hash mismatch");
   return true;
 }
@@ -42857,7 +42855,7 @@ function buildExecutionBinding(input = {}) {
     "authorization_hash"
   ], "execution binding input");
   if (input.effective_arguments !== void 0 && input.effective_arguments_hash !== void 0) {
-    const calculated = sha256Ref2(input.effective_arguments);
+    const calculated = sha256Ref(input.effective_arguments);
     if (!safeEqual(calculated, input.effective_arguments_hash)) {
       throw new Error("effective_arguments_hash does not match effective_arguments");
     }
@@ -42889,7 +42887,7 @@ function buildExecutionBinding(input = {}) {
       method: bindingMcpMethod.method,
       raw_method: bindingMcpMethod.raw_method,
       tool_name: input.tool_name == null ? null : requireOpaqueRef(input.tool_name, "tool_name"),
-      effective_arguments_hash: input.effective_arguments_hash ? requireSha256Ref(input.effective_arguments_hash, "effective_arguments_hash") : sha256Ref2(input.effective_arguments ?? {})
+      effective_arguments_hash: input.effective_arguments_hash ? requireSha256Ref(input.effective_arguments_hash, "effective_arguments_hash") : sha256Ref(input.effective_arguments ?? {})
     },
     provider_ref: requireOpaqueRef(input.provider_ref, "provider_ref"),
     target_ref: input.target_ref == null ? null : requireOpaqueRef(input.target_ref, "target_ref"),
@@ -42940,7 +42938,7 @@ function buildExecutionBinding(input = {}) {
   if (binding.commercial.currency && !/^[A-Z][A-Z0-9]{1,11}$/.test(binding.commercial.currency)) {
     throw new TypeError("currency must be an uppercase currency or asset code");
   }
-  binding.binding_hash = sha256Ref2({ ...binding, binding_hash: null });
+  binding.binding_hash = sha256Ref({ ...binding, binding_hash: null });
   return deepFreeze(binding);
 }
 function verifyExecutionBinding(binding, expected = {}, options = {}) {
@@ -43008,7 +43006,7 @@ function verifyExecutionBinding(binding, expected = {}, options = {}) {
     "signature_verified",
     "one_use_consumed"
   ], "execution binding.authority_flags");
-  const expectedHash = sha256Ref2({ ...binding, binding_hash: null });
+  const expectedHash = sha256Ref({ ...binding, binding_hash: null });
   if (!safeEqual(binding.binding_hash, expectedHash)) throw new Error("Execution binding hash mismatch");
   const rebuilt = buildExecutionBinding({
     principal_ref: binding.principal_ref,
@@ -43045,7 +43043,7 @@ function verifyExecutionBinding(binding, expected = {}, options = {}) {
     authorization_ref: binding.authorization_ref,
     authorization_hash: binding.authorization_hash
   });
-  if (canonicalize2(rebuilt) !== canonicalize2(binding)) {
+  if (canonicalize(rebuilt) !== canonicalize(binding)) {
     throw new Error("Execution binding does not satisfy the canonical closed contract");
   }
   const now = Date.parse(requireIsoDate(options.now ?? /* @__PURE__ */ new Date(), "now"));
@@ -43108,7 +43106,7 @@ function networkPolicy(input = {}) {
   if (mode === "allowlist" && allowlist.length === 0) {
     throw new TypeError("An allowlist network policy requires at least one entry");
   }
-  const policyHash = sha256Ref2({ mode, allowlist });
+  const policyHash = sha256Ref({ mode, allowlist });
   if (hasEnvelope && !safeEqual(
     requireSha256Ref(input.policy_hash, "network policy.policy_hash"),
     policyHash
@@ -43216,7 +43214,7 @@ function normalizeDistributedGovernance(value, label = "distributed governance")
     evidence_ref: requireOpaqueRef(value.evidence_ref, `${label}.evidence_ref`),
     evidence_hash: requireSha256Ref(value.evidence_hash, `${label}.evidence_hash`)
   };
-  sha256Ref2(governance);
+  sha256Ref(governance);
   return deepFreeze(governance);
 }
 function normalizeParentSeed(input) {
@@ -43234,7 +43232,7 @@ function normalizeGovernanceUpdate(input) {
   return deepFreeze({
     parent_ref: requireOpaqueRef(input.parent_ref, "parent_ref"),
     governance: cloneJson(governance),
-    governance_hash: sha256Ref2(governance)
+    governance_hash: sha256Ref(governance)
   });
 }
 function normalizeCommitApprovalRegistration(input) {
@@ -43263,7 +43261,7 @@ function normalizeCommitApprovalRegistration(input) {
     evidence_ref: requireOpaqueRef(input.evidence_ref, "evidence_ref"),
     evidence_hash: requireSha256Ref(input.evidence_hash, "evidence_hash")
   };
-  normalized.approval_key = sha256Ref2({
+  normalized.approval_key = sha256Ref({
     schema: "agoragentic.risk-fork.distributed-approval-key.v1",
     ...normalized
   });
@@ -43407,7 +43405,7 @@ function normalizeDistributedPrepareRequest(input) {
   };
   return deepFreeze({
     ...requestBody,
-    request_hash: sha256Ref2(requestBody)
+    request_hash: sha256Ref(requestBody)
   });
 }
 function normalizeEffectStartRequest(input) {
@@ -43439,7 +43437,7 @@ function normalizeFinalizationRequest(input) {
     expected_version: input.expected_version,
     effect_token: requireOpaqueRef(input.effect_token, "effect_token"),
     result,
-    result_hash: sha256Ref2(result)
+    result_hash: sha256Ref(result)
   });
 }
 function normalizeAmbiguityRequest(input) {
@@ -43511,7 +43509,7 @@ function normalizeReconciliationInput(input) {
     outcome_evidence_ref: requireOpaqueRef(input.outcome_evidence_ref, "outcome_evidence_ref"),
     outcome_evidence_hash: requireSha256Ref(input.outcome_evidence_hash, "outcome_evidence_hash"),
     result,
-    result_hash: sha256Ref2(result)
+    result_hash: sha256Ref(result)
   });
 }
 function buildReconciliationVerificationRequest(operation, input, observedAt) {
@@ -43528,7 +43526,7 @@ function buildReconciliationVerificationRequest(operation, input, observedAt) {
     result_hash: input.result_hash,
     observed_at: requireIsoDate(observedAt, "reconciliation observed_at")
   };
-  return deepFreeze({ ...body, verification_request_hash: sha256Ref2(body) });
+  return deepFreeze({ ...body, verification_request_hash: sha256Ref(body) });
 }
 function verifyReconciliationVerification(value, request) {
   assertPlainObject(value, "distributed reconciliation verification");
@@ -43571,7 +43569,7 @@ function buildAuthorizationVerificationRequest(current, authorization, observedA
     governance_evidence_hash: authorization.governance_evidence_hash,
     observed_at: requireIsoDate(observedAt, "authorization observed_at")
   };
-  return deepFreeze({ ...body, verification_request_hash: sha256Ref2(body) });
+  return deepFreeze({ ...body, verification_request_hash: sha256Ref(body) });
 }
 function verifyAuthorizationVerification(value, request) {
   assertPlainObject(value, "distributed authorization verification");
@@ -43718,7 +43716,7 @@ function buildEvent({
     previous_event_hash: previousHash,
     event_hash: null
   };
-  event.event_hash = sha256Ref2({ ...event, event_hash: null });
+  event.event_hash = sha256Ref({ ...event, event_hash: null });
   return event;
 }
 function assertExpectedHead(lifecycle, input) {
@@ -43876,7 +43874,7 @@ function verifyLifecycle(lifecycle) {
       `lifecycle.events[${index}].fork_resource_state`
     );
     const evidence = normalizeEvidence(event.evidence);
-    if (canonicalize2(evidence) !== canonicalize2(event.evidence)) {
+    if (canonicalize(evidence) !== canonicalize(event.evidence)) {
       throw new Error(`Lifecycle evidence is not canonical at event ${index}`);
     }
     if (index === 0) {
@@ -43893,7 +43891,7 @@ function verifyLifecycle(lifecycle) {
     }
     assertResourceLifecycleCoupling(event.to, resourceState, event.fork_resource_state);
     assertDestructionSemantics(event.to, resourceState, event.fork_resource_state, evidence);
-    const expectedHash = sha256Ref2({ ...event, event_hash: null });
+    const expectedHash = sha256Ref({ ...event, event_hash: null });
     if (!safeEqual(event.event_hash, expectedHash)) {
       throw new Error(`Lifecycle event hash mismatch at event ${index}`);
     }
@@ -44212,7 +44210,7 @@ async function loadMigrationPlan(schemaName) {
     const template = (await readFile(migration.url, "utf8")).replace(/\r\n?/g, "\n");
     plan.push(Object.freeze({
       version: migration.version,
-      migration_hash: sha256Ref2(template),
+      migration_hash: sha256Ref(template),
       sql: template.replaceAll("__RISK_FORK_SCHEMA__", quotedSchema)
     }));
   }
@@ -45130,7 +45128,7 @@ async function appendAudit(client, state, event) {
   if (!Number.isSafeInteger(sequence)) throw new Error("Authority audit sequence overflow");
   const observedAt = event.observed_at ?? await databaseNow(client);
   const payload = cloneJson(event.payload ?? {});
-  const payloadHash = sha256Ref2(payload);
+  const payloadHash = sha256Ref(payload);
   const previousEventHash = meta.rows[0].audit_head_hash ?? null;
   const eventBody = {
     schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
@@ -45144,7 +45142,7 @@ async function appendAudit(client, state, event) {
     previous_event_hash: previousEventHash,
     payload_hash: payloadHash
   };
-  const eventHash = sha256Ref2(eventBody);
+  const eventHash = sha256Ref(eventBody);
   await client.query(
     `INSERT INTO ${table(state, "audit_events")} (
        authority_id, sequence, event_type, operation_ref, parent_ref,
@@ -45660,7 +45658,7 @@ async function prepareOperation(state, request, verifyUnderReservation) {
     const parent = parentResult.rows[0];
     const parentError = parentStateError(parent, request.expected_parent_head_hash);
     if (parentError) throw parentError;
-    if (!safeEqual(parent.governance_hash, request.governance_hash) || parent.current_governance == null || !safeEqual(sha256Ref2(parent.current_governance), request.governance_hash)) {
+    if (!safeEqual(parent.governance_hash, request.governance_hash) || parent.current_governance == null || !safeEqual(sha256Ref(parent.current_governance), request.governance_hash)) {
       throw distributedAuthorityError(
         "Distributed current governance differs from the exact clean request",
         "DISTRIBUTED_GOVERNANCE_STALE",
@@ -45896,7 +45894,7 @@ async function prepareOperation(state, request, verifyUnderReservation) {
         governance_hash: request.governance_hash,
         approval_key: approval.approval_key,
         authorization_binding_hash: request.authorization?.binding_hash ?? null,
-        gate_hash: sha256Ref2(gateResult)
+        gate_hash: sha256Ref(gateResult)
       }
     });
     return {
@@ -45950,8 +45948,8 @@ async function startEffect(state, input) {
       );
     }
     const effectToken = `effect-token:${randomBytes2(32).toString("hex")}`;
-    const effectTokenHash = sha256Ref2(effectToken);
-    const effectKey = `risk-fork-effect:${sha256Ref2({
+    const effectTokenHash = sha256Ref(effectToken);
+    const effectKey = `risk-fork-effect:${sha256Ref({
       authority_id: state.authorityId,
       operation_ref: operation.operation_ref,
       request_hash: operation.request_hash
@@ -46001,14 +45999,14 @@ async function startEffect(state, input) {
   });
 }
 function finalHashes(operation, result, completedAt) {
-  const resultHash = sha256Ref2(result);
-  const nextHeadHash = sha256Ref2({
+  const resultHash = sha256Ref(result);
+  const nextHeadHash = sha256Ref({
     previous_head_hash: operation.previous_head_hash,
     artifact_hash: operation.artifact_hash,
     result_hash: resultHash,
     governance_evidence_hash: operation.governance_evidence_hash
   });
-  const transactionHash = sha256Ref2({
+  const transactionHash = sha256Ref({
     schema: "agoragentic.risk-fork.distributed-transaction.v1",
     operation_ref: operation.operation_ref,
     request_hash: operation.request_hash,
@@ -46100,7 +46098,7 @@ async function finalizeEffect(state, input) {
     const graph = await lockOperationGraph(client, state, request.operation_ref);
     const operation = graph.operation;
     if (operation.status === "committed") {
-      if (safeEqual(operation.result_hash, request.result_hash) && safeEqual(operation.effect_token_hash, sha256Ref2(request.effect_token))) {
+      if (safeEqual(operation.result_hash, request.result_hash) && safeEqual(operation.effect_token_hash, sha256Ref(request.effect_token))) {
         return { operation: operationFromRow(operation, { idempotent: true }), audit: null };
       }
       throw distributedAuthorityError(
@@ -46109,7 +46107,7 @@ async function finalizeEffect(state, input) {
         { operation_ref: operation.operation_ref }
       );
     }
-    if (operation.status !== "effect_started" || asVersion(operation.version) !== request.expected_version || !safeEqual(operation.effect_token_hash, sha256Ref2(request.effect_token))) {
+    if (operation.status !== "effect_started" || asVersion(operation.version) !== request.expected_version || !safeEqual(operation.effect_token_hash, sha256Ref(request.effect_token))) {
       throw new DistributedAuthorityAmbiguousError(
         "Distributed effect cannot be finalized from the observed state",
         { operation_ref: operation.operation_ref, status: operation.status, version: asVersion(operation.version) }
@@ -46126,7 +46124,7 @@ async function markAmbiguous(state, input) {
     const operation = graph.operation;
     if (operation.status === "ambiguous") return operationFromRow(operation, { idempotent: true });
     if (operation.status === "committed") return operationFromRow(operation, { idempotent: true });
-    if (operation.status !== "effect_started" || asVersion(operation.version) !== request.expected_version || !safeEqual(operation.effect_token_hash, sha256Ref2(request.effect_token))) {
+    if (operation.status !== "effect_started" || asVersion(operation.version) !== request.expected_version || !safeEqual(operation.effect_token_hash, sha256Ref(request.effect_token))) {
       throw new DistributedAuthorityAmbiguousError(
         "Distributed effect state changed before ambiguity could be recorded",
         { operation_ref: operation.operation_ref, status: operation.status, version: asVersion(operation.version) }
@@ -46178,7 +46176,7 @@ async function markAmbiguous(state, input) {
       observed_at: now,
       payload: {
         failure_code: request.failure_code,
-        failure_message_hash: sha256Ref2(request.failure_message)
+        failure_message_hash: sha256Ref(request.failure_message)
       }
     });
     return operationFromRow(updated.rows[0]);
@@ -46310,7 +46308,7 @@ async function reconcile(state, input) {
     if (request.resolution === "effect_succeeded") {
       return finalizeLocked(client, state, graph, request.result, {
         resolution: request.resolution,
-        requested_by_hash: sha256Ref2(request.requested_by),
+        requested_by_hash: sha256Ref(request.requested_by),
         outcome_evidence_hash: request.outcome_evidence_hash,
         verification_request_hash: verificationRequest.verification_request_hash,
         ...verification
@@ -46365,7 +46363,7 @@ async function reconcile(state, input) {
         resolution_evidence_hash: verification.evidence_hash,
         outcome_evidence_hash: request.outcome_evidence_hash,
         reconciliation_request_hash: verificationRequest.verification_request_hash,
-        requested_by_hash: sha256Ref2(request.requested_by)
+        requested_by_hash: sha256Ref(request.requested_by)
       }
     });
     return { operation: operationFromRow(updated.rows[0]), audit };
@@ -46550,7 +46548,7 @@ async function getAuditTrail(state, input = {}) {
     const sequence = Number.parseInt(row.sequence, 10);
     const observedAt = asIso(row.observed_at, "audit observed_at");
     const payload = cloneJson(row.payload);
-    const payloadHash = sha256Ref2(payload);
+    const payloadHash = sha256Ref(payload);
     const body = {
       schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
       authority_id: state.authorityId,
@@ -46563,7 +46561,7 @@ async function getAuditTrail(state, input = {}) {
       previous_event_hash: row.previous_event_hash ?? null,
       payload_hash: payloadHash
     };
-    if (sequence !== expectedSequence || !safeEqual(row.payload_hash, payloadHash) || row.previous_event_hash !== previous || !safeEqual(row.event_hash, sha256Ref2(body))) {
+    if (sequence !== expectedSequence || !safeEqual(row.payload_hash, payloadHash) || row.previous_event_hash !== previous || !safeEqual(row.event_hash, sha256Ref(body))) {
       throw distributedAuthorityError(
         "Distributed authority audit chain verification failed",
         "DISTRIBUTED_AUDIT_CHAIN_INVALID",
@@ -46643,7 +46641,7 @@ async function runCommit(state, input, callbacks) {
     return finalized.operation;
   } catch {
     const observed = await getOperation(state, started.operation.operation_ref).catch(() => null);
-    if (observed?.status === "committed" && safeEqual(observed.result_hash, sha256Ref2(result ?? null))) {
+    if (observed?.status === "committed" && safeEqual(observed.result_hash, sha256Ref(result ?? null))) {
       return observed;
     }
     const failureCode = "DURABLE_FINALIZATION_FAILED";
@@ -47050,7 +47048,7 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
       clean_commit_required: true
     }
   };
-  artifact.artifact_hash = sha256Ref2({ ...artifact, artifact_hash: null });
+  artifact.artifact_hash = sha256Ref({ ...artifact, artifact_hash: null });
   return deepFreeze(artifact);
 }
 function validateTypedResult(candidate, context) {
@@ -47065,7 +47063,7 @@ function validateTypedResult(candidate, context) {
     throw new Error(`Typed result taint scan failed: ${payloadFindings[0].code}`);
   }
   assertClosedLocalSchema(candidate.payload_schema);
-  const schemaHash = sha256Ref2(candidate.payload_schema);
+  const schemaHash = sha256Ref(candidate.payload_schema);
   if (context.policy.typed_result_schema_hash && !safeEqual(schemaHash, context.policy.typed_result_schema_hash)) {
     throw new Error("Typed result schema does not match the authorized schema hash");
   }
@@ -47074,7 +47072,7 @@ function validateTypedResult(candidate, context) {
     const detail = validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
     throw new Error(`Typed result does not satisfy its schema: ${detail}`);
   }
-  const payloadBytes = Buffer.byteLength(canonicalize2(candidate.payload), "utf8");
+  const payloadBytes = Buffer.byteLength(canonicalize(candidate.payload), "utf8");
   if (payloadBytes > context.policy.max_typed_result_bytes) {
     throw new Error(`Typed result exceeds ${context.policy.max_typed_result_bytes} bytes`);
   }
@@ -47084,7 +47082,7 @@ function validateTypedResult(candidate, context) {
     validatedAt: context.validatedAt,
     body: {
       payload: cloneJson(candidate.payload),
-      payload_hash: sha256Ref2(candidate.payload),
+      payload_hash: sha256Ref(candidate.payload),
       payload_schema: cloneJson(candidate.payload_schema),
       payload_schema_hash: schemaHash,
       payload_bytes: payloadBytes
@@ -47190,7 +47188,7 @@ function validateWorkspaceDiff(candidate, context) {
     if (typeof file.after_content !== "string") {
       throw new TypeError(`after_content is required for ${operation}: ${relativePath}`);
     }
-    const afterHash = sha256Ref2(file.after_content);
+    const afterHash = sha256Ref(file.after_content);
     if (file.after_hash && !safeEqual(afterHash, file.after_hash)) {
       throw new Error(`Workspace diff after_hash mismatch: ${relativePath}`);
     }
@@ -47224,7 +47222,7 @@ function validateWorkspaceDiff(candidate, context) {
       files,
       file_count: files.length,
       total_after_bytes: totalBytes,
-      diff_hash: sha256Ref2(files),
+      diff_hash: sha256Ref(files),
       test_evidence: cloneJson(testEvidence)
     },
     validation: {
@@ -47254,7 +47252,7 @@ function validateProposal(candidate, context) {
   });
   const binding = context.executionBinding;
   const rawArguments = candidate.action.arguments ?? {};
-  sha256Ref2(rawArguments);
+  sha256Ref(rawArguments);
   const normalizedAction = {
     operation: requireEnum(candidate.action.operation, ACTION_OPERATIONS, "action.operation"),
     target_ref: candidate.action.target_ref == null ? null : requireOpaqueRef(candidate.action.target_ref, "action.target_ref"),
@@ -47278,11 +47276,11 @@ function validateProposal(candidate, context) {
   }
   const findings = scanText(normalizedAction, context.policy);
   if (findings.length > 0) throw new Error(`Action proposal taint scan failed: ${findings[0].code}`);
-  const argumentsHash = sha256Ref2(normalizedAction.arguments);
+  const argumentsHash = sha256Ref(normalizedAction.arguments);
   if (!safeEqual(argumentsHash, binding.mcp.effective_arguments_hash)) {
     throw new Error("Action proposal does not match the authorized effective arguments hash");
   }
-  const actionHash = sha256Ref2(normalizedAction);
+  const actionHash = sha256Ref(normalizedAction);
   return buildArtifact({
     commitType: "CONSEQUENTIAL_ACTION_PROPOSAL",
     sourceForkId: context.sourceForkId,
@@ -47363,7 +47361,7 @@ function candidateFromArtifact(artifact) {
   };
 }
 function assertSameCanonicalJson(actual, expected, message) {
-  if (canonicalize2(actual) !== canonicalize2(expected)) throw new Error(message);
+  if (canonicalize(actual) !== canonicalize(expected)) throw new Error(message);
 }
 function rebuildCommitArtifactStructure(artifact) {
   const reconstructed = candidateFromArtifact(artifact);
@@ -47397,7 +47395,7 @@ var REQUIRED_TEST_METHODS = Object.freeze([
 ]);
 var CLEAN_REQUIRED_TEST_PROOFS = /* @__PURE__ */ new WeakSet();
 function normalizedPolicyHash(policy) {
-  return sha256Ref2(policy);
+  return sha256Ref(policy);
 }
 function verifyRequiredTestProof(proof, artifact, policy, options = {}) {
   assertCanonicalJson(proof);
@@ -47460,7 +47458,7 @@ function verifyRequiredTestProof(proof, artifact, policy, options = {}) {
     requiredTests,
     "Required-test verification does not cover the exact current policy"
   );
-  const expectedHash = sha256Ref2({ ...proof, verification_hash: null });
+  const expectedHash = sha256Ref({ ...proof, verification_hash: null });
   if (!safeEqual(
     requireSha256Ref(proof.verification_hash, "required-test verification.verification_hash"),
     expectedHash
@@ -47476,7 +47474,7 @@ async function verifyWorkspaceRequiredTests(artifact, input = {}) {
   }
   assertAllowedKeys(input, ["policy", "verifyTestEvidence", "now"], "required-test verifier input");
   const policy = normalizePolicy(input.policy ?? {});
-  const policyHash = sha256Ref2(policy);
+  const policyHash = sha256Ref(policy);
   const now = requireIsoDate(input.now ?? /* @__PURE__ */ new Date(), "required-test verifier now");
   if (policy.required_tests.length > 0 && typeof input.verifyTestEvidence !== "function") {
     throw new Error("A trusted clean-side required-test evidence verifier is required");
@@ -47500,7 +47498,7 @@ async function verifyWorkspaceRequiredTests(artifact, input = {}) {
       },
       request_hash: null
     };
-    request.request_hash = sha256Ref2({ ...request, request_hash: null });
+    request.request_hash = sha256Ref({ ...request, request_hash: null });
     const attestation = await input.verifyTestEvidence(deepFreeze(cloneJson(request)));
     assertCanonicalJson(attestation);
     const field = `clean required-test attestation for ${testName}`;
@@ -47549,7 +47547,7 @@ async function verifyWorkspaceRequiredTests(artifact, input = {}) {
     tests,
     verification_hash: null
   };
-  proof.verification_hash = sha256Ref2({ ...proof, verification_hash: null });
+  proof.verification_hash = sha256Ref({ ...proof, verification_hash: null });
   verifyRequiredTestProof(proof, artifact, policy, { now });
   const trustedProof = deepFreeze(proof);
   CLEAN_REQUIRED_TEST_PROOFS.add(trustedProof);
@@ -47600,7 +47598,7 @@ function revalidateCommitArtifact(artifact, input = {}) {
     execution_binding: reconstructed.executionBinding,
     validated_at: artifact.validated_at
   });
-  if (canonicalize2(rebuilt) !== canonicalize2(artifact)) {
+  if (canonicalize(rebuilt) !== canonicalize(artifact)) {
     throw new Error("Commit artifact is not authorized by the current commit policy");
   }
   if (reconstructed.executionBinding) {
@@ -47647,10 +47645,10 @@ function verifyCommitArtifact(artifact) {
   }
   requireSha256Ref(artifact.artifact_hash, "commit artifact.artifact_hash");
   const rebuilt = rebuildCommitArtifactStructure(artifact);
-  if (canonicalize2(rebuilt) !== canonicalize2(artifact)) {
+  if (canonicalize(rebuilt) !== canonicalize(artifact)) {
     throw new Error("Commit artifact does not satisfy the canonical closed contract");
   }
-  const expected = sha256Ref2({ ...artifact, artifact_hash: null });
+  const expected = sha256Ref({ ...artifact, artifact_hash: null });
   if (!safeEqual(artifact.artifact_hash, expected)) throw new Error("Commit artifact hash mismatch");
   return true;
 }
@@ -47849,7 +47847,7 @@ function assertAuthorizationActive(current, authorizationId) {
   return current;
 }
 function parentTransactionPaths(directory, parentRef) {
-  const name = sha256Ref2(requireOpaqueRef(parentRef, "parent_ref")).slice(7);
+  const name = sha256Ref(requireOpaqueRef(parentRef, "parent_ref")).slice(7);
   return {
     state: path2.join(directory, `${name}.parent-head.json`),
     authority: path2.join(directory, `${name}.commit-authority.json`),
@@ -47857,7 +47855,7 @@ function parentTransactionPaths(directory, parentRef) {
   };
 }
 function deriveParentAuthorityRef({ agent_id: agentId, session_id: sessionId } = {}) {
-  return sha256Ref2({
+  return sha256Ref({
     schema: "agoragentic.risk-fork.parent-authority-identity.v1",
     agent_id: requireOpaqueRef(agentId, "parent agent_id"),
     session_id: requireOpaqueRef(sessionId, "parent session_id")
@@ -48017,9 +48015,9 @@ function buildInternalFinalCommitAuthorityProof({
   transactionRef,
   linearizedAt
 }) {
-  const governanceHash = sha256Ref2(governance);
+  const governanceHash = sha256Ref(governance);
   const evidenceRef = `file-parent-authority:${transactionRef}`;
-  const evidenceHash = sha256Ref2({
+  const evidenceHash = sha256Ref({
     schema: "agoragentic.risk-fork.file-parent-commit-authority-evidence.v1",
     request_hash: authorityRequest.request_hash,
     transaction_ref: transactionRef,
@@ -48029,7 +48027,7 @@ function buildInternalFinalCommitAuthorityProof({
     linearized_at: linearizedAt
   });
   const linearizationRef = `file-parent-linearization:${transactionRef}`;
-  const linearizationHash = sha256Ref2({
+  const linearizationHash = sha256Ref({
     request_hash: authorityRequest.request_hash,
     linearized_at: linearizedAt,
     linearization_ref: linearizationRef,
@@ -48137,7 +48135,7 @@ function createFileParentHeadInternals(directory, clock) {
       const current = normalizeParentAuthority(await readJsonOrNull(files.authority), parentRef, now);
       assertClockNotBeforePersisted(now, parent.updated_at, "Parent governance update", { parent_ref: parentRef });
       assertClockNotBeforePersisted(now, current.updated_at, "Parent governance update", { parent_ref: parentRef });
-      const governanceChanged = current.current_governance == null || !safeEqual(sha256Ref2(current.current_governance), sha256Ref2(governance));
+      const governanceChanged = current.current_governance == null || !safeEqual(sha256Ref(current.current_governance), sha256Ref(governance));
       const next = {
         ...current,
         current_governance: governance,
@@ -48182,7 +48180,7 @@ function createFileParentHeadInternals(directory, clock) {
         );
       }
       const governanceHash = requireSha256Ref(input.governance_hash, "governance_hash");
-      if (!safeEqual(governanceHash, sha256Ref2(current.current_governance))) {
+      if (!safeEqual(governanceHash, sha256Ref(current.current_governance))) {
         throw codedTransactionError(
           "Commit approval governance hash does not match current clean-host governance",
           "COMMIT_APPROVAL_GOVERNANCE_MISMATCH",
@@ -48322,7 +48320,7 @@ function createFileParentHeadInternals(directory, clock) {
         artifact_hash: artifactHash,
         capsule_hash: capsuleHash,
         commit_type: commitType,
-        governance_hash: sha256Ref2(authorityBefore.current_governance),
+        governance_hash: sha256Ref(authorityBefore.current_governance),
         governance_evidence_hash: authorityBefore.current_governance.evidence_hash,
         started_at: startedAt
       };
@@ -48343,7 +48341,7 @@ function createFileParentHeadInternals(directory, clock) {
         assertCanonicalJson(authorityRequest);
         if (!safeEqual(authorityRequest.artifact_hash, artifactHash) || !safeEqual(authorityRequest.capsule_hash, capsuleHash) || !safeEqual(authorityRequest.parent_state_hash, expectedHead) || !safeEqual(authorityRequest.commit_type, commitType) || !safeEqual(
           authorityRequest.candidate_governance_hash,
-          sha256Ref2(authorityBefore.current_governance)
+          sha256Ref(authorityBefore.current_governance)
         )) {
           throw codedTransactionError(
             "Final commit-authority request does not match the reserved parent authority",
@@ -48459,14 +48457,14 @@ function createFileParentHeadInternals(directory, clock) {
         );
       }
       const completedAt = proof.observed_at;
-      const resultHash = sha256Ref2(result ?? null);
-      const nextHead = sha256Ref2({
+      const resultHash = sha256Ref(result ?? null);
+      const nextHead = sha256Ref({
         previous_head_hash: expectedHead,
         artifact_hash: artifactHash,
         result_hash: resultHash,
         governance_evidence_hash: authorityBefore.current_governance.evidence_hash
       });
-      const transactionHash = sha256Ref2({
+      const transactionHash = sha256Ref({
         ...intent,
         authority_request_hash: proof.request_hash,
         final_authority_hash: proof.linearization_hash,
@@ -48610,7 +48608,7 @@ async function verifyExecutionAuthorizationIntegrity(verifyAuthorizationIntegrit
     },
     request_hash: null
   };
-  verifierRequest.request_hash = sha256Ref2({ ...verifierRequest, request_hash: null });
+  verifierRequest.request_hash = sha256Ref({ ...verifierRequest, request_hash: null });
   const verification = await verifyAuthorizationIntegrity(
     deepFreeze(cloneJson(verifierRequest))
   );
@@ -48681,7 +48679,7 @@ function verifyCurrentExecutionAuthorizationBinding(current, request, now) {
   }, { now });
 }
 function executionAuthorizationPaths(directory, authorizationId) {
-  const name = sha256Ref2(requireOpaqueRef(authorizationId, "authorization id")).slice(7);
+  const name = sha256Ref(requireOpaqueRef(authorizationId, "authorization id")).slice(7);
   return {
     state: path2.join(directory, `${name}.execution-authorization.json`),
     lock: path2.join(directory, `${name}.execution-authorization.lock`)
@@ -48904,7 +48902,7 @@ function createFileExecutionAuthorizationInternals(directory, clock, verifyAutho
           { authorization_id: authorizationId, binding_hash: current.binding_hash, cause: failure }
         );
       }
-      const resultHash = sha256Ref2(result ?? null);
+      const resultHash = sha256Ref(result ?? null);
       await atomicWriteJson(files.state, {
         ...current,
         status: "consumed",
@@ -49091,14 +49089,14 @@ async function verifyCleanApproval({ artifact, capsule, parentStateHash, governa
     capsule_hash: capsule.capsule_hash,
     parent_state_hash: parentStateHash,
     governance: cloneJson(governance),
-    governance_hash: sha256Ref2(governance),
+    governance_hash: sha256Ref(governance),
     governance_evidence_ref: governance.evidence_ref,
     governance_evidence_hash: governance.evidence_hash,
     requested_at: now
   };
   const request = {
     ...requestBody,
-    request_hash: sha256Ref2(requestBody)
+    request_hash: sha256Ref(requestBody)
   };
   const result = await verifyCommitApproval(cloneJson(request));
   assertCanonicalJson(result);
@@ -49164,16 +49162,16 @@ function createFinalCommitAuthorityRequest({
     parent_state_hash: parentStateHash,
     capsule_governance: cloneJson(capsule.governance),
     candidate_governance: cloneJson(candidateGovernance),
-    candidate_governance_hash: sha256Ref2(candidateGovernance),
+    candidate_governance_hash: sha256Ref(candidateGovernance),
     preflight_approval: cloneJson(preflightApproval),
-    required_test_verification_hash: requiredTestVerification == null ? null : sha256Ref2(requiredTestVerification),
+    required_test_verification_hash: requiredTestVerification == null ? null : sha256Ref(requiredTestVerification),
     authorization_binding: authorizationBinding,
-    authorization_binding_hash: authorizationBinding == null ? null : sha256Ref2(authorizationBinding),
+    authorization_binding_hash: authorizationBinding == null ? null : sha256Ref(authorizationBinding),
     requested_at: normalizedRequestedAt
   };
   return deepFreeze({
     ...requestBody,
-    request_hash: sha256Ref2(requestBody)
+    request_hash: sha256Ref(requestBody)
   });
 }
 function verifyAtomicFinalCommitAuthority({
@@ -49215,7 +49213,7 @@ function verifyAtomicFinalCommitAuthority({
   }
   const governance = normalizeCurrentGovernance(result.governance);
   assertGovernanceCurrent(capsule, governance);
-  const governanceHash = sha256Ref2(governance);
+  const governanceHash = sha256Ref(governance);
   if (!safeEqual(result.governance_hash, governanceHash) || !safeEqual(governanceHash, request.candidate_governance_hash)) {
     throw codedTransactionError(
       "Final commit authority governance hash does not match its full governance snapshot",
@@ -49288,7 +49286,7 @@ function verifyAtomicFinalCommitAuthority({
     result.evidence_hash,
     "final commit-authority evidence_hash"
   );
-  const expectedLinearizationHash = sha256Ref2({
+  const expectedLinearizationHash = sha256Ref({
     request_hash: request.request_hash,
     linearized_at: linearizedAt,
     linearization_ref: linearizationRef,
@@ -49389,7 +49387,7 @@ function normalizeAuthorizationConsumption(value, binding, expectedResult) {
     "observed_at"
   ], "execution authorization transaction result");
   const resultHash = requireSha256Ref(value.result_hash, "authorization result_hash");
-  if (value.status !== "consumed" || value.authorization_id !== binding.one_use_authorization_id || value.authorization_ref !== binding.authorization_ref || value.authorization_hash !== binding.authorization_hash || value.binding_hash !== binding.binding_hash || !safeEqual(resultHash, sha256Ref2(expectedResult ?? null)) || !safeEqual(resultHash, sha256Ref2(value.result ?? null))) {
+  if (value.status !== "consumed" || value.authorization_id !== binding.one_use_authorization_id || value.authorization_ref !== binding.authorization_ref || value.authorization_hash !== binding.authorization_hash || value.binding_hash !== binding.binding_hash || !safeEqual(resultHash, sha256Ref(expectedResult ?? null)) || !safeEqual(resultHash, sha256Ref(value.result ?? null))) {
     throw new Error("Execution authorization transaction did not consume the exact binding and result");
   }
   return {
@@ -49482,7 +49480,7 @@ function normalizeParentTransaction(value, expectedHead, expectedResult) {
     "transaction_hash"
   ], "parent head transaction result");
   const resultHash = requireSha256Ref(value.result_hash, "parent transaction result_hash");
-  if (value.status !== "committed" || !safeEqual(value.previous_head_hash, expectedHead) || !safeEqual(resultHash, sha256Ref2(expectedResult ?? null)) || !safeEqual(resultHash, sha256Ref2(value.result ?? null))) {
+  if (value.status !== "committed" || !safeEqual(value.previous_head_hash, expectedHead) || !safeEqual(resultHash, sha256Ref(expectedResult ?? null)) || !safeEqual(resultHash, sha256Ref(value.result ?? null))) {
     throw new Error("Parent transaction did not atomically commit against the expected authoritative head");
   }
   return {
@@ -49496,7 +49494,7 @@ function normalizeParentTransaction(value, expectedHead, expectedResult) {
 }
 function normalizeDistributedParentTransaction(value, expectedHead) {
   assertPlainObject(value, "distributed parent transaction result");
-  if (value.schema !== "agoragentic.risk-fork.distributed-operation.v1" || value.status !== "committed" || !safeEqual(value.previous_head_hash, expectedHead) || !safeEqual(value.result_hash, sha256Ref2(value.result ?? null))) {
+  if (value.schema !== "agoragentic.risk-fork.distributed-operation.v1" || value.status !== "committed" || !safeEqual(value.previous_head_hash, expectedHead) || !safeEqual(value.result_hash, sha256Ref(value.result ?? null))) {
     throw new Error("Distributed authority did not return the exact committed parent transaction");
   }
   return {
@@ -49527,12 +49525,12 @@ function normalizeDistributedParentTransaction(value, expectedHead) {
   };
 }
 function createDistributedFinalAuthorityProof({ operation, authorityRequest, governance, approval }) {
-  if (!safeEqual(operation.authority_request_hash, authorityRequest.request_hash) || !safeEqual(operation.governance_hash, sha256Ref2(governance)) || operation.approval_evidence_ref !== approval.evidence_ref || !safeEqual(operation.approval_evidence_hash, approval.evidence_hash)) {
+  if (!safeEqual(operation.authority_request_hash, authorityRequest.request_hash) || !safeEqual(operation.governance_hash, sha256Ref(governance)) || operation.approval_evidence_ref !== approval.evidence_ref || !safeEqual(operation.approval_evidence_hash, approval.evidence_hash)) {
     throw new Error("Distributed operation receipt does not bind the final clean authority request");
   }
   const evidenceRef = operation.transaction_ref;
   const evidenceHash = operation.transaction_hash;
-  const linearizationHash = sha256Ref2({
+  const linearizationHash = sha256Ref({
     request_hash: authorityRequest.request_hash,
     linearized_at: operation.prepared_at,
     linearization_ref: operation.transaction_ref,
@@ -49801,7 +49799,7 @@ async function commitPreparedArtifact(input = {}, options = {}) {
       capsule_hash: capsule.capsule_hash,
       capsule_expires_at: capsule.expires_at,
       commit_type: artifact.commit_type,
-      governance_hash: sha256Ref2(governance),
+      governance_hash: sha256Ref(governance),
       approval_evidence_ref: approval.evidence_ref,
       approval_evidence_hash: approval.evidence_hash,
       authority_request_hash: authorityRequest.request_hash,
@@ -49838,7 +49836,7 @@ async function commitPreparedArtifact(input = {}, options = {}) {
           ], "distributed final gate request");
           const gateNow = requireIsoDate(gate.observed_at, "distributed final gate observed_at");
           const gateGovernance = normalizeCurrentGovernance(gate.governance);
-          const exactGate = gate.schema === "agoragentic.risk-fork.distributed-final-gate-request.v1" && safeEqual(gate.authority_request_hash, authorityRequest.request_hash) && gate.parent_ref === parentRef && safeEqual(gate.expected_parent_head_hash, expectedParentStateHash) && safeEqual(gate.artifact_hash, artifact.artifact_hash) && safeEqual(gate.capsule_hash, capsule.capsule_hash) && safeEqual(gate.governance_hash, sha256Ref2(gateGovernance)) && safeEqual(gate.governance_hash, sha256Ref2(governance)) && gate.approval_evidence_ref === approval.evidence_ref && safeEqual(gate.approval_evidence_hash, approval.evidence_hash) && (binding == null ? gate.authorization_binding_hash === null : safeEqual(gate.authorization_binding_hash, binding.binding_hash));
+          const exactGate = gate.schema === "agoragentic.risk-fork.distributed-final-gate-request.v1" && safeEqual(gate.authority_request_hash, authorityRequest.request_hash) && gate.parent_ref === parentRef && safeEqual(gate.expected_parent_head_hash, expectedParentStateHash) && safeEqual(gate.artifact_hash, artifact.artifact_hash) && safeEqual(gate.capsule_hash, capsule.capsule_hash) && safeEqual(gate.governance_hash, sha256Ref(gateGovernance)) && safeEqual(gate.governance_hash, sha256Ref(governance)) && gate.approval_evidence_ref === approval.evidence_ref && safeEqual(gate.approval_evidence_hash, approval.evidence_hash) && (binding == null ? gate.authorization_binding_hash === null : safeEqual(gate.authorization_binding_hash, binding.binding_hash));
           if (!exactGate) {
             throw codedTransactionError(
               "Distributed final gate differs from the exact clean commit request",
@@ -50451,7 +50449,7 @@ function normalizeTrustedServerVerification(value, request) {
     "evidence_ref",
     "evidence_hash"
   ], "trusted MCP server verification");
-  if (value.schema !== "agoragentic.risk-fork.trusted-mcp-server-verification.v1" || value.status !== "verified" || !safeEqual(value.request_hash, sha256Ref2(request))) {
+  if (value.schema !== "agoragentic.risk-fork.trusted-mcp-server-verification.v1" || value.status !== "verified" || !safeEqual(value.request_hash, sha256Ref(request))) {
     throw new Error("Trusted MCP server verifier did not bind the exact verification request");
   }
   return {
@@ -50473,7 +50471,7 @@ function assessTrustedServer(normalized, { trustedServerVerifier = null } = {}) 
   }
   const attestationStatement = { ...attestation };
   delete attestationStatement.attestation_hash;
-  if (!safeEqual(attestation.attestation_hash, sha256Ref2(attestationStatement))) {
+  if (!safeEqual(attestation.attestation_hash, sha256Ref(attestationStatement))) {
     return {
       trusted: false,
       code: "mcp_server_attestation_integrity_failed",
@@ -50546,7 +50544,7 @@ function assessTrustedServer(normalized, { trustedServerVerifier = null } = {}) 
     server_ref: attestation.server_ref,
     server_origin: attestation.server_origin,
     attestation_hash: attestation.attestation_hash,
-    owner_policy_hash: sha256Ref2(normalized.owner_policy),
+    owner_policy_hash: sha256Ref(normalized.owner_policy),
     trust_registry_version: attestation.trust_registry_version,
     evaluated_at: normalized.evaluated_at
   });
@@ -50768,7 +50766,7 @@ function classifyRiskInternal(input = {}, options = {}) {
   reasons.sort((left, right) => LEVEL_RANK[right.level] - LEVEL_RANK[left.level] || right.weight - left.weight || left.code.localeCompare(right.code));
   const blocked = level === "IRREVERSIBLE" && normalized.owner_policy.deny_irreversible;
   const score = Math.min(100, reasons.reduce((total, item) => total + item.weight, 0));
-  const inputHash = sha256Ref2(normalized);
+  const inputHash = sha256Ref(normalized);
   const decision = {
     schema: "agoragentic.risk-fork.risk-decision.v1",
     level,
@@ -50786,7 +50784,7 @@ function classifyRiskInternal(input = {}, options = {}) {
       trusted_server_verification: trustedServer.verification ?? null
     }
   };
-  decision.decision_hash = sha256Ref2({ ...decision, decision_hash: null });
+  decision.decision_hash = sha256Ref({ ...decision, decision_hash: null });
   return deepFreeze(decision);
 }
 function classifyRisk(input = {}, options = {}) {
@@ -50799,7 +50797,7 @@ function classifyRisk(input = {}, options = {}) {
 }
 function riskDecisionCanonicalBytes(decision) {
   assertPlainObject(decision, "decision");
-  return canonicalize2({ ...decision, decision_hash: null });
+  return canonicalize({ ...decision, decision_hash: null });
 }
 function verifyRiskDecision(decision, options = {}) {
   assertAllowedKeys(options, ["trusted_server_verifier"], "risk decision verifier options");
@@ -50847,7 +50845,7 @@ function verifyRiskDecision(decision, options = {}) {
     evaluatedAt: normalized.evaluated_at,
     evaluationMode: INTERNAL_EVALUATION_MODES.VERIFIED_DECISION_REPLAY
   });
-  if (canonicalize2(rebuilt) !== canonicalize2(decision)) {
+  if (canonicalize(rebuilt) !== canonicalize(decision)) {
     throw new Error("Risk decision does not satisfy the deterministic closed contract");
   }
   return true;
@@ -50860,7 +50858,7 @@ function elapsedMs(started) {
   return Math.max(0, Math.round(performance.now() - started));
 }
 function lifecycleEvidence(code, status = "observed", source = {}) {
-  const hash = sha256Ref2({ code, status, source });
+  const hash = sha256Ref({ code, status, source });
   return {
     status,
     ref: `controller-evidence:${hash.slice(7, 31)}`,
@@ -51065,7 +51063,7 @@ var RiskForkController = class {
   }
   async #assertProviderAllowed(decision) {
     const capabilities = this.provider.capabilities;
-    const capabilitiesHash = sha256Ref2(capabilities);
+    const capabilitiesHash = sha256Ref(capabilities);
     if (!capabilities.supports_verified_destruction) {
       throw new Error("Risk Fork commit requires provider-supported destruction verification");
     }
@@ -51194,7 +51192,7 @@ var RiskForkController = class {
     const now = requireIsoDate(this.clock(), "clock result");
     verifySavepointCapsule(input.capsule, { now });
     assertCapsuleMatchesDecision(input.capsule, decision);
-    const effectiveArgumentsHash = sha256Ref2(input.effective_arguments);
+    const effectiveArgumentsHash = sha256Ref(input.effective_arguments);
     if (!safeEqual(
       effectiveArgumentsHash,
       input.capsule.proposed_interaction.effective_arguments_hash
@@ -51405,7 +51403,7 @@ var RiskForkController = class {
           cleanup
         });
       }
-      const combinedCleanupHash = sha256Ref2({
+      const combinedCleanupHash = sha256Ref({
         fork_evidence_hash: requireSha256Ref(forkClaim.evidence_hash, "fork destruction evidence_hash"),
         savepoint_evidence_hash: requireSha256Ref(
           savepointClaim.evidence_hash,
@@ -51471,7 +51469,7 @@ var RiskForkController = class {
       }
       if (lifecycle.state === "PRECOMMIT_DESTROYING") {
         if (forkAbsenceVerified && savepointAbsenceVerified) {
-          const cleanupHash = sha256Ref2({
+          const cleanupHash = sha256Ref({
             fork: forkCreationAttempted ? forkClaim.evidence_hash : "not_created",
             savepoint: savepointCreationAttempted ? savepointClaim.evidence_hash : "not_created"
           });
@@ -51503,7 +51501,7 @@ var RiskForkController = class {
       }
       if (lifecycle.state === "DESTROYING") {
         if (forkAbsenceVerified && savepointAbsenceVerified) {
-          const cleanupHash = sha256Ref2({
+          const cleanupHash = sha256Ref({
             fork: forkCreationAttempted ? forkClaim.evidence_hash : "not_created",
             savepoint: savepointCreationAttempted ? savepointClaim.evidence_hash : "not_created"
           });
@@ -51648,13 +51646,13 @@ function createMcpInterceptionPlan(input = {}, options = {}) {
     },
     plan_hash: null
   };
-  plan.plan_hash = sha256Ref2({ ...plan, plan_hash: null });
+  plan.plan_hash = sha256Ref({ ...plan, plan_hash: null });
   return deepFreeze(plan);
 }
 function assertHostCanEnforce(plan, hostCapabilities = {}) {
   assertPlainObject(plan, "interception plan");
   requireSha256Ref(plan.plan_hash, "interception plan.plan_hash");
-  const expectedHash = sha256Ref2({ ...plan, plan_hash: null });
+  const expectedHash = sha256Ref({ ...plan, plan_hash: null });
   if (expectedHash !== plan.plan_hash) throw new Error("Interception plan hash mismatch");
   assertPlainObject(hostCapabilities, "hostCapabilities");
   for (const capability of plan.required_host_capabilities) {
@@ -52239,7 +52237,7 @@ function normalizeEvidence2(value, { includeComputedFields }) {
 }
 function assertExpectedBindings(evidence, expected) {
   const bindings = [
-    ["template_id_hash", expected.templateId == null ? null : sha256Ref2(expected.templateId)],
+    ["template_id_hash", expected.templateId == null ? null : sha256Ref(expected.templateId)],
     ["template_evidence_hash", expected.templateHash],
     ["bootstrap_artifact_hash", expected.bootstrapArtifactHash],
     ["runner_artifact_hash", expected.runnerArtifactHash]
@@ -52326,7 +52324,7 @@ function externalObservationBindings(evidence) {
     ["bootstrap_artifact_hash", evidence.runtime.bootstrap_artifact_hash],
     ["runner_artifact_hash", evidence.runtime.runner_artifact_hash],
     ["boot_guard_artifact_hash", evidence.runtime.boot_guard_artifact_hash],
-    ["limits_hash", sha256Ref2(evidence.limits)],
+    ["limits_hash", sha256Ref(evidence.limits)],
     ...Object.entries(E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS).map(([field, ref]) => [
       field,
       requireEvidenceRefHash(evidence, ref, `E2B external observation ${field}`)
@@ -52414,7 +52412,7 @@ function normalizeExternalObservationAudience(value) {
   };
 }
 function assertExternalObservationAudience(actual, expected) {
-  if (canonicalize2(actual) !== canonicalize2(expected)) {
+  if (canonicalize(actual) !== canonicalize(expected)) {
     throw new Error("E2B external qualification observation audience mismatch");
   }
 }
@@ -52690,7 +52688,7 @@ function externalObservationPayload(evidence, input, observer, policy) {
     cost: normalizeExternalCost({ currency: "USD", ...input.cost }),
     observation_hash: null
   };
-  payload.observation_hash = sha256Ref2(payload);
+  payload.observation_hash = sha256Ref(payload);
   return deepFreeze(payload);
 }
 function normalizeExternalObservationReceipt(value) {
@@ -52739,7 +52737,7 @@ function normalizeExternalObservationReceipt(value) {
     value.birth_controls,
     payload.observer_boundary
   );
-  const expectedObservationHash = sha256Ref2({ ...payload, observation_hash: null });
+  const expectedObservationHash = sha256Ref({ ...payload, observation_hash: null });
   if (!safeEqual(payload.observation_hash, expectedObservationHash)) {
     throw new Error("E2B external qualification observation hash mismatch");
   }
@@ -53039,7 +53037,7 @@ async function inspectRuntimePackageTree(root, anchor, state) {
     filePaths,
     record: {
       ...recordCore,
-      package_hash: sha256Ref2(recordCore)
+      package_hash: sha256Ref(recordCore)
     }
   };
 }
@@ -53166,7 +53164,7 @@ async function inspectRuntimeSdkPackage(packageDirectory) {
   const binding = deepFreeze({
     package: "e2b",
     version: "2.39.0",
-    integrity_hash: sha256Ref2(closure)
+    integrity_hash: sha256Ref(closure)
   });
   return {
     binding,
@@ -53329,7 +53327,7 @@ function createE2BExternalQualificationObservationVerifier(options = {}) {
         }
       }, observer, policy);
       const { signature: signatureValue, ...actualPayload } = normalizedObservation;
-      if (canonicalize2(actualPayload) !== canonicalize2(payload)) {
+      if (canonicalize(actualPayload) !== canonicalize(payload)) {
         throw new Error("E2B external qualification observation binding mismatch");
       }
       const signature = requireEd25519Signature(
@@ -53338,7 +53336,7 @@ function createE2BExternalQualificationObservationVerifier(options = {}) {
       );
       if (!verifySignature(
         null,
-        Buffer.from(canonicalize2(payload), "utf8"),
+        Buffer.from(canonicalize(payload), "utf8"),
         publicKey,
         signature
       )) {
@@ -53413,7 +53411,7 @@ function createE2BQualificationTrustVerifier(options = {}) {
       const signature = requireEd25519Signature(trust.signature);
       if (!verifySignature(
         null,
-        Buffer.from(canonicalize2(payload), "utf8"),
+        Buffer.from(canonicalize(payload), "utf8"),
         publicKey,
         signature
       )) {
@@ -53444,7 +53442,7 @@ function applyE2BExternalQualificationObservation(value, observation, verifier) 
 }
 function computedEvidence(input) {
   const evidence = normalizeEvidence2(input, { includeComputedFields: false });
-  evidence.evidence_hash = sha256Ref2({ ...evidence, evidence_hash: null });
+  evidence.evidence_hash = sha256Ref({ ...evidence, evidence_hash: null });
   return deepFreeze(evidence);
 }
 function externalResultRefSet() {
@@ -53524,7 +53522,7 @@ function finalizeE2BQualificationEvidence(evidence, verified) {
   const resultRefs = [
     {
       ref: EXTERNAL_QUALIFICATION_RESULT_REFS.observation_hash,
-      hash: sha256Ref2(verified)
+      hash: sha256Ref(verified)
     },
     {
       ref: EXTERNAL_QUALIFICATION_RESULT_REFS.observer_key_hash,
@@ -53604,7 +53602,7 @@ function assertFinalizedEvidenceMatchesReceipt(evidence, externalObservationVeri
     evidence.external_observation_receipt
   );
   const expectedFinalized = finalizeE2BQualificationEvidence(provisional, verified);
-  if (canonicalize2(expectedFinalized) !== canonicalize2(evidence)) {
+  if (canonicalize(expectedFinalized) !== canonicalize(evidence)) {
     throw new Error("E2B qualification evidence does not exactly match its observer receipt");
   }
 }
@@ -53619,11 +53617,11 @@ function createE2BQualificationEvidence(input = {}) {
 }
 function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
   const normalized = normalizeEvidence2(value, { includeComputedFields: true });
-  const expectedHash = sha256Ref2({ ...normalized, evidence_hash: null });
+  const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (!safeEqual(normalized.evidence_hash, expectedHash)) {
     throw new Error("E2B qualification evidence hash mismatch");
   }
-  if (canonicalize2(normalized) !== canonicalize2(value)) {
+  if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B qualification evidence is not canonical and closed");
   }
   assertExpectedBindings(normalized, expected);
@@ -53665,7 +53663,7 @@ var E2B_BOOT_EVIDENCE_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/boot-evidence.json`
 var E2B_BOOT_READY_PATH = `${E2B_BIRTH_RUNTIME_DIRECTORY}/birth-ready`;
 var E2B_BIRTH_REQUEST_MAX_BYTES = 64 * 1024;
 var E2B_BIRTH_MAX_VALIDITY_MS = 3e4;
-var EMPTY_RUNTIME_WORKSPACE_DIGEST = sha256Ref2([]);
+var EMPTY_RUNTIME_WORKSPACE_DIGEST = sha256Ref([]);
 var BOOT_EVIDENCE_CLAIMS = Object.freeze([
   "inherited_parent_processes_absent",
   "unauthorized_environment_absent",
@@ -53907,9 +53905,9 @@ function normalizeBootEvidence(value, includeComputed) {
 }
 function validateBootObservationEnvelope(value, options = {}) {
   const normalized = normalizeBootEvidence(value, true);
-  const expectedHash = sha256Ref2({ ...normalized, evidence_hash: null });
+  const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (normalized.evidence_hash !== expectedHash) throw new Error("E2B boot evidence hash mismatch");
-  if (canonicalize2(normalized) !== canonicalize2(value)) {
+  if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B boot evidence is not canonical and closed");
   }
   const now = options.now instanceof Date ? options.now.getTime() : Date.parse(options.now ?? /* @__PURE__ */ new Date());
@@ -53983,7 +53981,7 @@ function createE2BBirthRequest(input = {}) {
     ...input,
     authority_flags: input.authority_flags ?? birthAuthorityFlags()
   }, false);
-  normalized.request_hash = sha256Ref2({ ...normalized, request_hash: null });
+  normalized.request_hash = sha256Ref({ ...normalized, request_hash: null });
   return Object.freeze({
     ...normalized,
     authority_flags: Object.freeze(normalized.authority_flags)
@@ -53991,9 +53989,9 @@ function createE2BBirthRequest(input = {}) {
 }
 function validateE2BBirthRequest(value, options = {}) {
   const normalized = normalizeBirthRequest(value, true);
-  const expectedHash = sha256Ref2({ ...normalized, request_hash: null });
+  const expectedHash = sha256Ref({ ...normalized, request_hash: null });
   if (normalized.request_hash !== expectedHash) throw new Error("E2B birth request hash mismatch");
-  if (canonicalize2(normalized) !== canonicalize2(value)) {
+  if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B birth request is not canonical and closed");
   }
   for (const [field, wanted] of [
@@ -54104,11 +54102,11 @@ function normalizeBirthAttestation(value, includeComputed) {
 }
 function validateE2BBirthAttestation(value, options = {}) {
   const normalized = normalizeBirthAttestation(value, true);
-  const expectedHash = sha256Ref2({ ...normalized, attestation_hash: null });
+  const expectedHash = sha256Ref({ ...normalized, attestation_hash: null });
   if (normalized.attestation_hash !== expectedHash) {
     throw new Error("E2B birth attestation hash mismatch");
   }
-  if (canonicalize2(normalized) !== canonicalize2(value)) {
+  if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B birth attestation is not canonical and closed");
   }
   const request = validateE2BBirthRequest(options.request, {
@@ -54135,7 +54133,7 @@ function validateE2BBirthAttestation(value, options = {}) {
     template_evidence_hash: request.template_evidence_hash,
     template_provenance_hash: request.template_provenance_hash,
     allocation_started_at: request.allocation_started_at,
-    birth_nonce_hash: sha256Ref2(request.birth_nonce)
+    birth_nonce_hash: sha256Ref(request.birth_nonce)
   })) {
     if (normalized[field] !== wanted) {
       throw new Error(`E2B birth attestation binding mismatch: ${field}`);
@@ -54263,7 +54261,7 @@ function normalizeRecord(value) {
   if (normalized.sandbox_state === "allocated" && normalized.sandbox_id === null) {
     throw new Error("cleanup journal allocated sandbox requires an id");
   }
-  const expectedHash = sha256Ref2({ ...normalized, record_hash: null });
+  const expectedHash = sha256Ref({ ...normalized, record_hash: null });
   if (!safeEqual(expectedHash, normalized.record_hash)) {
     throw new Error("cleanup journal record hash mismatch");
   }
@@ -54271,7 +54269,7 @@ function normalizeRecord(value) {
 }
 function withHash(value) {
   const normalized = cloneJson({ ...value, record_hash: null });
-  normalized.record_hash = sha256Ref2(normalized);
+  normalized.record_hash = sha256Ref(normalized);
   return normalizeRecord(normalized);
 }
 async function syncDirectory(directory) {
@@ -54301,7 +54299,7 @@ var E2BCleanupJournal = class {
     return this;
   }
   #path(recordId) {
-    const digest = sha256Ref2(requireOpaqueRef(recordId, "cleanup journal record id")).slice(7);
+    const digest = sha256Ref(requireOpaqueRef(recordId, "cleanup journal record id")).slice(7);
     return path4.join(this.directory, `${digest}.json`);
   }
   async #read(recordId) {
@@ -54757,7 +54755,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
       records.push({
         path: relative,
         bytes: content.byteLength,
-        content_hash: sha256Ref2(content.toString("base64")),
+        content_hash: sha256Ref(content.toString("base64")),
         ...includeContent ? { content } : {}
       });
     }
@@ -54778,7 +54776,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) 
     public_records: publicRecords,
     file_count: publicRecords.length,
     total_bytes: totalBytes,
-    workspace_digest: sha256Ref2(publicRecords)
+    workspace_digest: sha256Ref(publicRecords)
   };
 }
 async function writeExclusive(target, content, mode = 256) {
@@ -55077,7 +55075,7 @@ function buildManifest(exportId, snapshot) {
     files: cloneJson(snapshot.public_records),
     manifest_hash: null
   };
-  manifest.manifest_hash = sha256Ref2({ ...manifest, manifest_hash: null });
+  manifest.manifest_hash = sha256Ref({ ...manifest, manifest_hash: null });
   return manifest;
 }
 function validateManifest(manifest, expected = {}) {
@@ -55096,7 +55094,7 @@ function validateManifest(manifest, expected = {}) {
   if (!Array.isArray(manifest.files) || manifest.files.length !== manifest.file_count) {
     throw new TypeError("workspace export manifest file list is invalid");
   }
-  const expectedHash = sha256Ref2({ ...cloneJson(manifest), manifest_hash: null });
+  const expectedHash = sha256Ref({ ...cloneJson(manifest), manifest_hash: null });
   if (!safeEqual(expectedHash, manifestHash)) throw new Error("workspace export manifest hash mismatch");
   if (expected.exportId && exportId !== expected.exportId) {
     throw new Error("workspace export id mismatch");
@@ -55162,11 +55160,11 @@ async function createImmutableWorkspaceExport(input = {}) {
       maxBytes,
       includeContent: false
     });
-    if (!safeEqual(copied.workspace_digest, source.workspace_digest) || canonicalize2(copied.public_records) !== canonicalize2(source.public_records)) {
+    if (!safeEqual(copied.workspace_digest, source.workspace_digest) || canonicalize(copied.public_records) !== canonicalize(source.public_records)) {
       throw new Error("Immutable workspace export changed while it was copied");
     }
     const manifest = buildManifest(exportId, copied);
-    const manifestBytes = Buffer.from(`${canonicalize2(manifest)}
+    const manifestBytes = Buffer.from(`${canonicalize(manifest)}
 `, "utf8");
     if (manifestBytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error("Workspace export manifest exceeds its bounded cleanup allowance");
@@ -55214,7 +55212,7 @@ async function readImmutableWorkspaceExport(input = {}) {
     maxBytes: Math.max(1, manifest.total_bytes),
     includeContent: true
   });
-  if (!safeEqual(current.workspace_digest, manifest.workspace_digest) || canonicalize2(current.public_records) !== canonicalize2(manifest.files)) {
+  if (!safeEqual(current.workspace_digest, manifest.workspace_digest) || canonicalize(current.public_records) !== canonicalize(manifest.files)) {
     throw new Error("Immutable workspace export no longer matches its manifest");
   }
   return deepFreeze({
@@ -55277,7 +55275,7 @@ var MAX_JSON_DEPTH = 50;
 var MAX_LIST_PAGES = 100;
 var EXECUTION_CLEANUP_MARGIN_MS = 5e3;
 var PROFILE_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-clean-template.v1";
-var EMPTY_WORKSPACE_DIGEST = sha256Ref2([]);
+var EMPTY_WORKSPACE_DIGEST = sha256Ref([]);
 var E2B_SDK_ALL_TRAFFIC_SENTINEL = "0.0.0.0/0";
 var E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE = "E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE";
 var E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER = "E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER";
@@ -55674,15 +55672,15 @@ function validateE2BSandboxInfo(info, expected = {}) {
     }
   }
   const observation = {
-    sandbox_id_hash: sha256Ref2(sandboxId),
-    template_id_hash: sha256Ref2(templateId),
-    metadata_hash: sha256Ref2(expected.metadata),
+    sandbox_id_hash: sha256Ref(sandboxId),
+    template_id_hash: sha256Ref(templateId),
+    metadata_hash: sha256Ref(expected.metadata),
     network_status: "exact_sdk_ipv4_sentinel_observed_ipv6_unqualified",
     volume_mount_status: "provider_reported_zero_observed",
     lifecycle_status: "provider_reported_kill_no_auto_resume_observed",
     deadline: new Date(parsedEndAt).toISOString()
   };
-  return deepFreeze({ ...observation, observation_hash: sha256Ref2(observation) });
+  return deepFreeze({ ...observation, observation_hash: sha256Ref(observation) });
 }
 function birthHandshakeError(code, message) {
   const error = new Error(message);
@@ -55717,7 +55715,7 @@ function parseCanonicalRuntimeEnvelope(bytes, field, maxBytes) {
   } catch {
     throw birthHandshakeError("E2B_BIRTH_ARTIFACT_INVALID", `${field} is not valid JSON`);
   }
-  if (text !== `${canonicalize2(parsed)}
+  if (text !== `${canonicalize(parsed)}
 `) {
     throw birthHandshakeError(
       "E2B_BIRTH_ARTIFACT_INVALID",
@@ -55801,9 +55799,9 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     );
   }
   const request = createE2BBirthRequest({
-    sandbox_id_hash: sha256Ref2(sandboxId),
-    provider_metadata_hash: sha256Ref2(options.metadata),
-    template_id_hash: sha256Ref2(templateId),
+    sandbox_id_hash: sha256Ref(sandboxId),
+    provider_metadata_hash: sha256Ref(options.metadata),
+    template_id_hash: sha256Ref(templateId),
     template_evidence_hash: templateEvidenceHash,
     template_provenance_hash: templateProvenanceHash,
     allocation_started_at: allocationStartedAt.toISOString(),
@@ -55831,7 +55829,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     }
     await assertRemoteBirthArtifactAbsent(files, target, remaining2);
   }
-  await files.write(paths.request, `${canonicalize2(request)}
+  await files.write(paths.request, `${canonicalize(request)}
 `);
   await files.write(paths.trigger, `${request.request_hash}
 `);
@@ -55893,9 +55891,9 @@ async function performE2BSandboxBirthHandshake(options = {}) {
   );
   const verifiedAt = new Date(clock());
   const verifiedRequest = validateE2BBirthRequest(request, {
-    sandboxIdHash: sha256Ref2(sandboxId),
-    providerMetadataHash: sha256Ref2(options.metadata),
-    templateIdHash: sha256Ref2(templateId),
+    sandboxIdHash: sha256Ref(sandboxId),
+    providerMetadataHash: sha256Ref(options.metadata),
+    templateIdHash: sha256Ref(templateId),
     templateEvidenceHash,
     templateProvenanceHash,
     allocationStartedAt: allocationStartedAt.toISOString(),
@@ -55976,7 +55974,7 @@ function validateSourceAttestation(result, request, expected = {}) {
     }
   }
   const normalized = cloneJson(result);
-  return deepFreeze({ ...normalized, attestation_hash: sha256Ref2(normalized) });
+  return deepFreeze({ ...normalized, attestation_hash: sha256Ref(normalized) });
 }
 var BOOTSTRAP_CLAIMS = Object.freeze([
   "inherited_parent_processes_absent",
@@ -56030,13 +56028,13 @@ function parseBootstrapAttestation(commandResult, expected, now) {
   }
   for (const [field, wanted] of Object.entries({
     bootstrap_request_hash: expected.bootstrapRequestHash,
-    child_sandbox_id_hash: sha256Ref2(expected.sandboxId),
-    template_id_hash: sha256Ref2(expected.templateId),
+    child_sandbox_id_hash: sha256Ref(expected.sandboxId),
+    template_id_hash: sha256Ref(expected.templateId),
     template_evidence_hash: expected.templateHash,
     capsule_hash: expected.capsuleHash,
     identity_hash: expected.identityHash,
     network_policy_hash: expected.networkPolicyHash,
-    metadata_hash: sha256Ref2(expected.metadata),
+    metadata_hash: sha256Ref(expected.metadata),
     workspace_digest: expected.workspaceDigest,
     trusted_bootstrap_artifact_hash: expected.bootstrapArtifactHash,
     trusted_runner_artifact_hash: expected.runnerArtifactHash
@@ -56067,7 +56065,7 @@ function parseBootstrapAttestation(commandResult, expected, now) {
     throw new Error("E2B child bootstrap attestation is stale or has an invalid validity window");
   }
   const normalized = cloneJson(result);
-  return deepFreeze({ ...normalized, attestation_hash: sha256Ref2(normalized) });
+  return deepFreeze({ ...normalized, attestation_hash: sha256Ref(normalized) });
 }
 function parseRunnerResult(value, expected) {
   assertPlainObject(value, "E2B runner result");
@@ -56101,7 +56099,7 @@ function parseRunnerResult(value, expected) {
     value.commit_candidate_hash,
     "E2B runner commit_candidate_hash"
   );
-  if (!safeEqual(candidateHash, sha256Ref2(candidate))) {
+  if (!safeEqual(candidateHash, sha256Ref(candidate))) {
     throw new Error("E2B runner commit candidate hash mismatch");
   }
   return deepFreeze({ ...cloneJson(value), commit_candidate: candidate });
@@ -56301,8 +56299,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       options.runnerCommand ?? DEFAULT_RUNNER_COMMAND,
       "runnerCommand"
     );
-    this.trustedBootstrapCommandHash = sha256Ref2(this.bootstrapCommand);
-    this.trustedRunnerCommandHash = sha256Ref2(this.runnerCommand);
+    this.trustedBootstrapCommandHash = sha256Ref(this.bootstrapCommand);
+    this.trustedRunnerCommandHash = sha256Ref(this.runnerCommand);
     this.trustedBootstrapArtifactHash = requireSha256Ref(
       options.trustedBootstrapArtifactHash,
       "trustedBootstrapArtifactHash"
@@ -56509,7 +56507,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       for (const item of items) {
         const metadata = item?.metadata;
         const templateId = item?.templateId ?? item?.templateID;
-        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref2(metadata), record.metadata_hash) || templateId !== this.cleanTemplateId) {
+        if (metadata?.["agoragentic.risk_fork.profile"] !== PROFILE_METADATA_SCHEMA || metadata?.["agoragentic.risk_fork.cleanup_ref"] !== record.cleanup_ref || !safeEqual(sha256Ref(metadata), record.metadata_hash) || templateId !== this.cleanTemplateId) {
           throw new Error("E2B cleanup listing returned an item outside the exact metadata binding");
         }
         matches.push(requireString(
@@ -56524,15 +56522,15 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     const sandboxIds = [...new Set(matches)].sort();
     const observation = {
-      query_hash: sha256Ref2(query),
+      query_hash: sha256Ref(query),
       metadata_hash: record.metadata_hash,
-      template_id_hash: sha256Ref2(this.cleanTemplateId),
+      template_id_hash: sha256Ref(this.cleanTemplateId),
       page_count: pages,
-      sandbox_id_hashes: sandboxIds.map((sandboxId) => sha256Ref2(sandboxId))
+      sandbox_id_hashes: sandboxIds.map((sandboxId) => sha256Ref(sandboxId))
     };
     return deepFreeze({
       sandbox_ids: sandboxIds,
-      observation_hash: sha256Ref2(observation)
+      observation_hash: sha256Ref(observation)
     });
   }
   async #verifySandboxAbsent(Sandbox, recordId, sandboxId) {
@@ -56617,7 +56615,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       }
       await this.#clearAllocationPoisonIfFullyAbsent(recordId);
       const evidence = {
-        sandbox_id_hash: sha256Ref2(sandboxId),
+        sandbox_id_hash: sha256Ref(sandboxId),
         absent: true,
         source: "Sandbox.getInfo.not_found.list.empty.Sandbox.getInfo.not_found",
         cleanup_list_observation_hash: listing.observation_hash
@@ -56627,7 +56625,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         outcome: "success",
         sandbox_id: sandboxId,
         evidence_ref: `e2b-absence:${evidence.sandbox_id_hash.slice(7, 23)}`,
-        evidence_hash: sha256Ref2(evidence)
+        evidence_hash: sha256Ref(evidence)
       };
     }
   }
@@ -56774,7 +56772,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     const recordId = `e2b_cleanup_${randomUUID6()}`;
     const cleanupRef = `e2b_cleanup_ref_${randomUUID6()}`;
     const exportId = `e2b_export_${randomUUID6()}`;
-    const metadataCoreHash = sha256Ref2({
+    const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
       capsule_hash: input.capsule.capsule_hash,
@@ -56784,7 +56782,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       record_id: recordId,
       cleanup_ref: cleanupRef,
       provider_id: this.id,
-      template_id_hash: sha256Ref2(this.cleanTemplateId),
+      template_id_hash: sha256Ref(this.cleanTemplateId),
       metadata_hash: metadataCoreHash,
       export_id: exportId
     });
@@ -56813,7 +56811,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         file_count: exportRecord.file_count,
         total_bytes: exportRecord.total_bytes,
         files: cloneJson(exportRecord.files),
-        clean_template_id_hash: sha256Ref2(this.cleanTemplateId),
+        clean_template_id_hash: sha256Ref(this.cleanTemplateId),
         clean_template_evidence_hash: this.cleanTemplateHash,
         trusted_bootstrap_command_hash: this.trustedBootstrapCommandHash,
         trusted_runner_command_hash: this.trustedRunnerCommandHash,
@@ -56821,7 +56819,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         trusted_runner_artifact_hash: this.trustedRunnerArtifactHash,
         request_hash: null
       };
-      request.request_hash = sha256Ref2({ ...request, request_hash: null });
+      request.request_hash = sha256Ref({ ...request, request_hash: null });
       const attestation = validateSourceAttestation(
         await this.verifyAuthorityFreeSource(deepFreeze(cloneJson(request)), {
           export_directory: exportRecord.export_directory
@@ -56847,7 +56845,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         allocation_attempted: false
       };
       this.savepoints.set(ref, record);
-      const savepointHash = sha256Ref2({
+      const savepointHash = sha256Ref({
         export_ref: ref,
         capsule_hash: record.capsule_hash,
         workspace_digest: exportRecord.workspace_digest,
@@ -56940,7 +56938,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     savepoint.allocation_attempted = true;
     const Sandbox = await this.#sandboxClass();
     const createStartedAt = this.clock();
-    await this.cleanupJournal.markAllocationRequested(savepoint.record_id, sha256Ref2(metadata));
+    await this.cleanupJournal.markAllocationRequested(savepoint.record_id, sha256Ref(metadata));
     if (this.reconciliationEligibleRecordIds.size > 0) {
       await this.cleanupJournal.markSandboxVerifiedAbsent(savepoint.record_id).catch(() => {
       });
@@ -57013,10 +57011,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         fork_identity: cloneJson(input.fork_identity),
         capsule_hash: savepoint.capsule_hash,
         network_policy_hash: policy.policy_hash,
-        clean_template_id_hash: sha256Ref2(this.cleanTemplateId),
+        clean_template_id_hash: sha256Ref(this.cleanTemplateId),
         clean_template_evidence_hash: this.cleanTemplateHash,
-        metadata_hash: sha256Ref2(metadata),
-        expected_child_sandbox_id_hash: sha256Ref2(sandboxId),
+        metadata_hash: sha256Ref(metadata),
+        expected_child_sandbox_id_hash: sha256Ref(sandboxId),
         trusted_bootstrap_artifact_hash: this.trustedBootstrapArtifactHash,
         trusted_runner_artifact_hash: this.trustedRunnerArtifactHash,
         inherited_authority_accepted: false,
@@ -57038,7 +57036,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           bootstrap_nonce: randomUUID6(),
           request_hash: null
         };
-        payload.request_hash = sha256Ref2({ ...payload, request_hash: null });
+        payload.request_hash = sha256Ref({ ...payload, request_hash: null });
         await sandbox.files.write(IDENTITY_PATH, JSON.stringify(payload));
         const result = await sandbox.commands.run(this.bootstrapCommand, {
           timeoutMs: Math.min(ttlMs, 6e4)
@@ -57125,8 +57123,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       savepoint.fork_ref = ref;
       return deepFreeze({
         fork_ref: ref,
-        fork_hash: sha256Ref2({
-          sandbox_id_hash: sha256Ref2(sandboxId),
+        fork_hash: sha256Ref({
+          sandbox_id_hash: sha256Ref(sandboxId),
           workspace_manifest_hash: savepoint.export_record.manifest_hash,
           identity_hash: record.identity_hash,
           network_policy_hash: record.network_policy_hash,
@@ -57293,14 +57291,14 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       capsule_hash: record.capsule_hash,
       identity_hash: record.identity_hash,
       network_policy_hash: record.network_policy_hash,
-      operation_hash: sha256Ref2(operation),
+      operation_hash: sha256Ref(operation),
       execution_mode: executionMode,
       expected_result_schema_hash: record.authorized_result_schema_hash,
       operation,
       result_path: resultPath,
       job_hash: null
     };
-    job.job_hash = sha256Ref2({ ...job, job_hash: null });
+    job.job_hash = sha256Ref({ ...job, job_hash: null });
     assertStrictSecretFreeJson(job, "E2B runner job");
     const started = this.clock();
     const controllerDeadlineAt = performance2.now() + timeoutMs;
@@ -57369,7 +57367,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         started_at: started.toISOString(),
         completed_at: completed.toISOString(),
         duration_ms: Math.max(0, completed.getTime() - started.getTime()),
-        result_hash: sha256Ref2(parsed),
+        result_hash: sha256Ref(parsed),
         command: commandMeasurements(commandResult)
       };
       if (this.qualified) {
@@ -57426,7 +57424,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["fork_ref"], "E2B collectEvidence input");
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
     const evidence = {
-      fork_ref_hash: sha256Ref2(record.ref),
+      fork_ref_hash: sha256Ref(record.ref),
       status: record.status,
       identity_hash: record.identity_hash,
       network_policy_hash: record.network_policy_hash,
@@ -57452,7 +57450,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       provider_live_qualification: this.qualified ? "verified" : "not_run",
       containment_claim: this.qualified ? "verified" : "not_verified"
     };
-    return deepFreeze({ ...evidence, evidence_hash: sha256Ref2(evidence) });
+    return deepFreeze({ ...evidence, evidence_hash: sha256Ref(evidence) });
   }
   async collectDiff(input = {}) {
     this.#requireConfigured("collectDiff");
@@ -57496,8 +57494,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         fork_ref: record.ref,
         status: "destroy_requested_observed",
         evidence_status: "observed",
-        evidence_hash: sha256Ref2({
-          sandbox_id_hash: sha256Ref2(record.sandbox_id),
+        evidence_hash: sha256Ref({
+          sandbox_id_hash: sha256Ref(record.sandbox_id),
           request: "kill",
           provider_result: "returned_without_error"
         })
@@ -57564,8 +57562,8 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         savepoint_ref: record.ref,
         status: "destroy_requested_observed",
         evidence_status: "observed",
-        evidence_hash: sha256Ref2({
-          export_ref_hash: sha256Ref2(record.ref),
+        evidence_hash: sha256Ref({
+          export_ref_hash: sha256Ref(record.ref),
           request: "destroy_local_export"
         })
       });
@@ -57625,7 +57623,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     await this.cleanupJournal.markExportVerifiedAbsent(record.record_id);
     await this.#clearAllocationPoisonIfFullyAbsent(record.record_id);
     const evidence = {
-      export_ref_hash: sha256Ref2(record.ref),
+      export_ref_hash: sha256Ref(record.ref),
       absent: true,
       provider_snapshot_created: false
     };
@@ -57635,7 +57633,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       outcome: "success",
       evidence_status: "verified",
       evidence_ref: `e2b-export-absence:${evidence.export_ref_hash.slice(7, 23)}`,
-      evidence_hash: sha256Ref2(evidence)
+      evidence_hash: sha256Ref(evidence)
     });
   }
 };
@@ -57773,7 +57771,7 @@ function independentAttestationPayload(request, verifierKeyHash, verifierArtifac
     source_request_hash: request.request_hash,
     workspace_digest: request.workspace_digest,
     workspace_manifest_hash: request.workspace_manifest_hash,
-    file_manifest_hash: sha256Ref2(request.files),
+    file_manifest_hash: sha256Ref(request.files),
     clean_template_id_hash: request.clean_template_id_hash,
     clean_template_evidence_hash: request.clean_template_evidence_hash,
     trusted_bootstrap_artifact_hash: request.trusted_bootstrap_artifact_hash,
@@ -57841,12 +57839,12 @@ function validateRequest(value) {
   if (summedBytes !== totalBytes) throw new Error("E2B source request total_bytes mismatch");
   const uniquePaths = new Set(files.map((entry) => entry.path));
   if (uniquePaths.size !== files.length) throw new Error("E2B source request paths are not unique");
-  const expectedHash = sha256Ref2({ ...cloneJson(value), request_hash: null });
+  const expectedHash = sha256Ref({ ...cloneJson(value), request_hash: null });
   if (!safeEqual(value.request_hash, expectedHash)) {
     throw new Error("E2B authority-free source request hash mismatch");
   }
   const normalized = { ...cloneJson(value), files };
-  if (canonicalize2(normalized) !== canonicalize2(value)) {
+  if (canonicalize(normalized) !== canonicalize(value)) {
     throw new Error("E2B authority-free source request is not canonical and closed");
   }
   return normalized;
@@ -57857,7 +57855,7 @@ function scanE2BStagedBytesAuthorityFree(files) {
       throw new Error("E2B staged export contains a secret-shaped path");
     }
     const content = Buffer.from(file.data_base64, "base64");
-    if (content.byteLength !== file.bytes || !safeEqual(sha256Ref2(content.toString("base64")), file.content_hash)) {
+    if (content.byteLength !== file.bytes || !safeEqual(sha256Ref(content.toString("base64")), file.content_hash)) {
       throw new Error("E2B staged export exact-byte binding mismatch");
     }
     if (containsRecognizedSecretBytes2(content)) {
@@ -57884,7 +57882,7 @@ async function persistEvidence(directory, record) {
     256
   );
   try {
-    await handle.writeFile(`${canonicalize2(record)}
+    await handle.writeFile(`${canonicalize(record)}
 `, "utf8");
     await handle.sync();
   } finally {
@@ -57951,7 +57949,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
       manifest_hash: request.workspace_manifest_hash,
       workspace_digest: request.workspace_digest
     });
-    if (staged.manifest.file_count !== request.file_count || staged.manifest.total_bytes !== request.total_bytes || canonicalize2(staged.manifest.files) !== canonicalize2(request.files)) {
+    if (staged.manifest.file_count !== request.file_count || staged.manifest.total_bytes !== request.total_bytes || canonicalize(staged.manifest.files) !== canonicalize(request.files)) {
       throw new Error("E2B independently reopened staged export does not match the request manifest");
     }
     scanE2BStagedBytesAuthorityFree(staged.files);
@@ -57979,19 +57977,19 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
       "E2B independent source attestation"
     );
     const { signature: signatureValue, ...signedPayload } = independentAttestation;
-    if (canonicalize2(signedPayload) !== canonicalize2(independentPayload)) {
+    if (canonicalize(signedPayload) !== canonicalize(independentPayload)) {
       throw new Error("E2B independent source attestation binding mismatch");
     }
     const signature = requireEd25519Signature2(signatureValue);
     if (!verifySignature2(
       null,
-      Buffer.from(canonicalize2(independentPayload), "utf8"),
+      Buffer.from(canonicalize(independentPayload), "utf8"),
       independentVerifierPublicKey,
       signature
     )) {
       throw new Error("E2B independent source attestation signature is invalid");
     }
-    const independentAttestationHash = sha256Ref2(independentAttestation);
+    const independentAttestationHash = sha256Ref(independentAttestation);
     const evidenceCore = {
       schema: EVIDENCE_SCHEMA,
       status: "verified_deterministic_clean_side_second_pass",
@@ -58000,7 +57998,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
       capsule_hash: request.capsule_hash,
       workspace_digest: request.workspace_digest,
       workspace_manifest_hash: request.workspace_manifest_hash,
-      file_manifest_hash: sha256Ref2(request.files),
+      file_manifest_hash: sha256Ref(request.files),
       verifier_artifact_hash: verifierArtifactHash,
       trusted_bootstrap_artifact_hash: bootstrapArtifactHash,
       trusted_runner_artifact_hash: runnerArtifactHash,
@@ -58021,7 +58019,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
     };
     const evidence = {
       ...evidenceCore,
-      evidence_hash: sha256Ref2(evidenceCore)
+      evidence_hash: sha256Ref(evidenceCore)
     };
     await persistEvidence(evidenceDirectory, evidence);
     return deepFreeze({
@@ -58048,7 +58046,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:c0096968d13d1fdb21563a262bd2eb8d1b1c9e3c1122220231f11cc5ab18ed42" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:50da1a7cb9174b2980c4fd8ee9c879237b040bd024b3d4fe9255921b19d5dc51" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
