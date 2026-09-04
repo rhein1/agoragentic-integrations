@@ -41,6 +41,7 @@ const build = await buildOfflineKit({
   repositoryRoot,
   sourceCommit,
   outputBase,
+  npmCacheDirectory: process.env.RISK_FORK_NPM_CACHE ?? null,
   validationSummary: {
     status: 'passed_release_candidate_build',
     source_commit: sourceCommit,

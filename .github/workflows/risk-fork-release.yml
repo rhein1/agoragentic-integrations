@@ -52,14 +52,30 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            risk-fork/package-lock.json
-            risk-fork/hackathon/package-lock.json
+      - name: Pin a fresh cache for warmup and every offline consumer
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const cache = path.join(fs.realpathSync(process.env.RUNNER_TEMP), 'risk-fork-npm-cache');
+          fs.mkdirSync(cache, { recursive: false });
+          for (const name of ['RISK_FORK_NPM_CACHE', 'npm_config_cache', 'NPM_CONFIG_CACHE']) {
+            fs.appendFileSync(process.env.GITHUB_ENV, `${name}=${cache}\n`);
+          }
+          NODE
+      - name: Use canonical temporary paths for strict filesystem tests
+        if: runner.os != 'Windows'
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import os from 'node:os';
+          const canonicalTemp = fs.realpathSync(os.tmpdir());
+          fs.appendFileSync(process.env.GITHUB_ENV, `TMPDIR=${canonicalTemp}\n`);
+          NODE
       # The demo package has no dependencies. Do not create a nested install tree
       # that can dirty the exact-source release boundary on another npm version.
       - name: Install locked core dependencies and warm the offline cache
-        run: npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
+        run: npm --cache "$RISK_FORK_NPM_CACHE" --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
       - name: Verify the actual package-consumer artifact
         working-directory: risk-fork
         run: npm run test:package

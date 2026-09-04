@@ -14,9 +14,16 @@ if (!npmCli || !path.isAbsolute(npmCli)) {
 const tempRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-packed-consumer-'));
 const consumerRoot = path.join(tempRoot, 'consumer');
 const environment = { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' };
+const explicitCache = process.env.RISK_FORK_NPM_CACHE;
+if (explicitCache !== undefined && !path.isAbsolute(explicitCache)) {
+  throw new Error('RISK_FORK_NPM_CACHE must be an absolute path');
+}
 
 function run(label, executable, args, cwd) {
-  const result = spawnSync(executable, args, {
+  const commandArgs = explicitCache && executable === process.execPath && args[0] === npmCli
+    ? [...args, '--cache', explicitCache]
+    : args;
+  const result = spawnSync(executable, commandArgs, {
     cwd, env: environment, encoding: 'utf8', timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
     windowsHide: true,
   });
