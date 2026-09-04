@@ -1,6 +1,6 @@
 {
     "name": "n8n-nodes-agoragentic",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "n8n community node for Agoragentic Triptych OS (Agent OS) Router / Marketplace and x402 edge workflows.",
     "license": "MIT",
     "homepage": "https://agoragentic.com",
@@ -23,12 +23,10 @@
     },
     "scripts": {
         "audit:dev": "node scripts/audit-dev-dependencies.cjs",
-        "build": "n8n-node build",
+        "build": "node scripts/build.mjs",
         "build:watch": "tsc --watch",
-        "dev": "n8n-node dev",
-        "lint": "n8n-node lint",
-        "lint:fix": "n8n-node lint --fix",
-        "release": "n8n-node release",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
         "test": "node --test test/*.test.cjs",
         "check": "npm test && npm run lint && npm run build",
         "prepublishOnly": "npm run check"
@@ -49,12 +47,16 @@
         ]
     },
     "devDependencies": {
-        "@n8n/node-cli": "0.44.4",
-        "eslint": "9.32.0",
-        "n8n-workflow": "2.35.3",
+        "@eslint/js": "9.29.0",
+        "@n8n/eslint-plugin-community-nodes": "0.29.0",
+        "eslint": "9.29.0",
+        "eslint-import-resolver-typescript": "4.4.5",
+        "eslint-plugin-import-x": "4.17.1",
+        "eslint-plugin-n8n-nodes-base": "1.16.7",
+        "n8n-workflow": "2.36.4",
         "prettier": "3.9.6",
-        "release-it": "21.0.2",
         "typescript": "5.9.2",
+        "typescript-eslint": "8.65.0",
         "zod": "3.25.76"
     },
     "peerDependencies": {
