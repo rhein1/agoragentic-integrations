@@ -38,6 +38,9 @@ export const OFFLINE_KIT_TRUTH = Object.freeze({
   clean_commit_performed: false,
 });
 
+export const OFFLINE_KIT_PACKAGE_MODE =
+  'public_release_candidate_unpublished_offline_directory';
+
 const PORTABLE_CONFIGURATION_VERIFICATION_DETAIL =
   'generated_portable_template_requires_path_regeneration_and_live_client_verification';
 
@@ -1220,6 +1223,9 @@ function assertManifestTruth(manifest) {
     throw new Error('Offline-kit provider qualification boundary is invalid');
   }
   if (manifest.supported_node !== '>=20') throw new Error('Offline-kit Node support metadata is invalid');
+  if (manifest.package_mode !== OFFLINE_KIT_PACKAGE_MODE || manifest.npm_published !== false) {
+    throw new Error('Offline-kit package publication boundary is invalid');
+  }
   if (
     manifest.configuration_status?.templates_client_verified !== 0
     || manifest.configuration_status?.unverified_client_status
@@ -1651,7 +1657,7 @@ async function createManifest({
     ignored_worktree_files_included: false,
     deterministic_created_at: FIXED_CREATED_AT,
     supported_node: '>=20',
-    package_mode: 'private_unpublished_offline_directory',
+    package_mode: OFFLINE_KIT_PACKAGE_MODE,
     provider: 'e2b',
     provider_status: 'not_live_qualified',
     production_qualified: false,

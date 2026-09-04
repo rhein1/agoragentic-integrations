@@ -113,6 +113,17 @@ export {
   verifyRiskForkImportEnvelope,
 } from './host-boundary.mjs';
 export {
+  RISK_FORK_MCP_HOST_ADAPTER_SCHEMA,
+  RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
+  RISK_FORK_MCP_PHASE_PLAN_SCHEMA,
+  RiskForkMcpHostAdapterError,
+  createRiskForkMcpHostAdapter,
+  createRiskForkMcpPhasePlan,
+  createTrustedRiskForkMcpPhasePlanSource,
+  isRiskForkMcpHostAdapter,
+} from './mcp-host-adapter.mjs';
+export {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
   verifyRiskForkReceiptStructure,

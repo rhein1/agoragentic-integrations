@@ -1,10 +1,20 @@
 {
   "name": "@agoragentic/risk-fork",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Provider-neutral fork-before-risk contracts, deterministic controls, and local reference tooling for agent execution.",
   "type": "module",
   "license": "Apache-2.0",
-  "private": true,
+  "private": false,
+  "author": {
+    "name": "Jeremy Borden",
+    "url": "https://agoragentic.com"
+  },
+  "homepage": "https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork",
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha",
+    "provenance": true
+  },
   "engines": {
     "node": ">=20"
   },
@@ -22,6 +32,7 @@
     "./controller": "./src/controller.mjs",
     "./interception": "./src/interception.mjs",
     "./host-boundary": "./src/host-boundary.mjs",
+    "./mcp-host-adapter": "./src/mcp-host-adapter.mjs",
     "./receipt": "./src/receipt.mjs",
     "./e2b-qualification": "./src/e2b-qualification.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",
@@ -40,7 +51,13 @@
     "ops/",
     "scripts/",
     "examples/",
+    "assets/",
     "README.md",
+    "GETTING_STARTED.md",
+    "MCP_HOST_ADAPTER.md",
+    "CITATION.cff",
+    "AUTHORS.md",
+    "CHANGELOG.md",
     "SECURITY_MODEL.md",
     "POSTGRES_AUTHORITY_RUNBOOK.md",
     "PROVIDER_COMPARISON.md",
@@ -50,6 +67,7 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
+    "test:package": "node scripts/verify-package-consumer.mjs",
     "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
     "check": "node scripts/check.mjs",
     "self-test": "node examples/local-reference.mjs",

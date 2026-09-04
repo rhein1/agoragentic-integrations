@@ -36,6 +36,13 @@
     "risk_fork_receipt"
   ],
   "read_only_discovery_tool_status": "review_only_not_production_served_or_registered",
+  "served_demo_tools": [
+    "risk_fork_demo_list_scenarios",
+    "risk_fork_demo_plan",
+    "risk_fork_demo_run",
+    "risk_fork_demo_receipt"
+  ],
+  "served_demo_tool_status": "local_stdio_closed_synthetic_fixtures_only",
   "public_execute_tool_exposed": false,
   "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
   "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",

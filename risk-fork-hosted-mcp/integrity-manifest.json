@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 46,
-    "sha256": "sha256:79b1ba2928a5d8f11764b6830fe14a66dd40b49c4f9dbae3b0d4fe232a6cff17"
+    "files": 49,
+    "sha256": "sha256:38a156143a856bdcc39825badf0fdd0739a6f42c87894c113853aee3ed0b7f89"
   },
   "reviewed_sources": [
     {
@@ -21,6 +21,16 @@
       "path": "mcp/package.json",
       "bytes": 2664,
       "sha256": "sha256:b6eb2fc795643b7e1b7d308ff8c2b95a1045b2b42297debf412f5cc016db55b4"
+    },
+    {
+      "path": "risk-fork/LICENSE",
+      "bytes": 11321,
+      "sha256": "sha256:f92d616fa9900548de8e8d90a5fef33b0dbce594998868e225e48f69c80c3e6d"
+    },
+    {
+      "path": "risk-fork/NOTICE",
+      "bytes": 199,
+      "sha256": "sha256:7c5c04f8dda8ac82ddd58594d1db346e3d6b187eceb58213fd37b5feb57bed6a"
     },
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
@@ -64,8 +74,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 3151,
-      "sha256": "sha256:92d982e2e6f42e3aff580d5f4c3b627a173d8fff8166696c4c2543d17b90d8a1"
+      "bytes": 3685,
+      "sha256": "sha256:f14399b94c2d485b42449e7ebe28b7a0063ef51a250200c19d79a11cf729c40b"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -164,8 +174,8 @@
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 4121,
-      "sha256": "sha256:20cccf584d5d4a6e47fe344d8f0ae51b843e171dd165b80745070e6847e86a73"
+      "bytes": 4481,
+      "sha256": "sha256:b6cd4e753d1da3226386c6ed7d2aa1bc799a5bf732eddae4ff72aad9a35b56b4"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -176,6 +186,11 @@
       "path": "risk-fork/src/lifecycle.mjs",
       "bytes": 14073,
       "sha256": "sha256:f8a16c9d7877e6132ffa020f91c7dea1224cb4ee53cb971a6bbf3c40b0156828"
+    },
+    {
+      "path": "risk-fork/src/mcp-host-adapter.mjs",
+      "bytes": 36264,
+      "sha256": "sha256:075d05e64262d18e87cf0fd671c3fd76061b7fe24d512596c21eca46247ebfa6"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -250,7 +265,7 @@
     },
     "risk_fork": {
       "name": "@agoragentic/risk-fork",
-      "version": "0.1.0-alpha.0"
+      "version": "0.1.0-alpha.1"
     }
   },
   "build": {
@@ -927,26 +942,26 @@
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/index.js",
       "source": "workspace_dependency",
-      "bytes": 15326,
-      "sha256": "sha256:79945eb0b513058251bd1c3b518b86c5c549bb73b8c37c77d717133d66277a97"
+      "bytes": 22061,
+      "sha256": "sha256:e82d3e55d954483e4927f9740bc3113a24d19ef5a73c7962d8a93c499fc982ff"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/lib/schemes.js",
       "source": "workspace_dependency",
-      "bytes": 7122,
-      "sha256": "sha256:0f9497f8e43c9b002d79c8a916709daa4ae8a6462735b1b5dc6ad587a28a5064"
+      "bytes": 7367,
+      "sha256": "sha256:c2c61d3fd0bc63a587100928a399e75be8c420d210c439d75f7346da4aa4f3c3"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/lib/utils.js",
       "source": "workspace_dependency",
-      "bytes": 10762,
-      "sha256": "sha256:3394986f9670b821493943faafe5d83ccc15109aba908f1b5dd017e27b0d0ea7"
+      "bytes": 20835,
+      "sha256": "sha256:610a6cfa7b1c9d5689443b3a3d14af4c24afed51ef5852495ae1489ae455a9f4"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/package.json",
       "source": "workspace_dependency",
       "bytes": 1983,
-      "sha256": "sha256:3b01e17f5de289a0905ad894187235c8a8bb284a1fd285b40227b1d862f86b4d"
+      "sha256": "sha256:e634f3848a2c6c7e1cdc28b119b16e072e10dada8a3ca3f175a2372d0dd83360"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/json-schema-traverse/LICENSE",
@@ -2230,13 +2245,25 @@
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
       "bytes": 4381,
-      "sha256": "sha256:3a9e7fcad69adaf461c4e0dcb77f8487a705207acf883c0aa2877df7ddd93aa5"
+      "sha256": "sha256:e962f0fd47464fe1353cdf93c4fb79a770a98746484df194bc13035b56416f5e"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
       "source": "package_source",
       "bytes": 62,
       "sha256": "sha256:3ce2fade9033fb9dacda1d1fddc60a73f5b142b0fc44d29991475a560a52df02"
+    },
+    {
+      "path": "risk-fork/LICENSE",
+      "source": "reviewed_source",
+      "bytes": 11321,
+      "sha256": "sha256:f92d616fa9900548de8e8d90a5fef33b0dbce594998868e225e48f69c80c3e6d"
+    },
+    {
+      "path": "risk-fork/NOTICE",
+      "source": "reviewed_source",
+      "bytes": 199,
+      "sha256": "sha256:7c5c04f8dda8ac82ddd58594d1db346e3d6b187eceb58213fd37b5feb57bed6a"
     },
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
@@ -2434,7 +2461,7 @@
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
     "bytes": 34222,
-    "sha256": "sha256:e111e01d634f9481f4659c1f581af6356c603e95210538b376f18cd878c6b5df",
+    "sha256": "sha256:40d67bdc1b74834da6d693705b56d225fd69fb29bf86a1be02dcea783e738efc",
     "sources": [
       {
         "package": "@modelcontextprotocol/sdk",
@@ -2482,7 +2509,7 @@
       },
       {
         "package": "fast-uri",
-        "version": "3.1.5",
+        "version": "3.1.7",
         "declared_license": "BSD-3-Clause",
         "method": "standalone_license_file",
         "path": "risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE",
@@ -2682,14 +2709,26 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2368051,
-    "sha256": "sha256:f9b22e38d0c42309338fbf5c30085f3252be33b93f63780248ec2ce95a71fdd0"
+    "bytes": 2381787,
+    "sha256": "sha256:482b1e5763f68b803cac36f6d75946c6d830a97530ed6a8bc0c063ab6f3e6074"
   },
   "packaged_assets": [
     {
+      "path": "LICENSE",
+      "source_path": "risk-fork/LICENSE",
+      "bytes": 11321,
+      "sha256": "sha256:f92d616fa9900548de8e8d90a5fef33b0dbce594998868e225e48f69c80c3e6d"
+    },
+    {
+      "path": "NOTICE",
+      "source_path": "risk-fork/NOTICE",
+      "bytes": 199,
+      "sha256": "sha256:7c5c04f8dda8ac82ddd58594d1db346e3d6b187eceb58213fd37b5feb57bed6a"
+    },
+    {
       "path": "THIRD_PARTY_NOTICES.txt",
       "bytes": 34222,
-      "sha256": "sha256:e111e01d634f9481f4659c1f581af6356c603e95210538b376f18cd878c6b5df"
+      "sha256": "sha256:40d67bdc1b74834da6d693705b56d225fd69fb29bf86a1be02dcea783e738efc"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",

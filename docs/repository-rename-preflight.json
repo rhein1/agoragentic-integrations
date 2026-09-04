@@ -6,17 +6,17 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 147,
-    "occurrence_count": 291,
+    "file_count": 153,
+    "occurrence_count": 300,
     "category_file_counts": {
-      "installer_or_clone": 28,
+      "installer_or_clone": 29,
       "machine_discovery": 51,
       "package_registry_metadata": 22,
-      "public_documentation": 72,
+      "public_documentation": 74,
       "raw_content_url": 2,
-      "release_or_provenance": 11,
+      "release_or_provenance": 12,
       "reusable_action": 2,
-      "source_or_test": 19
+      "source_or_test": 22
     }
   },
   "reusable_action_references": [
@@ -1334,10 +1334,20 @@
       ]
     },
     {
+      "path": "risk-fork-hosted-mcp/NOTICE",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
       "path": "risk-fork-hosted-mcp/package.json",
       "occurrences": 1,
       "line_numbers": [
-        60
+        61
       ],
       "categories": [
         "installer_or_clone",
@@ -1349,7 +1359,7 @@
       "path": "risk-fork-hosted-mcp/scripts/build.mjs",
       "occurrences": 1,
       "line_numbers": [
-        99
+        100
       ],
       "categories": [
         "installer_or_clone"
@@ -1359,7 +1369,7 @@
       "path": "risk-fork-hosted-mcp/scripts/verify-integrity.mjs",
       "occurrences": 1,
       "line_numbers": [
-        88
+        89
       ],
       "categories": [
         "installer_or_clone"
@@ -1379,11 +1389,64 @@
       ]
     },
     {
-      "path": "risk-fork/package.json",
+      "path": "risk-fork/AUTHORS.md",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/CITATION.cff",
       "occurrences": 2,
       "line_numbers": [
-        87,
-        91
+        12,
+        13
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "risk-fork/GETTING_STARTED.md",
+      "occurrences": 1,
+      "line_numbers": [
+        9
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/hackathon/scripts/release-artifacts.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        149
+      ],
+      "categories": [
+        "installer_or_clone",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "risk-fork/NOTICE",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "risk-fork/package.json",
+      "occurrences": 3,
+      "line_numbers": [
+        12,
+        106,
+        110
       ],
       "categories": [
         "installer_or_clone",
@@ -1404,9 +1467,10 @@
     },
     {
       "path": "risk-fork/README.md",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        67
+        11,
+        69
       ],
       "categories": [
         "public_documentation"

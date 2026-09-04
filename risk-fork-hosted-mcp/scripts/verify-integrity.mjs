@@ -40,7 +40,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
   description: 'Private, unpublished, integrity-bound hosted MCP enforcement and Risk Fork runtime bundle.',
   type: 'module',
   private: true,
-  license: 'MIT',
+  license: 'Apache-2.0',
   engines: { node: '>=20.0.0' },
   exports: {
     '.': './dist/runtime/index.mjs',
@@ -60,6 +60,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'NOTICE',
   ],
   scripts: {
     build: 'node scripts/build.mjs',
@@ -91,7 +92,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
 });
 const EXPECTED_SOURCES = Object.freeze({
   mcp: { name: 'agoragentic-mcp', version: '2.0.0' },
-  risk_fork: { name: '@agoragentic/risk-fork', version: '0.1.0-alpha.0' },
+  risk_fork: { name: '@agoragentic/risk-fork', version: '0.1.0-alpha.1' },
 });
 const EXPECTED_PACKAGE_SOURCE_PATHS = Object.freeze([
   'risk-fork-hosted-mcp/src/index.mjs',
@@ -194,6 +195,8 @@ const EXPECTED_EXPORTS = Object.freeze([
 const REVIEWED_SOURCE_EXACT_FILES = Object.freeze([
   'mcp/mcp-server.js',
   'mcp/package.json',
+  'risk-fork/LICENSE',
+  'risk-fork/NOTICE',
   'risk-fork/migrations/001_distributed_authority.pg.sql',
   'risk-fork/package.json',
   'risk-fork/schema/e2b-qualification-evidence.v1.json',
@@ -205,6 +208,8 @@ const REVIEWED_SOURCE_RECURSIVE_ROOTS = Object.freeze([
   'transaction-assurance/src',
 ]);
 const PACKAGED_REVIEWED_ASSETS = Object.freeze([
+  { source: 'risk-fork/LICENSE', target: 'LICENSE' },
+  { source: 'risk-fork/NOTICE', target: 'NOTICE' },
   { source: 'risk-fork/e2b-template/bin/boot-guard.mjs', target: 'e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs' },
   { source: 'risk-fork/e2b-template/bin/bootstrap.mjs', target: 'e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs' },
   { source: 'risk-fork/e2b-template/bin/run.mjs', target: 'e2b-context/risk-fork/e2b-template/bin/run.mjs' },
@@ -225,6 +230,10 @@ const PACKAGED_PHYSICAL_ROOTS = Object.freeze([
   'migrations',
   'ops/postgres',
   'schema',
+]);
+const PACKAGED_TOP_LEVEL_REVIEWED_ASSETS = Object.freeze([
+  'LICENSE',
+  'NOTICE',
 ]);
 
 function parseExactFlags(args, allowedFlags) {
@@ -1207,7 +1216,9 @@ async function listExactPackagedPhysicalRoot(relativeRoot, expectedFiles) {
 async function verifyExactPackagedPhysicalInventory() {
   const expectedFiles = [
     EXPECTED_ARTIFACT_PATH,
-    ...PACKAGED_REVIEWED_ASSETS.map((mapping) => mapping.target),
+    ...PACKAGED_REVIEWED_ASSETS
+      .map((mapping) => mapping.target)
+      .filter((target) => !PACKAGED_TOP_LEVEL_REVIEWED_ASSETS.includes(target)),
   ].sort(compareOrdinal);
   assertOrdinalUnique(expectedFiles, 'Expected packaged physical files', { paths: true });
   for (const expectedFile of expectedFiles) {
@@ -1257,6 +1268,11 @@ function assertStaticVerifierContract() {
   assertOrdinalUnique(EXPECTED_PACKAGE_SOURCE_PATHS, 'Package source paths', { paths: true });
   assertOrdinalUnique(EXPECTED_EXPORTS, 'Runtime export contract');
   assertOrdinalUnique(PACKAGED_PHYSICAL_ROOTS, 'Packaged physical roots', { paths: true });
+  assertOrdinalUnique(
+    PACKAGED_TOP_LEVEL_REVIEWED_ASSETS,
+    'Packaged top-level reviewed assets',
+    { paths: true },
+  );
   for (let index = 0; index < PACKAGED_REVIEWED_ASSETS.length; index += 1) {
     const mapping = PACKAGED_REVIEWED_ASSETS[index];
     assertExactKeys(mapping, ['source', 'target'], `Packaged reviewed asset mapping ${index}`);
@@ -1273,6 +1289,13 @@ function assertStaticVerifierContract() {
     PACKAGED_REVIEWED_ASSETS.map((mapping) => mapping.source),
     'Packaged reviewed asset sources',
   );
+  const actualTopLevelTargets = PACKAGED_REVIEWED_ASSETS
+    .map((mapping) => mapping.target)
+    .filter((target) => !target.includes('/'));
+  if (JSON.stringify(actualTopLevelTargets)
+    !== JSON.stringify(PACKAGED_TOP_LEVEL_REVIEWED_ASSETS)) {
+    throw new Error('Packaged top-level reviewed assets do not match the exact contract');
+  }
 }
 
 assertStaticVerifierContract();

@@ -115,7 +115,7 @@ export const HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: '@agoragentic/risk-fork-hosted-mcp',
   package_version: '0.1.0-alpha.0',
   mcp_source_version: '2.0.0',
-  risk_fork_source_version: '0.1.0-alpha.0',
+  risk_fork_source_version: '0.1.0-alpha.1',
   reviewed_source_integrity: REVIEWED_SOURCE_INTEGRITY,
   optional_e2b_peer_version: '2.39.0',
   publication_status: 'private_unpublished',

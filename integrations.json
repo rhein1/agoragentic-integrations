@@ -124,7 +124,7 @@
     },
     "risk_fork": {
       "name": "@agoragentic/risk-fork",
-      "version": "0.1.0-alpha.0",
+      "version": "0.1.0-alpha.1",
       "install": "cd risk-fork && npm ci",
       "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork",
       "distribution_status": "source_only",

@@ -6,7 +6,9 @@ Risk Fork is an experimental, source-only package for **fork-before-risk** agent
 
 The short analogy is **“quick-save before the boss fight.”** The security model is stronger and more specific: fork a known-good state *before* risk, leave the trusted parent clean, clone no authority, treat every child result as tainted, and import only a bounded artifact after clean-side validation.
 
-The public package is source-packaged under Apache License 2.0, but it is not published as an installable registry package. `package.json` is intentionally marked `private`, and the merged source grants no hosted execution or activation authority. **Production readiness is blocked. This directory contains no current public evidence that Risk Fork protects live Agoragentic MCP or Harness traffic.** Nothing in this directory proves production containment, live-provider operation, settlement, certification, or permission to take an external action.
+The public package is licensed under Apache License 2.0. Version `0.1.0-alpha.1` is a package release candidate with public alpha publication metadata; registry publication is not established by this checkout. **Production readiness is blocked. This directory contains no current public evidence that Risk Fork protects live Agoragentic MCP or Harness traffic.** Nothing in this directory proves production containment, live-provider operation, settlement, certification, or permission to take an external action.
+
+Created by **Jeremy Borden / Agoragentic**. Visit the [public developer page](https://agoragentic-risk-fork.rhein1.chatgpt.site), then start with [GETTING_STARTED.md](./GETTING_STARTED.md), the [visual hackathon demo](https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork/hackathon), or the experimental [MCP host adapter](./MCP_HOST_ADAPTER.md). Attribution is recorded in [CITATION.cff](./CITATION.cff), [AUTHORS.md](./AUTHORS.md) and [NOTICE](./NOTICE).
 
 The invariant is:
 
@@ -176,11 +178,11 @@ Compatibility and acquisition are pinned as follows:
 
 | Contract | Pinned public source behavior |
 | --- | --- |
-| Package | `@agoragentic/risk-fork@0.1.0-alpha.0`; ESM; Node.js `>=20` |
+| Package | `@agoragentic/risk-fork@0.1.0-alpha.1`; ESM; Node.js `>=20`; experimental release candidate |
 | Host subpath | `@agoragentic/risk-fork/host-boundary`; package-local source with no registry dependency required for this focused subpath |
 | Schemas | `agoragentic.risk-fork.host-pre-effect-boundary.v1`, `trusted-descriptor-request.v1`, `trusted-descriptor.v1`, and `import-envelope.v1` |
-| Acquisition | Source/workspace or reviewed local file copy only; `private: true` remains set and no npm registry publication is claimed or authorized |
-| Root package | Uses the exact dependencies declared in `package.json`; the focused clean-consumer test does not prove a registry install, lockfile resolution, or a published tarball |
+| Acquisition | Source/workspace or locally packed tarball; `private: false` and public alpha publication metadata prepare the candidate for release. Check the official release for registry publication evidence |
+| Root package | `npm run test:package` packs and installs the actual tarball offline in a fresh consumer, imports exports, and exercises the installed local lifecycle and MCP host example. This proves local artifact consumption, not registry publication or live containment |
 | Provider/live state | Local adapter remains a protocol simulator; live E2B/provider allocation and lease capability remain hard-disabled and production readiness remains false |
 
 Stable host-boundary diagnostic codes for this alpha contract are:
@@ -248,7 +250,7 @@ The `agoragentic.risk-fork.e2b-qualification-evidence.v1` shape is a private-alp
 
 Adapter qualification still requires every mandatory control to be verified plus a separate `verifyE2BQualificationTrust()` signature over the finalized evidence. The observer and qualification-trust Ed25519 SPKI hashes must differ, and both the evidence validator and trust verifier must receive the caller-pinned external-observation verifier. Neither signature grants production activation. Qualified SDK loading separately requires the module-branded runtime-integrity verifier.
 
-Because the package is source-only and private, the checked-in example imports source files directly. Run it only as a protocol demonstration:
+The checked-in example uses package-local relative imports, which also work from the installed tarball. Run it only as a protocol demonstration:
 
 ```powershell
 node examples/local-reference.mjs
@@ -256,7 +258,7 @@ node examples/local-reference.mjs
 
 The example prepares a typed artifact in an empty disposable workspace, destroys and independently verifies the local copies, and stops before clean commit. It does not contact a provider, spend funds, use credentials, or demonstrate real isolation.
 
-Risk Fork now keeps its strict canonical JSON/SHA-256 primitive package-local, so the focused host-boundary subpath does not escape the copied package tree. The clean-consumer test copies `package.json` and `src/` into an empty temporary `node_modules` tree and exercises that subpath without a network request or dependency loader. This proves only the checked-out source-copy surface. `npm pack --dry-run` remains a contents audit, not evidence that a registry package exists or that the full package installs under a clean exact dependency lock. `private: true` must remain until a separately authorized publication and compatibility tranche is complete.
+Risk Fork keeps its strict canonical JSON/SHA-256 primitive package-local, so the focused host-boundary subpath does not escape the copied package tree. The fast source-copy test exercises that subpath without a dependency loader. The separate `npm run test:package` release check exercises the actual tarball and installed dependencies in a fresh consumer. Run `npm ci --ignore-scripts --no-audit --no-fund` first to populate the integrity-addressed npm cache; consumer installation then uses `--offline`. The package includes Apache-2.0, NOTICE, citation metadata, developer docs and the README artwork. Neither check establishes registry publication or production qualification.
 
 ### PostgreSQL authority operations
 

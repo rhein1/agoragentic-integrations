@@ -1,0 +1,104 @@
+name: Risk Fork Release Candidate
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'risk-fork/**'
+      - '.github/workflows/risk-fork-release.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'risk-fork/**'
+      - '.github/workflows/risk-fork-release.yml'
+  workflow_dispatch:
+
+# This workflow produces retained CI artifacts only. It cannot create or mutate a
+# GitHub Release or publish a package; either action requires a separate explicit
+# repository-owner approval and its own protected release operation.
+permissions:
+  contents: read
+
+concurrency:
+  group: risk-fork-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-fresh-extraction:
+    name: Build and fresh extraction (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      RISK_FORK_DEMO_ALLOW_LOOPBACK: '0'
+      RISK_FORK_RELEASE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RISK_FORK_RELEASE_OUTPUT_BASE: ${{ runner.temp }}/risk-fork-release-output
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 1
+          ref: ${{ env.RISK_FORK_RELEASE_SOURCE_SHA }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            risk-fork/package-lock.json
+            risk-fork/hackathon/package-lock.json
+      - name: Install locked dependencies and warm the offline cache
+        run: |
+          npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
+          npm --prefix risk-fork/hackathon ci --ignore-scripts --no-audit --no-fund
+      - name: Verify the actual package-consumer artifact
+        working-directory: risk-fork
+        run: npm run test:package
+      - name: Audit locked core dependencies
+        working-directory: risk-fork
+        run: npm audit --omit=dev
+      - name: Verify source and hackathon release contracts
+        run: |
+          npm --prefix risk-fork run check
+          npm --prefix risk-fork test
+          npm --prefix risk-fork/hackathon run check
+          npm --prefix risk-fork/hackathon test
+      - name: Build exact-commit dependency-complete release candidate
+        run: node risk-fork/hackathon/scripts/build-release-artifacts.mjs
+      - name: Verify sidecars and run from a fresh extraction
+        run: >-
+          node risk-fork/hackathon/scripts/verify-release-artifacts.mjs
+          --artifacts "${{ runner.temp }}/risk-fork-release-output"
+          --extract-to "${{ runner.temp }}/risk-fork-fresh-extraction"
+          --record "${{ runner.temp }}/risk-fork-client-verification-${{ runner.os }}.json"
+      - name: Upload immutable candidate files and Linux conformance record
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: risk-fork-release-candidate-${{ env.RISK_FORK_RELEASE_SOURCE_SHA }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.zip
+            ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.sha256
+            ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.spdx.json
+            ${{ runner.temp }}/risk-fork-release-output/*/risk-fork-hackathon-demo-*.build.json
+      - name: Upload platform MCP client-verification record
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: risk-fork-client-verification-${{ runner.os }}-${{ env.RISK_FORK_RELEASE_SOURCE_SHA }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: ${{ runner.temp }}/risk-fork-client-verification-${{ runner.os }}.json
