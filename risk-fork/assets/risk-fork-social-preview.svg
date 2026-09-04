@@ -1,14 +1,142 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640"
-viewBox="0 0 1280 640" role="img" shape-rendering="geometricPrecision">
-<rect width="1280" height="640" fill="#F5F1E9"/>
-<rect x="642" y="0" width="638" height="640" fill="#0C1222"/>
-<rect x="0" y="0" width="1280" height="8" fill="#E8613A"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc" focusable="false" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
+  <title id="title">Risk Fork — fork before risk</title>
+  <desc id="desc">A source-only local demonstration of a trusted parent routing a risky tool call into a disposable child and accepting only a validated result without transferring authority.</desc>
 
-<g transform="translate(54 42)">
-  <rect x="0" y="0" width="28" height="28" rx="5.04" fill="#E8613A" fill-opacity="1" stroke="none" stroke-width="1"/><rect x="7.5600000000000005" y="7.5600000000000005" width="12.879999999999999" height="12.879999999999999" rx="1.9600000000000002" fill="#0C1222" fill-opacity="1" stroke="none" stroke-width="1"/>
-  <text x="42" y="22" font-family="Inter, Arial, sans-serif"
-        font-size="25" font-weight="700" letter-spacing="-0.8">
-    <tspan fill="#0C1222">agora</tspan><tspan fill="#E8613A">gentic</tspan>
-  </text>
-</g>
-<text x="54" y="124" fill="#E8613A" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="11" font-weight="700" letter-spacing="1.5" text-anchor="start">OPEN-SOURCE AGENT SECURITY</text><text x="54" y="222" fill="#0C1222" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="650" letter-spacing="-3.8" text-anchor="start">Risk Fork</text><text x="58" y="286" fill="#273047" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="500" letter-spacing="-0.55" text-anchor="start">Run untrusted MCP and tool calls</text><text x="58" y="322" fill="#273047" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="500" letter-spacing="-0.55" text-anchor="start">in a disposable environment.</text><path d="M 58 366 L 550 366" stroke="#0C1222" stroke-width="1" fill="none" stroke-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"/><text x="58" y="410" fill="#64748B" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="10" font-weight="700" letter-spacing="1.4" text-anchor="start">WHY IT MATTERS</text><text x="58" y="451" fill="#0C1222" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.5" text-anchor="start">The parent keeps its identity,</text><text x="58" y="485" fill="#0C1222" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="-0.5" text-anchor="start">memory, and authority.</text><text x="58" y="548" fill="#E8613A" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="650" letter-spacing="-0.45" text-anchor="start">Clone state. Never authority.</text><text x="58" y="594" fill="#64748B" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="9" font-weight="650" letter-spacing="0.95" text-anchor="start">HOST ENFORCED  ·  PROVIDER NEUTRAL  ·  TYPED RETURN ONLY</text><text x="692" y="70" fill="#E8613A" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="10" font-weight="700" letter-spacing="1.4" text-anchor="start">RISK FORK FLOW</text><text x="1224" y="70" fill="#06B6D4" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="9" font-weight="700" letter-spacing="1.0" text-anchor="end">PARENT STAYS CLEAN</text><path d="M 692 88 L 1224 88" stroke="#263044" stroke-width="1" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><rect x="700" y="150" width="190" height="140" rx="4" fill="#111A2E" fill-opacity="1" stroke="#F5F1E9" stroke-width="1.5"/><text x="724" y="179" fill="#94A3B8" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="9" font-weight="700" letter-spacing="1.0" text-anchor="start">TRUSTED AGENT</text><text x="724" y="220" fill="#F5F1E9" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="29" font-weight="650" letter-spacing="-0.7" text-anchor="start">Parent</text><path d="M 724 238 L 866 238" stroke="#263044" stroke-width="1" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><text x="724" y="262" fill="#06B6D4" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.6" font-weight="650" letter-spacing="0.65" text-anchor="start">IDENTITY · MEMORY · AUTHORITY</text><path d="M 890 220 H 972" stroke="#F5F1E9" stroke-width="4" fill="none" stroke-opacity="0.55" stroke-linecap="round" stroke-linejoin="round"/><circle cx="988" cy="220" r="10" fill="#F5F1E9" stroke="#E8613A" stroke-width="3"/><text x="988" y="252" fill="#94A3B8" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="700" letter-spacing="0.8" text-anchor="middle">RISK CHECK</text><path d="M 998 214 C 1040 178 1072 150 1112 126" stroke="#64748B" stroke-width="6" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="1140" cy="108" r="12" fill="none" stroke="#E8613A" stroke-width="2"/><path d="M 1135 103 L 1145 113 M 1145 103 L 1135 113" stroke="#E8613A" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><text x="1140" y="140" fill="#94A3B8" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="700" letter-spacing="0.75" text-anchor="middle">DIRECT BLOCKED</text><path d="M 998 226 C 1042 254 1062 290 1088 318" stroke="#E8613A" stroke-width="7" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 1071 307 L 1089 318 L 1071 329" stroke="#F5F1E9" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><text x="1036" y="279" fill="#F07A58" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="700" letter-spacing="0.8" text-anchor="middle">STATE ONLY</text><rect x="1084" y="274" width="152" height="184" rx="4" fill="#FFFDF8" fill-opacity="1" stroke="#E8613A" stroke-width="3"/><text x="1160" y="302" fill="#E8613A" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="8" font-weight="700" letter-spacing="0.95" text-anchor="middle">DISPOSABLE</text><text x="1160" y="340" fill="#0C1222" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="650" letter-spacing="-0.8" text-anchor="middle">Fork</text><path d="M 1106 358 L 1214 358" stroke="#D8D2C8" stroke-width="1" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><text x="1160" y="386" fill="#64748B" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="650" letter-spacing="0.7" text-anchor="middle">UNTRUSTED MCP</text><text x="1160" y="407" fill="#64748B" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="650" letter-spacing="0.7" text-anchor="middle">TOOLS · CODE</text><text x="1160" y="438" fill="#E8613A" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="8" font-weight="700" letter-spacing="0.8" text-anchor="middle">NO AUTHORITY</text><rect x="856" y="494" width="250" height="64" rx="4" fill="#111A2E" fill-opacity="1" stroke="#06B6D4" stroke-width="1.5"/><text x="880" y="520" fill="#06B6D4" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="8" font-weight="700" letter-spacing="0.95" text-anchor="start">VALIDATE</text><text x="880" y="545" fill="#F5F1E9" fill-opacity="1" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="-0.25" text-anchor="start">Typed result only</text><path d="M 1130 458 C 1115 485 1094 510 1106 526" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 6"/><path d="M 1115 516 L 1106 526 L 1118 532" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><path d="M 856 528 C 798 528 752 488 752 290" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 7"/><path d="M 743 305 L 752 290 L 762 305" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round"/><text x="760" y="582" fill="#06B6D4" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="700" letter-spacing="0.75" text-anchor="start">VALIDATED RESULT RETURNS</text><path d="M 1202 458 V 504" stroke="#E8613A" stroke-width="2.5" fill="none" stroke-opacity="1" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 5"/><text x="1202" y="530" fill="#E8613A" fill-opacity="1" font-family="JetBrains Mono, DejaVu Sans Mono, Consolas, monospace" font-size="7.5" font-weight="700" letter-spacing="0.75" text-anchor="middle">DESTROY</text></svg>
+  <defs>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#8FA5C4" stroke-opacity="0.07" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="orange-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#E8613A" stop-opacity="0.24"/>
+      <stop offset="0.52" stop-color="#E8613A" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#E8613A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cyan-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#06B6D4" stop-opacity="0.22"/>
+      <stop offset="0.52" stop-color="#06B6D4" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#06B6D4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#E8613A"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="boundary" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#E8613A" stop-opacity="0.72"/>
+      <stop offset="0.46" stop-color="#2A3A56" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#06B6D4" stop-opacity="0.72"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="20" flood-color="#000814" flood-opacity="0.52"/>
+    </filter>
+    <filter id="orange-halo" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="cyan-halo" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#FF7651"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#45D6DF"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="640" fill="#08111F"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <ellipse cx="1030" cy="250" rx="310" ry="290" fill="url(#orange-glow)"/>
+  <ellipse cx="875" cy="430" rx="330" ry="260" fill="url(#cyan-glow)"/>
+  <path d="M646 88C846 16 1121 59 1230 228" fill="none" stroke="#2A3A56" stroke-opacity="0.34" stroke-width="1.5"/>
+  <path d="M621 566C826 622 1096 594 1231 431" fill="none" stroke="#2A3A56" stroke-opacity="0.34" stroke-width="1.5"/>
+
+  <g transform="translate(70 52)" filter="url(#soft-shadow)">
+    <rect width="42" height="42" rx="11" fill="#E8613A"/>
+    <rect x="10" y="9" width="22" height="22" rx="5" fill="#0C1222"/>
+    <circle cx="31" cy="31" r="3.5" fill="#0C1222"/>
+    <text x="58" y="31" fill="#F8FAFC" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="28" font-weight="650" letter-spacing="0.2">agoragentic</text>
+  </g>
+
+  <g transform="translate(72 132)">
+    <rect width="310" height="36" rx="18" fill="#E8613A" fill-opacity="0.13" stroke="#E8613A" stroke-opacity="0.62"/>
+    <circle cx="20" cy="18" r="4" fill="#FF7651"/>
+    <text x="34" y="24" fill="#FF8A66" font-family="Consolas, monospace" font-size="14" font-weight="700" letter-spacing="1.45">FORK-BEFORE-RISK FOR AGENTS</text>
+
+    <text x="0" y="112" fill="#F8FAFC" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="66" font-weight="700" letter-spacing="-1.2">Risk Fork</text>
+    <text x="0" y="168" fill="#F8FAFC" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="43" font-weight="600" letter-spacing="-0.5">Fork before <tspan fill="#FF7651">risk.</tspan></text>
+
+    <rect x="0" y="198" width="500" height="3" rx="1.5" fill="url(#rule)"/>
+    <text x="0" y="246" fill="#B8C5D9" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="21" font-weight="350">Run untrusted tools in a disposable child.</text>
+    <text x="0" y="277" fill="#B8C5D9" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="21" font-weight="350">Return only validated results.</text>
+
+    <g transform="translate(0 310)">
+      <rect width="368" height="48" rx="14" fill="#101A2E" stroke="#2A3A56"/>
+      <path d="M20 15V33M20 24H31" fill="none" stroke="#45D6DF" stroke-width="2" stroke-linecap="round"/>
+      <text x="47" y="31" fill="#E7EDF6" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="19" font-weight="600">Clone state. <tspan fill="#FF8A66">Never authority.</tspan></text>
+    </g>
+  </g>
+
+  <g transform="translate(72 526)">
+    <rect width="518" height="42" rx="21" fill="#101A2E" stroke="#2A3A56"/>
+    <circle cx="22" cy="21" r="5" fill="#F4B860"/>
+    <text x="38" y="26" fill="#E7EDF6" font-family="Consolas, monospace" font-size="14" font-weight="700" letter-spacing="0.7">SOURCE-ONLY ALPHA · LOCAL DEMO · NO LIVE PROTECTION</text>
+  </g>
+
+  <g>
+    <rect x="650" y="122" width="558" height="394" rx="30" fill="#0C1628" fill-opacity="0.94" stroke="url(#boundary)" stroke-width="2" filter="url(#soft-shadow)"/>
+    <rect x="664" y="136" width="530" height="366" rx="23" fill="none" stroke="#8FA5C4" stroke-opacity="0.2" stroke-width="1.2" stroke-dasharray="5 8"/>
+
+    <g font-family="Consolas, monospace">
+      <circle cx="686" cy="166" r="4" fill="#45D6DF"/>
+      <text x="699" y="172" fill="#AFC0D7" font-size="15" font-weight="700" letter-spacing="1.1">HOST ENFORCEMENT CONTRACT</text>
+      <text x="1163" y="172" fill="#7086A4" font-size="15" font-weight="700" text-anchor="end">01</text>
+    </g>
+
+    <path d="M858 271H875" fill="none" stroke="#FF7651" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow-orange)"/>
+    <path d="M969 271H1001" fill="none" stroke="#FF7651" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow-orange)"/>
+    <rect x="866" y="181" width="116" height="28" rx="14" fill="#181B2B" stroke="#E8613A" stroke-opacity="0.58"/>
+    <text x="924" y="200" fill="#FF8A66" font-family="Consolas, monospace" font-size="15" font-weight="700" letter-spacing="0.5" text-anchor="middle">RISKY MOVE</text>
+
+    <g>
+      <rect x="690" y="211" width="168" height="120" rx="20" fill="#111D30" stroke="#38506F" stroke-width="2"/>
+      <circle cx="721" cy="244" r="13" fill="#06B6D4" fill-opacity="0.15" stroke="#45D6DF"/>
+      <path d="M715 244H727M721 238V250" stroke="#45D6DF" stroke-width="2" stroke-linecap="round"/>
+      <text x="714" y="282" fill="#F8FAFC" font-family="Consolas, monospace" font-size="16" font-weight="700" letter-spacing="0.2">TRUSTED PARENT</text>
+      <text x="714" y="308" fill="#8FA5C4" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="16">state + policy</text>
+    </g>
+
+    <g>
+      <circle cx="924" cy="271" r="45" fill="#171C30" stroke="#FF7651" stroke-width="2.4"/>
+      <circle cx="924" cy="271" r="35" fill="none" stroke="#E8613A" stroke-opacity="0.28"/>
+      <path d="M924 247V259M924 283V295M900 271H912M936 271H948" stroke="#FF7651" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="924" cy="271" r="5" fill="#FF7651" filter="url(#orange-halo)"/>
+      <rect x="870" y="326" width="108" height="30" rx="15" fill="#E8613A" fill-opacity="0.13" stroke="#E8613A" stroke-opacity="0.58"/>
+      <text x="924" y="347" fill="#FF8A66" font-family="Consolas, monospace" font-size="16" font-weight="700" letter-spacing="0.2" text-anchor="middle">RISK CHECK</text>
+    </g>
+
+    <g>
+      <rect x="1006" y="202" width="174" height="139" rx="20" fill="#1A1F31" stroke="#FF7651" stroke-width="2.2"/>
+      <path d="M1030 231H1051M1030 238H1044" stroke="#FF7651" stroke-width="2" stroke-linecap="round"/>
+      <text x="1030" y="273" fill="#F8FAFC" font-family="Consolas, monospace" font-size="16" font-weight="700" letter-spacing="0.2">DISPOSABLE</text>
+      <text x="1030" y="294" fill="#F8FAFC" font-family="Consolas, monospace" font-size="16" font-weight="700" letter-spacing="0.2">CHILD</text>
+      <rect x="1030" y="307" width="126" height="24" rx="12" fill="#E8613A" fill-opacity="0.13" stroke="#E8613A" stroke-opacity="0.58"/>
+      <text x="1093" y="324" fill="#FF9A7C" font-family="Consolas, monospace" font-size="15" font-weight="700" letter-spacing="0.1" text-anchor="middle">NO AUTHORITY</text>
+    </g>
+
+    <path d="M1093 342C1093 371 1070 382 1032 389" fill="none" stroke="#45D6DF" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow-cyan)"/>
+    <path d="M824 446C772 446 750 404 760 341" fill="none" stroke="#45D6DF" stroke-width="3" stroke-linecap="round" stroke-dasharray="7 7" marker-end="url(#arrow-cyan)"/>
+
+    <g>
+      <rect x="824" y="403" width="288" height="82" rx="18" fill="#0D2534" stroke="#45D6DF" stroke-width="2.2"/>
+      <circle cx="868" cy="444" r="14" fill="#06B6D4" fill-opacity="0.18" stroke="#45D6DF"/>
+      <path d="M862 444L867 449L875 439" fill="none" stroke="#45D6DF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="894" y="440" fill="#F8FAFC" font-family="Consolas, monospace" font-size="16" font-weight="700" letter-spacing="0.2">VALIDATED RESULT</text>
+      <text x="894" y="464" fill="#8FA5C4" font-family="Bahnschrift, Segoe UI, sans-serif" font-size="16">typed + policy-checked</text>
+    </g>
+
+    <circle cx="1171" cy="483" r="4" fill="#45D6DF" filter="url(#cyan-halo)"/>
+  </g>
+
+  <rect x="1" y="1" width="1278" height="638" rx="22" fill="none" stroke="#F8FAFC" stroke-opacity="0.08" stroke-width="2"/>
+</svg>
