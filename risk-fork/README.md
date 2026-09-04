@@ -6,7 +6,7 @@ Risk Fork is an experimental, source-only package for **fork-before-risk** agent
 
 The short analogy is **“quick-save before the boss fight.”** The security model is stronger and more specific: fork a known-good state *before* risk, leave the trusted parent clean, clone no authority, treat every child result as tainted, and import only a bounded artifact after clean-side validation.
 
-The public package is source-packaged and MIT-licensed, but it is not published as an installable registry package. `package.json` is intentionally marked `private`, and the merged source grants no hosted execution or activation authority. **Production readiness is blocked. This directory contains no current public evidence that Risk Fork protects live Agoragentic MCP or Harness traffic.** Nothing in this directory proves production containment, live-provider operation, settlement, certification, or permission to take an external action.
+The public package is source-packaged under Apache License 2.0, but it is not published as an installable registry package. `package.json` is intentionally marked `private`, and the merged source grants no hosted execution or activation authority. **Production readiness is blocked. This directory contains no current public evidence that Risk Fork protects live Agoragentic MCP or Harness traffic.** Nothing in this directory proves production containment, live-provider operation, settlement, certification, or permission to take an external action.
 
 The invariant is:
 
@@ -335,4 +335,6 @@ It must not contain hosted-provider credentials, customer data, private prompts 
 
 ## License
 
-The Risk Fork package is available under the [MIT License](./LICENSE). This license does not turn an experimental reference adapter into a security boundary or confer access to hosted/commercial services.
+The Risk Fork package in this directory is available under the [Apache License 2.0](./LICENSE). Its [NOTICE](./NOTICE) preserves the project attribution required for future distributions. Earlier Git revisions made available under the MIT License remain under their original license terms; this change applies Apache-2.0 to this source version and future Risk Fork releases derived from it.
+
+The repository-root license and separately packaged integrations may use different licenses. Apache-2.0 does not turn an experimental reference adapter into a security boundary or confer access to hosted/commercial services.

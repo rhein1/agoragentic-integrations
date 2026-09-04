@@ -3,7 +3,7 @@
   "version": "0.1.0-alpha.0",
   "description": "Provider-neutral fork-before-risk contracts, deterministic controls, and local reference tooling for agent execution.",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true,
   "engines": {
     "node": ">=20"
@@ -45,7 +45,8 @@
     "POSTGRES_AUTHORITY_RUNBOOK.md",
     "PROVIDER_COMPARISON.md",
     "ADVERSARIAL_REMEDIATION.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",

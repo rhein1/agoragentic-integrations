@@ -107,6 +107,7 @@ const REQUIRED_FILES = Object.freeze([
   ['risk-fork/package.json', 'risk-fork/package.json'],
   ['risk-fork/package-lock.json', 'risk-fork/package-lock.json'],
   ['risk-fork/LICENSE', 'risk-fork/LICENSE'],
+  ['risk-fork/NOTICE', 'risk-fork/NOTICE'],
   ['risk-fork/hackathon/package.json', 'risk-fork/hackathon/package.json'],
   ['risk-fork/hackathon/package-lock.json', 'risk-fork/hackathon/package-lock.json'],
   ['risk-fork/hackathon/README.md', 'risk-fork/hackathon/README.md'],
@@ -1578,6 +1579,7 @@ async function writeGeneratedKitMetadata({
   await write('CLAIM_BOUNDARY.md', claimBoundary());
   await write('SUPPORTED_NODE.txt', `>=20\n`);
   await write('LICENSE', await readFile(path.join(kitRoot, 'risk-fork/LICENSE'), 'utf8'));
+  await write('NOTICE', await readFile(path.join(kitRoot, 'risk-fork/NOTICE'), 'utf8'));
   await write('SOURCE_COMMITS.json', stableJson({
     schema: 'agoragentic.risk-fork.demo-source-commits.v1',
     banner: OFFLINE_KIT_BANNER,

@@ -55,6 +55,7 @@ const SOURCE_FILES = Object.freeze([
   'risk-fork/package.json',
   'risk-fork/package-lock.json',
   'risk-fork/LICENSE',
+  'risk-fork/NOTICE',
   'risk-fork/hackathon/package.json',
   'risk-fork/hackathon/package-lock.json',
   'risk-fork/hackathon/README.md',
@@ -202,6 +203,12 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
     [...manifest.files.map((entry) => entry.path)].sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right))),
   );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/fixtures/catalog.json'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/NOTICE'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'NOTICE'));
+  assert.equal(
+    await readFile(path.join(first.kit_directory, 'NOTICE'), 'utf8'),
+    await readFile(path.join(first.kit_directory, 'risk-fork/NOTICE'), 'utf8'),
+  );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/node_modules/ajv/package.json'));
   assert.ok(manifest.files.some((entry) => entry.path === 'DEPENDENCY_PROVENANCE.json'));
   assert.ok(!manifest.files.some((entry) => entry.path.endsWith(`/${tamperedMarker}`)));

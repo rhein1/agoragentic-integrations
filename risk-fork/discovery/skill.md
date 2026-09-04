@@ -1,7 +1,7 @@
 ---
 name: risk-fork-hackathon-demo
 description: Inspect deterministic fork-before-risk behavior over named local synthetic fixtures. Use only for the Risk Fork hackathon protocol simulator, never for live protection or real risky actions.
-license: MIT
+license: Apache-2.0
 metadata:
   entrypoint: risk-fork/hackathon/bin/risk-fork-demo.mjs
   status: experimental_source_demo
@@ -131,7 +131,8 @@ a separate publication action is authorized. Do not broaden cleanup or claim a
 production deletion SLA.
 
 The official local demo permits one active run and ten completed runs between
-explicit cleanup resets; it is not a daily allowance. Its MIT source can be
-copied or modified. Commit/manifest verification identifies official reviewed
-bytes, while the closed fixtures and limits constrain only this official demo
-and cannot prevent harmful third-party forks.
+explicit cleanup resets; it is not a daily allowance. Its Apache-2.0 source can
+be copied or modified subject to the license and NOTICE. Commit/manifest
+verification identifies official reviewed bytes, while the closed fixtures and
+limits constrain only this official demo and cannot prevent harmful third-party
+forks.

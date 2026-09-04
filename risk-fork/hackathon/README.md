@@ -201,13 +201,16 @@ marker. Local absence evidence is not a production deletion SLA.
 
 ## Open-source and abuse boundary
 
-The public tranche is MIT-licensed. That permits copying and modification; no
-source license or manifest can prevent someone from creating a harmful fork.
-The signed commit, deterministic manifest, and SHA-256 checks distinguish the
-official reviewed kit from modified bytes. The closed fixture catalog, one-run
-concurrency gate, ten-run cleanup-reset quota, byte/action limits, no-credential
-contract, and network guard constrain the official demo only. They are not DRM,
-malware prevention, or control over third-party forks.
+The public Risk Fork core and this demo are licensed under Apache-2.0. Future
+distributions must carry the license and applicable [NOTICE](../NOTICE)
+attribution, and modified files must be marked as changed. Earlier Git revisions
+made available under MIT remain under their original license terms. No source
+license or manifest can prevent someone from creating a harmful fork. The signed
+commit, deterministic manifest, and SHA-256 checks distinguish the official
+reviewed kit from modified bytes. The closed fixture catalog, one-run concurrency
+gate, ten-run cleanup-reset quota, byte/action limits, no-credential contract,
+and network guard constrain the official demo only. They are not DRM, malware
+prevention, or control over third-party forks.
 
 ## Flight Recorder
 

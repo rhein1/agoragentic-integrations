@@ -17,5 +17,5 @@
     "build:kit": "node ./scripts/build-offline-kit.mjs",
     "verify:kit": "node ./bin/risk-fork-demo.mjs verify-offline-kit"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }
