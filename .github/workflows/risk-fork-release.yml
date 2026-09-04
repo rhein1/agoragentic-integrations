@@ -57,10 +57,10 @@ jobs:
           cache-dependency-path: |
             risk-fork/package-lock.json
             risk-fork/hackathon/package-lock.json
-      - name: Install locked dependencies and warm the offline cache
-        run: |
-          npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
-          npm --prefix risk-fork/hackathon ci --ignore-scripts --no-audit --no-fund
+      # The demo package has no dependencies. Do not create a nested install tree
+      # that can dirty the exact-source release boundary on another npm version.
+      - name: Install locked core dependencies and warm the offline cache
+        run: npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
       - name: Verify the actual package-consumer artifact
         working-directory: risk-fork
         run: npm run test:package

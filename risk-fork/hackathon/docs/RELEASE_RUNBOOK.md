@@ -17,14 +17,13 @@ The ZIP also has its own `MANIFEST.json`, with a SHA-256 and byte count for ever
 
 ## Required source checks
 
-Use Node.js 22 for the release candidate. Dependency installation may access npm to populate the local cache; artifact construction and all demo execution after that point are provider-free and guarded against external network use.
+Use Node.js 22 for the release candidate. Core dependency installation may access npm to populate the local cache; the demo package has no dependencies and needs no separate install. Artifact construction and all demo execution after that point are provider-free and guarded against external network use.
 
 PowerShell:
 
 ```powershell
 git status --short
 npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
-npm --prefix risk-fork/hackathon ci --ignore-scripts --no-audit --no-fund
 npm --prefix risk-fork run check
 npm --prefix risk-fork test
 npm --prefix risk-fork run test:package
@@ -37,7 +36,6 @@ Bash:
 ```bash
 git status --short
 npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
-npm --prefix risk-fork/hackathon ci --ignore-scripts --no-audit --no-fund
 npm --prefix risk-fork run check
 npm --prefix risk-fork test
 npm --prefix risk-fork run test:package
