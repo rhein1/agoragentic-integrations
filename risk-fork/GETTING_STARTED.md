@@ -34,9 +34,9 @@ npm --prefix risk-fork run test:package
 ```
 
 That check packs the actual tarball, installs it into a fresh consumer using
-the local npm cache, imports package exports, runs the local lifecycle and MCP
+the source lockfile's exact dependency graph and local npm cache, imports package exports, runs the local lifecycle and MCP
 host example, and checks verified cleanup. It removes its temporary consumer.
-It does not publish the package or contact a sandbox provider.
+It does not publish the package, test unlocked registry resolution, or contact a sandbox provider.
 
 To retain a tarball for your own project, run `npm pack --ignore-scripts` in the
 `risk-fork` directory, then `npm install --ignore-scripts <absolute-tarball-path>`

@@ -22,7 +22,8 @@ function run(label, executable, args, cwd) {
   });
   if (result.error || result.status !== 0) {
     // npm's raw output can contain local configuration. Keep failure reporting bounded.
-    throw new Error(`${label} failed (exit ${result.status ?? 'unknown'}; ${result.error?.code ?? 'process_error'})`);
+    const npmCode = result.stderr?.match(/npm (?:error|ERR!) code ([A-Z][A-Z0-9_]{1,30})\b/)?.[1];
+    throw new Error(`${label} failed (exit ${result.status ?? 'unknown'}; ${result.error?.code ?? npmCode ?? 'process_error'})`);
   }
   return result.stdout;
 }
@@ -54,15 +55,55 @@ try {
       assert.ok(included.has(target), `Packed documentation link is missing: ${document} -> ${target}`);
     }
   }
-  await writeFile(path.join(consumerRoot, 'package.json'), JSON.stringify({
+  const sourceManifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
+  const sourceLock = JSON.parse(await readFile(path.join(packageRoot, 'package-lock.json'), 'utf8'));
+  assert.equal(sourceLock.lockfileVersion, 3);
+  assert.equal(sourceLock.packages[''].version, entry.version);
+  assert.deepEqual(sourceLock.packages[''].dependencies, sourceManifest.dependencies);
+  const localTarballRef = `file:../${entry.filename}`;
+  const consumerManifest = {
     name: 'risk-fork-clean-package-consumer', private: true, version: '1.0.0', type: 'module',
+    dependencies: { [entry.name]: localTarballRef },
+  };
+  const dependencyEntries = Object.fromEntries(Object.entries(sourceLock.packages)
+    .filter(([location, dependency]) => location !== '' && dependency.dev !== true));
+  const packageLocation = `node_modules/${entry.name}`;
+  assert.equal(dependencyEntries[packageLocation], undefined);
+  const installedPackageLock = {
+    version: entry.version, resolved: localTarballRef, integrity: entry.integrity,
+  };
+  for (const key of ['license', 'dependencies', 'engines', 'peerDependencies', 'peerDependenciesMeta']) {
+    if (sourceManifest[key] !== undefined) installedPackageLock[key] = sourceManifest[key];
+  }
+  // npm ci warms exact tarball content, not registry packuments. A fresh unlocked
+  // npm install can still require uncached metadata. Preserve the reviewed graph
+  // while installing the actual packed artifact, never a copied source directory.
+  await writeFile(path.join(consumerRoot, 'package.json'), JSON.stringify(consumerManifest));
+  await writeFile(path.join(consumerRoot, 'package-lock.json'), JSON.stringify({
+    name: consumerManifest.name, version: consumerManifest.version, lockfileVersion: 3, requires: true,
+    packages: {
+      '': consumerManifest,
+      [packageLocation]: installedPackageLock,
+      ...dependencyEntries,
+    },
   }));
   run('offline consumer install (run npm ci first to warm the npm cache)', process.execPath, [
-    npmCli, 'install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
-    '--omit=optional', '--save-exact', tarball,
+    npmCli, 'ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund',
+    '--omit=dev', '--omit=optional',
   ], consumerRoot);
+  let verifiedDependencyCount = 0;
+  for (const [location, dependency] of Object.entries(dependencyEntries)) {
+    if (dependency.optional === true) continue;
+    assert.match(location, /^node_modules\/(?:@[^/]+\/)?[^/]+(?:\/node_modules\/(?:@[^/]+\/)?[^/]+)*$/);
+    const installedDependency = JSON.parse(await readFile(path.join(consumerRoot, location, 'package.json'), 'utf8'));
+    assert.equal(installedDependency.version, dependency.version, `Installed dependency version drift: ${location}`);
+    verifiedDependencyCount += 1;
+  }
   const installedRoot = path.join(consumerRoot, 'node_modules/@agoragentic/risk-fork');
   const manifest = JSON.parse(await readFile(path.join(installedRoot, 'package.json'), 'utf8'));
+  for (const key of ['name', 'version', 'dependencies', 'peerDependencies', 'peerDependenciesMeta', 'engines']) {
+    assert.deepEqual(manifest[key], sourceManifest[key], `Packed manifest drift: ${key}`);
+  }
   assert.equal(manifest.version, entry.version);
   assert.equal(manifest.license, 'Apache-2.0');
   assert.equal(manifest.private, false);
@@ -113,7 +154,9 @@ try {
     status: 'passed', package: manifest.name, version: manifest.version,
     tarball_sha256: createHash('sha256').update(await readFile(tarball)).digest('hex'),
     packed_files: included.size, packed_bytes: entry.size,
-    offline_install: true, installed_exports: true, local_lifecycle: 'verified',
+    offline_install: true, dependency_resolution: 'exact_source_lock',
+    verified_dependency_count: verifiedDependencyCount,
+    installed_exports: true, local_lifecycle: 'verified',
     mcp_host_example: 'passed', registry_publication_verified: false,
     live_traffic_protected: false, provider_calls: 0,
   }, null, 2)}\n`);
