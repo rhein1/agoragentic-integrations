@@ -1,0 +1,26 @@
+{
+  "schema": "agoragentic.risk-fork.hackathon-fixture-catalog.v1",
+  "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",
+  "synthetic_only": true,
+  "arbitrary_input_allowed": false,
+  "scenario_ids": [
+    "low-read-only",
+    "elevated-owner-policy",
+    "high-filesystem-write",
+    "high-incomplete-metadata",
+    "high-untrusted-discovery",
+    "high-prompt-injection",
+    "e2b-malicious-mcp-containment",
+    "irreversible-deployment-proposal",
+    "deny-owner-policy",
+    "cleanup-unknown",
+    "stale-governance-binding",
+    "malformed-lifecycle-receipt",
+    "attack-traversal",
+    "attack-link",
+    "attack-secret",
+    "attack-oversized-write",
+    "attack-timeout",
+    "attack-concurrency"
+  ]
+}

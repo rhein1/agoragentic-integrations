@@ -55,10 +55,16 @@ export {
   verifyLifecycle,
 } from './lifecycle.mjs';
 export {
+  CLEANUP_VERIFICATION_EVIDENCE_SCHEMA,
+  CLEANUP_VERIFICATION_REQUEST_SCHEMA,
   REQUIRED_PROVIDER_METHODS,
   RiskForkProvider,
   assertRiskForkProvider,
+  createCleanupVerificationEvidence,
+  createCleanupVerificationRequest,
   requireProviderCapability,
+  verifyCleanupVerificationEvidence,
+  verifyCleanupVerificationRequest,
 } from './provider.mjs';
 export {
   scanTaintedValue,
@@ -91,6 +97,21 @@ export {
   assertHostCanEnforce,
   createMcpInterceptionPlan,
 } from './interception.mjs';
+export {
+  RISK_FORK_HOST_BOUNDARY_SCHEMA,
+  RISK_FORK_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
+  RiskForkHostBoundaryError,
+  createRiskForkHostBoundary,
+  createRiskForkImportEnvelope,
+  createTrustedRiskDescriptor,
+  createTrustedRiskDescriptorSource,
+  importRiskForkProviderResult,
+  isRiskForkHostBoundary,
+  verifyRiskForkImportEnvelope,
+} from './host-boundary.mjs';
 export {
   createRiskForkReceipt,
   verifyRiskForkReceipt,

@@ -1190,7 +1190,7 @@
       "path": "mcp/README.md",
       "occurrences": 1,
       "line_numbers": [
-        105
+        111
       ],
       "categories": [
         "installer_or_clone",
@@ -1394,8 +1394,8 @@
       "path": "risk-fork/package.json",
       "occurrences": 2,
       "line_numbers": [
-        86,
-        90
+        87,
+        91
       ],
       "categories": [
         "installer_or_clone",
@@ -1418,7 +1418,7 @@
       "path": "risk-fork/README.md",
       "occurrences": 3,
       "line_numbers": [
-        64
+        67
       ],
       "categories": [
         "public_documentation"
@@ -1428,7 +1428,7 @@
       "path": "risk-fork/SECURITY_MODEL.md",
       "occurrences": 3,
       "line_numbers": [
-        167
+        178
       ],
       "categories": [
         "public_documentation"

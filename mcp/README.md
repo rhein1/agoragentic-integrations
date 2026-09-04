@@ -42,7 +42,7 @@ The package accepts a host session only when its clean discovery envelope report
 - `prompts/list` and `prompts/get`; and
 - consequential fallback REST operations.
 
-Each request descriptor is immutable and binds the phase, target URL and origin, parameters, tool name, risk profile, transport constraints, request hash, and—after discovery—the session binding hash. The package requests `redirects: "error"`, forbids direct package network access, and accepts only a request-bound clean-import envelope. If a session closes while a host request is pending, the late result is discarded before import.
+Each request descriptor is immutable and binds the phase, target URL and origin, parameters, tool name, risk profile, transport constraints, request hash, and—after discovery—the session binding hash. Before `tools/call`, the package resolves the complete bounded paginated tool directory and binds the exact advertised descriptor, descriptor hash, annotations, and closed capability record into the host request. Duplicate names, repeated/ambiguous pagination, unadvertised calls, name substitution, and descriptor drift fail closed. Missing or incomplete effect metadata is `unknown_effectfulness` and is routed as `IRREVERSIBLE`/`prepare_only`; remote annotation text is evidence input, never authority. The package requests `redirects: "error"`, forbids direct package network access, and accepts only a request-bound clean-import envelope. If a session closes while a host request is pending, the late result is discarded before import.
 
 Accepted imported JSON is copied into bounded plain JSON and recursively frozen. Envelopes must echo the exact request ID, request hash, and phase; assert `clean_imported: true` and `authority_granted: false`; and carry an evidence reference. `evidence_hash` must equal `computeMcpCleanImportEvidenceHash(request.request_hash, result, evidence_ref)`. The helper domain-separates and hashes canonical bounded JSON that binds `{ request_hash, evidence_ref, result }`; changing any one invalidates the envelope. Credential-shaped keys and values—including nested, camel-case, and plural credential containers—bearer material, `amk_` keys, private keys, credential query parameters, accessors, non-plain prototypes, sparse arrays, excessive depth, excessive nodes, and oversized JSON are rejected. A credential-shaped property name is allowed only as a `tools/list` input/output schema definition, and that schema may not embed `default`, `const`, `example(s)`, or `enum` values.
 
@@ -77,6 +77,12 @@ function cleanImported(request, result, evidenceRef) {
 }
 
 const enforcementBoundary = createMcpEnforcementBoundary({
+  timeouts: {
+    open_session_ms: 15_000,
+    request_ms: 30_000,
+    close_ms: 5_000,
+    fallback_ms: 30_000,
+  },
   async openSession(openRequest) {
     // Trusted host implementation only:
     // 1. execute server/discover inside the independently qualified boundary;
@@ -86,16 +92,16 @@ const enforcementBoundary = createMcpEnforcementBoundary({
     return qualifiedHost.openMcpSession(openRequest);
   },
   async executeFallback(fallbackRequest) {
-    // Trusted host implementation only. It owns policy, credentials, network,
-    // lifecycle, clean import, and evidence for this one fallback action.
-    return qualifiedHost.executeMcpFallback(fallbackRequest);
+    // Required adapter shape only. Current source hard-blocks every fallback
+    // before this callback and must never invoke it.
+    throw new Error('fallback execution is not qualified');
   },
 });
 
 await runMcpRelay({ enforcementBoundary });
 ```
 
-The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
+The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. Host-adapter and returned session methods are receiver-bound immediately. The factory calls each host method with its documented request followed by a controller-owned context containing `signal`, `timeout_ms`, `deadline_at`, and `operation`; implementations should stop owned work when the signal aborts. Open, request, and close waits have bounded configurable deadlines, a late-resolving open session is closed, and repeated `close()` calls share one close attempt. AbortSignal alone is not an effect fence: every fallback callback, including `agoragentic_preview_x402`, is hard-disabled and never invoked until a trusted host supplies durable idempotency and terminal reconciliation. The preview endpoint mints a `quote_id`, so its name does not prove a no-effect contract. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
 
 Do not use the example as production qualification. The host implementation must additionally demonstrate fresh child identity, no inherited authority or parent-writable state, target and argument revalidation, atomic one-use authorization/CAS, taint handling, clean commit, crash/retry safety, provider failure cleanup, and verified lifecycle enforcement.
 
@@ -140,9 +146,9 @@ The fail-closed metadata surface includes:
 - `agoragentic_execute`
 - `agoragentic_execute_status`
 
-Listing these tools is not evidence that their network operations are enabled. Every corresponding HTTP operation is handed to the enforcement host as a new bound request; with no host capability, it is blocked with zero I/O.
+Listing these tools is not evidence that their network operations are enabled. Current source hard-blocks every corresponding fallback before request construction or host callback invocation, even when an enforcement capability is installed. The result is `risk_fork_effect_fence_required` with zero fallback I/O.
 
-`agoragentic_execute`, registration, quote-like preview operations, and other consequential actions receive the strictest request risk profile. The package does not authorize spend, sign payments, or import child authority.
+Fallback metadata may describe consequential operations, but no fallback risk descriptor is handed to the host while the effect fence is unqualified. `agoragentic_execute`, registration, quote-like preview operations (including the quote-ID-minting x402 preview), and every other fallback remain blocked before the callback. The package does not authorize spend, sign payments, or import child authority.
 
 ## Host qualification checklist
 

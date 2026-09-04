@@ -18,7 +18,7 @@ The published packages and repo-local source/CLI surfaces are:
 - **Premortem Golden Loop Agent**: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - **Agoragentic Rust Framework HTTP Runtime examples**: `rust-framework/` contains TypeScript/Node and Python clients for a local or self-hosted Rust runtime plus a public-safe Agent OS Harness packet example. It does not publish crates, provision hosted runtimes, spend, settle x402, publish listings, mutate trust, or require native bindings.
 - **AnyDoc Document Evidence Adapter**: `examples/anydoc-document-evidence/` is an experimental source-only Node >=20 package for process-isolated local office-document parsing, explicit evidence coverage, semantic-loss warnings, and completeness-blocked handoff. It is not published to npm and does not intentionally upload, invoke OCR, attach context, publish, or spend.
-- **Risk Fork**: `risk-fork/` is an experimental source-only fork-before-risk protocol and adapter package. Its local and disposable PostgreSQL evidence does not establish live E2B containment, hosted MCP interception, managed PostgreSQL operations, deployment, publication, spend authority, or production readiness.
+- **Risk Fork**: `risk-fork/` is an experimental source-only fork-before-risk protocol and adapter package. From a source checkout, first run `npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund`, then start the named-fixture hackathon demo with `node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor`. A verified offline kit bundles the dependency closure and needs no install. The demo is a local protocol simulator, not isolation or live protection. Local and disposable evidence does not establish live E2B containment, hosted MCP interception, managed PostgreSQL operations, deployment, npm publication, spend authority, or production readiness.
 - **ARD v0.91 source profile**: `ard/` pins upstream schemas and context, adds a local JSON-LD vocabulary, and generates offline repository candidates from one canonical source. It never dereferences contexts, serves a route, executes, pays, verifies trust, publishes, or deploys.
 
 ## Authentication
@@ -139,7 +139,8 @@ The canonical inventory is `integrations.json` and contains 110 integration surf
 | Superfluid | superfluid/agoragentic_superfluid.ts | copy the reference client into your project |
 | Tempo MPP | tempo-mpp/agoragentic_tempo_mpp.ts | copy the reference client into your project |
 | AnyDoc Document Evidence Adapter | examples/anydoc-document-evidence/agoragentic-anydoc.mjs | cd examples/anydoc-document-evidence && npm ci |
-| Risk Fork | risk-fork/src/index.mjs | cd risk-fork && npm ci; experimental source only |
+| Risk Fork | risk-fork/src/index.mjs | npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund; experimental source only |
+| Risk Fork hackathon demo | risk-fork/hackathon/bin/risk-fork-demo.mjs | same locked source install; verified offline kit needs no install; local Node entrypoint over named synthetic fixtures; no provider/external network, credential, clean commit, npm, hosted, production, or live-protection claim; Flight Recorder loopback is local transport only |
 | ARD v0.91 source profile | ard/src/profile.mjs | cd ard && npm ci --ignore-scripts; offline and default-off |
 
 ### Config-Only Integrations
@@ -263,6 +264,10 @@ Compatibility document: specs/ACP-SPEC.md. It is not the production wire contrac
 | Risk Fork | risk-fork/README.md |
 | Risk Fork security model | risk-fork/SECURITY_MODEL.md |
 | Risk Fork hosted MCP source bundle | risk-fork-hosted-mcp/README.md |
+| Risk Fork hackathon demo | risk-fork/hackathon/README.md |
+| Risk Fork hackathon status | risk-fork/hackathon/demo-status.json |
+| Risk Fork hackathon capability card | risk-fork/discovery/risk-fork-capability.json |
+| Risk Fork hackathon agent skill | risk-fork/discovery/skill.md |
 | A2A card | a2a/agent-card.json |
 | Glama entry | glama.json |
 | Citation | CITATION.cff |

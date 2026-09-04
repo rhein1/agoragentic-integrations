@@ -1,0 +1,190 @@
+{
+  "schema": "agoragentic.risk-fork.capability-card.v1",
+  "id": "risk-fork-hackathon-demo",
+  "name": "Risk Fork Hackathon Demo",
+  "kind": "agent_security_boundary",
+  "description": "Local deterministic visualization of fork-before-risk behavior, including a fake-E2B malicious-MCP contract simulation over closed synthetic fixtures.",
+  "status": "demo_only",
+  "intercepts": [
+    "mcp",
+    "tool_call",
+    "code_execution"
+  ],
+  "intercepts_live_traffic": false,
+  "risk_levels": [
+    "HIGH",
+    "IRREVERSIBLE"
+  ],
+  "commit_modes": [
+    "typed_result",
+    "workspace_diff",
+    "consequential_action_proposal"
+  ],
+  "providers": [
+    {
+      "id": "e2b",
+      "status": "hackathon_demo_only",
+      "qualification_status": "not_live_qualified",
+      "hackathon_mode": "injected_fake_sdk_local_contract_simulation",
+      "provider_calls": 0
+    }
+  ],
+  "read_only_discovery_tools": [
+    "risk_fork_assess",
+    "risk_fork_preview",
+    "risk_fork_status",
+    "risk_fork_receipt"
+  ],
+  "read_only_discovery_tool_status": "review_only_not_production_served_or_registered",
+  "public_execute_tool_exposed": false,
+  "entrypoint": "risk-fork/hackathon/bin/risk-fork-demo.mjs",
+  "banner": "DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION",
+  "use_when": [
+    "An attendee wants to inspect a named synthetic Risk Fork scenario.",
+    "A developer wants to preview deterministic risk classification and cleanup evidence offline.",
+    "An agent client needs a local stdio demonstration connector configured from a pinned checkout or verified kit."
+  ],
+  "do_not_use_when": [
+    "A real risky action, arbitrary command, live MCP server, production workspace, remote target, credential, wallet, or provider is involved.",
+    "The caller expects VM, container, kernel, cloud, E2B, or production isolation.",
+    "The caller expects deployment, publication, payment, hosted execution, live traffic protection, or clean commit."
+  ],
+  "host_decision_model": {
+    "model_may_select": "one enumerated synthetic scenario id",
+    "host_owns": [
+      "fixture metadata",
+      "risk input",
+      "classification",
+      "fork decision",
+      "limits",
+      "lifecycle",
+      "cleanup",
+      "receipt verification"
+    ],
+    "caller_risk_labels_accepted": false,
+    "arbitrary_operations_accepted": false
+  },
+  "commands": {
+    "doctor": "Read-only local readiness and owned-root inspection.",
+    "plan": "Read-only preview for one named scenario.",
+    "run": "Execute one closed synthetic scenario locally.",
+    "serve": "Serve the token-protected Flight Recorder on loopback.",
+    "config": "Print a local Node stdio configuration; --yes writes only an owned-root review artifact.",
+    "cleanup": "Clean marker-bound demo paths and separately verify absence.",
+    "verify-offline-kit": "Verify the commit-pinned kit without network or provider access."
+  },
+  "configuration": {
+    "command": "node",
+    "display_command": "node",
+    "args_prefix": [
+      "risk-fork/hackathon/bin/risk-fork-demo.mjs"
+    ],
+    "registry_resolution_allowed": false,
+    "write_target": "owned_demo_root_review_artifact_only",
+    "client_configuration_modified": false,
+    "supported_clients": [
+      "generic",
+      "codex",
+      "claude",
+      "cursor"
+    ],
+    "unverified_client_status": "generated_not_client_verified",
+    "client_verification_details": {
+      "codex": "codex_config_generated_not_live_client_verified"
+    }
+  },
+  "truth": {
+    "source_available": true,
+    "demo_available": true,
+    "demo_only": true,
+    "local_protocol_simulator": true,
+    "production_ready": false,
+    "live_traffic_protected": false,
+    "authority_granted": false,
+    "provider_calls": 0,
+    "network_used": false,
+    "credentials_used": false,
+    "clean_commit_performed": false,
+    "npm_published": false,
+    "hosted_enabled": false
+  },
+  "provider": "e2b",
+  "provider_status": "not_live_qualified",
+  "production_qualified": false,
+  "live_agoragentic_traffic_protected": false,
+  "hosted_execution_enabled": false,
+  "supported_node": ">=20",
+  "provider_qualification": {
+    "local_reference": "protocol_simulator_not_isolation",
+    "e2b": "not_live_qualified"
+  },
+  "allowed_scenario_ids": [
+    "low-read-only",
+    "elevated-owner-policy",
+    "high-filesystem-write",
+    "high-incomplete-metadata",
+    "high-untrusted-discovery",
+    "high-prompt-injection",
+    "e2b-malicious-mcp-containment",
+    "irreversible-deployment-proposal",
+    "deny-owner-policy",
+    "cleanup-unknown",
+    "stale-governance-binding",
+    "malformed-lifecycle-receipt",
+    "attack-traversal",
+    "attack-link",
+    "attack-secret",
+    "attack-oversized-write",
+    "attack-timeout",
+    "attack-concurrency"
+  ],
+  "limits": {
+    "active_runs": 1,
+    "completed_runs_before_cleanup_reset": 10,
+    "workspace_files": 128,
+    "workspace_bytes": 4194304,
+    "synthetic_write_bytes": 262144,
+    "actions": 50,
+    "fork_ttl_ms": 60000,
+    "execution_timeout_ms": 10000,
+    "recorder_bytes": 4194304,
+    "owned_demo_root_bytes": 67108864,
+    "daily_limit": null
+  },
+  "fake_e2b_profile": {
+    "scenario_id": "e2b-malicious-mcp-containment",
+    "sdk_contract_version": "2.39.0",
+    "maximum_active_sandboxes": 1,
+    "maximum_allocations": 1,
+    "sandbox_timeout_ms": 180000,
+    "retry": false,
+    "fallback_provider": null,
+    "estimated_maximum_cost_usd": 0.00585,
+    "provider_finalized_cost_usd": null,
+    "provider_calls": 0,
+    "isolation_boundary": false
+  },
+  "storage": {
+    "runtime_location": "marker-bound owned local demo root identified by a redacted doctor reference",
+    "github_stores_source_only": true,
+    "github_stores_runtime_forks": false,
+    "aws_used": false,
+    "e2b_used": false,
+    "vm_used": false,
+    "hosted_database_used": false
+  },
+  "cleanup": {
+    "automatic_request_on_terminal_paths": true,
+    "absence_verified_separately": true,
+    "unknown_or_failed_is_success": false,
+    "broad_recursive_delete_allowed": false,
+    "production_deletion_sla": false
+  },
+  "docs": {
+    "readme": "risk-fork/hackathon/README.md",
+    "quickstart": "risk-fork/hackathon/docs/QUICKSTART.md",
+    "cleanup": "risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md",
+    "status": "risk-fork/hackathon/demo-status.json",
+    "skill": "risk-fork/discovery/skill.md"
+  }
+}

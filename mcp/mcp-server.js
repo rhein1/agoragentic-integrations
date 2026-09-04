@@ -50,6 +50,14 @@ const MAX_REMOTE_TOOL_DIRECTORY_BYTES = MAX_ENFORCEMENT_JSON_BYTES;
 const MAX_REMOTE_TOOL_CURSOR_LENGTH = 4096;
 const MAX_ACP_SESSIONS = 1000;
 const MAX_ACP_CWD_LENGTH = 4096;
+const DEFAULT_HOST_TIMEOUTS = Object.freeze({
+    open_session_ms: 15_000,
+    request_ms: 30_000,
+    close_ms: 5_000,
+    fallback_ms: 30_000,
+});
+const MIN_HOST_TIMEOUT_MS = 10;
+const MAX_HOST_TIMEOUT_MS = 10 * 60 * 1000;
 const CANONICAL_INVOCATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 const MIN_CREDENTIAL_ASSIGNMENT_VALUE_LENGTH = 8;
 const enforcementBoundaryAdapters = new WeakMap();
@@ -62,6 +70,38 @@ const IRREVERSIBLE_TOOLS = new Set([
     'agoragentic_quote',
     'agoragentic_quote_service',
     'agoragentic_preview_x402',
+]);
+const TOOL_CAPABILITY_KEYS = Object.freeze([
+    'network_access',
+    'filesystem_read',
+    'filesystem_write',
+    'credential_access',
+    'wallet_or_payment',
+    'deployment',
+    'publication',
+    'communication',
+    'database_mutation',
+    'trust_or_reputation_mutation',
+    'external_side_effect',
+    'unknown_or_unclassified',
+]);
+const IRREVERSIBLE_TOOL_CAPABILITIES = new Set([
+    'network_access',
+    'filesystem_write',
+    'credential_access',
+    'wallet_or_payment',
+    'deployment',
+    'publication',
+    'communication',
+    'database_mutation',
+    'trust_or_reputation_mutation',
+    'external_side_effect',
+]);
+const TOOL_ANNOTATION_KEYS = Object.freeze([
+    'readOnlyHint',
+    'destructiveHint',
+    'idempotentHint',
+    'openWorldHint',
 ]);
 const SENSITIVE_CREDENTIAL_KEY_SEQUENCES = Object.freeze([
     ['api', 'key'],
@@ -709,7 +749,11 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
             return;
         }
         for (const [key, child] of Object.entries(current)) {
-            if (containsCredentialMaterial(key)) {
+            const parentKey = pathTokens.at(-1);
+            const booleanRiskCapabilityDeclaration = TOOL_CAPABILITY_KEYS.includes(key)
+                && typeof child === 'boolean'
+                && ['capabilities', 'agoragentic/risk-capabilities'].includes(parentKey);
+            if (containsCredentialMaterial(key) && !booleanRiskCapabilityDeclaration) {
                 throw new McpEnforcementError(
                     'MCP_CREDENTIAL_MATERIAL_REJECTED',
                     `${path}.<key> contains credential-shaped material`,
@@ -737,7 +781,7 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
                 });
                 continue;
             }
-            if (classification.sensitive) {
+            if (classification.sensitive && !booleanRiskCapabilityDeclaration) {
                 if (classification.referenceKind) {
                     assertOpaqueCredentialReference(child, childPath, classification.referenceKind);
                     continue;
@@ -840,13 +884,195 @@ function requireEnforcementBoundary(boundary) {
     return adapter;
 }
 
-function riskProfileFor(phase, toolName = null) {
+function normalizeHostTimeouts(value = {}) {
+    assertExactKeys(
+        value,
+        ['open_session_ms', 'request_ms', 'close_ms', 'fallback_ms'],
+        'MCP enforcement host timeouts',
+    );
+    return Object.freeze(Object.fromEntries(Object.entries(DEFAULT_HOST_TIMEOUTS).map(
+        ([key, fallback]) => {
+            const candidate = value[key] ?? fallback;
+            if (!Number.isSafeInteger(candidate)
+                || candidate < MIN_HOST_TIMEOUT_MS
+                || candidate > MAX_HOST_TIMEOUT_MS) {
+                throw new TypeError(
+                    `MCP enforcement host timeout ${key} must be an integer from ${MIN_HOST_TIMEOUT_MS} to ${MAX_HOST_TIMEOUT_MS}`,
+                );
+            }
+            return [key, candidate];
+        },
+    )));
+}
+
+async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+    const controller = new AbortController();
+    const deadlineAt = new Date(Date.now() + timeoutMs).toISOString();
+    let timer;
+    const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+            const error = new McpEnforcementError(
+                'MCP_ENFORCEMENT_HOST_DEADLINE_EXCEEDED',
+                `MCP enforcement host ${operation} exceeded its ${timeoutMs}ms deadline`,
+            );
+            controller.abort(error);
+            reject(error);
+        }, timeoutMs);
+    });
+    const context = Object.freeze({
+        signal: controller.signal,
+        timeout_ms: timeoutMs,
+        deadline_at: deadlineAt,
+        operation,
+    });
+    try {
+        return await Promise.race([
+            Promise.resolve().then(() => callback(...args, context)),
+            timeout,
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function openHostSessionWithDeadline(adapter, openRequest) {
+    let late = false;
+    const pending = Promise.resolve().then(() => adapter.openSession(openRequest, Object.freeze({
+        signal: controller.signal,
+        timeout_ms: adapter.timeouts.open_session_ms,
+        deadline_at: new Date(Date.now() + adapter.timeouts.open_session_ms).toISOString(),
+        operation: 'openSession',
+    })));
+    const controller = new AbortController();
+    let timer;
+    const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+            late = true;
+            const error = new McpEnforcementError(
+                'MCP_ENFORCEMENT_HOST_DEADLINE_EXCEEDED',
+                `MCP enforcement host openSession exceeded its ${adapter.timeouts.open_session_ms}ms deadline`,
+            );
+            controller.abort(error);
+            reject(error);
+        }, adapter.timeouts.open_session_ms);
+    });
+    pending.then(async (session) => {
+        if (!late) return;
+        const descriptor = session && typeof session === 'object'
+            ? Object.getOwnPropertyDescriptor(session, 'close')
+            : null;
+        if (descriptor?.enumerable && !descriptor.get && !descriptor.set
+            && typeof descriptor.value === 'function') {
+            await invokeHostWithDeadline(
+                descriptor.value.bind(session),
+                adapter.timeouts.close_ms,
+                'lateOpenSessionClose',
+            ).catch(() => {});
+        }
+    }).catch(() => {});
+    try {
+        return await Promise.race([pending, timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function normalizeToolAnnotations(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return Object.freeze({
+            raw: null,
+            complete: false,
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: true,
+        });
+    }
+    const raw = deepFreezeJson(cloneBoundedJson(value, 'remote tool annotations'));
+    const keys = Object.keys(raw);
+    const complete = TOOL_ANNOTATION_KEYS.every(
+        (key) => Object.hasOwn(raw, key) && typeof raw[key] === 'boolean',
+    ) && keys.every((key) => TOOL_ANNOTATION_KEYS.includes(key));
     return Object.freeze({
-        minimum_level: phase === 'tools/call' && IRREVERSIBLE_TOOLS.has(toolName)
-            ? 'IRREVERSIBLE'
-            : 'HIGH',
+        raw,
+        complete,
+        readOnlyHint: raw.readOnlyHint === true,
+        destructiveHint: raw.destructiveHint === true,
+        idempotentHint: raw.idempotentHint === true,
+        openWorldHint: raw.openWorldHint !== false,
+    });
+}
+
+function normalizeToolCapabilities(descriptor) {
+    const direct = descriptor.capabilities ?? null;
+    const metadata = descriptor._meta && typeof descriptor._meta === 'object'
+        && !Array.isArray(descriptor._meta)
+        ? descriptor._meta['agoragentic/risk-capabilities'] ?? null
+        : null;
+    if (direct !== null && metadata !== null && sha256Ref(direct) !== sha256Ref(metadata)) {
+        throw new McpEnforcementError(
+            'MCP_REMOTE_TOOL_CAPABILITIES_AMBIGUOUS',
+            `Remote tool ${descriptor.name} supplies conflicting capability declarations`,
+        );
+    }
+    const raw = direct ?? metadata;
+    const plain = raw && typeof raw === 'object' && !Array.isArray(raw);
+    const rawKeys = plain ? Object.keys(raw) : [];
+    const complete = plain
+        && TOOL_CAPABILITY_KEYS.every(
+            (key) => Object.hasOwn(raw, key) && typeof raw[key] === 'boolean',
+        )
+        && rawKeys.every((key) => TOOL_CAPABILITY_KEYS.includes(key));
+    const capabilities = Object.fromEntries(TOOL_CAPABILITY_KEYS.map((key) => [
+        key,
+        key === 'unknown_or_unclassified'
+            ? !complete || raw?.[key] === true
+            : complete && raw[key] === true,
+    ]));
+    return Object.freeze({ raw: plain ? deepFreezeJson(cloneBoundedJson(raw)) : null, complete, capabilities });
+}
+
+function bindRemoteToolDescriptor(value, field = 'remote tool descriptor') {
+    const descriptor = deepFreezeJson(cloneBoundedJson(value, field));
+    assertPlainRecord(descriptor, field);
+    if (typeof descriptor.name !== 'string'
+        || descriptor.name.length < 1
+        || descriptor.name.length > 500
+        || descriptor.name.includes('\0')) {
+        throw new TypeError(`${field}.name is invalid`);
+    }
+    const annotations = normalizeToolAnnotations(descriptor.annotations);
+    const capabilityRecord = normalizeToolCapabilities(descriptor);
+    const irreversibleCapability = TOOL_CAPABILITY_KEYS.some(
+        (key) => IRREVERSIBLE_TOOL_CAPABILITIES.has(key)
+            && capabilityRecord.capabilities[key] === true,
+    );
+    const unknownEffect = !annotations.complete
+        || !capabilityRecord.complete
+        || capabilityRecord.capabilities.unknown_or_unclassified === true;
+    const effectStatus = annotations.destructiveHint || irreversibleCapability
+        ? 'irreversible'
+        : unknownEffect || annotations.readOnlyHint !== true
+            ? 'unknown_effectfulness'
+            : 'explicit_read_only';
+    return deepFreezeJson({
+        descriptor,
+        descriptor_hash: sha256Ref(descriptor),
+        annotations: annotations.raw,
+        capabilities: capabilityRecord.capabilities,
+        effect_status: effectStatus,
+    });
+}
+
+function riskProfileFor(phase, toolName = null, toolBinding = null) {
+    const irreversible = phase === 'tools/call'
+        && (IRREVERSIBLE_TOOLS.has(toolName)
+            || !toolBinding
+            || ['irreversible', 'unknown_effectfulness'].includes(toolBinding.effect_status));
+    return Object.freeze({
+        minimum_level: irreversible ? 'IRREVERSIBLE' : 'HIGH',
         untrusted_content: true,
-        prepare_only: phase === 'tools/call' && IRREVERSIBLE_TOOLS.has(toolName),
+        prepare_only: irreversible,
     });
 }
 
@@ -866,6 +1092,7 @@ function buildEnforcementRequest({
     remoteUrl,
     params = {},
     toolName = null,
+    toolDescriptor = null,
     sessionBindingHash = null,
     extra = {},
 }) {
@@ -880,6 +1107,15 @@ function buildEnforcementRequest({
     assertExactKeys(safeExtra, ['raw_method', 'fallback_http'], 'MCP enforcement metadata');
     assertNoCredentialMaterial(safeExtra, 'MCP enforcement metadata');
     const rawMethod = phase === 'UNKNOWN' ? String(safeExtra.raw_method || '') : null;
+    const toolBinding = phase === 'tools/call'
+        ? bindRemoteToolDescriptor(toolDescriptor, 'bound remote tool descriptor')
+        : null;
+    if (phase === 'tools/call' && toolBinding.descriptor.name !== toolName) {
+        throw new McpEnforcementError(
+            'MCP_REMOTE_TOOL_DESCRIPTOR_SUBSTITUTED',
+            'Bound remote tool descriptor does not match the requested tool name',
+        );
+    }
     const request = {
         schema,
         request_id: `mcp-enforcement:${crypto.randomUUID()}`,
@@ -889,8 +1125,13 @@ function buildEnforcementRequest({
         mcp_server_origin: target.origin,
         session_binding_hash: sessionBindingHash,
         tool_name: toolName,
+        tool_descriptor: toolBinding?.descriptor ?? null,
+        tool_descriptor_hash: toolBinding?.descriptor_hash ?? null,
+        tool_annotations: toolBinding?.annotations ?? null,
+        tool_capabilities: toolBinding?.capabilities ?? null,
+        tool_effect_status: toolBinding?.effect_status ?? null,
         params: safeParams,
-        risk_profile: riskProfileFor(phase, toolName),
+        risk_profile: riskProfileFor(phase, toolName, toolBinding),
         transport_constraints: transportConstraints(),
         fallback_http: safeExtra.fallback_http ?? null,
         request_hash: null,
@@ -953,17 +1194,19 @@ function verifyCleanImportedResult(value, request) {
 }
 
 function createMcpEnforcementBoundary(hostAdapter = {}) {
-    assertExactKeys(hostAdapter, ['openSession', 'executeFallback'], 'MCP enforcement host adapter');
+    assertExactKeys(hostAdapter, ['openSession', 'executeFallback', 'timeouts'], 'MCP enforcement host adapter');
     if (typeof hostAdapter.openSession !== 'function' || typeof hostAdapter.executeFallback !== 'function') {
         throw new TypeError('MCP enforcement host adapter requires openSession and executeFallback functions');
     }
+    const timeouts = normalizeHostTimeouts(hostAdapter.timeouts);
     const boundary = Object.freeze({
         schema: MCP_ENFORCEMENT_SCHEMAS.boundary,
         mode: 'host_owns_network_and_clean_import',
     });
     enforcementBoundaryAdapters.set(boundary, Object.freeze({
-        openSession: hostAdapter.openSession,
-        executeFallback: hostAdapter.executeFallback,
+        openSession: hostAdapter.openSession.bind(hostAdapter),
+        executeFallback: hostAdapter.executeFallback.bind(hostAdapter),
+        timeouts,
     }));
     return boundary;
 }
@@ -1195,12 +1438,17 @@ function validateRemoteToolListPage(result, field = 'clean tools/list result') {
     if (!Array.isArray(result.tools)) {
         throw new TypeError(`${field}.tools must be an array`);
     }
-    const names = result.tools.map((tool, index) => {
-        assertPlainRecord(tool, `${field}.tools[${index}]`);
-        if (typeof tool.name !== 'string' || !tool.name) {
-            throw new TypeError(`${field}.tools[${index}].name is invalid`);
+    const names = new Set();
+    const bindings = result.tools.map((tool, index) => {
+        const binding = bindRemoteToolDescriptor(tool, `${field}.tools[${index}]`);
+        if (names.has(binding.descriptor.name)) {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_TOOL_DIRECTORY_AMBIGUOUS',
+                `Remote tools/list page contains duplicate tool name ${binding.descriptor.name}`,
+            );
         }
-        return tool.name;
+        names.add(binding.descriptor.name);
+        return binding;
     });
     let nextCursor = null;
     if (result.nextCursor !== undefined && result.nextCursor !== null) {
@@ -1211,7 +1459,58 @@ function validateRemoteToolListPage(result, field = 'clean tools/list result') {
         }
         nextCursor = result.nextCursor;
     }
-    return { names, nextCursor, tools: result.tools };
+    return {
+        names: [...names],
+        nextCursor,
+        tools: bindings.map((binding) => binding.descriptor),
+        bindings,
+    };
+}
+
+function bindRemoteToolDirectorySnapshot(sessionRecord, bindings) {
+    const byName = new Map();
+    for (const binding of bindings) {
+        const name = binding.descriptor.name;
+        if (byName.has(name)) {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_TOOL_DIRECTORY_AMBIGUOUS',
+                `Remote tools/list pagination contains duplicate tool name ${name}`,
+            );
+        }
+        byName.set(name, binding);
+    }
+    const directoryHash = sha256Ref([...byName.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, binding]) => ({ name, descriptor_hash: binding.descriptor_hash })));
+    if (sessionRecord.remoteToolDirectoryHash
+        && sessionRecord.remoteToolDirectoryHash !== directoryHash) {
+        throw new McpEnforcementError(
+            'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT',
+            'Remote tool descriptors changed after the enforced session was bound',
+        );
+    }
+    if (!sessionRecord.remoteToolDirectoryHash) {
+        sessionRecord.remoteToolDirectoryHash = directoryHash;
+        sessionRecord.remoteToolDescriptors = byName;
+    }
+    return Object.freeze({
+        names: new Set(byName.keys()),
+        tools: Object.freeze([...byName.values()].map((binding) => binding.descriptor)),
+        directory_hash: directoryHash,
+    });
+}
+
+function assertRemoteToolPageMatchesSnapshot(sessionRecord, bindings) {
+    if (!sessionRecord.remoteToolDescriptors) return;
+    for (const binding of bindings) {
+        const expected = sessionRecord.remoteToolDescriptors.get(binding.descriptor.name);
+        if (!expected || expected.descriptor_hash !== binding.descriptor_hash) {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT',
+                `Remote tool descriptor drifted for ${binding.descriptor.name}`,
+            );
+        }
+    }
 }
 
 function createRemoteToolDirectory(session) {
@@ -1225,6 +1524,7 @@ function createRemoteToolDirectory(session) {
             'The enforced MCP session has no validated initial tool page',
         );
     }
+    if (sessionRecord.remoteToolDirectory) return sessionRecord.remoteToolDirectory;
     async function failIncomplete(message) {
         try {
             await session.close();
@@ -1241,6 +1541,7 @@ function createRemoteToolDirectory(session) {
         function hydrate() {
             if (hydrationPromise) return hydrationPromise;
             hydrationPromise = (async () => {
+                const remoteBindings = [...firstPage.bindings];
                 const remoteTools = [...firstPage.tools];
                 const remoteToolNames = new Set(firstPage.names);
                 let remoteToolBytes = Buffer.byteLength(JSON.stringify(firstPage.tools), 'utf8');
@@ -1270,6 +1571,14 @@ function createRemoteToolDirectory(session) {
                         await failIncomplete('Remote tools/list pagination exceeded the cumulative byte limit');
                     }
                     remoteTools.push(...page.tools);
+                    for (const binding of page.bindings) {
+                        if (remoteToolNames.has(binding.descriptor.name)) {
+                            await failIncomplete(
+                                `Remote tools/list pagination contains duplicate tool name ${binding.descriptor.name}`,
+                            );
+                        }
+                        remoteBindings.push(binding);
+                    }
                     remoteToolBytes += pageBytes;
                     for (const name of page.names) remoteToolNames.add(name);
                     if (remoteTools.length > MAX_REMOTE_TOOL_DIRECTORY_TOOLS) {
@@ -1277,10 +1586,7 @@ function createRemoteToolDirectory(session) {
                     }
                     nextCursor = page.nextCursor;
                 }
-                return Object.freeze({
-                    names: remoteToolNames,
-                    tools: Object.freeze(remoteTools),
-                });
+                return bindRemoteToolDirectorySnapshot(sessionRecord, remoteBindings);
             })();
             return hydrationPromise;
         }
@@ -1320,7 +1626,9 @@ function createRemoteToolDirectory(session) {
         return snapshot.names.has(name);
     }
 
-    return { has, list };
+    const directory = Object.freeze({ has, list, initialize: () => currentEpoch.hydrate() });
+    sessionRecord.remoteToolDirectory = directory;
+    return directory;
 }
 
 const FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList().map((tool) => tool.name));
@@ -1363,24 +1671,14 @@ async function executeEnforcedFallback(enforcementBoundary, {
     body,
 }) {
     const adapter = requireEnforcementBoundary(enforcementBoundary);
-    const request = buildEnforcementRequest({
-        schema: MCP_ENFORCEMENT_SCHEMAS.fallbackRequest,
-        phase: 'tools/call',
-        remoteUrl: fallbackTargetUrl(path),
-        params: args,
-        toolName: name,
-        extra: {
-            fallback_http: {
-                method,
-                path,
-                body: body === undefined ? null : body,
-                authentication: { mode: 'host_resolved_out_of_band' },
-                user_agent: `agoragentic-mcp/${PACKAGE_VERSION}`,
-            },
-        },
-    });
-    const envelope = await adapter.executeFallback(request);
-    return verifyCleanImportedResult(envelope, request);
+    // Every fallback remains unavailable until the host supplies a durable
+    // effect fence with exact idempotency and terminal reconciliation.
+    // AbortSignal/Promise.race cannot prove that a late callback performed no
+    // effect, and preview_x402 mints a quote_id despite its preview name.
+    throw new McpEnforcementError(
+        'MCP_FALLBACK_EFFECT_FENCE_REQUIRED',
+        'MCP fallback is disabled until a durable host effect fence is qualified',
+    );
 }
 
 async function executeFallbackTool(name, args = {}, options = {}) {
@@ -1397,6 +1695,13 @@ async function executeFallbackTool(name, args = {}, options = {}) {
                 return buildBlockedToolResult(
                     'risk_fork_enforcement_required',
                     'Fallback network execution is disabled until a factory-created enforcement host capability is installed.',
+                    { tool: name },
+                );
+            }
+            if (error?.code === 'MCP_FALLBACK_EFFECT_FENCE_REQUIRED') {
+                return buildBlockedToolResult(
+                    'risk_fork_effect_fence_required',
+                    'Effect-capable fallback is disabled until a durable host effect fence is qualified.',
                     { tool: name },
                 );
             }
@@ -1517,7 +1822,7 @@ async function connectRemoteClient(options = {}) {
             stateless_required: true,
         },
     });
-    const rawHostSession = await adapter.openSession(openRequest);
+    const rawHostSession = await openHostSessionWithDeadline(adapter, openRequest);
     const closeDescriptor = rawHostSession && typeof rawHostSession === 'object'
         ? Object.getOwnPropertyDescriptor(rawHostSession, 'close')
         : null;
@@ -1525,7 +1830,7 @@ async function connectRemoteClient(options = {}) {
         && !closeDescriptor.get
         && !closeDescriptor.set
         && typeof closeDescriptor.value === 'function'
-        ? closeDescriptor.value
+        ? closeDescriptor.value.bind(rawHostSession)
         : null;
     let hostSession;
     let discoveryEnvelope;
@@ -1546,8 +1851,8 @@ async function connectRemoteClient(options = {}) {
         }
         hostSession = Object.freeze({
             discovery: rawHostSession.discovery,
-            request: rawHostSession.request,
-            close: rawHostSession.close,
+            request: rawHostSession.request.bind(rawHostSession),
+            close: rawHostSession.close.bind(rawHostSession),
         });
         discoveryEnvelope = verifyCleanImportedEnvelope(hostSession.discovery, openRequest);
         discovery = discoveryEnvelope.result;
@@ -1560,7 +1865,13 @@ async function connectRemoteClient(options = {}) {
         }
     } catch (error) {
         try {
-            await emergencyClose?.();
+            if (emergencyClose) {
+                await invokeHostWithDeadline(
+                    emergencyClose,
+                    adapter.timeouts.close_ms,
+                    'emergencyClose',
+                );
+            }
         } catch {
             // Preserve the fail-closed session/import error.
         }
@@ -1583,6 +1894,10 @@ async function connectRemoteClient(options = {}) {
         closed: false,
         closePromise: null,
         remoteToolFirstPage: null,
+        remoteToolDescriptors: null,
+        remoteToolDirectoryHash: null,
+        remoteToolDirectory: null,
+        timeouts: adapter.timeouts,
     };
 
     function close() {
@@ -1590,7 +1905,11 @@ async function connectRemoteClient(options = {}) {
         if (!current) return Promise.resolve();
         if (current.closePromise) return current.closePromise;
         current.closed = true;
-        current.closePromise = Promise.resolve().then(() => current.hostClose());
+        current.closePromise = invokeHostWithDeadline(
+            current.hostClose,
+            current.timeouts.close_ms,
+            'close',
+        );
         return current.closePromise;
     }
 
@@ -1600,16 +1919,39 @@ async function connectRemoteClient(options = {}) {
             throw new McpEnforcementError('MCP_ENFORCED_SESSION_CLOSED', 'The enforced MCP session is closed');
         }
         const safeParams = cloneBoundedJson(params, `${phase} params`);
+        let toolDescriptor = null;
+        if (phase === 'tools/call') {
+            const directory = current.remoteToolDirectory ?? createRemoteToolDirectory(session);
+            await directory.initialize();
+            const toolName = safeParams.name;
+            if (typeof toolName !== 'string' || toolName.length < 1) {
+                throw new TypeError('tools/call params.name is required');
+            }
+            const toolBinding = current.remoteToolDescriptors?.get(toolName);
+            if (!toolBinding) {
+                throw new McpEnforcementError(
+                    'MCP_REMOTE_TOOL_NOT_ADVERTISED',
+                    `Remote tool ${toolName} is not present in the bound discovery snapshot`,
+                );
+            }
+            toolDescriptor = toolBinding.descriptor;
+        }
         const phaseRequest = buildEnforcementRequest({
             schema: MCP_ENFORCEMENT_SCHEMAS.phaseRequest,
             phase,
             remoteUrl: current.remote_url,
             params: safeParams,
             toolName: phase === 'tools/call' ? safeParams.name ?? null : null,
+            toolDescriptor,
             sessionBindingHash: current.session_binding_hash,
         });
         try {
-            const envelope = await current.hostRequest(phaseRequest);
+            const envelope = await invokeHostWithDeadline(
+                current.hostRequest,
+                current.timeouts.request_ms,
+                phase,
+                phaseRequest,
+            );
             const afterRequest = enforcedSessionRecords.get(session);
             if (afterRequest !== current || current.closed) {
                 throw new McpEnforcementError(
@@ -1619,7 +1961,8 @@ async function connectRemoteClient(options = {}) {
             }
             const result = verifyCleanImportedResult(envelope, phaseRequest);
             if (phase === 'tools/list') {
-                validateRemoteToolListPage(result);
+                const page = validateRemoteToolListPage(result);
+                assertRemoteToolPageMatchesSnapshot(current, page.bindings);
                 if (safeParams.cursor === undefined) current.remoteToolFirstPage = result;
             }
             return result;
@@ -1651,6 +1994,7 @@ async function connectRemoteClient(options = {}) {
 
     try {
         await session.listTools();
+        createRemoteToolDirectory(session);
         return session;
     } catch (error) {
         try {
