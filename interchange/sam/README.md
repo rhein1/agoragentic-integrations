@@ -28,8 +28,10 @@ publish private mesh topology.
 
 The live client defaults to `http://127.0.0.1:8080/mcp`, accepts loopback HTTP,
 and rejects non-loopback endpoints unless the operator explicitly opts in. An
-opted-in remote endpoint must use HTTPS. Tokens may come from `SAM_API_TOKEN` or
+opted-in remote endpoint must use HTTPS, and the exported API accepts only the
+literal boolean `true` for that opt-in. Tokens may come from `SAM_API_TOKEN` or
 `SAM_API_TOKEN_PATH`; credentials embedded in endpoint URLs are rejected.
+Redirects are rejected before the SAM authentication header is attached.
 
 ## Install and validate
 
@@ -76,8 +78,13 @@ node interchange/sam/client.mjs discover
 node interchange/sam/client.mjs discover --service code-reviewer
 ```
 
-Discovery output hashes the MCP endpoint, peer, and tool identifiers by default.
-Remote endpoint origins are emitted only with the same private diagnostic opt-in.
+Discovery output hashes the complete MCP request URL (including query context),
+peer and tool identifiers, provider descriptions, label objects, and
+provider-supplied errors by default. Public descriptions are generic; raw label
+keys and values are omitted. `authentication_header_sent` records only whether
+a token header was configured; it does not claim the endpoint authenticated
+that token. Remote endpoint origins and raw discovery rows are emitted only
+with the same private diagnostic opt-in.
 Use
 `--include-private-topology` only for an owner-controlled local diagnostic; do
 not commit or publish that output.
@@ -101,10 +108,15 @@ node interchange/sam/client.mjs capture \
 
 The live capture requires exactly one matching discovery row for the requested
 peer and tool, describes it, then normalizes the pair. The default packet hashes
-the peer, service, tool, labels, and schemas. It does not emit the raw PeerID or
-tool route. `--include-private-target` exists only for a local, owner-controlled
-handoff and its output must not be committed or published. Private-target output
-intentionally does not validate against the public-safe import schema.
+the peer, service, tool, labels, schemas, and complete observation. Public
+display text is generic and hash-suffixed; provider-supplied descriptions remain
+hash-bound but are not copied into the public packet. Provider-controlled label
+keys and values are likewise represented only by `labels_hash`. It does not emit
+the raw PeerID, service name, tool name, or tool route. `--include-private-target`
+exists only for a local, owner-controlled handoff and its output must not be
+committed or published. The exported API accepts only the literal boolean `true`
+for this private opt-in. Private-target output intentionally does not validate
+against the public-safe import schema.
 
 `capture_evidence.sam_control_calls_made` lists the SAM metadata calls used by a
 live capture. `external_provider_called: false` and `provider_invoked: false`
@@ -148,9 +160,11 @@ proven separately:
 4. The Interchange has a deterministic outcome validator for the purchased job.
 5. Payment and settlement remain on an existing audited Agoragentic rail.
 
-SAM routing labels are observations and routing hints. They are hashed and their
-keys are retained, but they are not treated as provider identity, authorization,
-commercial eligibility, or settlement proof.
+SAM routing labels are observations and routing hints. The default public packet
+hash-binds the normalized label object without retaining raw label keys or values.
+Those fields appear only inside the explicitly private transport target and are
+not treated as provider identity, authorization, commercial eligibility, or
+settlement proof.
 
 ## Intended next slices
 

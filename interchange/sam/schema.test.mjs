@@ -34,6 +34,10 @@ test('public schema accepts the canonical packet and rejects authority omissions
   const enabledAuthority = structuredClone(packet);
   enabledAuthority.authority_flags.public_execute_enabled = true;
   assert.equal(validate(enabledAuthority), false);
+
+  const rawLabelKeys = structuredClone(packet);
+  rawLabelKeys.transport_evidence.observed_label_keys = ['tenant-alpha-control-plane'];
+  assert.equal(validate(rawLabelKeys), false);
 });
 
 test('public schema rejects private transport targets', async () => {

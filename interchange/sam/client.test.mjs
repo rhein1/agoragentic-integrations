@@ -44,15 +44,30 @@ test('endpoint policy is loopback-first and HTTPS-only for opted-in remotes', ()
   assert.equal(validateSamEndpoint('https://mesh.example/mcp', { allowRemote: true }).origin, 'https://mesh.example');
 });
 
-test('authenticated fetch injects the SAM-specific header', async () => {
-  let headers;
-  const wrapped = authenticatedFetch('secret-value', async (_input, init) => {
-    headers = init.headers;
+test('remote endpoint opt-in requires literal boolean true', () => {
+  for (const allowRemote of ['true', 1, {}, Object(true)]) {
+    assert.throws(
+      () => validateSamEndpoint('https://mesh.example/mcp', { allowRemote }),
+      (error) => error instanceof SamClientError && error.code === 'sam_remote_endpoint_requires_opt_in',
+    );
+  }
+});
+
+test('authenticated fetch injects the SAM-specific header and rejects redirects', async () => {
+  const requests = [];
+  const wrapped = authenticatedFetch('secret-value', async (input, init) => {
+    requests.push({ input, headers: init.headers, redirect: init.redirect });
+    if (init.redirect !== 'error') {
+      return new Response('{}', { headers: { location: 'https://attacker.example/collect' }, status: 302 });
+    }
     return new Response('{}');
   });
   await wrapped('http://127.0.0.1:8080/mcp', { headers: { 'X-Test': 'present' } });
-  assert.equal(headers.get('X-Sam-Authentication'), 'Bearer secret-value');
-  assert.equal(headers.get('X-Test'), 'present');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].redirect, 'error');
+  assert.equal(requests[0].headers.get('X-Sam-Authentication'), 'Bearer secret-value');
+  assert.equal(requests[0].headers.get('X-Test'), 'present');
+  assert.equal(requests.some(({ input }) => String(input).includes('attacker.example')), false);
 });
 
 test('explicit token paths override ambient tokens and ambiguous env sources fail closed', async () => {
@@ -80,9 +95,73 @@ test('read-only discovery never calls a remote provider and redacts raw topology
     'find_remote_tools',
   ]);
   assert.equal(output.tool_count, 1);
+  assert.equal(output.authentication_header_sent, false);
   assert.equal(output.safety.provider_invoked, false);
   assert.equal(JSON.stringify(output).includes(PEER), false);
   assert.equal(JSON.stringify(output).includes(TOOL), false);
+});
+
+test('public discovery hashes provider-controlled descriptions, labels, and errors by default', async () => {
+  const privateDescription = `private-marker ${PEER} ${TOOL} tenant-alpha-control-plane`;
+  const privateLabelKey = `route-${PEER}`;
+  const privateLabelValue = `target-${TOOL}`;
+  const privateError = `dial failed through ${PEER} for ${TOOL}`;
+  const rows = [
+    {
+      peer_id: PEER,
+      tool_name: TOOL,
+      description: privateDescription,
+      labels: { [privateLabelKey]: privateLabelValue },
+    },
+    {
+      peer_id: PEER,
+      tool_name: TOOL,
+      error: privateError,
+      labels: { 'internal-service-name': 'payments-prod-7' },
+    },
+  ];
+  const responses = {
+    get_mesh_info: text({ connected_peers: [PEER] }),
+    discover_remote_services: text([]),
+    find_remote_tools: text(rows),
+  };
+
+  const output = await discoverSamTools({}, {
+    client: new FakeClient(responses),
+    env: {},
+    now: () => '2026-08-19T20:00:00.000Z',
+  });
+  const serialized = JSON.stringify(output);
+  assert.equal(serialized.includes(PEER), false);
+  assert.equal(serialized.includes(TOOL), false);
+  assert.equal(serialized.includes('tenant-alpha-control-plane'), false);
+  assert.equal(serialized.includes(privateLabelKey), false);
+  assert.equal(serialized.includes(privateLabelValue), false);
+  assert.equal(serialized.includes('internal-service-name'), false);
+  assert.equal(serialized.includes('payments-prod-7'), false);
+  assert.equal(serialized.includes(privateError), false);
+  assert.equal(output.tools[0].observed_label_keys, undefined);
+  assert.match(output.tools[0].description, /^Metadata-only SAM-discovered MCP tool\./);
+  assert.match(output.tools[0].description_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.match(output.tools[0].labels_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(output.tools[1].error, 'sam_discovery_row_error');
+  assert.match(output.tools[1].error_hash, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(output.safety.provider_description_public, false);
+  assert.equal(output.safety.raw_label_fields_public, false);
+
+  const nonBooleanOptIn = await discoverSamTools(
+    { includePrivateTopology: 'true' },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateDescription), false);
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateLabelKey), false);
+  assert.equal(JSON.stringify(nonBooleanOptIn).includes(privateError), false);
+
+  const privateOutput = await discoverSamTools(
+    { includePrivateTopology: true },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.deepEqual(privateOutput.tools, rows);
 });
 
 test('default output hashes a remote endpoint and only private diagnostics reveal its origin', async () => {
@@ -105,6 +184,25 @@ test('default output hashes a remote endpoint and only private diagnostics revea
     { client: new FakeClient(responses), env: {} },
   );
   assert.equal(privateOutput.private_endpoint_origin, 'https://sam.private.example');
+});
+
+test('endpoint references bind the complete request URL including query context', async () => {
+  const responses = {
+    get_mesh_info: text({ connected_peers: [] }),
+    discover_remote_services: text([]),
+    find_remote_tools: text([]),
+  };
+  const tenantA = await discoverSamTools(
+    { endpoint: 'https://sam.private.example/mcp?tenant=a#ignored', allowRemote: true, token: 'sent' },
+    { client: new FakeClient(responses), env: {} },
+  );
+  const tenantB = await discoverSamTools(
+    { endpoint: 'https://sam.private.example/mcp?tenant=b', allowRemote: true, token: 'sent' },
+    { client: new FakeClient(responses), env: {} },
+  );
+  assert.notEqual(tenantA.endpoint_ref, tenantB.endpoint_ref);
+  assert.equal(tenantA.authentication_header_sent, true);
+  assert.equal(tenantA.authenticated, undefined);
 });
 
 test('oversized SAM tool responses fail closed before parsing', async () => {
@@ -142,6 +240,7 @@ test('live capture requires one exact discovery match and describes before norma
   assert.equal(output.capture_evidence.external_provider_called, false);
   assert.equal(output.capture_evidence.provider_invoked, false);
   assert.equal(output.capture_evidence.call_remote_tool_used, false);
+  assert.equal(output.authentication_header_sent, false);
   assert.equal(JSON.stringify(output).includes(PEER), false);
   assert.equal(JSON.stringify(output).includes(TOOL), false);
 });
@@ -152,6 +251,22 @@ test('live capture rejects ambiguous or missing exact matches', async () => {
     captureSamTool({ peerId: PEER, toolName: TOOL }, {}, { client, env: {} }),
     (error) => error instanceof SamClientError && error.code === 'sam_exact_tool_match_required',
   );
+});
+
+test('live capture rejects error-bearing and schema-less describe results', async () => {
+  for (const description of [
+    { peer_id: PEER, tool_name: TOOL, error: 'authorization denied' },
+    { peer_id: PEER, tool_name: TOOL, description: 'Missing schema.' },
+  ]) {
+    const client = new FakeClient({
+      find_remote_tools: text([{ peer_id: PEER, tool_name: TOOL }]),
+      describe_remote_tool: text(description),
+    });
+    await assert.rejects(
+      captureSamTool({ peerId: PEER, toolName: TOOL }, {}, { client, env: {} }),
+      /sam_description_(contains_error|input_schema_required)/,
+    );
+  }
 });
 
 test('live capture rejects malformed targets before any MCP request', async () => {
