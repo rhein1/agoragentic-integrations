@@ -1,5 +1,5 @@
 {
-  "version": "2.53.0",
+  "version": "2.54.0",
   "updated_at": "2026-09-01",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
@@ -629,6 +629,37 @@
       "path": "x402/buyer-demo.js",
       "install": "node x402/buyer-demo.js",
       "docs": "x402/README.md"
+    },
+    {
+      "id": "anchor-safe-pay",
+      "name": "Anchor Safe Pay + Harness Core Reference",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "anchor-safe-pay/safe-pay-harness-adapter.js",
+      "install": "cd anchor-safe-pay && npm ci",
+      "docs": "anchor-safe-pay/README.md",
+      "compatibility_scope": "Default-off, fixture-only, no-network and no-spend reference against anchor-x402-safe-pay 0.3.0 and Harness Core 0.4.2; mandate and approval records are caller-declared and explicitly unverified, approvals bind the exact mandate hash, the process-local ledger pins used mandate references, and execution is limited to an adapter-owned inert simulator with no caller callback; this is not verified owner authority, production payment, durable replay, settlement, partnership, or live screening evidence",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "tested",
+          "post_action_evidence": "local",
+          "approval_support": "record_only",
+          "receipt_support": "local",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "anchor-x402-safe-pay 0.3.0 + Harness Core 0.4.2 fixture contract",
+          "proof_class": "local",
+          "last_verified_at": "2026-09-04T20:31:20Z",
+          "evidence_ref": "anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "world-agentkit",
@@ -1792,6 +1823,8 @@
     "n8n": "n8n/README.md",
     "open_wallet_standard": "ows/README.md",
     "x402_buyer": "x402/README.md",
+    "anchor_safe_pay": "anchor-safe-pay/README.md",
+    "anchor_safe_pay_upstream_provenance": "anchor-safe-pay/upstream-provenance.json",
     "world_agentkit": "world-agentkit/README.md",
     "world_agentkit_adapter": "world-agentkit/agoragentic_world_agentkit.mjs",
     "interchange": "interchange/README.md",

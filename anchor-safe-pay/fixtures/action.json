@@ -1,0 +1,13 @@
+{
+  "action": "x402_payment_send",
+  "principal_ref": "owner:fixture",
+  "agent_ref": "agent:safe-pay-demo",
+  "recipient": "0x1111111111111111111111111111111111111111",
+  "amount_atomic": "1000000",
+  "asset": "USDC",
+  "network": "eip155:8453",
+  "task_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "quote_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "idempotency_key": "idem-secret-value-0001",
+  "proposed_at": "2029-12-31T23:59:00.000Z"
+}

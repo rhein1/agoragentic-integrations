@@ -1,17 +1,17 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.53.0",
+  "source_manifest_version": "2.54.0",
   "as_of": "2026-09-01",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 147,
-    "occurrence_count": 291,
+    "file_count": 148,
+    "occurrence_count": 292,
     "category_file_counts": {
-      "installer_or_clone": 28,
-      "machine_discovery": 51,
-      "package_registry_metadata": 22,
+      "installer_or_clone": 29,
+      "machine_discovery": 52,
+      "package_registry_metadata": 23,
       "public_documentation": 72,
       "raw_content_url": 2,
       "release_or_provenance": 11,
@@ -436,6 +436,18 @@
       ],
       "categories": [
         "public_documentation"
+      ]
+    },
+    {
+      "path": "anchor-safe-pay/package.json",
+      "occurrences": 1,
+      "line_numbers": [
+        26
+      ],
+      "categories": [
+        "installer_or_clone",
+        "machine_discovery",
+        "package_registry_metadata"
       ]
     },
     {
