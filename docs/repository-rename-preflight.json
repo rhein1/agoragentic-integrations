@@ -6,13 +6,13 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 156,
-    "occurrence_count": 344,
+    "file_count": 148,
+    "occurrence_count": 292,
     "category_file_counts": {
       "installer_or_clone": 29,
-      "machine_discovery": 58,
+      "machine_discovery": 52,
       "package_registry_metadata": 23,
-      "public_documentation": 76,
+      "public_documentation": 72,
       "raw_content_url": 2,
       "release_or_provenance": 11,
       "reusable_action": 2,
@@ -833,28 +833,6 @@
       ]
     },
     {
-      "path": "ecosystem.json",
-      "occurrences": 2,
-      "line_numbers": [
-        16,
-        104
-      ],
-      "categories": [
-        "machine_discovery"
-      ]
-    },
-    {
-      "path": "ecosystem.json",
-      "occurrences": 2,
-      "line_numbers": [
-        16,
-        104
-      ],
-      "categories": [
-        "machine_discovery"
-      ]
-    },
-    {
       "path": "elizaos/package.json",
       "occurrences": 1,
       "line_numbers": [
@@ -1049,86 +1027,6 @@
       ]
     },
     {
-      "path": "INTEGRATION_CATALOG_GUIDE.md",
-      "occurrences": 3,
-      "line_numbers": [
-        55,
-        131,
-        411
-      ],
-      "categories": [
-        "public_documentation"
-      ]
-    },
-    {
-      "path": "INTEGRATION_CATALOG_GUIDE.md",
-      "occurrences": 3,
-      "line_numbers": [
-        55,
-        131,
-        411
-      ],
-      "categories": [
-        "public_documentation"
-      ]
-    },
-    {
-      "path": "integrations.json",
-      "occurrences": 19,
-      "line_numbers": [
-        16,
-        37,
-        46,
-        70,
-        79,
-        88,
-        97,
-        103,
-        111,
-        119,
-        129,
-        139,
-        401,
-        413,
-        425,
-        437,
-        449,
-        461,
-        473
-      ],
-      "categories": [
-        "machine_discovery"
-      ]
-    },
-    {
-      "path": "integrations.json",
-      "occurrences": 19,
-      "line_numbers": [
-        16,
-        37,
-        46,
-        70,
-        79,
-        88,
-        97,
-        103,
-        111,
-        119,
-        129,
-        139,
-        401,
-        413,
-        425,
-        437,
-        449,
-        461,
-        473
-      ],
-      "categories": [
-        "machine_discovery"
-      ]
-    },
-    {
       "path": "integrations.json",
       "occurrences": 19,
       "line_numbers": [
@@ -1261,30 +1159,6 @@
       "categories": [
         "public_documentation",
         "raw_content_url"
-      ]
-    },
-    {
-      "path": "llms-full.txt",
-      "occurrences": 2,
-      "line_numbers": [
-        114,
-        115
-      ],
-      "categories": [
-        "machine_discovery",
-        "public_documentation"
-      ]
-    },
-    {
-      "path": "llms-full.txt",
-      "occurrences": 2,
-      "line_numbers": [
-        114,
-        115
-      ],
-      "categories": [
-        "machine_discovery",
-        "public_documentation"
       ]
     },
     {
