@@ -27,7 +27,7 @@
 - The unpublished MCP/ACP source candidate does not consume or forward this key. The npm package is a legacy direct relay and must not be used. Use SDK/REST auth only; never inject the key into either MCP surface.
 
 ## Integrations
-- Canonical inventory: `integrations.json` (108 indexed surfaces as of 2026-08-31).
+- Canonical inventory: `integrations.json` (109 indexed surfaces as of 2026-09-01).
 - Client-native packages: Cursor (`.cursor-plugin/plugin.json`), Gemini CLI (`gemini-extension.json`), Claude Code (`.claude-plugin/marketplace.json`), Cline (`llms-install.md`), and the experimental OpenCode Harness source plugin (`opencode/`). Package readiness does not imply external marketplace approval or live host compatibility.
 - Python frameworks include LangChain, LangGraph, Deep Agents, ClawTeam, CrewAI, AutoGen, OpenAI Agents, Google ADK, Haystack, pydantic-ai, smolagents, Agno, Griptape, LiveKit Agents, Pipecat, LlamaIndex, AgentScope, DSPy, Browser Use, and Langflow.
 - JavaScript/TypeScript frameworks and workflows include the fail-closed MCP/ACP protocol reference, Risk Fork, Vercel AI, Cloudflare Agents, Mastra, Bee Agent, ElizaOS, n8n, VoltAgent, Genkit, OpenAI Agents TypeScript, AG-UI, and experimental World AgentKit pre-payment composition.

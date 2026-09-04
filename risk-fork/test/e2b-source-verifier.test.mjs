@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rm,
   writeFile,
 } from 'node:fs/promises';
@@ -50,7 +51,7 @@ function independentTrust(options = {}) {
 }
 
 async function fixture(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-source-verifier-'));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-source-verifier-')));
   const source = path.join(root, 'source');
   const exportRoot = path.join(root, 'exports');
   const evidenceDirectory = path.join(root, 'evidence');

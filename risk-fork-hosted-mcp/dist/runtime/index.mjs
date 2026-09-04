@@ -4416,7 +4416,7 @@ var require_util2 = __commonJS({
     exports.esc = esc;
     exports.slugify = slugify;
     exports.isObject = isObject;
-    exports.isPlainObject = isPlainObject2;
+    exports.isPlainObject = isPlainObject3;
     exports.shallowClone = shallowClone;
     exports.numKeys = numKeys;
     exports.escapeRegex = escapeRegex;
@@ -4599,7 +4599,7 @@ var require_util2 = __commonJS({
         return false;
       }
     });
-    function isPlainObject2(o) {
+    function isPlainObject3(o) {
       if (isObject(o) === false)
         return false;
       const ctor = o.constructor;
@@ -4616,7 +4616,7 @@ var require_util2 = __commonJS({
       return true;
     }
     function shallowClone(o) {
-      if (isPlainObject2(o))
+      if (isPlainObject3(o))
         return { ...o };
       if (Array.isArray(o))
         return [...o];
@@ -4821,7 +4821,7 @@ var require_util2 = __commonJS({
       return clone(schema, def);
     }
     function extend(schema, shape) {
-      if (!isPlainObject2(shape)) {
+      if (!isPlainObject3(shape)) {
         throw new Error("Invalid input to extend: expected a plain object");
       }
       const checks = schema._zod.def.checks;
@@ -4844,7 +4844,7 @@ var require_util2 = __commonJS({
       return clone(schema, def);
     }
     function safeExtend(schema, shape) {
-      if (!isPlainObject2(shape)) {
+      if (!isPlainObject3(shape)) {
         throw new Error("Invalid input to safeExtend: expected a plain object");
       }
       const def = mergeDefs(schema._zod.def, {
@@ -27247,7 +27247,7 @@ var require_protocol = __commonJS({
       }
     };
     exports.Protocol = Protocol;
-    function isPlainObject2(value) {
+    function isPlainObject3(value) {
       return value !== null && typeof value === "object" && !Array.isArray(value);
     }
     function mergeCapabilities(base, additional) {
@@ -27258,7 +27258,7 @@ var require_protocol = __commonJS({
         if (addValue === void 0)
           continue;
         const baseValue = result[k];
-        if (isPlainObject2(baseValue) && isPlainObject2(addValue)) {
+        if (isPlainObject3(baseValue) && isPlainObject3(addValue)) {
           result[k] = { ...baseValue, ...addValue };
         } else {
           result[k] = addValue;
@@ -42249,6 +42249,23 @@ import { randomUUID as randomUUID5 } from "node:crypto";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/canonical.mjs
 import { createHash } from "node:crypto";
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function sortForCanonicalization(value) {
+  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, sortForCanonicalization(value[key])])
+  );
+}
+function rawCanonicalize(value) {
+  return JSON.stringify(sortForCanonicalization(value));
+}
+function rawSha256Ref(value) {
+  const input = typeof value === "string" ? value : rawCanonicalize(value);
+  return `sha256:${createHash("sha256").update(input, "utf8").digest("hex")}`;
+}
 var MAX_DEPTH = 64;
 var MAX_NODES = 1e5;
 var MAX_STRING_BYTES = 16 * 1024 * 1024;
@@ -42315,31 +42332,24 @@ function assertCanonicalJson(value) {
   assertJsonValue(value, { ancestors: /* @__PURE__ */ new WeakSet(), nodes: 0 }, "$", 0);
   return value;
 }
-function sortForCanonicalization(value) {
-  if (Array.isArray(value)) return value.map(sortForCanonicalization);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(
-    Object.keys(value).sort().map((key) => [key, sortForCanonicalization(value[key])])
-  );
-}
 function canonicalize(value) {
   assertCanonicalJson(value);
-  return JSON.stringify(sortForCanonicalization(value));
+  return rawCanonicalize(value);
 }
 function sha256Ref(value) {
-  return `sha256:${createHash("sha256").update(canonicalize(value), "utf8").digest("hex")}`;
+  return rawSha256Ref(canonicalize(value));
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
 import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
-function isPlainObject(value) {
+function isPlainObject2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 function assertPlainObject(value, field) {
-  if (!isPlainObject(value)) throw new TypeError(`${field} must be a JSON object`);
+  if (!isPlainObject2(value)) throw new TypeError(`${field} must be a JSON object`);
   return value;
 }
 function assertAllowedKeys(value, allowed, field) {
@@ -59801,7 +59811,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:70d957f412f5fd0f1ed9b3e3f705bf49efa17b0f4fe87530b33a1a40ab1faf36" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:79b1ba2928a5d8f11764b6830fe14a66dd40b49c4f9dbae3b0d4fe232a6cff17" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

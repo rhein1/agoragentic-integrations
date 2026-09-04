@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 46,
-    "sha256": "sha256:70d957f412f5fd0f1ed9b3e3f705bf49efa17b0f4fe87530b33a1a40ab1faf36"
+    "sha256": "sha256:79b1ba2928a5d8f11764b6830fe14a66dd40b49c4f9dbae3b0d4fe232a6cff17"
   },
   "reviewed_sources": [
     {
@@ -119,8 +119,8 @@
     },
     {
       "path": "risk-fork/src/canonical.mjs",
-      "bytes": 3852,
-      "sha256": "sha256:69b28cbb35115111b4bec1387c413597f7ed2e0df7f3d83fbf7b95d854660d02"
+      "bytes": 4306,
+      "sha256": "sha256:781ad8456eb557aa536c4c9db916fb5e2b8d8e13858cbc7584f3a453cb8fcc44"
     },
     {
       "path": "risk-fork/src/child-operation.mjs",
@@ -2337,8 +2337,8 @@
     {
       "path": "risk-fork/src/canonical.mjs",
       "source": "reviewed_source",
-      "bytes": 3852,
-      "sha256": "sha256:69b28cbb35115111b4bec1387c413597f7ed2e0df7f3d83fbf7b95d854660d02"
+      "bytes": 4306,
+      "sha256": "sha256:781ad8456eb557aa536c4c9db916fb5e2b8d8e13858cbc7584f3a453cb8fcc44"
     },
     {
       "path": "risk-fork/src/child-operation.mjs",
@@ -2682,8 +2682,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2367742,
-    "sha256": "sha256:ba1dffcfb3a2e75822e04dda4bf55842b39b3a3e44d3fe8da3140d329a882d8d"
+    "bytes": 2368051,
+    "sha256": "sha256:f9b22e38d0c42309338fbf5c30085f3252be33b93f63780248ec2ce95a71fdd0"
   },
   "packaged_assets": [
     {
@@ -2724,8 +2724,8 @@
     {
       "path": "e2b-context/risk-fork/src/canonical.mjs",
       "source_path": "risk-fork/src/canonical.mjs",
-      "bytes": 3852,
-      "sha256": "sha256:69b28cbb35115111b4bec1387c413597f7ed2e0df7f3d83fbf7b95d854660d02"
+      "bytes": 4306,
+      "sha256": "sha256:781ad8456eb557aa536c4c9db916fb5e2b8d8e13858cbc7584f3a453cb8fcc44"
     },
     {
       "path": "e2b-context/risk-fork/src/child-operation.mjs",

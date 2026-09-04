@@ -37,10 +37,14 @@ test('normalizes a SAM tool without leaking the raw transport target', () => {
   assert.equal(packet.authority_flags.payment_enabled, false);
   assert.equal(packet.authority_flags.public_execute_enabled, false);
   assert.equal(packet.transport_evidence.authorization_verified_by_normalizer, false);
-  assert.deepEqual(packet.transport_evidence.observed_label_keys, ['region', 'team']);
+  assert.equal(packet.transport_evidence.observed_label_keys, undefined);
   assert.equal(packet.private_transport_target, undefined);
   assert.equal(serialized.includes(PEER_ID), false);
   assert.equal(serialized.includes(TOOL_NAME), false);
+  assert.equal(serialized.includes('code-reviewer'), false);
+  assert.equal(serialized.includes('review_code'), false);
+  assert.equal(serialized.includes('Review a code snippet.'), false);
+  assert.match(packet.capability_card_input.name, /^SAM MCP tool [a-f0-9]{12}$/);
   assert.match(packet.transport_evidence.peer_ref, /^sha256:[a-f0-9]{64}$/);
 });
 
@@ -52,6 +56,30 @@ test('includes the private target only after explicit opt-in', () => {
     region: 'us-east-1',
     team: 'platform',
   });
+
+  for (const includePrivateTarget of ['true', 1, {}, Object(true)]) {
+    const publicPacket = normalizeSamTool({ ...fixture(), includePrivateTarget });
+    assert.equal(publicPacket.private_transport_target, undefined);
+  }
+});
+
+test('default packet hash-binds labels without exposing provider-controlled keys or values', () => {
+  const privateLabelKey = 'tenant-alpha-control-plane';
+  const privateLabelValue = 'payments-prod-7';
+  const first = fixture();
+  first.discovery.labels = { [privateLabelKey]: privateLabelValue };
+  const packet = normalizeSamTool(first);
+  const serialized = JSON.stringify(packet);
+  assert.equal(serialized.includes(privateLabelKey), false);
+  assert.equal(serialized.includes(privateLabelValue), false);
+  assert.match(packet.transport_evidence.labels_hash, /^sha256:[a-f0-9]{64}$/);
+
+  const changed = fixture();
+  changed.discovery.labels = { [privateLabelKey]: `${privateLabelValue}-changed` };
+  assert.notEqual(
+    packet.transport_evidence.labels_hash,
+    normalizeSamTool(changed).transport_evidence.labels_hash,
+  );
 });
 
 test('rejects a description for a different peer or tool', () => {
@@ -80,6 +108,39 @@ test('hashRef is deterministic across object key order', () => {
   assert.equal(hashRef({ b: 2, a: 1 }), hashRef({ a: 1, b: 2 }));
 });
 
+test('hashRef preserves own __proto__ properties from parsed JSON', () => {
+  const withProto = JSON.parse('{"schema":{"type":"object","__proto__":{"const":"bound"}}}');
+  const withoutProto = JSON.parse('{"schema":{"type":"object"}}');
+  assert.notEqual(hashRef(withProto), hashRef(withoutProto));
+});
+
+test('rejects error-bearing or schema-less describe results', () => {
+  const errored = fixture();
+  errored.description.error = 'authorization denied';
+  delete errored.description.input_schema;
+  assert.throws(() => normalizeSamTool(errored), /sam_description_contains_error/);
+
+  const schemaLess = fixture();
+  delete schemaLess.description.input_schema;
+  assert.throws(() => normalizeSamTool(schemaLess), /sam_description_input_schema_required/);
+});
+
+test('rejects present non-object output schemas while allowing omission or null', () => {
+  const omitted = normalizeSamTool(fixture());
+  const explicitNull = fixture();
+  explicitNull.description.output_schema = null;
+  assert.equal(normalizeSamTool(explicitNull).transport_evidence.schema_hash, omitted.transport_evidence.schema_hash);
+
+  for (const outputSchema of ['not-a-schema', [], 7, false]) {
+    const invalid = fixture();
+    invalid.description.output_schema = outputSchema;
+    assert.throws(
+      () => normalizeSamTool(invalid),
+      /sam_description_output_schema_invalid/,
+    );
+  }
+});
+
 test('rejects unbounded or malformed remote metadata', () => {
   const oversizedDescription = fixture();
   oversizedDescription.description.description = 'x'.repeat(8_193);
@@ -93,5 +154,16 @@ test('rejects unbounded or malformed remote metadata', () => {
   assert.throws(
     () => normalizeSamTool({ ...fixture(), observedAt: 'not-a-timestamp' }),
     /sam_observed_at_invalid/,
+  );
+  assert.throws(
+    () => normalizeSamTool({ ...fixture(), observedAt: '2026-02-30T00:00:00Z' }),
+    /sam_observed_at_invalid/,
+  );
+  assert.throws(
+    () => normalizeSamTool({ ...fixture(), observedAt: '2025-02-29T00:00:00Z' }),
+    /sam_observed_at_invalid/,
+  );
+  assert.doesNotThrow(
+    () => normalizeSamTool({ ...fixture(), observedAt: '2024-02-29T23:59:59.123+05:30' }),
   );
 });

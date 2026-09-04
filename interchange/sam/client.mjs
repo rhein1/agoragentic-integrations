@@ -10,6 +10,8 @@ export const DEFAULT_SAM_MCP_URL = 'http://127.0.0.1:8080/mcp';
 const MAX_SAM_TOKEN_BYTES = 16_384;
 const MAX_SAM_TOOL_RESULT_BYTES = 1_048_576;
 const MAX_SAM_DISCOVERY_ROWS = 512;
+const PUBLIC_SAM_DISCOVERY_DESCRIPTION =
+  'Metadata-only SAM-discovered MCP tool. Provider-supplied descriptive text remains private pending operator review.';
 
 export class SamClientError extends Error {
   constructor(code, message, { status = 500, retryable = false, cause } = {}) {
@@ -52,7 +54,7 @@ export function validateSamEndpoint(endpoint = DEFAULT_SAM_MCP_URL, { allowRemot
     throw new SamClientError('sam_endpoint_credentials_forbidden', 'Do not embed credentials in the SAM endpoint URL.', { status: 400 });
   }
   const local = isLoopback(url.hostname);
-  if (!local && !allowRemote) {
+  if (!local && allowRemote !== true) {
     throw new SamClientError(
       'sam_remote_endpoint_requires_opt_in',
       'Only loopback SAM endpoints are accepted by default. Set allowRemote only for an operator-approved endpoint.',
@@ -116,7 +118,7 @@ export function authenticatedFetch(token, fetchImpl = globalThis.fetch) {
     const inherited = typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined;
     const headers = new Headers(init.headers || inherited || undefined);
     if (token) headers.set('X-Sam-Authentication', `Bearer ${token}`);
-    return fetchImpl(input, { ...init, headers });
+    return fetchImpl(input, { ...init, headers, redirect: 'error' });
   };
 }
 
@@ -216,7 +218,7 @@ async function withClient(options, dependencies, work) {
     fetchImpl: dependencies.fetch || globalThis.fetch,
   });
   try {
-    return await work(client, { endpoint, authenticated: Boolean(token) });
+    return await work(client, { endpoint, authenticationHeaderSent: Boolean(token) });
   } finally {
     if (!injected && typeof client?.close === 'function') await client.close();
   }
@@ -246,8 +248,10 @@ function asRows(value) {
 }
 
 function redactEndpoint(endpoint, includePrivate = false) {
+  const requestUrl = new URL(endpoint.href);
+  requestUrl.hash = '';
   const output = {
-    endpoint_ref: hashRef({ origin: endpoint.origin, pathname: endpoint.pathname }),
+    endpoint_ref: hashRef({ request_url: requestUrl.href }),
     endpoint_loopback: isLoopback(endpoint.hostname),
   };
   if (includePrivate) output.private_endpoint_origin = endpoint.origin;
@@ -265,6 +269,25 @@ function redactMeshInfo(value, includePrivate = false) {
   };
   if (includePrivate) output.private_mesh_info = info;
   return output;
+}
+
+function optionalHashRef(field, value) {
+  if (value === undefined || value === null || value === '') return null;
+  return hashRef({ [field]: value });
+}
+
+function publicToolObservation(row) {
+  const labels = isRecord(row.labels) ? row.labels : {};
+  const hasError = row.error !== undefined && row.error !== null && row.error !== '';
+  return {
+    peer_ref: optionalHashRef('peer_id', row.peer_id),
+    tool_ref: optionalHashRef('tool_name', row.tool_name),
+    description: PUBLIC_SAM_DISCOVERY_DESCRIPTION,
+    description_hash: optionalHashRef('description', row.description),
+    labels_hash: hashRef({ labels }),
+    error: hasError ? 'sam_discovery_row_error' : null,
+    error_hash: hasError ? hashRef({ error: row.error }) : null,
+  };
 }
 
 /**
@@ -288,24 +311,20 @@ export async function discoverSamTools(options = {}, dependencies = {}) {
       schema: 'agoragentic.interchange.sam-discovery.v1',
       captured_at: dependencies.now?.() || new Date().toISOString(),
       ...redactEndpoint(connection.endpoint, options.includePrivateTopology === true),
-      authenticated: connection.authenticated,
+      authentication_header_sent: connection.authenticationHeaderSent,
       mesh: redactMeshInfo(meshInfo, options.includePrivateTopology === true),
       service_count: asRows(services).length,
       tool_count: rows.filter((row) => !row.error).length,
-      tools: options.includePrivateTopology
+      tools: options.includePrivateTopology === true
         ? rows
-        : rows.map((row) => ({
-            peer_ref: row.peer_id ? hashRef({ peer_id: row.peer_id }) : null,
-            tool_ref: row.tool_name ? hashRef({ tool_name: row.tool_name }) : null,
-            description: String(row.description || ''),
-            observed_label_keys: isRecord(row.labels) ? Object.keys(row.labels).sort() : [],
-            error: row.error || null,
-          })),
+        : rows.map(publicToolObservation),
       safety: {
         provider_invoked: false,
         funds_moved: false,
         marketplace_publication: false,
         raw_topology_public: false,
+        provider_description_public: false,
+        raw_label_fields_public: false,
       },
     };
   });
@@ -361,7 +380,7 @@ export async function captureSamTool({ peerId, toolName }, options = {}, depende
       schema: 'agoragentic.interchange.sam-live-capture.v1',
       captured_at: capturedAt,
       ...redactEndpoint(connection.endpoint, options.includePrivateTarget === true),
-      authenticated: connection.authenticated,
+      authentication_header_sent: connection.authenticationHeaderSent,
       packet,
       capture_evidence: {
         sam_endpoint_called: true,
