@@ -546,7 +546,7 @@ test('resolves the complete paginated remote tool directory before fallback deci
     }
 });
 
-test('keeps concurrent pagination epochs isolated before consequential fallback decisions', async () => {
+test('keeps an in-flight pagination epoch isolated and rejects a drifting refresh', async () => {
     function deferred() {
         let resolve;
         const promise = new Promise((settle) => {
@@ -623,13 +623,18 @@ test('keeps concurrent pagination epochs isolated before consequential fallback 
         oldPageTwo.resolve({ tools: [{ name: 'old-page-two' }] });
         const oldEpochDecision = await routingDecision;
         newPageTwo.resolve({ tools: [{ name: 'new-page-two' }] });
-        const aggregate = await refreshedList;
+        const refreshError = await refreshedList.then(() => null, (error) => error);
 
         assert.equal(oldEpochDecision, true);
         assert.equal(fallbackSelections, 0);
-        assert.equal(aggregate.tools.some((tool) => tool.name === 'old-page-two'), false);
-        assert.equal(aggregate.tools.some((tool) => tool.name === 'new-page-two'), true);
-        assert.equal(await directory.has('agoragentic_register'), false);
+        assert.equal(refreshError?.code, 'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT');
+        await assert.rejects(
+            directory.has('agoragentic_register'),
+            (error) => [
+                'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT',
+                'MCP_ENFORCED_SESSION_CLOSED',
+            ].includes(error?.code),
+        );
         assert.deepEqual(calls, [
             {},
             { cursor: 'old-page-2' },

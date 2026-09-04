@@ -14,7 +14,10 @@ import {
 } from '../src/clean-commit.mjs';
 import { RiskForkController } from '../src/controller.mjs';
 import { transitionLifecycle } from '../src/lifecycle.mjs';
-import { RiskForkProvider } from '../src/provider.mjs';
+import {
+  RiskForkProvider,
+  createCleanupVerificationEvidence,
+} from '../src/provider.mjs';
 import {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
@@ -749,14 +752,15 @@ class RecordingProvider extends RiskForkProvider {
     return { status: 'destroy_requested_observed' };
   }
 
-  async verifyDestroyed() {
+  async verifyDestroyed(input) {
     this.events.push('verify-fork-destroyed');
-    return {
+    return createCleanupVerificationEvidence(input.cleanup_request, {
       status: 'verified',
       outcome: 'success',
+      observed_at: NOW,
       evidence_ref: 'fork-absence:evidence',
-      evidence_hash: hash('fork-absence'),
-    };
+      observation_hash: hash('fork-absence'),
+    });
   }
 
   async destroySavepoint() {
@@ -764,14 +768,15 @@ class RecordingProvider extends RiskForkProvider {
     return { status: 'destroy_requested_observed' };
   }
 
-  async verifySavepointDestroyed() {
+  async verifySavepointDestroyed(input) {
     this.events.push('verify-savepoint-destroyed');
-    return {
+    return createCleanupVerificationEvidence(input.cleanup_request, {
       status: 'verified',
       outcome: 'success',
+      observed_at: NOW,
       evidence_ref: 'savepoint-absence:evidence',
-      evidence_hash: hash('savepoint-absence'),
-    };
+      observation_hash: hash('savepoint-absence'),
+    });
   }
 }
 
@@ -858,8 +863,8 @@ test('controller preparation failures persist terminal cleanup states', async (t
     assert.equal(error?.code, 'RISK_FORK_PREPARATION_FAILED');
     assert.equal(error.evidence.lifecycle.state, 'DESTRUCTION_UNKNOWN');
     assert.equal(error.evidence.lifecycle.fork_resource_state, 'DESTROY_UNKNOWN');
-    assert.equal(error.evidence.cleanup.fork_request, null);
-    assert.equal(error.evidence.cleanup.fork_verification, null);
+    assert.equal(error.evidence.cleanup.fork.status, 'unknown');
+    assert.equal(error.evidence.cleanup.fork.outcome, 'unknown');
     assert.deepEqual(provider.events, [
       'create-savepoint',
       'create-fork',

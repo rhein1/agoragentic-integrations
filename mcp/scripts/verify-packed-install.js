@@ -687,17 +687,16 @@ async function verifyPackedSecurityGuards(api, remoteUrl) {
         oldRacePage.resolve({ tools: [{ name: 'packed-old-page-two' }] });
         assert.strictEqual(await raceDecision, true);
         newRacePage.resolve({ tools: [{ name: 'packed-new-page-two' }] });
-        const raceAggregate = await raceList;
+        const refreshError = await raceList.then(() => null, (error) => error);
         assert.strictEqual(raceFallbackSelections, 0);
-        assert.strictEqual(
-            raceAggregate.tools.some((tool) => tool.name === 'packed-old-page-two'),
-            false,
+        assert.strictEqual(refreshError?.code, 'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT');
+        await assert.rejects(
+            raceDirectory.has('agoragentic_register'),
+            (error) => [
+                'MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT',
+                'MCP_ENFORCED_SESSION_CLOSED',
+            ].includes(error?.code),
         );
-        assert.strictEqual(
-            raceAggregate.tools.some((tool) => tool.name === 'packed-new-page-two'),
-            true,
-        );
-        assert.strictEqual(await raceDirectory.has('agoragentic_register'), false);
     } finally {
         oldRacePage.resolve({ tools: [] });
         newRacePage.resolve({ tools: [] });

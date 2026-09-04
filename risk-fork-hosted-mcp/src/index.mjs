@@ -15,8 +15,25 @@ export {
   REQUIRED_PROVIDER_METHODS,
   RiskForkProvider,
   assertRiskForkProvider,
+  createCleanupVerificationRequest,
   requireProviderCapability,
+  verifyCleanupVerificationEvidence,
 } from '../../risk-fork/src/provider.mjs';
+export {
+  RISK_FORK_HOST_BOUNDARY_SCHEMA,
+  RISK_FORK_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
+  RiskForkHostBoundaryError,
+  createRiskForkHostBoundary,
+  createRiskForkImportEnvelope,
+  createTrustedRiskDescriptor,
+  createTrustedRiskDescriptorSource,
+  importRiskForkProviderResult,
+  isRiskForkHostBoundary,
+  verifyRiskForkImportEnvelope,
+} from '../../risk-fork/src/host-boundary.mjs';
 export {
   classifyRisk,
   createTrustedMcpServerVerifier,

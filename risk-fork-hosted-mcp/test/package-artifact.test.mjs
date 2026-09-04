@@ -1161,6 +1161,11 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     'computeMcpCleanImportEvidenceHash',
     'connectRemoteClient',
     'createMcpEnforcementBoundary',
+    'createCleanupVerificationRequest',
+    'createRiskForkHostBoundary',
+    'createRiskForkImportEnvelope',
+    'createTrustedRiskDescriptor',
+    'createTrustedRiskDescriptorSource',
     'runAcpAdapter',
     'runMcpRelay',
     'RiskForkController',
@@ -1203,6 +1208,8 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     'createMcpInterceptionPlan',
     'createTrustedMcpServerVerifier',
     'verifyRiskDecision',
+    'verifyCleanupVerificationEvidence',
+    'verifyRiskForkImportEnvelope',
   ]) {
     assert.ok(Object.hasOwn(api, name), `missing export ${name}`);
   }
@@ -1313,10 +1320,21 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     await writeFile(path.join(temporary, 'package.json'), '{"private":true}\n', 'utf8');
     await writeFile(path.join(temporary, 'consumer-check.mjs'), [
       "import assert from 'node:assert/strict';",
-      "import { applyE2BExternalQualificationObservation, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
+      "import { applyE2BExternalQualificationObservation, createCleanupVerificationRequest, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, createRiskForkHostBoundary, createRiskForkImportEnvelope, createTrustedRiskDescriptor, createTrustedRiskDescriptorSource, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, verifyCleanupVerificationEvidence, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
       "import { createRiskForkE2BTemplate } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/e2b-template/template.mjs';",
       "assert.equal(typeof createMcpEnforcementBoundary, 'function');",
       "assert.equal(typeof createMcpInterceptionPlan, 'function');",
+      "assert.equal(typeof createRiskForkHostBoundary, 'function');",
+      "assert.equal(typeof createRiskForkImportEnvelope, 'function');",
+      "assert.equal(typeof verifyCleanupVerificationEvidence, 'function');",
+      "const descriptorSource = createTrustedRiskDescriptorSource((request) => createTrustedRiskDescriptor(request, { mcp_phase: 'tools/call', raw_method: null, mcp_server_ref: 'server:packed', mcp_server_origin: 'https://mcp.example.test', mcp_server_trust: 'reachable', mcp_server_attestation: null, tool_name: 'workspace_apply_patch', tool_annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }, capabilities: { network_access: false, filesystem_read: false, filesystem_write: true, credential_access: false, wallet_or_payment: false, deployment: false, publication: false, communication: false, database_mutation: false, trust_or_reputation_mutation: false, external_side_effect: false, unknown_or_unclassified: false }, prompt_injection_indicators: [], owner_policy: { minimum_level: 'LOW', force_risk_fork: false, deny_irreversible: false, trusted_server_refs: [], trusted_attestor_refs: [], trusted_attestation_hashes: [], trust_registry_version: null, allowed_egress: [] } }));",
+      "const hostBoundary = createRiskForkHostBoundary({ controller: { async prepare() { return { mode: 'denied', authority_granted: false }; } }, trusted_descriptor_source: descriptorSource, clock: () => '2026-08-29T00:00:00.000Z' });",
+      "const hostResult = await hostBoundary.preEffect({ descriptor_ref: 'descriptor:packed', operation_input: { operation: { kind: 'bounded_file_batch', actions: [] }, expected_commit_type: 'TYPED_RESULT' } });",
+      "assert.equal(hostResult.authority_granted, false);",
+      "const imported = createRiskForkImportEnvelope({ source_fork_ref: 'fork:test', result_hash: `sha256:${'a'.repeat(64)}`, candidate: { type: 'TYPED_RESULT', payload: { ok: true }, payload_schema: { type: 'object', additionalProperties: false, required: ['ok'], properties: { ok: { type: 'boolean' } } } } });",
+      "assert.equal(imported.import_type, 'TYPED_RESULT');",
+      "const cleanupRequest = createCleanupVerificationRequest({ provider_id: 'provider:test', resource_kind: 'fork', resource_ref: 'fork:test', requested_at: '2026-08-29T00:00:00.000Z', request_nonce: 'nonce:test' });",
+      "assert.equal(cleanupRequest.provider_id, 'provider:test');",
       "assert.equal(typeof E2BRiskForkAdapter, 'function');",
       "assert.equal(typeof applyE2BExternalQualificationObservation, 'function');",
       "assert.equal(typeof createE2BExternalQualificationObservationVerifier, 'function');",

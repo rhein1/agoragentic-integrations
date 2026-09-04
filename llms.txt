@@ -17,7 +17,7 @@
 - Premortem Golden Loop Agent: `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` or `heal --repo .` (free local Node ≥18 CLI; no repo contents sent anywhere by default)
 - Rust Framework HTTP runtime examples: `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080 node rust-framework/typescript-call-rust-agent.mjs` or `python rust-framework/python_call_rust_agent.py` (client examples only; no hosted provisioning or spend)
 - AnyDoc Document Evidence Adapter: `cd examples/anydoc-document-evidence && npm ci` (experimental source-only Node >=20 package; local process-isolated parsing with explicit evidence coverage and completeness blockers)
-- Risk Fork: `cd risk-fork && npm ci` (experimental source-only fork-before-risk contracts; local/disposable tests do not establish live containment, hosted interception, managed PostgreSQL readiness, deployment, publication, or spend authority)
+- Risk Fork: `npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund` for the source contracts and named-fixture local demo; then `node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor` (experimental source only; verified offline kits already bundle the closure and need no install; the demo is not isolation, live protection, hosted interception, provider qualification, deployment, npm publication, or spend authority)
 - ARD v0.91 source profile: `cd ard && npm ci --ignore-scripts && npm test` (pinned local schemas/contexts and offline generator/normalizer only; no network dereference, well-known route, execution, payment, trust-promotion, publication, or deployment authority)
 
 ## Auth
@@ -104,6 +104,9 @@
 - hyperframes/upstream-provenance.json — reviewed HyperFrames revision, package version, license, and compatibility boundary
 - hyperframes/schemas/sanitized-timeline.schema.json — sanitized deterministic timeline contract
 - hyperframes/schemas/local-render-receipt.schema.json — hash-bound local render receipt contract
+- risk-fork/hackathon/demo-status.json — local demo truth flags; source/demo true, production/live/npm/hosted false, and E2B not live-qualified
+- risk-fork/discovery/risk-fork-capability.json — machine-readable local entrypoint, limits, storage, cleanup, provider, and claim boundary
+- risk-fork/discovery/skill.md — agent-use rule for enumerated synthetic fixtures only
 - premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs — free local no-spend CLI: session, premortem, golden-loop, run, heal, HTML reports, transcripts, JSON/Markdown receipts, and additive self-heal plans
 - ag-ui/README.md — AG-UI Protocol Bridge (quote, match, approval, receipt mapping)
 - bedrock-agentcore/README.md — AWS Bedrock AgentCore adapter and policy mapping
