@@ -638,21 +638,21 @@
       "path": "anchor-safe-pay/safe-pay-harness-adapter.js",
       "install": "cd anchor-safe-pay && npm ci",
       "docs": "anchor-safe-pay/README.md",
-      "compatibility_scope": "Default-off, fixture-only, no-network and no-spend reference against anchor-x402-safe-pay 0.3.0 and Harness Core 0.4.2; its process-local ledger and simulated callback are not production payment, durable replay, settlement, partnership, or live screening evidence",
+      "compatibility_scope": "Default-off, fixture-only, no-network and no-spend reference against anchor-x402-safe-pay 0.3.0 and Harness Core 0.4.2; mandate and approval records are caller-declared and explicitly unverified, approvals bind the exact mandate hash, the process-local ledger pins used mandate references, and execution is limited to an adapter-owned inert simulator with no caller callback; this is not verified owner authority, production payment, durable replay, settlement, partnership, or live screening evidence",
       "capability_record": {
         "capabilities": {
           "router_client": "none",
           "manifest_mapping": "none",
           "pre_action_enforcement": "tested",
           "post_action_evidence": "local",
-          "approval_support": "host_enforced",
+          "approval_support": "record_only",
           "receipt_support": "local",
           "agent_os_export": "none"
         },
         "evidence": {
           "host_version_tested": "anchor-x402-safe-pay 0.3.0 + Harness Core 0.4.2 fixture contract",
           "proof_class": "local",
-          "last_verified_at": "2026-08-31T23:32:32Z",
+          "last_verified_at": "2026-09-04T20:31:20Z",
           "evidence_ref": "anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs"
         },
         "requirements": {

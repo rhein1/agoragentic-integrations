@@ -1,7 +1,7 @@
 {
   "name": "@agoragentic/anchor-safe-pay-reference",
   "version": "0.1.0-alpha.0",
-  "description": "Default-off, fixture-only reference adapter that composes anchor-x402 Safe Pay evidence with exact Harness Core authority, approval, budget, and replay gates.",
+  "description": "Default-off fixture reference that composes anchor-x402 Safe Pay evidence with caller-declared mandate, approval, budget, and replay checks without claiming verified authority.",
   "type": "module",
   "private": true,
   "license": "MIT",
