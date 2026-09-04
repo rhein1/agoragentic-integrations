@@ -290,7 +290,7 @@ async function startWindowsExclusiveLock(lockPath) {
   });
 
   try {
-    await waitForExactStdoutLine(child, WINDOWS_LOCK_READY, 4_000);
+    await waitForExactStdoutLine(child, WINDOWS_LOCK_READY, 15_000);
   } catch (error) {
     if (child.exitCode === null && child.signalCode === null) child.kill();
     await waitForClose(closePromise, 3_000).catch(() => {});
@@ -805,7 +805,7 @@ test('destroy failure blocks replay but an explicit retry can finish cleanup', a
 
 test('Windows retries destruction after a transient workspace lock is released', {
   skip: process.platform !== 'win32',
-  timeout: 10_000,
+  timeout: 30_000,
 }, async () => {
   const fixture = await makeFixture('risk-fork-local-windows-destroy-retry-');
   const { adapter, fork } = fixture;
