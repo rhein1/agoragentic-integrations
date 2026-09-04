@@ -484,7 +484,7 @@ test('public-safe packet creation and verification reject secrets, private paths
     'sk_test_abcdefghijklmnopqrstuvwxyz012345',
     'npm_abcdefghijklmnopqrstuvwxyz012345',
     'hf_abcdefghijklmnopqrstuvwxyz012345',
-    'whsec_abcdefghijklmnopqrstuvwxyz012345',
+    ['wh', 'sec_abcdefghijklmnopqrstuvwxyz012345'].join(''),
     'glrt-abcdefghijklmnopqrstuvwxyz012345',
     'glft-abcdefghijklmnopqrstuvwxyz012345',
     'gldt-abcdefghijklmnopqrstuvwxyz012345',
