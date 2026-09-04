@@ -44,7 +44,6 @@ jobs:
       AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
       RISK_FORK_DEMO_ALLOW_LOOPBACK: '0'
       RISK_FORK_RELEASE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      RISK_FORK_RELEASE_OUTPUT_BASE: ${{ runner.temp }}/risk-fork-release-output
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -74,6 +73,8 @@ jobs:
           npm --prefix risk-fork/hackathon run check
           npm --prefix risk-fork/hackathon test
       - name: Build exact-commit dependency-complete release candidate
+        env:
+          RISK_FORK_RELEASE_OUTPUT_BASE: ${{ runner.temp }}/risk-fork-release-output
         run: node risk-fork/hackathon/scripts/build-release-artifacts.mjs
       - name: Verify sidecars and run from a fresh extraction
         run: >-
