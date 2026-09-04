@@ -1,0 +1,57 @@
+{
+  "schema": "agoragentic.risk-fork.e2b-live-canary-plan.v1",
+  "status": "blocked_pending_separate_owner_approval",
+  "provider": "e2b",
+  "provider_status": "not_live_qualified",
+  "source_gate_enabled": false,
+  "composition_status": "source_disabled_not_executable",
+  "pre_io_gate_model": "implemented_injectable_evaluation_only_no_sdk_or_provider_io",
+  "sdk": "e2b@2.39.0",
+  "adapter_module": "risk-fork/src/adapters/e2b.mjs#E2BRiskForkAdapter",
+  "qualification_harness": "risk-fork/scripts/e2b-live-qualification.mjs",
+  "purpose": "one synthetic malicious-stdio-MCP containment canary only",
+  "required_gates": [
+    "RISK_FORK_DEMO_E2B_ENABLED=true",
+    "E2B_API_KEY present in the clean controller only",
+    "owner-authenticated exact approval verified by a pinned trusted authority",
+    "durable atomic claim of an unconsumed one-use run ID",
+    "hard maximum-cost field",
+    "synthetic-only declaration"
+  ],
+  "unimplemented_blockers": [
+    "no pinned host owner-approval authority is bound to the injectable verifier interface",
+    "no production durable atomic one-use claim store is bound to the injectable claim interface",
+    "compile-time source gate remains false",
+    "separate owner approval for this exact plan has not been granted"
+  ],
+  "limits": {
+    "maximum_provider_allocations": 1,
+    "maximum_active_sandboxes": 1,
+    "maximum_runtime_seconds": 180,
+    "maximum_cost_usd": 0.00585,
+    "automatic_retry": false,
+    "fallback_provider": null,
+    "persistent_volumes": false,
+    "inherited_environment": false,
+    "child_provider_key": false,
+    "production_secrets": false,
+    "actual_payments_or_actions": false,
+    "public_ingress": false
+  },
+  "required_evidence": [
+    "allocation requested",
+    "sandbox ID observed",
+    "command completed or failed closed",
+    "kill requested",
+    "kill acknowledged",
+    "first getInfo absence observation",
+    "exact metadata list observation",
+    "second getInfo absence observation",
+    "runtime estimate",
+    "provider-finalized cost when available"
+  ],
+  "qualification_claim_after_success": "hackathon_demo_operation_only_not_production_qualification",
+  "provider_finalized_cost_usd": null,
+  "approval_granted": false,
+  "provider_calls_performed_by_this_plan": 0
+}

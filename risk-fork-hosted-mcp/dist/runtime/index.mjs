@@ -64,7 +64,7 @@ var require_package = __commonJS({
         start: "node dist/mcp-server.cjs",
         dev: "node mcp-server.js",
         build: "node scripts/build.js",
-        check: "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/fallback-preview.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
+        check: "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
         test: "node --test test/*.test.js",
         "verify:packed-install": "node scripts/verify-packed-install.js",
         prepack: "npm run build",
@@ -35057,6 +35057,14 @@ var require_mcp_server = __commonJS({
     var MAX_REMOTE_TOOL_CURSOR_LENGTH = 4096;
     var MAX_ACP_SESSIONS = 1e3;
     var MAX_ACP_CWD_LENGTH = 4096;
+    var DEFAULT_HOST_TIMEOUTS = Object.freeze({
+      open_session_ms: 15e3,
+      request_ms: 3e4,
+      close_ms: 5e3,
+      fallback_ms: 3e4
+    });
+    var MIN_HOST_TIMEOUT_MS = 10;
+    var MAX_HOST_TIMEOUT_MS = 10 * 60 * 1e3;
     var CANONICAL_INVOCATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
     var MIN_CREDENTIAL_ASSIGNMENT_VALUE_LENGTH = 8;
     var enforcementBoundaryAdapters = /* @__PURE__ */ new WeakMap();
@@ -35069,6 +35077,38 @@ var require_mcp_server = __commonJS({
       "agoragentic_quote",
       "agoragentic_quote_service",
       "agoragentic_preview_x402"
+    ]);
+    var TOOL_CAPABILITY_KEYS = Object.freeze([
+      "network_access",
+      "filesystem_read",
+      "filesystem_write",
+      "credential_access",
+      "wallet_or_payment",
+      "deployment",
+      "publication",
+      "communication",
+      "database_mutation",
+      "trust_or_reputation_mutation",
+      "external_side_effect",
+      "unknown_or_unclassified"
+    ]);
+    var IRREVERSIBLE_TOOL_CAPABILITIES = /* @__PURE__ */ new Set([
+      "network_access",
+      "filesystem_write",
+      "credential_access",
+      "wallet_or_payment",
+      "deployment",
+      "publication",
+      "communication",
+      "database_mutation",
+      "trust_or_reputation_mutation",
+      "external_side_effect"
+    ]);
+    var TOOL_ANNOTATION_KEYS = Object.freeze([
+      "readOnlyHint",
+      "destructiveHint",
+      "idempotentHint",
+      "openWorldHint"
     ]);
     var SENSITIVE_CREDENTIAL_KEY_SEQUENCES = Object.freeze([
       ["api", "key"],
@@ -35409,20 +35449,20 @@ var require_mcp_server = __commonJS({
         while (index < text.length) {
           skipWhitespace();
           const key = readString();
-          const normalizedKey2 = key.normalize("NFC");
+          const normalizedKey3 = key.normalize("NFC");
           if (containsCredentialMaterial(key)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${field} contains a credential-shaped JSON object key`
             );
           }
-          if (keys.has(normalizedKey2)) {
+          if (keys.has(normalizedKey3)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${field} contains a duplicate JSON object key`
             );
           }
-          keys.add(normalizedKey2);
+          keys.add(normalizedKey3);
           skipWhitespace();
           if (text[index] !== ":") syntaxError();
           index += 1;
@@ -35643,7 +35683,9 @@ var require_mcp_server = __commonJS({
           return;
         }
         for (const [key, child] of Object.entries(current)) {
-          if (containsCredentialMaterial(key)) {
+          const parentKey = pathTokens.at(-1);
+          const booleanRiskCapabilityDeclaration = TOOL_CAPABILITY_KEYS.includes(key) && typeof child === "boolean" && ["capabilities", "agoragentic/risk-capabilities"].includes(parentKey);
+          if (containsCredentialMaterial(key) && !booleanRiskCapabilityDeclaration) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${path8}.<key> contains credential-shaped material`
@@ -35666,7 +35708,7 @@ var require_mcp_server = __commonJS({
             });
             continue;
           }
-          if (classification.sensitive) {
+          if (classification.sensitive && !booleanRiskCapabilityDeclaration) {
             if (classification.referenceKind) {
               assertOpaqueCredentialReference(child, childPath, classification.referenceKind);
               continue;
@@ -35754,11 +35796,166 @@ var require_mcp_server = __commonJS({
       if (!adapter) throw enforcementRequired();
       return adapter;
     }
-    function riskProfileFor(phase, toolName = null) {
+    function normalizeHostTimeouts(value = {}) {
+      assertExactKeys(
+        value,
+        ["open_session_ms", "request_ms", "close_ms", "fallback_ms"],
+        "MCP enforcement host timeouts"
+      );
+      return Object.freeze(Object.fromEntries(Object.entries(DEFAULT_HOST_TIMEOUTS).map(
+        ([key, fallback]) => {
+          const candidate = value[key] ?? fallback;
+          if (!Number.isSafeInteger(candidate) || candidate < MIN_HOST_TIMEOUT_MS || candidate > MAX_HOST_TIMEOUT_MS) {
+            throw new TypeError(
+              `MCP enforcement host timeout ${key} must be an integer from ${MIN_HOST_TIMEOUT_MS} to ${MAX_HOST_TIMEOUT_MS}`
+            );
+          }
+          return [key, candidate];
+        }
+      )));
+    }
+    async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+      const controller = new AbortController();
+      const deadlineAt = new Date(Date.now() + timeoutMs).toISOString();
+      let timer;
+      const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+          const error = new McpEnforcementError(
+            "MCP_ENFORCEMENT_HOST_DEADLINE_EXCEEDED",
+            `MCP enforcement host ${operation} exceeded its ${timeoutMs}ms deadline`
+          );
+          controller.abort(error);
+          reject(error);
+        }, timeoutMs);
+      });
+      const context = Object.freeze({
+        signal: controller.signal,
+        timeout_ms: timeoutMs,
+        deadline_at: deadlineAt,
+        operation
+      });
+      try {
+        return await Promise.race([
+          Promise.resolve().then(() => callback(...args, context)),
+          timeout
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    async function openHostSessionWithDeadline(adapter, openRequest) {
+      let late = false;
+      const pending = Promise.resolve().then(() => adapter.openSession(openRequest, Object.freeze({
+        signal: controller.signal,
+        timeout_ms: adapter.timeouts.open_session_ms,
+        deadline_at: new Date(Date.now() + adapter.timeouts.open_session_ms).toISOString(),
+        operation: "openSession"
+      })));
+      const controller = new AbortController();
+      let timer;
+      const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => {
+          late = true;
+          const error = new McpEnforcementError(
+            "MCP_ENFORCEMENT_HOST_DEADLINE_EXCEEDED",
+            `MCP enforcement host openSession exceeded its ${adapter.timeouts.open_session_ms}ms deadline`
+          );
+          controller.abort(error);
+          reject(error);
+        }, adapter.timeouts.open_session_ms);
+      });
+      pending.then(async (session) => {
+        if (!late) return;
+        const descriptor = session && typeof session === "object" ? Object.getOwnPropertyDescriptor(session, "close") : null;
+        if (descriptor?.enumerable && !descriptor.get && !descriptor.set && typeof descriptor.value === "function") {
+          await invokeHostWithDeadline(
+            descriptor.value.bind(session),
+            adapter.timeouts.close_ms,
+            "lateOpenSessionClose"
+          ).catch(() => {
+          });
+        }
+      }).catch(() => {
+      });
+      try {
+        return await Promise.race([pending, timeout]);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    function normalizeToolAnnotations(value) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return Object.freeze({
+          raw: null,
+          complete: false,
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true
+        });
+      }
+      const raw = deepFreezeJson(cloneBoundedJson(value, "remote tool annotations"));
+      const keys = Object.keys(raw);
+      const complete = TOOL_ANNOTATION_KEYS.every(
+        (key) => Object.hasOwn(raw, key) && typeof raw[key] === "boolean"
+      ) && keys.every((key) => TOOL_ANNOTATION_KEYS.includes(key));
       return Object.freeze({
-        minimum_level: phase === "tools/call" && IRREVERSIBLE_TOOLS.has(toolName) ? "IRREVERSIBLE" : "HIGH",
+        raw,
+        complete,
+        readOnlyHint: raw.readOnlyHint === true,
+        destructiveHint: raw.destructiveHint === true,
+        idempotentHint: raw.idempotentHint === true,
+        openWorldHint: raw.openWorldHint !== false
+      });
+    }
+    function normalizeToolCapabilities(descriptor) {
+      const direct = descriptor.capabilities ?? null;
+      const metadata = descriptor._meta && typeof descriptor._meta === "object" && !Array.isArray(descriptor._meta) ? descriptor._meta["agoragentic/risk-capabilities"] ?? null : null;
+      if (direct !== null && metadata !== null && sha256Ref2(direct) !== sha256Ref2(metadata)) {
+        throw new McpEnforcementError(
+          "MCP_REMOTE_TOOL_CAPABILITIES_AMBIGUOUS",
+          `Remote tool ${descriptor.name} supplies conflicting capability declarations`
+        );
+      }
+      const raw = direct ?? metadata;
+      const plain = raw && typeof raw === "object" && !Array.isArray(raw);
+      const rawKeys = plain ? Object.keys(raw) : [];
+      const complete = plain && TOOL_CAPABILITY_KEYS.every(
+        (key) => Object.hasOwn(raw, key) && typeof raw[key] === "boolean"
+      ) && rawKeys.every((key) => TOOL_CAPABILITY_KEYS.includes(key));
+      const capabilities = Object.fromEntries(TOOL_CAPABILITY_KEYS.map((key) => [
+        key,
+        key === "unknown_or_unclassified" ? !complete || raw?.[key] === true : complete && raw[key] === true
+      ]));
+      return Object.freeze({ raw: plain ? deepFreezeJson(cloneBoundedJson(raw)) : null, complete, capabilities });
+    }
+    function bindRemoteToolDescriptor(value, field = "remote tool descriptor") {
+      const descriptor = deepFreezeJson(cloneBoundedJson(value, field));
+      assertPlainRecord(descriptor, field);
+      if (typeof descriptor.name !== "string" || descriptor.name.length < 1 || descriptor.name.length > 500 || descriptor.name.includes("\0")) {
+        throw new TypeError(`${field}.name is invalid`);
+      }
+      const annotations = normalizeToolAnnotations(descriptor.annotations);
+      const capabilityRecord = normalizeToolCapabilities(descriptor);
+      const irreversibleCapability = TOOL_CAPABILITY_KEYS.some(
+        (key) => IRREVERSIBLE_TOOL_CAPABILITIES.has(key) && capabilityRecord.capabilities[key] === true
+      );
+      const unknownEffect = !annotations.complete || !capabilityRecord.complete || capabilityRecord.capabilities.unknown_or_unclassified === true;
+      const effectStatus = annotations.destructiveHint || irreversibleCapability ? "irreversible" : unknownEffect || annotations.readOnlyHint !== true ? "unknown_effectfulness" : "explicit_read_only";
+      return deepFreezeJson({
+        descriptor,
+        descriptor_hash: sha256Ref2(descriptor),
+        annotations: annotations.raw,
+        capabilities: capabilityRecord.capabilities,
+        effect_status: effectStatus
+      });
+    }
+    function riskProfileFor(phase, toolName = null, toolBinding = null) {
+      const irreversible = phase === "tools/call" && (IRREVERSIBLE_TOOLS.has(toolName) || !toolBinding || ["irreversible", "unknown_effectfulness"].includes(toolBinding.effect_status));
+      return Object.freeze({
+        minimum_level: irreversible ? "IRREVERSIBLE" : "HIGH",
         untrusted_content: true,
-        prepare_only: phase === "tools/call" && IRREVERSIBLE_TOOLS.has(toolName)
+        prepare_only: irreversible
       });
     }
     function transportConstraints() {
@@ -35776,6 +35973,7 @@ var require_mcp_server = __commonJS({
       remoteUrl,
       params = {},
       toolName = null,
+      toolDescriptor = null,
       sessionBindingHash = null,
       extra = {}
     }) {
@@ -35790,6 +35988,13 @@ var require_mcp_server = __commonJS({
       assertExactKeys(safeExtra, ["raw_method", "fallback_http"], "MCP enforcement metadata");
       assertNoCredentialMaterial(safeExtra, "MCP enforcement metadata");
       const rawMethod = phase === "UNKNOWN" ? String(safeExtra.raw_method || "") : null;
+      const toolBinding = phase === "tools/call" ? bindRemoteToolDescriptor(toolDescriptor, "bound remote tool descriptor") : null;
+      if (phase === "tools/call" && toolBinding.descriptor.name !== toolName) {
+        throw new McpEnforcementError(
+          "MCP_REMOTE_TOOL_DESCRIPTOR_SUBSTITUTED",
+          "Bound remote tool descriptor does not match the requested tool name"
+        );
+      }
       const request = {
         schema,
         request_id: `mcp-enforcement:${crypto.randomUUID()}`,
@@ -35799,8 +36004,13 @@ var require_mcp_server = __commonJS({
         mcp_server_origin: target.origin,
         session_binding_hash: sessionBindingHash,
         tool_name: toolName,
+        tool_descriptor: toolBinding?.descriptor ?? null,
+        tool_descriptor_hash: toolBinding?.descriptor_hash ?? null,
+        tool_annotations: toolBinding?.annotations ?? null,
+        tool_capabilities: toolBinding?.capabilities ?? null,
+        tool_effect_status: toolBinding?.effect_status ?? null,
         params: safeParams,
-        risk_profile: riskProfileFor(phase, toolName),
+        risk_profile: riskProfileFor(phase, toolName, toolBinding),
         transport_constraints: transportConstraints(),
         fallback_http: safeExtra.fallback_http ?? null,
         request_hash: null
@@ -35855,17 +36065,19 @@ var require_mcp_server = __commonJS({
       return verifyCleanImportedEnvelope(value, request).result;
     }
     function createMcpEnforcementBoundary2(hostAdapter = {}) {
-      assertExactKeys(hostAdapter, ["openSession", "executeFallback"], "MCP enforcement host adapter");
+      assertExactKeys(hostAdapter, ["openSession", "executeFallback", "timeouts"], "MCP enforcement host adapter");
       if (typeof hostAdapter.openSession !== "function" || typeof hostAdapter.executeFallback !== "function") {
         throw new TypeError("MCP enforcement host adapter requires openSession and executeFallback functions");
       }
+      const timeouts = normalizeHostTimeouts(hostAdapter.timeouts);
       const boundary = Object.freeze({
         schema: MCP_ENFORCEMENT_SCHEMAS2.boundary,
         mode: "host_owns_network_and_clean_import"
       });
       enforcementBoundaryAdapters.set(boundary, Object.freeze({
-        openSession: hostAdapter.openSession,
-        executeFallback: hostAdapter.executeFallback
+        openSession: hostAdapter.openSession.bind(hostAdapter),
+        executeFallback: hostAdapter.executeFallback.bind(hostAdapter),
+        timeouts
       }));
       return boundary;
     }
@@ -36048,12 +36260,17 @@ var require_mcp_server = __commonJS({
       if (!Array.isArray(result.tools)) {
         throw new TypeError(`${field}.tools must be an array`);
       }
-      const names = result.tools.map((tool, index) => {
-        assertPlainRecord(tool, `${field}.tools[${index}]`);
-        if (typeof tool.name !== "string" || !tool.name) {
-          throw new TypeError(`${field}.tools[${index}].name is invalid`);
+      const names = /* @__PURE__ */ new Set();
+      const bindings = result.tools.map((tool, index) => {
+        const binding = bindRemoteToolDescriptor(tool, `${field}.tools[${index}]`);
+        if (names.has(binding.descriptor.name)) {
+          throw new McpEnforcementError(
+            "MCP_REMOTE_TOOL_DIRECTORY_AMBIGUOUS",
+            `Remote tools/list page contains duplicate tool name ${binding.descriptor.name}`
+          );
         }
-        return tool.name;
+        names.add(binding.descriptor.name);
+        return binding;
       });
       let nextCursor = null;
       if (result.nextCursor !== void 0 && result.nextCursor !== null) {
@@ -36062,7 +36279,53 @@ var require_mcp_server = __commonJS({
         }
         nextCursor = result.nextCursor;
       }
-      return { names, nextCursor, tools: result.tools };
+      return {
+        names: [...names],
+        nextCursor,
+        tools: bindings.map((binding) => binding.descriptor),
+        bindings
+      };
+    }
+    function bindRemoteToolDirectorySnapshot(sessionRecord, bindings) {
+      const byName = /* @__PURE__ */ new Map();
+      for (const binding of bindings) {
+        const name = binding.descriptor.name;
+        if (byName.has(name)) {
+          throw new McpEnforcementError(
+            "MCP_REMOTE_TOOL_DIRECTORY_AMBIGUOUS",
+            `Remote tools/list pagination contains duplicate tool name ${name}`
+          );
+        }
+        byName.set(name, binding);
+      }
+      const directoryHash = sha256Ref2([...byName.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([name, binding]) => ({ name, descriptor_hash: binding.descriptor_hash })));
+      if (sessionRecord.remoteToolDirectoryHash && sessionRecord.remoteToolDirectoryHash !== directoryHash) {
+        throw new McpEnforcementError(
+          "MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT",
+          "Remote tool descriptors changed after the enforced session was bound"
+        );
+      }
+      if (!sessionRecord.remoteToolDirectoryHash) {
+        sessionRecord.remoteToolDirectoryHash = directoryHash;
+        sessionRecord.remoteToolDescriptors = byName;
+      }
+      return Object.freeze({
+        names: new Set(byName.keys()),
+        tools: Object.freeze([...byName.values()].map((binding) => binding.descriptor)),
+        directory_hash: directoryHash
+      });
+    }
+    function assertRemoteToolPageMatchesSnapshot(sessionRecord, bindings) {
+      if (!sessionRecord.remoteToolDescriptors) return;
+      for (const binding of bindings) {
+        const expected = sessionRecord.remoteToolDescriptors.get(binding.descriptor.name);
+        if (!expected || expected.descriptor_hash !== binding.descriptor_hash) {
+          throw new McpEnforcementError(
+            "MCP_REMOTE_TOOL_DESCRIPTOR_DRIFT",
+            `Remote tool descriptor drifted for ${binding.descriptor.name}`
+          );
+        }
+      }
     }
     function createRemoteToolDirectory2(session) {
       const sessionRecord = enforcedSessionRecords.get(session);
@@ -36075,6 +36338,7 @@ var require_mcp_server = __commonJS({
           "The enforced MCP session has no validated initial tool page"
         );
       }
+      if (sessionRecord.remoteToolDirectory) return sessionRecord.remoteToolDirectory;
       async function failIncomplete(message) {
         try {
           await session.close();
@@ -36088,6 +36352,7 @@ var require_mcp_server = __commonJS({
         function hydrate() {
           if (hydrationPromise) return hydrationPromise;
           hydrationPromise = (async () => {
+            const remoteBindings = [...firstPage.bindings];
             const remoteTools = [...firstPage.tools];
             const remoteToolNames = new Set(firstPage.names);
             let remoteToolBytes = Buffer.byteLength(JSON.stringify(firstPage.tools), "utf8");
@@ -36117,6 +36382,14 @@ var require_mcp_server = __commonJS({
                 await failIncomplete("Remote tools/list pagination exceeded the cumulative byte limit");
               }
               remoteTools.push(...page.tools);
+              for (const binding of page.bindings) {
+                if (remoteToolNames.has(binding.descriptor.name)) {
+                  await failIncomplete(
+                    `Remote tools/list pagination contains duplicate tool name ${binding.descriptor.name}`
+                  );
+                }
+                remoteBindings.push(binding);
+              }
               remoteToolBytes += pageBytes;
               for (const name of page.names) remoteToolNames.add(name);
               if (remoteTools.length > MAX_REMOTE_TOOL_DIRECTORY_TOOLS) {
@@ -36124,10 +36397,7 @@ var require_mcp_server = __commonJS({
               }
               nextCursor = page.nextCursor;
             }
-            return Object.freeze({
-              names: remoteToolNames,
-              tools: Object.freeze(remoteTools)
-            });
+            return bindRemoteToolDirectorySnapshot(sessionRecord, remoteBindings);
           })();
           return hydrationPromise;
         }
@@ -36161,7 +36431,9 @@ var require_mcp_server = __commonJS({
         const snapshot = await epoch.hydrate();
         return snapshot.names.has(name);
       }
-      return { has, list };
+      const directory = Object.freeze({ has, list, initialize: () => currentEpoch.hydrate() });
+      sessionRecord.remoteToolDirectory = directory;
+      return directory;
     }
     var FALLBACK_TOOL_NAMES = new Set(buildFallbackToolList2().map((tool) => tool.name));
     function buildBlockedToolResult(code, message, details = {}) {
@@ -36175,23 +36447,6 @@ var require_mcp_server = __commonJS({
         })
       };
     }
-    function fallbackTargetUrl(path8) {
-      if (!AGORAGENTIC_BASE) {
-        throw new McpEnforcementError(
-          "MCP_FALLBACK_BASE_INVALID",
-          "Set a valid AGORAGENTIC_MCP_URL or explicit AGORAGENTIC_BASE_URL before using fallback tools"
-        );
-      }
-      const base = normalizeRemoteTarget(AGORAGENTIC_BASE);
-      const baseUrl = new URL(base.href);
-      if (baseUrl.pathname !== "/" || baseUrl.search) {
-        throw new McpEnforcementError(
-          "MCP_FALLBACK_BASE_INVALID",
-          "AGORAGENTIC_BASE_URL must be an HTTP(S) origin without a path or query"
-        );
-      }
-      return normalizeRemoteTarget(new URL(path8, base.origin).href, { allowQuery: true }).href;
-    }
     async function executeEnforcedFallback(enforcementBoundary, {
       name,
       args,
@@ -36200,24 +36455,10 @@ var require_mcp_server = __commonJS({
       body
     }) {
       const adapter = requireEnforcementBoundary(enforcementBoundary);
-      const request = buildEnforcementRequest({
-        schema: MCP_ENFORCEMENT_SCHEMAS2.fallbackRequest,
-        phase: "tools/call",
-        remoteUrl: fallbackTargetUrl(path8),
-        params: args,
-        toolName: name,
-        extra: {
-          fallback_http: {
-            method,
-            path: path8,
-            body: body === void 0 ? null : body,
-            authentication: { mode: "host_resolved_out_of_band" },
-            user_agent: `agoragentic-mcp/${PACKAGE_VERSION}`
-          }
-        }
-      });
-      const envelope = await adapter.executeFallback(request);
-      return verifyCleanImportedResult(envelope, request);
+      throw new McpEnforcementError(
+        "MCP_FALLBACK_EFFECT_FENCE_REQUIRED",
+        "MCP fallback is disabled until a durable host effect fence is qualified"
+      );
     }
     async function executeFallbackTool2(name, args = {}, options = {}) {
       assertExactKeys(options, ["enforcementBoundary"], "fallback execution options");
@@ -36232,6 +36473,13 @@ var require_mcp_server = __commonJS({
             return buildBlockedToolResult(
               "risk_fork_enforcement_required",
               "Fallback network execution is disabled until a factory-created enforcement host capability is installed.",
+              { tool: name }
+            );
+          }
+          if (error?.code === "MCP_FALLBACK_EFFECT_FENCE_REQUIRED") {
+            return buildBlockedToolResult(
+              "risk_fork_effect_fence_required",
+              "Effect-capable fallback is disabled until a durable host effect fence is qualified.",
               { tool: name }
             );
           }
@@ -36343,9 +36591,9 @@ var require_mcp_server = __commonJS({
           stateless_required: true
         }
       });
-      const rawHostSession = await adapter.openSession(openRequest);
+      const rawHostSession = await openHostSessionWithDeadline(adapter, openRequest);
       const closeDescriptor = rawHostSession && typeof rawHostSession === "object" ? Object.getOwnPropertyDescriptor(rawHostSession, "close") : null;
-      const emergencyClose = closeDescriptor?.enumerable && !closeDescriptor.get && !closeDescriptor.set && typeof closeDescriptor.value === "function" ? closeDescriptor.value : null;
+      const emergencyClose = closeDescriptor?.enumerable && !closeDescriptor.get && !closeDescriptor.set && typeof closeDescriptor.value === "function" ? closeDescriptor.value.bind(rawHostSession) : null;
       let hostSession;
       let discoveryEnvelope;
       let discovery;
@@ -36363,8 +36611,8 @@ var require_mcp_server = __commonJS({
         }
         hostSession = Object.freeze({
           discovery: rawHostSession.discovery,
-          request: rawHostSession.request,
-          close: rawHostSession.close
+          request: rawHostSession.request.bind(rawHostSession),
+          close: rawHostSession.close.bind(rawHostSession)
         });
         discoveryEnvelope = verifyCleanImportedEnvelope(hostSession.discovery, openRequest);
         discovery = discoveryEnvelope.result;
@@ -36377,7 +36625,13 @@ var require_mcp_server = __commonJS({
         }
       } catch (error) {
         try {
-          await emergencyClose?.();
+          if (emergencyClose) {
+            await invokeHostWithDeadline(
+              emergencyClose,
+              adapter.timeouts.close_ms,
+              "emergencyClose"
+            );
+          }
         } catch {
         }
         throw error;
@@ -36397,14 +36651,22 @@ var require_mcp_server = __commonJS({
         hostClose: hostSession.close,
         closed: false,
         closePromise: null,
-        remoteToolFirstPage: null
+        remoteToolFirstPage: null,
+        remoteToolDescriptors: null,
+        remoteToolDirectoryHash: null,
+        remoteToolDirectory: null,
+        timeouts: adapter.timeouts
       };
       function close() {
         const current = enforcedSessionRecords.get(session);
         if (!current) return Promise.resolve();
         if (current.closePromise) return current.closePromise;
         current.closed = true;
-        current.closePromise = Promise.resolve().then(() => current.hostClose());
+        current.closePromise = invokeHostWithDeadline(
+          current.hostClose,
+          current.timeouts.close_ms,
+          "close"
+        );
         return current.closePromise;
       }
       async function request(phase, params = {}) {
@@ -36413,16 +36675,39 @@ var require_mcp_server = __commonJS({
           throw new McpEnforcementError("MCP_ENFORCED_SESSION_CLOSED", "The enforced MCP session is closed");
         }
         const safeParams = cloneBoundedJson(params, `${phase} params`);
+        let toolDescriptor = null;
+        if (phase === "tools/call") {
+          const directory = current.remoteToolDirectory ?? createRemoteToolDirectory2(session);
+          await directory.initialize();
+          const toolName = safeParams.name;
+          if (typeof toolName !== "string" || toolName.length < 1) {
+            throw new TypeError("tools/call params.name is required");
+          }
+          const toolBinding = current.remoteToolDescriptors?.get(toolName);
+          if (!toolBinding) {
+            throw new McpEnforcementError(
+              "MCP_REMOTE_TOOL_NOT_ADVERTISED",
+              `Remote tool ${toolName} is not present in the bound discovery snapshot`
+            );
+          }
+          toolDescriptor = toolBinding.descriptor;
+        }
         const phaseRequest = buildEnforcementRequest({
           schema: MCP_ENFORCEMENT_SCHEMAS2.phaseRequest,
           phase,
           remoteUrl: current.remote_url,
           params: safeParams,
           toolName: phase === "tools/call" ? safeParams.name ?? null : null,
+          toolDescriptor,
           sessionBindingHash: current.session_binding_hash
         });
         try {
-          const envelope = await current.hostRequest(phaseRequest);
+          const envelope = await invokeHostWithDeadline(
+            current.hostRequest,
+            current.timeouts.request_ms,
+            phase,
+            phaseRequest
+          );
           const afterRequest = enforcedSessionRecords.get(session);
           if (afterRequest !== current || current.closed) {
             throw new McpEnforcementError(
@@ -36432,7 +36717,8 @@ var require_mcp_server = __commonJS({
           }
           const result = verifyCleanImportedResult(envelope, phaseRequest);
           if (phase === "tools/list") {
-            validateRemoteToolListPage(result);
+            const page = validateRemoteToolListPage(result);
+            assertRemoteToolPageMatchesSnapshot(current, page.bindings);
             if (safeParams.cursor === void 0) current.remoteToolFirstPage = result;
           }
           return result;
@@ -36461,6 +36747,7 @@ var require_mcp_server = __commonJS({
       enforcedSessionRecords.set(session, record);
       try {
         await session.listTools();
+        createRemoteToolDirectory2(session);
         return session;
       } catch (error) {
         try {
@@ -41958,7 +42245,7 @@ var init_esm = __esm({
 var import_mcp_server = __toESM(require_mcp_server(), 1);
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/controller.mjs
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomUUID as randomUUID5 } from "node:crypto";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/canonical.mjs
 import { createHash } from "node:crypto";
@@ -46869,6 +47156,47 @@ function isProductionPostgresDistributedCommitAuthority(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/taint-gate.mjs
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/authority-shape.mjs
+var AUTHORITY_FAMILIES = Object.freeze([
+  "authority",
+  "privilege",
+  "permission",
+  "capability",
+  "credential",
+  "secret",
+  "token",
+  "bearer",
+  "handle",
+  "signer",
+  "wallet",
+  "session",
+  "keymaterial",
+  "privatekey",
+  "signingkey",
+  "apikey"
+]);
+function normalizeAuthorityShapeKey(value) {
+  return String(value).normalize("NFKC").replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+}
+function isForbiddenAuthorityShapeKey(value) {
+  const fingerprint = normalizeAuthorityShapeKey(value);
+  return AUTHORITY_FAMILIES.some((family) => fingerprint.includes(family));
+}
+function containsObviousCapabilityLikeText(value) {
+  const text = String(value);
+  if (/bearer\s+[a-z0-9._~+\/-]{8,}/i.test(text)) return true;
+  for (const assignment of text.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})\s*[:=]/g)) {
+    if (isForbiddenAuthorityShapeKey(assignment[1])) return true;
+  }
+  const fingerprint = normalizeAuthorityShapeKey(text);
+  const familyCount = AUTHORITY_FAMILIES.filter((family) => fingerprint.includes(family)).length;
+  if (familyCount >= 2) return true;
+  const states = ["grant", "granted", "active", "enabled", "issued", "exposed", "ref", "value", "material"];
+  return AUTHORITY_FAMILIES.some((family) => fingerprint.includes(family) && states.some((state) => fingerprint.includes(state)));
+}
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/taint-gate.mjs
 var SECRET_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   BEARER_CREDENTIAL_PATTERN,
@@ -46941,7 +47269,8 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
       throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path8}.<key>`);
     }
     visitor(key, `${path8}.<key>`);
-    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizeChildKey(key))) {
+    const normalizedKey3 = normalizeChildKey(key);
+    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKey3) || isForbiddenAuthorityShapeKey(key)) {
       throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path8}.<key>`);
     }
     walkStrings(child, visitor, limits, state, `${path8}.<value>`, depth + 1);
@@ -46953,6 +47282,7 @@ function scanText(value, policy) {
     for (const pattern of SECRET_PATTERNS) {
       if (pattern.test(text)) findings.push({ code: "secret_pattern", path: path8 });
     }
+    if (containsObviousCapabilityLikeText(text)) findings.push({ code: "authority_shape", path: path8 });
     if (!policy.allow_prompt_injection_text) {
       for (const pattern of PROMPT_INJECTION_PATTERNS) {
         if (pattern.test(text)) findings.push({ code: "prompt_injection_pattern", path: path8 });
@@ -50114,6 +50444,232 @@ async function commitPreparedArtifact(input = {}, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/provider.mjs
+var CLEANUP_VERIFICATION_REQUEST_SCHEMA = "agoragentic.risk-fork.cleanup-verification-request.v1";
+var CLEANUP_VERIFICATION_EVIDENCE_SCHEMA = "agoragentic.risk-fork.cleanup-verification-evidence.v1";
+var RESOURCE_METHODS = Object.freeze({
+  fork: Object.freeze({ destroy: "destroyFork", verify: "verifyDestroyed" }),
+  savepoint: Object.freeze({ destroy: "destroySavepoint", verify: "verifySavepointDestroyed" })
+});
+var CLEANUP_EVIDENCE_KEYS = Object.freeze([
+  "schema",
+  "status",
+  "outcome",
+  "provider_id",
+  "resource_kind",
+  "resource_ref",
+  "destroy_method",
+  "verify_method",
+  "cleanup_request_hash",
+  "requested_at",
+  "observed_at",
+  "evidence_ref",
+  "observation_hash",
+  "evidence_hash"
+]);
+function verifyCleanupVerificationRequest(value, expected = {}) {
+  assertPlainObject(value, "cleanup verification request");
+  assertAllowedKeys(value, [
+    "schema",
+    "provider_id",
+    "resource_kind",
+    "resource_ref",
+    "destroy_method",
+    "verify_method",
+    "requested_at",
+    "request_nonce",
+    "request_hash"
+  ], "cleanup verification request");
+  if (value.schema !== CLEANUP_VERIFICATION_REQUEST_SCHEMA) {
+    throw new Error("Cleanup verification request schema is invalid");
+  }
+  const resourceKind = requireEnum(
+    value.resource_kind,
+    Object.keys(RESOURCE_METHODS),
+    "cleanup verification request.resource_kind"
+  );
+  const normalized = {
+    schema: CLEANUP_VERIFICATION_REQUEST_SCHEMA,
+    provider_id: requireOpaqueRef(value.provider_id, "cleanup verification request.provider_id"),
+    resource_kind: resourceKind,
+    resource_ref: requireOpaqueRef(value.resource_ref, "cleanup verification request.resource_ref"),
+    destroy_method: requireEnum(
+      value.destroy_method,
+      [RESOURCE_METHODS[resourceKind].destroy],
+      "cleanup verification request.destroy_method"
+    ),
+    verify_method: requireEnum(
+      value.verify_method,
+      [RESOURCE_METHODS[resourceKind].verify],
+      "cleanup verification request.verify_method"
+    ),
+    requested_at: requireIsoDate(
+      value.requested_at,
+      "cleanup verification request.requested_at"
+    ),
+    request_nonce: requireOpaqueRef(
+      value.request_nonce,
+      "cleanup verification request.request_nonce"
+    ),
+    request_hash: requireSha256Ref(
+      value.request_hash,
+      "cleanup verification request.request_hash"
+    )
+  };
+  const expectedHash = sha256Ref({ ...normalized, request_hash: null });
+  if (!safeEqual(normalized.request_hash, expectedHash)) {
+    throw new Error("Cleanup verification request hash mismatch");
+  }
+  for (const [field, expectedValue] of Object.entries(expected)) {
+    if (expectedValue !== void 0 && normalized[field] !== expectedValue) {
+      throw new Error(`Cleanup verification request binding mismatch: ${field}`);
+    }
+  }
+  return deepFreeze(normalized);
+}
+function createCleanupVerificationRequest(input = {}) {
+  const resourceKind = requireEnum(
+    input.resource_kind,
+    Object.keys(RESOURCE_METHODS),
+    "cleanup verification request.resource_kind"
+  );
+  const request = {
+    schema: CLEANUP_VERIFICATION_REQUEST_SCHEMA,
+    provider_id: requireOpaqueRef(input.provider_id, "cleanup verification request.provider_id"),
+    resource_kind: resourceKind,
+    resource_ref: requireOpaqueRef(input.resource_ref, "cleanup verification request.resource_ref"),
+    destroy_method: RESOURCE_METHODS[resourceKind].destroy,
+    verify_method: RESOURCE_METHODS[resourceKind].verify,
+    requested_at: requireIsoDate(input.requested_at, "cleanup verification request.requested_at"),
+    request_nonce: requireOpaqueRef(input.request_nonce, "cleanup verification request.request_nonce"),
+    request_hash: null
+  };
+  request.request_hash = sha256Ref(request);
+  return verifyCleanupVerificationRequest(request);
+}
+function createCleanupVerificationEvidence(requestValue, input = {}) {
+  const request = verifyCleanupVerificationRequest(requestValue);
+  const status = requireEnum(
+    input.status,
+    ["verified", "failed", "unknown"],
+    "cleanup verification evidence.status"
+  );
+  const expectedOutcome = status === "verified" ? "success" : status === "failed" ? "failure" : "unknown";
+  const outcome = requireEnum(
+    input.outcome ?? expectedOutcome,
+    [expectedOutcome],
+    "cleanup verification evidence.outcome"
+  );
+  const evidenceRef = input.evidence_ref == null ? null : requireOpaqueRef(input.evidence_ref, "cleanup verification evidence.evidence_ref");
+  if (status === "verified" && evidenceRef === null) {
+    throw new Error("Verified cleanup evidence requires evidence_ref");
+  }
+  const evidence = {
+    schema: CLEANUP_VERIFICATION_EVIDENCE_SCHEMA,
+    status,
+    outcome,
+    provider_id: request.provider_id,
+    resource_kind: request.resource_kind,
+    resource_ref: request.resource_ref,
+    destroy_method: request.destroy_method,
+    verify_method: request.verify_method,
+    cleanup_request_hash: request.request_hash,
+    requested_at: request.requested_at,
+    observed_at: requireIsoDate(
+      input.observed_at ?? request.requested_at,
+      "cleanup verification evidence.observed_at"
+    ),
+    evidence_ref: evidenceRef,
+    observation_hash: requireSha256Ref(
+      input.observation_hash,
+      "cleanup verification evidence.observation_hash"
+    ),
+    evidence_hash: null
+  };
+  evidence.evidence_hash = sha256Ref(evidence);
+  return deepFreeze(evidence);
+}
+function verifyCleanupVerificationEvidence(value, requestValue, options = {}) {
+  const request = verifyCleanupVerificationRequest(requestValue);
+  assertPlainObject(value, "cleanup verification evidence");
+  assertAllowedKeys(value, CLEANUP_EVIDENCE_KEYS, "cleanup verification evidence");
+  if (value.schema !== CLEANUP_VERIFICATION_EVIDENCE_SCHEMA) {
+    throw new Error("Cleanup verification evidence schema is invalid");
+  }
+  const status = requireEnum(
+    value.status,
+    ["verified", "failed", "unknown"],
+    "cleanup verification evidence.status"
+  );
+  const expectedOutcome = status === "verified" ? "success" : status === "failed" ? "failure" : "unknown";
+  const normalized = {
+    schema: CLEANUP_VERIFICATION_EVIDENCE_SCHEMA,
+    status,
+    outcome: requireEnum(
+      value.outcome,
+      [expectedOutcome],
+      "cleanup verification evidence.outcome"
+    ),
+    provider_id: requireOpaqueRef(value.provider_id, "cleanup verification evidence.provider_id"),
+    resource_kind: requireEnum(
+      value.resource_kind,
+      [request.resource_kind],
+      "cleanup verification evidence.resource_kind"
+    ),
+    resource_ref: requireOpaqueRef(value.resource_ref, "cleanup verification evidence.resource_ref"),
+    destroy_method: requireEnum(
+      value.destroy_method,
+      [request.destroy_method],
+      "cleanup verification evidence.destroy_method"
+    ),
+    verify_method: requireEnum(
+      value.verify_method,
+      [request.verify_method],
+      "cleanup verification evidence.verify_method"
+    ),
+    cleanup_request_hash: requireSha256Ref(
+      value.cleanup_request_hash,
+      "cleanup verification evidence.cleanup_request_hash"
+    ),
+    requested_at: requireIsoDate(value.requested_at, "cleanup verification evidence.requested_at"),
+    observed_at: requireIsoDate(value.observed_at, "cleanup verification evidence.observed_at"),
+    evidence_ref: value.evidence_ref == null ? null : requireOpaqueRef(value.evidence_ref, "cleanup verification evidence.evidence_ref"),
+    observation_hash: requireSha256Ref(
+      value.observation_hash,
+      "cleanup verification evidence.observation_hash"
+    ),
+    evidence_hash: requireSha256Ref(
+      value.evidence_hash,
+      "cleanup verification evidence.evidence_hash"
+    )
+  };
+  for (const field of ["provider_id", "resource_kind", "resource_ref"]) {
+    if (normalized[field] !== request[field]) {
+      throw new Error(`Cleanup verification evidence binding mismatch: ${field}`);
+    }
+  }
+  if (!safeEqual(normalized.cleanup_request_hash, request.request_hash) || normalized.requested_at !== request.requested_at) {
+    throw new Error("Cleanup verification evidence request binding mismatch");
+  }
+  if (status === "verified" && normalized.evidence_ref === null) {
+    throw new Error("Verified cleanup evidence requires evidence_ref");
+  }
+  const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
+  if (!safeEqual(normalized.evidence_hash, expectedHash)) {
+    throw new Error("Cleanup verification evidence hash mismatch");
+  }
+  const requestedAt = Date.parse(request.requested_at);
+  const observedAt = Date.parse(normalized.observed_at);
+  const now = Date.parse(requireIsoDate(options.now ?? /* @__PURE__ */ new Date(), "cleanup verification now"));
+  const maxAgeMs = boundedInteger(
+    options.max_age_ms ?? 5 * 60 * 1e3,
+    "cleanup verification max_age_ms",
+    { min: 1, max: 24 * 60 * 60 * 1e3 }
+  );
+  if (observedAt < requestedAt || observedAt > now + 1e3 || now - observedAt > maxAgeMs) {
+    throw new Error("Cleanup verification evidence is stale or outside the request window");
+  }
+  return deepFreeze(normalized);
+}
 var REQUIRED_PROVIDER_METHODS = Object.freeze([
   "createSavepoint",
   "createFork",
@@ -50229,6 +50785,1054 @@ function requireProviderCapability(provider, capability) {
   }
 }
 
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { types as utilTypes } from "node:util";
+var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boundary.v1";
+var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
+var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
+var RISK_FORK_IMPORT_ENVELOPE_SCHEMA = "agoragentic.risk-fork.import-envelope.v1";
+var RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
+  INVALID_BOUNDARY_INPUT: "RISK_FORK_HOST_BOUNDARY_INVALID_INPUT",
+  CALLER_RISK_LABEL_REJECTED: "RISK_FORK_CALLER_RISK_LABEL_REJECTED",
+  OPERATION_TOO_LARGE: "RISK_FORK_HOST_OPERATION_TOO_LARGE",
+  DESCRIPTOR_SOURCE_UNTRUSTED: "RISK_FORK_HOST_DESCRIPTOR_SOURCE_UNTRUSTED",
+  DESCRIPTOR_RESOLUTION_FAILED: "RISK_FORK_HOST_DESCRIPTOR_RESOLUTION_FAILED",
+  DESCRIPTOR_INVALID: "RISK_FORK_HOST_DESCRIPTOR_INVALID",
+  DESCRIPTOR_REQUEST_MISMATCH: "RISK_FORK_HOST_DESCRIPTOR_REQUEST_MISMATCH",
+  DESCRIPTOR_HASH_MISMATCH: "RISK_FORK_HOST_DESCRIPTOR_HASH_MISMATCH",
+  UNKNOWN_METADATA: "RISK_FORK_HOST_METADATA_UNKNOWN",
+  PRE_EFFECT_REJECTED: "RISK_FORK_HOST_PRE_EFFECT_REJECTED",
+  IMPORT_INVALID: "RISK_FORK_IMPORT_ENVELOPE_INVALID",
+  IMPORT_TOO_LARGE: "RISK_FORK_IMPORT_ENVELOPE_TOO_LARGE",
+  IMPORT_DLP_REJECTED: "RISK_FORK_IMPORT_ENVELOPE_DLP_REJECTED",
+  IMPORT_TYPE_MISMATCH: "RISK_FORK_IMPORT_ENVELOPE_TYPE_MISMATCH"
+});
+var CAPABILITY_KEYS = Object.freeze([
+  "network_access",
+  "filesystem_read",
+  "filesystem_write",
+  "credential_access",
+  "wallet_or_payment",
+  "deployment",
+  "publication",
+  "communication",
+  "database_mutation",
+  "trust_or_reputation_mutation",
+  "external_side_effect",
+  "unknown_or_unclassified"
+]);
+var ANNOTATION_KEYS = Object.freeze([
+  "readOnlyHint",
+  "destructiveHint",
+  "idempotentHint",
+  "openWorldHint"
+]);
+var OWNER_POLICY_KEYS = Object.freeze([
+  "minimum_level",
+  "force_risk_fork",
+  "deny_irreversible",
+  "trusted_server_refs",
+  "trusted_attestor_refs",
+  "trusted_attestation_hashes",
+  "trust_registry_version",
+  "allowed_egress"
+]);
+var PREPARE_INPUT_KEYS = Object.freeze([
+  "capsule",
+  "savepoint_input",
+  "operation",
+  "effective_arguments",
+  "expected_commit_type",
+  "commit_policy",
+  "expected_binding",
+  "network_policy"
+]);
+var PROVIDER_RESULT_KEYS = Object.freeze([
+  "status",
+  "taint_status",
+  "commit_candidate",
+  "result_hash",
+  "measurements",
+  "authority_granted"
+]);
+var MAX_OPERATION_BYTES2 = 2 * 1024 * 1024;
+var MAX_IMPORT_BYTES = 1024 * 1024;
+var MAX_IMPORT_NODES = 2e4;
+var MAX_IMPORT_DEPTH = 32;
+var MAX_IMPORT_STRING_BYTES = 256 * 1024;
+var MAX_IMPORT_FILES = 500;
+var MAX_IMPORT_TEST_EVIDENCE = 100;
+var TEST_EVIDENCE_KEYS = Object.freeze([
+  "name",
+  "status",
+  "evidence_ref",
+  "evidence_hash",
+  "duration_ms"
+]);
+var trustedDescriptorSourceCallbacks = /* @__PURE__ */ new WeakMap();
+var hostBoundaryRecords = /* @__PURE__ */ new WeakMap();
+var hostPreparedRecords = /* @__PURE__ */ new WeakMap();
+var DANGEROUS_KEY_FINGERPRINTS = /* @__PURE__ */ new Set(["proto", "constructor", "prototype"]);
+var FORBIDDEN_IMPORT_KEY_FINGERPRINTS = /* @__PURE__ */ new Set([
+  "prompt",
+  "rawprompt",
+  "systemprompt",
+  "developerprompt",
+  "developermessage",
+  "rawconversation",
+  "conversation",
+  "messages",
+  "chathistory",
+  "chattranscript",
+  "transcript",
+  "tooloutput",
+  "tooloutputs",
+  "rawtooloutput",
+  "toolresult",
+  "toolresults",
+  "commandoutput",
+  "processoutput",
+  "stdout",
+  "stderr",
+  "logs",
+  "rawlogs",
+  "filesystemstate",
+  "rawfilesystem",
+  "workspacestate",
+  "workspacesnapshot",
+  "directorytree",
+  "filetree",
+  "memory",
+  "memories",
+  "memorystate",
+  "env",
+  "environment",
+  "environmentstate",
+  "rawenvironment",
+  "processenv",
+  "environmentvariables",
+  "providerhandle",
+  "executionhandle",
+  "authorityhandle",
+  "runtimehandle"
+]);
+var CALLER_RISK_LABEL_FINGERPRINTS = /* @__PURE__ */ new Set([
+  "risk",
+  "risklabel",
+  "risklevel",
+  "riskscore",
+  "riskdecision",
+  "classification",
+  "safetyclass",
+  "directive",
+  "requiresfork",
+  "forceoptionalfork"
+]);
+var SENSITIVE_IMPORT_KEY_PATTERN = /(?:^|_)(?:api_?key|access_?token|refresh_?token|id_?token|session_?token|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_?secret|private_?key|signing_?key|seed_?phrase|mnemonic|wallet_?(?:key|secret)|capability_?(?:grant|token))(?:$|_)/i;
+var SENSITIVE_IMPORT_VALUE_PATTERNS = Object.freeze([
+  /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
+  /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))\s*[=:]\s*[^&\s"']{8,}/i,
+  /[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|client[_-]?secret)=[^&\s]{8,}/i
+]);
+var RiskForkHostBoundaryError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "RiskForkHostBoundaryError";
+    this.code = code;
+  }
+};
+function boundaryError(code, message) {
+  return new RiskForkHostBoundaryError(code, message);
+}
+function normalizedKey2(value) {
+  return value.normalize("NFKC").replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+}
+function keyFingerprint(value) {
+  return normalizedKey2(value).replaceAll("_", "");
+}
+function assertNoCallerRiskLabels(value, field = "operation") {
+  function walk(current) {
+    if (!current || typeof current !== "object") return;
+    if (utilTypes.isProxy(current)) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+        `${field} must be ordinary JSON`
+      );
+    }
+    for (const [key, child] of Object.entries(current)) {
+      const fingerprint = keyFingerprint(key);
+      if (CALLER_RISK_LABEL_FINGERPRINTS.has(fingerprint) || fingerprint.startsWith("risk")) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_RISK_LABEL_REJECTED,
+          "Caller/model risk labels are not accepted by the host boundary"
+        );
+      }
+      walk(child);
+    }
+  }
+  walk(value);
+}
+function assertBoundedCanonicalJson(value, {
+  field,
+  maxBytes,
+  maxNodes = 5e4,
+  maxDepth = 50,
+  maxStringBytes = 512 * 1024,
+  dlp = false
+}) {
+  const state = { nodes: 0, seen: /* @__PURE__ */ new WeakSet() };
+  function rejectDlp() {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_DLP_REJECTED,
+      "Risk Fork import envelope failed privacy/DLP validation"
+    );
+  }
+  function walk(current, depth) {
+    state.nodes += 1;
+    if (state.nodes > maxNodes || depth > maxDepth) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TOO_LARGE : RISK_FORK_HOST_DIAGNOSTIC_CODES.OPERATION_TOO_LARGE,
+        `${field} exceeds the bounded JSON complexity limit`
+      );
+    }
+    if (current === null || typeof current === "boolean") return;
+    if (typeof current === "string") {
+      if (Buffer.byteLength(current, "utf8") > maxStringBytes) {
+        throw boundaryError(
+          dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TOO_LARGE : RISK_FORK_HOST_DIAGNOSTIC_CODES.OPERATION_TOO_LARGE,
+          `${field} contains an oversized string`
+        );
+      }
+      if (dlp && (containsSecretShapedText(current) || containsObviousCapabilityLikeText(current) || SENSITIVE_IMPORT_VALUE_PATTERNS.some((pattern) => pattern.test(current)))) {
+        rejectDlp();
+      }
+      return;
+    }
+    if (typeof current === "number") {
+      if (!Number.isFinite(current) || Object.is(current, -0) || Number.isInteger(current) && !Number.isSafeInteger(current)) {
+        throw boundaryError(
+          dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+          `${field} contains a non-canonical number`
+        );
+      }
+      return;
+    }
+    if (typeof current !== "object" || utilTypes.isProxy(current)) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+        `${field} must contain only ordinary JSON values`
+      );
+    }
+    if (state.seen.has(current)) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+        `${field} contains a cycle or shared object identity`
+      );
+    }
+    state.seen.add(current);
+    const prototype = Object.getPrototypeOf(current);
+    if (!Array.isArray(current) && prototype !== Object.prototype && prototype !== null) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+        `${field} contains a non-plain object`
+      );
+    }
+    if (Object.getOwnPropertySymbols(current).length > 0) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+        `${field} contains a symbol key`
+      );
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    for (const [key, descriptor] of Object.entries(descriptors)) {
+      if (Array.isArray(current) && key === "length") continue;
+      if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+        throw boundaryError(
+          dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+          `${field} contains a hidden or accessor-backed field`
+        );
+      }
+    }
+    if (Array.isArray(current)) {
+      if (Object.keys(current).length !== current.length) {
+        throw boundaryError(
+          dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+          `${field} contains a sparse or extended array`
+        );
+      }
+      for (let index = 0; index < current.length; index += 1) {
+        if (!Object.hasOwn(current, index)) {
+          throw boundaryError(
+            dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+            `${field} contains a sparse array`
+          );
+        }
+        walk(current[index], depth + 1);
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(current)) {
+      const normalized = normalizedKey2(key);
+      const fingerprint = keyFingerprint(key);
+      if (DANGEROUS_KEY_FINGERPRINTS.has(fingerprint)) {
+        throw boundaryError(
+          dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+          `${field} contains a forbidden JSON key`
+        );
+      }
+      if (dlp && (FORBIDDEN_IMPORT_KEY_FINGERPRINTS.has(fingerprint) || SENSITIVE_IMPORT_KEY_PATTERN.test(normalized) || isForbiddenAuthorityShapeKey(key) || containsSecretShapedText(key))) {
+        rejectDlp();
+      }
+      walk(child, depth + 1);
+    }
+  }
+  try {
+    walk(value, 0);
+    assertCanonicalJson(value);
+    const serialized = canonicalize(value);
+    if (Buffer.byteLength(serialized, "utf8") > maxBytes) {
+      throw boundaryError(
+        dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TOO_LARGE : RISK_FORK_HOST_DIAGNOSTIC_CODES.OPERATION_TOO_LARGE,
+        `${field} exceeds ${maxBytes} bytes`
+      );
+    }
+    return JSON.parse(serialized);
+  } catch (error) {
+    if (error instanceof RiskForkHostBoundaryError) throw error;
+    throw boundaryError(
+      dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+      `${field} is not bounded canonical JSON`
+    );
+  }
+}
+function normalizeImportCandidate(candidate, expectedType) {
+  assertPlainObject(candidate, "Risk Fork import candidate");
+  const type = requireEnum(candidate.type, COMMIT_TYPES, "Risk Fork import candidate.type");
+  if (expectedType && type !== expectedType) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TYPE_MISMATCH,
+      "Risk Fork import candidate type does not match the requested import type"
+    );
+  }
+  if (type === "TYPED_RESULT") {
+    assertAllowedKeys(candidate, ["type", "payload", "payload_schema"], "typed-result import candidate");
+    assertPlainObject(candidate.payload_schema, "typed-result import candidate.payload_schema");
+  } else if (type === "WORKSPACE_DIFF") {
+    assertAllowedKeys(candidate, ["type", "files", "test_evidence"], "workspace-diff import candidate");
+    if (!Array.isArray(candidate.files) || candidate.files.length > MAX_IMPORT_FILES) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TOO_LARGE,
+        `Risk Fork workspace-diff import exceeds ${MAX_IMPORT_FILES} files`
+      );
+    }
+    candidate.files.forEach((file, index) => {
+      const field = `workspace-diff import candidate.files[${index}]`;
+      assertAllowedKeys(
+        file,
+        ["path", "operation", "before_hash", "after_hash", "after_content"],
+        field
+      );
+      normalizeRelativePath(file.path, `${field}.path`);
+      requireEnum(file.operation, ["create", "modify", "delete"], `${field}.operation`);
+      if (file.before_hash != null) requireSha256Ref(file.before_hash, `${field}.before_hash`);
+      if (file.after_hash != null) requireSha256Ref(file.after_hash, `${field}.after_hash`);
+      if (file.after_content != null && typeof file.after_content !== "string") {
+        throw new TypeError(`${field}.after_content must be text or null`);
+      }
+    });
+    if (candidate.test_evidence !== void 0 && (!Array.isArray(candidate.test_evidence) || candidate.test_evidence.length > MAX_IMPORT_TEST_EVIDENCE)) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TOO_LARGE,
+        `Risk Fork import exceeds ${MAX_IMPORT_TEST_EVIDENCE} test evidence records`
+      );
+    }
+    candidate.test_evidence?.forEach((evidence, index) => {
+      const field = `workspace-diff import candidate.test_evidence[${index}]`;
+      assertAllowedKeys(evidence, TEST_EVIDENCE_KEYS, field);
+      for (const key of TEST_EVIDENCE_KEYS) {
+        if (!Object.hasOwn(evidence, key)) {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID,
+            "Risk Fork test evidence is incomplete"
+          );
+        }
+      }
+      requireOpaqueRef(evidence.name, `${field}.name`, { maxLength: 200 });
+      requireEnum(evidence.status, ["passed", "failed"], `${field}.status`);
+      requireOpaqueRef(evidence.evidence_ref, `${field}.evidence_ref`);
+      requireSha256Ref(evidence.evidence_hash, `${field}.evidence_hash`);
+      if (!Number.isSafeInteger(evidence.duration_ms) || evidence.duration_ms < 0 || evidence.duration_ms > 864e5) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID,
+          "Risk Fork test evidence duration is invalid"
+        );
+      }
+    });
+  } else {
+    assertAllowedKeys(candidate, ["type", "action"], "action-proposal import candidate");
+    assertAllowedKeys(candidate.action, [
+      "operation",
+      "target_ref",
+      "provider_ref",
+      "arguments",
+      "amount",
+      "currency",
+      "payment_rail"
+    ], "action-proposal import candidate.action");
+    assertPlainObject(candidate.action.arguments ?? {}, "action-proposal import arguments");
+  }
+  return candidate;
+}
+function normalizeImportEnvelope(value, options = {}) {
+  assertAllowedKeys(options, [
+    "expected_type",
+    "expected_source_fork_ref",
+    "expected_result_hash"
+  ], "Risk Fork import verification options");
+  const clone = assertBoundedCanonicalJson(value, {
+    field: "Risk Fork import envelope",
+    maxBytes: MAX_IMPORT_BYTES,
+    maxNodes: MAX_IMPORT_NODES,
+    maxDepth: MAX_IMPORT_DEPTH,
+    maxStringBytes: MAX_IMPORT_STRING_BYTES,
+    dlp: true
+  });
+  assertAllowedKeys(clone, [
+    "schema",
+    "import_type",
+    "source_fork_ref",
+    "result_hash",
+    "candidate",
+    "envelope_hash"
+  ], "Risk Fork import envelope");
+  if (clone.schema !== RISK_FORK_IMPORT_ENVELOPE_SCHEMA) {
+    throw new TypeError("Risk Fork import envelope schema is invalid");
+  }
+  const importType = requireEnum(clone.import_type, COMMIT_TYPES, "Risk Fork import_type");
+  normalizeImportCandidate(clone.candidate, importType);
+  const normalized = {
+    schema: RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+    import_type: importType,
+    source_fork_ref: requireOpaqueRef(
+      clone.source_fork_ref,
+      "Risk Fork import source_fork_ref",
+      { maxLength: 4096 }
+    ),
+    result_hash: requireSha256Ref(clone.result_hash, "Risk Fork import result_hash"),
+    candidate: clone.candidate,
+    envelope_hash: requireSha256Ref(clone.envelope_hash, "Risk Fork import envelope_hash")
+  };
+  if (options.expected_type && normalized.import_type !== options.expected_type) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_TYPE_MISMATCH,
+      "Risk Fork import type does not match the host request"
+    );
+  }
+  if (options.expected_source_fork_ref && normalized.source_fork_ref !== options.expected_source_fork_ref) {
+    throw new Error("Risk Fork import source fork binding mismatch");
+  }
+  if (options.expected_result_hash && !safeEqual(normalized.result_hash, options.expected_result_hash)) {
+    throw new Error("Risk Fork import result hash binding mismatch");
+  }
+  const expectedHash = sha256Ref({ ...normalized, envelope_hash: null });
+  if (!safeEqual(normalized.envelope_hash, expectedHash)) {
+    throw new Error("Risk Fork import envelope hash mismatch");
+  }
+  return deepFreeze(normalized);
+}
+function createRiskForkImportEnvelope(input = {}) {
+  try {
+    assertAllowedKeys(
+      input,
+      ["source_fork_ref", "result_hash", "candidate"],
+      "Risk Fork import envelope input"
+    );
+    const candidate = assertBoundedCanonicalJson(input.candidate, {
+      field: "Risk Fork import candidate",
+      maxBytes: MAX_IMPORT_BYTES,
+      maxNodes: MAX_IMPORT_NODES,
+      maxDepth: MAX_IMPORT_DEPTH,
+      maxStringBytes: MAX_IMPORT_STRING_BYTES,
+      dlp: true
+    });
+    const importType = requireEnum(candidate.type, COMMIT_TYPES, "Risk Fork import candidate.type");
+    normalizeImportCandidate(candidate, importType);
+    const envelope = {
+      schema: RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+      import_type: importType,
+      source_fork_ref: requireOpaqueRef(
+        input.source_fork_ref,
+        "Risk Fork import source_fork_ref",
+        { maxLength: 4096 }
+      ),
+      result_hash: requireSha256Ref(input.result_hash, "Risk Fork import result_hash"),
+      candidate,
+      envelope_hash: null
+    };
+    envelope.envelope_hash = sha256Ref(envelope);
+    return normalizeImportEnvelope(envelope);
+  } catch (error) {
+    if (error instanceof RiskForkHostBoundaryError) throw error;
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID,
+      "Risk Fork import envelope is invalid"
+    );
+  }
+}
+function verifyRiskForkImportEnvelope(value, options = {}) {
+  try {
+    return normalizeImportEnvelope(value, options);
+  } catch (error) {
+    if (error instanceof RiskForkHostBoundaryError) throw error;
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID,
+      "Risk Fork import envelope is invalid"
+    );
+  }
+}
+function importRiskForkProviderResult(value, input = {}) {
+  try {
+    assertAllowedKeys(
+      input,
+      ["source_fork_ref", "expected_type", "candidate"],
+      "Risk Fork provider import input"
+    );
+    const result = assertBoundedCanonicalJson(value, {
+      field: "Risk Fork provider result",
+      maxBytes: MAX_IMPORT_BYTES,
+      maxNodes: MAX_IMPORT_NODES,
+      maxDepth: MAX_IMPORT_DEPTH,
+      maxStringBytes: MAX_IMPORT_STRING_BYTES,
+      dlp: false
+    });
+    const { authority_granted: declaredAuthority, ...dlpResult } = result;
+    assertBoundedCanonicalJson(dlpResult, {
+      field: "Risk Fork provider result",
+      maxBytes: MAX_IMPORT_BYTES,
+      maxNodes: MAX_IMPORT_NODES,
+      maxDepth: MAX_IMPORT_DEPTH,
+      maxStringBytes: MAX_IMPORT_STRING_BYTES,
+      dlp: true
+    });
+    assertAllowedKeys(result, PROVIDER_RESULT_KEYS, "Risk Fork provider result");
+    if (result.status !== void 0 && result.status !== "completed") {
+      throw new Error("Risk Fork provider result status is not completed");
+    }
+    if (result.taint_status !== void 0 && result.taint_status !== "TAINTED") {
+      throw new Error("Risk Fork provider result taint status is invalid");
+    }
+    if (declaredAuthority !== void 0 && declaredAuthority !== false) {
+      throw new Error("Risk Fork provider result cannot grant authority");
+    }
+    const expectedType = requireEnum(
+      input.expected_type,
+      COMMIT_TYPES,
+      "Risk Fork provider import expected_type"
+    );
+    const candidate = input.candidate ?? result.commit_candidate;
+    if (!candidate) throw new Error("Risk Fork provider result has no import candidate");
+    const envelope = createRiskForkImportEnvelope({
+      source_fork_ref: input.source_fork_ref,
+      result_hash: result.result_hash,
+      candidate
+    });
+    return verifyRiskForkImportEnvelope(envelope, {
+      expected_type: expectedType,
+      expected_source_fork_ref: input.source_fork_ref,
+      expected_result_hash: result.result_hash
+    });
+  } catch (error) {
+    if (error instanceof RiskForkHostBoundaryError) throw error;
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID,
+      "Risk Fork provider result import is invalid"
+    );
+  }
+}
+function verifyDescriptorRequest(value) {
+  assertPlainObject(value, "trusted descriptor request");
+  assertAllowedKeys(value, [
+    "schema",
+    "request_id",
+    "descriptor_ref",
+    "operation_hash",
+    "requested_at",
+    "request_hash"
+  ], "trusted descriptor request");
+  if (value.schema !== RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA) {
+    throw new TypeError("Trusted descriptor request schema is invalid");
+  }
+  const normalized = {
+    schema: RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
+    request_id: requireOpaqueRef(value.request_id, "trusted descriptor request.request_id"),
+    descriptor_ref: requireOpaqueRef(
+      value.descriptor_ref,
+      "trusted descriptor request.descriptor_ref"
+    ),
+    operation_hash: requireSha256Ref(
+      value.operation_hash,
+      "trusted descriptor request.operation_hash"
+    ),
+    requested_at: requireIsoDate(
+      value.requested_at,
+      "trusted descriptor request.requested_at"
+    ),
+    request_hash: requireSha256Ref(value.request_hash, "trusted descriptor request.request_hash")
+  };
+  const expectedHash = sha256Ref({ ...normalized, request_hash: null });
+  if (!safeEqual(normalized.request_hash, expectedHash)) {
+    throw new Error("Trusted descriptor request hash mismatch");
+  }
+  return deepFreeze(normalized);
+}
+function normalizeCompleteBooleanRecord(value, keys, field) {
+  try {
+    assertAllowedKeys(value, keys, field);
+  } catch {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+      `${field} is absent, incomplete, or malformed`
+    );
+  }
+  for (const key of keys) {
+    if (!Object.hasOwn(value, key) || typeof value[key] !== "boolean") {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+        `${field} is incomplete or non-boolean`
+      );
+    }
+  }
+  return Object.fromEntries(keys.map((key) => [key, value[key]]));
+}
+function normalizeTrustedDescriptor(value, request) {
+  const clone = assertBoundedCanonicalJson(value, {
+    field: "trusted descriptor",
+    maxBytes: MAX_OPERATION_BYTES2
+  });
+  assertAllowedKeys(clone, [
+    "schema",
+    "request_hash",
+    "descriptor_ref",
+    "mcp_phase",
+    "raw_method",
+    "mcp_server_ref",
+    "mcp_server_origin",
+    "mcp_server_trust",
+    "mcp_server_attestation",
+    "tool_name",
+    "tool_annotations",
+    "capabilities",
+    "prompt_injection_indicators",
+    "owner_policy",
+    "descriptor_hash"
+  ], "trusted descriptor");
+  if (clone.schema !== RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA) {
+    throw new TypeError("Trusted descriptor schema is invalid");
+  }
+  if (!safeEqual(clone.request_hash, request.request_hash) || clone.descriptor_ref !== request.descriptor_ref) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_REQUEST_MISMATCH,
+      "Trusted descriptor does not bind the exact host request"
+    );
+  }
+  const phase = requireEnum(clone.mcp_phase, MCP_PHASES, "trusted descriptor.mcp_phase");
+  if (phase === "UNKNOWN") {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+      "Unknown MCP methods cannot pass the host pre-effect boundary"
+    );
+  }
+  const rawMethod = clone.raw_method == null ? null : requireMcpMethodName(clone.raw_method, "trusted descriptor.raw_method");
+  if (rawMethod !== null) {
+    throw new TypeError("trusted descriptor.raw_method is permitted only for UNKNOWN methods");
+  }
+  const capabilities = normalizeCompleteBooleanRecord(
+    clone.capabilities,
+    CAPABILITY_KEYS,
+    "trusted descriptor.capabilities"
+  );
+  if (capabilities.unknown_or_unclassified) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+      "Unknown or unclassified effect metadata cannot pass the host boundary"
+    );
+  }
+  const annotations = normalizeCompleteBooleanRecord(
+    clone.tool_annotations,
+    ANNOTATION_KEYS,
+    "trusted descriptor.tool_annotations"
+  );
+  const trust = requireEnum(
+    clone.mcp_server_trust,
+    ["verified", "reachable", "failed", "untrusted"],
+    "trusted descriptor.mcp_server_trust"
+  );
+  const toolName = clone.tool_name == null ? null : requireOpaqueRef(clone.tool_name, "trusted descriptor.tool_name", { maxLength: 300 });
+  if (phase === "tools/call" && !toolName) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+      "A tools/call descriptor requires an exact tool name"
+    );
+  }
+  assertAllowedKeys(clone.owner_policy, OWNER_POLICY_KEYS, "trusted descriptor.owner_policy");
+  for (const key of OWNER_POLICY_KEYS) {
+    if (!Object.hasOwn(clone.owner_policy, key)) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+        "Trusted owner policy metadata is incomplete"
+      );
+    }
+  }
+  const normalized = {
+    schema: RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
+    request_hash: request.request_hash,
+    descriptor_ref: requireOpaqueRef(clone.descriptor_ref, "trusted descriptor.descriptor_ref"),
+    mcp_phase: phase,
+    raw_method: null,
+    mcp_server_ref: requireOpaqueRef(
+      clone.mcp_server_ref,
+      "trusted descriptor.mcp_server_ref"
+    ),
+    mcp_server_origin: requireExternalEndpoint(
+      clone.mcp_server_origin,
+      "trusted descriptor.mcp_server_origin"
+    ),
+    mcp_server_trust: trust,
+    mcp_server_attestation: clone.mcp_server_attestation ?? null,
+    tool_name: toolName,
+    tool_annotations: annotations,
+    capabilities,
+    prompt_injection_indicators: uniqueStrings(
+      clone.prompt_injection_indicators,
+      "trusted descriptor.prompt_injection_indicators",
+      { maxItems: 50, maxLength: 500 }
+    ),
+    owner_policy: clone.owner_policy,
+    descriptor_hash: requireSha256Ref(clone.descriptor_hash, "trusted descriptor.descriptor_hash")
+  };
+  if (normalized.mcp_server_attestation !== null) {
+    assertPlainObject(normalized.mcp_server_attestation, "trusted descriptor.mcp_server_attestation");
+  }
+  const expectedHash = sha256Ref({ ...normalized, descriptor_hash: null });
+  if (!safeEqual(normalized.descriptor_hash, expectedHash)) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_HASH_MISMATCH,
+      "Trusted descriptor hash mismatch"
+    );
+  }
+  return deepFreeze(JSON.parse(canonicalize(normalized)));
+}
+function createTrustedRiskDescriptor(requestValue, input = {}) {
+  const request = verifyDescriptorRequest(requestValue);
+  try {
+    assertAllowedKeys(input, [
+      "mcp_phase",
+      "raw_method",
+      "mcp_server_ref",
+      "mcp_server_origin",
+      "mcp_server_trust",
+      "mcp_server_attestation",
+      "tool_name",
+      "tool_annotations",
+      "capabilities",
+      "prompt_injection_indicators",
+      "owner_policy"
+    ], "trusted descriptor input");
+    const phase = requireEnum(input.mcp_phase, MCP_PHASES, "trusted descriptor.mcp_phase");
+    if (phase === "UNKNOWN") {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+        "Unknown MCP methods cannot pass the host pre-effect boundary"
+      );
+    }
+    if (input.raw_method != null) {
+      throw new TypeError("trusted descriptor.raw_method is permitted only for UNKNOWN methods");
+    }
+    const annotations = normalizeCompleteBooleanRecord(
+      input.tool_annotations,
+      ANNOTATION_KEYS,
+      "trusted descriptor.tool_annotations"
+    );
+    const capabilities = normalizeCompleteBooleanRecord(
+      input.capabilities,
+      CAPABILITY_KEYS,
+      "trusted descriptor.capabilities"
+    );
+    if (capabilities.unknown_or_unclassified) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+        "Unknown or unclassified effect metadata cannot pass the host boundary"
+      );
+    }
+    const toolName = input.tool_name == null ? null : requireOpaqueRef(input.tool_name, "trusted descriptor.tool_name", { maxLength: 300 });
+    if (phase === "tools/call" && !toolName) {
+      throw boundaryError(
+        RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+        "A tools/call descriptor requires an exact tool name"
+      );
+    }
+    assertAllowedKeys(input.owner_policy, OWNER_POLICY_KEYS, "trusted descriptor.owner_policy");
+    for (const key of OWNER_POLICY_KEYS) {
+      if (!Object.hasOwn(input.owner_policy, key)) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.UNKNOWN_METADATA,
+          "Trusted owner policy metadata is incomplete"
+        );
+      }
+    }
+    const ownerPolicy = assertBoundedCanonicalJson(input.owner_policy, {
+      field: "trusted descriptor.owner_policy",
+      maxBytes: MAX_OPERATION_BYTES2
+    });
+    const attestation = input.mcp_server_attestation == null ? null : assertBoundedCanonicalJson(input.mcp_server_attestation, {
+      field: "trusted descriptor.mcp_server_attestation",
+      maxBytes: MAX_OPERATION_BYTES2
+    });
+    if (attestation !== null) {
+      assertPlainObject(attestation, "trusted descriptor.mcp_server_attestation");
+    }
+    const descriptor = {
+      schema: RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
+      request_hash: request.request_hash,
+      descriptor_ref: request.descriptor_ref,
+      mcp_phase: phase,
+      raw_method: null,
+      mcp_server_ref: requireOpaqueRef(
+        input.mcp_server_ref,
+        "trusted descriptor.mcp_server_ref"
+      ),
+      mcp_server_origin: requireExternalEndpoint(
+        input.mcp_server_origin,
+        "trusted descriptor.mcp_server_origin"
+      ),
+      mcp_server_trust: requireEnum(
+        input.mcp_server_trust,
+        ["verified", "reachable", "failed", "untrusted"],
+        "trusted descriptor.mcp_server_trust"
+      ),
+      mcp_server_attestation: attestation,
+      tool_name: toolName,
+      tool_annotations: annotations,
+      capabilities,
+      prompt_injection_indicators: uniqueStrings(
+        input.prompt_injection_indicators,
+        "trusted descriptor.prompt_injection_indicators",
+        { maxItems: 50, maxLength: 500 }
+      ),
+      owner_policy: ownerPolicy,
+      descriptor_hash: null
+    };
+    descriptor.descriptor_hash = sha256Ref(descriptor);
+    return normalizeTrustedDescriptor(descriptor, request);
+  } catch (error) {
+    if (error instanceof RiskForkHostBoundaryError) throw error;
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_INVALID,
+      "Trusted descriptor is invalid"
+    );
+  }
+}
+function createTrustedRiskDescriptorSource(resolveDescriptor) {
+  if (typeof resolveDescriptor !== "function") {
+    throw new TypeError("Trusted Risk Fork descriptor source requires a host callback");
+  }
+  const source = Object.freeze({
+    schema: "agoragentic.risk-fork.trusted-descriptor-source.v1",
+    trust_mode: "host_callback_identity"
+  });
+  trustedDescriptorSourceCallbacks.set(source, resolveDescriptor);
+  return source;
+}
+function normalizePrepareInput(value) {
+  const clone = assertBoundedCanonicalJson(value, {
+    field: "Risk Fork host operation input",
+    maxBytes: MAX_OPERATION_BYTES2
+  });
+  assertAllowedKeys(clone, PREPARE_INPUT_KEYS, "Risk Fork host operation input");
+  assertNoCallerRiskLabels(clone.operation, "Risk Fork child operation");
+  clone.operation = validateChildOperation(clone.operation, "Risk Fork child operation");
+  clone.expected_commit_type = requireEnum(
+    clone.expected_commit_type,
+    COMMIT_TYPES,
+    "Risk Fork host expected_commit_type"
+  );
+  return deepFreeze(clone);
+}
+function riskInputFromDescriptor(descriptor, requestId) {
+  return deepFreeze({
+    request_id: requestId,
+    mcp_phase: descriptor.mcp_phase,
+    ...descriptor.raw_method === null ? {} : { raw_method: descriptor.raw_method },
+    mcp_server_ref: descriptor.mcp_server_ref,
+    mcp_server_origin: descriptor.mcp_server_origin,
+    mcp_server_trust: descriptor.mcp_server_trust,
+    ...descriptor.mcp_server_attestation === null ? {} : { mcp_server_attestation: descriptor.mcp_server_attestation },
+    ...descriptor.tool_name === null ? {} : { tool_name: descriptor.tool_name },
+    tool_annotations: descriptor.tool_annotations,
+    capabilities: descriptor.capabilities,
+    prompt_injection_indicators: descriptor.prompt_injection_indicators,
+    owner_policy: descriptor.owner_policy
+  });
+}
+function createRiskForkHostBoundary(input = {}) {
+  assertAllowedKeys(input, [
+    "controller",
+    "trusted_descriptor_source",
+    "create_execution_binding",
+    "fork_elevated",
+    "trusted_limits",
+    "clock"
+  ], "Risk Fork host boundary factory input");
+  if (!input.controller || typeof input.controller.prepare !== "function") {
+    throw new TypeError("Risk Fork host boundary requires a controller prepare method");
+  }
+  const resolveDescriptor = trustedDescriptorSourceCallbacks.get(input.trusted_descriptor_source);
+  if (!resolveDescriptor) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_SOURCE_UNTRUSTED,
+      "Risk Fork host boundary requires the exact host-owned descriptor source capability"
+    );
+  }
+  if (input.create_execution_binding !== void 0 && typeof input.create_execution_binding !== "function") {
+    throw new TypeError("create_execution_binding must be a clean host callback");
+  }
+  if (input.fork_elevated !== void 0 && typeof input.fork_elevated !== "boolean") {
+    throw new TypeError("fork_elevated must be a boolean");
+  }
+  const clock = input.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") throw new TypeError("Risk Fork host boundary clock is invalid");
+  const controllerPrepare = input.controller.prepare.bind(input.controller);
+  const controllerCommit = typeof input.controller.commit === "function" ? input.controller.commit.bind(input.controller) : null;
+  const trustedLimits = input.trusted_limits ?? {
+    fork_ttl_ms: 5 * 60 * 1e3,
+    idle_ttl_ms: 6e4,
+    max_execution_ms: 6e4
+  };
+  assertAllowedKeys(trustedLimits, [
+    "fork_ttl_ms",
+    "idle_ttl_ms",
+    "max_execution_ms"
+  ], "Risk Fork trusted host limits");
+  for (const [key, value] of Object.entries(trustedLimits)) {
+    if (!Number.isSafeInteger(value) || value < 100 || value > 24 * 60 * 60 * 1e3) {
+      throw new TypeError(`Risk Fork trusted host limit ${key} is invalid`);
+    }
+  }
+  const boundary = Object.freeze({
+    schema: RISK_FORK_HOST_BOUNDARY_SCHEMA,
+    mode: "host_owned_pre_effect",
+    preEffect: async (request) => {
+      const record = hostBoundaryRecords.get(boundary);
+      try {
+        assertCanonicalJson(request);
+        assertAllowedKeys(
+          request,
+          ["descriptor_ref", "operation_input"],
+          "Risk Fork host preEffect request"
+        );
+        const descriptorRef = requireOpaqueRef(
+          request.descriptor_ref,
+          "Risk Fork host descriptor_ref"
+        );
+        const operationInput = normalizePrepareInput(request.operation_input);
+        const requestedAt = requireIsoDate(record.clock(), "Risk Fork host boundary clock result");
+        const descriptorRequest = {
+          schema: RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
+          request_id: `risk-fork-host:${randomUUID4()}`,
+          descriptor_ref: descriptorRef,
+          operation_hash: sha256Ref(operationInput),
+          requested_at: requestedAt,
+          request_hash: null
+        };
+        descriptorRequest.request_hash = sha256Ref(descriptorRequest);
+        const frozenRequest = verifyDescriptorRequest(descriptorRequest);
+        let resolved;
+        try {
+          resolved = await record.resolveDescriptor(frozenRequest);
+        } catch (error) {
+          if (error instanceof RiskForkHostBoundaryError) throw error;
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_RESOLUTION_FAILED,
+            "Trusted descriptor source did not resolve the host request"
+          );
+        }
+        let descriptor;
+        try {
+          descriptor = normalizeTrustedDescriptor(resolved, frozenRequest);
+        } catch (error) {
+          if (error instanceof RiskForkHostBoundaryError) throw error;
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_INVALID,
+            "Trusted descriptor source returned an invalid descriptor"
+          );
+        }
+        const riskInput = riskInputFromDescriptor(descriptor, frozenRequest.request_id);
+        let prepared;
+        try {
+          prepared = await record.controllerPrepare({
+            ...operationInput,
+            ...record.trustedLimits,
+            risk_input: riskInput,
+            force_optional_fork: record.forkElevated,
+            ...operationInput.expected_commit_type === "CONSEQUENTIAL_ACTION_PROPOSAL" && record.createExecutionBinding ? { createExecutionBinding: record.createExecutionBinding } : {}
+          });
+        } catch {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.PRE_EFFECT_REJECTED,
+            "Risk Fork controller rejected the host-owned pre-effect request"
+          );
+        }
+        assertBoundedCanonicalJson(prepared, {
+          field: "Risk Fork prepared result",
+          maxBytes: MAX_OPERATION_BYTES2
+        });
+        const result = deepFreeze({
+          schema: "agoragentic.risk-fork.host-pre-effect-result.v1",
+          descriptor_ref: descriptor.descriptor_ref,
+          descriptor_hash: descriptor.descriptor_hash,
+          operation_hash: frozenRequest.operation_hash,
+          prepared,
+          authority_granted: false,
+          provider_handle_exposed: false
+        });
+        hostPreparedRecords.set(result, Object.freeze({ prepared, boundary }));
+        return result;
+      } catch (error) {
+        if (error instanceof RiskForkHostBoundaryError) throw error;
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
+          "Risk Fork host pre-effect request is invalid"
+        );
+      }
+    },
+    commitPrepared: async (preEffectResult, cleanCommitInput = {}) => {
+      const provenance = hostPreparedRecords.get(preEffectResult);
+      if (!provenance || provenance.boundary !== boundary || !controllerCommit) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.PRE_EFFECT_REJECTED,
+          "Risk Fork prepared result is not commit-capable for this host boundary"
+        );
+      }
+      return controllerCommit(provenance.prepared, cleanCommitInput);
+    },
+    validateImport: (envelope, options = {}) => verifyRiskForkImportEnvelope(envelope, options)
+  });
+  hostBoundaryRecords.set(boundary, Object.freeze({
+    controllerPrepare,
+    controllerCommit,
+    resolveDescriptor,
+    createExecutionBinding: input.create_execution_binding ?? null,
+    forkElevated: input.fork_elevated !== false,
+    clock,
+    trustedLimits: deepFreeze({ ...trustedLimits })
+  }));
+  return boundary;
+}
+function isRiskForkHostBoundary(value) {
+  return hostBoundaryRecords.has(value);
+}
+
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/risk-classifier.mjs
 var TRUST_STATES = Object.freeze(["verified", "reachable", "failed", "unknown", "untrusted"]);
 var trustedServerVerifierCallbacks = /* @__PURE__ */ new WeakMap();
@@ -50236,7 +51840,7 @@ var INTERNAL_EVALUATION_MODES = Object.freeze({
   AUTHORITATIVE_CLOCK: "authoritative_clock",
   VERIFIED_DECISION_REPLAY: "verified_decision_replay"
 });
-var CAPABILITY_KEYS = Object.freeze([
+var CAPABILITY_KEYS2 = Object.freeze([
   "network_access",
   "filesystem_read",
   "filesystem_write",
@@ -50282,10 +51886,10 @@ function authoritativeClockTime(clock) {
   return requireIsoDate(value, "risk classifier clock result");
 }
 function normalizeCapabilities(value = {}) {
-  const incomplete = value === null || CAPABILITY_KEYS.some((key) => !Object.hasOwn(value, key));
+  const incomplete = value === null || CAPABILITY_KEYS2.some((key) => !Object.hasOwn(value, key));
   const capabilities = value ?? {};
-  assertAllowedKeys(capabilities, CAPABILITY_KEYS, "capabilities");
-  return Object.fromEntries(CAPABILITY_KEYS.map((key) => [
+  assertAllowedKeys(capabilities, CAPABILITY_KEYS2, "capabilities");
+  return Object.fromEntries(CAPABILITY_KEYS2.map((key) => [
     key,
     key === "unknown_or_unclassified" ? optionalBoolean(capabilities[key], `capabilities.${key}`, incomplete) || incomplete : optionalBoolean(capabilities[key], `capabilities.${key}`, false)
   ]));
@@ -50856,6 +52460,7 @@ function verifyRiskDecision(decision, options = {}) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/controller.mjs
 var CONTROLLER_MODES = Object.freeze(["demonstration", "production"]);
 var CONTROLLER_DISTRIBUTED_AUTHORITIES = /* @__PURE__ */ new WeakMap();
+var CONTROLLER_PREPARED_RESULTS = /* @__PURE__ */ new WeakMap();
 function elapsedMs(started) {
   return Math.max(0, Math.round(performance.now() - started));
 }
@@ -50936,33 +52541,12 @@ function normalizeProviderVerification(result, provider, capabilitiesHash) {
     evidence_hash: requireSha256Ref(result.evidence_hash, "provider profile evidence_hash")
   };
 }
-function normalizeCleanupClaim(value, field) {
-  assertPlainObject(value, field);
-  const status = requireEnum(
-    value.status,
-    ["verified", "failed", "unknown"],
-    `${field}.status`
-  );
-  const outcome = requireEnum(
-    value.outcome ?? "unknown",
-    ["success", "failure", "unknown"],
-    `${field}.outcome`
-  );
-  const evidenceRef = value.evidence_ref == null ? null : requireOpaqueRef(value.evidence_ref, `${field}.evidence_ref`);
-  const evidenceHash = value.evidence_hash == null ? null : requireSha256Ref(value.evidence_hash, `${field}.evidence_hash`);
-  if (status === "verified" && (outcome !== "success" || !evidenceRef || !evidenceHash)) {
-    throw new Error(`${field} verified status requires bound success evidence`);
-  }
-  return {
-    status,
-    outcome,
-    evidence_ref: evidenceRef,
-    evidence_hash: evidenceHash
-  };
+function normalizeCleanupClaim(value, request, now) {
+  return verifyCleanupVerificationEvidence(value, request, { now });
 }
-function safeCleanupClaim(value, field) {
+function safeCleanupClaim(value, request, now) {
   try {
-    return normalizeCleanupClaim(value, field);
+    return normalizeCleanupClaim(value, request, now);
   } catch {
     return {
       status: "unknown",
@@ -51111,22 +52695,35 @@ var RiskForkController = class {
   }
   async #destroyResources({ forkRef, savepointRef }) {
     const result = {
+      fork_cleanup_request: null,
       fork_request: null,
       fork_verification: null,
+      savepoint_cleanup_request: null,
       savepoint_request: null,
       savepoint_verification: null
     };
     if (forkRef) {
+      result.fork_cleanup_request = createCleanupVerificationRequest({
+        provider_id: this.provider.id,
+        resource_kind: "fork",
+        resource_ref: forkRef,
+        requested_at: requireIsoDate(this.clock(), "clock result"),
+        request_nonce: randomUUID5()
+      });
       try {
         result.fork_request = await this.provider.destroyFork({
           fork_ref: forkRef,
-          reason: "risk_fork_clean_boundary"
+          reason: "risk_fork_clean_boundary",
+          cleanup_request: result.fork_cleanup_request
         });
       } catch (error) {
         result.fork_request = { status: "failed", code: String(error?.code ?? "destroy_failed") };
       }
       try {
-        result.fork_verification = await this.provider.verifyDestroyed({ fork_ref: forkRef });
+        result.fork_verification = await this.provider.verifyDestroyed({
+          fork_ref: forkRef,
+          cleanup_request: result.fork_cleanup_request
+        });
       } catch (error) {
         result.fork_verification = {
           status: "unknown",
@@ -51136,16 +52733,25 @@ var RiskForkController = class {
       }
     }
     if (savepointRef) {
+      result.savepoint_cleanup_request = createCleanupVerificationRequest({
+        provider_id: this.provider.id,
+        resource_kind: "savepoint",
+        resource_ref: savepointRef,
+        requested_at: requireIsoDate(this.clock(), "clock result"),
+        request_nonce: randomUUID5()
+      });
       try {
         result.savepoint_request = await this.provider.destroySavepoint({
-          savepoint_ref: savepointRef
+          savepoint_ref: savepointRef,
+          cleanup_request: result.savepoint_cleanup_request
         });
       } catch (error) {
         result.savepoint_request = { status: "failed", code: String(error?.code ?? "delete_failed") };
       }
       try {
         result.savepoint_verification = await this.provider.verifySavepointDestroyed({
-          savepoint_ref: savepointRef
+          savepoint_ref: savepointRef,
+          cleanup_request: result.savepoint_cleanup_request
         });
       } catch (error) {
         result.savepoint_verification = {
@@ -51209,6 +52815,22 @@ var RiskForkController = class {
     if (!input.capsule.allowed_commit_types.includes(expectedCommitType)) {
       throw new Error("Requested commit type is not authorized by the Savepoint Capsule");
     }
+    assertPlainObject(input.commit_policy ?? {}, "commit_policy");
+    const effectiveCommitPolicy = cloneJson(input.commit_policy ?? {});
+    if (expectedCommitType === "TYPED_RESULT") {
+      if (!input.commit_policy || !Object.hasOwn(input.commit_policy, "typed_result_schema_hash")) {
+        throw new Error(
+          "Typed-result preparation requires the capsule-authorized schema hash in commit_policy"
+        );
+      }
+      if (!safeEqual(
+        input.commit_policy.typed_result_schema_hash,
+        input.capsule.authorized_result_schema_hash
+      )) {
+        throw new Error("Typed-result commit policy does not match the Savepoint Capsule");
+      }
+      effectiveCommitPolicy.typed_result_schema_hash = input.capsule.authorized_result_schema_hash;
+    }
     if (decision.level === "IRREVERSIBLE" && expectedCommitType !== "CONSEQUENTIAL_ACTION_PROPOSAL") {
       throw new Error("Irreversible work may leave the fork only as a consequential action proposal");
     }
@@ -51244,7 +52866,7 @@ var RiskForkController = class {
     }
     const providerVerification = await this.#assertProviderAllowed(decision);
     let lifecycle = createLifecycle({
-      run_id: `risk-fork-${randomUUID4()}`,
+      run_id: `risk-fork-${randomUUID5()}`,
       requested_at: now,
       reason: "risk_fork_requested",
       actor: "clean_controller",
@@ -51258,6 +52880,7 @@ var RiskForkController = class {
     let executionBinding = null;
     let savepointCreationAttempted = false;
     let forkCreationAttempted = false;
+    let cleanupResult = null;
     const measurements = {};
     try {
       lifecycle = advance(lifecycle, "SAVEPOINTING", { at: requireIsoDate(this.clock(), "clock result") });
@@ -51337,18 +52960,24 @@ var RiskForkController = class {
         timeout_ms: maxExecutionMs
       });
       measurements.execution_ms = elapsedMs(executionStarted);
-      lifecycle = advance(lifecycle, "TAINTED", {
-        at: requireIsoDate(this.clock(), "clock result"),
-        evidence: lifecycleEvidence("fork_output_tainted", "observed", {
-          result_hash: requireSha256Ref(execution.result_hash, "provider execution result_hash")
-        })
-      });
       let candidate;
       if (expectedCommitType === "WORKSPACE_DIFF") {
         candidate = await this.provider.collectDiff({ fork_ref: forkRef });
       } else {
         candidate = execution.commit_candidate;
       }
+      const imported = importRiskForkProviderResult(execution, {
+        source_fork_ref: forkRef,
+        expected_type: expectedCommitType,
+        candidate
+      });
+      candidate = imported.candidate;
+      lifecycle = advance(lifecycle, "TAINTED", {
+        at: requireIsoDate(this.clock(), "clock result"),
+        evidence: lifecycleEvidence("fork_output_tainted", "observed", {
+          result_hash: imported.result_hash
+        })
+      });
       assertPlainObject(candidate, "fork commit candidate");
       if (candidate.type !== expectedCommitType) {
         throw new Error("Fork returned a different commit type than the clean controller requested");
@@ -51358,7 +52987,7 @@ var RiskForkController = class {
       const artifact = validateCommitCandidate({
         candidate,
         source_fork_id: forkRef,
-        policy: input.commit_policy ?? {},
+        policy: effectiveCommitPolicy,
         expected_binding: expectedBinding,
         execution_binding: executionBinding,
         validated_at: requireIsoDate(this.clock(), "clock result")
@@ -51378,12 +53007,19 @@ var RiskForkController = class {
         fork_resource_state: "DESTROY_REQUESTED"
       });
       const cleanupStarted = performance.now();
-      const cleanup = await this.#destroyResources({ forkRef, savepointRef });
+      cleanupResult = await this.#destroyResources({ forkRef, savepointRef });
+      const cleanup = cleanupResult;
       measurements.cleanup_ms = elapsedMs(cleanupStarted);
-      const forkClaim = normalizeCleanupClaim(cleanup.fork_verification, "fork destruction verification");
+      const cleanupObservedAt = requireIsoDate(this.clock(), "clock result");
+      const forkClaim = normalizeCleanupClaim(
+        cleanup.fork_verification,
+        cleanup.fork_cleanup_request,
+        cleanupObservedAt
+      );
       const savepointClaim = normalizeCleanupClaim(
         cleanup.savepoint_verification,
-        "savepoint destruction verification"
+        cleanup.savepoint_cleanup_request,
+        cleanupObservedAt
       );
       const cleanupVerified = forkClaim.status === "verified" && forkClaim.outcome === "success" && savepointClaim.status === "verified" && savepointClaim.outcome === "success";
       if (!cleanupVerified) {
@@ -51402,7 +53038,10 @@ var RiskForkController = class {
         });
         throw new RiskForkPreparationError("Risk Fork cleanup was not verified; commit is blocked", {
           lifecycle,
-          cleanup
+          cleanup: {
+            fork: forkClaim,
+            savepoint: savepointClaim
+          }
         });
       }
       const combinedCleanupHash = sha256Ref({
@@ -51430,7 +53069,7 @@ var RiskForkController = class {
         evidence_ref: cleanupLifecycleEvidence.ref,
         evidence_hash: cleanupLifecycleEvidence.hash
       };
-      return deepFreeze({
+      const prepared = deepFreeze({
         mode: "prepared_for_clean_commit",
         risk_decision: decision,
         capsule: input.capsule,
@@ -51447,18 +53086,26 @@ var RiskForkController = class {
         measurements,
         authority_granted: false
       });
+      CONTROLLER_PREPARED_RESULTS.set(prepared, {
+        controller: this,
+        consumed: false
+      });
+      return prepared;
     } catch (error) {
       if (error instanceof RiskForkPreparationError) throw error;
       const failedAt = requireIsoDate(this.clock(), "clock result");
       lifecycle = markPreparationStageFailed(lifecycle, failedAt);
-      const cleanup = await this.#destroyResources({ forkRef, savepointRef });
+      const cleanup = cleanupResult ?? await this.#destroyResources({ forkRef, savepointRef });
+      const cleanupObservedAt = requireIsoDate(this.clock(), "clock result");
       const forkClaim = safeCleanupClaim(
         cleanup.fork_verification,
-        "failed preparation fork destruction verification"
+        cleanup.fork_cleanup_request,
+        cleanupObservedAt
       );
       const savepointClaim = safeCleanupClaim(
         cleanup.savepoint_verification,
-        "failed preparation savepoint destruction verification"
+        cleanup.savepoint_cleanup_request,
+        cleanupObservedAt
       );
       const forkAbsenceVerified = !forkCreationAttempted || Boolean(forkRef) && forkClaim.status === "verified" && forkClaim.outcome === "success";
       const savepointAbsenceVerified = !savepointCreationAttempted || Boolean(savepointRef) && savepointClaim.status === "verified" && savepointClaim.outcome === "success";
@@ -51535,17 +53182,34 @@ var RiskForkController = class {
       }
       throw new RiskForkPreparationError("Risk Fork preparation failed closed", {
         lifecycle,
-        cleanup,
+        cleanup: {
+          fork: forkClaim,
+          savepoint: savepointClaim
+        },
         cause_code: String(error?.code ?? error?.name ?? "error").slice(0, 200)
       });
     }
   }
   async commit(prepared, cleanCommitInput = {}) {
+    const provenance = CONTROLLER_PREPARED_RESULTS.get(prepared);
+    if (!provenance || provenance.controller !== this) {
+      const error = new Error(
+        "Prepared Risk Fork result was not produced by this controller instance"
+      );
+      error.code = "RISK_FORK_PREPARED_PROVENANCE_INVALID";
+      throw error;
+    }
+    if (provenance.consumed) {
+      const error = new Error("Prepared Risk Fork result has already entered clean commit");
+      error.code = "RISK_FORK_PREPARED_ALREADY_CONSUMED";
+      throw error;
+    }
     assertPreparedForCleanCommit(prepared);
     assertPlainObject(cleanCommitInput, "cleanCommitInput");
     if (Object.hasOwn(cleanCommitInput, "distributedCommitAuthority") || Object.hasOwn(cleanCommitInput, "distributedClaimantRef")) {
       throw new TypeError("Distributed authority is trusted controller construction state");
     }
+    provenance.consumed = true;
     let lifecycle = advance(prepared.lifecycle, "COMMITTING", {
       at: requireIsoDate(this.clock(), "clock result"),
       evidence: lifecycleEvidence("clean_commit_started", "observed", {
@@ -53649,7 +55313,7 @@ async function sha256FileRef(file) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
@@ -54158,7 +55822,7 @@ function validateE2BBirthAttestation(value, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { randomUUID as randomUUID6 } from "node:crypto";
 import {
   mkdir as mkdir2,
   open as open3,
@@ -54321,7 +55985,7 @@ var E2BCleanupJournal = class {
     await this.initialize();
     const normalized = normalizeRecord(record);
     const target = this.#path(normalized.record_id);
-    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID5()}.tmp`);
+    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID6()}.tmp`);
     let handle;
     try {
       handle = await open3(temp, "wx", 384);
@@ -55810,7 +57474,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     expires_at: new Date(
       allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
     ).toISOString(),
-    birth_nonce: randomUUID6()
+    birth_nonce: randomUUID7()
   });
   const paths = e2bBirthRequestPaths(request.request_hash);
   for (const target of [
@@ -56076,8 +57740,15 @@ function parseRunnerResult(value, expected) {
     "status",
     "job_id",
     "job_hash",
+    "parent_state_hash",
     "capsule_hash",
     "identity_hash",
+    "provider_ref",
+    "template_id_hash",
+    "mcp_phase",
+    "mcp_server_ref",
+    "tool_name",
+    "effective_arguments_hash",
     "network_policy_hash",
     "operation_hash",
     "execution_mode",
@@ -56771,9 +58442,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
-    const recordId = `e2b_cleanup_${randomUUID6()}`;
-    const cleanupRef = `e2b_cleanup_ref_${randomUUID6()}`;
-    const exportId = `e2b_export_${randomUUID6()}`;
+    const recordId = `e2b_cleanup_${randomUUID7()}`;
+    const cleanupRef = `e2b_cleanup_ref_${randomUUID7()}`;
+    const exportId = `e2b_export_${randomUUID7()}`;
     const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
@@ -56838,6 +58509,11 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         record_id: recordId,
         cleanup_ref: cleanupRef,
         capsule_hash: input.capsule.capsule_hash,
+        parent_state_hash: input.capsule.parent.state_hash,
+        mcp_phase: input.capsule.proposed_interaction.mcp_method,
+        mcp_server_ref: input.capsule.proposed_interaction.mcp_server_ref,
+        tool_name: input.capsule.proposed_interaction.tool_name,
+        effective_arguments_hash: input.capsule.proposed_interaction.effective_arguments_hash,
         authorized_result_schema_hash: input.capsule.authorized_result_schema_hash,
         export_record: exportRecord,
         attestation,
@@ -57035,7 +58711,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           ...commonBootstrap,
           phase,
           expected_workspace_digest: workspaceDigest,
-          bootstrap_nonce: randomUUID6(),
+          bootstrap_nonce: randomUUID7(),
           request_hash: null
         };
         payload.request_hash = sha256Ref({ ...payload, request_hash: null });
@@ -57100,6 +58776,11 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         sandbox,
         savepoint_ref: savepoint.ref,
         capsule_hash: savepoint.capsule_hash,
+        parent_state_hash: savepoint.parent_state_hash,
+        mcp_phase: savepoint.mcp_phase,
+        mcp_server_ref: savepoint.mcp_server_ref,
+        tool_name: savepoint.tool_name,
+        effective_arguments_hash: savepoint.effective_arguments_hash,
         authorized_result_schema_hash: savepoint.authorized_result_schema_hash,
         identity_hash: input.fork_identity.identity_hash,
         network_policy_hash: policy.policy_hash,
@@ -57284,14 +58965,21 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     });
     const remainingMs = Date.parse(record.expires_at) - this.clock().getTime();
     if (timeoutMs > remainingMs) throw new Error("Execution timeout exceeds the child hard deadline");
-    const jobId = `rfj_${randomUUID6().replaceAll("-", "")}`;
+    const jobId = `rfj_${randomUUID7().replaceAll("-", "")}`;
     const jobPath = `${JOB_PATH}.${jobId}.json`;
     const resultPath = `${RESULT_PATH}.${jobId}.json`;
     const job = {
       schema: "agoragentic.risk-fork.runner-job.v1",
       job_id: jobId,
+      parent_state_hash: record.parent_state_hash,
       capsule_hash: record.capsule_hash,
       identity_hash: record.identity_hash,
+      provider_ref: this.id,
+      template_id_hash: sha256Ref(this.cleanTemplateId),
+      mcp_phase: record.mcp_phase,
+      mcp_server_ref: record.mcp_server_ref,
+      tool_name: record.tool_name,
+      effective_arguments_hash: record.effective_arguments_hash,
       network_policy_hash: record.network_policy_hash,
       operation_hash: sha256Ref(operation),
       execution_mode: executionMode,
@@ -57356,8 +59044,15 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       parsed = parseRunnerResult(parsed, {
         job_id: job.job_id,
         job_hash: job.job_hash,
+        parent_state_hash: job.parent_state_hash,
         capsule_hash: job.capsule_hash,
         identity_hash: job.identity_hash,
+        provider_ref: job.provider_ref,
+        template_id_hash: job.template_id_hash,
+        mcp_phase: job.mcp_phase,
+        mcp_server_ref: job.mcp_server_ref,
+        tool_name: job.tool_name,
+        effective_arguments_hash: job.effective_arguments_hash,
         network_policy_hash: job.network_policy_hash,
         operation_hash: job.operation_hash,
         execution_mode: job.execution_mode,
@@ -57476,8 +59171,19 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.#requireConfigured("destroyFork");
     this.#requireForkRuntimeEnabled("destroyFork");
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ["fork_ref", "reason"], "E2B destroyFork input");
+    assertAllowedKeys(
+      input,
+      ["fork_ref", "reason", "cleanup_request"],
+      "E2B destroyFork input"
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: "fork",
+        resource_ref: record.ref
+      });
+    }
     if (record.destroyed_verified) {
       return deepFreeze({
         fork_ref: record.ref,
@@ -57522,8 +59228,23 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     this.#requireConfigured("verifyDestroyed");
     this.#requireForkRuntimeEnabled("verifyDestroyed");
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ["fork_ref"], "E2B verifyDestroyed input");
+    assertAllowedKeys(
+      input,
+      ["fork_ref", "cleanup_request"],
+      "E2B verifyDestroyed input"
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, "fork_ref"));
+    const cleanupRequest = input.cleanup_request ? verifyCleanupVerificationRequest(input.cleanup_request, {
+      provider_id: this.id,
+      resource_kind: "fork",
+      resource_ref: record.ref
+    }) : createCleanupVerificationRequest({
+      provider_id: this.id,
+      resource_kind: "fork",
+      resource_ref: record.ref,
+      requested_at: this.clock(),
+      request_nonce: randomUUID7()
+    });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
     const result = await this.#verifySandboxAbsent(Sandbox, record.record_id, record.sandbox_id);
@@ -57532,20 +59253,38 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       record.destruction_status = "verified_destroyed";
       record.status = "destroyed";
     }
-    return deepFreeze({
+    const observationHash = result.evidence_hash ?? sha256Ref({
+      provider_id: this.id,
       fork_ref: record.ref,
+      sandbox_id_hash: sha256Ref(record.sandbox_id),
       status: result.status,
       outcome: result.outcome,
-      evidence_status: result.status === "verified" ? "verified" : result.status === "failed" ? "verified_present" : "unknown",
-      ...result.evidence_ref ? { evidence_ref: result.evidence_ref } : {},
-      ...result.evidence_hash ? { evidence_hash: result.evidence_hash } : {}
+      destruction_status: record.destruction_status
+    });
+    return createCleanupVerificationEvidence(cleanupRequest, {
+      status: result.status,
+      outcome: result.outcome,
+      evidence_ref: result.evidence_ref ?? null,
+      observation_hash: observationHash,
+      observed_at: this.clock()
     });
   }
   async destroySavepoint(input = {}) {
     this.#requireConfigured("destroySavepoint");
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ["savepoint_ref"], "E2B destroySavepoint input");
+    assertAllowedKeys(
+      input,
+      ["savepoint_ref", "cleanup_request"],
+      "E2B destroySavepoint input"
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, "savepoint_ref"));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: "savepoint",
+        resource_ref: record.ref
+      });
+    }
     if (record.destroyed) {
       return deepFreeze({
         savepoint_ref: record.ref,
@@ -57587,8 +59326,23 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
   async verifySavepointDestroyed(input = {}) {
     this.#requireConfigured("verifySavepointDestroyed");
     this.#revalidateQualificationTrust();
-    assertAllowedKeys(input, ["savepoint_ref"], "E2B verifySavepointDestroyed input");
+    assertAllowedKeys(
+      input,
+      ["savepoint_ref", "cleanup_request"],
+      "E2B verifySavepointDestroyed input"
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, "savepoint_ref"));
+    const cleanupRequest = input.cleanup_request ? verifyCleanupVerificationRequest(input.cleanup_request, {
+      provider_id: this.id,
+      resource_kind: "savepoint",
+      resource_ref: record.ref
+    }) : createCleanupVerificationRequest({
+      provider_id: this.id,
+      resource_kind: "savepoint",
+      resource_ref: record.ref,
+      requested_at: this.clock(),
+      request_nonce: randomUUID7()
+    });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
     try {
@@ -57603,22 +59357,32 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
         errorCode(error, "EXPORT_ABSENCE_CHECK_FAILED")
       ).catch(() => {
       });
-      return deepFreeze({
-        savepoint_ref: record.ref,
+      return createCleanupVerificationEvidence(cleanupRequest, {
         status: "unknown",
         outcome: "unknown",
-        evidence_status: "unknown",
-        error_code: "E2B_LOCAL_EXPORT_ABSENCE_UNKNOWN"
+        evidence_ref: null,
+        observation_hash: sha256Ref({
+          provider_id: this.id,
+          savepoint_ref: record.ref,
+          status: "unknown",
+          error_code: errorCode(error, "EXPORT_ABSENCE_CHECK_FAILED")
+        }),
+        observed_at: this.clock()
       });
     }
     if (!absent) {
       this.#poisonAllocationUntilReconciled(record.record_id);
       await this.cleanupJournal.markExportUnknown(record.record_id, "EXPORT_STILL_PRESENT");
-      return deepFreeze({
-        savepoint_ref: record.ref,
+      return createCleanupVerificationEvidence(cleanupRequest, {
         status: "failed",
         outcome: "failure",
-        evidence_status: "verified_present"
+        evidence_ref: null,
+        observation_hash: sha256Ref({
+          provider_id: this.id,
+          savepoint_ref: record.ref,
+          absent: false
+        }),
+        observed_at: this.clock()
       });
     }
     record.destroyed = true;
@@ -57629,13 +59393,12 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       absent: true,
       provider_snapshot_created: false
     };
-    return deepFreeze({
-      savepoint_ref: record.ref,
+    return createCleanupVerificationEvidence(cleanupRequest, {
       status: "verified",
       outcome: "success",
-      evidence_status: "verified",
       evidence_ref: `e2b-export-absence:${evidence.export_ref_hash.slice(7, 23)}`,
-      evidence_hash: sha256Ref(evidence)
+      observation_hash: sha256Ref(evidence),
+      observed_at: this.clock()
     });
   }
 };
@@ -58048,7 +59811,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:7e8176ef2aaea6cf42e150cc20cd15d63fc074dba05409dfa4cf2ee5d7457ae8" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:79b1ba2928a5d8f11764b6830fe14a66dd40b49c4f9dbae3b0d4fe232a6cff17" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
@@ -58095,8 +59858,14 @@ export {
   MCP_V2_PROTOCOL_VERSION,
   PostgresDistributedCommitAuthority,
   REQUIRED_PROVIDER_METHODS,
+  RISK_FORK_HOST_BOUNDARY_SCHEMA,
+  RISK_FORK_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
+  RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
   RiskForkCommitError,
   RiskForkController,
+  RiskForkHostBoundaryError,
   RiskForkMcpBoundary,
   RiskForkPreparationError,
   RiskForkProvider,
@@ -58113,6 +59882,7 @@ export {
   commitPreparedArtifact,
   computeMcpCleanImportEvidenceHash,
   connectRemoteClient,
+  createCleanupVerificationRequest,
   createE2BAuthorityFreeSourceVerifier,
   createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
@@ -58123,14 +59893,20 @@ export {
   createMcpInterceptionPlan,
   createPostgresAuthorityPool,
   createRemoteToolDirectory,
+  createRiskForkHostBoundary,
+  createRiskForkImportEnvelope,
   createSavepointCapsule,
   createTrustedMcpServerVerifier,
+  createTrustedRiskDescriptor,
+  createTrustedRiskDescriptorSource,
   deriveParentAuthorityRef,
   executeFallbackTool,
+  importRiskForkProviderResult,
   isE2BQualificationEvidenceCanonical,
   isE2BRuntimeSdkIntegrityVerifier,
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
+  isRiskForkHostBoundary,
   loadVerifiedE2BRuntimeSdk,
   migratePostgresDistributedAuthority,
   networkPolicy,
@@ -58145,6 +59921,7 @@ export {
   sha256FileRef,
   validateCommitCandidate,
   validateE2BQualificationEvidence,
+  verifyCleanupVerificationEvidence,
   verifyCommitArtifact,
   verifyE2BExternalQualificationObservation,
   verifyE2BQualificationTrust,
@@ -58152,5 +59929,6 @@ export {
   verifyPostgresAuthorityClientTransport,
   verifyPostgresDistributedAuthoritySchema,
   verifyRiskDecision,
+  verifyRiskForkImportEnvelope,
   verifySavepointCapsule
 };

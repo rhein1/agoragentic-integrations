@@ -1330,7 +1330,7 @@ test('clean import permits documented placeholders and internal opaque identifie
     }
 });
 
-test('fallback execution status rejects noncanonical invocation IDs before host I/O and preserves valid IDs', async () => {
+test('fallback execution status rejects invalid IDs and keeps valid effectful fallback fenced', async () => {
     const statusTool = mcp.buildFallbackToolList().find(
         (tool) => tool.name === 'agoragentic_execute_status',
     );
@@ -1408,11 +1408,13 @@ test('fallback execution status rejects noncanonical invocation IDs before host 
             { enforcementBoundary: boundary },
         );
         assert.deepEqual(JSON.parse(accepted.content[0].text), {
-            ok: true,
-            path: `/api/execute/status/${validId}`,
+            ok: false,
+            error: 'risk_fork_effect_fence_required',
+            message: 'Effect-capable fallback is disabled until a durable host effect fence is qualified.',
+            tool: 'agoragentic_execute_status',
         });
     }
-    assert.equal(fallbackCalls, validIds.length);
+    assert.equal(fallbackCalls, 0);
 });
 
 test('ACP parsing is bounded, duplicate-safe, and remains usable after invalid input', async () => {

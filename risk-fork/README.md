@@ -1,5 +1,7 @@
 # Agoragentic Risk Fork
 
+![Risk Fork — run untrusted MCP and tool calls in a disposable environment while the trusted parent retains identity, memory, and authority.](./assets/risk-fork-social-preview.svg)
+
 Risk Fork is an experimental, source-only package for **fork-before-risk** agent execution. It defines provider-neutral contracts for classifying a proposed interaction, capturing a reference-only Savepoint Capsule, executing in a tainted child, validating a narrowly typed result, destroying the child, and—only from a clean controller—committing an accepted artifact.
 
 The short analogy is **“quick-save before the boss fight.”** The security model is stronger and more specific: fork a known-good state *before* risk, leave the trusted parent clean, clone no authority, treat every child result as tainted, and import only a bounded artifact after clean-side validation.
@@ -17,6 +19,7 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQ
 | Surface | Status | Honest boundary |
 | --- | --- | --- |
 | Deterministic risk classifier | Experimental source implementation | No LLM decision path; incomplete capability metadata is treated as unknown/`HIGH`, and owner policy can only raise the minimum or deny |
+| Framework-neutral host boundary | Experimental source implementation | A host-owned wrapper resolves exact trusted descriptors, derives the classifier input, and rejects caller/model risk labels before controller preparation. It is mandatory only when a host routes every effect path through it; this package cannot prevent a framework from bypassing the wrapper |
 | Savepoint Capsule, fork identity, execution binding | Experimental source implementation | The public v1 capsule permits no runtime snapshot or a verified filesystem-only snapshot; process-memory/runtime snapshots are invalid, and hashes/references are evidence rather than grants |
 | Hash-linked lifecycle | Experimental source implementation | A destroy request and a verified absence observation are separate facts |
 | Taint gate | Experimental source implementation | Imports only a typed result, bounded workspace diff, or consequential-action proposal; child-asserted test evidence cannot satisfy current required-test policy without clean re-execution or a trusted external attestation |
@@ -102,10 +105,12 @@ Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verif
    - `WORKSPACE_DIFF`
    - `CONSEQUENTIAL_ACTION_PROPOSAL`
 7. A child consequential-action candidate contains only the proposed action. The clean side creates and attaches the execution binding; the child never receives or returns the authorization reference, hash, nonce, or one-use identifier.
-8. The provider is asked to destroy the fork and savepoint; separate verification must establish destruction. Unknown or failed verification remains explicit.
+8. The provider is asked to destroy the fork and savepoint; separate verification must establish destruction. Each verification uses a fresh closed cleanup request bound to the provider ID, exact resource kind/ref, destroy/verify method pair, request time, nonce, and request hash. The returned closed evidence must bind that request plus its observation time/ref/hash; stale, cross-provider, substituted-resource, tampered, and cross-request replay evidence is rejected. Unknown or failed verification remains explicit.
 9. A clean controller first performs advisory current-governance and exact-approval preflight. In production mode, the concrete `PostgresDistributedCommitAuthority` must itself be constructed for `deploymentMode: 'production'`, `migrationMode: 'verify-only'`, and verified CA-authenticated TLS. It then locks the parent, governance, approval, and optional authorization rows in a fixed order under a serializable transaction, uses PostgreSQL server time, and runs the final clean revalidation before reserving the exact rows. Demonstration mode may instead use the concrete file reference transactions. Callback-based authority substitutes, development/apply-mode PostgreSQL instances, duck-typed authorities, mixed authority backends, and caller-injected controller authority are rejected.
 10. The PostgreSQL authority durably records `prepared`, then `effect_started` with a unique `effect_key`, before synchronously invoking the clean effect callback. The key is passed downstream for fencing/idempotency; it does not grant authority and does not prove generic exactly-once external effects. There is no automatic invocation after `effect_started` or `ambiguous`. Exact committed replay returns the stored result. Trusted exact-version reconciliation may finalize only exact proven success; a point-in-time absence or failure observation leaves the operation ambiguous and keeps the parent, approval, and one-use authorization unavailable because the original callback may still complete. File transactions retain only local single-filesystem reference semantics.
 11. A hash-bound receipt cross-binds lineage, fork/provider, risk decision, artifact, destruction evidence, optional authorization reference, and lifecycle-derived timestamps without embedding authority or raw private content.
+
+`RiskForkController.prepare()` also brands each successful prepared result in controller-local process memory. `commit()` accepts that exact object once; object spreads, JSON round trips, fabricated values, results from another controller instance, and replay after a commit attempt are rejected. This is intentionally incompatible with durable workflow serialization or cross-process handoff. Such workflows remain unsupported until a separately trusted durable provenance design exists; persisting the JSON does not preserve commit authority.
 
 ## What was reused, extended, and added
 
@@ -131,6 +136,73 @@ import { classifyRisk } from '@agoragentic/risk-fork/classifier';
 import { LocalReferenceRiskForkAdapter } from '@agoragentic/risk-fork/adapters/local-reference';
 import { PostgresDistributedCommitAuthority } from '@agoragentic/risk-fork/adapters/postgres-authority';
 ```
+
+### Framework-neutral host onboarding
+
+The smallest host integration surface is the dependency-light `./host-boundary` export. It is intended for framework authors, not model-selected tool use:
+
+```js
+import {
+  createRiskForkHostBoundary,
+  createTrustedRiskDescriptor,
+  createTrustedRiskDescriptorSource,
+} from '@agoragentic/risk-fork/host-boundary';
+
+const trustedDescriptorSource = createTrustedRiskDescriptorSource(async (request) => {
+  const hostMetadata = await resolveHostOwnedMetadata(request.descriptor_ref);
+  return createTrustedRiskDescriptor(request, hostMetadata);
+});
+
+const riskForkBoundary = createRiskForkHostBoundary({
+  controller,
+  trusted_descriptor_source: trustedDescriptorSource,
+});
+
+// The host invokes this before the proposed effect. The agent/model does not
+// choose a risk label and never receives the controller or provider handle.
+const prepared = await riskForkBoundary.preEffect({
+  descriptor_ref: trustedHostDescriptorRef,
+  operation_input: trustedControllerInput,
+});
+```
+
+The descriptor callback is an opaque host-owned capability held by identity in process memory. Each resolution request is hash-bound to the exact descriptor reference and canonical operation input. A returned descriptor must echo that request, self-bind its closed contents, provide all four MCP annotations, all twelve capability booleans, and every owner-policy field, and identify a known MCP phase. `UNKNOWN`, incomplete metadata, `unknown_or_unclassified: true`, descriptor substitution, and descriptor-hash drift fail closed before `RiskForkController.prepare()`. The wrapper derives `risk_input`; risk labels, scores, classifications, directives, and fork decisions supplied in the operation payload are rejected.
+
+`preEffect()` returns only closed canonical JSON with `authority_granted: false` and `provider_handle_exposed: false`. The boundary object itself exposes exactly `schema`, `mode`, `preEffect`, `commitPrepared`, and `validateImport`; it does not return or expose the controller/provider capability. `commitPrepared()` accepts only the exact in-memory result object produced by this boundary and rejects clones, JSON round-trips, fabrications, and results from another boundary. This WeakMap provenance is intentionally process-local and is not a durable-workflow resume mechanism. This is a host enforcement seam, not an autonomous agent opt-in. A framework must route every instruction-bearing and effectful operation through it before accepting remote content or performing an effect. A direct framework call around the wrapper remains a bypass that this source package cannot detect or prevent.
+
+Provider output also crosses a mandatory closed import boundary inside `RiskForkController.prepare()`. The only accepted candidate types are `TYPED_RESULT`, `WORKSPACE_DIFF`, and `CONSEQUENTIAL_ACTION_PROPOSAL`. The import envelope is capped at 1 MiB, 20,000 JSON nodes, depth 32, and 256 KiB per string; workspace diffs are additionally capped at 500 files and 100 closed test-evidence records. Proxies, accessors, symbols, sparse/extended arrays, cycles/shared object identities, non-plain objects, non-canonical numbers, extra keys, type substitution, obvious authority/capability-shaped keys or text, and live object/callback handles are rejected. Accepted content remains tainted and non-dereferenced until the normal clean taint gate completes. Pattern scans do not prove semantic authority absence or detect every encoded secret, so the host must minimize provider output and must never treat accepted JSON as a capability.
+
+Compatibility and acquisition are pinned as follows:
+
+| Contract | Pinned public source behavior |
+| --- | --- |
+| Package | `@agoragentic/risk-fork@0.1.0-alpha.0`; ESM; Node.js `>=20` |
+| Host subpath | `@agoragentic/risk-fork/host-boundary`; package-local source with no registry dependency required for this focused subpath |
+| Schemas | `agoragentic.risk-fork.host-pre-effect-boundary.v1`, `trusted-descriptor-request.v1`, `trusted-descriptor.v1`, and `import-envelope.v1` |
+| Acquisition | Source/workspace or reviewed local file copy only; `private: true` remains set and no npm registry publication is claimed or authorized |
+| Root package | Uses the exact dependencies declared in `package.json`; the focused clean-consumer test does not prove a registry install, lockfile resolution, or a published tarball |
+| Provider/live state | Local adapter remains a protocol simulator; live E2B/provider allocation and lease capability remain hard-disabled and production readiness remains false |
+
+Stable host-boundary diagnostic codes for this alpha contract are:
+
+| Code | Meaning |
+| --- | --- |
+| `RISK_FORK_HOST_BOUNDARY_INVALID_INPUT` | Wrapper request or prepared response was not closed canonical JSON |
+| `RISK_FORK_CALLER_RISK_LABEL_REJECTED` | Caller/model supplied a risk label, score, classification, directive, or fork decision |
+| `RISK_FORK_HOST_OPERATION_TOO_LARGE` | Host operation exceeded its JSON size/complexity bound |
+| `RISK_FORK_HOST_DESCRIPTOR_SOURCE_UNTRUSTED` | Descriptor-source capability was missing or fabricated |
+| `RISK_FORK_HOST_DESCRIPTOR_RESOLUTION_FAILED` | Host descriptor callback failed without a closed Risk Fork diagnostic |
+| `RISK_FORK_HOST_DESCRIPTOR_INVALID` | Descriptor shape or value was invalid |
+| `RISK_FORK_HOST_DESCRIPTOR_REQUEST_MISMATCH` | Descriptor did not bind the exact request/reference |
+| `RISK_FORK_HOST_DESCRIPTOR_HASH_MISMATCH` | Descriptor contents did not match its hash |
+| `RISK_FORK_HOST_METADATA_UNKNOWN` | MCP phase/effect metadata was unknown or incomplete |
+| `RISK_FORK_HOST_PRE_EFFECT_REJECTED` | Bound controller rejected the prepared pre-effect request |
+| `RISK_FORK_IMPORT_ENVELOPE_INVALID` | Import/provider result violated the closed schema or canonical JSON contract |
+| `RISK_FORK_IMPORT_ENVELOPE_TOO_LARGE` | Import exceeded a byte, node, depth, string, file, or evidence bound |
+| `RISK_FORK_IMPORT_ENVELOPE_DLP_REJECTED` | Import contained prohibited private/raw-state or obvious secret material |
+| `RISK_FORK_IMPORT_ENVELOPE_TYPE_MISMATCH` | Imported candidate type did not match the host-requested type |
+
+These codes diagnose why the source boundary failed closed; they do not establish deployment, containment, provider cleanup, approval, or permission to retry.
 
 The qualification API set in the first import below is available from both the package root and its focused subpath. The adapter and source-verifier imports show their complete focused contracts: the root also re-exports `E2BRiskForkAdapter`, `createE2BAuthorityFreeSourceVerifier()`, and `scanE2BStagedBytesAuthorityFree()`, while the named secure-profile error constant and independent-source schema remain focused-only. Every path exposes validation mechanics, never provider authority:
 
@@ -184,7 +256,7 @@ node examples/local-reference.mjs
 
 The example prepares a typed artifact in an empty disposable workspace, destroys and independently verifies the local copies, and stops before clean commit. It does not contact a provider, spend funds, use credentials, or demonstrate real isolation.
 
-Risk Fork currently reuses the adjacent source checkout at `transaction-assurance/src/canonical.mjs`. Consequently, `npm pack --dry-run` is a contents audit, not proof that the tarball is independently installable outside this monorepo. A future publication tranche must replace that source-relative edge with a resolvable reviewed package dependency before removing `private: true`.
+Risk Fork now keeps its strict canonical JSON/SHA-256 primitive package-local, so the focused host-boundary subpath does not escape the copied package tree. The clean-consumer test copies `package.json` and `src/` into an empty temporary `node_modules` tree and exercises that subpath without a network request or dependency loader. This proves only the checked-out source-copy surface. `npm pack --dry-run` remains a contents audit, not evidence that a registry package exists or that the full package installs under a clean exact dependency lock. `private: true` must remain until a separately authorized publication and compatibility tranche is complete.
 
 ### PostgreSQL authority operations
 
@@ -218,7 +290,7 @@ Adapters implement:
 - `destroySavepoint`
 - `verifySavepointDestroyed`
 
-Capability flags are declarations that must be independently tested. `supports_verified_destruction: true` does not itself prove an individual resource was destroyed. Production mode requires declared hard TTL, idle TTL, maximum execution-time enforcement, and either prohibited child credentials or automatic credential expiry. The local adapter and every E2B profile in this source keep `supports_idle_ttl: false`. Signed qualification evidence can be retained and revalidated, but it cannot turn on a provider capability while `E2B_LIVE_FORK_SOURCE_ENABLED` is hard-false.
+Capability flags are declarations that must be independently tested. `supports_verified_destruction: true` does not itself prove an individual resource was destroyed. The provider cleanup methods accept the controller-created `cleanup_request`; verification must return the exact `agoragentic.risk-fork.cleanup-verification-evidence.v1` envelope rather than an unbound success claim. The request/evidence constructors and verifiers are exported from the package root and `./provider`. Production mode requires declared hard TTL, idle TTL, maximum execution-time enforcement, and either prohibited child credentials or automatic credential expiry. The local adapter and every E2B profile in this source keep `supports_idle_ttl: false`. Signed qualification evidence can be retained and revalidated, but it cannot turn on a provider capability while `E2B_LIVE_FORK_SOURCE_ENABLED` is hard-false.
 
 The E2B adapter has four deliberately separate states: unavailable, configured-but-unqualified, qualification-evidence-present, and `evidence_present_activation_blocked`. Construction requires a clean-side `verifyAuthorityFreeSource` function plus reviewed `trustedBootstrapArtifactHash` and `trustedRunnerArtifactHash` values in every state. When all five effective clean-template profile values are absent, construction yields the unavailable adapter: `createSavepoint`, `createFork`, and `executeInFork` throw `E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE` before SDK loading, verification callbacks, or provider I/O, and the capability profile declares provider support false or unverified. Supplying only part of the profile instead throws a `TypeError` during construction, before an adapter exists. A complete configured profile requires `cleanTemplateId`, `cleanTemplateHash`, `workspaceExportDirectory`, `cleanupJournalDirectory`, and a template provenance hash. The provenance hash may be supplied as `cleanTemplateProvenanceHash` or derived from `qualificationEvidence.template.provenance_hash`; when both are present they must match exactly.
 
@@ -227,7 +299,7 @@ When all five clean-template settings are present, the configured source profile
 - enumerates a bounded source tree through stable file handles, rejects secret-shaped paths/content plus symlinks, hard links, special files, and case/Unicode collisions, and stages the accepted exact bytes in a read-only immutable export with a hash-bound manifest;
 - requires an external clean-controller attestation exact-bound to that manifest, workspace digest, pinned clean template, and trusted bootstrap/runner artifacts;
 - requests child birth from that pinned template with `envs: {}`, empty IAM tokens, no mounts, a hard deadline with kill/no-auto-resume, and the E2B SDK's declared all-traffic deny sentinel, then completes a one-use post-allocation birth request/attestation before any bootstrap command, identity, or upload;
-- requires exact provider metadata echo plus fresh pre-upload and post-import bootstrap attestations, and exact-binds each unique runner job and result to the capsule, child identity, network policy, operation, execution mode, trusted runner, and authorized result schema;
+- requires exact provider metadata echo plus fresh pre-upload and post-import bootstrap attestations, and exact-binds each unique runner job and result directly to the job ID, parent-state hash, capsule, child identity, provider, template, MCP phase/server/tool/argument hash, network policy, operation, execution mode, trusted runner, and authorized result schema;
 - imports result bytes only through a fixed 4 MiB streamed buffer with controller-total and stream-idle deadlines, abort/cancel behavior, and fail-closed child cleanup on timeout, stall, overflow, or binding failure; and
 - writes cleanup intent before allocation, persists export/sandbox cleanup state, reconciles exact metadata-bound orphans across restart, and poisons every later allocation whenever cleanup is unknown until both sandbox and export absence are independently recorded.
 

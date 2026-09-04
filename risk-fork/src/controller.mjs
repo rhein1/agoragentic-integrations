@@ -17,11 +17,16 @@ import {
   transitionLifecycle,
   verifyLifecycle,
 } from './lifecycle.mjs';
-import { assertRiskForkProvider } from './provider.mjs';
+import {
+  assertRiskForkProvider,
+  createCleanupVerificationRequest,
+  verifyCleanupVerificationEvidence,
+} from './provider.mjs';
 import {
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
 } from './adapters/postgres-authority.mjs';
+import { importRiskForkProviderResult } from './host-boundary.mjs';
 import { classifyRisk } from './risk-classifier.mjs';
 import { validateCommitCandidate, verifyCommitArtifact } from './taint-gate.mjs';
 import {
@@ -39,6 +44,10 @@ import {
 
 const CONTROLLER_MODES = Object.freeze(['demonstration', 'production']);
 const CONTROLLER_DISTRIBUTED_AUTHORITIES = new WeakMap();
+// Prepared-result authority is intentionally process-local. JSON serialization,
+// worker/process transfer, and durable workflow resumption lose this brand and
+// must be rejected until a separately trusted durable provenance design exists.
+const CONTROLLER_PREPARED_RESULTS = new WeakMap();
 
 function elapsedMs(started) {
   return Math.max(0, Math.round(performance.now() - started));
@@ -130,39 +139,13 @@ function normalizeProviderVerification(result, provider, capabilitiesHash) {
   };
 }
 
-function normalizeCleanupClaim(value, field) {
-  assertPlainObject(value, field);
-  const status = requireEnum(
-    value.status,
-    ['verified', 'failed', 'unknown'],
-    `${field}.status`,
-  );
-  const outcome = requireEnum(
-    value.outcome ?? 'unknown',
-    ['success', 'failure', 'unknown'],
-    `${field}.outcome`,
-  );
-  const evidenceRef = value.evidence_ref == null
-    ? null
-    : requireOpaqueRef(value.evidence_ref, `${field}.evidence_ref`);
-  const evidenceHash = value.evidence_hash == null
-    ? null
-    : requireSha256Ref(value.evidence_hash, `${field}.evidence_hash`);
-  if (status === 'verified'
-    && (outcome !== 'success' || !evidenceRef || !evidenceHash)) {
-    throw new Error(`${field} verified status requires bound success evidence`);
-  }
-  return {
-    status,
-    outcome,
-    evidence_ref: evidenceRef,
-    evidence_hash: evidenceHash,
-  };
+function normalizeCleanupClaim(value, request, now) {
+  return verifyCleanupVerificationEvidence(value, request, { now });
 }
 
-function safeCleanupClaim(value, field) {
+function safeCleanupClaim(value, request, now) {
   try {
-    return normalizeCleanupClaim(value, field);
+    return normalizeCleanupClaim(value, request, now);
   } catch {
     return {
       status: 'unknown',
@@ -329,22 +312,35 @@ export class RiskForkController {
 
   async #destroyResources({ forkRef, savepointRef }) {
     const result = {
+      fork_cleanup_request: null,
       fork_request: null,
       fork_verification: null,
+      savepoint_cleanup_request: null,
       savepoint_request: null,
       savepoint_verification: null,
     };
     if (forkRef) {
+      result.fork_cleanup_request = createCleanupVerificationRequest({
+        provider_id: this.provider.id,
+        resource_kind: 'fork',
+        resource_ref: forkRef,
+        requested_at: requireIsoDate(this.clock(), 'clock result'),
+        request_nonce: randomUUID(),
+      });
       try {
         result.fork_request = await this.provider.destroyFork({
           fork_ref: forkRef,
           reason: 'risk_fork_clean_boundary',
+          cleanup_request: result.fork_cleanup_request,
         });
       } catch (error) {
         result.fork_request = { status: 'failed', code: String(error?.code ?? 'destroy_failed') };
       }
       try {
-        result.fork_verification = await this.provider.verifyDestroyed({ fork_ref: forkRef });
+        result.fork_verification = await this.provider.verifyDestroyed({
+          fork_ref: forkRef,
+          cleanup_request: result.fork_cleanup_request,
+        });
       } catch (error) {
         result.fork_verification = {
           status: 'unknown',
@@ -354,9 +350,17 @@ export class RiskForkController {
       }
     }
     if (savepointRef) {
+      result.savepoint_cleanup_request = createCleanupVerificationRequest({
+        provider_id: this.provider.id,
+        resource_kind: 'savepoint',
+        resource_ref: savepointRef,
+        requested_at: requireIsoDate(this.clock(), 'clock result'),
+        request_nonce: randomUUID(),
+      });
       try {
         result.savepoint_request = await this.provider.destroySavepoint({
           savepoint_ref: savepointRef,
+          cleanup_request: result.savepoint_cleanup_request,
         });
       } catch (error) {
         result.savepoint_request = { status: 'failed', code: String(error?.code ?? 'delete_failed') };
@@ -364,6 +368,7 @@ export class RiskForkController {
       try {
         result.savepoint_verification = await this.provider.verifySavepointDestroyed({
           savepoint_ref: savepointRef,
+          cleanup_request: result.savepoint_cleanup_request,
         });
       } catch (error) {
         result.savepoint_verification = {
@@ -430,6 +435,24 @@ export class RiskForkController {
     if (!input.capsule.allowed_commit_types.includes(expectedCommitType)) {
       throw new Error('Requested commit type is not authorized by the Savepoint Capsule');
     }
+    assertPlainObject(input.commit_policy ?? {}, 'commit_policy');
+    const effectiveCommitPolicy = cloneJson(input.commit_policy ?? {});
+    if (expectedCommitType === 'TYPED_RESULT') {
+      if (!input.commit_policy
+        || !Object.hasOwn(input.commit_policy, 'typed_result_schema_hash')) {
+        throw new Error(
+          'Typed-result preparation requires the capsule-authorized schema hash in commit_policy',
+        );
+      }
+      if (!safeEqual(
+        input.commit_policy.typed_result_schema_hash,
+        input.capsule.authorized_result_schema_hash,
+      )) {
+        throw new Error('Typed-result commit policy does not match the Savepoint Capsule');
+      }
+      effectiveCommitPolicy.typed_result_schema_hash =
+        input.capsule.authorized_result_schema_hash;
+    }
     if (decision.level === 'IRREVERSIBLE'
       && expectedCommitType !== 'CONSEQUENTIAL_ACTION_PROPOSAL') {
       throw new Error('Irreversible work may leave the fork only as a consequential action proposal');
@@ -481,6 +504,7 @@ export class RiskForkController {
     let executionBinding = null;
     let savepointCreationAttempted = false;
     let forkCreationAttempted = false;
+    let cleanupResult = null;
     const measurements = {};
 
     try {
@@ -568,19 +592,24 @@ export class RiskForkController {
         timeout_ms: maxExecutionMs,
       });
       measurements.execution_ms = elapsedMs(executionStarted);
-      lifecycle = advance(lifecycle, 'TAINTED', {
-        at: requireIsoDate(this.clock(), 'clock result'),
-        evidence: lifecycleEvidence('fork_output_tainted', 'observed', {
-          result_hash: requireSha256Ref(execution.result_hash, 'provider execution result_hash'),
-        }),
-      });
-
       let candidate;
       if (expectedCommitType === 'WORKSPACE_DIFF') {
         candidate = await this.provider.collectDiff({ fork_ref: forkRef });
       } else {
         candidate = execution.commit_candidate;
       }
+      const imported = importRiskForkProviderResult(execution, {
+        source_fork_ref: forkRef,
+        expected_type: expectedCommitType,
+        candidate,
+      });
+      candidate = imported.candidate;
+      lifecycle = advance(lifecycle, 'TAINTED', {
+        at: requireIsoDate(this.clock(), 'clock result'),
+        evidence: lifecycleEvidence('fork_output_tainted', 'observed', {
+          result_hash: imported.result_hash,
+        }),
+      });
       assertPlainObject(candidate, 'fork commit candidate');
       if (candidate.type !== expectedCommitType) {
         throw new Error('Fork returned a different commit type than the clean controller requested');
@@ -590,7 +619,7 @@ export class RiskForkController {
       const artifact = validateCommitCandidate({
         candidate,
         source_fork_id: forkRef,
-        policy: input.commit_policy ?? {},
+        policy: effectiveCommitPolicy,
         expected_binding: expectedBinding,
         execution_binding: executionBinding,
         validated_at: requireIsoDate(this.clock(), 'clock result'),
@@ -610,12 +639,19 @@ export class RiskForkController {
         fork_resource_state: 'DESTROY_REQUESTED',
       });
       const cleanupStarted = performance.now();
-      const cleanup = await this.#destroyResources({ forkRef, savepointRef });
+      cleanupResult = await this.#destroyResources({ forkRef, savepointRef });
+      const cleanup = cleanupResult;
       measurements.cleanup_ms = elapsedMs(cleanupStarted);
-      const forkClaim = normalizeCleanupClaim(cleanup.fork_verification, 'fork destruction verification');
+      const cleanupObservedAt = requireIsoDate(this.clock(), 'clock result');
+      const forkClaim = normalizeCleanupClaim(
+        cleanup.fork_verification,
+        cleanup.fork_cleanup_request,
+        cleanupObservedAt,
+      );
       const savepointClaim = normalizeCleanupClaim(
         cleanup.savepoint_verification,
-        'savepoint destruction verification',
+        cleanup.savepoint_cleanup_request,
+        cleanupObservedAt,
       );
       const cleanupVerified = forkClaim.status === 'verified'
         && forkClaim.outcome === 'success'
@@ -637,7 +673,10 @@ export class RiskForkController {
         });
         throw new RiskForkPreparationError('Risk Fork cleanup was not verified; commit is blocked', {
           lifecycle,
-          cleanup,
+          cleanup: {
+            fork: forkClaim,
+            savepoint: savepointClaim,
+          },
         });
       }
       const combinedCleanupHash = sha256Ref({
@@ -665,7 +704,7 @@ export class RiskForkController {
         evidence_ref: cleanupLifecycleEvidence.ref,
         evidence_hash: cleanupLifecycleEvidence.hash,
       };
-      return deepFreeze({
+      const prepared = deepFreeze({
         mode: 'prepared_for_clean_commit',
         risk_decision: decision,
         capsule: input.capsule,
@@ -682,18 +721,26 @@ export class RiskForkController {
         measurements,
         authority_granted: false,
       });
+      CONTROLLER_PREPARED_RESULTS.set(prepared, {
+        controller: this,
+        consumed: false,
+      });
+      return prepared;
     } catch (error) {
       if (error instanceof RiskForkPreparationError) throw error;
       const failedAt = requireIsoDate(this.clock(), 'clock result');
       lifecycle = markPreparationStageFailed(lifecycle, failedAt);
-      const cleanup = await this.#destroyResources({ forkRef, savepointRef });
+      const cleanup = cleanupResult ?? await this.#destroyResources({ forkRef, savepointRef });
+      const cleanupObservedAt = requireIsoDate(this.clock(), 'clock result');
       const forkClaim = safeCleanupClaim(
         cleanup.fork_verification,
-        'failed preparation fork destruction verification',
+        cleanup.fork_cleanup_request,
+        cleanupObservedAt,
       );
       const savepointClaim = safeCleanupClaim(
         cleanup.savepoint_verification,
-        'failed preparation savepoint destruction verification',
+        cleanup.savepoint_cleanup_request,
+        cleanupObservedAt,
       );
       const forkAbsenceVerified = !forkCreationAttempted
         || (Boolean(forkRef) && forkClaim.status === 'verified' && forkClaim.outcome === 'success');
@@ -779,19 +826,36 @@ export class RiskForkController {
       }
       throw new RiskForkPreparationError('Risk Fork preparation failed closed', {
         lifecycle,
-        cleanup,
+        cleanup: {
+          fork: forkClaim,
+          savepoint: savepointClaim,
+        },
         cause_code: String(error?.code ?? error?.name ?? 'error').slice(0, 200),
       });
     }
   }
 
   async commit(prepared, cleanCommitInput = {}) {
+    const provenance = CONTROLLER_PREPARED_RESULTS.get(prepared);
+    if (!provenance || provenance.controller !== this) {
+      const error = new Error(
+        'Prepared Risk Fork result was not produced by this controller instance',
+      );
+      error.code = 'RISK_FORK_PREPARED_PROVENANCE_INVALID';
+      throw error;
+    }
+    if (provenance.consumed) {
+      const error = new Error('Prepared Risk Fork result has already entered clean commit');
+      error.code = 'RISK_FORK_PREPARED_ALREADY_CONSUMED';
+      throw error;
+    }
     assertPreparedForCleanCommit(prepared);
     assertPlainObject(cleanCommitInput, 'cleanCommitInput');
     if (Object.hasOwn(cleanCommitInput, 'distributedCommitAuthority')
       || Object.hasOwn(cleanCommitInput, 'distributedClaimantRef')) {
       throw new TypeError('Distributed authority is trusted controller construction state');
     }
+    provenance.consumed = true;
     let lifecycle = advance(prepared.lifecycle, 'COMMITTING', {
       at: requireIsoDate(this.clock(), 'clock result'),
       evidence: lifecycleEvidence('clean_commit_started', 'observed', {

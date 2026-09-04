@@ -21,6 +21,7 @@
     "./distributed-authority": "./src/distributed-authority.mjs",
     "./controller": "./src/controller.mjs",
     "./interception": "./src/interception.mjs",
+    "./host-boundary": "./src/host-boundary.mjs",
     "./receipt": "./src/receipt.mjs",
     "./e2b-qualification": "./src/e2b-qualification.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",

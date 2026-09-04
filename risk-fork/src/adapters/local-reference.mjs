@@ -23,7 +23,12 @@ import {
   networkPolicy,
   verifySavepointCapsule,
 } from '../contracts.mjs';
-import { RiskForkProvider } from '../provider.mjs';
+import {
+  RiskForkProvider,
+  createCleanupVerificationEvidence,
+  createCleanupVerificationRequest,
+  verifyCleanupVerificationRequest,
+} from '../provider.mjs';
 import {
   assertAllowedKeys,
   assertPlainObject,
@@ -852,9 +857,6 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       type: 'WORKSPACE_DIFF',
       files,
       test_evidence: [],
-      baseline_digest: before.workspace_digest,
-      fork_workspace_digest: after.workspace_digest,
-      diff_hash: sha256Ref(files),
     };
   }
 
@@ -902,7 +904,19 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   }
 
   async destroyFork(input = {}) {
+    assertAllowedKeys(
+      input,
+      ['fork_ref', 'reason', 'cleanup_request'],
+      'local destroyFork input',
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: 'fork',
+        resource_ref: record.ref,
+      });
+    }
     if (!record.destroy_promise) {
       const attempt = this.#destroyForkRecord(record);
       record.destroy_promise = attempt;
@@ -917,19 +931,55 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   }
 
   async verifyDestroyed(input = {}) {
+    assertAllowedKeys(
+      input,
+      ['fork_ref', 'cleanup_request'],
+      'local verifyDestroyed input',
+    );
     const record = this.#forkRecord(requireString(input.fork_ref, 'fork_ref'));
+    const cleanupRequest = input.cleanup_request
+      ? verifyCleanupVerificationRequest(input.cleanup_request, {
+          provider_id: this.id,
+          resource_kind: 'fork',
+          resource_ref: record.ref,
+        })
+      : createCleanupVerificationRequest({
+          provider_id: this.id,
+          resource_kind: 'fork',
+          resource_ref: record.ref,
+          requested_at: this.clock(),
+          request_nonce: randomUUID(),
+        });
     const absent = !(await exists(assertOwnedPath(this.baseDirectory, record.directory)));
-    return {
+    const observationHash = sha256Ref({
+      provider_id: this.id,
       fork_ref: record.ref,
+      absent,
+      inspected_path_hash: sha256Ref(record.directory),
+    });
+    return createCleanupVerificationEvidence(cleanupRequest, {
       status: absent ? 'verified' : 'failed',
       outcome: absent ? 'success' : 'failure',
       evidence_ref: `local-absence:${sha256Ref(record.ref).slice(7, 23)}`,
-      evidence_hash: sha256Ref({ fork_ref: record.ref, absent }),
-    };
+      observation_hash: observationHash,
+      observed_at: this.clock(),
+    });
   }
 
   async destroySavepoint(input = {}) {
+    assertAllowedKeys(
+      input,
+      ['savepoint_ref', 'cleanup_request'],
+      'local destroySavepoint input',
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
+    if (input.cleanup_request) {
+      verifyCleanupVerificationRequest(input.cleanup_request, {
+        provider_id: this.id,
+        resource_kind: 'savepoint',
+        resource_ref: record.ref,
+      });
+    }
     if (!record.destroyed) {
       await rm(assertOwnedPath(this.baseDirectory, record.directory), { recursive: true, force: true });
       record.destroyed = true;
@@ -942,15 +992,39 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   }
 
   async verifySavepointDestroyed(input = {}) {
+    assertAllowedKeys(
+      input,
+      ['savepoint_ref', 'cleanup_request'],
+      'local verifySavepointDestroyed input',
+    );
     const record = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
+    const cleanupRequest = input.cleanup_request
+      ? verifyCleanupVerificationRequest(input.cleanup_request, {
+          provider_id: this.id,
+          resource_kind: 'savepoint',
+          resource_ref: record.ref,
+        })
+      : createCleanupVerificationRequest({
+          provider_id: this.id,
+          resource_kind: 'savepoint',
+          resource_ref: record.ref,
+          requested_at: this.clock(),
+          request_nonce: randomUUID(),
+        });
     const absent = !(await exists(assertOwnedPath(this.baseDirectory, record.directory)));
-    return {
+    const observationHash = sha256Ref({
+      provider_id: this.id,
       savepoint_ref: record.ref,
+      absent,
+      inspected_path_hash: sha256Ref(record.directory),
+    });
+    return createCleanupVerificationEvidence(cleanupRequest, {
       status: absent ? 'verified' : 'failed',
       outcome: absent ? 'success' : 'failure',
       evidence_ref: `local-savepoint-absence:${sha256Ref(record.ref).slice(7, 23)}`,
-      evidence_hash: sha256Ref({ savepoint_ref: record.ref, absent }),
-    };
+      observation_hash: observationHash,
+      observed_at: this.clock(),
+    });
   }
 
   async dispose() {

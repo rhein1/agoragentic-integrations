@@ -29,8 +29,15 @@ const MAX_JOB_BYTES = 1024 * 1024;
 const JOB_KEYS = Object.freeze([
   'schema',
   'job_id',
+  'parent_state_hash',
   'capsule_hash',
   'identity_hash',
+  'provider_ref',
+  'template_id_hash',
+  'mcp_phase',
+  'mcp_server_ref',
+  'tool_name',
+  'effective_arguments_hash',
   'network_policy_hash',
   'operation_hash',
   'execution_mode',
@@ -67,13 +74,27 @@ function validateJob(value, resultPath) {
     throw new TypeError('runner job id is invalid');
   }
   for (const field of [
+    'parent_state_hash',
     'capsule_hash',
     'identity_hash',
+    'template_id_hash',
+    'effective_arguments_hash',
     'network_policy_hash',
     'operation_hash',
     'expected_result_schema_hash',
     'job_hash',
   ]) requireSha256Ref(value[field], `runner job.${field}`);
+  for (const field of ['provider_ref', 'mcp_phase', 'mcp_server_ref']) {
+    if (typeof value[field] !== 'string' || value[field].length < 1 || value[field].length > 500) {
+      throw new TypeError(`runner job.${field} is invalid`);
+    }
+  }
+  if (value.tool_name !== null
+    && (typeof value.tool_name !== 'string'
+      || value.tool_name.length < 1
+      || value.tool_name.length > 500)) {
+    throw new TypeError('runner job.tool_name is invalid');
+  }
   if (!['prepare_only', 'isolated_execution'].includes(value.execution_mode)) {
     throw new TypeError('runner execution mode is invalid');
   }
@@ -248,8 +269,15 @@ export async function runRunnerJob(options = {}) {
     status: 'completed',
     job_id: job.job_id,
     job_hash: job.job_hash,
+    parent_state_hash: job.parent_state_hash,
     capsule_hash: job.capsule_hash,
     identity_hash: job.identity_hash,
+    provider_ref: job.provider_ref,
+    template_id_hash: job.template_id_hash,
+    mcp_phase: job.mcp_phase,
+    mcp_server_ref: job.mcp_server_ref,
+    tool_name: job.tool_name,
+    effective_arguments_hash: job.effective_arguments_hash,
     network_policy_hash: job.network_policy_hash,
     operation_hash: job.operation_hash,
     execution_mode: job.execution_mode,
