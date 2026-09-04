@@ -33,6 +33,10 @@ function allowedReport() {
 									url: 'https://github.com/advisories/GHSA-2v37-7h3g-55p8',
 									severity: 'high',
 								},
+								{
+									url: 'https://github.com/advisories/GHSA-xwg4-73v4-xw9w',
+									severity: 'high',
+								},
 							]
 						: ['nanoid'],
 			},
