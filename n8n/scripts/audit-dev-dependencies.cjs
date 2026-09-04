@@ -29,6 +29,7 @@ function main() {
 		: ['audit', '--json', '--audit-level=low'];
 	const result = spawnSync(command, args, {
 		encoding: 'utf8',
+		shell: process.platform === 'win32',
 	});
 	if (result.error) throw result.error;
 	if (![0, 1].includes(result.status)) {
