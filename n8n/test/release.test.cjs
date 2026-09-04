@@ -9,30 +9,41 @@ const root = path.join(__dirname, '..');
 const readJson = (relativePath) =>
 	JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
 
-test('0.1.3 release metadata is locked to the stable n8n toolchain', () => {
+test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 	const pkg = readJson('package.json');
 	const lock = readJson('package-lock.json');
+	const expectedDevDependencies = {
+		'@eslint/js': '9.29.0',
+		'@n8n/eslint-plugin-community-nodes': '0.29.0',
+		eslint: '9.29.0',
+		'eslint-import-resolver-typescript': '4.4.5',
+		'eslint-plugin-import-x': '4.17.1',
+		'eslint-plugin-n8n-nodes-base': '1.16.7',
+		'n8n-workflow': '2.36.4',
+		prettier: '3.9.6',
+		typescript: '5.9.2',
+		'typescript-eslint': '8.65.0',
+		zod: '3.25.76',
+	};
 
-	assert.equal(pkg.version, '0.1.3');
-	assert.equal(pkg.devDependencies['@n8n/node-cli'], '0.44.4');
-	assert.equal(pkg.devDependencies.eslint, '9.32.0');
-	assert.equal(pkg.devDependencies.prettier, '3.9.6');
-	assert.equal(pkg.devDependencies.typescript, '5.9.2');
-	assert.equal(pkg.devDependencies['n8n-workflow'], '2.35.3');
-	assert.equal(pkg.devDependencies.zod, '3.25.76');
+	assert.equal(pkg.version, '0.1.4');
+	assert.deepEqual(pkg.devDependencies, expectedDevDependencies);
 	assert.equal(pkg.peerDependencies['n8n-workflow'], '*');
-	assert.equal(pkg.devDependencies['release-it'], '21.0.2');
+	assert.equal(pkg.overrides, undefined);
+	assert.equal(pkg.devDependencies['@n8n/node-cli'], undefined);
+	assert.equal(pkg.devDependencies['release-it'], undefined);
+	assert.equal(pkg.scripts.build, 'node scripts/build.mjs');
+	assert.equal(pkg.scripts.lint, 'eslint .');
 	assert.equal(pkg.engines.node, '>=20.19.0');
 	assert.equal(pkg.repository.directory, 'n8n');
+	assert.equal(lock.version, pkg.version);
 	assert.equal(lock.packages[''].version, pkg.version);
-	assert.equal(lock.packages[''].devDependencies['@n8n/node-cli'], '0.44.4');
-	assert.equal(lock.packages[''].devDependencies.eslint, '9.32.0');
-	assert.equal(lock.packages[''].devDependencies.prettier, '3.9.6');
-	assert.equal(lock.packages[''].devDependencies.typescript, '5.9.2');
-	assert.equal(lock.packages[''].devDependencies['n8n-workflow'], '2.35.3');
-	assert.equal(lock.packages[''].devDependencies['release-it'], '21.0.2');
-	assert.equal(lock.packages[''].devDependencies.zod, '3.25.76');
+	assert.deepEqual(lock.packages[''].devDependencies, expectedDevDependencies);
 	assert.equal(lock.packages[''].peerDependencies['n8n-workflow'], '*');
+	assert.equal(lock.packages['node_modules/@n8n/node-cli'], undefined);
+	assert.equal(lock.packages['node_modules/@langchain/classic'], undefined);
+	assert.equal(lock.packages['node_modules/@langchain/community'], undefined);
+	assert.equal(lock.packages['node_modules/n8n-workflow/node_modules/uuid'].version, '11.1.1');
 });
 
 test('current n8n metadata includes required subtitle and themed icons', () => {
@@ -44,6 +55,7 @@ test('current n8n metadata includes required subtitle and themed icons', () => {
 		path.join(root, 'credentials', 'AgoragenticApi.credentials.ts'),
 		'utf8',
 	);
+	const eslintConfig = fs.readFileSync(path.join(root, 'eslint.config.mjs'), 'utf8');
 
 	assert.match(nodeSource, /subtitle:/);
 	assert.match(nodeSource, /light: 'file:agoragentic\.svg'/);
@@ -52,6 +64,9 @@ test('current n8n metadata includes required subtitle and themed icons', () => {
 	assert.match(credentialSource, /dark: 'file:agoragentic\.dark\.svg'/);
 	assert.equal(fs.existsSync(path.join(root, 'credentials', 'agoragentic.dark.svg')), true);
 	assert.equal(readJson('tsconfig.json').compilerOptions.incremental, false);
+	assert.match(eslintConfig, /@n8n\/eslint-plugin-community-nodes/);
+	assert.match(eslintConfig, /n8nCommunityNodesPlugin\.configs\.recommended/);
+	assert.doesNotMatch(eslintConfig, /configWithoutCloudSupport/);
 });
 
 test('lockfile retains cross-platform optional dependencies required on Linux', () => {

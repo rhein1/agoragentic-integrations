@@ -180,10 +180,10 @@ jobs:
           npm test
           npm pack --dry-run
 
-      - name: Setup Node 22 for n8n toolchain
+      - name: Setup Node 24 for n8n toolchain
         uses: actions/setup-node@v7.0.0
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Validate n8n community node
         working-directory: n8n
