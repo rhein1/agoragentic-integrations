@@ -64,6 +64,7 @@ eight affected dependency nodes they currently reach:
 
 - `GHSA-28wg-ghj8-5hjv`
 - `GHSA-2v37-7h3g-55p8`
+- `GHSA-xwg4-73v4-xw9w`
 
 While high findings remain, a new or missing advisory ID, a severity
 escalation, or an affected-package addition/substitution fails the gate. A
