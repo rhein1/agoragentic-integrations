@@ -57,7 +57,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import path from 'node:path';
-          const cache = path.join(fs.realpathSync(process.env.RUNNER_TEMP), 'risk-fork-npm-cache');
+          const cache = path.join(fs.realpathSync.native(process.env.RUNNER_TEMP), 'risk-fork-npm-cache');
           fs.mkdirSync(cache, { recursive: false });
           for (const name of ['RISK_FORK_NPM_CACHE', 'npm_config_cache', 'NPM_CONFIG_CACHE']) {
             fs.appendFileSync(process.env.GITHUB_ENV, `${name}=${cache}\n`);
@@ -68,7 +68,9 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import os from 'node:os';
-          const canonicalTemp = fs.realpathSync(os.tmpdir());
+          // The JS fallback preserves Windows 8.3 aliases such as RUNNER~1.
+          // Use the native resolver, matching fs/promises.realpath in the guards.
+          const canonicalTemp = fs.realpathSync.native(os.tmpdir());
           // Minimal child environments preserve different subsets of these names.
           // Keep every spelling canonical, including Windows short-path aliases.
           for (const name of ['TMPDIR', 'TMP', 'TEMP']) {
