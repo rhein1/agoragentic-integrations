@@ -13,6 +13,7 @@ const MAX_SAM_PEER_ID_LENGTH = 256;
 const MAX_SAM_TOOL_NAME_LENGTH = 512;
 const MAX_SAM_DESCRIPTION_LENGTH = 8_192;
 const MAX_SAM_SCHEMA_BYTES = 262_144;
+const PUBLIC_SAM_DESCRIPTION = 'Metadata-only SAM-discovered MCP tool. Exact provider routing and descriptive text remain private pending operator review.';
 
 const FALSE_AUTHORITY_FLAGS = Object.freeze({
   eligible_for_execution: false,
@@ -56,7 +57,27 @@ function boundedText(value, { code, maxLength, fallback = '' }) {
 
 function validObservedAt(value) {
   const observedAt = cleanText(value);
-  if (!observedAt || !/^\d{4}-\d{2}-\d{2}T/.test(observedAt) || !Number.isFinite(Date.parse(observedAt))) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(observedAt);
+  if (!match) {
+    throw new Error('sam_observed_at_invalid');
+  }
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, offsetHourText, offsetMinuteText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const offsetHour = offsetHourText === undefined ? 0 : Number(offsetHourText);
+  const offsetMinute = offsetMinuteText === undefined ? 0 : Number(offsetMinuteText);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (
+    month < 1 || month > 12
+    || day < 1 || day > daysInMonth[month - 1]
+    || hour > 23 || minute > 59 || second > 59
+    || offsetHour > 23 || offsetMinute > 59
+  ) {
     throw new Error('sam_observed_at_invalid');
   }
   return observedAt;
@@ -65,10 +86,17 @@ function validObservedAt(value) {
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (!isRecord(value)) return value;
-  const out = {};
+  const out = Object.create(null);
   for (const key of Object.keys(value).sort()) {
     const child = value[key];
-    if (child !== undefined) out[key] = canonicalize(child);
+    if (child !== undefined) {
+      Object.defineProperty(out, key, {
+        value: canonicalize(child),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
   }
   return out;
 }
@@ -105,14 +133,20 @@ function normalizeLabels(labels) {
   for (const key of Object.keys(labels).sort().slice(0, 32)) {
     const normalizedKey = cleanText(key).slice(0, 128);
     const normalizedValue = cleanText(labels[key]).slice(0, 256);
-    if (normalizedKey && normalizedValue) out[normalizedKey] = normalizedValue;
+    if (normalizedKey && normalizedValue) {
+      Object.defineProperty(out, normalizedKey, {
+        configurable: true,
+        enumerable: true,
+        value: normalizedValue,
+        writable: true,
+      });
+    }
   }
   return out;
 }
 
-function publicDisplayName(serviceName, bareToolName) {
-  const service = serviceName.replace(/^mcp:\/\//, '');
-  return `${service}: ${bareToolName.replaceAll('_', ' ')}`;
+function publicDisplayName(toolRef) {
+  return `SAM MCP tool ${toolRef.slice(7, 19)}`;
 }
 
 /**
@@ -133,6 +167,7 @@ export function normalizeSamTool({
   assertJsonSize(discovery, MAX_SAM_DISCOVERY_BYTES, 'sam_discovery_row_too_large');
   assertJsonSize(description, MAX_SAM_DESCRIPTION_BYTES, 'sam_description_too_large');
   if (cleanText(discovery.error)) throw new Error('sam_discovery_row_contains_error');
+  if (cleanText(description.error)) throw new Error('sam_description_contains_error');
 
   const peerId = boundedText(discovery.peer_id, {
     code: 'sam_peer_id_too_long',
@@ -147,8 +182,15 @@ export function normalizeSamTool({
   if (describedPeerId !== peerId) throw new Error('sam_description_peer_mismatch');
   if (describedToolName !== parsed.toolName) throw new Error('sam_description_tool_mismatch');
 
-  const inputSchema = isRecord(description.input_schema) ? description.input_schema : {};
-  const outputSchema = isRecord(description.output_schema) ? description.output_schema : null;
+  if (!Object.prototype.hasOwnProperty.call(description, 'input_schema') || !isRecord(description.input_schema)) {
+    throw new Error('sam_description_input_schema_required');
+  }
+  const inputSchema = description.input_schema;
+  const hasOutputSchema = Object.prototype.hasOwnProperty.call(description, 'output_schema');
+  if (hasOutputSchema && description.output_schema !== null && !isRecord(description.output_schema)) {
+    throw new Error('sam_description_output_schema_invalid');
+  }
+  const outputSchema = hasOutputSchema ? description.output_schema : null;
   assertJsonSize({ input_schema: inputSchema, output_schema: outputSchema }, MAX_SAM_SCHEMA_BYTES, 'sam_tool_schema_too_large');
   const labels = normalizeLabels(discovery.labels);
   const peerRef = hashRef({ peer_id: peerId });
@@ -157,14 +199,10 @@ export function normalizeSamTool({
   const schemaHash = hashRef({ input_schema: inputSchema, output_schema: outputSchema });
   const labelsHash = hashRef({ labels });
   const manifestHash = hashRef({ discovery, description });
-  const descriptionText = boundedText(
-    description.description || discovery.description,
-    {
-      code: 'sam_tool_description_too_long',
-      maxLength: MAX_SAM_DESCRIPTION_LENGTH,
-      fallback: 'SAM-discovered MCP tool. Description was not supplied.',
-    },
-  );
+  boundedText(description.description || discovery.description, {
+    code: 'sam_tool_description_too_long',
+    maxLength: MAX_SAM_DESCRIPTION_LENGTH,
+  });
 
   const packet = {
     schema: SAM_TOOL_IMPORT_SCHEMA,
@@ -173,8 +211,8 @@ export function normalizeSamTool({
     lifecycle_status: 'normalized',
     manifest_hash: manifestHash,
     capability_card_input: {
-      name: publicDisplayName(parsed.serviceName, parsed.bareToolName),
-      description: descriptionText,
+      name: publicDisplayName(toolRef),
+      description: PUBLIC_SAM_DESCRIPTION,
       category: 'developer-tools',
       tags: ['sam', 'mcp', 'sovereign-agent-mesh'],
       interface_kind: 'sam_mesh_tool',
@@ -197,7 +235,6 @@ export function normalizeSamTool({
       tool_ref: toolRef,
       schema_hash: schemaHash,
       labels_hash: labelsHash,
-      observed_label_keys: Object.keys(labels),
       authorization_verified_by_normalizer: false,
       reachability_verified_by_normalizer: false,
       provider_account_bound: false,
@@ -223,7 +260,7 @@ export function normalizeSamTool({
     },
   };
 
-  if (includePrivateTarget) {
+  if (includePrivateTarget === true) {
     packet.private_transport_target = {
       peer_id: peerId,
       service_name: parsed.serviceName,

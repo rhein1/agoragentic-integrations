@@ -80,7 +80,13 @@
         "anydoc_document_evidence": {
           "$ref": "#/$defs/package"
         },
+        "interchange_sam": {
+          "$ref": "#/$defs/package"
+        },
         "risk_fork": {
+          "$ref": "#/$defs/package"
+        },
+        "ard_profile": {
           "$ref": "#/$defs/package"
         }
       }

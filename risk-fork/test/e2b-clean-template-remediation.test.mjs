@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import {
   chmod,
   link,
@@ -8,6 +9,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   rm,
   symlink,
   writeFile,
@@ -527,7 +529,7 @@ function createMockSdk(options = {}) {
 }
 
 async function fixture(t, mockOptions = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-clean-template-test-'));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-clean-template-test-')));
   const source = path.join(root, 'source');
   const exportsDirectory = path.join(root, 'exports');
   const journalDirectory = path.join(root, 'journal');
@@ -1525,8 +1527,16 @@ test('sanitized export rejects Unicode-normalization path collisions before prov
   const value = await fixture(t);
   const composed = path.join(value.source, '\u00e9');
   const decomposed = path.join(value.source, 'e\u0301');
-  await mkdir(composed);
-  await mkdir(decomposed);
+  try {
+    await mkdir(composed);
+    await mkdir(decomposed);
+  } catch (err) {
+    if (err.code === 'EEXIST') {
+      t.skip('Filesystem normalizes Unicode paths; adversarial collision fixture cannot be constructed on this volume');
+      return;
+    }
+    throw err;
+  }
   await writeFile(path.join(composed, 'left.txt'), 'left\n');
   await writeFile(path.join(decomposed, 'right.txt'), 'right\n');
   await assert.rejects(
@@ -1537,11 +1547,19 @@ test('sanitized export rejects Unicode-normalization path collisions before prov
 });
 
 test('sanitized export rejects case-folding path collisions before provider allocation', {
-  skip: process.platform === 'win32',
+  skip: process.platform === 'win32' || process.platform === 'darwin'
+    ? 'Filesystem is case-insensitive by default on this platform'
+    : false,
 }, async (t) => {
   const value = await fixture(t);
-  await writeFile(path.join(value.source, 'CaseName.txt'), 'upper\n');
-  await writeFile(path.join(value.source, 'casename.txt'), 'lower\n');
+  const upper = path.join(value.source, 'CaseName.txt');
+  const lower = path.join(value.source, 'casename.txt');
+  await writeFile(upper, 'upper\n');
+  if (existsSync(lower)) {
+    t.skip('Filesystem is case-insensitive; case-folding collision fixture cannot be constructed on this volume');
+    return;
+  }
+  await writeFile(lower, 'lower\n');
   await assert.rejects(
     value.adapter.createSavepoint({ capsule: value.capsule, source_workspace: value.source }),
     /case|collision/i,
@@ -1550,16 +1568,23 @@ test('sanitized export rejects case-folding path collisions before provider allo
 });
 
 test('sanitized export rejects special filesystem entries before provider allocation', {
-  skip: process.platform === 'win32',
+  skip: process.platform === 'win32'
+    ? 'Special filesystem entries (UNIX sockets) are unavailable on Windows'
+    : false,
 }, async (t) => {
   const value = await fixture(t);
   const socketPath = path.join(value.source, 'provider.sock');
   const server = net.createServer();
   try {
-    await new Promise((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(socketPath, resolve);
-    });
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(socketPath, resolve);
+      });
+    } catch (err) {
+      t.skip(`Unix domain socket fixture cannot be bound on this volume: ${err.message}`);
+      return;
+    }
     await assert.rejects(
       value.adapter.createSavepoint({ capsule: value.capsule, source_workspace: value.source }),
       /special filesystem entry/i,

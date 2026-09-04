@@ -3,11 +3,30 @@
 // bytes so textual JSON cannot collide with the value it represents.
 // The stricter validation below is a fail-closed boundary: Transaction
 // Assurance accepts ordinary JavaScript values for ergonomic local evidence,
-// while security bindings must reject values that JSON would omit or coerce.
-import {
-  canonicalize as transactionAssuranceCanonicalize,
-  sha256Ref as transactionAssuranceSha256Ref,
-} from '../../transaction-assurance/src/canonical.mjs';
+import { createHash } from 'node:crypto';
+
+export function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sortForCanonicalization(value) {
+  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, sortForCanonicalization(value[key])]),
+  );
+}
+
+function rawCanonicalize(value) {
+  return JSON.stringify(sortForCanonicalization(value));
+}
+
+function rawSha256Ref(value) {
+  const input = typeof value === 'string' ? value : rawCanonicalize(value);
+  return `sha256:${createHash('sha256').update(input, 'utf8').digest('hex')}`;
+}
 
 const MAX_DEPTH = 64;
 const MAX_NODES = 100_000;
@@ -83,12 +102,12 @@ export function assertCanonicalJson(value) {
 
 export function canonicalize(value) {
   assertCanonicalJson(value);
-  return transactionAssuranceCanonicalize(value);
+  return rawCanonicalize(value);
 }
 
 export function sha256Ref(value) {
   // Hash canonical JSON bytes for every supported type. Passing strings
   // through raw made textual JSON collide with the value it represented
   // (for example, "{}" and {}, or "null" and null).
-  return transactionAssuranceSha256Ref(canonicalize(value));
+  return rawSha256Ref(canonicalize(value));
 }

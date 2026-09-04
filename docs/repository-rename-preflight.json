@@ -1,18 +1,18 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.52.0",
-  "as_of": "2026-08-31",
+  "source_manifest_version": "2.54.0",
+  "as_of": "2026-09-01",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 142,
-    "occurrence_count": 278,
+    "file_count": 156,
+    "occurrence_count": 344,
     "category_file_counts": {
       "installer_or_clone": 29,
-      "machine_discovery": 46,
+      "machine_discovery": 58,
       "package_registry_metadata": 23,
-      "public_documentation": 72,
+      "public_documentation": 76,
       "raw_content_url": 2,
       "release_or_provenance": 11,
       "reusable_action": 2,
@@ -451,6 +451,72 @@
       ]
     },
     {
+      "path": "ard/examples/a2a.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/mcp.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/examples/risk-fork.entry.json",
+      "occurrences": 1,
+      "line_numbers": [
+        10
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ai-catalog.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/generated/ard.json",
+      "occurrences": 3,
+      "line_numbers": [
+        79,
+        140,
+        201
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ard/source/manifest.source.json",
+      "occurrences": 3,
+      "line_numbers": [
+        59,
+        102,
+        145
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
       "path": "autogen/README.md",
       "occurrences": 1,
       "line_numbers": [
@@ -767,6 +833,28 @@
       ]
     },
     {
+      "path": "ecosystem.json",
+      "occurrences": 2,
+      "line_numbers": [
+        16,
+        104
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "ecosystem.json",
+      "occurrences": 2,
+      "line_numbers": [
+        16,
+        104
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
       "path": "elizaos/package.json",
       "occurrences": 1,
       "line_numbers": [
@@ -954,7 +1042,31 @@
       "line_numbers": [
         55,
         131,
-        409
+        411
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "INTEGRATION_CATALOG_GUIDE.md",
+      "occurrences": 3,
+      "line_numbers": [
+        55,
+        131,
+        411
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "INTEGRATION_CATALOG_GUIDE.md",
+      "occurrences": 3,
+      "line_numbers": [
+        55,
+        131,
+        411
       ],
       "categories": [
         "public_documentation"
@@ -962,7 +1074,7 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 17,
+      "occurrences": 19,
       "line_numbers": [
         16,
         37,
@@ -973,14 +1085,72 @@
         97,
         103,
         111,
-        120,
-        382,
-        394,
-        406,
-        418,
-        430,
-        442,
-        454
+        119,
+        129,
+        139,
+        401,
+        413,
+        425,
+        437,
+        449,
+        461,
+        473
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "integrations.json",
+      "occurrences": 19,
+      "line_numbers": [
+        16,
+        37,
+        46,
+        70,
+        79,
+        88,
+        97,
+        103,
+        111,
+        119,
+        129,
+        139,
+        401,
+        413,
+        425,
+        437,
+        449,
+        461,
+        473
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "integrations.json",
+      "occurrences": 19,
+      "line_numbers": [
+        16,
+        37,
+        46,
+        70,
+        79,
+        88,
+        97,
+        103,
+        111,
+        119,
+        129,
+        139,
+        401,
+        413,
+        425,
+        437,
+        449,
+        461,
+        473
       ],
       "categories": [
         "machine_discovery"
@@ -990,7 +1160,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        279
+        285
       ],
       "categories": [
         "machine_discovery"
@@ -1097,8 +1267,32 @@
       "path": "llms-full.txt",
       "occurrences": 2,
       "line_numbers": [
-        113,
-        114
+        114,
+        115
+      ],
+      "categories": [
+        "machine_discovery",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "llms-full.txt",
+      "occurrences": 2,
+      "line_numbers": [
+        114,
+        115
+      ],
+      "categories": [
+        "machine_discovery",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "llms-full.txt",
+      "occurrences": 2,
+      "line_numbers": [
+        114,
+        115
       ],
       "categories": [
         "machine_discovery",
@@ -1390,7 +1584,7 @@
       "path": "scripts/verify-integrations-json.js",
       "occurrences": 1,
       "line_numbers": [
-        296
+        298
       ],
       "categories": [
         "source_or_test"

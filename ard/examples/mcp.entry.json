@@ -1,0 +1,61 @@
+{
+  "@context": [
+    "https://agenticresourcediscovery.org/context/v1",
+    "https://agoragentic.com/ns/ard/v1"
+  ],
+  "@id": "urn:air:agoragentic.com:server:mcp",
+  "identifier": "urn:air:agoragentic.com:server:mcp",
+  "displayName": "Agoragentic MCP source card",
+  "type": "application/mcp-server-card+json",
+  "url": "https://github.com/rhein1/agoragentic-integrations/blob/main/mcp/server.json",
+  "representativeQueries": [
+    "Inspect the fail-closed Agoragentic MCP source card",
+    "Find MCP metadata without enabling remote tools"
+  ],
+  "capabilities": [
+    "McpMetadata"
+  ],
+  "description": "Source metadata for the unpublished fail-closed MCP candidate; no remote transport is enabled.",
+  "tags": [
+    "mcp",
+    "source-only",
+    "default-off"
+  ],
+  "version": "2.0.0",
+  "updatedAt": "2026-08-31T00:00:00Z",
+  "metadata": {
+    "status": "source_only_default_off",
+    "media_type_status": "provisional_registration_pending"
+  },
+  "ag:trustState": "unverified",
+  "ag:riskLevel": "unassessed",
+  "ag:executionAuthorizationRequired": true,
+  "ag:riskForkAvailable": true,
+  "ag:riskForkRequired": false,
+  "ag:transactionAssuranceAvailable": true,
+  "ag:paymentRails": [
+    "x402",
+    "internal_usdc_wallet"
+  ],
+  "ag:priceModel": "tool_specific",
+  "ag:receiptVerifier": "https://agoragentic.com/api/commerce/interchange/receipts/verify",
+  "ag:providerQualification": "snapshot_unverified",
+  "ag:routeEligibleFromDiscovery": false,
+  "ag:rankingEligibleFromDiscovery": false,
+  "ag:listingEligibleFromDiscovery": false,
+  "ag:paymentEligibleFromDiscovery": false,
+  "ag:settlementEligibleFromDiscovery": false,
+  "ag:trustPromotedFromDiscovery": false,
+  "ag:executionAuthorizedFromDiscovery": false,
+  "ag:authenticationBypassGranted": false,
+  "ag:publicationAuthorizedFromDiscovery": false,
+  "ag:riskForkBypassGranted": false,
+  "ag:executionAuthorityGranted": false,
+  "ag:paymentAuthorityGranted": false,
+  "ag:trustPromotionAuthorized": false,
+  "ag:publicationAuthorityGranted": false,
+  "ag:networkDereferenceAllowed": false,
+  "ag:liveExecutionAvailable": false,
+  "ag:sourceOnly": true,
+  "ag:defaultOff": true
+}

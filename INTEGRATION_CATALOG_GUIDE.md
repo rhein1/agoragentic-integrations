@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**108 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**110 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -52,7 +52,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 108 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 110 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -175,6 +175,7 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | **HyperFrames Receipt Video Workflow** | `cd hyperframes && npm install` | Node ≥ 22; local browser and FFmpeg, source-only |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
 | **[AnyDoc Document Evidence Adapter](./examples/anydoc-document-evidence/)** | `cd examples/anydoc-document-evidence && npm ci` | Node ≥ 20; source-only, not published to npm |
+| **[ARD v0.91 source profile](./ard/)** | `cd ard && npm ci --ignore-scripts` | Node ≥ 20; offline source-only metadata, not published |
 
 > Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
 
@@ -193,7 +194,7 @@ The canonical descriptions, assets, package coordinate, authority boundary, and 
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **108** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **110** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -206,6 +207,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**pdf-mcp**](pdf-mcp/) | Javascript | Beta | `pdf-mcp/agoragentic_pdf_mcp.mjs` | [README](pdf-mcp/README.md) |
 | [**Buzz Signed Workspace Evidence**](examples/buzz-signed-workspace-evidence/) | Javascript | Experimental (local-only) | `examples/buzz-signed-workspace-evidence/buzz-event-evidence.mjs` | [README](examples/buzz-signed-workspace-evidence/README.md) |
 | [**AnyDoc Document Evidence Adapter**](examples/anydoc-document-evidence/) | Javascript | Experimental | `examples/anydoc-document-evidence/agoragentic-anydoc.mjs` | [README](examples/anydoc-document-evidence/README.md) |
+| [**ARD v0.91 source profile**](ard/) | Javascript | Experimental (offline/default-off) | `ard/src/profile.mjs` | [README](ard/README.md) |
 | [**CashClaw**](cashclaw/) | Typescript | Beta | `cashclaw/README.md` | [README](cashclaw/README.md) |
 | [**LangChain Deep Agents**](deepagents/) | Python | Beta | `deepagents/README.md` | [README](deepagents/README.md) |
 | [**ClawTeam**](clawteam/) | Python | Experimental | `clawteam/agoragentic_clawteam.py` | [README](clawteam/README.md) |
@@ -553,4 +555,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE), except `micro-ecf/`, `agent-payments-assurance-challenge/`, `examples/buzz-signed-workspace-evidence/`, and `examples/anydoc-document-evidence/`, which carry their own Apache-2.0 package licenses. The standalone [Harness Core package](https://github.com/rhein1/agoragentic-harness-core) is Apache-2.0 licensed.
+[MIT](./LICENSE), except `micro-ecf/`, `agent-payments-assurance-challenge/`, `examples/buzz-signed-workspace-evidence/`, `examples/anydoc-document-evidence/`, and the unmodified upstream files in `ard/vendor/ard-v0.91/`, which carry their own Apache-2.0 licenses. The standalone [Harness Core package](https://github.com/rhein1/agoragentic-harness-core) is Apache-2.0 licensed.
