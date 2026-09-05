@@ -17,12 +17,14 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES } from '../src/client-adoption.mjs';
+import { containsSerializedCredentialMaterial } from '../src/util.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const repositoryRoot = path.dirname(packageRoot);
 const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mjs');
 const fixtureRoot = path.join(packageRoot, 'test', 'fixtures');
 const serveTest = process.platform === 'win32' ? test.skip : test;
+const utilEntrypointUrl = new URL('../src/util.mjs', import.meta.url).href;
 
 async function sha256(filename) {
   return `sha256:${createHash('sha256').update(await readFile(filename)).digest('hex')}`;
@@ -899,6 +901,22 @@ serveTest('stdio client gate scans decoded request and response values for crede
     ['Basic authorization', 'basic-auth', 'Basic c3ludGhldGljOnBhc3M=', /c3ludGhldGljOnBhc3M/],
     ['short Basic authorization', 'basic-auth-short', 'Basic dTpw', /dTpw/],
     ['unpadded Basic authorization', 'basic-auth-unpadded', 'Basic dTpwZA', /dTpwZA/],
+    ['over-padded Basic authorization', 'basic-auth-overpadded', 'Basic dTpw=', /dTpw/],
+    ['multiply over-padded Basic authorization', 'basic-auth-multiply-overpadded', 'Basic dTpw===', /dTpw/],
+    ['space-folded Basic authorization', 'basic-auth-space-folded', 'Basic dT pw', /dT pw/],
+    ['tab-folded Basic authorization', 'basic-auth-tab-folded', 'Basic dT\tpw', /dT\\?t?pw/],
+    [
+      'base64url Basic authorization',
+      'basic-auth-base64url',
+      'Basic ZiA0dD86O30_MX4',
+      /ZiA0dD86O30_MX4/,
+    ],
+    ['dangling-alphanumeric Basic authorization', 'basic-auth-dangling-alphanumeric', 'Basic dTpwA', /dTpwA/],
+    ['dangling-dash Basic authorization', 'basic-auth-dangling-dash', 'Basic dTpw-', /dTpw-/],
+    ['dangling-underscore Basic authorization', 'basic-auth-dangling-underscore', 'Basic dTpw_', /dTpw_/],
+    ['ignored-dot Basic authorization', 'basic-auth-ignored-dot', 'Basic dTpw.', /dTpw\./],
+    ['ignored-tilde Basic authorization', 'basic-auth-ignored-tilde', 'Basic dTpw~', /dTpw~/],
+    ['punctuation-wrapped Basic authorization', 'basic-auth-wrapped', '(Basic dTpw)', /dTpw/],
     [
       'Proxy-Authorization header',
       'proxy-authorization',
@@ -1397,6 +1415,8 @@ test('stdio client gate routes SIGHUP through bounded POSIX gateway cleanup', {
     }
     assert.equal(Number.isSafeInteger(gatewayPid), true, 'gateway pid must be recorded');
     session.child.kill('SIGHUP');
+    await delay(25);
+    session.child.kill('SIGHUP');
     const outcome = await withTimeout(session.exit, 2_500);
     assert.notEqual(outcome, null, 'SIGHUP cleanup must remain bounded');
     assert.deepEqual(outcome, { code: 0, signal: null });
@@ -1414,6 +1434,15 @@ test('stdio client gate routes SIGHUP through bounded POSIX gateway cleanup', {
 test('stdio client gate rejects serialized gateway paths containing full credential forms', () => {
   const unsafePaths = [
     path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw===', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dT pw', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic ZiA0dD86O30_MX4', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpwA', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw-', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw_', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw.', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw~', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', '(Basic dTpw)', 'risk-forkd.js'),
     path.join(
       path.parse(packageRoot).root,
       'synthetic',
@@ -1433,6 +1462,37 @@ test('stdio client gate rejects serialized gateway paths containing full credent
     assert.match(JSON.parse(refused.stderr).message, /absolute path ending in risk-forkd\.js/);
     assert.doesNotMatch(refused.stderr, /dTpw|synthetic-user|synthetic-pass/);
   }
+});
+
+test('credential scanning remains bounded for a near-limit repeated Basic prefix', () => {
+  const probe = spawnSync(process.execPath, [
+    '--input-type=module',
+    '--eval',
+    `import { containsSerializedCredentialMaterial } from ${JSON.stringify(utilEntrypointUrl)};
+const adversarial = 'basic '.repeat(174_762) + '!';
+if (containsSerializedCredentialMaterial(adversarial) !== false) process.exit(2);`,
+  ], {
+    cwd: packageRoot,
+    encoding: 'utf8',
+    timeout: 2_500,
+    windowsHide: true,
+  });
+  assert.equal(probe.error?.code, undefined, 'credential scan exceeded its bounded runtime');
+  assert.equal(probe.status, 0, probe.stderr);
+});
+
+test('credential scanning recognizes punctuation boundaries without matching embedded identifiers', () => {
+  for (const wrapped of [
+    '(Basic dTpw)',
+    '[Basic dTpw]',
+    '"Basic dTpw"',
+    ',Basic dTpw',
+    ';Basic dTpw',
+  ]) {
+    assert.equal(containsSerializedCredentialMaterial(wrapped), true);
+  }
+  assert.equal(containsSerializedCredentialMaterial('nonbasic dTpw'), false);
+  assert.equal(containsSerializedCredentialMaterial('non-basic dTpw'), false);
 });
 
 serveTest('stdio client gate bounds descriptor reads while the gateway file changes size', async () => {

@@ -923,7 +923,7 @@ async function serve(options) {
     ? ['SIGINT', 'SIGTERM']
     : ['SIGHUP', 'SIGINT', 'SIGTERM'];
   for (const signal of terminationSignals) {
-    process.once(signal, () => close(0, `Client gate received ${signal}`));
+    process.on(signal, () => close(0, `Client gate received ${signal}`));
   }
 }
 

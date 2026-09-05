@@ -565,6 +565,42 @@ test('client adoption rejects credential-shaped paths before packet serializatio
         forbidden: /dTpw/,
       },
       {
+        gateway: path.join(temporaryRoot, 'Basic dTpw===', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dT pw', 'risk-forkd.js'),
+        forbidden: /dT pw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic ZiA0dD86O30_MX4', 'risk-forkd.js'),
+        forbidden: /ZiA0dD86O30_MX4/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpwA', 'risk-forkd.js'),
+        forbidden: /dTpwA/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpw-', 'risk-forkd.js'),
+        forbidden: /dTpw-/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpw_', 'risk-forkd.js'),
+        forbidden: /dTpw_/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpw.', 'risk-forkd.js'),
+        forbidden: /dTpw\./,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpw~', 'risk-forkd.js'),
+        forbidden: /dTpw~/,
+      },
+      {
+        gateway: path.join(temporaryRoot, '(Basic dTpw)', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
         gateway: path.join(
           temporaryRoot,
           'synthetic-user:synthetic-pass@example.test',

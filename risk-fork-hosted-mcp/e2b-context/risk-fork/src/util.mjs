@@ -140,8 +140,6 @@ const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
 ]));
 
-const BASIC_AUTH_VALUE_PATTERN =
-  /(?:^|[\s:=\\/])basic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;'"\\/])/gi;
 const AUTHORIZATION_VALUE_PATTERN =
   /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
 const URL_USERINFO_PATTERN =
@@ -157,22 +155,90 @@ export function containsSecretShapedText(value) {
   return false;
 }
 
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  const embeddedIdentifier = (previous >= 0x30 && previous <= 0x39)
+    || (previous >= 0x41 && previous <= 0x5a)
+    || (previous >= 0x61 && previous <= 0x7a)
+    || previous === 0x2d
+    || previous === 0x2e
+    || previous === 0x5f;
+  return !embeddedIdentifier;
+}
+
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 0x20) === 0x62
+    && (value.charCodeAt(index + 1) | 0x20) === 0x61
+    && (value.charCodeAt(index + 2) | 0x20) === 0x73
+    && (value.charCodeAt(index + 3) | 0x20) === 0x69
+    && (value.charCodeAt(index + 4) | 0x20) === 0x63;
+}
+
+function isToken68CharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a)
+    || code === 0x2b
+    || code === 0x2d
+    || code === 0x2e
+    || code === 0x2f
+    || code === 0x3d
+    || code === 0x5f
+    || code === 0x7e;
+}
+
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length && isToken68CharacterCode(value.charCodeAt(cursor))
+    ? cursor
+    : -1;
+}
+
+function decodedBasicCandidateContainsColon(value, start, end) {
+  if (start >= end) return false;
+  const encoded = value.slice(start, end).replace(/[\t ]/g, '');
+  return encoded.length > 0 && Buffer.from(encoded, 'base64').includes(0x3a);
+}
+
 function containsBasicAuthorization(value) {
-  BASIC_AUTH_VALUE_PATTERN.lastIndex = 0;
-  let match;
-  while ((match = BASIC_AUTH_VALUE_PATTERN.exec(value)) !== null) {
-    const encoded = match[1];
-    const unpadded = encoded.replace(/=+$/, '');
-    const remainder = unpadded.length % 4;
-    if (remainder === 1) continue;
-    const padded = `${unpadded}${'='.repeat((4 - remainder) % 4)}`;
-    const decoded = Buffer.from(padded, 'base64');
-    const canonical = decoded.toString('base64');
-    if (canonical.replace(/=+$/, '') === unpadded
-      && (!encoded.includes('=') || encoded === canonical)
-      && decoded.includes(0x3a)) {
-      return true;
+  let search = 0;
+  while (search < value.length) {
+    let tokenStart = -1;
+    while (search < value.length) {
+      tokenStart = basicTokenStartAt(value, search);
+      if (tokenStart !== -1) break;
+      search += 1;
     }
+    if (tokenStart === -1) return false;
+
+    let candidateStart = tokenStart;
+    let cursor = tokenStart;
+    while (cursor < value.length) {
+      const nestedTokenStart = basicTokenStartAt(value, cursor);
+      if (nestedTokenStart !== -1) {
+        if (decodedBasicCandidateContainsColon(value, candidateStart, cursor)) return true;
+        candidateStart = nestedTokenStart;
+        cursor = nestedTokenStart;
+        continue;
+      }
+      const code = value.charCodeAt(cursor);
+      if (isToken68CharacterCode(code) || code === 0x09 || code === 0x20) {
+        cursor += 1;
+        continue;
+      }
+      break;
+    }
+    if (decodedBasicCandidateContainsColon(value, candidateStart, cursor)) return true;
+    search = cursor + 1;
   }
   return false;
 }

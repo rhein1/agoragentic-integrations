@@ -122,6 +122,28 @@ input.on('line', (line) => {
     result = { content: [{ type: 'text', text: 'Basic dTpw' }] };
   } else if (operation === 'basic-auth-unpadded') {
     result = { content: [{ type: 'text', text: 'Basic dTpwZA' }] };
+  } else if (operation === 'basic-auth-overpadded') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw=' }] };
+  } else if (operation === 'basic-auth-multiply-overpadded') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw===' }] };
+  } else if (operation === 'basic-auth-space-folded') {
+    result = { content: [{ type: 'text', text: 'Basic dT pw' }] };
+  } else if (operation === 'basic-auth-tab-folded') {
+    result = { content: [{ type: 'text', text: 'Basic dT\tpw' }] };
+  } else if (operation === 'basic-auth-base64url') {
+    result = { content: [{ type: 'text', text: 'Basic ZiA0dD86O30_MX4' }] };
+  } else if (operation === 'basic-auth-dangling-alphanumeric') {
+    result = { content: [{ type: 'text', text: 'Basic dTpwA' }] };
+  } else if (operation === 'basic-auth-dangling-dash') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw-' }] };
+  } else if (operation === 'basic-auth-dangling-underscore') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw_' }] };
+  } else if (operation === 'basic-auth-ignored-dot') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw.' }] };
+  } else if (operation === 'basic-auth-ignored-tilde') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw~' }] };
+  } else if (operation === 'basic-auth-wrapped') {
+    result = { content: [{ type: 'text', text: '(Basic dTpw)' }] };
   } else if (operation === 'proxy-authorization') {
     result = { content: [{ type: 'text', text: 'Proxy-Authorization: Basic c3ludGhldGljOnBhc3M=' }] };
   } else if (operation === 'proxy-authorization-pair') {
