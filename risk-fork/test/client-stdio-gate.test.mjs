@@ -38,6 +38,20 @@ function withTimeout(promise, milliseconds) {
   });
 }
 
+async function isProcessExecutable(pid) {
+  try {
+    process.kill(pid, 0);
+    if (process.platform === 'linux') {
+      const processStat = await readFile(`/proc/${pid}/stat`, 'utf8');
+      return !/^\d+ \(.*\) Z /.test(processStat);
+    }
+    return true;
+  } catch (error) {
+    if (error?.code === 'ESRCH' || error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
 async function startGate(fixtureName, { consumeOutput = true } = {}) {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
@@ -53,12 +67,14 @@ async function startGate(fixtureName, { consumeOutput = true } = {}) {
     windowsHide: true,
   });
   const pending = new Map();
+  const messages = [];
   const stderr = [];
   const output = consumeOutput ? createInterface({ input: child.stdout }) : null;
   const exit = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
   if (output) {
     output.on('line', (line) => {
       const message = JSON.parse(line);
+      messages.push(message);
       const waiter = pending.get(message.id);
       if (!waiter) return;
       pending.delete(message.id);
@@ -97,7 +113,7 @@ async function startGate(fixtureName, { consumeOutput = true } = {}) {
     }
     await rm(temporaryRoot, { recursive: true, force: true });
   }
-  return { child, cleanup, exit, gateway, request, stderr, temporaryRoot };
+  return { child, cleanup, exit, gateway, messages, request, stderr, temporaryRoot };
 }
 
 test('stdio client gate exposes and forwards only risk_fork_protect', async () => {
@@ -196,6 +212,253 @@ test('stdio client gate bounds concurrent pending gateway requests', async () =>
   }
 });
 
+test('stdio client gate cancellation releases slots and tolerates one bounded late response', async (t) => {
+  await t.test('cancelled requests need no gateway response to release every pending slot', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      for (let id = 1; id <= 16; id += 1) {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0',
+          id,
+          method: 'tools/call',
+          params: {
+            name: 'risk_fork_protect', arguments: { operation: 'cancel-no-response' },
+          },
+        })}\n`);
+      }
+      for (let requestId = 1; requestId <= 16; requestId += 1) {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'notifications/cancelled',
+          params: { requestId, reason: 'test cancellation' },
+        })}\n`);
+      }
+      const called = await session.request(17, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(called.error, undefined);
+      assert.equal(session.child.exitCode, null);
+      await delay(150);
+      assert.deepEqual(
+        session.messages.filter((message) => Number.isInteger(message.id) && message.id <= 16),
+        [],
+      );
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('cancelled and active gateway backlogs remain capped at 16 and 32', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      for (let requestId = 1; requestId <= 16; requestId += 1) {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: requestId, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation: 'cancel-no-response' },
+          },
+        })}\n`);
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId },
+        })}\n`);
+      }
+      for (let requestId = 17; requestId <= 32; requestId += 1) {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: requestId, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation: 'gateway-hang' },
+          },
+        })}\n`);
+      }
+      const rejected = await session.request(33, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'gateway-hang' },
+      });
+      assert.equal(rejected.error.code, -32003);
+      assert.match(rejected.error.message, /At most 32 total gateway requests/);
+
+      const countFile = path.join(session.temporaryRoot, 'gateway-operation-count.txt');
+      let gatewayOperationCount = 0;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        try {
+          gatewayOperationCount = Number.parseInt(await readFile(countFile, 'utf8'), 10);
+        } catch {}
+        if (gatewayOperationCount === 32) break;
+        await delay(10);
+      }
+      assert.equal(gatewayOperationCount, 32);
+
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 17 },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'cancelled backlog overflow must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.equal(Number.parseInt(await readFile(countFile, 'utf8'), 10), 32);
+      assert.deepEqual(
+        session.messages.filter((message) => Number.isInteger(message.id) && message.id <= 16),
+        [],
+      );
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('one late response to a cancelled request is validated and discarded', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'late-after-cancel' },
+        },
+      })}\n`);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+      })}\n`);
+      await delay(150);
+      assert.equal(session.child.exitCode, null);
+      assert.deepEqual(session.messages.filter((message) => message.id === 1), []);
+      const called = await session.request(2, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(called.error, undefined);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('a duplicate response after terminal removal fails closed as unknown', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      const called = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'duplicate-response' },
+      });
+      assert.equal(called.error, undefined);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'duplicate response must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.equal(session.messages.filter((message) => message.id === 1).length, 1);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('a cancelled client id stays tombstoned against request and cancellation ABA', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'aba-old' },
+        },
+      })}\n`);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+      })}\n`);
+      const rejected = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'aba-new' },
+      });
+      assert.equal(rejected.error.code, -32600);
+      assert.match(rejected.error.message, /duplicate|retired/);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+      })}\n`);
+      const called = await session.request(2, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(called.error, undefined);
+      assert.equal(session.child.exitCode, null);
+      assert.equal(session.messages.filter((message) => message.id === 1).length, 1);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('a cancelled client id stays retired after terminal response and stale cancel', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'terminal-on-cancel' },
+        },
+      })}\n`);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+      })}\n`);
+      const terminalBarrier = await session.request(2, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(terminalBarrier.error, undefined);
+      const rejected = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'aba-new' },
+      });
+      assert.equal(rejected.error.code, -32600);
+      assert.match(rejected.error.message, /retired request id/);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+      })}\n`);
+      const called = await session.request(3, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(called.error, undefined);
+      assert.equal(session.child.exitCode, null);
+      assert.equal(
+        session.messages.filter((message) => message.id === 1 && message.error === undefined).length,
+        0,
+      );
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('retired cancellation ids are bounded to 1024 for the gate lifetime', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      for (let batchStart = 1; batchStart <= 1024; batchStart += 16) {
+        for (let requestId = batchStart; requestId < batchStart + 16; requestId += 1) {
+          session.child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0', id: requestId, method: 'tools/call', params: {
+              name: 'risk_fork_protect', arguments: { operation: 'terminal-on-cancel' },
+            },
+          })}\n`);
+          session.child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId },
+          })}\n`);
+        }
+        const barrier = await session.request(`retired-barrier-${batchStart}`, 'tools/call', {
+          name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+        });
+        assert.equal(barrier.error, undefined);
+      }
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1025, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'terminal-on-cancel' },
+        },
+      })}\n`);
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1025 },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'retired-id capacity overflow must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('malformed cancellation request ids fail closed', async () => {
+    const session = await startGate('client-gateway-cancellation.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: {} },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'malformed cancellation must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+    } finally {
+      await session.cleanup();
+    }
+  });
+});
+
 test('stdio client gate leaves the exact schema to the gateway but requires an object input', async () => {
   const session = await startGate('client-gateway-invalid-schema.js');
   try {
@@ -248,7 +511,12 @@ test('stdio client gate verifies exact gateway bytes and current gateway stays u
     hosted_authority_granted: false,
     production_authority_granted: false,
     live_traffic_protected: false,
-    credentials_forwarded: false,
+    inherited_environment_forwarded: false,
+    recognized_credential_pattern_matches_forwarded: false,
+    max_active_gateway_requests: 16,
+    max_cancelled_gateway_requests: 16,
+    max_total_gateway_requests: 32,
+    max_retired_cancelled_client_ids: 1024,
     provider_calls: 0,
     network_implementation_included: false,
   });
@@ -266,6 +534,37 @@ test('stdio client gate preserves a clean exit after client EOF', async () => {
     assert.deepEqual(outcome, { code: 0, signal: null });
     assert.doesNotMatch(session.stderr.join(''), /EPIPE|uncaught|node:internal/i);
   } finally {
+    await session.cleanup();
+  }
+});
+
+test('stdio client gate cleans inherited POSIX gateway descendants after clean EOF', {
+  skip: process.platform === 'win32' ? 'POSIX clean-EOF process-group boundary' : false,
+}, async () => {
+  const session = await startGate('client-gateway-clean-eof-descendant.js');
+  let descendantPid = null;
+  try {
+    const pidFile = path.join(session.temporaryRoot, 'descendant.pid');
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        descendantPid = Number.parseInt(await readFile(pidFile, 'utf8'), 10);
+        break;
+      } catch {
+        await delay(10);
+      }
+    }
+    assert.equal(Number.isSafeInteger(descendantPid), true, 'descendant pid must be recorded');
+    session.child.stdin.end();
+    const outcome = await withTimeout(session.exit, 2_500);
+    assert.notEqual(outcome, null, 'clean-EOF descendant cleanup must remain bounded');
+    assert.deepEqual(outcome, { code: 0, signal: null });
+    await delay(100);
+    assert.equal(await isProcessExecutable(descendantPid), false, 'descendant must not remain executable');
+    assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+  } finally {
+    if (Number.isSafeInteger(descendantPid)) {
+      try { process.kill(descendantPid, 'SIGKILL'); } catch {}
+    }
     await session.cleanup();
   }
 });
@@ -347,6 +646,27 @@ test('stdio client gate contains closed and backpressured gateway pipe errors', 
 });
 
 test('stdio client gate scans decoded request and response values for credentials', async (t) => {
+  const sensitiveProperties = [
+    'token',
+    'session_token',
+    'oauth_token',
+    'openAIAPIKey',
+    'openai_api_key',
+    'aws_secret_access_key',
+    'token_value',
+    'sessionTokenValue',
+    'githubTokenValue',
+    'openAIKey',
+    'AWSAccessKeyId',
+    'aws_access_key_id',
+    'accessKeyId',
+    'sessionTokenRaw',
+    'oauthTokenRaw',
+    'githubTokenRaw',
+    'tokenPayload',
+    'openAIKeyValue',
+    'awsAccessKeyIdValue',
+  ];
   await t.test('decoded client request', async () => {
     const session = await startGate('client-gateway-good.js');
     try {
@@ -398,39 +718,260 @@ test('stdio client gate scans decoded request and response values for credential
     }
   });
 
-  await t.test('sensitive client property', async () => {
+  for (const property of sensitiveProperties) {
+    await t.test(`sensitive client property ${property}`, async () => {
+      const session = await startGate('client-gateway-good.js');
+      try {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: {
+            name: 'risk_fork_protect',
+            arguments: { operation: 'ordinary', [property]: 'abcdefgh' },
+          },
+        })}\n`);
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, 'sensitive request property must terminate promptly');
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), /abcdefgh|uncaught|node:internal/i);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  await t.test('ordinary token metadata names remain available', async () => {
     const session = await startGate('client-gateway-good.js');
     try {
-      session.child.stdin.write(`${JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/call',
-        params: {
-          name: 'risk_fork_protect',
-          arguments: { operation: 'ordinary', access_token: 'abcdefgh' },
+      const called = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect',
+        arguments: {
+          operation: 'ordinary-metadata',
+          token_count: 12,
+          tokenizer: 'fixture',
+          api_keynote: 'fixture',
         },
-      })}\n`);
-      const outcome = await withTimeout(session.exit, 2_000);
-      assert.notEqual(outcome, null, 'sensitive request property must terminate promptly');
-      assert.equal(outcome.code, 78);
-      assert.doesNotMatch(session.stderr.join(''), /abcdefgh|uncaught|node:internal/i);
+      });
+      assert.equal(called.error, undefined);
     } finally {
       await session.cleanup();
     }
   });
 
-  await t.test('sensitive gateway property', async () => {
+  for (const [index, property] of sensitiveProperties.entries()) {
+    await t.test(`sensitive gateway property ${property}`, async () => {
+      const session = await startGate('client-gateway-hostile-responses.js');
+      try {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation: `sensitive-field-${index}` },
+          },
+        })}\n`);
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, 'sensitive response property must terminate promptly');
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), /abcdefgh|uncaught|node:internal/i);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+});
+
+test('stdio client gate rejects numbers that JSON cannot round-trip canonically', async (t) => {
+  const nonCanonicalNumbers = [
+    ['non-finite number', '1e400', 'non-finite-number'],
+    ['negative zero', '-0', 'negative-zero'],
+    ['unsafe integer', '9007199254740993', 'unsafe-integer'],
+    ['underflow number', '1e-400', 'underflow-number'],
+    ['rounded number below one', '0.99999999999999999', 'rounded-below-one'],
+    ['rounded decimal tail', '0.100000000000000005', 'rounded-decimal-tail'],
+  ];
+  const canonicalEquivalentNumbers = [
+    ['equivalent decimal', '1.0', 'equivalent-decimal', 1],
+    ['equivalent exponent', '1e3', 'equivalent-exponent', 1000],
+  ];
+  for (const [name, literal] of nonCanonicalNumbers) {
+    await t.test(`client request ${name}`, async () => {
+      const session = await startGate('client-gateway-good.js');
+      try {
+        session.child.stdin.write(
+          `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"risk_fork_protect","arguments":{"operation":"ordinary","numeric_value":${literal}}}}\n`,
+        );
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, `${name} request must terminate promptly`);
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  await t.test('ordinary finite safe numbers remain available', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      const called = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect',
+        arguments: {
+          operation: 'ordinary-numbers',
+          numeric_values: [0, 1.5, Number.MAX_SAFE_INTEGER],
+        },
+      });
+      assert.equal(called.error, undefined);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  for (const [name, literal] of canonicalEquivalentNumbers) {
+    await t.test(`client request ${name}`, async () => {
+      const session = await startGate('client-gateway-good.js');
+      try {
+        session.child.stdin.write(
+          `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"risk_fork_protect","arguments":{"operation":"ordinary","numeric_value":${literal}}}}\n`,
+        );
+        const barrier = await session.request(2, 'tools/call', {
+          name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+        });
+        assert.equal(barrier.error, undefined);
+        assert.equal(
+          session.messages.filter((message) => message.id === 1 && message.error === undefined).length,
+          1,
+        );
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  await t.test('many raw equivalent numbers remain linearly bounded', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      const repeatedNumber = `1.${'0'.repeat(120)}`;
+      const rawLine = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"risk_fork_protect","arguments":{"operation":"ordinary","numeric_values":[${Array(6_000).fill(repeatedNumber).join(',')}]}}}\n`;
+      assert.ok(Buffer.byteLength(rawLine) < 1024 * 1024);
+      session.child.stdin.write(rawLine);
+      const barrier = await session.request(2, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(barrier.error, undefined);
+      assert.equal(
+        session.messages.filter((message) => message.id === 1 && message.error === undefined).length,
+        1,
+      );
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  for (const [name, , operation] of nonCanonicalNumbers) {
+    await t.test(`gateway response ${name}`, async () => {
+      const session = await startGate('client-gateway-hostile-responses.js');
+      try {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation },
+          },
+        })}\n`);
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, `${name} response must terminate promptly`);
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  for (const [name, , operation, expected] of canonicalEquivalentNumbers) {
+    await t.test(`gateway response ${name}`, async () => {
+      const session = await startGate('client-gateway-hostile-responses.js');
+      try {
+        const called = await session.request(1, 'tools/call', {
+          name: 'risk_fork_protect', arguments: { operation },
+        });
+        assert.equal(called.error, undefined);
+        assert.equal(called.result.value, expected);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+});
+
+test('stdio client gate requires fatal UTF-8 decoding and preserves BOM framing', async (t) => {
+  await t.test('malformed client bytes fail closed', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      session.child.stdin.write(Buffer.concat([
+        Buffer.from('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"risk_fork_protect","arguments":{"operation":"'),
+        Buffer.from([0xc3, 0x28]),
+        Buffer.from('"}}}\n'),
+      ]));
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'malformed client UTF-8 must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.doesNotMatch(session.stderr.join(''), /\uFFFD|uncaught|node:internal/i);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('malformed gateway bytes fail closed', async () => {
     const session = await startGate('client-gateway-hostile-responses.js');
     try {
       session.child.stdin.write(`${JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
-          name: 'risk_fork_protect', arguments: { operation: 'sensitive-field' },
+          name: 'risk_fork_protect', arguments: { operation: 'malformed-utf8' },
         },
       })}\n`);
       const outcome = await withTimeout(session.exit, 2_000);
-      assert.notEqual(outcome, null, 'sensitive response property must terminate promptly');
+      assert.notEqual(outcome, null, 'malformed gateway UTF-8 must terminate promptly');
       assert.equal(outcome.code, 78);
-      assert.doesNotMatch(session.stderr.join(''), /abcdefgh|uncaught|node:internal/i);
+      assert.doesNotMatch(session.stderr.join(''), /\uFFFD|uncaught|node:internal/i);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('leading client BOM remains an invalid JSON frame', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      session.child.stdin.write(Buffer.concat([
+        Buffer.from([0xef, 0xbb, 0xbf]),
+        Buffer.from(`${JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+          },
+        })}\n`),
+      ]));
+      const barrier = await session.request(2, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'ordinary' },
+      });
+      assert.equal(barrier.error, undefined);
+      assert.equal(
+        session.messages.some((message) => message.id === null && message.error?.code === -32700),
+        true,
+      );
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('leading gateway BOM remains an invalid JSON frame', async () => {
+    const session = await startGate('client-gateway-hostile-responses.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'leading-bom' },
+        },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null, 'gateway BOM must terminate promptly');
+      assert.equal(outcome.code, 78);
+      assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
     } finally {
       await session.cleanup();
     }
@@ -525,18 +1066,7 @@ test('stdio client gate terminates the POSIX process group after its leader exit
     assert.notEqual(outcome, null, 'descendant cleanup must remain bounded');
     assert.equal(outcome.code, 78);
     await delay(100);
-    let descendantRunning = true;
-    try {
-      process.kill(descendantPid, 0);
-      if (process.platform === 'linux') {
-        const processStat = await readFile(`/proc/${descendantPid}/stat`, 'utf8');
-        descendantRunning = !/^\d+ \(.*\) Z /.test(processStat);
-      }
-    } catch (error) {
-      if (error?.code === 'ESRCH' || error?.code === 'ENOENT') descendantRunning = false;
-      else throw error;
-    }
-    assert.equal(descendantRunning, false, 'descendant must not remain executable');
+    assert.equal(await isProcessExecutable(descendantPid), false, 'descendant must not remain executable');
   } finally {
     if (Number.isSafeInteger(descendantPid)) {
       try { process.kill(descendantPid, 'SIGKILL'); } catch {}

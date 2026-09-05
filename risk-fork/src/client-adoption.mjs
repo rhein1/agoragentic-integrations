@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { types as utilTypes } from 'node:util';
+import { isDeepStrictEqual, types as utilTypes } from 'node:util';
 
 import { containsSecretShapedText, deepFreeze, requireSha256Ref } from './util.mjs';
 
@@ -12,6 +12,9 @@ export const RISK_FORK_CLIENTS = Object.freeze(['claude-code', 'codex', 'cursor'
 const SERVER_NAME = 'risk_fork';
 const SOURCE_STATUS = 'source_only_default_off';
 const GATEWAY_STATUS = 'diagnostic_only_refuses_standalone_startup';
+const MAX_PACKET_DEPTH = 32;
+const MAX_PACKET_NODES = 5_000;
+const MAX_PACKET_STRING_BYTES = 4 * 1024 * 1024;
 const issuedPackets = new WeakSet();
 
 function fail(message) {
@@ -86,6 +89,69 @@ function requireAbsoluteFile(value, field, basename) {
     throw fail(`${field} must not contain credential-shaped material`);
   }
   return normalized;
+}
+
+function assertOrdinaryPacketTree(value) {
+  const seen = new WeakSet();
+  let nodes = 0;
+
+  function walk(current, depth) {
+    nodes += 1;
+    if (nodes > MAX_PACKET_NODES || depth > MAX_PACKET_DEPTH) {
+      throw fail('Client-adoption packet exceeds the deterministic verification limit');
+    }
+    if (current === null || typeof current === 'boolean') return;
+    if (typeof current === 'string') {
+      if (Buffer.byteLength(current, 'utf8') > MAX_PACKET_STRING_BYTES) {
+        throw fail('Client-adoption packet contains an oversized string');
+      }
+      return;
+    }
+    if (typeof current === 'number') {
+      if (!Number.isFinite(current) || Object.is(current, -0) || !Number.isSafeInteger(current)) {
+        throw fail('Client-adoption packet contains an invalid number');
+      }
+      return;
+    }
+    if (typeof current !== 'object' || utilTypes.isProxy(current) || seen.has(current)) {
+      throw fail('Client-adoption packet must contain only ordinary, unshared JSON values');
+    }
+    seen.add(current);
+    const isArray = Array.isArray(current);
+    const prototype = Object.getPrototypeOf(current);
+    if ((isArray && prototype !== Array.prototype)
+      || (!isArray && prototype !== Object.prototype)) {
+      throw fail('Client-adoption packet contains a non-plain value');
+    }
+    if (Object.getOwnPropertySymbols(current).length !== 0) {
+      throw fail('Client-adoption packet contains a symbol key');
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    const keys = Object.keys(descriptors);
+    for (const key of keys) {
+      if (isArray && key === 'length') continue;
+      const descriptor = descriptors[key];
+      if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+        throw fail('Client-adoption packet contains a non-data property');
+      }
+    }
+    if (isArray) {
+      if (Object.keys(current).length !== current.length) {
+        throw fail('Client-adoption packet contains a sparse or extended array');
+      }
+      for (let index = 0; index < current.length; index += 1) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
+          throw fail('Client-adoption packet contains a sparse array');
+        }
+        walk(descriptor.value, depth + 1);
+      }
+      return;
+    }
+    for (const key of keys) walk(descriptors[key].value, depth + 1);
+  }
+
+  walk(value, 0);
 }
 
 function json(value) {
@@ -289,6 +355,38 @@ export function createRiskForkClientAdoptionPacket(rawOptions) {
   });
   issuedPackets.add(packet);
   return packet;
+}
+
+export function verifyRiskForkClientAdoptionPacket(value) {
+  assertOrdinaryPacketTree(value);
+  if (!value
+    || typeof value !== 'object'
+    || Array.isArray(value)
+    || !value.gateway
+    || typeof value.gateway !== 'object'
+    || Array.isArray(value.gateway)) {
+    throw fail('Client-adoption packet must contain its canonical gateway binding');
+  }
+
+  let expected;
+  try {
+    expected = createRiskForkClientAdoptionPacket({
+      client: value.client,
+      gateEntrypoint: value.gateway.gate_entrypoint,
+      gateSha256: value.gateway.gate_sha256,
+      gatewayEntrypoint: value.gateway.gateway_entrypoint,
+      gatewaySha256: value.gateway.gateway_sha256,
+      nodeExecutable: process.execPath,
+    });
+  } catch {
+    throw fail('Client-adoption packet does not contain a valid canonical gateway binding');
+  }
+  if (!isDeepStrictEqual(value, expected)) {
+    throw fail(
+      'Client-adoption packet does not match the exact canonical client, output inventory, content, paths, posture, and default-off controls',
+    );
+  }
+  return true;
 }
 
 export function isRiskForkClientAdoptionPacket(value) {

@@ -11,6 +11,7 @@ import {
   RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES,
   RISK_FORK_CLIENTS,
   createRiskForkClientAdoptionPacket,
+  verifyRiskForkClientAdoptionPacket,
 } from '../src/client-adoption.mjs';
 import { containsSecretShapedText } from '../src/util.mjs';
 
@@ -136,7 +137,7 @@ async function packetFor(client, gatewayEntrypoint = sourceCheckoutGatewayEntryp
     exactRegularFile(normalizedGateEntrypoint, 'client gate'),
     exactRegularFile(normalizedGatewayEntrypoint, 'risk-forkd gateway', { requireCanonical: true }),
   ]);
-  return createRiskForkClientAdoptionPacket({
+  const packet = createRiskForkClientAdoptionPacket({
     client,
     gateEntrypoint: normalizedGateEntrypoint,
     gateSha256: sha256Ref(gateBytes),
@@ -144,6 +145,8 @@ async function packetFor(client, gatewayEntrypoint = sourceCheckoutGatewayEntryp
     gatewaySha256: sha256Ref(gatewayBytes),
     nodeExecutable: normalizedNodeExecutable,
   });
+  verifyRiskForkClientAdoptionPacket(packet);
+  return packet;
 }
 
 function assertGateway(value) {

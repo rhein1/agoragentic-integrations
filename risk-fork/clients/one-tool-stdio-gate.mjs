@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { TextDecoder } from 'node:util';
 
 import { RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES } from '../src/client-adoption.mjs';
 import { containsSecretShapedText } from '../src/util.mjs';
@@ -19,12 +20,18 @@ const TOOL_NAME = 'risk_fork_protect';
 const MAX_LINE_BYTES = 1024 * 1024;
 const MAX_GATEWAY_BYTES = RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES;
 const MAX_PENDING_REQUESTS = 16;
+const MAX_CANCELLED_GATEWAY_REQUESTS = 16;
+const MAX_GATEWAY_REQUESTS = MAX_PENDING_REQUESTS + MAX_CANCELLED_GATEWAY_REQUESTS;
+const MAX_RETIRED_CANCELLED_CLIENT_IDS = 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_JSON_DEPTH = 32;
 const MAX_JSON_NODES = 20_000;
+const MAX_JSON_NUMBER_TOKEN_CHARACTERS = 1024;
 const SHUTDOWN_GRACE_MS = 500;
 const SHUTDOWN_FORCE_EXIT_MS = 1500;
-const SECRET_JSON_PROPERTY = /^(?:(?:x[_-]?)?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|bearer[_-]?token|id[_-]?token|private[_-]?key|secret[_-]?key|client[_-]?secret|secret|credentials?|authorization|password|passphrase|mnemonic|seed[_-]?phrase)$/i;
+const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
+const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
 const VERIFIED_GATEWAY_BOOTSTRAP = String.raw`
 'use strict';
 const fs = require('node:fs');
@@ -71,7 +78,12 @@ const STATUS = Object.freeze({
   hosted_authority_granted: false,
   production_authority_granted: false,
   live_traffic_protected: false,
-  credentials_forwarded: false,
+  inherited_environment_forwarded: false,
+  recognized_credential_pattern_matches_forwarded: false,
+  max_active_gateway_requests: MAX_PENDING_REQUESTS,
+  max_cancelled_gateway_requests: MAX_CANCELLED_GATEWAY_REQUESTS,
+  max_total_gateway_requests: MAX_GATEWAY_REQUESTS,
+  max_retired_cancelled_client_ids: MAX_RETIRED_CANCELLED_CLIENT_IDS,
   provider_calls: 0,
   network_implementation_included: false,
 });
@@ -157,6 +169,76 @@ function isJsonRpcMessage(value) {
   return isPlainObject(value) && value.jsonrpc === '2.0';
 }
 
+function normalizedKey(value) {
+  return value
+    .normalize('NFKC')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function isAuthorityOrSecretKey(value) {
+  const normalized = normalizedKey(value);
+  return AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)
+    || /(?:^|_)token(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
+    || /(?:^|_)(?:api|ai(?:api)?)_?key(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
+    || /(?:^|_)key_(?:raw|value|secret|payload|credential)$/.test(normalized)
+    || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized);
+}
+
+function decimalRationalKey(token) {
+  if (token.length > MAX_JSON_NUMBER_TOKEN_CHARACTERS) return null;
+  const match = /^(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(token);
+  if (!match) return null;
+  const fraction = match[3] ?? '';
+  let digits = `${match[2]}${fraction}`.replace(/^0+/, '');
+  if (digits.length === 0) return '0';
+  let exponent = BigInt(match[4] ?? '0') - BigInt(fraction.length);
+  const trailingZeroCount = /0+$/.exec(digits)?.[0].length ?? 0;
+  if (trailingZeroCount > 0) {
+    digits = digits.slice(0, -trailingZeroCount);
+    exponent += BigInt(trailingZeroCount);
+  }
+  return `${match[1]}${digits}e${exponent}`;
+}
+
+function validateCanonicalJsonNumbers(line, boundary) {
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character !== '-' && (character < '0' || character > '9')) continue;
+    JSON_NUMBER_TOKEN_PATTERN.lastIndex = index;
+    const token = JSON_NUMBER_TOKEN_PATTERN.exec(line)?.[0];
+    if (!token || token.length > MAX_JSON_NUMBER_TOKEN_CHARACTERS) {
+      throw fail(`${boundary} contained a number outside the canonical JSON boundary`);
+    }
+    const numericValue = Number(token);
+    const canonicalToken = Number.isFinite(numericValue) ? JSON.stringify(numericValue) : null;
+    if (canonicalToken === null
+      || decimalRationalKey(token) !== decimalRationalKey(canonicalToken)) {
+      throw fail(`${boundary} contained a number outside the canonical JSON boundary`);
+    }
+    index += token.length - 1;
+  }
+}
+
 function encodeBoundedSecretFreeJson(value, boundary) {
   const stack = [{ value, depth: 0 }];
   let nodes = 1;
@@ -178,6 +260,14 @@ function encodeBoundedSecretFreeJson(value, boundary) {
       }
       continue;
     }
+    if (typeof current.value === 'number') {
+      if (!Number.isFinite(current.value)
+        || Object.is(current.value, -0)
+        || (Number.isInteger(current.value) && !Number.isSafeInteger(current.value))) {
+        throw fail(`${boundary} contained a number outside the canonical JSON boundary`);
+      }
+      continue;
+    }
     if (current.value === null || typeof current.value !== 'object') continue;
     if (Array.isArray(current.value)) {
       for (let index = current.value.length - 1; index >= 0; index -= 1) {
@@ -186,7 +276,7 @@ function encodeBoundedSecretFreeJson(value, boundary) {
       continue;
     }
     for (const key of Object.keys(current.value)) {
-      if (SECRET_JSON_PROPERTY.test(key) || containsSecretShapedText(key)) {
+      if (isAuthorityOrSecretKey(key) || containsSecretShapedText(key)) {
         throw fail(`${boundary} contained a credential-shaped property`);
       }
       pushNode(current.value[key], current.depth + 1);
@@ -219,8 +309,28 @@ function idKey(id) {
   return `${typeof id}:${String(id)}`;
 }
 
+function retiredClientIdKey(clientKey) {
+  return createHash('sha256').update(clientKey, 'utf8').digest('hex');
+}
+
+function validateCancellation(message) {
+  if (!isPlainObject(message.params)
+    || Object.keys(message.params).some((key) => key !== 'requestId' && key !== 'reason')) {
+    throw fail('Client cancellation params must contain only requestId and optional reason');
+  }
+  const key = idKey(message.params.requestId);
+  if (key === null) {
+    throw fail('Client cancellation requestId must be a string or number');
+  }
+  if (Object.hasOwn(message.params, 'reason') && typeof message.params.reason !== 'string') {
+    throw fail('Client cancellation reason must be a string');
+  }
+  return key;
+}
+
 function createBoundedLineReader(stream, onLine, onFailure, onEnd = () => {}) {
   const buffer = Buffer.allocUnsafe(MAX_LINE_BYTES);
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
   let length = 0;
   let failed = false;
   stream.on('data', (chunk) => {
@@ -244,7 +354,15 @@ function createBoundedLineReader(stream, onLine, onFailure, onEnd = () => {}) {
       offset = newline + 1;
       if (line.length > 0 && line[line.length - 1] === 0x0d) line = line.subarray(0, -1);
       if (line.length === 0) continue;
-      onLine(line.toString('utf8'));
+      let decodedLine;
+      try {
+        decodedLine = decoder.decode(line);
+      } catch {
+        failed = true;
+        onFailure(fail('MCP line was not valid UTF-8'));
+        return;
+      }
+      onLine(decodedLine);
     }
   });
   function finish() {
@@ -341,12 +459,17 @@ async function serve(options) {
     stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
-  const pending = new Map();
+  const pendingByClientId = new Map();
+  const pendingByGatewayId = new Map();
+  const retiredCancelledClientIds = new Set();
+  let nextGatewayRequestSequence = 0n;
+  let cancelledGatewayRequests = 0;
   let closing = false;
   let inputEnded = false;
   let clientOutputBackpressured = false;
   let escalationTimer = null;
   let forceExitTimer = null;
+  let inputEndTimer = null;
   const gatewayProcessGroup = process.platform !== 'win32' && Number.isSafeInteger(child.pid)
     ? -child.pid
     : null;
@@ -388,18 +511,41 @@ async function serve(options) {
     return child.exitCode === null && child.signalCode === null;
   }
 
+  function issueGatewayRequestId() {
+    const requestId = `${GATEWAY_REQUEST_ID_PREFIX}${nextGatewayRequestSequence}`;
+    nextGatewayRequestSequence += 1n;
+    return requestId;
+  }
+
+  function removePendingRequest(request) {
+    clearTimeout(request.timer);
+    if (pendingByClientId.get(request.clientKey) === request) {
+      pendingByClientId.delete(request.clientKey);
+    }
+    pendingByGatewayId.delete(request.gatewayId);
+    if (request.cancelled) cancelledGatewayRequests -= 1;
+  }
+
   function close(code, reason) {
     if (closing) return;
     closing = true;
     process.stdin.pause();
     if (!process.stdin.destroyed) process.stdin.destroy();
-    for (const { id, timer } of pending.values()) {
-      clearTimeout(timer);
-      if (!safeWrite(process.stdout, errorResponse(id, -32000, reason))) {
+    for (const request of pendingByGatewayId.values()) {
+      clearTimeout(request.timer);
+      if (!request.cancelled
+        && !safeWrite(process.stdout, errorResponse(request.clientId, -32000, reason))) {
         clientOutputBackpressured = true;
       }
     }
-    pending.clear();
+    pendingByClientId.clear();
+    pendingByGatewayId.clear();
+    retiredCancelledClientIds.clear();
+    cancelledGatewayRequests = 0;
+    if (inputEndTimer) {
+      clearTimeout(inputEndTimer);
+      inputEndTimer = null;
+    }
     process.exitCode = code;
     destroyChildPipes();
     signalGatewayTree('SIGTERM');
@@ -444,6 +590,12 @@ async function serve(options) {
       writeClient(errorResponse(null, -32700, 'Parse error'));
       return;
     }
+    try {
+      validateCanonicalJsonNumbers(line, 'Client request');
+    } catch (error) {
+      close(78, error.message);
+      return;
+    }
     let encodedMessage;
     try {
       encodedMessage = encodeBoundedSecretFreeJson(message, 'Client request');
@@ -475,13 +627,65 @@ async function serve(options) {
       ));
       return;
     }
-    if (message.id !== undefined) {
-      const key = idKey(message.id);
-      if (key === null || pending.has(key)) {
-        writeClient(errorResponse(message.id ?? null, -32600, 'Invalid or duplicate request id'));
+    if (message.method === 'notifications/cancelled') {
+      let cancellationKey;
+      try {
+        cancellationKey = validateCancellation(message);
+      } catch (error) {
+        close(78, error.message);
         return;
       }
-      if (pending.size >= MAX_PENDING_REQUESTS) {
+      const request = pendingByClientId.get(cancellationKey);
+      if (!request) return;
+      if (request.cancelled) return;
+      if (cancelledGatewayRequests >= MAX_CANCELLED_GATEWAY_REQUESTS) {
+        close(
+          78,
+          `At most ${MAX_CANCELLED_GATEWAY_REQUESTS} cancelled gateway requests may remain unconfirmed`,
+        );
+        return;
+      }
+      if (retiredCancelledClientIds.size >= MAX_RETIRED_CANCELLED_CLIENT_IDS) {
+        close(
+          78,
+          `At most ${MAX_RETIRED_CANCELLED_CLIENT_IDS} cancelled client ids may be retired`,
+        );
+        return;
+      }
+      request.cancelled = true;
+      retiredCancelledClientIds.add(retiredClientIdKey(cancellationKey));
+      cancelledGatewayRequests += 1;
+      try {
+        encodedMessage = encodeBoundedSecretFreeJson({
+          ...message,
+          params: { ...message.params, requestId: request.gatewayId },
+        }, 'Gateway cancellation');
+      } catch (error) {
+        close(78, error.message);
+        return;
+      }
+    }
+    if (message.id !== undefined) {
+      const clientKey = idKey(message.id);
+      if (clientKey === null
+        || pendingByClientId.has(clientKey)
+        || retiredCancelledClientIds.has(retiredClientIdKey(clientKey))) {
+        writeClient(errorResponse(
+          message.id ?? null,
+          -32600,
+          'Invalid, duplicate, or retired request id',
+        ));
+        return;
+      }
+      if (pendingByGatewayId.size >= MAX_GATEWAY_REQUESTS) {
+        writeClient(errorResponse(
+          message.id,
+          -32003,
+          `At most ${MAX_GATEWAY_REQUESTS} total gateway requests may remain unresolved`,
+        ));
+        return;
+      }
+      if (pendingByGatewayId.size - cancelledGatewayRequests >= MAX_PENDING_REQUESTS) {
         writeClient(errorResponse(
           message.id,
           -32002,
@@ -489,11 +693,30 @@ async function serve(options) {
         ));
         return;
       }
+      const gatewayId = issueGatewayRequestId();
+      try {
+        encodedMessage = encodeBoundedSecretFreeJson(
+          { ...message, id: gatewayId },
+          'Gateway request',
+        );
+      } catch (error) {
+        close(78, error.message);
+        return;
+      }
       const timer = setTimeout(
         () => close(78, `Gateway request exceeded the ${REQUEST_TIMEOUT_MS}-millisecond deadline`),
         REQUEST_TIMEOUT_MS,
       );
-      pending.set(key, { id: message.id, method: message.method, timer });
+      const request = {
+        clientId: message.id,
+        clientKey,
+        gatewayId,
+        method: message.method,
+        timer,
+        cancelled: false,
+      };
+      pendingByClientId.set(clientKey, request);
+      pendingByGatewayId.set(gatewayId, request);
     }
     if (!safeWrite(child.stdin, encodedMessage)) {
       close(78, 'Gateway input exceeded the client-gate backpressure limit');
@@ -513,9 +736,14 @@ async function serve(options) {
       close(78, 'Gateway emitted invalid JSON');
       return;
     }
-    let encodedMessage;
     try {
-      encodedMessage = encodeBoundedSecretFreeJson(message, 'Gateway response');
+      validateCanonicalJsonNumbers(line, 'Gateway response');
+    } catch (error) {
+      close(78, error.message);
+      return;
+    }
+    try {
+      encodeBoundedSecretFreeJson(message, 'Gateway response');
     } catch (error) {
       close(78, error.message);
       return;
@@ -524,35 +752,47 @@ async function serve(options) {
       close(78, 'Gateway emitted a message outside the closed response surface');
       return;
     }
-    const key = idKey(message.id);
-    const request = key === null ? null : pending.get(key);
+    const request = typeof message.id === 'string'
+      ? pendingByGatewayId.get(message.id)
+      : null;
     if (!request) {
       close(78, 'Gateway returned an unknown request id');
       return;
     }
     try {
       validateGatewayResponse(message);
-      clearTimeout(request.timer);
-      pending.delete(key);
-      if (message.error === undefined) {
+      if (!request.cancelled && message.error === undefined) {
         if (request.method === 'initialize') validateInitialize(message);
         if (request.method === 'tools/list') validateToolsList(message);
       }
     } catch (error) {
-      clearTimeout(request.timer);
-      pending.delete(key);
-      writeClient(errorResponse(
-        message.id,
-        -32001,
-        error.message,
-        { reason_code: error.code ?? 'RISK_FORK_CLIENT_GATE_INVALID' },
-      ));
+      removePendingRequest(request);
+      if (!request.cancelled) {
+        writeClient(errorResponse(
+          request.clientId,
+          -32001,
+          error.message,
+          { reason_code: error.code ?? 'RISK_FORK_CLIENT_GATE_INVALID' },
+        ));
+      }
       close(78, 'Gateway tool surface failed closed');
+      return;
+    }
+    removePendingRequest(request);
+    if (request.cancelled) return;
+    let encodedMessage;
+    try {
+      encodedMessage = encodeBoundedSecretFreeJson(
+        { ...message, id: request.clientId },
+        'Client response',
+      );
+    } catch (error) {
+      close(78, error.message);
       return;
     }
     writeClient(encodedMessage);
   }, (error) => close(78, error.message), () => {
-    if (!closing && !(inputEnded && pending.size === 0)) {
+    if (!closing && !(inputEnded && pendingByGatewayId.size === 0)) {
       close(78, 'Gateway response stream ended before the gateway process exited');
     }
   });
@@ -562,10 +802,8 @@ async function serve(options) {
   child.on('error', () => close(78, 'Gateway process could not start'));
   child.on('exit', (code) => {
     if (closing) return;
-    if (inputEnded && pending.size === 0 && code === 0) {
-      closing = true;
-      process.stdin.pause();
-      process.exitCode = 0;
+    if (inputEnded && pendingByGatewayId.size === 0 && code === 0) {
+      close(0, 'Gateway process exited after client input closed');
       return;
     }
     close(code === 0 ? 78 : (code ?? 78), 'Gateway process exited');
@@ -575,8 +813,11 @@ async function serve(options) {
     inputEnded = true;
     process.stdin.pause();
     if (!child.stdin.destroyed) child.stdin.end();
-    const timeout = setTimeout(() => close(78, 'Gateway did not stop after client input closed'), 2000);
-    timeout.unref();
+    inputEndTimer = setTimeout(
+      () => close(78, 'Gateway did not stop after client input closed'),
+      2000,
+    );
+    inputEndTimer.unref();
   });
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, () => close(0, `Client gate received ${signal}`));

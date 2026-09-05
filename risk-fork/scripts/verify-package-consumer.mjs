@@ -190,6 +190,15 @@ try {
     assert.equal(clients.RISK_FORK_GATEWAY_TOOL, 'risk_fork_protect');
     assert.deepEqual(clients.RISK_FORK_CLIENTS, ['claude-code', 'codex', 'cursor']);
     assert.equal(core.createRiskForkClientAdoptionPacket, clients.createRiskForkClientAdoptionPacket);
+    assert.equal(typeof clients.verifyRiskForkClientAdoptionPacket, 'function');
+    assert.equal(
+      core.verifyRiskForkClientAdoptionPacket,
+      clients.verifyRiskForkClientAdoptionPacket,
+    );
+    assert.equal(
+      clients.verifyRiskForkClientAdoptionPacket(${JSON.stringify(installedClientPlan)}),
+      true,
+    );
   `], consumerRoot);
   const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
     path.join(installedRoot, 'examples/local-reference.mjs'),

@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isDeepStrictEqual } = require('node:util');
 
 const { validateInventoryHolds } = require('./integration-inventory-holds.js');
 const { verifyEcosystemProfile } = require('./verify-ecosystem-profile.js');
@@ -429,6 +430,67 @@ function assertArdSourceOnly(manifest) {
   if (canonical !== compatibility) fail('ARD canonical and predecessor candidate artifacts must remain byte-identical');
 }
 
+function assertRiskForkClientAdoption(manifest) {
+  const expected = {
+    status: 'source_only_default_off',
+    package_subpath: './client-adoption',
+    package_import: '@agoragentic/risk-fork/client-adoption',
+    module: 'risk-fork/src/client-adoption.mjs',
+    cli: 'risk-fork/scripts/client-adoption.mjs',
+    docs: 'risk-fork/CLIENT_ADOPTION.md',
+    schema: 'risk-fork/schema/client-adoption-packet.v1.json',
+    stdio_gate: 'risk-fork/clients/one-tool-stdio-gate.mjs',
+    expected_tool: 'risk_fork_protect',
+    supported_clients: ['claude-code', 'codex', 'cursor'],
+    client_enabled: false,
+    activation_supported: false,
+    executor_bound: false,
+    provider_authority_granted: false,
+    hosted_authority_granted: false,
+    production_authority_granted: false,
+    live_traffic_protected: false,
+  };
+  const entries = [
+    ['packages.risk_fork', manifest.packages?.risk_fork],
+    ['integrations.risk-fork', (manifest.integrations || []).find((entry) => entry.id === 'risk-fork')],
+  ];
+  for (const [label, entry] of entries) {
+    if (!isDeepStrictEqual(entry?.client_adoption, expected)) {
+      fail(`${label}.client_adoption must expose the exact source-only/default-off adoption boundary`);
+    }
+    const scope = entry?.compatibility_scope || '';
+    for (const required of [
+      expected.package_import,
+      'risk_fork_protect',
+      'source-only/default-off',
+      'clients remain disabled',
+      'live traffic protection false',
+    ]) {
+      if (!scope.includes(required)) fail(`${label}.compatibility_scope must include ${required}`);
+    }
+  }
+
+  const discovery = {
+    risk_fork_client_adoption: expected.docs,
+    risk_fork_client_adoption_module: expected.module,
+    risk_fork_client_adoption_cli: expected.cli,
+    risk_fork_client_adoption_schema: expected.schema,
+    risk_fork_client_stdio_gate: expected.stdio_gate,
+  };
+  for (const [key, value] of Object.entries(discovery)) {
+    if (manifest.discovery?.[key] !== value) fail(`discovery.${key} must point to ${value}`);
+    if (!fs.existsSync(path.join(root, value))) fail(`discovery.${key} does not exist: ${value}`);
+  }
+
+  const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'risk-fork', 'package.json'), 'utf8'));
+  if (packageJson.exports?.[expected.package_subpath] !== './src/client-adoption.mjs') {
+    fail('Risk Fork package must expose ./client-adoption from ./src/client-adoption.mjs');
+  }
+  if (packageJson.scripts?.['client:plan'] !== 'node scripts/client-adoption.mjs plan --client all') {
+    fail('Risk Fork package must expose the default-off client:plan workflow');
+  }
+}
+
 const rawManifest = fs.readFileSync(manifestPath, 'utf8');
 const duplicates = topLevelDuplicateKeys(rawManifest);
 if (duplicates.length) fail(`integrations.json has duplicate top-level keys: ${duplicates.join(', ')}`);
@@ -444,5 +506,6 @@ assertRegistryMetadata();
 assertA2aRouterFirst();
 assertDifyRouterFirst();
 assertArdSourceOnly(manifest);
+assertRiskForkClientAdoption(manifest);
 if (process.exitCode) process.exit(process.exitCode);
 console.log('✅ integrations machine-surface verification passed');

@@ -133,6 +133,7 @@ export {
   RISK_FORK_GATEWAY_TOOL,
   createRiskForkClientAdoptionPacket,
   isRiskForkClientAdoptionPacket,
+  verifyRiskForkClientAdoptionPacket,
 } from './client-adoption.mjs';
 export {
   createRiskForkReceipt,

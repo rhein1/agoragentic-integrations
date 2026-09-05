@@ -23,6 +23,8 @@ import {
   RISK_FORK_CLIENTS,
   RISK_FORK_GATEWAY_TOOL,
   createRiskForkClientAdoptionPacket,
+  isRiskForkClientAdoptionPacket,
+  verifyRiskForkClientAdoptionPacket,
 } from '../src/client-adoption.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -55,7 +57,7 @@ function runCli(args) {
   });
 }
 
-test('client adoption packet validates against its closed schema', async () => {
+test('client adoption packet passes its structural schema and deterministic verifier', async () => {
   const packet = await createPacket();
   const schema = JSON.parse(await readFile(
     path.join(packageRoot, 'schema', 'client-adoption-packet.v1.json'),
@@ -68,6 +70,13 @@ test('client adoption packet validates against its closed schema', async () => {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   assert.equal(validate(packet), true, JSON.stringify(validate.errors));
+  assert.equal(verifyRiskForkClientAdoptionPacket(packet), true);
+  assert.equal(isRiskForkClientAdoptionPacket(packet), true);
+  assert.equal(
+    verifyRiskForkClientAdoptionPacket(JSON.parse(JSON.stringify(packet))),
+    true,
+  );
+  assert.equal(isRiskForkClientAdoptionPacket(JSON.parse(JSON.stringify(packet))), false);
   assert.equal(Object.isFrozen(packet), true);
   assert.deepEqual(packet.expected_tool_inventory, [RISK_FORK_GATEWAY_TOOL]);
   assert.equal(packet.gateway.runtime_closure_bound, false);
@@ -88,6 +97,111 @@ test('client adoption packet validates against its closed schema', async () => {
     network_used: false,
   });
   assert.deepEqual(RISK_FORK_CLIENTS, ['claude-code', 'codex', 'cursor']);
+});
+
+test('client adoption schema rejects obvious inventory, activation, and posture contradictions', async () => {
+  const schema = JSON.parse(await readFile(
+    path.join(packageRoot, 'schema', 'client-adoption-packet.v1.json'),
+    'utf8',
+  ));
+  const validate = new Ajv2020({ allErrors: true, strict: true }).compile(schema);
+  const packet = await createPacket();
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const rejectedBySchema = (candidate) => {
+    assert.equal(validate(candidate), false, 'structural guardrail must reject contradiction');
+  };
+
+  const activeContent = clone(packet);
+  const activeCodex = activeContent.outputs.find((entry) => entry.client === 'codex');
+  activeCodex.content = activeCodex.content.replace('enabled = false', 'enabled = true');
+  rejectedBySchema(activeContent);
+
+  const clientOutputMismatch = clone(packet);
+  clientOutputMismatch.client = 'codex';
+  rejectedBySchema(clientOutputMismatch);
+
+  const duplicateOutput = clone(packet);
+  duplicateOutput.outputs[1] = clone(duplicateOutput.outputs[0]);
+  rejectedBySchema(duplicateOutput);
+
+  const missingOutput = clone(packet);
+  missingOutput.outputs.pop();
+  rejectedBySchema(missingOutput);
+
+  const extraOutput = clone(packet);
+  extraOutput.outputs.push(clone(extraOutput.outputs[0]));
+  rejectedBySchema(extraOutput);
+
+  const contradictoryPosture = clone(packet);
+  contradictoryPosture.outputs.find((entry) => entry.client === 'codex').native_default_off = false;
+  rejectedBySchema(contradictoryPosture);
+});
+
+test('deterministic verification binds every selected client to its canonical outputs', async () => {
+  const expected = new Map([
+    ['all', [
+      'claude-code-risk-fork.disabled.mcp.json',
+      'claude-code-risk-fork.disabled.settings.json',
+      'codex-risk-fork.disabled.toml',
+      'cursor-risk-fork.disabled.mcp.json',
+      'cursor-risk-fork.disabled.permissions.json',
+    ]],
+    ['claude-code', [
+      'claude-code-risk-fork.disabled.mcp.json',
+      'claude-code-risk-fork.disabled.settings.json',
+    ]],
+    ['codex', ['codex-risk-fork.disabled.toml']],
+    ['cursor', [
+      'cursor-risk-fork.disabled.mcp.json',
+      'cursor-risk-fork.disabled.permissions.json',
+    ]],
+  ]);
+  for (const [client, filenames] of expected) {
+    const packet = JSON.parse(JSON.stringify(await createPacket(client)));
+    assert.equal(verifyRiskForkClientAdoptionPacket(packet), true);
+    assert.deepEqual(packet.outputs.map((entry) => entry.review_filename), filenames);
+  }
+});
+
+test('deterministic client adoption verification rejects noncanonical output semantics', async () => {
+  const packet = await createPacket();
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const reject = (candidate) => {
+    assert.throws(
+      () => verifyRiskForkClientAdoptionPacket(candidate),
+      (error) => error?.code === 'RISK_FORK_CLIENT_ADOPTION_INVALID'
+        && /exact canonical client, output inventory, content, paths, posture/.test(error.message),
+    );
+    assert.equal(isRiskForkClientAdoptionPacket(candidate), false);
+  };
+
+  const activeContent = clone(packet);
+  const activeCodex = activeContent.outputs.find((entry) => entry.client === 'codex');
+  activeCodex.content = activeCodex.content.replace('enabled = false', 'enabled = true');
+  reject(activeContent);
+
+  const clientOutputMismatch = clone(packet);
+  clientOutputMismatch.client = 'codex';
+  reject(clientOutputMismatch);
+
+  const duplicateOutput = clone(packet);
+  duplicateOutput.outputs[1] = clone(duplicateOutput.outputs[0]);
+  reject(duplicateOutput);
+
+  const missingOutput = clone(packet);
+  missingOutput.outputs.pop();
+  reject(missingOutput);
+
+  const extraOutput = clone(packet);
+  extraOutput.outputs.push({
+    ...clone(extraOutput.outputs[0]),
+    review_filename: 'claude-code-risk-fork-copy.disabled.mcp.json',
+  });
+  reject(extraOutput);
+
+  const contradictoryPosture = clone(packet);
+  contradictoryPosture.outputs.find((entry) => entry.client === 'codex').native_default_off = false;
+  reject(contradictoryPosture);
 });
 
 test('generated client files are inactive and expose only the gateway contract', async () => {
@@ -201,6 +315,35 @@ test('client adoption rejects structural ambiguity without invoking accessors or
     Array.prototype.includes = originalIncludes;
   }
   assert.equal(prototypePollutionAccepted, false);
+
+  const packetWithAccessor = JSON.parse(JSON.stringify(await createPacket('codex')));
+  let packetAccessorReads = 0;
+  Object.defineProperty(packetWithAccessor, 'outputs', {
+    enumerable: true,
+    get() {
+      packetAccessorReads += 1;
+      return [];
+    },
+  });
+  assert.throws(
+    () => verifyRiskForkClientAdoptionPacket(packetWithAccessor),
+    (error) => error?.code === 'RISK_FORK_CLIENT_ADOPTION_INVALID',
+  );
+  assert.equal(packetAccessorReads, 0);
+
+  const packetWithProxy = JSON.parse(JSON.stringify(await createPacket('codex')));
+  let packetProxyTraps = 0;
+  packetWithProxy.gateway = new Proxy(packetWithProxy.gateway, {
+    get() {
+      packetProxyTraps += 1;
+      throw new Error('must not run');
+    },
+  });
+  assert.throws(
+    () => verifyRiskForkClientAdoptionPacket(packetWithProxy),
+    (error) => error?.code === 'RISK_FORK_CLIENT_ADOPTION_INVALID',
+  );
+  assert.equal(packetProxyTraps, 0);
 });
 
 test('client adoption CLI previews without writes and writes only inactive review files', async () => {
