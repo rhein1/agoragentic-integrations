@@ -36,6 +36,15 @@ const canonicalEquivalentNumbers = {
   'equivalent-decimal': '1.0',
   'equivalent-exponent': '1e3',
 };
+const basicWhitespaceByOperation = new Map([
+  '\t', '\n', '\v', '\f', '\r', ' ', '\u00a0', '\u1680',
+  '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
+  '\u2006', '\u2007', '\u2008', '\u2009', '\u200a', '\u2028',
+  '\u2029', '\u202f', '\u205f', '\u3000', '\ufeff',
+].map((whitespace) => {
+  const codePoint = whitespace.codePointAt(0).toString(16).padStart(4, '0');
+  return [`basic-auth-whitespace-u${codePoint}`, whitespace];
+}));
 input.on('line', (line) => {
   const message = JSON.parse(line);
   if (message.id === undefined) return;
@@ -66,6 +75,7 @@ input.on('line', (line) => {
     return;
   }
   const operation = message.params?.arguments?.operation;
+  const basicWhitespace = basicWhitespaceByOperation.get(operation);
   if (operation === 'malformed-utf8') {
     process.stdout.write(Buffer.concat([
       Buffer.from(`{"jsonrpc":"2.0","id":${JSON.stringify(message.id)},"result":{"value":"`),
@@ -126,10 +136,16 @@ input.on('line', (line) => {
     result = { content: [{ type: 'text', text: 'Basic dTpw=' }] };
   } else if (operation === 'basic-auth-multiply-overpadded') {
     result = { content: [{ type: 'text', text: 'Basic dTpw===' }] };
-  } else if (operation === 'basic-auth-space-folded') {
-    result = { content: [{ type: 'text', text: 'Basic dT pw' }] };
-  } else if (operation === 'basic-auth-tab-folded') {
-    result = { content: [{ type: 'text', text: 'Basic dT\tpw' }] };
+  } else if (basicWhitespace !== undefined) {
+    result = { content: [{ type: 'text', text: `Basic dT${basicWhitespace}pw` }] };
+  } else if (operation === 'basic-auth-leading-dot') {
+    result = { content: [{ type: 'text', text: '.Basic dTpw' }] };
+  } else if (operation === 'basic-auth-leading-dash') {
+    result = { content: [{ type: 'text', text: '-Basic dTpw' }] };
+  } else if (operation === 'basic-auth-leading-underscore') {
+    result = { content: [{ type: 'text', text: '_Basic dTpw' }] };
+  } else if (operation === 'basic-auth-path-component') {
+    result = { content: [{ type: 'text', text: '/.-_Basic dTpw/' }] };
   } else if (operation === 'basic-auth-base64url') {
     result = { content: [{ type: 'text', text: 'Basic ZiA0dD86O30_MX4' }] };
   } else if (operation === 'basic-auth-dangling-alphanumeric') {

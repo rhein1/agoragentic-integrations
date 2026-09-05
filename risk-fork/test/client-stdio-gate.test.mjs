@@ -25,6 +25,12 @@ const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mj
 const fixtureRoot = path.join(packageRoot, 'test', 'fixtures');
 const serveTest = process.platform === 'win32' ? test.skip : test;
 const utilEntrypointUrl = new URL('../src/util.mjs', import.meta.url).href;
+const ECMASCRIPT_WHITESPACE_CHARACTERS = Object.freeze([
+  '\t', '\n', '\v', '\f', '\r', ' ', '\u00a0', '\u1680',
+  '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
+  '\u2006', '\u2007', '\u2008', '\u2009', '\u200a', '\u2028',
+  '\u2029', '\u202f', '\u205f', '\u3000', '\ufeff',
+]);
 
 async function sha256(filename) {
   return `sha256:${createHash('sha256').update(await readFile(filename)).digest('hex')}`;
@@ -903,8 +909,19 @@ serveTest('stdio client gate scans decoded request and response values for crede
     ['unpadded Basic authorization', 'basic-auth-unpadded', 'Basic dTpwZA', /dTpwZA/],
     ['over-padded Basic authorization', 'basic-auth-overpadded', 'Basic dTpw=', /dTpw/],
     ['multiply over-padded Basic authorization', 'basic-auth-multiply-overpadded', 'Basic dTpw===', /dTpw/],
-    ['space-folded Basic authorization', 'basic-auth-space-folded', 'Basic dT pw', /dT pw/],
-    ['tab-folded Basic authorization', 'basic-auth-tab-folded', 'Basic dT\tpw', /dT\\?t?pw/],
+    ...ECMASCRIPT_WHITESPACE_CHARACTERS.map((whitespace) => {
+      const codePoint = whitespace.codePointAt(0).toString(16).padStart(4, '0');
+      return [
+        `ECMAScript U+${codePoint.toUpperCase()}-folded Basic authorization`,
+        `basic-auth-whitespace-u${codePoint}`,
+        `Basic dT${whitespace}pw`,
+        /dT/,
+      ];
+    }),
+    ['leading-dot Basic authorization', 'basic-auth-leading-dot', '.Basic dTpw', /\.Basic dTpw/],
+    ['leading-dash Basic authorization', 'basic-auth-leading-dash', '-Basic dTpw', /-Basic dTpw/],
+    ['leading-underscore Basic authorization', 'basic-auth-leading-underscore', '_Basic dTpw', /_Basic dTpw/],
+    ['path-component Basic authorization', 'basic-auth-path-component', '/.-_Basic dTpw/', /\.\-_Basic dTpw/],
     [
       'base64url Basic authorization',
       'basic-auth-base64url',
@@ -1486,6 +1503,10 @@ test('stdio client gate rejects serialized gateway paths containing full credent
     path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw.', 'risk-forkd.js'),
     path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw~', 'risk-forkd.js'),
     path.join(path.parse(packageRoot).root, 'synthetic', '(Basic dTpw)', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', '.Basic dTpw', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', '-Basic dTpw', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', '_Basic dTpw', 'risk-forkd.js'),
+    path.join(path.parse(packageRoot).root, 'synthetic', '.-_Basic dTpw', 'risk-forkd.js'),
     path.join(
       path.parse(packageRoot).root,
       'synthetic',
@@ -1513,7 +1534,9 @@ test('credential scanning remains bounded for a near-limit repeated Basic prefix
     '--eval',
     `import { containsSerializedCredentialMaterial } from ${JSON.stringify(utilEntrypointUrl)};
 const adversarial = 'basic '.repeat(174_762) + '!';
-if (containsSerializedCredentialMaterial(adversarial) !== false) process.exit(2);`,
+if (containsSerializedCredentialMaterial(adversarial) !== false) process.exit(2);
+const folded = 'Basic dT' + '\\f'.repeat(1_000_000) + 'pw';
+if (containsSerializedCredentialMaterial(folded) !== true) process.exit(3);`,
   ], {
     cwd: packageRoot,
     encoding: 'utf8',
@@ -1531,11 +1554,36 @@ test('credential scanning recognizes punctuation boundaries without matching emb
     '"Basic dTpw"',
     ',Basic dTpw',
     ';Basic dTpw',
+    '.Basic dTpw',
+    '-Basic dTpw',
+    '_Basic dTpw',
+    '/.Basic dTpw/',
+    '/-_Basic dTpw/',
   ]) {
     assert.equal(containsSerializedCredentialMaterial(wrapped), true);
   }
   assert.equal(containsSerializedCredentialMaterial('nonbasic dTpw'), false);
   assert.equal(containsSerializedCredentialMaterial('non-basic dTpw'), false);
+  assert.equal(containsSerializedCredentialMaterial('non.basic dTpw'), false);
+  assert.equal(containsSerializedCredentialMaterial('non_basic dTpw'), false);
+  assert.equal(containsSerializedCredentialMaterial('non.-_Basic dTpw'), false);
+});
+
+test('credential scanning consumes and removes the same complete whitespace set', () => {
+  const runtimeWhitespaceCharacters = [];
+  const whitespacePattern = /\s/u;
+  for (let codePoint = 0; codePoint <= 0x10ffff; codePoint += 1) {
+    const character = String.fromCodePoint(codePoint);
+    if (whitespacePattern.test(character)) runtimeWhitespaceCharacters.push(character);
+  }
+  assert.deepEqual(runtimeWhitespaceCharacters, ECMASCRIPT_WHITESPACE_CHARACTERS);
+
+  for (const whitespace of ECMASCRIPT_WHITESPACE_CHARACTERS) {
+    assert.equal(containsSerializedCredentialMaterial(`Basic${whitespace}dTpw`), true);
+    assert.equal(containsSerializedCredentialMaterial(`Basic d${whitespace}Tpw`), true);
+    assert.equal(containsSerializedCredentialMaterial(`Basic dT${whitespace}pw`), true);
+    assert.equal(containsSerializedCredentialMaterial(`Basic dTp${whitespace}w`), true);
+  }
 });
 
 serveTest('stdio client gate bounds descriptor reads while the gateway file changes size', async () => {

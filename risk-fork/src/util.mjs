@@ -159,16 +159,25 @@ function isWhitespaceCharacter(value) {
   return /\s/u.test(value);
 }
 
+function isAsciiAlphanumericCharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a);
+}
+
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 0x2d || code === 0x2e || code === 0x5f;
+}
+
 function isBasicBoundary(value, index) {
   if (index === 0) return true;
   const previous = value.charCodeAt(index - 1);
-  const embeddedIdentifier = (previous >= 0x30 && previous <= 0x39)
-    || (previous >= 0x41 && previous <= 0x5a)
-    || (previous >= 0x61 && previous <= 0x7a)
-    || previous === 0x2d
-    || previous === 0x2e
-    || previous === 0x5f;
-  return !embeddedIdentifier;
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
 }
 
 function hasCaseInsensitiveBasicAt(value, index) {
@@ -205,7 +214,7 @@ function basicTokenStartAt(value, index) {
 
 function decodedBasicCandidateContainsColon(value, start, end) {
   if (start >= end) return false;
-  const encoded = value.slice(start, end).replace(/[\t ]/g, '');
+  const encoded = value.slice(start, end).replace(/\s/gu, '');
   return encoded.length > 0 && Buffer.from(encoded, 'base64').includes(0x3a);
 }
 
@@ -231,7 +240,7 @@ function containsBasicAuthorization(value) {
         continue;
       }
       const code = value.charCodeAt(cursor);
-      if (isToken68CharacterCode(code) || code === 0x09 || code === 0x20) {
+      if (isToken68CharacterCode(code) || isWhitespaceCharacter(value[cursor])) {
         cursor += 1;
         continue;
       }

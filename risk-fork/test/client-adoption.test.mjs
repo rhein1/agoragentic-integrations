@@ -645,6 +645,22 @@ test('client adoption rejects credential-shaped paths before packet serializatio
         forbidden: /dTpw/,
       },
       {
+        gateway: path.join(temporaryRoot, '.Basic dTpw', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, '-Basic dTpw', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, '_Basic dTpw', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, '.-_Basic dTpw', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
         gateway: path.join(
           temporaryRoot,
           'synthetic-user:synthetic-pass@example.test',
