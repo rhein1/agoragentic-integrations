@@ -1165,8 +1165,8 @@
       "path": "mcp/package.json",
       "occurrences": 2,
       "line_numbers": [
-        46,
-        51
+        51,
+        56
       ],
       "categories": [
         "installer_or_clone",
@@ -1325,8 +1325,8 @@
       "path": "risk-fork-hosted-mcp/dist/runtime/index.mjs",
       "occurrences": 2,
       "line_numbers": [
-        98,
-        103
+        103,
+        108
       ],
       "categories": [
         "installer_or_clone",

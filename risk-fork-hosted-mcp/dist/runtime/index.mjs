@@ -57,16 +57,21 @@ var require_package = __commonJS({
       mcpName: "io.github.rhein1/agoragentic",
       description: "Unpublished, non-installable 2.0.0 source candidate for the fail-closed Agoragentic MCP protocol adapter. Remote and fallback network execution require a separately qualified host enforcement implementation.",
       main: "dist/mcp-server.cjs",
+      exports: {
+        ".": "./dist/mcp-server.cjs",
+        "./risk-forkd": "./risk-forkd.js"
+      },
       bin: {
-        "agoragentic-mcp": "dist/mcp-server.cjs"
+        "agoragentic-mcp": "dist/mcp-server.cjs",
+        "risk-forkd": "risk-forkd.js"
       },
       scripts: {
         start: "node dist/mcp-server.cjs",
         dev: "node mcp-server.js",
         build: "node scripts/build.js",
-        check: "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/metadata-boundary.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
-        test: "node --test test/*.test.js",
-        "verify:packed-install": "node scripts/verify-packed-install.js",
+        check: "node --check mcp-server.js && node --check risk-forkd.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check scripts/verify-risk-forkd-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/metadata-boundary.test.js && node --check test/risk-forkd.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js && node --check test/fixtures/risk-forkd-entry.js",
+        test: "npm run build && node --test test/*.test.js",
+        "verify:packed-install": "node scripts/verify-packed-install.js && node scripts/verify-risk-forkd-packed-install.js",
         prepack: "npm run build",
         prepublishOnly: `node -e "throw new Error('MCP_PUBLISH_DISABLED_UNQUALIFIED_SOURCE_CANDIDATE')"`,
         postinstall: "node scripts/postinstall.js || true"
@@ -119,6 +124,7 @@ var require_package = __commonJS({
       },
       files: [
         "dist/mcp-server.cjs",
+        "risk-forkd.js",
         "scripts/postinstall.js",
         "README.md",
         "LICENSE"
@@ -36400,6 +36406,9 @@ var require_mcp_server = __commonJS({
       }));
       return boundary;
     }
+    function isMcpEnforcementBoundary(value) {
+      return enforcementBoundaryAdapters.has(value);
+    }
     var ACP_ENFORCEMENT_NOTE = " Network execution is fail-closed unless an embedding host supplies a separately qualified enforcement implementation.";
     var ACP_TOOLS = [
       {
@@ -37512,7 +37521,7 @@ var require_mcp_server = __commonJS({
         process.exit(1);
       });
     }
-    module.exports = {
+    module.exports = Object.freeze({
       MCP_ENFORCEMENT_SCHEMAS: MCP_ENFORCEMENT_SCHEMAS2,
       MCP_V2_PROTOCOL_VERSION: MCP_V2_PROTOCOL_VERSION2,
       buildFallbackToolList: buildFallbackToolList2,
@@ -37522,10 +37531,11 @@ var require_mcp_server = __commonJS({
       createMcpEnforcementBoundary: createMcpEnforcementBoundary2,
       createRemoteToolDirectory: createRemoteToolDirectory2,
       executeFallbackTool: executeFallbackTool2,
+      isMcpEnforcementBoundary,
       runAcpAdapter: runAcpAdapter2,
       runMcpRelay: runMcpRelay2,
       stripOpaqueMcpMetadata
-    };
+    });
   }
 });
 
@@ -61553,7 +61563,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:42be5386e702b9a92f862691d8464dc428b382674466075007cde3c5904d93bd" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:a9dbbce2fb425b4c765908d270323abefbc8b0a2d922f1b913d9638eeccbc5f2" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
