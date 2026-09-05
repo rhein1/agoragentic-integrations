@@ -23,3 +23,23 @@ test('capability discovery advertises exactly the four actually served demo tool
     assert.ok(!card.served_demo_tools.includes(proposed));
   }
 });
+
+test('storage claims distinguish committed source, temporary CI artifacts, and local runtime data', async () => {
+  const [cardText, readme, skill, workflow] = await Promise.all([
+    readFile(new URL('../../discovery/risk-fork-capability.json', import.meta.url), 'utf8'),
+    readFile(new URL('../README.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../discovery/skill.md', import.meta.url), 'utf8'),
+    readFile(new URL('../../../.github/workflows/risk-fork-release.yml', import.meta.url), 'utf8'),
+  ]);
+  const card = JSON.parse(cardText);
+
+  assert.equal(card.storage.git_repository_stores_committed_source_only, true);
+  assert.equal(card.storage.github_actions_release_candidate_retention_days, 14);
+  assert.equal(card.storage.github_actions_client_verification_retention_days, 14);
+  assert.equal(card.storage.github_actions_stores_runtime_data, false);
+  assert.equal(card.storage.github_stores_runtime_forks, false);
+  assert.equal(Object.hasOwn(card.storage, 'github_stores_source_only'), false);
+  assert.match(readme, /GitHub Actions\s+artifacts for 14 days/);
+  assert.match(skill, /GitHub Actions\s+artifacts for 14 days/);
+  assert.equal((workflow.match(/retention-days: 14/g) ?? []).length, 2);
+});

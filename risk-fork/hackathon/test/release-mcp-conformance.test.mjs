@@ -23,4 +23,5 @@ test('real stdio MCP client completes initialize, discovery, plan, run, and rece
   assert.equal(result.network_used, false);
   assert.equal(result.live_traffic_protected, false);
   assert.equal(result.gui_client_status, 'unknown_not_tested');
+  assert.equal(result.scenario, 'high-filesystem-write');
 });

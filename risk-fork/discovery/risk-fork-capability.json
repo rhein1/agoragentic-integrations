@@ -173,7 +173,10 @@
   },
   "storage": {
     "runtime_location": "marker-bound owned local demo root identified by a redacted doctor reference",
-    "github_stores_source_only": true,
+    "git_repository_stores_committed_source_only": true,
+    "github_actions_release_candidate_retention_days": 14,
+    "github_actions_client_verification_retention_days": 14,
+    "github_actions_stores_runtime_data": false,
     "github_stores_runtime_forks": false,
     "aws_used": false,
     "e2b_used": false,

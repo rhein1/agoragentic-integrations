@@ -7,7 +7,10 @@ import { promisify } from 'node:util';
 
 import { buildOfflineKit } from '../src/offline-kit.mjs';
 import { runOfflineRuntimeVerification } from '../src/offline-runtime-verifier.mjs';
-import { writeReleaseSidecars } from './release-artifacts.mjs';
+import {
+  finalizeReleaseArtifactDirectory,
+  writeReleaseSidecars,
+} from './release-artifacts.mjs';
 
 const execFileAsync = promisify(execFile);
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -55,4 +58,5 @@ const build = await buildOfflineKit({
   },
 });
 const sidecars = await writeReleaseSidecars({ build });
-process.stdout.write(`${JSON.stringify({ build, sidecars }, null, 2)}\n`);
+const finalization = await finalizeReleaseArtifactDirectory({ build, outputBase });
+process.stdout.write(`${JSON.stringify({ build, sidecars, finalization }, null, 2)}\n`);

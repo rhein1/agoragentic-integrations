@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, writeFile } from 'node:fs/promises';
+import { lstat, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -12,6 +12,7 @@ import {
 export const RELEASE_ARTIFACT_SCHEMA = 'agoragentic.risk-fork.hackathon-release-build.v1';
 export const SPDX_VERSION = 'SPDX-2.3';
 export const RELEASE_FIXED_CREATED_AT = '1980-01-01T00:00:00Z';
+const BUILD_OWNER_NAME = '.risk-fork-offline-kit-owner.json';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -37,6 +38,17 @@ function safeBasename(value, label) {
     throw new Error(`${label} must be a single portable filename`);
   }
   return value;
+}
+
+function assertExactObjectKeys(value, expectedKeys, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be a closed object`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  if (!isDeepStrictEqual(actual, expected)) {
+    throw new Error(`${label} does not match its closed schema`);
+  }
 }
 
 function spdxId(value) {
@@ -258,42 +270,155 @@ async function assertRecord(directory, record, label) {
   return bytes;
 }
 
+async function lstatOrNull(target) {
+  try {
+    return await lstat(target);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+export async function finalizeReleaseArtifactDirectory({ build, outputBase } = {}) {
+  const sourceCommit = exactCommit(build?.source_commit);
+  if (typeof outputBase !== 'string' || !path.isAbsolute(outputBase)) {
+    throw new TypeError('outputBase must be an explicit absolute path');
+  }
+  const output = path.resolve(outputBase);
+  const artifactDirectory = path.resolve(build?.artifact_container ?? '');
+  const kitDirectory = path.resolve(build?.kit_directory ?? '');
+  const shortCommit = sourceCommit.slice(0, 12);
+  const stem = `risk-fork-hackathon-demo-${shortCommit}`;
+  if (path.dirname(artifactDirectory) !== output
+    || path.basename(artifactDirectory) !== shortCommit
+    || path.dirname(kitDirectory) !== artifactDirectory
+    || path.basename(kitDirectory) !== 'risk-fork-hackathon-demo') {
+    throw new Error('Release build paths are outside the exact commit-pinned artifact boundary');
+  }
+  for (const [target, label] of [
+    [output, 'release output root'],
+    [artifactDirectory, 'release artifact directory'],
+    [kitDirectory, 'release kit directory'],
+  ]) {
+    const info = await lstat(target);
+    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(target) !== target) {
+      throw new Error(`${label} must be an exact real directory`);
+    }
+  }
+
+  const expectedBeforeFinalization = [
+    BUILD_OWNER_NAME,
+    'risk-fork-hackathon-demo',
+    `${stem}.build.json`,
+    `${stem}.sha256`,
+    `${stem}.spdx.json`,
+    `${stem}.zip`,
+  ].sort();
+  const names = (await readdir(artifactDirectory)).sort();
+  if (!isDeepStrictEqual(names, expectedBeforeFinalization)) {
+    throw new Error('Release artifact directory does not match its exact owned pre-finalization inventory');
+  }
+
+  const ownerPath = path.join(artifactDirectory, BUILD_OWNER_NAME);
+  const ownerBytes = await readBounded(ownerPath, 1024);
+  const owner = JSON.parse(ownerBytes.toString('utf8'));
+  assertExactObjectKeys(owner, ['owned_stage', 'schema', 'source_commit'], 'Release build owner marker');
+  if (owner.schema !== 'agoragentic.risk-fork.offline-kit-build-owner.v1'
+    || owner.source_commit !== sourceCommit
+    || owner.owned_stage !== true
+    || ownerBytes.toString('utf8') !== stableJson(owner)) {
+    throw new Error('Release build owner marker is invalid or non-canonical');
+  }
+
+  await rm(kitDirectory, { recursive: true, force: false, maxRetries: 0 });
+  await rm(ownerPath, { force: false, maxRetries: 0 });
+  if (await lstatOrNull(kitDirectory) || await lstatOrNull(ownerPath)) {
+    throw new Error('Release build-owned staging data was not removed before artifact finalization');
+  }
+  const verification = await verifyReleaseArtifactSet({ artifactDirectory });
+  return Object.freeze({
+    finalized: true,
+    source_commit: sourceCommit,
+    artifact_directory: artifactDirectory,
+    committed_file_count: (await readdir(artifactDirectory)).length,
+    verification,
+  });
+}
+
 export async function verifyReleaseArtifactSet({ artifactDirectory } = {}) {
   if (typeof artifactDirectory !== 'string' || !path.isAbsolute(artifactDirectory)) {
     throw new TypeError('artifactDirectory must be an explicit absolute path');
   }
   let directory = path.resolve(artifactDirectory);
-  const { readdir } = await import('node:fs/promises');
+  let resolvedFromParent = false;
+  const rootInfo = await lstat(directory);
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error('Release artifact root must be a real directory');
+  }
   let names = await readdir(directory);
   if (!names.some((name) => name.endsWith('.build.json'))) {
-    const candidates = [];
-    for (const name of names) {
-      const candidate = path.join(directory, name);
-      const info = await lstat(candidate);
-      if (!info.isDirectory() || info.isSymbolicLink()) continue;
-      const childNames = await readdir(candidate);
-      if (childNames.some((child) => child.endsWith('.build.json'))) candidates.push({ candidate, childNames });
-    }
-    if (candidates.length !== 1) {
+    if (names.length !== 1) {
       throw new Error('Release output root must contain exactly one commit-pinned artifact directory');
     }
-    directory = candidates[0].candidate;
-    names = candidates[0].childNames;
+    const candidateName = safeBasename(names[0], 'Release artifact directory');
+    const candidate = path.join(directory, candidateName);
+    const info = await lstat(candidate);
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw new Error('Release output root must contain exactly one commit-pinned artifact directory');
+    }
+    directory = candidate;
+    resolvedFromParent = true;
+    names = await readdir(candidate);
   }
   const buildNames = names.filter((name) => name.endsWith('.build.json'));
   if (buildNames.length !== 1) throw new Error('Release directory must contain exactly one build manifest');
   const buildBytes = await readBounded(path.join(directory, buildNames[0]));
   const build = JSON.parse(buildBytes.toString('utf8'));
+  assertExactObjectKeys(build, [
+    'schema',
+    'banner',
+    ...Object.keys(OFFLINE_KIT_TRUTH),
+    'source_commit',
+    'source_materialization',
+    'deterministic_created_at',
+    'distribution',
+    'npm_registry_publication',
+    'provider_qualification',
+    'gui_client_verification',
+    'zip',
+    'checksum',
+    'sbom',
+  ], 'Release build manifest');
+  assertExactObjectKeys(build.zip, [
+    'filename',
+    'sha256',
+    'bytes',
+    'internal_manifest_sha256',
+    'internal_manifest_bytes',
+    'payload_file_count',
+    'payload_bytes',
+  ], 'Release ZIP record');
+  assertExactObjectKeys(build.checksum, ['filename', 'sha256', 'bytes'], 'Checksum record');
+  assertExactObjectKeys(build.sbom, ['filename', 'sha256', 'bytes'], 'SBOM record');
+  if (buildBytes.toString('utf8') !== stableJson(build)) {
+    throw new Error('Release build manifest must use canonical JSON bytes');
+  }
   if (build.schema !== RELEASE_ARTIFACT_SCHEMA
     || build.banner !== OFFLINE_KIT_BANNER
     || build.distribution !== 'dependency_complete_offline_zip'
-    || build.source_materialization !== 'exact_git_blobs') {
+    || build.source_materialization !== 'exact_git_blobs'
+    || build.deterministic_created_at !== RELEASE_FIXED_CREATED_AT) {
     throw new Error('Release build manifest boundary is invalid');
   }
   for (const [key, expected] of Object.entries(OFFLINE_KIT_TRUTH)) {
     if (build[key] !== expected) throw new Error(`Release truth field ${key} is invalid`);
   }
   exactCommit(build.source_commit);
+  const stem = `risk-fork-hackathon-demo-${build.source_commit.slice(0, 12)}`;
+  if ((resolvedFromParent && path.basename(directory) !== build.source_commit.slice(0, 12))
+    || buildNames[0] !== `${stem}.build.json`) {
+    throw new Error('Release artifact directory does not match its exact source commit');
+  }
   if (build.npm_registry_publication !== false
     || build.provider_qualification !== false
     || build.gui_client_verification !== 'unknown_not_tested') {
@@ -301,9 +426,30 @@ export async function verifyReleaseArtifactSet({ artifactDirectory } = {}) {
   }
 
   const zipFilename = safeBasename(build.zip?.filename, 'ZIP filename');
-  if (!/^[0-9a-f]{64}$/.test(build.zip?.internal_manifest_sha256 ?? '')
+  const checksumFilename = safeBasename(build.checksum?.filename, 'Checksum filename');
+  const sbomFilename = safeBasename(build.sbom?.filename, 'SBOM filename');
+  const expectedNames = [
+    `${stem}.build.json`,
+    `${stem}.sha256`,
+    `${stem}.spdx.json`,
+    `${stem}.zip`,
+  ].sort();
+  if (zipFilename !== `${stem}.zip`
+    || checksumFilename !== `${stem}.sha256`
+    || sbomFilename !== `${stem}.spdx.json`
+    || JSON.stringify([...names].sort()) !== JSON.stringify(expectedNames)) {
+    throw new Error('Release artifact directory must contain exactly the four commit-pinned files');
+  }
+  if (!/^[0-9a-f]{64}$/.test(build.zip?.sha256 ?? '')
+    || !Number.isSafeInteger(build.zip?.bytes)
+    || build.zip.bytes < 1
+    || !/^[0-9a-f]{64}$/.test(build.zip?.internal_manifest_sha256 ?? '')
     || !Number.isSafeInteger(build.zip?.internal_manifest_bytes)
-    || build.zip.internal_manifest_bytes < 1) {
+    || build.zip.internal_manifest_bytes < 1
+    || !Number.isSafeInteger(build.zip?.payload_file_count)
+    || build.zip.payload_file_count < 1
+    || !Number.isSafeInteger(build.zip?.payload_bytes)
+    || build.zip.payload_bytes < 1) {
     throw new Error('Internal kit manifest record is invalid');
   }
   const zipBytes = await readBounded(path.join(directory, zipFilename), 64 * 1024 * 1024);
@@ -326,6 +472,18 @@ export async function verifyReleaseArtifactSet({ artifactDirectory } = {}) {
   const zipVerification = await verifyZipArchive({ zipPath: path.join(directory, zipFilename) });
   if (zipVerification.sha256 !== build.zip.sha256 || zipVerification.verified !== true) {
     throw new Error('Canonical ZIP verification failed');
+  }
+  const internalManifestEntries = zipVerification.entries.filter((entry) => entry.path === 'MANIFEST.json');
+  const payloadEntries = zipVerification.entries.filter((entry) => entry.path !== 'MANIFEST.json');
+  const payloadBytes = payloadEntries.reduce((sum, entry) => sum + entry.bytes, 0);
+  if (internalManifestEntries.length !== 1
+    || internalManifestEntries[0].sha256 !== build.zip.internal_manifest_sha256
+    || internalManifestEntries[0].bytes !== build.zip.internal_manifest_bytes
+    || payloadEntries.length !== build.zip.payload_file_count
+    || payloadBytes !== build.zip.payload_bytes
+    || zipVerification.entry_count !== build.zip.payload_file_count + 1
+    || zipVerification.uncompressed_bytes !== build.zip.payload_bytes + build.zip.internal_manifest_bytes) {
+    throw new Error('Release build manifest does not match the ZIP payload inventory');
   }
   return Object.freeze({
     schema: 'agoragentic.risk-fork.hackathon-release-verification.v1',

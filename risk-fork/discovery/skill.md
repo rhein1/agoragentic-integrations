@@ -126,9 +126,11 @@ hash and binding it to the replay record.
 
 Runtime fixture data stays under the marker-bound owned local demo root
 identified only by the redacted reference from `doctor`. The Git repository
-stores public draft source, not runtime forks; generated kits remain local until
-a separate publication action is authorized. Do not broaden cleanup or claim a
-production deletion SLA.
+stores committed public source, not runtime forks. Release-candidate CI retains
+the generated kit files and client-verification records as GitHub Actions
+artifacts for 14 days; it never uploads synthetic savepoint, fork, recorder, or
+receipt data, and those CI files are not a GitHub Release. Do not broaden cleanup
+or claim a production deletion SLA.
 
 The official local demo permits one active run and ten completed runs between
 explicit cleanup resets; it is not a daily allowance. Its Apache-2.0 source can

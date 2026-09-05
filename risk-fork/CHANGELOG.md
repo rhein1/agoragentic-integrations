@@ -10,6 +10,14 @@
 - Add an MCP host adapter example and adversarial protocol tests.
 - Add reproducible hackathon release artifacts and fresh-extraction CI on
   Windows, macOS, and Linux.
+- Reject polluted release directories and non-canonical or open-ended build
+  manifests, bind their internal ZIP inventory, and remove only exact
+  ownership-verified staging entries before an artifact set can be reported as
+  verified.
+- Abort tracked MCP host requests on session close and prevent a queued host
+  callback from starting after close wins the race.
+- Distinguish committed Git source from 14-day GitHub Actions candidate
+  artifacts while keeping all synthetic runtime-fork data local.
 - Distinguish the four served demo MCP tools from proposed discovery tools.
 - Refresh vulnerable transitive dependency locks and audit the core release
   dependency graph in CI; preserve third-party license notices.

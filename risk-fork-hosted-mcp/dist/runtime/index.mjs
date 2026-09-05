@@ -36097,10 +36097,12 @@ var require_mcp_server = __commonJS({
         }
       )));
     }
-    async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+    function startHostInvocation(callback, timeoutMs, operation, ...args) {
       const controller = new AbortController();
       const deadlineAt = new Date(Date.now() + timeoutMs).toISOString();
       let timer;
+      let removeAbortListener = () => {
+      };
       const timeout = new Promise((_resolve, reject) => {
         timer = setTimeout(() => {
           const error = new McpEnforcementError(
@@ -36111,20 +36113,39 @@ var require_mcp_server = __commonJS({
           reject(error);
         }, timeoutMs);
       });
+      const aborted = new Promise((_resolve, reject) => {
+        const onAbort = () => {
+          reject(controller.signal.reason ?? new McpEnforcementError(
+            "MCP_ENFORCEMENT_HOST_ABORTED",
+            `MCP enforcement host ${operation} was aborted`
+          ));
+        };
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+        removeAbortListener = () => controller.signal.removeEventListener("abort", onAbort);
+      });
       const context = Object.freeze({
         signal: controller.signal,
         timeout_ms: timeoutMs,
         deadline_at: deadlineAt,
         operation
       });
-      try {
-        return await Promise.race([
-          Promise.resolve().then(() => callback(...args, context)),
-          timeout
-        ]);
-      } finally {
+      const pending = Promise.race([
+        Promise.resolve().then(() => callback(...args, context)),
+        timeout,
+        aborted
+      ]).finally(() => {
         clearTimeout(timer);
-      }
+        removeAbortListener();
+      });
+      return Object.freeze({
+        promise: pending,
+        abort(reason2) {
+          if (!controller.signal.aborted) controller.abort(reason2);
+        }
+      });
+    }
+    async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+      return startHostInvocation(callback, timeoutMs, operation, ...args).promise;
     }
     async function openHostSessionWithDeadline(adapter, openRequest) {
       let late = false;
@@ -36934,6 +36955,7 @@ var require_mcp_server = __commonJS({
         hostClose: hostSession.close,
         closed: false,
         closePromise: null,
+        activeRequests: /* @__PURE__ */ new Set(),
         remoteToolFirstPage: null,
         remoteToolDescriptors: null,
         remoteToolDirectoryHash: null,
@@ -36945,11 +36967,21 @@ var require_mcp_server = __commonJS({
         if (!current) return Promise.resolve();
         if (current.closePromise) return current.closePromise;
         current.closed = true;
-        current.closePromise = invokeHostWithDeadline(
+        const closedError = new McpEnforcementError(
+          "MCP_ENFORCED_SESSION_CLOSED",
+          "The enforced MCP session closed while a host request was pending"
+        );
+        const activeRequests = [...current.activeRequests];
+        for (const activeRequest of activeRequests) activeRequest.abort(closedError);
+        const hostClose = invokeHostWithDeadline(
           current.hostClose,
           current.timeouts.close_ms,
           "close"
         );
+        current.closePromise = Promise.all([
+          Promise.allSettled(activeRequests.map((activeRequest) => activeRequest.promise)),
+          hostClose
+        ]).then(([, result]) => result);
         return current.closePromise;
       }
       async function request(phase, params = {}) {
@@ -36962,6 +36994,12 @@ var require_mcp_server = __commonJS({
         if (phase === "tools/call") {
           const directory = current.remoteToolDirectory ?? createRemoteToolDirectory2(session);
           await directory.initialize();
+          if (enforcedSessionRecords.get(session) !== current || current.closed) {
+            throw new McpEnforcementError(
+              "MCP_ENFORCED_SESSION_CLOSED",
+              "The enforced MCP session closed before the host request could start"
+            );
+          }
           const toolName = safeParams.name;
           if (typeof toolName !== "string" || toolName.length < 1) {
             throw new TypeError("tools/call params.name is required");
@@ -36984,13 +37022,23 @@ var require_mcp_server = __commonJS({
           toolDescriptor,
           sessionBindingHash: current.session_binding_hash
         });
+        const invocation = startHostInvocation(
+          (requestDescriptor, context) => {
+            if (enforcedSessionRecords.get(session) !== current || current.closed) {
+              throw new McpEnforcementError(
+                "MCP_ENFORCED_SESSION_CLOSED",
+                "The enforced MCP session closed before the host request could start"
+              );
+            }
+            return current.hostRequest(requestDescriptor, context);
+          },
+          current.timeouts.request_ms,
+          phase,
+          phaseRequest
+        );
+        current.activeRequests.add(invocation);
         try {
-          const envelope = await invokeHostWithDeadline(
-            current.hostRequest,
-            current.timeouts.request_ms,
-            phase,
-            phaseRequest
-          );
+          const envelope = await invocation.promise;
           const afterRequest = enforcedSessionRecords.get(session);
           if (afterRequest !== current || current.closed) {
             throw new McpEnforcementError(
@@ -37011,6 +37059,8 @@ var require_mcp_server = __commonJS({
           } catch {
           }
           throw error;
+        } finally {
+          current.activeRequests.delete(invocation);
         }
       }
       session = Object.freeze({
@@ -60094,7 +60144,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:38a156143a856bdcc39825badf0fdd0739a6f42c87894c113853aee3ed0b7f89" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:811f628bb97fe7c6dd3a43791e6be058f4ef2047b06c21cc3a94f00806fe2e99" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

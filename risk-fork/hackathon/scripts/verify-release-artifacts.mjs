@@ -115,6 +115,7 @@ const record = {
     receipt: 'verified',
     cleanup: 'verified',
   },
+  scenario: mcp.scenario,
   gui_clients: {
     codex: 'unknown_not_tested',
     claude_desktop: 'unknown_not_tested',
