@@ -151,20 +151,30 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
       throw new Error('MCP initialization contract drifted');
     }
     await client.send({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
-    const listed = await client.send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+    const listed = await client.send({
+      jsonrpc: '2.0', id: 2, method: 'tools/list', params: { _meta: { progressToken: 0 } },
+    });
     const toolNames = listed.tools.map((tool) => tool.name).sort();
     if (JSON.stringify(toolNames) !== JSON.stringify(EXPECTED_TOOLS)) {
       throw new Error('MCP tool inventory drifted from the served demo surface');
     }
     const planned = await client.send({
       jsonrpc: '2.0', id: 3, method: 'tools/call',
-      params: { name: 'risk_fork_demo_plan', arguments: { scenario: 'low-read-only' } },
+      params: {
+        _meta: { progressToken: 1 },
+        name: 'risk_fork_demo_plan',
+        arguments: { scenario: 'low-read-only' },
+      },
     });
     assertTruth(planned.structuredContent, 'plan');
     if (planned.structuredContent.writes_performed !== false) throw new Error('MCP plan wrote state');
     const ran = await client.send({
       jsonrpc: '2.0', id: 4, method: 'tools/call',
-      params: { name: 'risk_fork_demo_run', arguments: { scenario: 'high-filesystem-write' } },
+      params: {
+        _meta: { progressToken: 2 },
+        name: 'risk_fork_demo_run',
+        arguments: { scenario: 'high-filesystem-write' },
+      },
     });
     const run = ran.structuredContent;
     assertTruth(run, 'run');
@@ -178,7 +188,11 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
     }
     const receiptResult = await client.send({
       jsonrpc: '2.0', id: 5, method: 'tools/call',
-      params: { name: 'risk_fork_demo_receipt', arguments: { run_id: run.run_id } },
+      params: {
+        _meta: { progressToken: 3 },
+        name: 'risk_fork_demo_receipt',
+        arguments: { run_id: run.run_id },
+      },
     });
     assertTruth(receiptResult.structuredContent, 'receipt');
     if (receiptResult.isError === true
