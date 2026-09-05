@@ -1,107 +1,169 @@
 #!/usr/bin/env python3
-"""
-Claude Agent SDK Gating Adapter for Agoragentic.
+"""Fail-closed local preflight and SDK hook shape; never a paid executor.
 
-Uses Claude Agent SDK-style permission middleware and hook abstractions to gate:
-- Marketplace execution and automated capability requests.
-- Maximum USDC spend caps.
-- External network/file requests before dispatching paid routed capability calls.
-- Human-in-the-loop validation for paid flows.
-- Automated receipt logging and publication.
+This module does not authenticate a principal, read files on behalf of a tool,
+verify settlement, or grant approval. Production backend authorization remains
+mandatory. See README.md for the evidence boundary and compatibility changes.
 """
+from __future__ import annotations
 
-import os
 import json
-from typing import Any, Dict, Tuple
+import math
+import re
+from decimal import Decimal
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Mapping, Optional, Tuple
 
-# Configuration
-AGORAGENTIC_API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")
-DRY_RUN = not AGORAGENTIC_API_KEY
+READ_TOOLS = frozenset({"agoragentic_match", "agoragentic_search", "agoragentic_categories"})
+EXECUTE_TOOLS = frozenset({"agoragentic_execute", "agoragentic_invoke"})
+DEFAULTS = {
+    "max_spend_usdc_per_call": "0.25",
+    "allow_file_access_before_execution": False,
+    "require_hitl_for_spend": True,
+    "publish_receipts_publicly": False,
+}
+MONEY = re.compile(r"(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,6})?\Z", re.ASCII)
+
+
+def money(value: Any) -> Decimal:
+    """Accept bounded decimal strings and legacy finite numbers; never coerce bools."""
+    if type(value) not in (str, int, float):
+        raise ValueError("invalid_money")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("invalid_money")
+    text = value if type(value) is str else format(Decimal(str(value)), "f")
+    if not MONEY.fullmatch(text):
+        raise ValueError("invalid_money")
+    return Decimal(text)
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_config_key")
+        result[key] = value
+    return result
+
+
+def load_permissions(path: Optional[str]) -> Mapping[str, Any]:
+    raw: Any = {}
+    if path is not None:
+        source = Path(path)
+        # A missing or invalid explicitly requested policy is never a default policy.
+        with source.open("rb") as stream:
+            data = stream.read(16_385)
+        if len(data) > 16_384:
+            raise ValueError("config_too_large")
+        raw = json.loads(data.decode("utf-8"), object_pairs_hook=_unique_object)
+    if type(raw) is not dict:
+        raise ValueError("config_must_be_object")
+    if "permissions" in raw:
+        if set(raw) - {"$schema", "version", "security_level", "permissions", "audit_trail"}:
+            raise ValueError("unknown_config_field")
+        raw = raw["permissions"]
+    if type(raw) is not dict or set(raw) - set(DEFAULTS):
+        raise ValueError("unknown_permission")
+    config = {**DEFAULTS, **raw}
+    config["max_spend_usdc_per_call"] = str(money(config["max_spend_usdc_per_call"]))
+    for key in set(DEFAULTS) - {"max_spend_usdc_per_call"}:
+        if type(config[key]) is not bool:
+            raise ValueError("permission_must_be_boolean")
+    return MappingProxyType(config)
+
+
+def public_receipt(receipt: Any) -> dict[str, str]:
+    """Allowlist a small display projection, not the original/verifiable receipt.
+
+    No input ID, free-form message, nested field, signature, hash, or address is
+    reflected. Original signed evidence must be retained separately by the host.
+    This projection is intentionally lossy and must never be used for verification.
+    """
+    if type(receipt) is not dict:
+        return {"projection": "receipt_display_only"}
+    result = {"projection": "receipt_display_only"}
+    if receipt.get("status") in ("recorded", "blocked", "failed", "pending", "completed"):
+        result["status"] = receipt["status"]
+    return result
+
 
 class ClaudeAgentSdkGatingAdapter:
     def __init__(self, permissions_config_path: Optional[str] = None):
-        self.permissions = self._load_permissions(permissions_config_path)
+        self.permissions = load_permissions(permissions_config_path)
 
-    def _load_permissions(self, path: Optional[str]) -> Dict[str, Any]:
-        if path and os.path.exists(path):
-            with open(path, "r") as f:
-                return json.load(f)
-        return {
-            "max_spend_usdc_per_call": 0.25,
-            "allow_file_access_before_execution": False,
-            "require_hitl_for_spend": True,
-            "publish_receipts_publicly": False
-        }
+    def verify_tool_permission(self, tool_name: str, args: dict[str, Any]) -> Tuple[bool, str]:
+        """Compatibility tuple. A pending approval ALWAYS has allowed=False.
 
-    def verify_tool_permission(self, tool_name: str, args: Dict[str, Any]) -> Tuple[bool, str]:
+        Even a disabled HITL preference does not open a payment path. Unknown
+        tools (including arbitrary MCP prefixes) fail closed. Read preflight is
+        not remote access authorization or proof of a host boundary.
         """
-        Claude Agent SDK hook invoked before calling any marketplace tool.
-        Enforces permissions and spend limits.
+        if type(tool_name) is not str or type(args) is not dict:
+            return False, "Invalid_Tool_Input"
+        if tool_name in READ_TOOLS:
+            return True, "Read_Only_Preflight"
+        if tool_name not in EXECUTE_TOOLS:
+            return False, "Unsupported_Tool"
+        constraints = args.get("constraints")
+        if type(constraints) is not dict or "max_cost_usdc" not in constraints:
+            return False, "Invalid_Spend_Cap"
+        try:
+            requested = money(constraints["max_cost_usdc"])
+        except ValueError:
+            return False, "Invalid_Spend_Cap"
+        if requested > money(self.permissions["max_spend_usdc_per_call"]):
+            return False, "Denied_Spend_Limit_Exceeded"
+        data = args.get("input_data", {})
+        if type(data) is not dict:
+            return False, "Invalid_Tool_Input"
+        if "read_local_files" in data:
+            if type(data["read_local_files"]) is not bool:
+                return False, "Invalid_Tool_Input"
+            if data["read_local_files"] and not self.permissions["allow_file_access_before_execution"]:
+                return False, "Denied_File_Access_Blocked"
+        if self.permissions["require_hitl_for_spend"]:
+            return False, "Approval_Required"
+        return False, "Paid_Execution_Unavailable"
+
+    async def pre_tool_use(self, input_data: dict[str, Any], tool_use_id: Any = None,
+                           context: Any = None) -> dict[str, Any]:
+        """SDK callback. Deny pending work rather than relying on a textual warning.
+
+        An allowed preflight returns no permission override, preserving other
+        host permission checks. This callback never dispatches the operation.
         """
-        # Gating network actions before paid capability calls
-        if tool_name == "agoragentic_execute":
-            # 1. Spend budget limit check
-            max_allowed = self.permissions.get("max_spend_usdc_per_call", 0.0)
-            requested_cap = float(args.get("constraints", {}).get("max_cost_usdc", 0.0))
-            
-            if requested_cap > max_allowed:
-                return False, f"Permission Denied: Spend cap {requested_cap} USDC exceeds maximum policy limit of {max_allowed} USDC."
+        if type(input_data) is not dict or input_data.get("hook_event_name") != "PreToolUse":
+            allowed, status = False, "Invalid_Hook_Input"
+        else:
+            allowed, status = self.verify_tool_permission(
+                input_data.get("tool_name"), input_data.get("tool_input"))
+        if allowed:
+            return {}
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": status,
+        }}
 
-            # 2. File boundary sanity checks
-            if not self.permissions.get("allow_file_access_before_execution", False):
-                if args.get("input_data", {}).get("read_local_files", False):
-                    return False, "Permission Denied: Local file extraction is blocked before paid execution."
+    def sdk_hooks(self) -> dict[str, Any]:
+        """Explicit opt-in registration; importing this file starts no SDK or network."""
+        from claude_agent_sdk import HookMatcher
+        return {"PreToolUse": [HookMatcher(matcher=None, hooks=[self.pre_tool_use])]}
 
-            # 3. Human Gate check
-            if self.permissions.get("require_hitl_for_spend", True):
-                print(f"[Claude SDK Permission] HITL approval required for {requested_cap} USDC spend.")
-                return True, "Authorized_With_HITL_Gate"
+    def handle_post_execution(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Replace only the receipt projection; not a general output/PII filter.
 
-        return True, "Authorized"
-
-    def handle_post_execution(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        A legacy publication preference cannot authorize disclosure. No original
+        receipt is modified, logged, published, or represented as verified here.
         """
-        Post-execution hook called after a successful routed execute() call.
-        Enforces receipt publication and telemetry policies.
-        """
-        receipt = result.get("receipt", {})
-        
-        # Redact private details if receipt publication is restricted
-        if not self.permissions.get("publish_receipts_publicly", False):
-            if "settlement_address" in receipt:
-                receipt["settlement_address"] = "[REDACTED_BY_CLAUDE_SDK_POLICY]"
-            
-        print(f"[Claude SDK Permission] Receipt logged. ID: {receipt.get('receipt_id')}")
-        result["receipt"] = receipt
-        return result
+        if type(result) is not dict:
+            raise ValueError("result_must_be_object")
+        return {**result, "receipt": public_receipt(result.get("receipt"))}
 
 
 if __name__ == "__main__":
     adapter = ClaudeAgentSdkGatingAdapter()
-    
-    # 1. Test allowed tool call
-    print("--- Test 1: Under Spend Limit ---")
     allowed, status = adapter.verify_tool_permission(
-        "agoragentic_execute", 
-        {"constraints": {"max_cost_usdc": 0.15}}
-    )
-    print(f"Allowed: {allowed}, Status: {status}")
-
-    # 2. Test blocked tool call (Over spend limit)
-    print("\n--- Test 2: Over Spend Limit ---")
-    allowed_over, status_over = adapter.verify_tool_permission(
-        "agoragentic_execute", 
-        {"constraints": {"max_cost_usdc": 0.50}} # Default limit is 0.25
-    )
-    print(f"Allowed: {allowed_over}, Status: {status_over}")
-
-    # 3. Test file gating
-    print("\n--- Test 3: Blocked File Access ---")
-    allowed_file, status_file = adapter.verify_tool_permission(
-        "agoragentic_execute", 
-        {
-            "constraints": {"max_cost_usdc": 0.10},
-            "input_data": {"read_local_files": True}
-        }
-    )
-    print(f"Allowed: {allowed_file}, Status: {status_file}")
+        "agoragentic_execute", {"constraints": {"max_cost_usdc": "0.15"}})
+    assert not allowed and status == "Approval_Required"
+    print(json.dumps({"allowed": allowed, "status": status, "network_calls": 0}))

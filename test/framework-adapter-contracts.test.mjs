@@ -14,6 +14,7 @@ const adapters = [
   ["LiveKit Agents", "livekit-agents/adapter.test.py"],
   ["Pipecat", "pipecat/adapter.test.py"],
   ["smolagents", "smolagents/adapter.test.py"],
+  ["Claude Agent SDK + commerce fixture", "claude-agent-sdk/adapter.test.py"],
 ];
 
 for (const [name, relativePath] of adapters) {
@@ -28,3 +29,10 @@ for (const [name, relativePath] of adapters) {
     assert.match(result.stderr, /OK/);
   });
 }
+
+test("Claude Agent SDK TypeScript fail-closed contract", () => {
+  const result = spawnSync(process.execPath,
+    ["--experimental-strip-types", "--test", "claude-agent-sdk/adapter.test.mjs"],
+    { cwd: repoRoot, encoding: "utf8", timeout: 30_000 });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
