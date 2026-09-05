@@ -56906,6 +56906,7 @@ import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { types as utilTypes2 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/e2b-template/lib/runtime-contract.mjs
 var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
@@ -58529,10 +58530,174 @@ var MAX_JSON_DEPTH = 50;
 var MAX_LIST_PAGES = 100;
 var EXECUTION_CLEANUP_MARGIN_MS = 5e3;
 var PROFILE_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-clean-template.v1";
+var LIVE_QUALIFICATION_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-live-qualification.v1";
 var EMPTY_WORKSPACE_DIGEST = sha256Ref([]);
 var E2B_SDK_ALL_TRAFFIC_SENTINEL = "0.0.0.0/0";
+var MAX_SANDBOX_METADATA_BYTES = 8 * 1024;
+var E2B_RUNTIME_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.schema",
+  "agoragentic.risk_fork.profile",
+  "agoragentic.risk_fork.cleanup_ref",
+  "agoragentic.risk_fork.capsule_hash",
+  "agoragentic.risk_fork.workspace_manifest_hash",
+  "agoragentic.risk_fork.identity_hash",
+  "agoragentic.risk_fork.network_policy_hash",
+  "agoragentic.risk_fork.template_hash",
+  "agoragentic.risk_fork.bootstrap_artifact_hash",
+  "agoragentic.risk_fork.runner_artifact_hash"
+]);
+var E2B_LIVE_QUALIFICATION_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.profile",
+  "agoragentic.risk_fork.run_hash"
+]);
+var E2B_RUNTIME_HASH_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.capsule_hash",
+  "agoragentic.risk_fork.workspace_manifest_hash",
+  "agoragentic.risk_fork.identity_hash",
+  "agoragentic.risk_fork.network_policy_hash",
+  "agoragentic.risk_fork.template_hash",
+  "agoragentic.risk_fork.bootstrap_artifact_hash",
+  "agoragentic.risk_fork.runner_artifact_hash"
+]);
+var E2B_CLEAN_METADATA_KEYS = /* @__PURE__ */ new Set([
+  ...E2B_RUNTIME_METADATA_KEYS,
+  ...E2B_LIVE_QUALIFICATION_METADATA_KEYS
+]);
 var E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE = "E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE";
 var E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER = "E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER";
+function createDetachedArray(...values) {
+  const output = Object.setPrototypeOf([], null);
+  for (let index = 0; index < values.length; index += 1) {
+    Object.defineProperty(output, index, {
+      configurable: true,
+      enumerable: true,
+      value: values[index],
+      writable: true
+    });
+  }
+  return output;
+}
+function buildE2BCleanSandboxCreateOptions(input = {}) {
+  if (input && typeof input === "object" && utilTypes2.isProxy(input)) {
+    throw new TypeError("E2B clean sandbox creation input must not be a Proxy");
+  }
+  assertPlainObject(input, "E2B clean sandbox creation input");
+  if (Object.getOwnPropertySymbols(input).length > 0) {
+    throw new TypeError("E2B clean sandbox creation input contains a symbol key");
+  }
+  const inputDescriptors = Object.getOwnPropertyDescriptors(input);
+  for (const descriptor of Object.values(inputDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(
+        "E2B clean sandbox creation input contains a hidden or accessor-backed field"
+      );
+    }
+  }
+  const inputKeys = Object.keys(inputDescriptors);
+  const unexpectedInputKeys = inputKeys.filter((key) => !["timeoutMs", "metadata"].includes(key));
+  if (unexpectedInputKeys.length > 0) {
+    throw new TypeError("E2B clean sandbox creation input contains unsupported fields");
+  }
+  if (inputKeys.length !== 2 || !Object.hasOwn(inputDescriptors, "timeoutMs") || !Object.hasOwn(inputDescriptors, "metadata")) {
+    throw new TypeError("E2B clean sandbox creation input must contain exact required fields");
+  }
+  const timeoutMs = boundedInteger(
+    inputDescriptors.timeoutMs.value,
+    "E2B clean sandbox timeoutMs",
+    {
+      min: 1e3,
+      max: 24 * 60 * 60 * 1e3
+    }
+  );
+  const rawMetadata = inputDescriptors.metadata.value;
+  if (rawMetadata && typeof rawMetadata === "object" && utilTypes2.isProxy(rawMetadata)) {
+    throw new TypeError("E2B clean sandbox metadata must not be a Proxy");
+  }
+  assertPlainObject(rawMetadata, "E2B clean sandbox metadata");
+  if (Object.getOwnPropertySymbols(rawMetadata).length > 0) {
+    throw new TypeError("E2B clean sandbox metadata contains a symbol key");
+  }
+  const metadataDescriptors = Object.getOwnPropertyDescriptors(rawMetadata);
+  for (const descriptor of Object.values(metadataDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError("E2B clean sandbox metadata contains a hidden or accessor field");
+    }
+  }
+  const metadata = /* @__PURE__ */ Object.create(null);
+  const metadataEntries = Object.entries(metadataDescriptors).map(([key, descriptor]) => [key, descriptor.value]);
+  if (metadataEntries.length > 32) {
+    throw new TypeError("E2B clean sandbox metadata exceeds 32 entries");
+  }
+  for (const [key, value] of metadataEntries) {
+    const normalizedKey3 = requireString(key, "E2B clean sandbox metadata key", {
+      maxLength: 200,
+      pattern: /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
+    });
+    if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey3)) {
+      throw new TypeError("E2B clean sandbox metadata contains an unsupported key");
+    }
+    if (value && typeof value === "object" && utilTypes2.isProxy(value)) {
+      throw new TypeError(`E2B clean sandbox metadata ${normalizedKey3} must not be a Proxy`);
+    }
+    const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey3}`, {
+      maxLength: 1024
+    });
+    if (normalizedKey3 !== key || normalizedValue !== value || /[^\x20-\x7e]/.test(normalizedValue)) {
+      throw new TypeError("E2B clean sandbox metadata must use exact printable ASCII strings");
+    }
+    metadata[normalizedKey3] = normalizedValue;
+  }
+  const profile = metadata["agoragentic.risk_fork.profile"];
+  const expectedMetadataKeys = profile === PROFILE_METADATA_SCHEMA ? E2B_RUNTIME_METADATA_KEYS : profile === LIVE_QUALIFICATION_METADATA_SCHEMA ? E2B_LIVE_QUALIFICATION_METADATA_KEYS : null;
+  if (!expectedMetadataKeys || metadataEntries.length !== expectedMetadataKeys.length || expectedMetadataKeys.some((key) => !(key in metadata))) {
+    throw new TypeError("E2B clean sandbox metadata does not match a supported exact profile");
+  }
+  if (profile === PROFILE_METADATA_SCHEMA) {
+    if (metadata["agoragentic.risk_fork.schema"] !== "v1" || !/^e2b_cleanup_ref_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      metadata["agoragentic.risk_fork.cleanup_ref"]
+    )) {
+      throw new TypeError("E2B clean sandbox runtime metadata binding is invalid");
+    }
+    for (const key of E2B_RUNTIME_HASH_METADATA_KEYS) {
+      requireSha256Ref(metadata[key], `E2B clean sandbox metadata ${key}`);
+    }
+  } else {
+    requireSha256Ref(
+      metadata["agoragentic.risk_fork.run_hash"],
+      "E2B clean sandbox metadata run hash"
+    );
+  }
+  if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > MAX_SANDBOX_METADATA_BYTES) {
+    throw new TypeError("E2B clean sandbox metadata exceeds the byte limit");
+  }
+  assertCanonicalJson({ timeoutMs, metadata });
+  const outputMetadata = /* @__PURE__ */ Object.create(null);
+  for (const key of expectedMetadataKeys) outputMetadata[key] = metadata[key];
+  const network = Object.assign(/* @__PURE__ */ Object.create(null), {
+    // Keep the SDK-required Array brand while severing mutable inherited
+    // Array.prototype hooks before the pinned SDK retains these values for
+    // JSON serialization.
+    allowOut: createDetachedArray(),
+    denyOut: createDetachedArray(E2B_SDK_ALL_TRAFFIC_SENTINEL),
+    allowPublicTraffic: false
+  });
+  const lifecycle = Object.assign(/* @__PURE__ */ Object.create(null), {
+    onTimeout: "kill",
+    autoResume: false
+  });
+  const iam = Object.assign(/* @__PURE__ */ Object.create(null), { tokens: /* @__PURE__ */ Object.create(null) });
+  return deepFreeze(Object.assign(/* @__PURE__ */ Object.create(null), {
+    timeoutMs,
+    secure: true,
+    allowInternetAccess: false,
+    network,
+    lifecycle,
+    metadata: outputMetadata,
+    envs: /* @__PURE__ */ Object.create(null),
+    iam,
+    volumeMounts: /* @__PURE__ */ Object.create(null)
+  }));
+}
 var E2B_LIVE_FORK_SOURCE_ENABLED = false;
 function secureSnapshotProfileUnavailable(operation) {
   const error = new Error(
@@ -60186,21 +60351,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       runnerArtifactHash: this.trustedRunnerArtifactHash
     }, this.cleanTemplateHash);
     const createTimeoutMs = this.qualified ? Math.min(idleTtlMs, ttlMs) : ttlMs;
-    const createOptions = {
+    const createOptions = buildE2BCleanSandboxCreateOptions({
       timeoutMs: createTimeoutMs,
-      secure: true,
-      allowInternetAccess: false,
-      network: {
-        allowOut: [],
-        denyOut: [E2B_SDK_ALL_TRAFFIC_SENTINEL],
-        allowPublicTraffic: false
-      },
-      lifecycle: { onTimeout: "kill", autoResume: false },
-      metadata,
-      envs: {},
-      iam: { tokens: {} },
-      volumeMounts: {}
-    };
+      metadata
+    });
     savepoint.allocation_attempted = true;
     const Sandbox = await this.#sandboxClass();
     const createStartedAt = this.clock();
@@ -61399,7 +61553,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:b5e4de4aa9a4aad5b840e1eadfee096ccb7d7d59acd54d92e2a7b5c8f721716c" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:42be5386e702b9a92f862691d8464dc428b382674466075007cde3c5904d93bd" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 49,
-    "sha256": "sha256:b5e4de4aa9a4aad5b840e1eadfee096ccb7d7d59acd54d92e2a7b5c8f721716c"
+    "sha256": "sha256:42be5386e702b9a92f862691d8464dc428b382674466075007cde3c5904d93bd"
   },
   "reviewed_sources": [
     {
@@ -99,8 +99,8 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
-      "bytes": 106129,
-      "sha256": "sha256:c33875308bfc3be0527cca1c066284b935f6c1f65d3cd35fcbb09394ed9ec8d6"
+      "bytes": 113493,
+      "sha256": "sha256:4572865b82363e37e43abfd0138949c3fd09af9b45ecb1f292a743c089783836"
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
@@ -174,8 +174,8 @@
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 4640,
-      "sha256": "sha256:ccf71f734b30169cb9fb8dc7e3a85b865b963063c36fe82596f7cd44868a0990"
+      "bytes": 4677,
+      "sha256": "sha256:b07ba4579e53152b6cca638b66c223199eafe1824736ffe7cce2c8c885974b4d"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -2354,8 +2354,8 @@
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
       "source": "reviewed_source",
-      "bytes": 106129,
-      "sha256": "sha256:c33875308bfc3be0527cca1c066284b935f6c1f65d3cd35fcbb09394ed9ec8d6"
+      "bytes": 113493,
+      "sha256": "sha256:4572865b82363e37e43abfd0138949c3fd09af9b45ecb1f292a743c089783836"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
@@ -2729,8 +2729,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2437279,
-    "sha256": "sha256:e10040bee793b5c3700fb685ca4720a4f381ce41dc4a85a283aeeea9f36da622"
+    "bytes": 2444445,
+    "sha256": "sha256:b6bda4f783fb47816c9f8a6c3d171a0aae6a6f7d4927c1200d52ae35e94f8e4f"
   },
   "packaged_assets": [
     {

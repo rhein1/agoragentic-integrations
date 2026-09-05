@@ -22,6 +22,7 @@ import {
   loadVerifiedE2BRuntimeSdk,
 } from '../src/e2b-qualification.mjs';
 import {
+  buildE2BCleanSandboxCreateOptions,
   performE2BSandboxBirthHandshake,
   validateE2BSandboxInfo,
 } from '../src/adapters/e2b.mjs';
@@ -35,7 +36,6 @@ import {
 import { E2B_QUALIFICATION_MAX_CANARY_COST_USD } from './e2b-build-template.mjs';
 import { assertE2BEvidencePlatformSecurity } from './e2b-evidence-platform.mjs';
 
-const ALL_TRAFFIC = '0.0.0.0/0';
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$/;
 const PROFILE = 'agoragentic.risk-fork.e2b-live-qualification.v1';
 const LIVE_ATTEMPT_SCHEMA =
@@ -690,22 +690,14 @@ async function runDefaultE2BSingleSandboxCanary({
     sandbox = await withProviderCall(
       'Sandbox.create',
       providerCallTimeoutMs,
-      (request) => Sandbox.create(gate.templateId, {
-        ...request,
-        timeoutMs: gate.idleTtlMs,
-        secure: true,
-        allowInternetAccess: false,
-        network: {
-          allowOut: [],
-          denyOut: [ALL_TRAFFIC],
-          allowPublicTraffic: false,
-        },
-        lifecycle: { onTimeout: 'kill', autoResume: false },
-        envs: {},
-        iam: { tokens: {} },
-        volumeMounts: {},
-        metadata,
-      }),
+      (request) => Sandbox.create(gate.templateId, Object.assign(
+        Object.create(null),
+        request,
+        buildE2BCleanSandboxCreateOptions({
+          timeoutMs: gate.idleTtlMs,
+          metadata,
+        }),
+      )),
     );
     createdAt = new Date(clock());
     activeFailureStage = 'sandbox_handle_validation';
