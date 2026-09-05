@@ -128,6 +128,14 @@ export {
   isRiskForkMcpHostAdapter,
 } from './mcp-host-adapter.mjs';
 export {
+  RISK_FORK_CLIENTS,
+  RISK_FORK_CLIENT_ADOPTION_SCHEMA,
+  RISK_FORK_GATEWAY_TOOL,
+  createRiskForkClientAdoptionPacket,
+  isRiskForkClientAdoptionPacket,
+  verifyRiskForkClientAdoptionPacket,
+} from './client-adoption.mjs';
+export {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
   verifyRiskForkReceiptStructure,

@@ -140,12 +140,125 @@ const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
 ]));
 
+const AUTHORIZATION_VALUE_PATTERN =
+  /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+const URL_USERINFO_PATTERN =
+  /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+const PATH_USERINFO_PATTERN =
+  /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
+
 export function containsSecretShapedText(value) {
   if (typeof value !== 'string') return false;
   for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
     if (SECRET_SHAPED_TEXT[index].test(value)) return true;
   }
   return false;
+}
+
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+
+function isAsciiAlphanumericCharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a);
+}
+
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 0x2d || code === 0x2e || code === 0x5f;
+}
+
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
+}
+
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 0x20) === 0x62
+    && (value.charCodeAt(index + 1) | 0x20) === 0x61
+    && (value.charCodeAt(index + 2) | 0x20) === 0x73
+    && (value.charCodeAt(index + 3) | 0x20) === 0x69
+    && (value.charCodeAt(index + 4) | 0x20) === 0x63;
+}
+
+function isToken68CharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a)
+    || code === 0x2b
+    || code === 0x2d
+    || code === 0x2e
+    || code === 0x2f
+    || code === 0x3d
+    || code === 0x5f
+    || code === 0x7e;
+}
+
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length && isToken68CharacterCode(value.charCodeAt(cursor))
+    ? cursor
+    : -1;
+}
+
+function decodedBasicCandidateContainsColon(value, start, end) {
+  if (start >= end) return false;
+  const encoded = value.slice(start, end).replace(/\s/gu, '');
+  return encoded.length > 0 && Buffer.from(encoded, 'base64').includes(0x3a);
+}
+
+function containsBasicAuthorization(value) {
+  let search = 0;
+  while (search < value.length) {
+    let tokenStart = -1;
+    while (search < value.length) {
+      tokenStart = basicTokenStartAt(value, search);
+      if (tokenStart !== -1) break;
+      search += 1;
+    }
+    if (tokenStart === -1) return false;
+
+    let candidateStart = tokenStart;
+    let cursor = tokenStart;
+    while (cursor < value.length) {
+      const nestedTokenStart = basicTokenStartAt(value, cursor);
+      if (nestedTokenStart !== -1) {
+        if (decodedBasicCandidateContainsColon(value, candidateStart, cursor)) return true;
+        candidateStart = nestedTokenStart;
+        cursor = nestedTokenStart;
+        continue;
+      }
+      const code = value.charCodeAt(cursor);
+      if (isToken68CharacterCode(code) || isWhitespaceCharacter(value[cursor])) {
+        cursor += 1;
+        continue;
+      }
+      break;
+    }
+    if (decodedBasicCandidateContainsColon(value, candidateStart, cursor)) return true;
+    search = cursor + 1;
+  }
+  return false;
+}
+
+export function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== 'string') return false;
+  return containsSecretShapedText(value)
+    || containsBasicAuthorization(value)
+    || AUTHORIZATION_VALUE_PATTERN.test(value)
+    || URL_USERINFO_PATTERN.test(value)
+    || PATH_USERINFO_PATTERN.test(value);
 }
 
 export function assertNoSecretShapedText(value, field) {

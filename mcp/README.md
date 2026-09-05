@@ -155,6 +155,8 @@ It emits a machine-readable source-only/default-off status and exits with code 7
 
 The private package metadata includes the `risk-forkd` bin and `agoragentic-mcp/risk-forkd` subpath so a locally packed source checkout can verify their exact shared-module identity. This is not a registry installation claim: the package remains `private`, publication is hard-blocked, and the public npm name still resolves the unsafe legacy relay.
 
+Client-specific Claude Code, Codex, and Cursor integration preparation lives in [`risk-fork/CLIENT_ADOPTION.md`](../risk-fork/CLIENT_ADOPTION.md). It generates inactive review files and adds a local one-tool stdio gate for the future `risk_fork_protect` surface. It does not make this diagnostic CLI runnable, grant provider authority, or enable a client.
+
 ## Target configuration
 
 `AGORAGENTIC_MCP_URL` selects the desired MCP target placed in enforcement descriptors. It defaults to `https://agoragentic.com/api/mcp`.

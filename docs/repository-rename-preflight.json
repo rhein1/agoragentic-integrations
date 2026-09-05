@@ -1029,14 +1029,14 @@
         111,
         119,
         129,
-        139,
-        401,
-        413,
-        425,
-        437,
-        449,
-        461,
-        473
+        162,
+        424,
+        436,
+        448,
+        460,
+        472,
+        484,
+        496
       ],
       "categories": [
         "machine_discovery"
@@ -1046,7 +1046,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        285
+        288
       ],
       "categories": [
         "machine_discovery"
@@ -1445,8 +1445,8 @@
       "occurrences": 3,
       "line_numbers": [
         12,
-        117,
-        121
+        122,
+        126
       ],
       "categories": [
         "installer_or_clone",
@@ -1510,7 +1510,7 @@
       "path": "scripts/verify-integrations-json.js",
       "occurrences": 1,
       "line_numbers": [
-        298
+        299
       ],
       "categories": [
         "source_or_test"

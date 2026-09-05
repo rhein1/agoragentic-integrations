@@ -1,0 +1,411 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-client-adoption-packet.v1.json",
+  "title": "Risk Fork source-only client adoption packet",
+  "description": "Structural guardrail only. Parsed packets require deterministic verification with verifyRiskForkClientAdoptionPacket before reliance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "client",
+    "server_name",
+    "expected_tool_inventory",
+    "gateway",
+    "outputs",
+    "controls"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.risk-fork.client-adoption-packet.v1"
+    },
+    "status": {
+      "const": "source_only_default_off"
+    },
+    "client": {
+      "enum": [
+        "all",
+        "claude-code",
+        "codex",
+        "cursor"
+      ]
+    },
+    "server_name": {
+      "const": "risk_fork"
+    },
+    "expected_tool_inventory": {
+      "const": [
+        "risk_fork_protect"
+      ]
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_entrypoint",
+        "gate_sha256",
+        "gateway_entrypoint",
+        "gateway_sha256",
+        "standalone_status",
+        "exact_gateway_tool_enforced_by_local_gate",
+        "runtime_closure_bound",
+        "tool_input_schema_owner",
+        "tool_input_schema_bound"
+      ],
+      "properties": {
+        "gate_entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gate_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "gateway_entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gateway_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "standalone_status": {
+          "const": "diagnostic_only_refuses_standalone_startup"
+        },
+        "exact_gateway_tool_enforced_by_local_gate": {
+          "const": true
+        },
+        "runtime_closure_bound": {
+          "const": false
+        },
+        "tool_input_schema_owner": {
+          "const": "future_risk-forkd_gateway"
+        },
+        "tool_input_schema_bound": {
+          "const": false
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "client",
+          "format",
+          "review_filename",
+          "active_destination",
+          "content",
+          "native_default_off",
+          "native_exact_tool_allowlist",
+          "prompt_posture"
+        ],
+        "properties": {
+          "client": {
+            "enum": [
+              "claude-code",
+              "codex",
+              "cursor"
+            ]
+          },
+          "format": {
+            "enum": [
+              "json",
+              "toml"
+            ]
+          },
+          "review_filename": {
+            "type": "string",
+            "enum": [
+              "claude-code-risk-fork.disabled.mcp.json",
+              "claude-code-risk-fork.disabled.settings.json",
+              "codex-risk-fork.disabled.toml",
+              "cursor-risk-fork.disabled.mcp.json",
+              "cursor-risk-fork.disabled.permissions.json"
+            ]
+          },
+          "active_destination": {
+            "type": "string",
+            "minLength": 1
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1
+          },
+          "native_default_off": {
+            "type": "boolean"
+          },
+          "native_exact_tool_allowlist": {
+            "type": "boolean"
+          },
+          "prompt_posture": {
+            "enum": [
+              "explicit_per_tool_prompt",
+              "not_configured_in_this_file",
+              "explicit_ask_rule_while_server_disabled",
+              "client_default_only",
+              "empty_workspace_allowlist_best_effort_block"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "review_filename": {
+                  "const": "claude-code-risk-fork.disabled.mcp.json"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "client": { "const": "claude-code" },
+                "format": { "const": "json" },
+                "active_destination": { "const": "project .mcp.json" },
+                "native_default_off": { "const": false },
+                "native_exact_tool_allowlist": { "const": false },
+                "prompt_posture": { "const": "not_configured_in_this_file" }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "review_filename": {
+                  "const": "claude-code-risk-fork.disabled.settings.json"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "client": { "const": "claude-code" },
+                "format": { "const": "json" },
+                "active_destination": { "const": "project .claude/settings.json after an explicit reviewed merge" },
+                "native_default_off": { "const": true },
+                "native_exact_tool_allowlist": { "const": false },
+                "prompt_posture": { "const": "explicit_ask_rule_while_server_disabled" }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "review_filename": {
+                  "const": "codex-risk-fork.disabled.toml"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "client": { "const": "codex" },
+                "format": { "const": "toml" },
+                "active_destination": { "const": "$CODEX_HOME/config.toml or a trusted project .codex/config.toml" },
+                "content": {
+                  "type": "string",
+                  "allOf": [
+                    { "pattern": "(^|\\n)enabled = false(\\r?\\n|$)" },
+                    { "pattern": "enabled_tools = \\[\"risk_fork_protect\"\\]" },
+                    { "not": { "pattern": "(^|\\n)enabled = true(\\r?\\n|$)" } }
+                  ]
+                },
+                "native_default_off": { "const": true },
+                "native_exact_tool_allowlist": { "const": true },
+                "prompt_posture": { "const": "explicit_per_tool_prompt" }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "review_filename": {
+                  "const": "cursor-risk-fork.disabled.mcp.json"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "client": { "const": "cursor" },
+                "format": { "const": "json" },
+                "active_destination": { "const": "project .cursor/mcp.json" },
+                "native_default_off": { "const": false },
+                "native_exact_tool_allowlist": { "const": false },
+                "prompt_posture": { "const": "client_default_only" }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "review_filename": {
+                  "const": "cursor-risk-fork.disabled.permissions.json"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "client": { "const": "cursor" },
+                "format": { "const": "json" },
+                "active_destination": { "const": "project .cursor/permissions.json after an explicit reviewed merge" },
+                "native_default_off": { "const": false },
+                "native_exact_tool_allowlist": { "const": false },
+                "prompt_posture": { "const": "empty_workspace_allowlist_best_effort_block" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "writes_performed",
+        "client_configuration_modified",
+        "client_enabled",
+        "activation_supported",
+        "provider_authority_granted",
+        "executor_bound",
+        "hosted_authority_granted",
+        "production_authority_granted",
+        "live_traffic_protected",
+        "credentials_included",
+        "provider_calls",
+        "network_used"
+      ],
+      "properties": {
+        "writes_performed": {
+          "const": false
+        },
+        "client_configuration_modified": {
+          "const": false
+        },
+        "client_enabled": {
+          "const": false
+        },
+        "activation_supported": {
+          "const": false
+        },
+        "provider_authority_granted": {
+          "const": false
+        },
+        "executor_bound": {
+          "const": false
+        },
+        "hosted_authority_granted": {
+          "const": false
+        },
+        "production_authority_granted": {
+          "const": false
+        },
+        "live_traffic_protected": {
+          "const": false
+        },
+        "credentials_included": {
+          "const": false
+        },
+        "provider_calls": {
+          "const": 0
+        },
+        "network_used": {
+          "const": false
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "client": { "const": "all" }
+        },
+        "required": ["client"]
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "type": "array",
+            "minItems": 5,
+            "maxItems": 5,
+            "prefixItems": [
+              { "type": "object", "properties": { "review_filename": { "const": "claude-code-risk-fork.disabled.mcp.json" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "claude-code-risk-fork.disabled.settings.json" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "codex-risk-fork.disabled.toml" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "cursor-risk-fork.disabled.mcp.json" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "cursor-risk-fork.disabled.permissions.json" } } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "client": { "const": "claude-code" }
+        },
+        "required": ["client"]
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              { "type": "object", "properties": { "review_filename": { "const": "claude-code-risk-fork.disabled.mcp.json" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "claude-code-risk-fork.disabled.settings.json" } } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "client": { "const": "codex" }
+        },
+        "required": ["client"]
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "prefixItems": [
+              { "type": "object", "properties": { "review_filename": { "const": "codex-risk-fork.disabled.toml" } } }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "client": { "const": "cursor" }
+        },
+        "required": ["client"]
+      },
+      "then": {
+        "properties": {
+          "outputs": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              { "type": "object", "properties": { "review_filename": { "const": "cursor-risk-fork.disabled.mcp.json" } } },
+              { "type": "object", "properties": { "review_filename": { "const": "cursor-risk-fork.disabled.permissions.json" } } }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

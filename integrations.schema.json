@@ -220,6 +220,9 @@
         "compatibility_scope": {
           "type": "string",
           "description": "Bounded statement of the package compatibility evidence."
+        },
+        "client_adoption": {
+          "$ref": "#/$defs/riskForkClientAdoption"
         }
       }
     },
@@ -361,8 +364,91 @@
           "type": "string",
           "description": "Exact source or runtime boundary for an experimental integration."
         },
+        "client_adoption": {
+          "$ref": "#/$defs/riskForkClientAdoption"
+        },
         "capability_record": {
           "$ref": "#/$defs/integrationCapabilityRecord"
+        }
+      }
+    },
+    "riskForkClientAdoption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "package_subpath",
+        "package_import",
+        "module",
+        "cli",
+        "docs",
+        "schema",
+        "stdio_gate",
+        "expected_tool",
+        "supported_clients",
+        "client_enabled",
+        "activation_supported",
+        "executor_bound",
+        "provider_authority_granted",
+        "hosted_authority_granted",
+        "production_authority_granted",
+        "live_traffic_protected"
+      ],
+      "properties": {
+        "status": {
+          "const": "source_only_default_off"
+        },
+        "package_subpath": {
+          "const": "./client-adoption"
+        },
+        "package_import": {
+          "const": "@agoragentic/risk-fork/client-adoption"
+        },
+        "module": {
+          "const": "risk-fork/src/client-adoption.mjs"
+        },
+        "cli": {
+          "const": "risk-fork/scripts/client-adoption.mjs"
+        },
+        "docs": {
+          "const": "risk-fork/CLIENT_ADOPTION.md"
+        },
+        "schema": {
+          "const": "risk-fork/schema/client-adoption-packet.v1.json"
+        },
+        "stdio_gate": {
+          "const": "risk-fork/clients/one-tool-stdio-gate.mjs"
+        },
+        "expected_tool": {
+          "const": "risk_fork_protect"
+        },
+        "supported_clients": {
+          "const": [
+            "claude-code",
+            "codex",
+            "cursor"
+          ]
+        },
+        "client_enabled": {
+          "const": false
+        },
+        "activation_supported": {
+          "const": false
+        },
+        "executor_bound": {
+          "const": false
+        },
+        "provider_authority_granted": {
+          "const": false
+        },
+        "hosted_authority_granted": {
+          "const": false
+        },
+        "production_authority_granted": {
+          "const": false
+        },
+        "live_traffic_protected": {
+          "const": false
         }
       }
     },
