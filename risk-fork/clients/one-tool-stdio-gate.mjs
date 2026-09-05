@@ -33,6 +33,12 @@ const SHUTDOWN_FORCE_EXIT_MS = 1500;
 const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
 const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
+const CREDENTIAL_TUPLE_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet_key|walletkey|access_key_id|accesskeyid|secret_access_key)(?:$|_)/i;
+// This source distribution has no kernel-owned descendant tree boundary. Tests
+// exercise the protocol engine only after replacing this literal in an
+// unpackaged fixture copy; the shipped gate always refuses before verification
+// or process creation.
+const KERNEL_DESCENDANT_CONTAINMENT_VERIFIED = false;
 const VERIFIED_GATEWAY_BOOTSTRAP = String.raw`
 'use strict';
 const fs = require('node:fs');
@@ -82,10 +88,8 @@ const STATUS = Object.freeze({
   live_traffic_protected: false,
   inherited_environment_forwarded: false,
   recognized_credential_pattern_matches_forwarded: false,
-  serve_supported_on_current_platform: process.platform !== 'win32',
-  descendant_containment: process.platform === 'win32'
-    ? 'unavailable'
-    : 'posix_process_group',
+  serve_supported_on_current_platform: false,
+  descendant_containment: 'unavailable_requires_kernel_owned_boundary',
   max_active_gateway_requests: MAX_PENDING_REQUESTS,
   max_cancelled_gateway_requests: MAX_CANCELLED_GATEWAY_REQUESTS,
   max_total_gateway_requests: MAX_GATEWAY_REQUESTS,
@@ -196,6 +200,10 @@ function isAuthorityOrSecretKey(value) {
     || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized);
 }
 
+function isCredentialTupleKey(value) {
+  return CREDENTIAL_TUPLE_KEY_PATTERN.test(normalizedKey(value));
+}
+
 function containsCredentialMaterial(value) {
   const normalized = normalizedKey(value);
   return containsSerializedCredentialMaterial(value)
@@ -287,6 +295,12 @@ function encodeBoundedSecretFreeJson(value, boundary, { allowRequestProgressToke
     }
     if (current.value === null || typeof current.value !== 'object') continue;
     if (Array.isArray(current.value)) {
+      if (current.value.length === 2
+        && typeof current.value[0] === 'string'
+        && typeof current.value[1] === 'string'
+        && isCredentialTupleKey(current.value[0])) {
+        throw fail(`${boundary} contained a credential-shaped tuple`);
+      }
       for (let index = current.value.length - 1; index >= 0; index -= 1) {
         pushNode(current.value[index], current.depth + 1);
       }
@@ -474,12 +488,26 @@ function validateToolsList(message) {
 }
 
 async function serve(options) {
-  if (process.platform === 'win32') {
+  if (!KERNEL_DESCENDANT_CONTAINMENT_VERIFIED) {
     throw fail(
-      'Serve is unavailable on Windows until enforceable descendant-process containment exists',
-      'RISK_FORK_CLIENT_GATE_PLATFORM_UNSUPPORTED',
+      'Serve is unavailable until a kernel-owned descendant-process boundary is integrated',
+      'RISK_FORK_CLIENT_GATE_CONTAINMENT_UNAVAILABLE',
     );
   }
+  let activeTerminationHandler = null;
+  let pendingTerminationSignal = null;
+  const terminationSignals = process.platform === 'win32'
+    ? ['SIGINT', 'SIGTERM']
+    : ['SIGHUP', 'SIGINT', 'SIGTERM'];
+  const terminationHandler = (signal) => {
+    if (activeTerminationHandler === null) {
+      pendingTerminationSignal ??= signal;
+      return;
+    }
+    activeTerminationHandler(signal);
+  };
+  for (const signal of terminationSignals) process.on(signal, terminationHandler);
+
   const gatewayBytes = verifyGateway(options.gatewayEntrypoint, options.gatewaySha256);
   const child = spawn(process.execPath, [
     '--eval',
@@ -601,6 +629,8 @@ async function serve(options) {
       process.exit(code);
     }, SHUTDOWN_FORCE_EXIT_MS);
   }
+
+  activeTerminationHandler = (signal) => close(0, `Client gate received ${signal}`);
 
   child.once('close', () => {
     if (!closing || gatewayTreeExists()) return;
@@ -920,12 +950,7 @@ async function serve(options) {
     );
     inputEndTimer.unref();
   });
-  const terminationSignals = process.platform === 'win32'
-    ? ['SIGINT', 'SIGTERM']
-    : ['SIGHUP', 'SIGINT', 'SIGTERM'];
-  for (const signal of terminationSignals) {
-    process.on(signal, () => close(0, `Client gate received ${signal}`));
-  }
+  if (pendingTerminationSignal !== null) activeTerminationHandler(pendingTerminationSignal);
 }
 
 try {

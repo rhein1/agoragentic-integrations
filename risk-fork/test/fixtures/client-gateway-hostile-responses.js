@@ -158,6 +158,12 @@ input.on('line', (line) => {
     result = { content: [{ type: 'text', text: 'Basic dTpw.' }] };
   } else if (operation === 'basic-auth-ignored-tilde') {
     result = { content: [{ type: 'text', text: 'Basic dTpw~' }] };
+  } else if (operation === 'basic-auth-ignored-colon') {
+    result = { content: [{ type: 'text', text: 'Basic dT:pw' }] };
+  } else if (operation === 'basic-auth-ignored-bang') {
+    result = { content: [{ type: 'text', text: 'Basic dT!pw' }] };
+  } else if (operation === 'basic-auth-ignored-zero-width') {
+    result = { content: [{ type: 'text', text: 'Basic dT\u200bpw' }] };
   } else if (operation === 'basic-auth-wrapped') {
     result = { content: [{ type: 'text', text: '(Basic dTpw)' }] };
   } else if (operation === 'proxy-authorization') {
@@ -176,6 +182,26 @@ input.on('line', (line) => {
     result = {
       content: [{ type: 'text', text: 'ordinary' }],
       metadata: ['Authorization', 'Negotiate x'],
+    };
+  } else if (operation === 'credential-name-x-api-key') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['X-Api-Key', 'abcdefgh'],
+    };
+  } else if (operation === 'credential-name-openai-api-key') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['openai_api_key', 'abcdefgh'],
+    };
+  } else if (operation === 'credential-name-aws-access-key-id') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['AWSAccessKeyId', 'abcdefgh'],
+    };
+  } else if (operation === 'benign-policy-prose') {
+    result = {
+      content: [{ type: 'text', text: 'approval required; no authority granted' }],
+      metadata: [['approval', 'required'], ['authority', 'none']],
     };
   } else if (operation === 'url-userinfo') {
     result = { content: [{ type: 'text', text: 'https://synthetic-user:synthetic-pass@example.test/path' }] };

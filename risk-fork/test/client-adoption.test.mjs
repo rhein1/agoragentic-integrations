@@ -383,6 +383,15 @@ test('client adoption caps own keys before materializing property descriptors', 
   assert.equal(descriptorCalls, 0);
 });
 
+test('client adoption CLI never reflects an unknown credential-shaped argument', () => {
+  const credential = `amk_${'a'.repeat(64)}`;
+  const refused = runCli(['plan', '--client', 'all', credential]);
+  assert.equal(refused.status, 64);
+  assert.equal(refused.stdout, '');
+  assert.equal(JSON.parse(refused.stderr).message, 'Unknown or incomplete command-line flag');
+  assert.doesNotMatch(refused.stderr, /amk_[a-f0-9]{64}/);
+});
+
 test('client adoption CLI previews without writes and writes only inactive review files', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-adoption-'));
   try {
@@ -639,6 +648,18 @@ test('client adoption rejects credential-shaped paths before packet serializatio
       {
         gateway: path.join(temporaryRoot, 'Basic dTpw~', 'risk-forkd.js'),
         forbidden: /dTpw~/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dT:pw', 'risk-forkd.js'),
+        forbidden: /dT:pw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dT!pw', 'risk-forkd.js'),
+        forbidden: /dT!pw/,
+      },
+      {
+        gateway: path.join(temporaryRoot, 'Basic dT\u200bpw', 'risk-forkd.js'),
+        forbidden: /dT\u200bpw/,
       },
       {
         gateway: path.join(temporaryRoot, '(Basic dTpw)', 'risk-forkd.js'),

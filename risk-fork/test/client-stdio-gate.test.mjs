@@ -25,6 +25,7 @@ const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mj
 const fixtureRoot = path.join(packageRoot, 'test', 'fixtures');
 const serveTest = process.platform === 'win32' ? test.skip : test;
 const utilEntrypointUrl = new URL('../src/util.mjs', import.meta.url).href;
+const clientAdoptionEntrypointUrl = new URL('../src/client-adoption.mjs', import.meta.url).href;
 const ECMASCRIPT_WHITESPACE_CHARACTERS = Object.freeze([
   '\t', '\n', '\v', '\f', '\r', ' ', '\u00a0', '\u1680',
   '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
@@ -34,6 +35,33 @@ const ECMASCRIPT_WHITESPACE_CHARACTERS = Object.freeze([
 
 async function sha256(filename) {
   return `sha256:${createHash('sha256').update(await readFile(filename)).digest('hex')}`;
+}
+
+async function materializeUncontainedTestGate(temporaryRoot) {
+  const target = path.join(temporaryRoot, 'one-tool-stdio-gate-test-only.mjs');
+  const original = await readFile(gateEntrypoint, 'utf8');
+  const replacements = [
+    [
+      "from '../src/client-adoption.mjs';",
+      `from ${JSON.stringify(clientAdoptionEntrypointUrl)};`,
+    ],
+    [
+      "from '../src/util.mjs';",
+      `from ${JSON.stringify(utilEntrypointUrl)};`,
+    ],
+    [
+      'const KERNEL_DESCENDANT_CONTAINMENT_VERIFIED = false;',
+      'const KERNEL_DESCENDANT_CONTAINMENT_VERIFIED = true;',
+    ],
+  ];
+  let source = original;
+  for (const [needle, replacement] of replacements) {
+    assert.equal(source.split(needle).length - 1, 1, `test gate expected one ${needle}`);
+    source = source.replace(needle, replacement);
+  }
+  assert.notEqual(source, original);
+  await writeFile(target, source, 'utf8');
+  return target;
 }
 
 function withTimeout(promise, milliseconds) {
@@ -65,8 +93,9 @@ async function startGate(fixtureName, { consumeOutput = true, ready = true } = {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
   await copyFile(path.join(fixtureRoot, fixtureName), gateway);
+  const testGateEntrypoint = await materializeUncontainedTestGate(temporaryRoot);
   const child = spawn(process.execPath, [
-    gateEntrypoint,
+    testGateEntrypoint,
     'serve',
     '--gateway-entrypoint', gateway,
     '--gateway-sha256', await sha256(gateway),
@@ -658,25 +687,34 @@ serveTest('stdio client gate leaves the exact schema to the gateway but requires
 });
 
 serveTest('stdio client gate verifies exact gateway bytes and current gateway stays unavailable', async () => {
-  const mismatch = spawnSync(process.execPath, [
-    gateEntrypoint,
-    'serve',
-    '--gateway-entrypoint', path.join(repositoryRoot, 'mcp', 'risk-forkd.js'),
-    '--gateway-sha256', `sha256:${'0'.repeat(64)}`,
-  ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
-  assert.equal(mismatch.status, 78);
-  assert.equal(JSON.parse(mismatch.stderr).reason_code, 'RISK_FORK_CLIENT_GATE_HASH_MISMATCH');
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-hash-'));
+  try {
+    const testGateEntrypoint = await materializeUncontainedTestGate(temporaryRoot);
+    const mismatch = spawnSync(process.execPath, [
+      testGateEntrypoint,
+      'serve',
+      '--gateway-entrypoint', path.join(repositoryRoot, 'mcp', 'risk-forkd.js'),
+      '--gateway-sha256', `sha256:${'0'.repeat(64)}`,
+    ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
+    assert.equal(mismatch.status, 78);
+    assert.equal(JSON.parse(mismatch.stderr).reason_code, 'RISK_FORK_CLIENT_GATE_HASH_MISMATCH');
 
-  const currentGateway = path.join(repositoryRoot, 'mcp', 'risk-forkd.js');
-  const unavailable = spawnSync(process.execPath, [
-    gateEntrypoint,
-    'serve',
-    '--gateway-entrypoint', currentGateway,
-    '--gateway-sha256', await sha256(currentGateway),
-  ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
-  assert.equal(unavailable.status, 78);
-  assert.equal(unavailable.stdout, '');
-
+    const currentGateway = path.join(repositoryRoot, 'mcp', 'risk-forkd.js');
+    const unavailable = spawnSync(process.execPath, [
+      gateEntrypoint,
+      'serve',
+      '--gateway-entrypoint', currentGateway,
+      '--gateway-sha256', await sha256(currentGateway),
+    ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
+    assert.equal(unavailable.status, 78);
+    assert.equal(unavailable.stdout, '');
+    assert.equal(
+      JSON.parse(unavailable.stderr).reason_code,
+      'RISK_FORK_CLIENT_GATE_CONTAINMENT_UNAVAILABLE',
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });
 
 test('stdio client gate reports its exact platform and resource boundaries', async () => {
@@ -699,10 +737,8 @@ test('stdio client gate reports its exact platform and resource boundaries', asy
     live_traffic_protected: false,
     inherited_environment_forwarded: false,
     recognized_credential_pattern_matches_forwarded: false,
-    serve_supported_on_current_platform: process.platform !== 'win32',
-    descendant_containment: process.platform === 'win32'
-      ? 'unavailable'
-      : 'posix_process_group',
+    serve_supported_on_current_platform: false,
+    descendant_containment: 'unavailable_requires_kernel_owned_boundary',
     max_active_gateway_requests: 16,
     max_cancelled_gateway_requests: 16,
     max_total_gateway_requests: 32,
@@ -716,12 +752,20 @@ test('stdio client gate reports its exact platform and resource boundaries', asy
   const source = await readFile(gateEntrypoint, 'utf8');
   assert.doesNotMatch(source, /\b(?:fetch|https?\.request|connectRemoteClient|commitPrepared)\b/);
   assert.doesNotMatch(source, /from ['"](?:node:)?(?:dns|http|https|net|tls|undici)['"]/);
+  const signalRegistration = source.indexOf(
+    'for (const signal of terminationSignals) process.on(signal, terminationHandler);',
+  );
+  const gatewayVerification = source.indexOf(
+    'const gatewayBytes = verifyGateway(options.gatewayEntrypoint, options.gatewaySha256);',
+  );
+  const gatewaySpawn = source.indexOf('const child = spawn(process.execPath, [');
+  assert.ok(signalRegistration >= 0);
+  assert.ok(signalRegistration < gatewayVerification);
+  assert.ok(signalRegistration < gatewaySpawn);
 });
 
-test('stdio client gate refuses Windows serve before starting gateway code', {
-  skip: process.platform !== 'win32' ? 'Windows-specific descendant-containment boundary' : false,
-}, async () => {
-  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-win32-'));
+test('stdio client gate refuses serve before starting gateway code without kernel containment', async () => {
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-containment-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
   const marker = path.join(temporaryRoot, 'gateway-started.txt');
   try {
@@ -736,7 +780,7 @@ test('stdio client gate refuses Windows serve before starting gateway code', {
     assert.equal(refused.stdout, '');
     assert.equal(
       JSON.parse(refused.stderr).reason_code,
-      'RISK_FORK_CLIENT_GATE_PLATFORM_UNSUPPORTED',
+      'RISK_FORK_CLIENT_GATE_CONTAINMENT_UNAVAILABLE',
     );
     await assert.rejects(readFile(marker), { code: 'ENOENT' });
   } finally {
@@ -933,6 +977,14 @@ serveTest('stdio client gate scans decoded request and response values for crede
     ['dangling-underscore Basic authorization', 'basic-auth-dangling-underscore', 'Basic dTpw_', /dTpw_/],
     ['ignored-dot Basic authorization', 'basic-auth-ignored-dot', 'Basic dTpw.', /dTpw\./],
     ['ignored-tilde Basic authorization', 'basic-auth-ignored-tilde', 'Basic dTpw~', /dTpw~/],
+    ['ignored-colon Basic authorization', 'basic-auth-ignored-colon', 'Basic dT:pw', /dT:pw/],
+    ['ignored-bang Basic authorization', 'basic-auth-ignored-bang', 'Basic dT!pw', /dT!pw/],
+    [
+      'ignored-zero-width Basic authorization',
+      'basic-auth-ignored-zero-width',
+      'Basic dT\u200bpw',
+      /dT\u200bpw/,
+    ],
     ['punctuation-wrapped Basic authorization', 'basic-auth-wrapped', '(Basic dTpw)', /dTpw/],
     [
       'Proxy-Authorization header',
@@ -957,6 +1009,24 @@ serveTest('stdio client gate scans decoded request and response values for crede
       'authorization-non-basic',
       ['Authorization', 'Negotiate x'],
       /Negotiate x/,
+    ],
+    [
+      'X-Api-Key tuple',
+      'credential-name-x-api-key',
+      ['X-Api-Key', 'abcdefgh'],
+      /abcdefgh/,
+    ],
+    [
+      'openai_api_key tuple',
+      'credential-name-openai-api-key',
+      ['openai_api_key', 'abcdefgh'],
+      /abcdefgh/,
+    ],
+    [
+      'AWSAccessKeyId tuple',
+      'credential-name-aws-access-key-id',
+      ['AWSAccessKeyId', 'abcdefgh'],
+      /abcdefgh/,
     ],
     [
       'URL userinfo',
@@ -1094,6 +1164,24 @@ serveTest('stdio client gate scans decoded request and response values for crede
         },
       });
       assert.equal(called.error, undefined);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('ordinary policy prose and governance tuples remain available', async () => {
+    const session = await startGate('client-gateway-hostile-responses.js');
+    try {
+      const called = await session.request(1, 'tools/call', {
+        name: 'risk_fork_protect',
+        arguments: {
+          operation: 'benign-policy-prose',
+          description: 'approval required; no authority granted',
+          metadata: [['approval', 'required'], ['authority', 'none']],
+        },
+      });
+      assert.equal(called.error, undefined);
+      assert.equal(called.result.content[0].text, 'approval required; no authority granted');
     } finally {
       await session.cleanup();
     }
@@ -1593,10 +1681,11 @@ serveTest('stdio client gate bounds descriptor reads while the gateway file chan
   const padded = Buffer.concat([source, Buffer.from(`\n/*${'x'.repeat(256_000)}*/\n`)]);
   const expectedHash = `sha256:${createHash('sha256').update(padded).digest('hex')}`;
   try {
+    const testGateEntrypoint = await materializeUncontainedTestGate(temporaryRoot);
     for (let attempt = 0; attempt < 8; attempt += 1) {
       await writeFile(gateway, padded);
       const child = spawn(process.execPath, [
-        gateEntrypoint, 'serve', '--gateway-entrypoint', gateway,
+        testGateEntrypoint, 'serve', '--gateway-entrypoint', gateway,
         '--gateway-sha256', expectedHash,
       ], { cwd: packageRoot, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       const stderr = [];
@@ -1628,11 +1717,12 @@ test('stdio client gate rejects a FIFO gateway without blocking', {
 }, async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-fifo-'));
   try {
+    const testGateEntrypoint = await materializeUncontainedTestGate(temporaryRoot);
     const gateway = path.join(temporaryRoot, 'risk-forkd.js');
     const created = spawnSync('mkfifo', [gateway], { encoding: 'utf8' });
     assert.equal(created.status, 0, created.stderr);
     const child = spawn(process.execPath, [
-      gateEntrypoint,
+      testGateEntrypoint,
       'serve',
       '--gateway-entrypoint',
       gateway,
@@ -1668,11 +1758,12 @@ serveTest('stdio client gate never executes gateway bytes swapped after launch b
     'utf8',
   );
   try {
+    const testGateEntrypoint = await materializeUncontainedTestGate(temporaryRoot);
     for (let attempt = 0; attempt < 12; attempt += 1) {
       await writeFile(gateway, verifiedBytes);
       const stderr = [];
       const child = spawn(process.execPath, [
-        gateEntrypoint,
+        testGateEntrypoint,
         'serve',
         '--gateway-entrypoint', gateway,
         '--gateway-sha256', expectedHash,

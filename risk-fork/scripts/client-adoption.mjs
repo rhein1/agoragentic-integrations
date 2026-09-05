@@ -50,7 +50,7 @@ function parseFlags(values) {
       || flag === '--manifest'
       || flag === '--output';
     if (!takesValue || index + 1 >= values.length) {
-      throw new TypeError(`Unknown or incomplete flag: ${flag}`);
+      throw new TypeError('Unknown or incomplete command-line flag');
     }
     const key = flag.slice(2);
     if (flags[key] !== undefined) throw new TypeError(`Duplicate ${flag}`);
