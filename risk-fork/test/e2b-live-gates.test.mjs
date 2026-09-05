@@ -737,11 +737,25 @@ test('default live harness attempts exactly one sandbox and never treats boot-lo
   assert.ok(birthRuntime.state.request);
   assert.ok(birthRuntime.state.attestation);
   assert.ok(birthRuntime.state.bootEvidence);
-  assert.deepEqual(createOptions.envs, {});
-  assert.deepEqual(createOptions.iam, { tokens: {} });
-  assert.deepEqual(createOptions.volumeMounts, {});
-  assert.deepEqual(createOptions.lifecycle, { onTimeout: 'kill', autoResume: false });
-  assert.deepEqual(createOptions.network, {
+  assert.equal(Object.getPrototypeOf(createOptions), null);
+  assert.equal(Object.getPrototypeOf(createOptions.envs), null);
+  assert.deepEqual(Object.keys(createOptions.envs), []);
+  assert.equal(Object.getPrototypeOf(createOptions.iam), null);
+  assert.deepEqual(Object.keys(createOptions.iam), ['tokens']);
+  assert.equal(Object.getPrototypeOf(createOptions.iam.tokens), null);
+  assert.deepEqual(Object.keys(createOptions.iam.tokens), []);
+  assert.equal(Object.getPrototypeOf(createOptions.volumeMounts), null);
+  assert.deepEqual(Object.keys(createOptions.volumeMounts), []);
+  assert.equal(Object.getPrototypeOf(createOptions.metadata), null);
+  assert.equal(Object.getPrototypeOf(createOptions.lifecycle), null);
+  assert.deepEqual(
+    { ...createOptions.lifecycle },
+    { onTimeout: 'kill', autoResume: false },
+  );
+  assert.equal(Object.getPrototypeOf(createOptions.network), null);
+  assert.equal(Object.getPrototypeOf(createOptions.network.allowOut), null);
+  assert.equal(Object.getPrototypeOf(createOptions.network.denyOut), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(createOptions.network)), {
     allowOut: [],
     denyOut: ['0.0.0.0/0'],
     allowPublicTraffic: false,

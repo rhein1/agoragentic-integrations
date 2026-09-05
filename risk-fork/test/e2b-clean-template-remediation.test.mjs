@@ -718,17 +718,31 @@ test('strict clean-template profile exports locally and never snapshots or forks
 test('child birth options are exact and authority-free while IPv6 remains unqualified', async (t) => {
   const { mock, fork } = await prepareFork(t);
   assert.equal(mock.events.find((event) => event.type === 'create').templateId, TEMPLATE_ID);
-  assert.deepEqual(mock.createOptions.envs, {});
-  assert.deepEqual(mock.createOptions.iam, { tokens: {} });
-  assert.deepEqual(mock.createOptions.volumeMounts, {});
+  assert.equal(Object.getPrototypeOf(mock.createOptions), null);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.envs), null);
+  assert.deepEqual(Object.keys(mock.createOptions.envs), []);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.iam), null);
+  assert.deepEqual(Object.keys(mock.createOptions.iam), ['tokens']);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.iam.tokens), null);
+  assert.deepEqual(Object.keys(mock.createOptions.iam.tokens), []);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.volumeMounts), null);
+  assert.deepEqual(Object.keys(mock.createOptions.volumeMounts), []);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.metadata), null);
   assert.equal(mock.createOptions.secure, true);
   assert.equal(mock.createOptions.allowInternetAccess, false);
-  assert.deepEqual(mock.createOptions.network, {
+  assert.equal(Object.getPrototypeOf(mock.createOptions.network), null);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.network.allowOut), null);
+  assert.equal(Object.getPrototypeOf(mock.createOptions.network.denyOut), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(mock.createOptions.network)), {
     allowOut: [],
     denyOut: ['0.0.0.0/0'],
     allowPublicTraffic: false,
   });
-  assert.deepEqual(mock.createOptions.lifecycle, { onTimeout: 'kill', autoResume: false });
+  assert.equal(Object.getPrototypeOf(mock.createOptions.lifecycle), null);
+  assert.deepEqual(
+    { ...mock.createOptions.lifecycle },
+    { onTimeout: 'kill', autoResume: false },
+  );
   assert.equal(mock.createOptions.timeoutMs, 60_000);
   assert.equal(fork.network_status, 'offline_conformance_observation_only_ipv4_ipv6_unqualified');
 });

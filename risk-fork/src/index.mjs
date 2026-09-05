@@ -139,6 +139,7 @@ export {
 export {
   E2BRiskForkAdapter,
   E2B_RISK_FORK_PATHS,
+  buildE2BCleanSandboxCreateOptions,
 } from './adapters/e2b.mjs';
 export {
   createE2BAuthorityFreeSourceVerifier,
