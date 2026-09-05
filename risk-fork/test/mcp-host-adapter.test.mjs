@@ -1255,7 +1255,9 @@ test('a timed-out open retains pending capacity until its underlying plan become
   const current = await fixture({
     blockPhase: 'server/discover',
     maxSessions: 1,
-    timeouts: { open_session_ms: 500 },
+    // Keep the adapter's ordinary open deadline above slow parallel Windows CI;
+    // the explicit 20 ms deadline below is the timeout behavior under test.
+    timeouts: { open_session_ms: 2_000 },
   });
   try {
     const timedOpenRequest = enforcementRequest({

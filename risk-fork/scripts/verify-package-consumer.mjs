@@ -20,9 +20,13 @@ if (explicitCache !== undefined && !path.isAbsolute(explicitCache)) {
 }
 
 function run(label, executable, args, cwd) {
-  const commandArgs = explicitCache && executable === process.execPath && args[0] === npmCli
-    ? [...args, '--cache', explicitCache]
-    : args;
+  let commandArgs = args;
+  if (explicitCache && executable === process.execPath && args[0] === npmCli) {
+    const separator = args.indexOf('--');
+    commandArgs = separator === -1
+      ? [...args, '--cache', explicitCache]
+      : [...args.slice(0, separator), '--cache', explicitCache, ...args.slice(separator)];
+  }
   const result = spawnSync(executable, commandArgs, {
     cwd, env: environment, encoding: 'utf8', timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
     windowsHide: true,
@@ -47,13 +51,14 @@ try {
   const included = new Set(entry.files.map(file => file.path));
   for (const expected of [
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
+    'CLIENT_ADOPTION.md', 'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/mcp-host-adapter.mjs', 'src/mcp-transport-contract.mjs',
     'e2b-template/lib/mcp-http-phase.mjs', 'examples/mcp-host-adapter.mjs',
     'src/framework-tool-adapter.mjs', 'src/frameworks/openai-agents.mjs',
     'src/frameworks/langchain.mjs', 'src/frameworks/langgraph.mjs',
     'examples/local-reference.mjs', 'examples/framework-adapters.mjs',
-    'FRAMEWORK_ADAPTERS.md',
+    'FRAMEWORK_ADAPTERS.md', 'src/client-adoption.mjs',
   ]) assert.ok(included.has(expected), `Packed file missing: ${expected}`);
   for (const file of included) {
     assert.ok(!/(?:^|\/)(?:node_modules|\.git|\.env|test|hackathon)(?:\/|$)/.test(file), `Unexpected package path: ${file}`);
@@ -65,6 +70,7 @@ try {
     'AUTHORS.md',
     'MCP_HOST_ADAPTER.md',
     'FRAMEWORK_ADAPTERS.md',
+    'CLIENT_ADOPTION.md',
   ]) {
     const markdown = await readFile(path.join(packageRoot, document), 'utf8');
     for (const match of markdown.matchAll(/\]\((\.\.?\/[^)#]+)(?:#[^)]*)?\)/g)) {
@@ -131,6 +137,28 @@ try {
     await readFile(path.join(installedRoot, 'NOTICE'), 'utf8'),
     await readFile(path.join(packageRoot, 'NOTICE'), 'utf8'),
   );
+  const externalGateway = path.join(tempRoot, 'risk-forkd.js');
+  await writeFile(externalGateway, "'use strict';\nprocess.exitCode = 78;\n", 'utf8');
+  const installedClientPlan = JSON.parse(run(
+    'installed client adoption plan',
+    process.execPath,
+    [
+      npmCli,
+      'run',
+      '--silent',
+      'client:plan',
+      '--',
+      '--gateway',
+      externalGateway,
+    ],
+    installedRoot,
+  ));
+  assert.equal(installedClientPlan.status, 'source_only_default_off');
+  assert.equal(installedClientPlan.gateway.gateway_entrypoint, externalGateway);
+  assert.equal(installedClientPlan.gateway.runtime_closure_bound, false);
+  assert.equal(installedClientPlan.controls.client_enabled, false);
+  assert.equal(installedClientPlan.controls.provider_calls, 0);
+  assert.equal(installedClientPlan.controls.live_traffic_protected, false);
 
   run('installed package exports', process.execPath, ['--input-type=module', '--eval', `
     import assert from 'node:assert/strict';
@@ -143,6 +171,7 @@ try {
     import * as openai from '@agoragentic/risk-fork/frameworks/openai-agents';
     import * as langchain from '@agoragentic/risk-fork/frameworks/langchain';
     import * as langgraph from '@agoragentic/risk-fork/frameworks/langgraph';
+    import * as clients from '@agoragentic/risk-fork/client-adoption';
     assert.equal(typeof core.RiskForkController, 'function');
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
     assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
@@ -158,6 +187,9 @@ try {
     assert.equal(typeof openai.createOpenAIAgentsRiskForkTool, 'function');
     assert.equal(typeof langchain.createLangChainRiskForkTool, 'function');
     assert.equal(typeof langgraph.createLangGraphRiskForkNode, 'function');
+    assert.equal(clients.RISK_FORK_GATEWAY_TOOL, 'risk_fork_protect');
+    assert.deepEqual(clients.RISK_FORK_CLIENTS, ['claude-code', 'codex', 'cursor']);
+    assert.equal(core.createRiskForkClientAdoptionPacket, clients.createRiskForkClientAdoptionPacket);
   `], consumerRoot);
   const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
     path.join(installedRoot, 'examples/local-reference.mjs'),
@@ -209,6 +241,7 @@ try {
     verified_dependency_count: verifiedDependencyCount,
     installed_exports: true, mcp_http_phase_exports: 'verified', local_lifecycle: 'verified',
     mcp_host_example: 'passed', framework_adapter_example: 'passed',
+    installed_client_plan: 'passed',
     registry_publication_verified: false,
     live_traffic_protected: false, provider_calls: 0,
   }, null, 2)}\n`);
