@@ -400,6 +400,38 @@ class DynamicMcpTestProvider extends RiskForkProvider {
       tls_server_name: input.operation.destination_policy.dns_name,
       http_host: new URL(input.operation.mcp_server_ref).host,
       proxy_used: false,
+      request_body_hash: sha256Ref(`request:${input.operation.operation_hash}`),
+      response_body_hash: sha256Ref(`response:${input.operation.operation_hash}`),
+      wire_result_hash: sha256Ref(mcpResult),
+      wire_result_type: 'complete',
+      measurements: {
+        dns_query_count: 3,
+        connection_attempt_count: 1,
+        http_request_count: 1,
+        retry_count: 0,
+        request_body_bytes: 128,
+        response_body_bytes: 128,
+        elapsed_ms: 1,
+        http_status_code: 200,
+        tls_protocol: 'TLSv1.3',
+        response_content_type: 'application/json',
+        response_content_encoding: null,
+        decompression_used: false,
+        sse_used: false,
+        sse_event_count: 0,
+        sse_notification_count: 0,
+        protocol_metadata_sent: true,
+        method_header_sent: true,
+        name_header_sent: ['tools/call', 'resources/read', 'prompts/get']
+          .includes(input.operation.phase),
+        parameter_header_count: 0,
+        access_header_sent: false,
+        cookie_header_sent: false,
+        state_header_sent: false,
+        response_cookie_received: false,
+        response_state_created: false,
+        access_challenge_received: false,
+      },
       evidence_hash: null,
     };
     transportEvidence = this.transportEvidenceMutator(transportEvidence, input.operation);
@@ -738,6 +770,42 @@ test('live-default mode executes exact MCP phases only inside a request-bound ch
   assert.equal(current.provider.destroyedSavepoints.size, 2);
 });
 
+test('live-default child transport retains the exact explicit-read-only tools/call binding', async () => {
+  const current = dynamicFixture();
+  const opened = await openDirect(current.adapter);
+  const capabilities = completeCapabilities();
+  const annotations = completeAnnotations();
+  const descriptor = {
+    name: 'local_echo',
+    description: 'Exact child-transport binding fixture.',
+    inputSchema: {
+      type: 'object',
+      properties: { message: { type: 'string' } },
+    },
+    annotations,
+    capabilities,
+  };
+  const response = await opened.session.request(enforcementRequest({
+    schema: 'agoragentic.mcp.enforced-phase-request.v1',
+    phase: 'tools/call',
+    sessionBindingHash: opened.binding,
+    params: { name: 'local_echo', arguments: { message: 'bounded' } },
+    toolDescriptor: descriptor,
+    toolCapabilities: capabilities,
+    toolAnnotations: annotations,
+    toolEffectStatus: 'explicit_read_only',
+  }));
+  assert.equal(response.result.isError, false);
+  const operation = current.provider.operations.at(-1);
+  assert.equal(operation.kind, 'mcp_http_phase');
+  assert.equal(operation.phase, 'tools/call');
+  assert.equal(operation.tool_name, 'local_echo');
+  assert.equal(operation.tool_descriptor_hash, sha256Ref(descriptor));
+  assert.equal(operation.tool_effect_status, 'explicit_read_only');
+  assert.match(operation.tool_safety_binding_hash, /^sha256:[a-f0-9]{64}$/);
+  await opened.session.close();
+});
+
 test('live-default destination contract rejects non-HTTPS, literal, and special-use targets', async () => {
   const current = dynamicFixture();
   const rejectedTargets = [
@@ -778,6 +846,8 @@ test('live-default destination contract rejects non-HTTPS, literal, and special-
       session_binding_hash: null,
       tool_name: null,
       tool_descriptor_hash: null,
+      tool_input_schema: null,
+      tool_input_schema_hash: null,
       tool_annotations: null,
       tool_capabilities: null,
       tool_effect_status: null,
@@ -1058,6 +1128,7 @@ test('tool effect metadata cannot understate risk and stricter host profiles fai
   const annotations = completeAnnotations();
   const descriptor = {
     name: 'local_echo',
+    inputSchema: { type: 'object', properties: {} },
     annotations,
     capabilities,
   };
@@ -1121,7 +1192,11 @@ test('null-bearing capability metadata cannot claim that its effect is classifie
       unknown_or_unclassified: false,
     };
     const annotations = completeAnnotations();
-    const descriptor = { name: 'local_echo', annotations };
+    const descriptor = {
+      name: 'local_echo',
+      inputSchema: { type: 'object', properties: {} },
+      annotations,
+    };
     await assert.rejects(
       opened.session.request(enforcementRequest({
         schema: 'agoragentic.mcp.enforced-phase-request.v1',

@@ -1,7 +1,7 @@
 # Risk Fork MCP host adapter
 
-> **SOURCE-ONLY / SYNTHETIC DEMONSTRATION — NOT A REMOTE MCP TRANSPORT — NOT AN
-> ISOLATION BOUNDARY — NO LIVE TRAFFIC PROTECTION**
+> **SOURCE-ONLY / DEFAULT-OFF CHILD TRANSPORT — NOT A QUALIFIED ISOLATION
+> BOUNDARY — NO LIVE TRAFFIC PROTECTION**
 
 The MCP host adapter is a provider-neutral source contract for placing the existing
 Risk Fork host boundary in front of an MCP session lifecycle. It matches the
@@ -51,7 +51,9 @@ Before that gate, the Agoragentic MCP host validates the complete raw parameter
 object within its depth, node, and byte limits, then erases the standard opaque
 `_meta` member. Opaque transport/client metadata therefore cannot influence tool
 classification, request hashes, host dispatch, persistence, or remote forwarding.
-The actual operation arguments remain bound and scanned normally.
+The actual operation arguments remain bound and scanned normally. The child
+reconstructs the reserved 2026-07-28 `_meta` envelope from fixed host-owned
+values; caller-supplied protocol metadata is never forwarded.
 
 Caller `risk_profile` data is a minimum, not trusted classification authority. A
 successful typed import must contain a controller risk decision at least as strict
@@ -135,9 +137,12 @@ controller decision before import.
 
 The `mcp_http_phase` object returned by `createRiskForkMcpChildOperation()` is a
 closed, authority-free provider contract. It carries the exact request binding,
-redirect rejection, response schema, byte bound, and timeout, but it does not
-implement HTTP. A provider runner must explicitly support that operation and
-enforce the allowlist inside its disposable child. No bundled runner does so yet.
+redirect rejection, response schema, byte bound, timeout, and (for `tools/call`)
+the host-computed `explicit_read_only` effect binding. The E2B template runner now
+dispatches that operation to the opaque runtime capability exported from
+`@agoragentic/risk-fork/e2b-template/mcp-http-phase`. The runtime uses one direct
+Node-core Streamable HTTP POST per phase. This source addition does not enable
+the E2B adapter, build a hosted template, or grant provider/network authority.
 
 The destination contract accepts only HTTPS URLs with public DNS names. It rejects
 IP literals and local/special-use names, requires the child to resolve A, AAAA, and
@@ -146,7 +151,34 @@ unicast answers, pins the selected address while retaining the original TLS SNI
 and HTTP Host, disables environment proxies, and rejects redirects. The child must
 return a closed, hash-bound transport-evidence wrapper; clean import rechecks the
 requested/final URL, CNAME chain, resolved and selected addresses, TLS name, Host,
-proxy status, redirect count, and evidence hash before exposing the MCP result.
+proxy status, redirect count, typed request/connection/DNS/byte/TLS measurements,
+request/response/wire-result hashes, required protocol metadata and mirrored
+header observations, closed no-state/no-decompression controls, and evidence hash
+before exposing the MCP result. Each request sends both required response media
+types, `MCP-Protocol-Version`, `Mcp-Method`, conditional safely encoded
+`Mcp-Name`, and any `Mcp-Param-*` values derived from valid `x-mcp-header`
+annotations in the exact hash-bound tool input schema. Invalid annotated tools are
+excluded from `tools/list` before the application result is exposed. The runtime
+accepts bounded duplicate-key-aware UTF-8 JSON or bounded request-scoped SSE with
+at most 256 events. SSE comments are discarded inside the child. Progress and
+logging notifications are rejected because this profile supplies neither a
+progress token nor a log-level opt-in. Exactly one matching final response is
+required.
+Redirects, compressed bodies, cookies, access challenges, resumable/retry SSE
+state, protocol sessions, server requests, mismatched or duplicate finals, and
+fallback/retry are rejected.
+
+Every request carries fixed `2026-07-28` client metadata. Every wire result must
+declare `resultType: "complete"`; `input_required`, tasks, missing or unknown
+result types fail closed without another request. `server/discover` goes over the
+wire with only the reserved `_meta`, validates standard `supportedVersions` and
+`capabilities`, then becomes the package's internal
+`{ protocol_version, stateless: true }` binding. Wire-only `resultType`, `_meta`,
+and cache hints are removed before application-schema validation. This bounded
+profile does not implement older `initialize` negotiation, authorization-bearing
+servers, subscriptions, tasks, or MRTR retries. See the
+[2026-07-28 Streamable HTTP specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
+and [discovery contract](https://modelcontextprotocol.io/specification/2026-07-28/server/discover).
 
 That wrapper is a contract, not independent network proof. A production claim
 requires a qualified executor to originate the observations at the actual socket
@@ -205,18 +237,19 @@ outer-host deadline, while this adapter's `close()` waits for terminal cleanup.
   schema and bindings exactly match those emitted by
   `createRiskForkMcpChildOperation()`, plus an exact one-endpoint allowlist. The
   operation deliberately contains no predeclared response.
-- There is no executor for `mcp_http_phase` in the current Local or E2B provider
-  runners. Their implemented operation surface remains a closed
-  `bounded_file_batch`; Local remains network-blocked and E2B live execution is
-  hard-disabled.
+- The E2B template runner contains a source-reviewed `mcp_http_phase` executor.
+  The Local provider remains restricted to `bounded_file_batch`, and the E2B
+  adapter's live allocation/execution gate remains hard-disabled. No provider was
+  contacted and no hosted template was rebuilt by adding this source.
 - A phase-plan callback **must not fetch remote MCP content**. Doing so would put
   the risky network interaction on the clean host, outside the disposable fork.
 - Predeclared `bounded_file_batch.commit_candidate` plans are rejected unless the
   host explicitly selects `synthetic_demo_mode:true`. That option exists only for
   the contained example/tests and is not a live fallback.
-- A real provider still needs a separately reviewed `mcp_http_phase` executor,
-  independently observed DNS/address enforcement, redirect rejection, bounded
-  response import, and an explicit credential model.
+- A real provider still needs separately reviewed wiring to this executor,
+  independently observed DNS/address/socket enforcement, and qualification of
+  the exact packaged template. The initial runtime intentionally has no
+  credential model: only public credential-free HTTPS MCP endpoints are accepted.
 - Current taint policy rejects authority/capability-shaped fields in child
   artifacts. Consequently, a fork-produced `tools/list` result cannot currently
   carry the complete `capabilities` declaration needed to classify a discovered
@@ -233,6 +266,6 @@ outer-host deadline, while this adapter's `close()` waits for terminal cleanup.
   must explicitly construct the opaque capabilities and install this adapter at
   its mandatory network/session boundary.
 
-Until those gaps are implemented and independently qualified, present this as a
-source-complete host-boundary coordinator and honest local demonstration—not as a
-universal MCP gateway or live Risk Fork protection.
+Until those gaps are independently qualified, present this as a source-complete
+host-boundary coordinator plus default-off child transport and an honest local
+demonstration—not as a universal MCP gateway or live Risk Fork protection.

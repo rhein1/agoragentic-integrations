@@ -33,6 +33,8 @@
     "./interception": "./src/interception.mjs",
     "./host-boundary": "./src/host-boundary.mjs",
     "./mcp-host-adapter": "./src/mcp-host-adapter.mjs",
+    "./mcp-transport-contract": "./src/mcp-transport-contract.mjs",
+    "./e2b-template/mcp-http-phase": "./e2b-template/lib/mcp-http-phase.mjs",
     "./receipt": "./src/receipt.mjs",
     "./e2b-qualification": "./src/e2b-qualification.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",

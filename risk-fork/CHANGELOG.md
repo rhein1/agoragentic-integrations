@@ -8,6 +8,11 @@
 - Verify the actual npm tarball in a fresh consumer with offline dependency
   installation and a real local reference lifecycle.
 - Add an MCP host adapter example and adversarial protocol tests.
+- Add a default-off child-side `mcp_http_phase` runtime with a shared public-DNS,
+  socket-pinning, MCP 2026-07-28 Streamable HTTP, bounded JSON/SSE,
+  header/body-binding, `x-mcp-header`, closed-transport, and measured-evidence
+  contract. It supports only credential-free public HTTPS endpoints, accepts only
+  complete no-retry results, and grants no provider activation.
 - Add reproducible hackathon release artifacts and fresh-extraction CI on
   Windows, macOS, and Linux.
 - Reject polluted release directories and non-canonical or open-ended build

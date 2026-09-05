@@ -48,6 +48,7 @@ export function createRiskForkE2BTemplate(options = {}) {
         src: [
           'risk-fork/src/child-operation.mjs',
           'risk-fork/src/canonical.mjs',
+          'risk-fork/src/mcp-transport-contract.mjs',
           'risk-fork/src/util.mjs',
         ],
         dest: '/opt/agoragentic/risk-fork/src/',
