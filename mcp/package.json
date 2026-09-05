@@ -12,7 +12,7 @@
         "start": "node dist/mcp-server.cjs",
         "dev": "node mcp-server.js",
         "build": "node scripts/build.js",
-        "check": "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
+        "check": "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/metadata-boundary.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
         "test": "node --test test/*.test.js",
         "verify:packed-install": "node scripts/verify-packed-install.js",
         "prepack": "npm run build",

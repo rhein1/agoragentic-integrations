@@ -1100,11 +1100,27 @@ function riskProfileFor(phase, toolName = null, toolBinding = null) {
 function transportConstraints() {
     return Object.freeze({
         direct_network_permitted: false,
+        https_required: true,
+        address_scope: 'public_unicast_only',
+        dns_resolution: 'child_before_each_connection_attempt',
+        address_pinning_required: true,
+        proxy_environment_allowed: false,
         redirects: 'error',
+        max_redirects: 0,
+        transport_evidence_required: true,
         response_acceptance: 'clean_import_only',
         fallback_on_protocol_error: false,
         credential_material_in_child: false,
     });
+}
+
+function stripOpaqueMcpMetadata(params, field) {
+    const cloned = cloneBoundedJson(params, field);
+    assertPlainRecord(cloned, field);
+    if (!Object.hasOwn(cloned, '_meta')) return deepFreezeJson(cloned);
+    assertPlainRecord(cloned._meta, `${field}._meta`);
+    const { _meta: ignoredOpaqueMetadata, ...withoutMetadata } = cloned;
+    return deepFreezeJson(withoutMetadata);
 }
 
 function buildEnforcementRequest({
@@ -1950,7 +1966,10 @@ async function connectRemoteClient(options = {}) {
         if (!current || current.closed) {
             throw new McpEnforcementError('MCP_ENFORCED_SESSION_CLOSED', 'The enforced MCP session is closed');
         }
-        const safeParams = cloneBoundedJson(params, `${phase} params`);
+        // MCP `_meta` is opaque client/transport metadata. Validate it inside the
+        // existing raw wire-size/shape bound, then erase it before classification,
+        // hashing, host dispatch, persistence, or remote forwarding.
+        const safeParams = stripOpaqueMcpMetadata(params, `${phase} params`);
         let toolDescriptor = null;
         if (phase === 'tools/call') {
             const directory = current.remoteToolDirectory ?? createRemoteToolDirectory(session);
@@ -2535,4 +2554,5 @@ module.exports = {
     executeFallbackTool,
     runAcpAdapter,
     runMcpRelay,
+    stripOpaqueMcpMetadata,
 };
