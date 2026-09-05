@@ -27,6 +27,7 @@ const REQUIRED_FILES = Object.freeze([
   'risk-fork/package.json',
   'risk-fork/package-lock.json',
   'risk-fork/LICENSE',
+  'risk-fork/NOTICE',
   'risk-fork/hackathon/package.json',
   'risk-fork/hackathon/package-lock.json',
   'risk-fork/hackathon/README.md',

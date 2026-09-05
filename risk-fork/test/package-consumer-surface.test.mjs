@@ -17,10 +17,17 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 test('a clean copied consumer can import and exercise the framework-neutral package subpath', async () => {
   const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'), 'utf8'));
   assert.equal(manifest.name, '@agoragentic/risk-fork');
-  assert.equal(manifest.version, '0.1.0-alpha.0');
-  assert.equal(manifest.private, true);
+  assert.equal(manifest.version, '0.1.0-alpha.1');
+  assert.equal(manifest.private, false);
+  assert.equal(manifest.publishConfig.tag, 'alpha');
+  assert.equal(manifest.publishConfig.provenance, true);
+  assert.equal(manifest.license, 'Apache-2.0');
   assert.equal(manifest.engines.node, '>=20');
   assert.equal(manifest.exports['./host-boundary'], './src/host-boundary.mjs');
+  assert.match(
+    await readFile(path.join(packageRoot, 'NOTICE'), 'utf8'),
+    /Risk Fork[\s\S]*Copyright 2026 Agoragentic/,
+  );
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-clean-consumer-'));
   const installedRoot = path.join(

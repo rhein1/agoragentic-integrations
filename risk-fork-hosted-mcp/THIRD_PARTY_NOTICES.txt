@@ -127,7 +127,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ========================================================================
-fast-uri@3.1.5
+fast-uri@3.1.7
 Declared license: BSD-3-Clause
 Notice source: risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE
 Notice source method: standalone_license_file

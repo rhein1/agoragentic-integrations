@@ -38,6 +38,9 @@ export const OFFLINE_KIT_TRUTH = Object.freeze({
   clean_commit_performed: false,
 });
 
+export const OFFLINE_KIT_PACKAGE_MODE =
+  'public_release_candidate_unpublished_offline_directory';
+
 const PORTABLE_CONFIGURATION_VERIFICATION_DETAIL =
   'generated_portable_template_requires_path_regeneration_and_live_client_verification';
 
@@ -107,6 +110,7 @@ const REQUIRED_FILES = Object.freeze([
   ['risk-fork/package.json', 'risk-fork/package.json'],
   ['risk-fork/package-lock.json', 'risk-fork/package-lock.json'],
   ['risk-fork/LICENSE', 'risk-fork/LICENSE'],
+  ['risk-fork/NOTICE', 'risk-fork/NOTICE'],
   ['risk-fork/hackathon/package.json', 'risk-fork/hackathon/package.json'],
   ['risk-fork/hackathon/package-lock.json', 'risk-fork/hackathon/package-lock.json'],
   ['risk-fork/hackathon/README.md', 'risk-fork/hackathon/README.md'],
@@ -1219,6 +1223,9 @@ function assertManifestTruth(manifest) {
     throw new Error('Offline-kit provider qualification boundary is invalid');
   }
   if (manifest.supported_node !== '>=20') throw new Error('Offline-kit Node support metadata is invalid');
+  if (manifest.package_mode !== OFFLINE_KIT_PACKAGE_MODE || manifest.npm_published !== false) {
+    throw new Error('Offline-kit package publication boundary is invalid');
+  }
   if (
     manifest.configuration_status?.templates_client_verified !== 0
     || manifest.configuration_status?.unverified_client_status
@@ -1578,6 +1585,7 @@ async function writeGeneratedKitMetadata({
   await write('CLAIM_BOUNDARY.md', claimBoundary());
   await write('SUPPORTED_NODE.txt', `>=20\n`);
   await write('LICENSE', await readFile(path.join(kitRoot, 'risk-fork/LICENSE'), 'utf8'));
+  await write('NOTICE', await readFile(path.join(kitRoot, 'risk-fork/NOTICE'), 'utf8'));
   await write('SOURCE_COMMITS.json', stableJson({
     schema: 'agoragentic.risk-fork.demo-source-commits.v1',
     banner: OFFLINE_KIT_BANNER,
@@ -1649,7 +1657,7 @@ async function createManifest({
     ignored_worktree_files_included: false,
     deterministic_created_at: FIXED_CREATED_AT,
     supported_node: '>=20',
-    package_mode: 'private_unpublished_offline_directory',
+    package_mode: OFFLINE_KIT_PACKAGE_MODE,
     provider: 'e2b',
     provider_status: 'not_live_qualified',
     production_qualified: false,

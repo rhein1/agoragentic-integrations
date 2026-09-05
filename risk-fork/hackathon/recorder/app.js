@@ -54,6 +54,51 @@
       const localExecution = record.execution_mode === 'local_reference_protocol_execution';
       const fakeE2BExecution = record.execution_mode === 'fake_e2b_protocol_execution';
       const noIsolationBoundary = record.isolation_boundary === false;
+      const parentUnchanged = record.parent_state_unchanged === true
+        && typeof record.parent_state_hash_before === 'string'
+        && record.parent_state_hash_before === record.parent_state_hash_after;
+      article.append(text('p', fakeE2BExecution
+        ? 'FAKE E2B · LOCAL CONTRACT SIMULATION'
+        : 'LOCAL PROTOCOL SIMULATION', 'simulation-label'));
+      const overview = text('div', '', 'overview');
+      for (const [label, value, state] of [
+        ['Risk decision', decision.level || 'unknown', 'risk-value'],
+        ['Clean parent', parentUnchanged ? 'UNCHANGED' : 'UNVERIFIED', parentUnchanged ? 'ok' : 'blocked'],
+        ['Cleanup evidence', cleanup.status || 'unknown', cleanup.status === 'verified' ? 'ok' : 'blocked'],
+        ['External commit', record.clean_commit_performed === false ? 'NONE' : 'UNVERIFIED', record.clean_commit_performed === false ? 'ok' : 'blocked'],
+      ]) {
+        const card = text('section', '', 'overview-card');
+        card.append(text('p', label, 'label'), text('p', value, `overview-value ${state}`));
+        overview.append(card);
+      }
+      article.append(overview);
+      if (Array.isArray(lifecycle.states) && lifecycle.states.length > 0) {
+        const timeline = text('ol', '', 'timeline');
+        timeline.setAttribute('aria-label', 'Recorded lifecycle states');
+        lifecycle.states.forEach(state => timeline.append(text('li', state)));
+        article.append(timeline);
+      }
+      if (Array.isArray(record.attack_attempts) && record.attack_attempts.length > 0) {
+        const table = text('table', '', 'attacks');
+        table.append(text('caption', 'Synthetic attack outcomes · evaluated by the local fixture'));
+        const head = text('thead', '');
+        const headings = text('tr', '');
+        for (const label of ['Attempt', 'Observed result']) {
+          const cell = text('th', label);
+          cell.scope = 'col';
+          headings.append(cell);
+        }
+        head.append(headings);
+        table.append(head);
+        const body = text('tbody', '');
+        record.attack_attempts.forEach(attempt => {
+          const item = text('tr', '');
+          item.append(text('td', attempt.attack), text('td', attempt.status));
+          body.append(item);
+        });
+        table.append(body);
+        article.append(table);
+      }
       lanes.append(
         lane('Clean Parent', [
           ['action', record.action_summary],
@@ -139,7 +184,9 @@
           ['max owned-root bytes', boundedNumber(limits.max_root_bytes, 'bytes')],
         ]),
       );
-      article.append(lanes);
+      const details = text('details', '', 'evidence-details');
+      details.append(text('summary', 'Inspect the complete four-lane evidence record'), lanes);
+      article.append(details);
       root.append(article);
     });
     if (records.length === 0) root.append(text('p', 'No sanitized demo records are present.'));

@@ -4,7 +4,7 @@
   "description": "Private, unpublished, integrity-bound hosted MCP enforcement and Risk Fork runtime bundle.",
   "type": "module",
   "private": true,
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -25,7 +25,8 @@
     "scripts/verify-integrity.mjs",
     "THIRD_PARTY_NOTICES.txt",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",

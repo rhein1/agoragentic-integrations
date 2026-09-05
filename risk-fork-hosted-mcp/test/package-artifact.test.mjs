@@ -32,6 +32,8 @@ const REVIEWED_SOURCE_NORMALIZATION = 'utf8_crlf_to_lf_lone_cr_preserved';
 const HOSTED_FIXTURE_COPIES = Object.freeze([
   ['mcp/mcp-server.js', 'mcp/mcp-server.js'],
   ['mcp/package.json', 'mcp/package.json'],
+  ['risk-fork/LICENSE', 'risk-fork/LICENSE'],
+  ['risk-fork/NOTICE', 'risk-fork/NOTICE'],
   ['risk-fork/e2b-template', 'risk-fork/e2b-template'],
   ['risk-fork/migrations/001_distributed_authority.pg.sql', 'risk-fork/migrations/001_distributed_authority.pg.sql'],
   ['risk-fork/ops/postgres', 'risk-fork/ops/postgres'],
@@ -53,6 +55,8 @@ const GENERATED_HOSTED_ROOTS = Object.freeze([
   'schema',
 ]);
 const GENERATED_HOSTED_OUTPUT_PATHS = Object.freeze([
+  'LICENSE',
+  'NOTICE',
   'THIRD_PARTY_NOTICES.txt',
   'dist/runtime/index.mjs',
   'e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs',
@@ -206,6 +210,8 @@ async function listFiles(directory, prefix = '') {
 
 async function snapshotGeneratedHostedOutputs(root) {
   const actualPaths = [
+    'LICENSE',
+    'NOTICE',
     'THIRD_PARTY_NOTICES.txt',
     'integrity-manifest.json',
   ];
@@ -247,6 +253,7 @@ test('package contract is private, exact-version, and has no mandatory runtime d
   assert.equal(pkg.version, '0.1.0-alpha.0');
   assert.equal(pkg.private, true);
   assert.equal(pkg.type, 'module');
+  assert.equal(pkg.license, 'Apache-2.0');
   assert.deepEqual(pkg.exports, {
     '.': './dist/runtime/index.mjs',
     './e2b-context/*': './e2b-context/*',
@@ -270,6 +277,7 @@ test('package contract is private, exact-version, and has no mandatory runtime d
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'NOTICE',
   ]);
 });
 
@@ -307,7 +315,7 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.package.name, '@agoragentic/risk-fork-hosted-mcp');
   assert.equal(manifest.package.version, '0.1.0-alpha.0');
   assert.equal(manifest.sources.mcp.version, '2.0.0');
-  assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.0');
+  assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.1');
   assert.equal(manifest.source_commit, undefined);
   assert.ok(manifest.reviewed_sources.length > 20);
   assert.deepEqual(
@@ -342,6 +350,43 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.artifact.path, 'dist/runtime/index.mjs');
   assert.equal(manifest.artifact.sha256, sha256(secondBundle));
   assert.equal(manifest.artifact.bytes, secondBundle.byteLength);
+  const apacheLicenseBytes = await readFile(path.join(packageRoot, 'LICENSE'));
+  const riskForkLicenseBytes = canonicalReviewedSourceBytes(
+    await readFile(path.join(repositoryRoot, 'risk-fork', 'LICENSE')),
+  );
+  assert.deepEqual(apacheLicenseBytes, riskForkLicenseBytes);
+  assert.match(apacheLicenseBytes.toString('utf8'), /^Apache License\r?\n/);
+  assert.match(apacheLicenseBytes.toString('utf8'), /Version 2\.0, January 2004/);
+  const riskForkNoticeBytes = canonicalReviewedSourceBytes(
+    await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
+  );
+  const packagedNoticeBytes = await readFile(path.join(packageRoot, 'NOTICE'));
+  assert.deepEqual(packagedNoticeBytes, riskForkNoticeBytes);
+  assert.match(packagedNoticeBytes.toString('utf8'), /^Risk Fork\r?\nCopyright 2026 Agoragentic\r?\n/);
+  for (const expected of [
+    {
+      path: 'LICENSE',
+      source_path: 'risk-fork/LICENSE',
+      bytes: riskForkLicenseBytes,
+    },
+    {
+      path: 'NOTICE',
+      source_path: 'risk-fork/NOTICE',
+      bytes: riskForkNoticeBytes,
+    },
+  ]) {
+    const asset = manifest.packaged_assets.find((entry) => entry.path === expected.path);
+    assert.deepEqual(asset, {
+      path: expected.path,
+      source_path: expected.source_path,
+      bytes: expected.bytes.byteLength,
+      sha256: sha256(expected.bytes),
+    });
+    const input = manifest.inputs.find((entry) => entry.path === expected.source_path);
+    assert.equal(input.source, 'reviewed_source');
+    assert.equal(input.bytes, expected.bytes.byteLength);
+    assert.equal(input.sha256, sha256(expected.bytes));
+  }
   assert.equal(manifest.third_party_notices.path, 'THIRD_PARTY_NOTICES.txt');
   const noticesBytes = await readFile(path.join(packageRoot, 'THIRD_PARTY_NOTICES.txt'));
   const noticesText = noticesBytes.toString('utf8');
@@ -352,6 +397,12 @@ test('build is deterministic and records exact source and artifact integrity', a
     [...manifest.third_party_notices.sources]
       .sort((left, right) => compareOrdinal(left.package, right.package)),
   );
+  const mitNoticeSources = manifest.third_party_notices.sources.filter(
+    (source) => source.declared_license === 'MIT',
+  );
+  assert.ok(mitNoticeSources.length > 0);
+  assert.match(noticesText, /@modelcontextprotocol\/sdk@1\.30\.0\nDeclared license: MIT/);
+  assert.match(noticesText, /Permission is hereby granted, free of charge/);
   const readmeFallbacks = [
     {
       package: 'pg-types',
@@ -1221,6 +1272,7 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     manifest.source_attestation.sha256,
   );
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.optional_e2b_peer_version, '2.39.0');
+  assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.risk_fork_source_version, '0.1.0-alpha.1');
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.outbound_mcp_transport_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.managed_postgres_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.e2b_live_qualified, false);
@@ -1376,6 +1428,7 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     const installedFiles = await listFiles(installed);
     assert.deepEqual(installedFiles, [
       'LICENSE',
+      'NOTICE',
       'README.md',
       'THIRD_PARTY_NOTICES.txt',
       'dist/runtime/index.mjs',
@@ -1396,6 +1449,18 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       'schema/e2b-qualification-evidence.v1.json',
       'scripts/verify-integrity.mjs',
     ]);
+    assert.deepEqual(
+      await readFile(path.join(installed, 'LICENSE')),
+      canonicalReviewedSourceBytes(
+        await readFile(path.join(repositoryRoot, 'risk-fork', 'LICENSE')),
+      ),
+    );
+    assert.deepEqual(
+      await readFile(path.join(installed, 'NOTICE')),
+      canonicalReviewedSourceBytes(
+        await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
+      ),
+    );
     const installedVerifyOutput = run(
       process.execPath,
       [path.join(installed, 'scripts', 'verify-integrity.mjs')],
