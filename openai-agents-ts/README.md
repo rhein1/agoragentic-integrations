@@ -11,6 +11,15 @@ The TypeScript tools are fully runnable locally and support dry-run mock mode wi
 - **What it is**: A TypeScript implementation of OpenAI Agents SDK-compatible function tool definitions wrapping Agoragentic REST endpoints.
 - **What it is NOT**: A replacement for the Python SDK, nor a hosted agent server. It functions as a client-side capability provider.
 
+The tools in this directory call their configured client directly and do not
+automatically use Risk Fork. The public Risk Fork package now includes an
+optional, JavaScript-compatible, default-off function-tool execution shim in
+[`risk-fork/FRAMEWORK_ADAPTERS.md`](../risk-fork/FRAMEWORK_ADAPTERS.md). A host
+must replace every direct effect callback with that protected callback and
+supply the exact branded host boundary, plan source, and executor. Merely
+installing either integration does not enable interception or prove live
+protection.
+
 ## Exposed Tools
 
 1. `agoragentic_quote(task, constraints)`: Fetches a pricing quote.

@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 51,
-    "sha256": "sha256:e8a14801c92f70ad394287c13ae22ce940e6fb0b10afe0c65100fc8737bd15d9"
+    "files": 55,
+    "sha256": "sha256:5eaa9a5ff5ed75e48b94aa4387fc24e31ac719e7e3d3a2548ad25f0fadfedd4b"
   },
   "reviewed_sources": [
     {
@@ -79,8 +79,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 3871,
-      "sha256": "sha256:4bd9a62659de55f845b28daaf2f06593bc9fb782355d131a7cc660035713a6f1"
+      "bytes": 4286,
+      "sha256": "sha256:f2606f0876fa1b9e7c2660576b9a066c9a77a346f0a3f7c93611c836ab7bddfa"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -171,6 +171,26 @@
       "path": "risk-fork/src/e2b-qualification.mjs",
       "bytes": 77804,
       "sha256": "sha256:be31c080e15204f3c2f57aa6e2a7700436b8bb751b186401abc28255b8cc655a"
+    },
+    {
+      "path": "risk-fork/src/framework-tool-adapter.mjs",
+      "bytes": 27859,
+      "sha256": "sha256:9317c8d60321d653d4d26ce1956d99ba42b15e23dff2dc58007971e5c2161b26"
+    },
+    {
+      "path": "risk-fork/src/frameworks/langchain.mjs",
+      "bytes": 1648,
+      "sha256": "sha256:1155af1d9cce8931d5a5db0fef5c3244c41a6b9313f78c5701f278db9ad3d209"
+    },
+    {
+      "path": "risk-fork/src/frameworks/langgraph.mjs",
+      "bytes": 3106,
+      "sha256": "sha256:edf798f00f9da2d2002cdf5446271f0cda2226a5a1a7777a0186ea60a36b7aa5"
+    },
+    {
+      "path": "risk-fork/src/frameworks/openai-agents.mjs",
+      "bytes": 1730,
+      "sha256": "sha256:bda9a9cf6b80935d82390ef87bb1bcc9052e8b879dbe7a56fc1d139af6251055"
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
@@ -2752,7 +2772,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 2483304,
-    "sha256": "sha256:6a21ccba79a76ea53baba1b3eacebe0a282c80ada911e3075228f538bcbc6afb"
+    "sha256": "sha256:1b8c9720b2ca66a5e9c22a6db7306d97a5bc0afdaca933cbb6b6db95be12d335"
   },
   "packaged_assets": [
     {

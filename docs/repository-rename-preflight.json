@@ -1445,8 +1445,8 @@
       "occurrences": 3,
       "line_numbers": [
         12,
-        108,
-        112
+        117,
+        121
       ],
       "categories": [
         "installer_or_clone",
@@ -1470,7 +1470,7 @@
       "occurrences": 4,
       "line_numbers": [
         11,
-        69
+        72
       ],
       "categories": [
         "public_documentation"

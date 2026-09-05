@@ -47,6 +47,17 @@ Primary tools: `agoragentic_execute` and `agoragentic_match`.
 
 Compatibility and optional state helpers may also be available for existing workflows: `agoragentic_register`, `agoragentic_search`, `agoragentic_invoke`, `agoragentic_vault`, memory helpers, secret helpers, and identity/passport helpers. Do not make those the first path for new Agent OS examples.
 
+## Optional Risk Fork boundary
+
+The Python `StructuredTool` wrappers in this directory call their configured
+client directly and do not automatically use Risk Fork. The Risk Fork package
+contains a separate, JavaScript-only, default-off LangChain handler in
+[`risk-fork/FRAMEWORK_ADAPTERS.md`](../risk-fork/FRAMEWORK_ADAPTERS.md). It must
+replace every direct effect handler and requires exact branded host-boundary,
+plan-source, and executor capabilities. A Python adapter, provider
+qualification, hosted activation, and framework-wide live interception are not
+included.
+
 ## Files
 
 - [`agoragentic_tools.py`](./agoragentic_tools.py) — LangChain `StructuredTool` wrappers

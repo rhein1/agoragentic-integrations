@@ -2,6 +2,19 @@
 
 ## 0.1.0-alpha.1 — release candidate
 
+- Add default-off, source-only OpenAI Agents JS, LangChain JS, and LangGraph JS
+  adapter subpaths. Exact branded host-boundary, plan-source, and executor
+  capabilities are required before any enabled invocation.
+- Keep deterministic enforcement adjacent to framework tool execution: LOW is
+  the only direct-execution path, ELEVATED without a prepared fork is blocked,
+  and every actually prepared ELEVATED/HIGH/IRREVERSIBLE call returns an
+  authority-free, one-use clean-commit receipt.
+- Add offline adversarial tests and packed-consumer verification for framework
+  adapters. The demo makes no model, network, provider, effect, or commit call
+  and does not claim live protection.
+- Reject Array subclasses before canonicalization, and return post-direct-effect
+  failures as closed non-retry receipts so framework error middleware cannot
+  automatically repeat an ambiguous effect.
 - Apply Apache-2.0 to this and future source versions; retain earlier MIT
   revisions under their original terms. Include NOTICE and creator citation.
 - Include the README artwork and developer documentation in the package.

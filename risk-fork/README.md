@@ -8,7 +8,7 @@ The short analogy is **“quick-save before the boss fight.”** The security mo
 
 The public package is licensed under Apache License 2.0. Version `0.1.0-alpha.1` is a package release candidate with public alpha publication metadata; registry publication is not established by this checkout. **Production readiness is blocked. This directory contains no current public evidence that Risk Fork protects live Agoragentic MCP or Harness traffic.** Nothing in this directory proves production containment, live-provider operation, settlement, certification, or permission to take an external action.
 
-Created by **Jeremy Borden / Agoragentic**. Visit the [public developer page](https://agoragentic-risk-fork.rhein1.chatgpt.site), then start with [GETTING_STARTED.md](./GETTING_STARTED.md), the [visual hackathon demo](https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork/hackathon), or the experimental [MCP host adapter](./MCP_HOST_ADAPTER.md). Attribution is recorded in [CITATION.cff](./CITATION.cff), [AUTHORS.md](./AUTHORS.md) and [NOTICE](./NOTICE).
+Created by **Jeremy Borden / Agoragentic**. Visit the [public developer page](https://agoragentic-risk-fork.rhein1.chatgpt.site), then start with [GETTING_STARTED.md](./GETTING_STARTED.md), the [visual hackathon demo](https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork/hackathon), the experimental [MCP host adapter](./MCP_HOST_ADAPTER.md), or the default-off [OpenAI Agents, LangChain, and LangGraph adapters](./FRAMEWORK_ADAPTERS.md). Attribution is recorded in [CITATION.cff](./CITATION.cff), [AUTHORS.md](./AUTHORS.md) and [NOTICE](./NOTICE).
 
 The invariant is:
 
@@ -22,6 +22,7 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQ
 | --- | --- | --- |
 | Deterministic risk classifier | Experimental source implementation | No LLM decision path; incomplete capability metadata is treated as unknown/`HIGH`, and owner policy can only raise the minimum or deny |
 | Framework-neutral host boundary | Experimental source implementation | A host-owned wrapper resolves exact trusted descriptors, derives the classifier input, and rejects caller/model risk labels before controller preparation. It is mandatory only when a host routes every effect path through it; this package cannot prevent a framework from bypassing the wrapper |
+| OpenAI Agents JS, LangChain JS, and LangGraph JS adapters | Experimental source implementation; default-off | Thin wrappers require exact branded host-boundary, plan-source, and executor capabilities. LOW may enter the hidden direct executor; ELEVATED without a prepared fork is blocked; an actually prepared ELEVATED/HIGH/IRREVERSIBLE call returns a retained clean-commit receipt. No SDK, provider, hosted activation, Python adapter, or live-protection evidence is bundled |
 | Savepoint Capsule, fork identity, execution binding | Experimental source implementation | The public v1 capsule permits no runtime snapshot or a verified filesystem-only snapshot; process-memory/runtime snapshots are invalid, and hashes/references are evidence rather than grants |
 | Hash-linked lifecycle | Experimental source implementation | A destroy request and a verified absence observation are separate facts |
 | Taint gate | Experimental source implementation | Imports only a typed result, bounded workspace diff, or consequential-action proposal; child-asserted test evidence cannot satisfy current required-test policy without clean re-execution or a trusted external attestation |
@@ -46,6 +47,8 @@ Run the repository checks for the exact checkout before relying on a source surf
 cd risk-fork
 npm install
 npm test
+npm run demo:frameworks
+npm run test:package
 npm run test:postgres # requires RISK_FORK_TEST_POSTGRES_URL
 npm run check
 npm run benchmark:local
@@ -137,6 +140,10 @@ The package export map exposes the main module plus focused subpaths:
 import { classifyRisk } from '@agoragentic/risk-fork/classifier';
 import { LocalReferenceRiskForkAdapter } from '@agoragentic/risk-fork/adapters/local-reference';
 import { PostgresDistributedCommitAuthority } from '@agoragentic/risk-fork/adapters/postgres-authority';
+import { createRiskForkFrameworkToolAdapter } from '@agoragentic/risk-fork/framework-tool-adapter';
+import { createOpenAIAgentsRiskForkTool } from '@agoragentic/risk-fork/frameworks/openai-agents';
+import { createLangChainRiskForkTool } from '@agoragentic/risk-fork/frameworks/langchain';
+import { createLangGraphRiskForkNode } from '@agoragentic/risk-fork/frameworks/langgraph';
 ```
 
 ### Framework-neutral host onboarding
@@ -180,9 +187,10 @@ Compatibility and acquisition are pinned as follows:
 | --- | --- |
 | Package | `@agoragentic/risk-fork@0.1.0-alpha.1`; ESM; Node.js `>=20`; experimental release candidate |
 | Host subpath | `@agoragentic/risk-fork/host-boundary`; package-local source with no registry dependency required for this focused subpath |
+| Framework subpaths | `@agoragentic/risk-fork/framework-tool-adapter` plus `frameworks/openai-agents`, `frameworks/langchain`, and `frameworks/langgraph`; JavaScript-only source shims with no bundled framework SDK |
 | Schemas | `agoragentic.risk-fork.host-pre-effect-boundary.v1`, `trusted-descriptor-request.v1`, `trusted-descriptor.v1`, and `import-envelope.v1` |
 | Acquisition | Source/workspace or locally packed tarball; `private: false` and public alpha publication metadata prepare the candidate for release. Check the official release for registry publication evidence |
-| Root package | `npm run test:package` packs and installs the actual tarball offline in a fresh consumer, imports exports, and exercises the installed local lifecycle and MCP host example. This proves local artifact consumption, not registry publication or live containment |
+| Root package | `npm run test:package` packs and installs the actual tarball offline in a fresh consumer, imports exports, and exercises the installed local lifecycle, MCP host example, and provider-free framework demo. This proves local artifact consumption, not registry publication or live containment |
 | Provider/live state | Local adapter remains a protocol simulator; live E2B/provider allocation and lease capability remain hard-disabled and production readiness remains false |
 
 Stable host-boundary diagnostic codes for this alpha contract are:
@@ -250,13 +258,14 @@ The `agoragentic.risk-fork.e2b-qualification-evidence.v1` shape is a private-alp
 
 Adapter qualification still requires every mandatory control to be verified plus a separate `verifyE2BQualificationTrust()` signature over the finalized evidence. The observer and qualification-trust Ed25519 SPKI hashes must differ, and both the evidence validator and trust verifier must receive the caller-pinned external-observation verifier. Neither signature grants production activation. Qualified SDK loading separately requires the module-branded runtime-integrity verifier.
 
-The checked-in example uses package-local relative imports, which also work from the installed tarball. Run it only as a protocol demonstration:
+The checked-in examples use package-local relative imports, which also work from the installed tarball. Run them only as protocol demonstrations:
 
 ```powershell
 node examples/local-reference.mjs
+node examples/framework-adapters.mjs
 ```
 
-The example prepares a typed artifact in an empty disposable workspace, destroys and independently verifies the local copies, and stops before clean commit. It does not contact a provider, spend funds, use credentials, or demonstrate real isolation.
+The local-reference example prepares a typed artifact in an empty disposable workspace, destroys and independently verifies the local copies, and stops before clean commit. The framework example composes OpenAI Agents, LangChain, and LangGraph source shims around deterministic classification, retains three synthetic receipts, and performs zero model, network, provider, direct-effect, or clean-commit calls. Neither example contacts a provider, spends funds, uses credentials, demonstrates real isolation, or proves live protection. See [FRAMEWORK_ADAPTERS.md](./FRAMEWORK_ADAPTERS.md) for the embedding contract and bypass boundary.
 
 Risk Fork keeps its strict canonical JSON/SHA-256 primitive package-local, so the focused host-boundary subpath does not escape the copied package tree. The fast source-copy test exercises that subpath without a dependency loader. The separate `npm run test:package` release check exercises the actual tarball and installed dependencies in a fresh consumer. Run `npm ci --ignore-scripts --no-audit --no-fund` first to populate the integrity-addressed npm cache; consumer installation then uses `--offline`. The package includes Apache-2.0, NOTICE, citation metadata, developer docs and the README artwork. Neither check establishes registry publication or production qualification.
 
