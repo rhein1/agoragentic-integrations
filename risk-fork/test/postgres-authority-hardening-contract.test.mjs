@@ -370,9 +370,25 @@ test('authority status contract is bounded, read-only, exact, and unavailable be
   const end = runtimeSource.indexOf('\nasync function ', start + 1);
   assert.notEqual(start, -1);
   const implementation = runtimeSource.slice(start, end === -1 ? runtimeSource.length : end);
-  assert.match(implementation, /BEGIN READ ONLY/);
+  assert.match(
+    implementation,
+    /BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY/,
+  );
+  assert.doesNotMatch(implementation, /client\.query\('BEGIN READ ONLY'\)/);
   assert.match(implementation, /SET LOCAL statement_timeout/);
   assert.match(implementation, /verifyPostgresDistributedAuthoritySchema\(client/);
+  assert.ok(
+    implementation.indexOf('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
+      < implementation.indexOf('SET LOCAL statement_timeout'),
+  );
+  assert.ok(
+    implementation.indexOf('SET LOCAL statement_timeout')
+      < implementation.indexOf('verifyPostgresDistributedAuthoritySchema(client'),
+  );
+  assert.ok(
+    implementation.indexOf('verifyPostgresDistributedAuthoritySchema(client')
+      < implementation.indexOf('WITH status_clock AS'),
+  );
   assert.match(implementation, /status IN \('prepared', 'effect_started', 'ambiguous'\)/);
   assert.doesNotMatch(implementation, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|GRANT|REVOKE)\b/i);
   assert.equal(Object.isFrozen(PostgresDistributedCommitAuthority.prototype), true);
@@ -387,7 +403,22 @@ test('verify-only schema check performs no DDL and enforces runtime privilege ne
   });
 
   assert.equal(report.runtime_privileges_verified, true);
-  assert.deepEqual(report.migration_versions, [1]);
+  assert.equal(report.migration_versions.length, 1);
+  assert.equal(report.migration_versions[0], 1);
+  assert.equal(report.migration_versions instanceof Array, true);
+  assert.equal(Object.getPrototypeOf(report.migration_versions), Array.prototype);
+  assert.deepEqual([...report.migration_versions], [1]);
+  assert.deepEqual(report.migration_versions.map((version) => version + 1), [2]);
+  assert.deepEqual(report.migration_versions.filter((version) => version === 1), [1]);
+  assert.equal(report.migration_versions.includes(1), true);
+  assert.equal(report.migration_hashes.length, 1);
+  assert.equal(report.migration_hashes[0], migrationHash);
+  assert.equal(report.migration_hashes instanceof Array, true);
+  assert.equal(Object.getPrototypeOf(report.migration_hashes), Array.prototype);
+  assert.deepEqual([...report.migration_hashes], [migrationHash]);
+  assert.equal(report.migration_hashes.includes(migrationHash), true);
+  assert.equal(Object.isFrozen(report.migration_versions), true);
+  assert.equal(Object.isFrozen(report.migration_hashes), true);
   assert.equal(
     accepted.queries.some(({ sql }) => /^\s*(?:CREATE|ALTER|DROP|GRANT|REVOKE)\b/i.test(sql)),
     false,

@@ -76,6 +76,96 @@ function renderRoleTemplate(source, replacements) {
   return rendered;
 }
 
+function sourceSection(source, startMarker, endMarker) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  assert.notEqual(start, -1, `Missing source marker: ${startMarker}`);
+  assert.notEqual(end, -1, `Missing source marker: ${endMarker}`);
+  return source.slice(start, end);
+}
+
+test('authority status uses one explicit repeatable-read read-only transaction in query order', async () => {
+  const source = await readFile(
+    new URL('../src/adapters/postgres-authority.mjs', import.meta.url),
+    'utf8',
+  );
+  const status = sourceSection(
+    source,
+    'async function getAuthorityStatus(state)',
+    'async function listUnresolved(state, input = {})',
+  );
+  const begin = status.indexOf(
+    "await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')",
+  );
+  const timeout = status.indexOf('await client.query(`SET LOCAL statement_timeout', begin);
+  const schema = status.indexOf('await verifyPostgresDistributedAuthoritySchema', timeout);
+  const statusQuery = status.indexOf('const result = await client.query(', schema);
+  const rollback = status.indexOf("await client.query('ROLLBACK')", statusQuery);
+  assert.ok(begin >= 0);
+  assert.ok(timeout > begin);
+  assert.ok(schema > timeout);
+  assert.ok(statusQuery > schema);
+  assert.ok(rollback > statusQuery);
+  assert.equal(status.includes("client.query('BEGIN READ ONLY')"), false);
+});
+
+test('exported audit and status verification paths avoid named inherited Array hooks', async () => {
+  const adapter = await readFile(
+    new URL('../src/adapters/postgres-authority.mjs', import.meta.url),
+    'utf8',
+  );
+  const canonical = await readFile(new URL('../src/canonical.mjs', import.meta.url), 'utf8');
+  const migrator = await readFile(
+    new URL('../src/adapters/postgres-authority-migrator.mjs', import.meta.url),
+    'utf8',
+  );
+  const util = await readFile(new URL('../src/util.mjs', import.meta.url), 'utf8');
+  const namedHook = /\.(?:at|map|some|push|pop)\s*\(|for\s*\(\s*const\s+[^)]*\s+of\s+/;
+  assert.doesNotMatch(
+    sourceSection(
+      adapter,
+      'export function verifyPostgresAuthorityAuditPage(input = {})',
+      'function optionalIso(value, label)',
+    ),
+    namedHook,
+  );
+  assert.doesNotMatch(
+    sourceSection(
+      adapter,
+      'async function getAuthorityStatus(state)',
+      'async function listUnresolved(state, input = {})',
+    ),
+    namedHook,
+  );
+  assert.doesNotMatch(canonical, namedHook);
+  assert.doesNotMatch(
+    sourceSection(util, 'function detachArray(value)', 'export function requireString('),
+    namedHook,
+  );
+  assert.doesNotMatch(
+    sourceSection(
+      util,
+      'export function containsSecretShapedText(value)',
+      'export function assertNoSecretShapedText(value, field)',
+    ),
+    namedHook,
+  );
+  for (const section of [
+    sourceSection(
+      migrator,
+      'export async function verifyPostgresAuthorityClientTransport(',
+      'export async function acquirePostgresAuthorityClient(',
+    ),
+    sourceSection(migrator, 'async function loadMigrationPlan(schemaName)', 'function tableName('),
+    sourceSection(migrator, 'async function verifyMigrationSet(', 'function assertCatalogFingerprint('),
+    sourceSection(migrator, 'async function verifyRequiredRelations(', 'async function hasTablePrivilege('),
+    sourceSection(migrator, 'async function verifyRuntimePrivileges(', 'export async function verifyPostgresDistributedAuthoritySchema('),
+    sourceSection(migrator, 'export async function verifyPostgresDistributedAuthoritySchema(', 'async function applyMigrations('),
+  ]) {
+    assert.doesNotMatch(section, namedHook);
+  }
+});
+
 test('TLS fresh-database provisioning, migrator, and least-privilege runtime are separated', {
   skip: ADMIN_URL && TLS_CA
     ? false
@@ -402,6 +492,7 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
     'utf8',
   )).replace(/\r\n?/g, '\n'));
   assert.deepEqual(Object.keys(emptyStatus).sort(), [
+    'audit_checkpoint',
     'database_clock',
     'pool',
     'schema',
@@ -409,8 +500,8 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
     'unresolved',
     'version',
   ]);
-  assert.equal(emptyStatus.schema, 'agoragentic.risk-fork.postgres-authority-status.v1');
-  assert.equal(emptyStatus.version, 1);
+  assert.equal(emptyStatus.schema, 'agoragentic.risk-fork.postgres-authority-status.v2');
+  assert.equal(emptyStatus.version, 2);
   assert.deepEqual(emptyStatus.schema_verification, {
     verified: true,
     schema_version: 1,
@@ -419,6 +510,8 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
   });
   assert.equal(emptyStatus.database_clock.reachable, true);
   assert.doesNotThrow(() => new Date(emptyStatus.database_clock.observed_at).toISOString());
+  assert.equal(emptyStatus.audit_checkpoint.sequence, auditBeforeStatus.rows[0].count);
+  assert.match(emptyStatus.audit_checkpoint.event_hash, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(emptyStatus.unresolved, {
     counts: { prepared: 0, effect_started: 0, ambiguous: 0 },
     oldest_updated_at: null,
@@ -433,8 +526,28 @@ test('TLS fresh-database provisioning, migrator, and least-privilege runtime are
     assert.equal(Number.isSafeInteger(value) && value >= 0, true);
   }
   assert.equal(Object.isFrozen(emptyStatus), true);
+  assert.equal(Object.isFrozen(emptyStatus.audit_checkpoint), true);
   assert.equal(Object.isFrozen(emptyStatus.schema_verification), true);
   assert.equal(Object.isFrozen(emptyStatus.schema_verification.migration_versions), true);
+  assert.equal(emptyStatus.schema_verification.migration_versions instanceof Array, true);
+  assert.equal(
+    Object.getPrototypeOf(emptyStatus.schema_verification.migration_versions),
+    Array.prototype,
+  );
+  assert.deepEqual([...emptyStatus.schema_verification.migration_versions], [1]);
+  assert.deepEqual(emptyStatus.schema_verification.migration_versions.map((version) => version), [1]);
+  assert.deepEqual(emptyStatus.schema_verification.migration_versions.filter(Boolean), [1]);
+  assert.equal(emptyStatus.schema_verification.migration_versions.includes(1), true);
+  assert.equal(emptyStatus.schema_verification.migration_hashes instanceof Array, true);
+  assert.equal(
+    Object.getPrototypeOf(emptyStatus.schema_verification.migration_hashes),
+    Array.prototype,
+  );
+  assert.deepEqual([...emptyStatus.schema_verification.migration_hashes], [expectedMigrationHash]);
+  assert.equal(
+    emptyStatus.schema_verification.migration_hashes.includes(expectedMigrationHash),
+    true,
+  );
   assert.equal(Object.isFrozen(emptyStatus.unresolved.counts), true);
   assert.equal(Object.isFrozen(emptyStatus.pool), true);
   const auditAfterStatus = await migratorPool.query(
