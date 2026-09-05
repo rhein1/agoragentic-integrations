@@ -291,6 +291,7 @@ test('birth watcher fails closed on expired, preexisting, and replayed state', a
     },
     requestWaitTimeoutMs: 1_000,
   });
+  const expiredWatcherRejection = assert.rejects(expiredWatcher, /expired|validity|outside/i);
   await waitForPath(path.join(expiredDirectory, 'template-build-ready'));
   const expiredPaths = e2bBirthRequestPaths(expired.request_hash);
   await writeFile(
@@ -301,7 +302,7 @@ test('birth watcher fails closed on expired, preexisting, and replayed state', a
     path.join(expiredDirectory, path.posix.basename(expiredPaths.trigger)),
     `${expired.request_hash}\n`,
   );
-  await assert.rejects(expiredWatcher, /expired|validity|outside/i);
+  await expiredWatcherRejection;
 
   await assert.rejects(
     runBirthWatcher({ runtimeDirectory: preexistingDirectory, requestWaitTimeoutMs: 10 }),
@@ -376,6 +377,7 @@ test('birth watcher rejects hard-linked request state before collecting evidence
     },
     requestWaitTimeoutMs: 1_000,
   });
+  const watcherRejection = assert.rejects(watcher, /bounded regular file|hard link/i);
   await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
   const remotePaths = e2bBirthRequestPaths(request.request_hash);
   const sourcePath = path.join(root, 'request-source.json');
@@ -384,7 +386,7 @@ test('birth watcher rejects hard-linked request state before collecting evidence
   await writeFile(sourcePath, `${canonicalize(request)}\n`);
   await link(sourcePath, requestPath);
   await writeFile(triggerPath, `${request.request_hash}\n`);
-  await assert.rejects(watcher, /bounded regular file|hard link/i);
+  await watcherRejection;
   assert.equal(collectCalls, 0);
 });
 
@@ -401,6 +403,7 @@ test('birth watcher rejects replacement of its one-use runtime directory', async
       resumePoll = resolve;
     }),
   });
+  const watcherRejection = assert.rejects(watcher, /runtime directory identity changed/i);
   await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
   for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -409,7 +412,7 @@ test('birth watcher rejects replacement of its one-use runtime directory', async
   await rename(runtimeDirectory, movedDirectory);
   await mkdir(runtimeDirectory, { mode: 0o700 });
   resumePoll();
-  await assert.rejects(watcher, /runtime directory identity changed/i);
+  await watcherRejection;
 });
 
 test('birth watcher rejects runtime directory mode drift', {
@@ -426,6 +429,7 @@ test('birth watcher rejects runtime directory mode drift', {
       resumePoll = resolve;
     }),
   });
+  const watcherRejection = assert.rejects(watcher, /runtime directory mode is invalid/i);
   await waitForPath(path.join(runtimeDirectory, 'template-build-ready'));
   for (let attempt = 0; attempt < 100 && !resumePoll; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -433,7 +437,7 @@ test('birth watcher rejects runtime directory mode drift', {
   assert.equal(typeof resumePoll, 'function');
   await chmod(runtimeDirectory, 0o755);
   resumePoll();
-  await assert.rejects(watcher, /runtime directory mode is invalid/i);
+  await watcherRejection;
 });
 
 test('boot guard treats timeout as unknown and hashes provider credential keys without values', () => {
