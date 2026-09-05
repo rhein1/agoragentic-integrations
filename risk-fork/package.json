@@ -68,7 +68,7 @@
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "test:package": "node scripts/verify-package-consumer.mjs",
-    "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
+    "test:postgres": "node --test test/postgres-audit-checkpoint.test.mjs test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
     "check": "node scripts/check.mjs",
     "self-test": "node examples/local-reference.mjs",
     "benchmark:local": "node scripts/benchmark-local.mjs",

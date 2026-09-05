@@ -129,6 +129,7 @@ try {
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
     assert.equal(typeof core.RiskForkController, 'function');
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
+    assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
     assert.equal(typeof host.createRiskForkHostBoundary, 'function');
     assert.equal(typeof mcp.createRiskForkMcpHostAdapter, 'function');
     assert.equal(typeof mcp.createTrustedRiskForkMcpPhasePlanSource, 'function');

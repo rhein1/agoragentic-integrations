@@ -1,6 +1,53 @@
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+
+function createDetachedArray(length = 0) {
+  return detachArray(new Array(length));
+}
+
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function arrayContains(value, expected) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === expected) return true;
+  }
+  return false;
+}
+
+function sortStrings(value) {
+  for (let index = 1; index < value.length; index += 1) {
+    const candidate = value[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && value[cursor] > candidate) {
+      value[cursor + 1] = value[cursor];
+      cursor -= 1;
+    }
+    value[cursor + 1] = candidate;
+  }
+  return value;
+}
+
+function joinStrings(value, separator) {
+  let joined = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (index > 0) joined += separator;
+    joined += value[index];
+  }
+  return joined;
+}
+
 export function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -14,12 +61,25 @@ export function assertPlainObject(value, field) {
 
 export function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
-  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unexpected.length > 0) {
-    if (unexpected.some((key) => containsSecretShapedText(key))) {
-      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+  const keys = detachArray(Object.keys(value));
+  const unexpected = createDetachedArray();
+  let unexpectedCount = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (!arrayContains(allowed, key)) {
+      defineArrayIndex(unexpected, unexpectedCount, key);
+      unexpectedCount += 1;
     }
-    throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(', ')}`);
+  }
+  if (unexpected.length > 0) {
+    for (let index = 0; index < unexpected.length; index += 1) {
+      if (containsSecretShapedText(unexpected[index])) {
+        throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+      }
+    }
+    throw new TypeError(
+      `${field} contains unsupported fields: ${joinStrings(sortStrings(unexpected), ', ')}`,
+    );
   }
 }
 
@@ -70,7 +130,7 @@ export const BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
 export const GENERIC_CREDENTIAL_TOKEN_PATTERN =
   /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
 
-const SECRET_SHAPED_TEXT = Object.freeze([
+const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   BEARER_CREDENTIAL_PATTERN,
   AGORAGENTIC_API_KEY_PATTERN,
@@ -78,11 +138,14 @@ const SECRET_SHAPED_TEXT = Object.freeze([
   GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
-]);
+]));
 
 export function containsSecretShapedText(value) {
-  return typeof value === 'string'
-    && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+  if (typeof value !== 'string') return false;
+  for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
+    if (SECRET_SHAPED_TEXT[index].test(value)) return true;
+  }
+  return false;
 }
 
 export function assertNoSecretShapedText(value, field) {

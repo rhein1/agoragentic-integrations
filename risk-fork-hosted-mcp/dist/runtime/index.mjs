@@ -42611,12 +42611,57 @@ import { createHash } from "node:crypto";
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray(length) {
+  return detachArray(new Array(length));
+}
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function ownStringKeys(value) {
+  return detachArray(Object.keys(value));
+}
+function sortStrings(keys) {
+  for (let index = 1; index < keys.length; index += 1) {
+    const candidate = keys[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && keys[cursor] > candidate) {
+      keys[cursor + 1] = keys[cursor];
+      cursor -= 1;
+    }
+    keys[cursor + 1] = candidate;
+  }
+  return keys;
+}
 function sortForCanonicalization(value) {
-  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (Array.isArray(value)) {
+    const sorted2 = createDetachedArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex(sorted2, index, sortForCanonicalization(value[index]));
+    }
+    return sorted2;
+  }
   if (!isPlainObject(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value).sort().map((key) => [key, sortForCanonicalization(value[key])])
-  );
+  const sorted = /* @__PURE__ */ Object.create(null);
+  const keys = sortStrings(ownStringKeys(value));
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(sorted, key, {
+      value: sortForCanonicalization(value[key]),
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return sorted;
 }
 function rawCanonicalize(value) {
   return JSON.stringify(sortForCanonicalization(value));
@@ -42658,21 +42703,25 @@ function assertJsonValue(value, state, path8, depth) {
     if (Object.getOwnPropertySymbols(value).length > 0) {
       throw new TypeError(`Canonical JSON contains a symbol key at ${path8}`);
     }
-    for (const [key, descriptor] of Object.entries(descriptors)) {
+    const descriptorKeys = ownStringKeys(descriptors);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      const descriptor = descriptors[key];
       if (Array.isArray(value) && key === "length") continue;
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
         throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path8}.${key}`);
       }
     }
     if (Array.isArray(value)) {
-      if (Object.keys(value).length !== value.length) {
+      if (ownStringKeys(value).length !== value.length) {
         throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path8}`);
       }
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.hasOwn(value, index)) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
           throw new TypeError(`Canonical JSON array is sparse at ${path8}[${index}]`);
         }
-        assertJsonValue(value[index], state, `${path8}[${index}]`, depth + 1);
+        assertJsonValue(descriptor.value, state, `${path8}[${index}]`, depth + 1);
       }
       return;
     }
@@ -42680,8 +42729,9 @@ function assertJsonValue(value, state, path8, depth) {
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError(`Canonical JSON contains a non-plain object at ${path8}`);
     }
-    for (const [key, child] of Object.entries(value)) {
-      assertJsonValue(child, state, `${path8}.${key}`, depth + 1);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      assertJsonValue(descriptors[key].value, state, `${path8}.${key}`, depth + 1);
     }
   } finally {
     state.ancestors.delete(value);
@@ -42702,6 +42752,47 @@ function sha256Ref(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
 import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
+function detachArray2(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray2(length = 0) {
+  return detachArray2(new Array(length));
+}
+function defineArrayIndex2(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function arrayContains(value, expected) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === expected) return true;
+  }
+  return false;
+}
+function sortStrings2(value) {
+  for (let index = 1; index < value.length; index += 1) {
+    const candidate = value[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && value[cursor] > candidate) {
+      value[cursor + 1] = value[cursor];
+      cursor -= 1;
+    }
+    value[cursor + 1] = candidate;
+  }
+  return value;
+}
+function joinStrings(value, separator) {
+  let joined = "";
+  for (let index = 0; index < value.length; index += 1) {
+    if (index > 0) joined += separator;
+    joined += value[index];
+  }
+  return joined;
+}
 function isPlainObject2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -42713,12 +42804,25 @@ function assertPlainObject(value, field) {
 }
 function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
-  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unexpected.length > 0) {
-    if (unexpected.some((key) => containsSecretShapedText(key))) {
-      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+  const keys = detachArray2(Object.keys(value));
+  const unexpected = createDetachedArray2();
+  let unexpectedCount = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (!arrayContains(allowed, key)) {
+      defineArrayIndex2(unexpected, unexpectedCount, key);
+      unexpectedCount += 1;
     }
-    throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(", ")}`);
+  }
+  if (unexpected.length > 0) {
+    for (let index = 0; index < unexpected.length; index += 1) {
+      if (containsSecretShapedText(unexpected[index])) {
+        throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+      }
+    }
+    throw new TypeError(
+      `${field} contains unsupported fields: ${joinStrings(sortStrings2(unexpected), ", ")}`
+    );
   }
 }
 function requireString(value, field, { maxLength = 4096, pattern = null } = {}) {
@@ -42747,7 +42851,7 @@ var AGORAGENTIC_API_KEY_PATTERN = AGORAGENTIC_GENERATED_API_KEY_PATTERN;
 var EMBEDDED_CREDENTIAL_TOKEN_PATTERN = /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
 var BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
 var GENERIC_CREDENTIAL_TOKEN_PATTERN = /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
-var SECRET_SHAPED_TEXT = Object.freeze([
+var SECRET_SHAPED_TEXT = Object.freeze(detachArray2([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   BEARER_CREDENTIAL_PATTERN,
   AGORAGENTIC_API_KEY_PATTERN,
@@ -42755,9 +42859,13 @@ var SECRET_SHAPED_TEXT = Object.freeze([
   GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i
-]);
+]));
 function containsSecretShapedText(value) {
-  return typeof value === "string" && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+  if (typeof value !== "string") return false;
+  for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
+    if (SECRET_SHAPED_TEXT[index].test(value)) return true;
+  }
+  return false;
 }
 function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
@@ -44556,17 +44664,51 @@ function verifyLifecycle(lifecycle) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority.mjs
 import { randomBytes as randomBytes2, randomUUID as randomUUID2 } from "node:crypto";
+import { types as utilTypes } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority-migrator.mjs
 import { readFile } from "node:fs/promises";
-var MIGRATIONS = Object.freeze([
+function detachArray3(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function defineArrayIndex3(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function freezeDetachedArray(value) {
+  return Object.freeze(detachArray3(value));
+}
+function freezeDataGraph(value, seen = /* @__PURE__ */ new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray3(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, "value")) freezeDataGraph(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+function mapPublicArray(value, mapper) {
+  const mapped = new Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    defineArrayIndex3(mapped, index, mapper(value[index]));
+  }
+  return mapped;
+}
+var MIGRATIONS = freezeDetachedArray([
   Object.freeze({
     version: 1,
     url: new URL("../../migrations/001_distributed_authority.pg.sql", import.meta.url)
   })
 ]);
 var SAFE_STARTUP_OPTIONS = "-c synchronous_commit=on -c search_path=pg_catalog";
-var REQUIRED_RELATIONS = Object.freeze([
+var REQUIRED_RELATIONS = freezeDetachedArray([
   "authority_schema_migrations",
   "authority_meta",
   "parent_heads",
@@ -44597,32 +44739,32 @@ var EXPECTED_AUDIT_FUNCTION_BODY = [
 ].join("\n");
 var RUNTIME_TABLE_PRIVILEGES = Object.freeze({
   authority_schema_migrations: Object.freeze({
-    required: Object.freeze(["SELECT"]),
-    forbidden: Object.freeze(["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT"]),
+    forbidden: freezeDetachedArray(["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   authority_meta: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   parent_heads: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   commit_approvals: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   execution_authorizations: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   operations: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   audit_events: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT"]),
-    forbidden: Object.freeze(["UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT"]),
+    forbidden: freezeDetachedArray(["UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   })
 });
 function configurationError(message, code) {
@@ -44779,7 +44921,7 @@ async function verifyPostgresAuthorityClientTransport(client, options = {}) {
     "PostgreSQL authority transport verification options"
   );
   const requireTls = requireBoolean(options.requireTls ?? false, "requireTls");
-  if (!requireTls) return deepFreeze({ tls_verified: false });
+  if (!requireTls) return freezeDataGraph({ tls_verified: false });
   let result;
   try {
     result = await client.query(
@@ -44816,7 +44958,7 @@ async function verifyPostgresAuthorityClientTransport(client, options = {}) {
       }
     );
   }
-  return deepFreeze({
+  return freezeDataGraph({
     tls_verified: true,
     protocol: typeof result.rows[0].version === "string" ? result.rows[0].version : null,
     cipher: typeof result.rows[0].cipher === "string" ? result.rows[0].cipher : null,
@@ -44853,14 +44995,19 @@ async function acquirePostgresAuthorityClient(pool, options = {}) {
 }
 async function loadMigrationPlan(schemaName) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
-  const plan = [];
-  for (const migration of MIGRATIONS) {
+  const plan = new Array(MIGRATIONS.length);
+  for (let index = 0; index < MIGRATIONS.length; index += 1) {
+    const migration = MIGRATIONS[index];
     const template = (await readFile(migration.url, "utf8")).replace(/\r\n?/g, "\n");
-    plan.push(Object.freeze({
-      version: migration.version,
-      migration_hash: sha256Ref(template),
-      sql: template.replaceAll("__RISK_FORK_SCHEMA__", quotedSchema)
-    }));
+    defineArrayIndex3(
+      plan,
+      index,
+      Object.freeze({
+        version: migration.version,
+        migration_hash: sha256Ref(template),
+        sql: template.replaceAll("__RISK_FORK_SCHEMA__", quotedSchema)
+      })
+    );
   }
   return Object.freeze(plan);
 }
@@ -45263,16 +45410,15 @@ async function verifyRequiredRelations(client, schemaName) {
       ORDER BY relation.relname, trigger_record.tgname`,
     [schemaName, REQUIRED_RELATIONS]
   );
-  const expectedTriggers = /* @__PURE__ */ new Map([
-    ["audit_events_no_delete", {
-      type: 11,
-      definition: "CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
-    }],
-    ["audit_events_no_update", {
-      type: 19,
-      definition: "CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
-    }]
-  ]);
+  const expectedTriggers = /* @__PURE__ */ new Map();
+  expectedTriggers.set("audit_events_no_delete", {
+    type: 11,
+    definition: "CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
+  });
+  expectedTriggers.set("audit_events_no_update", {
+    type: 19,
+    definition: "CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
+  });
   if (triggers.rowCount !== expectedTriggers.size) {
     throw migrationMismatch(
       "PostgreSQL authority audit triggers differ from the reviewed migration",
@@ -45281,7 +45427,8 @@ async function verifyRequiredRelations(client, schemaName) {
       { scope: "audit_triggers", observed_count: triggers.rowCount }
     );
   }
-  for (const row of triggers.rows) {
+  for (let index = 0; index < triggers.rows.length; index += 1) {
+    const row = triggers.rows[index];
     const expected = expectedTriggers.get(row.tgname);
     const enabled = row.tgenabled === "O" || row.tgenabled === "A";
     if (!expected || row.relation_name !== "audit_events" || !enabled || Number.parseInt(row.tgtype, 10) !== expected.type || row.function_schema !== schemaName || row.function_name !== "reject_audit_mutation" || row.security_definer !== false || row.volatility !== "v" || row.function_kind !== "f" || Number.parseInt(row.argument_count, 10) !== 0 || row.return_type !== "trigger" || row.language_name !== "plpgsql" || String(row.function_body).replace(/\r\n?/g, "\n").trim() !== EXPECTED_AUDIT_FUNCTION_BODY || row.trigger_definition !== expected.definition) {
@@ -45384,9 +45531,13 @@ async function verifyRuntimePrivileges(client, schemaName) {
       { scope: "schema" }
     );
   }
-  for (const [relationName, policy] of Object.entries(RUNTIME_TABLE_PRIVILEGES)) {
+  const relationNames = detachArray3(Object.keys(RUNTIME_TABLE_PRIVILEGES));
+  for (let relationIndex = 0; relationIndex < relationNames.length; relationIndex += 1) {
+    const relationName = relationNames[relationIndex];
+    const policy = RUNTIME_TABLE_PRIVILEGES[relationName];
     const relation = tableName(schemaName, relationName);
-    for (const privilege of policy.required) {
+    for (let index = 0; index < policy.required.length; index += 1) {
+      const privilege = policy.required[index];
       if (!await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role is missing a required table privilege",
@@ -45396,7 +45547,8 @@ async function verifyRuntimePrivileges(client, schemaName) {
         );
       }
     }
-    for (const privilege of policy.forbidden) {
+    for (let index = 0; index < policy.forbidden.length; index += 1) {
+      const privilege = policy.forbidden[index];
       if (await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role has a forbidden table privilege",
@@ -45405,7 +45557,7 @@ async function verifyRuntimePrivileges(client, schemaName) {
           { relation: relationName, privilege, expected: false }
         );
       }
-      if (["INSERT", "UPDATE", "REFERENCES"].includes(privilege) && await hasAnyColumnPrivilege(client, relation, privilege)) {
+      if ((privilege === "INSERT" || privilege === "UPDATE" || privilege === "REFERENCES") && await hasAnyColumnPrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role has a forbidden column privilege",
           "DISTRIBUTED_AUTHORITY_RUNTIME_PRIVILEGES_INVALID",
@@ -45453,10 +45605,10 @@ async function verifyPostgresDistributedAuthoritySchema(client, options = {}) {
   await verifyMigrationSet(client, schemaName, quotedSchema, plan);
   await verifyRequiredRelations(client, schemaName);
   if (verifyPrivileges) await verifyRuntimePrivileges(client, schemaName);
-  return deepFreeze({
+  return freezeDataGraph({
     schema_name: schemaName,
-    migration_versions: plan.map((migration) => migration.version),
-    migration_hashes: plan.map((migration) => migration.migration_hash),
+    migration_versions: mapPublicArray(plan, (migration) => migration.version),
+    migration_hashes: mapPublicArray(plan, (migration) => migration.migration_hash),
     runtime_privileges_verified: verifyPrivileges
   });
 }
@@ -45606,8 +45758,97 @@ async function migratePostgresDistributedAuthority(options = {}) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority.mjs
 var POSTGRES_AUTHORITIES = /* @__PURE__ */ new WeakMap();
 var SERIALIZATION_FAILURES = /* @__PURE__ */ new Set(["40001", "40P01"]);
+function detachArray4(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray3(length) {
+  return detachArray4(new Array(length));
+}
+function createPublicArray(length) {
+  return new Array(length);
+}
+function defineArrayIndex4(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function freezeDetachedArray2(value) {
+  return Object.freeze(detachArray4(value));
+}
+function ownStringKeys2(value) {
+  return detachArray4(Object.keys(value));
+}
+function freezeDataGraph2(value, seen = /* @__PURE__ */ new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray4(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, "value")) freezeDataGraph2(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+function cloneAuditJson(value) {
+  if (!value || typeof value !== "object") return value;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Array.isArray(value)) {
+    const clone2 = createPublicArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex4(clone2, index, cloneAuditJson(descriptors[String(index)].value));
+    }
+    return clone2;
+  }
+  const clone = {};
+  const keys = ownStringKeys2(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(clone, key, {
+      value: cloneAuditJson(descriptors[key].value),
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return clone;
+}
+var POSTGRES_AUDIT_PAGE_KEYS = freezeDetachedArray2([
+  "authority_id",
+  "after_sequence",
+  "limit",
+  "audit_sequence",
+  "audit_head_hash",
+  "predecessor_hash",
+  "rows"
+]);
+var POSTGRES_AUDIT_ROW_KEYS = freezeDetachedArray2([
+  "authority_id",
+  "sequence",
+  "event_type",
+  "operation_ref",
+  "parent_ref",
+  "authorization_id",
+  "observed_at",
+  "previous_event_hash",
+  "payload",
+  "payload_hash",
+  "event_hash"
+]);
+var MAX_AUDIT_PAYLOAD_GRAPH_NODES = 1e5;
 function asIso(value, label) {
-  return requireIsoDate(value instanceof Date ? value : String(value), label);
+  if (typeof value === "string") return requireIsoDate(value, label);
+  if (value && typeof value === "object") {
+    try {
+      const timestamp = Date.prototype.getTime.call(value);
+      if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+    } catch {
+    }
+  }
+  throw new TypeError(`${label} must be an ISO 8601 date-time`);
 }
 function asVersion(value, label = "operation version") {
   const normalized = typeof value === "number" ? value : Number.parseInt(value, 10);
@@ -45617,7 +45858,22 @@ function asVersion(value, label = "operation version") {
   return normalized;
 }
 function asStatusCount(value, label) {
-  const text = typeof value === "bigint" ? value.toString() : String(value);
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return value;
+  }
+  if (typeof value === "bigint") {
+    if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return Number(value);
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+  const text = value;
   if (!/^(?:0|[1-9][0-9]*)$/.test(text)) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
@@ -45626,6 +45882,237 @@ function asStatusCount(value, label) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
   return normalized;
+}
+function readEnumerableDataObject(value, requiredKeys, label, { allowExtra = false } = {}) {
+  if (value && typeof value === "object" && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  assertPlainObject(value, label);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const observedKeys = ownStringKeys2(descriptors);
+  for (let index = 0; index < observedKeys.length; index += 1) {
+    const descriptor = descriptors[observedKeys[index]];
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} contains a hidden or accessor-backed field`);
+    }
+  }
+  let missingRequiredKey = false;
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    if (!Object.hasOwn(descriptors, requiredKeys[index])) {
+      missingRequiredKey = true;
+      break;
+    }
+  }
+  if (!allowExtra && observedKeys.length !== requiredKeys.length || missingRequiredKey) {
+    throw new TypeError(`${label} must contain the required data fields`);
+  }
+  const record = /* @__PURE__ */ Object.create(null);
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    const key = requiredKeys[index];
+    Object.defineProperty(record, key, {
+      value: descriptors[key].value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return record;
+}
+function readDenseDataArray(value, label) {
+  if (value && typeof value === "object" && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  const prototype = value && typeof value === "object" ? Object.getPrototypeOf(value) : null;
+  if (!Array.isArray(value) || prototype !== Array.prototype && prototype !== null) {
+    throw new TypeError(`${label} must be an ordinary array`);
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const lengthDescriptor = descriptors.length;
+  const length = lengthDescriptor?.value;
+  if (!lengthDescriptor || lengthDescriptor.get || lengthDescriptor.set || !Number.isSafeInteger(length) || length < 0 || ownStringKeys2(descriptors).length !== length + 1) {
+    throw new TypeError(`${label} must be a dense data array`);
+  }
+  const rows = createDetachedArray3(length);
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} must be a dense data array`);
+    }
+    defineArrayIndex4(rows, index, descriptor.value);
+  }
+  return rows;
+}
+function mapDenseDataArray(value, label, mapper) {
+  const source = readDenseDataArray(value, label);
+  const mapped = createPublicArray(source.length);
+  for (let index = 0; index < source.length; index += 1) {
+    defineArrayIndex4(mapped, index, mapper(source[index]));
+  }
+  return mapped;
+}
+function assertProxyFreeAuditPayload(value) {
+  const pending = createDetachedArray3(1);
+  defineArrayIndex4(pending, 0, value);
+  let pendingCount = 1;
+  const seen = /* @__PURE__ */ new WeakSet();
+  let nodes = 0;
+  while (pendingCount > 0) {
+    pendingCount -= 1;
+    const current = pending[pendingCount];
+    delete pending[pendingCount];
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    if (utilTypes.isProxy(current)) {
+      throw new TypeError("PostgreSQL authority audit payload must not contain a Proxy");
+    }
+    seen.add(current);
+    nodes += 1;
+    if (nodes > MAX_AUDIT_PAYLOAD_GRAPH_NODES) {
+      throw new TypeError("PostgreSQL authority audit payload graph is too large");
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    const keys = detachArray4(Reflect.ownKeys(descriptors));
+    for (let index = 0; index < keys.length; index += 1) {
+      const descriptor = descriptors[keys[index]];
+      if (Object.hasOwn(descriptor, "value")) {
+        defineArrayIndex4(pending, pendingCount, descriptor.value);
+        pendingCount += 1;
+      }
+    }
+  }
+  return value;
+}
+function auditChainInvalid(sequence = null) {
+  return distributedAuthorityError(
+    "Distributed authority audit chain verification failed",
+    "DISTRIBUTED_AUDIT_CHAIN_INVALID",
+    { sequence }
+  );
+}
+function normalizeAuditCheckpoint(sequenceValue, hashValue) {
+  let sequence;
+  let eventHash;
+  try {
+    sequence = asStatusCount(sequenceValue, "PostgreSQL authority audit sequence");
+    eventHash = hashValue == null ? null : requireSha256Ref(hashValue, "PostgreSQL authority audit head hash");
+  } catch {
+    throw auditChainInvalid();
+  }
+  if (sequence === 0 !== (eventHash === null)) throw auditChainInvalid(sequence);
+  return { sequence, event_hash: eventHash };
+}
+function verifyPostgresAuthorityAuditPage(input = {}) {
+  const page = readEnumerableDataObject(
+    input,
+    POSTGRES_AUDIT_PAGE_KEYS,
+    "PostgreSQL authority audit page"
+  );
+  const authorityId = requireOpaqueRef(page.authority_id, "audit authority_id");
+  const after = page.after_sequence;
+  const limit = page.limit;
+  const rows = readDenseDataArray(page.rows, "PostgreSQL authority audit rows");
+  if (!Number.isSafeInteger(after) || after < 0 || Object.is(after, -0) || !Number.isSafeInteger(limit) || limit < 1 || limit > 1e4 || rows.length > limit) {
+    throw new TypeError("PostgreSQL authority audit page bounds are invalid");
+  }
+  const checkpoint = normalizeAuditCheckpoint(page.audit_sequence, page.audit_head_hash);
+  if (after > checkpoint.sequence) throw auditChainInvalid(after);
+  let previous = null;
+  try {
+    previous = page.predecessor_hash == null ? null : requireSha256Ref(page.predecessor_hash, "audit predecessor hash");
+  } catch {
+    throw auditChainInvalid(after);
+  }
+  if (after === 0 && previous !== null || after > 0 && previous === null) {
+    throw auditChainInvalid(after);
+  }
+  if (after === checkpoint.sequence && !(previous === null && checkpoint.event_hash === null || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(after);
+  }
+  const events = createPublicArray(rows.length);
+  let expectedSequence = after + 1;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const rawRow = rows[rowIndex];
+    let observedSequence = null;
+    try {
+      const row = readEnumerableDataObject(
+        rawRow,
+        POSTGRES_AUDIT_ROW_KEYS,
+        "PostgreSQL authority audit row",
+        { allowExtra: true }
+      );
+      const sequence = asStatusCount(row.sequence, "audit sequence");
+      observedSequence = sequence;
+      const rowAuthorityId = requireOpaqueRef(row.authority_id, "audit authority_id");
+      const observedAt = asIso(row.observed_at, "audit observed_at");
+      const eventType = requireOpaqueRef(row.event_type, "audit event_type");
+      const operationRef = row.operation_ref == null ? null : requireOpaqueRef(row.operation_ref, "audit operation_ref");
+      const parentRef = row.parent_ref == null ? null : requireOpaqueRef(row.parent_ref, "audit parent_ref");
+      const authorizationId = row.authorization_id == null ? null : requireOpaqueRef(row.authorization_id, "audit authorization_id");
+      const rowPreviousHash = row.previous_event_hash == null ? null : requireSha256Ref(row.previous_event_hash, "audit previous_event_hash");
+      const storedPayloadHash = requireSha256Ref(row.payload_hash, "audit payload_hash");
+      const storedEventHash = requireSha256Ref(row.event_hash, "audit event_hash");
+      const rawPayload = assertProxyFreeAuditPayload(row.payload);
+      const payloadHash = sha256Ref(rawPayload);
+      const payload = cloneAuditJson(rawPayload);
+      const body = {
+        schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
+        authority_id: authorityId,
+        sequence,
+        event_type: eventType,
+        operation_ref: operationRef,
+        parent_ref: parentRef,
+        authorization_id: authorizationId,
+        observed_at: observedAt,
+        previous_event_hash: rowPreviousHash,
+        payload_hash: payloadHash
+      };
+      const previousMatches = previous === null ? rowPreviousHash === null : safeEqual(rowPreviousHash, previous);
+      if (sequence !== expectedSequence || sequence > checkpoint.sequence || rowAuthorityId !== authorityId || !safeEqual(storedPayloadHash, payloadHash) || !previousMatches || !safeEqual(storedEventHash, sha256Ref(body))) {
+        throw auditChainInvalid(sequence);
+      }
+      defineArrayIndex4(
+        events,
+        rowIndex,
+        freezeDataGraph2({ ...body, payload, event_hash: storedEventHash })
+      );
+      previous = storedEventHash;
+      expectedSequence += 1;
+    } catch (error) {
+      if (error?.code === "DISTRIBUTED_AUDIT_CHAIN_INVALID") throw error;
+      throw auditChainInvalid(observedSequence);
+    }
+  }
+  const verifiedThroughSequence = events.length === 0 ? after : events[events.length - 1].sequence;
+  if (after < checkpoint.sequence && events.length === 0) {
+    throw auditChainInvalid(after + 1);
+  }
+  if (events.length < limit && verifiedThroughSequence < checkpoint.sequence) {
+    throw auditChainInvalid(verifiedThroughSequence + 1);
+  }
+  const segmentReachesAuthorityHead = verifiedThroughSequence === checkpoint.sequence;
+  if (segmentReachesAuthorityHead && !(previous === null && checkpoint.event_hash === null || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(checkpoint.sequence);
+  }
+  const startsAtGenesis = after === 0;
+  const fullChainVerified = startsAtGenesis && segmentReachesAuthorityHead;
+  return freezeDataGraph2({
+    schema: "agoragentic.risk-fork.postgres-authority-audit-page.v1",
+    version: 1,
+    events,
+    next_sequence: segmentReachesAuthorityHead ? null : verifiedThroughSequence,
+    segment_verified: true,
+    segment_starts_at_genesis: startsAtGenesis,
+    segment_reaches_authority_head: segmentReachesAuthorityHead,
+    verified: fullChainVerified,
+    verified_through_sequence: verifiedThroughSequence,
+    authority_head: checkpoint,
+    authority_head_verified: fullChainVerified
+  });
 }
 function optionalIso(value, label) {
   return value == null ? null : asIso(value, label);
@@ -45771,13 +46258,16 @@ async function appendAudit(client, state, event) {
     [state.authorityId]
   );
   if (meta.rowCount !== 1) throw new Error("PostgreSQL authority metadata is absent");
-  const previousSequence = Number.parseInt(meta.rows[0].audit_sequence, 10);
-  const sequence = previousSequence + 1;
+  const checkpoint = normalizeAuditCheckpoint(
+    meta.rows[0].audit_sequence,
+    meta.rows[0].audit_head_hash
+  );
+  const sequence = checkpoint.sequence + 1;
   if (!Number.isSafeInteger(sequence)) throw new Error("Authority audit sequence overflow");
   const observedAt = event.observed_at ?? await databaseNow(client);
   const payload = cloneJson(event.payload ?? {});
   const payloadHash = sha256Ref(payload);
-  const previousEventHash = meta.rows[0].audit_head_hash ?? null;
+  const previousEventHash = checkpoint.event_hash;
   const eventBody = {
     schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
     authority_id: state.authorityId,
@@ -47035,7 +47525,7 @@ async function getAuthorityStatus(state) {
       requireTls: state.requireTls,
       verifiedClients: state.verifiedClients
     });
-    await client.query("BEGIN READ ONLY");
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     transactionOpen = true;
     const statusTimeoutMs = Math.min(state.statementTimeoutMs, 5e3);
     await client.query(`SET LOCAL statement_timeout = ${statusTimeoutMs}`);
@@ -47047,7 +47537,7 @@ async function getAuthorityStatus(state) {
       `WITH status_clock AS (
          SELECT clock_timestamp() AS observed_at
        ), authority AS (
-         SELECT schema_version
+         SELECT schema_version, audit_sequence, audit_head_hash
            FROM ${table(state, "authority_meta")}
           WHERE authority_id = $1
        ), unresolved AS (
@@ -47060,6 +47550,8 @@ async function getAuthorityStatus(state) {
             AND status IN ('prepared', 'effect_started', 'ambiguous')
        )
        SELECT authority.schema_version,
+              authority.audit_sequence,
+              authority.audit_head_hash,
               status_clock.observed_at,
               unresolved.prepared_count,
               unresolved.effect_started_count,
@@ -47090,8 +47582,17 @@ async function getAuthorityStatus(state) {
     if (oldestUpdatedAt === null !== (oldestAgeMs === null)) {
       throw new Error("Authority unresolved age and timestamp disagree");
     }
-    const migrationVersions = schemaReport.migration_versions.map((version) => asVersion(version, "PostgreSQL authority migration version"));
-    const migrationHashes = schemaReport.migration_hashes.map((hash) => requireSha256Ref(hash, "PostgreSQL authority migration hash"));
+    const migrationVersions = mapDenseDataArray(
+      schemaReport.migration_versions,
+      "PostgreSQL authority migration versions",
+      (version) => asVersion(version, "PostgreSQL authority migration version")
+    );
+    const migrationHashes = mapDenseDataArray(
+      schemaReport.migration_hashes,
+      "PostgreSQL authority migration hashes",
+      (hash) => requireSha256Ref(hash, "PostgreSQL authority migration hash")
+    );
+    const auditCheckpoint = normalizeAuditCheckpoint(row.audit_sequence, row.audit_head_hash);
     const pool = {
       total_connections: asStatusCount(state.pool.totalCount, "PostgreSQL pool total"),
       idle_connections: asStatusCount(state.pool.idleCount, "PostgreSQL pool idle total"),
@@ -47099,9 +47600,9 @@ async function getAuthorityStatus(state) {
     };
     await client.query("ROLLBACK");
     transactionOpen = false;
-    return deepFreeze({
-      schema: "agoragentic.risk-fork.postgres-authority-status.v1",
-      version: 1,
+    return freezeDataGraph2({
+      schema: "agoragentic.risk-fork.postgres-authority-status.v2",
+      version: 2,
       schema_verification: {
         verified: true,
         schema_version: asVersion(row.schema_version, "PostgreSQL authority schema version"),
@@ -47112,6 +47613,7 @@ async function getAuthorityStatus(state) {
         reachable: true,
         observed_at: observedAt
       },
+      audit_checkpoint: auditCheckpoint,
       unresolved: {
         counts: {
           prepared: asStatusCount(row.prepared_count, "prepared operation count"),
@@ -47172,59 +47674,62 @@ async function getAuditTrail(state, input = {}) {
   if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 1e4) {
     throw new TypeError("distributed audit pagination is invalid");
   }
-  const result = await queryWithVerifiedClient(
-    state,
-    `SELECT * FROM ${table(state, "audit_events")}
-      WHERE authority_id = $1 AND sequence > $2
-      ORDER BY sequence ASC LIMIT $3`,
-    [state.authorityId, after, limit]
-  );
-  let previous = after === 0 ? null : null;
-  if (after > 0) {
-    const head = await queryWithVerifiedClient(
-      state,
-      `SELECT event_hash FROM ${table(state, "audit_events")}
-        WHERE authority_id = $1 AND sequence = $2`,
-      [state.authorityId, after]
-    );
-    if (head.rowCount !== 1) throw new Error("Audit pagination predecessor is absent");
-    previous = head.rows[0].event_hash;
-  }
-  const events = [];
-  let expectedSequence = after + 1;
-  for (const row of result.rows) {
-    const sequence = Number.parseInt(row.sequence, 10);
-    const observedAt = asIso(row.observed_at, "audit observed_at");
-    const payload = cloneJson(row.payload);
-    const payloadHash = sha256Ref(payload);
-    const body = {
-      schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
-      authority_id: state.authorityId,
-      sequence,
-      event_type: row.event_type,
-      operation_ref: row.operation_ref ?? null,
-      parent_ref: row.parent_ref ?? null,
-      authorization_id: row.authorization_id ?? null,
-      observed_at: observedAt,
-      previous_event_hash: row.previous_event_hash ?? null,
-      payload_hash: payloadHash
-    };
-    if (sequence !== expectedSequence || !safeEqual(row.payload_hash, payloadHash) || row.previous_event_hash !== previous || !safeEqual(row.event_hash, sha256Ref(body))) {
-      throw distributedAuthorityError(
-        "Distributed authority audit chain verification failed",
-        "DISTRIBUTED_AUDIT_CHAIN_INVALID",
-        { sequence }
-      );
-    }
-    events.push(deepFreeze({ ...body, payload, event_hash: row.event_hash }));
-    previous = row.event_hash;
-    expectedSequence += 1;
-  }
-  return deepFreeze({
-    events,
-    next_sequence: events.length === limit ? events.at(-1).sequence : null,
-    verified: true
+  const client = await acquirePostgresAuthorityClient(state.pool, {
+    requireTls: state.requireTls,
+    verifiedClients: state.verifiedClients
   });
+  let transactionOpen = false;
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    transactionOpen = true;
+    await client.query(`SET LOCAL statement_timeout = ${state.statementTimeoutMs}`);
+    await client.query(
+      `SET LOCAL idle_in_transaction_session_timeout = ${state.statementTimeoutMs}`
+    );
+    const checkpointResult = await client.query(
+      `SELECT audit_sequence, audit_head_hash
+         FROM ${table(state, "authority_meta")}
+        WHERE authority_id = $1`,
+      [state.authorityId]
+    );
+    if (checkpointResult.rowCount !== 1) {
+      throw new Error("PostgreSQL authority metadata is absent");
+    }
+    let predecessorHash = null;
+    if (after > 0) {
+      const predecessorResult = await client.query(
+        `SELECT event_hash FROM ${table(state, "audit_events")}
+          WHERE authority_id = $1 AND sequence = $2`,
+        [state.authorityId, after]
+      );
+      if (predecessorResult.rowCount !== 1) throw auditChainInvalid(after);
+      predecessorHash = predecessorResult.rows[0].event_hash;
+    }
+    const result = await client.query(
+      `SELECT * FROM ${table(state, "audit_events")}
+        WHERE authority_id = $1 AND sequence > $2
+        ORDER BY sequence ASC LIMIT $3`,
+      [state.authorityId, after, limit]
+    );
+    const verified = verifyPostgresAuthorityAuditPage({
+      authority_id: state.authorityId,
+      after_sequence: after,
+      limit,
+      audit_sequence: checkpointResult.rows[0].audit_sequence,
+      audit_head_hash: checkpointResult.rows[0].audit_head_hash,
+      predecessor_hash: predecessorHash,
+      rows: result.rows
+    });
+    await client.query("ROLLBACK");
+    transactionOpen = false;
+    return verified;
+  } catch (error) {
+    if (transactionOpen) await client.query("ROLLBACK").catch(() => {
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 async function runCommit(state, input, callbacks) {
   const request = normalizeDistributedPrepareRequest(input);
@@ -51146,7 +51651,7 @@ function requireProviderCapability(provider, capability) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { types as utilTypes } from "node:util";
+import { types as utilTypes2 } from "node:util";
 var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boundary.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
@@ -51313,7 +51818,7 @@ function keyFingerprint(value) {
 function assertNoCallerRiskLabels(value, field = "operation") {
   function walk(current) {
     if (!current || typeof current !== "object") return;
-    if (utilTypes.isProxy(current)) {
+    if (utilTypes2.isProxy(current)) {
       throw boundaryError(
         RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must be ordinary JSON`
@@ -51377,7 +51882,7 @@ function assertBoundedCanonicalJson(value, {
       }
       return;
     }
-    if (typeof current !== "object" || utilTypes.isProxy(current)) {
+    if (typeof current !== "object" || utilTypes2.isProxy(current)) {
       throw boundaryError(
         dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must contain only ordinary JSON values`
@@ -56916,7 +57421,7 @@ import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { types as utilTypes2 } from "node:util";
+import { types as utilTypes3 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/e2b-template/lib/runtime-contract.mjs
 var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
@@ -58575,7 +59080,7 @@ var E2B_CLEAN_METADATA_KEYS = /* @__PURE__ */ new Set([
 ]);
 var E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE = "E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE";
 var E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER = "E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER";
-function createDetachedArray(...values) {
+function createDetachedArray4(...values) {
   const output = Object.setPrototypeOf([], null);
   for (let index = 0; index < values.length; index += 1) {
     Object.defineProperty(output, index, {
@@ -58588,7 +59093,7 @@ function createDetachedArray(...values) {
   return output;
 }
 function buildE2BCleanSandboxCreateOptions(input = {}) {
-  if (input && typeof input === "object" && utilTypes2.isProxy(input)) {
+  if (input && typeof input === "object" && utilTypes3.isProxy(input)) {
     throw new TypeError("E2B clean sandbox creation input must not be a Proxy");
   }
   assertPlainObject(input, "E2B clean sandbox creation input");
@@ -58620,7 +59125,7 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     }
   );
   const rawMetadata = inputDescriptors.metadata.value;
-  if (rawMetadata && typeof rawMetadata === "object" && utilTypes2.isProxy(rawMetadata)) {
+  if (rawMetadata && typeof rawMetadata === "object" && utilTypes3.isProxy(rawMetadata)) {
     throw new TypeError("E2B clean sandbox metadata must not be a Proxy");
   }
   assertPlainObject(rawMetadata, "E2B clean sandbox metadata");
@@ -58646,7 +59151,7 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey3)) {
       throw new TypeError("E2B clean sandbox metadata contains an unsupported key");
     }
-    if (value && typeof value === "object" && utilTypes2.isProxy(value)) {
+    if (value && typeof value === "object" && utilTypes3.isProxy(value)) {
       throw new TypeError(`E2B clean sandbox metadata ${normalizedKey3} must not be a Proxy`);
     }
     const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey3}`, {
@@ -58687,8 +59192,8 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     // Keep the SDK-required Array brand while severing mutable inherited
     // Array.prototype hooks before the pinned SDK retains these values for
     // JSON serialization.
-    allowOut: createDetachedArray(),
-    denyOut: createDetachedArray(E2B_SDK_ALL_TRAFFIC_SENTINEL),
+    allowOut: createDetachedArray4(),
+    denyOut: createDetachedArray4(E2B_SDK_ALL_TRAFFIC_SENTINEL),
     allowPublicTraffic: false
   });
   const lifecycle = Object.assign(/* @__PURE__ */ Object.create(null), {
@@ -61563,7 +62068,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:a9dbbce2fb425b4c765908d270323abefbc8b0a2d922f1b913d9638eeccbc5f2" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:6087698b409f264a811a9866df6d6446ced009ca97abb2947a070ff89f114de4" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

@@ -9,14 +9,62 @@ export function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+
+function createDetachedArray(length) {
+  return detachArray(new Array(length));
+}
+
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function ownStringKeys(value) {
+  return detachArray(Object.keys(value));
+}
+
+function sortStrings(keys) {
+  for (let index = 1; index < keys.length; index += 1) {
+    const candidate = keys[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && keys[cursor] > candidate) {
+      keys[cursor + 1] = keys[cursor];
+      cursor -= 1;
+    }
+    keys[cursor + 1] = candidate;
+  }
+  return keys;
+}
+
 function sortForCanonicalization(value) {
-  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (Array.isArray(value)) {
+    const sorted = createDetachedArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex(sorted, index, sortForCanonicalization(value[index]));
+    }
+    return sorted;
+  }
   if (!isPlainObject(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, sortForCanonicalization(value[key])]),
-  );
+  const sorted = Object.create(null);
+  const keys = sortStrings(ownStringKeys(value));
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(sorted, key, {
+      value: sortForCanonicalization(value[key]),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return sorted;
 }
 
 function rawCanonicalize(value) {
@@ -63,7 +111,10 @@ function assertJsonValue(value, state, path, depth) {
     if (Object.getOwnPropertySymbols(value).length > 0) {
       throw new TypeError(`Canonical JSON contains a symbol key at ${path}`);
     }
-    for (const [key, descriptor] of Object.entries(descriptors)) {
+    const descriptorKeys = ownStringKeys(descriptors);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      const descriptor = descriptors[key];
       if (Array.isArray(value) && key === 'length') continue;
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
         throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path}.${key}`);
@@ -71,14 +122,15 @@ function assertJsonValue(value, state, path, depth) {
     }
 
     if (Array.isArray(value)) {
-      if (Object.keys(value).length !== value.length) {
+      if (ownStringKeys(value).length !== value.length) {
         throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path}`);
       }
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.hasOwn(value, index)) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
           throw new TypeError(`Canonical JSON array is sparse at ${path}[${index}]`);
         }
-        assertJsonValue(value[index], state, `${path}[${index}]`, depth + 1);
+        assertJsonValue(descriptor.value, state, `${path}[${index}]`, depth + 1);
       }
       return;
     }
@@ -87,8 +139,9 @@ function assertJsonValue(value, state, path, depth) {
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError(`Canonical JSON contains a non-plain object at ${path}`);
     }
-    for (const [key, child] of Object.entries(value)) {
-      assertJsonValue(child, state, `${path}.${key}`, depth + 1);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      assertJsonValue(descriptors[key].value, state, `${path}.${key}`, depth + 1);
     }
   } finally {
     state.ancestors.delete(value);

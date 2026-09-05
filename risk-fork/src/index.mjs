@@ -149,6 +149,7 @@ export {
   PostgresDistributedCommitAuthority,
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
+  verifyPostgresAuthorityAuditPage,
 } from './adapters/postgres-authority.mjs';
 export {
   acquirePostgresAuthorityClient,
