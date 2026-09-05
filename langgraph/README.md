@@ -42,6 +42,15 @@ The adapter exposes:
 - Keep approval nodes in the LangGraph flow for risky or expensive actions.
 - Store `invocation_id` and `receipt_id` in graph state for reconciliation.
 
+These Python tools and nodes do not automatically use Risk Fork. A separate,
+JavaScript-only, default-off node wrapper is documented in
+[`risk-fork/FRAMEWORK_ADAPTERS.md`](../risk-fork/FRAMEWORK_ADAPTERS.md). It reads
+one explicit state field, ignores unrelated graph state and runtime config, and
+returns one partial-state receipt. For LangGraph `ToolNode`, use the protected
+LangChain handler described there. Installing the source does not establish a
+qualified provider, hosted activation, or live graph protection, and a Python
+adapter remains future work.
+
 ## References
 
 - LangGraph: https://www.langchain.com/langgraph

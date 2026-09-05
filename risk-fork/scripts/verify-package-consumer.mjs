@@ -50,13 +50,22 @@ try {
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/mcp-host-adapter.mjs', 'src/mcp-transport-contract.mjs',
     'e2b-template/lib/mcp-http-phase.mjs', 'examples/mcp-host-adapter.mjs',
-    'examples/local-reference.mjs',
+    'src/framework-tool-adapter.mjs', 'src/frameworks/openai-agents.mjs',
+    'src/frameworks/langchain.mjs', 'src/frameworks/langgraph.mjs',
+    'examples/local-reference.mjs', 'examples/framework-adapters.mjs',
+    'FRAMEWORK_ADAPTERS.md',
   ]) assert.ok(included.has(expected), `Packed file missing: ${expected}`);
   for (const file of included) {
     assert.ok(!/(?:^|\/)(?:node_modules|\.git|\.env|test|hackathon)(?:\/|$)/.test(file), `Unexpected package path: ${file}`);
     assert.ok(!file.endsWith('.tgz') && !file.endsWith('.zip'), 'Nested release artifact');
   }
-  for (const document of ['README.md', 'GETTING_STARTED.md', 'AUTHORS.md', 'MCP_HOST_ADAPTER.md']) {
+  for (const document of [
+    'README.md',
+    'GETTING_STARTED.md',
+    'AUTHORS.md',
+    'MCP_HOST_ADAPTER.md',
+    'FRAMEWORK_ADAPTERS.md',
+  ]) {
     const markdown = await readFile(path.join(packageRoot, document), 'utf8');
     for (const match of markdown.matchAll(/\]\((\.\.?\/[^)#]+)(?:#[^)]*)?\)/g)) {
       const target = path.posix.normalize(path.posix.join(path.posix.dirname(document), match[1]));
@@ -130,6 +139,10 @@ try {
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
     import * as mcpTransport from '@agoragentic/risk-fork/mcp-transport-contract';
     import * as mcpRuntime from '@agoragentic/risk-fork/e2b-template/mcp-http-phase';
+    import * as framework from '@agoragentic/risk-fork/framework-tool-adapter';
+    import * as openai from '@agoragentic/risk-fork/frameworks/openai-agents';
+    import * as langchain from '@agoragentic/risk-fork/frameworks/langchain';
+    import * as langgraph from '@agoragentic/risk-fork/frameworks/langgraph';
     assert.equal(typeof core.RiskForkController, 'function');
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
     assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
@@ -140,6 +153,11 @@ try {
     assert.equal(typeof mcpRuntime.createMcpHttpPhaseRuntime, 'function');
     assert.equal(mcpRuntime.isMcpHttpPhaseRuntime(mcpRuntime.executeMcpHttpPhase), true);
     assert.equal(core.createRiskForkMcpHostAdapter, mcp.createRiskForkMcpHostAdapter);
+    assert.equal(typeof framework.createRiskForkFrameworkToolAdapter, 'function');
+    assert.equal(typeof framework.createTrustedRiskForkFrameworkExecutor, 'function');
+    assert.equal(typeof openai.createOpenAIAgentsRiskForkTool, 'function');
+    assert.equal(typeof langchain.createLangChainRiskForkTool, 'function');
+    assert.equal(typeof langgraph.createLangGraphRiskForkNode, 'function');
   `], consumerRoot);
   const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
     path.join(installedRoot, 'examples/local-reference.mjs'),
@@ -163,6 +181,25 @@ try {
   assert.equal(mcpExample.cleanup_verified, true);
   assert.deepEqual(mcpExample.observed_phases, ['server/discover', 'tools/list']);
   assert.ok(mcpExample.fork_count >= 2 && mcpExample.savepoint_count >= 2);
+  const frameworkExample = JSON.parse(run('installed framework adapter example', process.execPath, [
+    path.join(installedRoot, 'examples/framework-adapters.mjs'),
+  ], consumerRoot));
+  assert.equal(frameworkExample.status, 'passed');
+  assert.equal(frameworkExample.source_only, true);
+  assert.equal(frameworkExample.default_on, false);
+  assert.equal(frameworkExample.classification_only, true);
+  assert.equal(frameworkExample.provider_qualified, false);
+  assert.equal(frameworkExample.live_traffic_protected, false);
+  assert.equal(frameworkExample.model_calls, 0);
+  assert.equal(frameworkExample.network_calls, 0);
+  assert.equal(frameworkExample.provider_calls, 0);
+  assert.equal(frameworkExample.direct_effect_calls, 0);
+  assert.equal(frameworkExample.clean_commit_calls, 0);
+  assert.equal(frameworkExample.receipts_retained, 3);
+  assert.deepEqual(
+    frameworkExample.frameworks.map(entry => entry.framework),
+    ['openai-agents', 'langchain', 'langgraph'],
+  );
   process.stdout.write(`${JSON.stringify({
     schema: 'agoragentic.risk-fork.packed-consumer-check.v1',
     status: 'passed', package: manifest.name, version: manifest.version,
@@ -171,7 +208,8 @@ try {
     offline_install: true, dependency_resolution: 'exact_source_lock',
     verified_dependency_count: verifiedDependencyCount,
     installed_exports: true, mcp_http_phase_exports: 'verified', local_lifecycle: 'verified',
-    mcp_host_example: 'passed', registry_publication_verified: false,
+    mcp_host_example: 'passed', framework_adapter_example: 'passed',
+    registry_publication_verified: false,
     live_traffic_protected: false, provider_calls: 0,
   }, null, 2)}\n`);
 } finally {

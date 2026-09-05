@@ -34,14 +34,15 @@ npm --prefix risk-fork run test:package
 ```
 
 That check packs the actual tarball, installs it into a fresh consumer using
-the source lockfile's exact dependency graph and local npm cache, imports package exports, runs the local lifecycle and MCP
-host example, and checks verified cleanup. It removes its temporary consumer.
+the source lockfile's exact dependency graph and local npm cache, imports package exports, runs the local lifecycle, MCP
+host example, and provider-free framework-adapter demo, and checks verified cleanup. It removes its temporary consumer.
 It does not publish the package, test unlocked registry resolution, or contact a sandbox provider.
 
 To retain a tarball for your own project, run `npm pack --ignore-scripts` in the
 `risk-fork` directory, then `npm install --ignore-scripts <absolute-tarball-path>`
 in your project. Dependencies may be fetched during this ordinary installation.
-The packed `examples/local-reference.mjs` is runnable with local Node.
+The packed `examples/local-reference.mjs` and
+`examples/framework-adapters.mjs` are runnable with local Node.
 
 ## Integrate at the host boundary
 
@@ -54,6 +55,12 @@ A model prompt or MCP tool description is discovery, not enforcement. Every
 instruction-bearing read and consequential tool path must pass through the
 host. An agent retaining an independent shell, network client or direct MCP
 transport can bypass a wrapper. The host must remove or intercept those paths.
+
+For native OpenAI Agents JS function tools, LangChain JS tool handlers, or
+LangGraph JS nodes, read [FRAMEWORK_ADAPTERS.md](./FRAMEWORK_ADAPTERS.md). Those
+shims are default-off and require exact branded boundary, plan-source, and
+executor capabilities. They do not bundle the external frameworks, a provider,
+hosted activation, or Python equivalents.
 
 The source adapter is for local protocol integration. Production remains
 blocked by real provider qualification, mandatory host installation and durable
