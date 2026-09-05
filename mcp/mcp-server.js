@@ -1248,6 +1248,10 @@ function createMcpEnforcementBoundary(hostAdapter = {}) {
     return boundary;
 }
 
+function isMcpEnforcementBoundary(value) {
+    return enforcementBoundaryAdapters.has(value);
+}
+
 const ACP_ENFORCEMENT_NOTE = ' Network execution is fail-closed unless an embedding host supplies a separately qualified enforcement implementation.';
 const ACP_TOOLS = [
     {
@@ -2542,7 +2546,7 @@ if (require.main === module) {
     });
 }
 
-module.exports = {
+module.exports = Object.freeze({
     MCP_ENFORCEMENT_SCHEMAS,
     MCP_V2_PROTOCOL_VERSION,
     buildFallbackToolList,
@@ -2552,7 +2556,8 @@ module.exports = {
     createMcpEnforcementBoundary,
     createRemoteToolDirectory,
     executeFallbackTool,
+    isMcpEnforcementBoundary,
     runAcpAdapter,
     runMcpRelay,
     stripOpaqueMcpMetadata,
-};
+});

@@ -17,7 +17,7 @@
       "distribution_status": "source_only",
       "source": "mcp",
       "min_node": "20",
-      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate. The npm registry resolves a legacy direct relay and must not be used. Owned metadata only by default; remote discovery and tools require a separately qualified host enforcement boundary"
+      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate. The npm registry resolves a legacy direct relay and must not be used. Owned metadata only by default; remote discovery and tools require a separately qualified host enforcement boundary. The risk-forkd programmatic shell accepts only the exact in-process boundary brand; its CLI is diagnostic-only, and no executor, provider, hosted, E2B, production, or live-traffic qualification is claimed"
     },
     "node_sdk": {
       "name": "agoragentic",
@@ -38,7 +38,7 @@
       "distribution_status": "source_only",
       "source": "mcp",
       "min_node": "20",
-      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate only; remote calls fail closed and AGORAGENTIC_API_KEY is neither consumed nor forwarded"
+      "compatibility_scope": "Unpublished, non-installable 2.0.0 source candidate only; remote calls fail closed and AGORAGENTIC_API_KEY is neither consumed nor forwarded. The risk-forkd programmatic shell requires an exact in-process MCP boundary while its standalone CLI refuses startup; executor/provider/hosted/E2B/production authority remains false"
     },
     "agent_client_protocol": {
       "name": "agoragentic-mcp",
@@ -785,7 +785,7 @@
       "path": "mcp/mcp-server.js",
       "install": "npm --prefix mcp ci && npm --prefix mcp run build",
       "docs": "mcp/README.md",
-      "compatibility_scope": "Unpublished, non-installable source candidate with owned local metadata plus a tested fail-closed host-enforcement contract; no qualified hosted enforcement, credential transport, live isolation, or production MCP traffic claim",
+      "compatibility_scope": "Unpublished, non-installable source candidate with owned local metadata plus a tested fail-closed host-enforcement contract and a default-off risk-forkd programmatic shell that accepts only the exact in-process boundary brand; its CLI refuses standalone startup, and there is no bound executor, qualified provider or hosted enforcement, credential transport, live isolation, or production MCP traffic claim",
       "capability_record": {
         "capabilities": {
           "router_client": "none",

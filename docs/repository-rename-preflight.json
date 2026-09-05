@@ -1165,8 +1165,8 @@
       "path": "mcp/package.json",
       "occurrences": 2,
       "line_numbers": [
-        46,
-        51
+        51,
+        56
       ],
       "categories": [
         "installer_or_clone",

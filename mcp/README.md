@@ -125,6 +125,36 @@ node mcp/dist/mcp-server.cjs --acp
 
 ACP mode supports `initialize`, `session/new`, `session/prompt`, `session/cancel`, `tools/list`, and `shutdown` locally. `tools/call` is restricted to the advertised ACP tool names and remains fail-closed without an embedding host capability.
 
+## `risk-forkd` source shell
+
+This source candidate also contains a small `risk-forkd` front door. Its programmatic factory accepts exactly one value: an enforcement boundary created by the matching bundled `createMcpEnforcementBoundary()` instance. Structural copies, boundaries created by another module instance, accessors, extra options, and runtime overrides are rejected before relay startup. The returned service exposes only `schema`, `mode`, immutable `status`, and a single-use `start()` method; the boundary remains private and `start()` delegates only to `runMcpRelay({ enforcementBoundary })`.
+
+```js
+const mcp = require('./dist/mcp-server.cjs');
+const { createRiskForkdService } = require('./risk-forkd.js');
+
+// Construct this separately with createRiskForkMcpHostAdapter() only after an
+// owner has supplied and qualified its exact host boundary and phase-plan path.
+const riskForkHostAdapter = ownerSuppliedRiskForkHostAdapter;
+const enforcementBoundary = mcp.createMcpEnforcementBoundary(riskForkHostAdapter);
+const service = createRiskForkdService({ enforcementBoundary });
+
+console.error(service.status);
+await service.start();
+```
+
+The factory brand proves only that the boundary came from this MCP module instance. It does not prove that the hidden adapter is a Risk Fork adapter, that an `mcp_http_phase` executor is bound, or that any provider or hosted runtime is qualified. Accordingly, the status keeps the executor, Risk Fork provider, hosted runtime, E2B live, production authority, live-traffic protection, bundled-network, and `commitPrepared` flags false. This shell never calls `commitPrepared`.
+
+The checked-in CLI is intentionally diagnostic-only:
+
+```bash
+node mcp/risk-forkd.js
+```
+
+It emits a machine-readable source-only/default-off status and exits with code 78. It does not load an arbitrary config module or accept a serialized boundary because the identity brand is process-local. A future owner-supplied provider binding needs a separately reviewed closed API that connects a branded `mcp_http_phase` runtime to the Risk Fork controller/host-adapter path, plus provider and live qualification evidence. Until then, only an embedding process that already owns the exact in-process boundary can start the service. Relay cleanup remains the existing bounded MCP cleanup on signal or stdio EOF.
+
+The private package metadata includes the `risk-forkd` bin and `agoragentic-mcp/risk-forkd` subpath so a locally packed source checkout can verify their exact shared-module identity. This is not a registry installation claim: the package remains `private`, publication is hard-blocked, and the public npm name still resolves the unsafe legacy relay.
+
 ## Target configuration
 
 `AGORAGENTIC_MCP_URL` selects the desired MCP target placed in enforcement descriptors. It defaults to `https://agoragentic.com/api/mcp`.
