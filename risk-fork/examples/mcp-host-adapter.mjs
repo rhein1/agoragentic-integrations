@@ -20,7 +20,7 @@ import {
 const clock = () => new Date();
 
 function enforcementRequest({ schema, phase, sessionBindingHash = null, params = {} }) {
-  const target = new URL('https://demo.invalid/mcp');
+  const target = new URL('https://mcp.agoragentic.com/demo-source-only');
   const request = {
     schema,
     request_id: `mcp-enforcement:local-${randomUUID()}`,
@@ -43,7 +43,14 @@ function enforcementRequest({ schema, phase, sessionBindingHash = null, params =
     },
     transport_constraints: {
       direct_network_permitted: false,
+      https_required: true,
+      address_scope: 'public_unicast_only',
+      dns_resolution: 'child_before_each_connection_attempt',
+      address_pinning_required: true,
+      proxy_environment_allowed: false,
       redirects: 'error',
+      max_redirects: 0,
+      transport_evidence_required: true,
       response_acceptance: 'clean_import_only',
       fallback_on_protocol_error: false,
       credential_material_in_child: false,
@@ -239,6 +246,7 @@ try {
   const adapter = createRiskForkMcpHostAdapter({
     host_boundary: hostBoundary,
     trusted_phase_plan_source: planSource,
+    synthetic_demo_mode: true,
     clock,
   });
 

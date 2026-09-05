@@ -47,6 +47,12 @@ methods, HTTP fallback, redirects, direct network permission, caller-supplied lo
 risk, request replay, concurrent requests within one session, target changes, and
 session-binding changes fail closed.
 
+Before that gate, the Agoragentic MCP host validates the complete raw parameter
+object within its depth, node, and byte limits, then erases the standard opaque
+`_meta` member. Opaque transport/client metadata therefore cannot influence tool
+classification, request hashes, host dispatch, persistence, or remote forwarding.
+The actual operation arguments remain bound and scanned normally.
+
 Caller `risk_profile` data is a minimum, not trusted classification authority. A
 successful typed import must contain a controller risk decision at least as strict
 as that minimum, and its normalized phase, server, tool name, annotations, and
@@ -63,6 +69,7 @@ source:
 
 ```js
 import {
+  createRiskForkMcpChildOperation,
   createRiskForkMcpHostAdapter,
   createRiskForkMcpPhasePlan,
   createTrustedRiskForkMcpPhasePlanSource,
@@ -71,9 +78,11 @@ import {
 const phasePlans = createTrustedRiskForkMcpPhasePlanSource(
   async (planRequest, { signal } = {}) => {
     // Clean-host policy code only. Do not fetch a remote MCP response here.
+    const responseSchema = responseSchemaForPhase(planRequest.phase);
     // Build a fresh capsule whose proposed_interaction binds every request field.
     const capsule = await buildFreshCapsule({
       planRequest,
+      responseSchema,
       targetRef: `mcp-request:${planRequest.mcp_request_hash.slice(7)}`,
       signal,
     });
@@ -83,14 +92,19 @@ const phasePlans = createTrustedRiskForkMcpPhasePlanSource(
       operation_input: {
         capsule,
         savepoint_input: authorityFreeSavepointInput,
-        operation: closedProviderOperation,
+        operation: createRiskForkMcpChildOperation(planRequest, {
+          response_schema: responseSchema,
+        }),
         effective_arguments: planRequest.params,
         expected_commit_type: 'TYPED_RESULT',
         commit_policy: {
           typed_result_schema_hash: capsule.authorized_result_schema_hash,
         },
         expected_binding: {},
-        network_policy: { mode: 'blocked' },
+        network_policy: {
+          mode: 'allowlist',
+          allowlist: [planRequest.mcp_server_ref],
+        },
       },
     });
   },
@@ -111,12 +125,34 @@ const session = await connectRemoteClient({
 });
 ```
 
-`buildFreshCapsule`, `registerTrustedDescriptor`, and
-`closedProviderOperation` are deliberately host-owned policy functions, not
-callbacks the model or remote server may supply. The descriptor registered for a
+`buildFreshCapsule`, `responseSchemaForPhase`, and `registerTrustedDescriptor`
+are deliberately host-owned policy functions, not callbacks the model or remote
+server may supply. The descriptor's owner policy must independently authorize the
+same exact endpoint in `allowed_egress`. The descriptor registered for a
 `tools/call` must reproduce the exact bound tool annotations and normalized
 capabilities supplied in `planRequest`; the adapter checks them again against the
 controller decision before import.
+
+The `mcp_http_phase` object returned by `createRiskForkMcpChildOperation()` is a
+closed, authority-free provider contract. It carries the exact request binding,
+redirect rejection, response schema, byte bound, and timeout, but it does not
+implement HTTP. A provider runner must explicitly support that operation and
+enforce the allowlist inside its disposable child. No bundled runner does so yet.
+
+The destination contract accepts only HTTPS URLs with public DNS names. It rejects
+IP literals and local/special-use names, requires the child to resolve A, AAAA, and
+CNAME records immediately before every connection attempt, permits only public
+unicast answers, pins the selected address while retaining the original TLS SNI
+and HTTP Host, disables environment proxies, and rejects redirects. The child must
+return a closed, hash-bound transport-evidence wrapper; clean import rechecks the
+requested/final URL, CNAME chain, resolved and selected addresses, TLS name, Host,
+proxy status, redirect count, and evidence hash before exposing the MCP result.
+
+That wrapper is a contract, not independent network proof. A production claim
+requires a qualified executor to originate the observations at the actual socket
+boundary and a trusted clean-side observer to corroborate them. A custom or test
+provider can fabricate child-reported evidence, so the current source and tests do
+not establish DNS-rebinding containment or live transport protection.
 
 ## Run the contained example
 
@@ -130,9 +166,11 @@ node --test test/mcp-host-adapter.test.mjs
 The example uses `LocalReferenceRiskForkAdapter`, a real `RiskForkController`, an
 empty authority-free workspace, and real savepoint/fork/destruction lifecycle
 calls. Its MCP responses are synthetic, predeclared typed-result fixtures. It does
-not contact `demo.invalid` or any other remote server. The JSON result states
+not contact `mcp.agoragentic.com` or any other remote server. The JSON result states
 `demo_only:true`, `isolation_boundary:false`, and `live_protection:false` and
 verifies that both local savepoints and forks were destroyed.
+The explicit `synthetic_demo_mode:true` option is required for that shortcut; the
+adapter's default rejects predeclared results before provider allocation.
 
 ## Storage, deletion, and bounds
 
@@ -163,15 +201,22 @@ outer-host deadline, while this adapter's `close()` waits for terminal cleanup.
 
 ## Current limits blocking live use
 
-- There is no child-side MCP or HTTP operation in the current Local or E2B
-  provider runners. Their operation surface is a closed `bounded_file_batch`, and
-  this adapter requires `network_policy.mode === 'blocked'`.
+- The live-default adapter accepts only an `mcp_http_phase` operation whose closed
+  schema and bindings exactly match those emitted by
+  `createRiskForkMcpChildOperation()`, plus an exact one-endpoint allowlist. The
+  operation deliberately contains no predeclared response.
+- There is no executor for `mcp_http_phase` in the current Local or E2B provider
+  runners. Their implemented operation surface remains a closed
+  `bounded_file_batch`; Local remains network-blocked and E2B live execution is
+  hard-disabled.
 - A phase-plan callback **must not fetch remote MCP content**. Doing so would put
   the risky network interaction on the clean host, outside the disposable fork.
-- The example and tests therefore use synthetic, predeclared MCP payloads. A real
-  remote adapter still needs a separately reviewed child MCP operation with exact
-  endpoint allowlisting, redirect rejection, bounded response import, and an
-  explicit credential model.
+- Predeclared `bounded_file_batch.commit_candidate` plans are rejected unless the
+  host explicitly selects `synthetic_demo_mode:true`. That option exists only for
+  the contained example/tests and is not a live fallback.
+- A real provider still needs a separately reviewed `mcp_http_phase` executor,
+  independently observed DNS/address enforcement, redirect rejection, bounded
+  response import, and an explicit credential model.
 - Current taint policy rejects authority/capability-shaped fields in child
   artifacts. Consequently, a fork-produced `tools/list` result cannot currently
   carry the complete `capabilities` declaration needed to classify a discovered
