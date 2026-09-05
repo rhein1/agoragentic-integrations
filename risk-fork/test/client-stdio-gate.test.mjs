@@ -1369,6 +1369,49 @@ serveTest('stdio client gate force-terminates a gateway that ignores graceful sh
   }
 });
 
+serveTest('stdio client gate exits promptly when verified gateway compilation throws', async () => {
+  const session = await startGate('client-gateway-compile-throws.js', { ready: false });
+  try {
+    const outcome = await withTimeout(session.exit, 2_000);
+    assert.notEqual(outcome, null, 'gateway compile failure must terminate promptly');
+    assert.deepEqual(outcome, { code: 78, signal: null });
+    assert.doesNotMatch(session.stderr.join(''), /synthetic compile failure|uncaught|node:internal/i);
+  } finally {
+    await session.cleanup();
+  }
+});
+
+serveTest('stdio client gate cleans stubborn descendants after hostile gateway compilation throws', async () => {
+  const session = await startGate('client-gateway-compile-throws-with-descendant.js', { ready: false });
+  let descendantPid = null;
+  try {
+    const pidFile = path.join(session.temporaryRoot, 'compile-descendant.pid');
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      try {
+        descendantPid = Number.parseInt(await readFile(pidFile, 'utf8'), 10);
+        break;
+      } catch {
+        await delay(10);
+      }
+    }
+    assert.equal(Number.isSafeInteger(descendantPid), true, 'compile descendant pid must be recorded');
+    const outcome = await withTimeout(session.exit, 2_500);
+    assert.notEqual(outcome, null, 'hostile compile failure cleanup must remain bounded');
+    assert.deepEqual(outcome, { code: 78, signal: null });
+    await delay(100);
+    assert.equal(await isProcessExecutable(descendantPid), false, 'compile descendant must not remain executable');
+    assert.doesNotMatch(
+      session.stderr.join(''),
+      /synthetic compile failure|synthetic descendant readiness failure|uncaught|node:internal/i,
+    );
+  } finally {
+    if (Number.isSafeInteger(descendantPid)) {
+      try { process.kill(descendantPid, 'SIGKILL'); } catch {}
+    }
+    await session.cleanup();
+  }
+});
+
 test('stdio client gate terminates the POSIX process group after its leader exits', {
   skip: process.platform === 'win32' ? 'POSIX process-group boundary' : false,
 }, async () => {

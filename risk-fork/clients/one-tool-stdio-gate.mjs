@@ -38,6 +38,7 @@ const VERIFIED_GATEWAY_BOOTSTRAP = String.raw`
 const fs = require('node:fs');
 const path = require('node:path');
 const Module = require('node:module');
+const terminateBootstrap = process.kill.bind(process, process.pid, 'SIGKILL');
 const entrypoint = process.argv[1];
 if (typeof entrypoint !== 'string' || !path.isAbsolute(entrypoint)) process.exit(78);
 let source;
@@ -53,7 +54,7 @@ try {
   process.mainModule = gatewayModule;
   gatewayModule._compile(source, entrypoint);
 } catch {
-  process.exitCode = 78;
+  terminateBootstrap();
 }
 `;
 const ALLOWED_CLIENT_METHODS = new Set([

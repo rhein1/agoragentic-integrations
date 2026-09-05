@@ -134,13 +134,23 @@ function assertOrdinaryPacketTree(value) {
       || (!isArray && prototype !== Object.prototype)) {
       throw fail('Client-adoption packet contains a non-plain value');
     }
-    if (Object.getOwnPropertySymbols(current).length !== 0) {
-      throw fail('Client-adoption packet contains a symbol key');
+    const ownKeys = Reflect.ownKeys(current);
+    const keys = [];
+    let dataKeyCount = 0;
+    for (let index = 0; index < ownKeys.length; index += 1) {
+      const key = ownKeys[index];
+      if (typeof key === 'symbol') {
+        throw fail('Client-adoption packet contains a symbol key');
+      }
+      if (isArray && key === 'length') continue;
+      dataKeyCount += 1;
+      if (dataKeyCount > MAX_PACKET_NODES - nodes) {
+        throw fail('Client-adoption packet exceeds the deterministic verification limit');
+      }
+      keys[keys.length] = key;
     }
     const descriptors = Object.getOwnPropertyDescriptors(current);
-    const keys = Object.keys(descriptors);
     for (const key of keys) {
-      if (isArray && key === 'length') continue;
       const descriptor = descriptors[key];
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
         throw fail('Client-adoption packet contains a non-data property');

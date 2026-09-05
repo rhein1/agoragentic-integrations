@@ -267,7 +267,12 @@ async function writeReview(packet, output) {
 
 async function verifyReview(manifestPath, gatewayBinding) {
   const manifestBytes = await exactRegularFile(manifestPath, 'manifest');
-  const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  let manifest;
+  try {
+    manifest = JSON.parse(manifestBytes.toString('utf8'));
+  } catch {
+    throw new TypeError('Review manifest must contain valid JSON');
+  }
   if (manifest?.schema !== 'agoragentic.risk-fork.client-adoption-review-manifest.v1'
     || manifest?.status !== 'source_only_default_off'
     || typeof manifest.client !== 'string'
@@ -304,7 +309,9 @@ async function verifyReview(manifestPath, gatewayBinding) {
       active_client_paths_written: false,
     },
   };
-  if (!isDeepStrictEqual(manifest, expectedManifest)) {
+  const expectedManifestBytes = Buffer.from(`${JSON.stringify(expectedManifest, null, 2)}\n`, 'utf8');
+  if (!manifestBytes.equals(expectedManifestBytes)
+    || !isDeepStrictEqual(manifest, expectedManifest)) {
     throw new TypeError('Review manifest does not match the exact current source packet');
   }
 

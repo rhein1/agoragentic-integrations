@@ -362,6 +362,27 @@ test('client adoption caps aggregate UTF-8 verification for repeated large primi
   );
 });
 
+test('client adoption caps own keys before materializing property descriptors', () => {
+  const wide = {};
+  for (let index = 0; index < 5_001; index += 1) wide[`property_${index}`] = null;
+  const originalGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
+  let descriptorCalls = 0;
+  try {
+    Object.getOwnPropertyDescriptors = () => {
+      descriptorCalls += 1;
+      throw new Error('descriptor materialization must not run');
+    };
+    assert.throws(
+      () => verifyRiskForkClientAdoptionPacket(wide),
+      (error) => error?.code === 'RISK_FORK_CLIENT_ADOPTION_INVALID'
+        && /deterministic verification limit/.test(error.message),
+    );
+  } finally {
+    Object.getOwnPropertyDescriptors = originalGetOwnPropertyDescriptors;
+  }
+  assert.equal(descriptorCalls, 0);
+});
+
 test('client adoption CLI previews without writes and writes only inactive review files', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-adoption-'));
   try {
@@ -498,6 +519,29 @@ test('client adoption CLI previews without writes and writes only inactive revie
     );
 
     const manifestPath = path.join(output, 'manifest.json');
+    const canonicalManifest = await readFile(manifestPath, 'utf8');
+    await writeFile(manifestPath, '{"schema": Basic dTpw}\n', 'utf8');
+    const malformed = runCli(['verify-review', '--manifest', manifestPath]);
+    assert.equal(malformed.status, 64);
+    assert.match(JSON.parse(malformed.stderr).message, /must contain valid JSON/);
+    assert.doesNotMatch(malformed.stderr, /dTpw/);
+
+    const duplicateManifests = [
+      canonicalManifest.replace('{\n', '{\n  "status": "Basic dTpw",\n'),
+      canonicalManifest.replace(
+        '  "controls": {\n',
+        '  "controls": {\n    "provider_calls": "Basic dTpw",\n',
+      ),
+    ];
+    for (const duplicateManifest of duplicateManifests) {
+      await writeFile(manifestPath, duplicateManifest, 'utf8');
+      const duplicate = runCli(['verify-review', '--manifest', manifestPath]);
+      assert.equal(duplicate.status, 64);
+      assert.match(JSON.parse(duplicate.stderr).message, /exact current source packet/);
+      assert.doesNotMatch(duplicate.stderr, /dTpw/);
+    }
+
+    await writeFile(manifestPath, canonicalManifest, 'utf8');
     const forgedManifest = JSON.parse(await readFile(manifestPath, 'utf8'));
     const forgedFilename = path.join(output, forgedManifest.files[0].filename);
     await writeFile(forgedFilename, '{}\n', 'utf8');
