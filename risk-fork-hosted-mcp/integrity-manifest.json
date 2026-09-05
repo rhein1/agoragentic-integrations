@@ -9,18 +9,18 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 49,
-    "sha256": "sha256:42be5386e702b9a92f862691d8464dc428b382674466075007cde3c5904d93bd"
+    "sha256": "sha256:a9dbbce2fb425b4c765908d270323abefbc8b0a2d922f1b913d9638eeccbc5f2"
   },
   "reviewed_sources": [
     {
       "path": "mcp/mcp-server.js",
-      "bytes": 104394,
-      "sha256": "sha256:c8284414174a4d8d85dc6245285c17d76cbfc8c38f22e0383897c820a4f3caa1"
+      "bytes": 104536,
+      "sha256": "sha256:f20571c15099474ff907b0cef7ddc1c1f09482490cf7827776db07f952f9df21"
     },
     {
       "path": "mcp/package.json",
-      "bytes": 2711,
-      "sha256": "sha256:3767e7abe9f4b73f0ba8a253307ebac723faba05366a8d1da64b5b5087c4152f"
+      "bytes": 3128,
+      "sha256": "sha256:344b93e85381f7d80b6ac581a1469108b83ba3992a86c9e9670b60233047ec17"
     },
     {
       "path": "risk-fork/LICENSE",
@@ -422,14 +422,14 @@
     {
       "path": "mcp/mcp-server.js",
       "source": "reviewed_source",
-      "bytes": 104394,
-      "sha256": "sha256:c8284414174a4d8d85dc6245285c17d76cbfc8c38f22e0383897c820a4f3caa1"
+      "bytes": 104536,
+      "sha256": "sha256:f20571c15099474ff907b0cef7ddc1c1f09482490cf7827776db07f952f9df21"
     },
     {
       "path": "mcp/package.json",
       "source": "reviewed_source",
-      "bytes": 2711,
-      "sha256": "sha256:3767e7abe9f4b73f0ba8a253307ebac723faba05366a8d1da64b5b5087c4152f"
+      "bytes": 3128,
+      "sha256": "sha256:344b93e85381f7d80b6ac581a1469108b83ba3992a86c9e9670b60233047ec17"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/LICENSE",
@@ -2729,8 +2729,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2444445,
-    "sha256": "sha256:b6bda4f783fb47816c9f8a6c3d171a0aae6a6f7d4927c1200d52ae35e94f8e4f"
+    "bytes": 2445017,
+    "sha256": "sha256:fe3010d66ba92eff7ce4c937df6d07f9d445858abb87bcba1f3a92a954f3a8db"
   },
   "packaged_assets": [
     {
