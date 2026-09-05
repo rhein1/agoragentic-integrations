@@ -1,0 +1,15 @@
+{
+  "name": "@agoragentic/risk-fork-managed-service-source",
+  "version": "0.1.0-alpha.0",
+  "description": "Source-only, default-off control-plane scaffold for managed Risk Fork execution.",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs"
+  }
+}
