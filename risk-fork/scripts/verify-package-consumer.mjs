@@ -48,7 +48,8 @@ try {
   for (const expected of [
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
-    'src/mcp-host-adapter.mjs', 'examples/mcp-host-adapter.mjs',
+    'src/mcp-host-adapter.mjs', 'src/mcp-transport-contract.mjs',
+    'e2b-template/lib/mcp-http-phase.mjs', 'examples/mcp-host-adapter.mjs',
     'examples/local-reference.mjs',
   ]) assert.ok(included.has(expected), `Packed file missing: ${expected}`);
   for (const file of included) {
@@ -127,12 +128,17 @@ try {
     import * as core from '@agoragentic/risk-fork';
     import * as host from '@agoragentic/risk-fork/host-boundary';
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
+    import * as mcpTransport from '@agoragentic/risk-fork/mcp-transport-contract';
+    import * as mcpRuntime from '@agoragentic/risk-fork/e2b-template/mcp-http-phase';
     assert.equal(typeof core.RiskForkController, 'function');
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
     assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
     assert.equal(typeof host.createRiskForkHostBoundary, 'function');
     assert.equal(typeof mcp.createRiskForkMcpHostAdapter, 'function');
     assert.equal(typeof mcp.createTrustedRiskForkMcpPhasePlanSource, 'function');
+    assert.equal(typeof mcpTransport.validateMcpHttpPhaseOperation, 'function');
+    assert.equal(typeof mcpRuntime.createMcpHttpPhaseRuntime, 'function');
+    assert.equal(mcpRuntime.isMcpHttpPhaseRuntime(mcpRuntime.executeMcpHttpPhase), true);
     assert.equal(core.createRiskForkMcpHostAdapter, mcp.createRiskForkMcpHostAdapter);
   `], consumerRoot);
   const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
@@ -164,7 +170,7 @@ try {
     packed_files: included.size, packed_bytes: entry.size,
     offline_install: true, dependency_resolution: 'exact_source_lock',
     verified_dependency_count: verifiedDependencyCount,
-    installed_exports: true, local_lifecycle: 'verified',
+    installed_exports: true, mcp_http_phase_exports: 'verified', local_lifecycle: 'verified',
     mcp_host_example: 'passed', registry_publication_verified: false,
     live_traffic_protected: false, provider_calls: 0,
   }, null, 2)}\n`);

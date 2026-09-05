@@ -271,6 +271,10 @@ const PACKAGED_REVIEWED_ASSETS = Object.freeze([
     target: 'e2b-context/risk-fork/e2b-template/bin/run.mjs',
   },
   {
+    source: 'risk-fork/e2b-template/lib/mcp-http-phase.mjs',
+    target: 'e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs',
+  },
+  {
     source: 'risk-fork/e2b-template/lib/runtime-contract.mjs',
     target: 'e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs',
   },
@@ -285,6 +289,10 @@ const PACKAGED_REVIEWED_ASSETS = Object.freeze([
   {
     source: 'risk-fork/src/child-operation.mjs',
     target: 'e2b-context/risk-fork/src/child-operation.mjs',
+  },
+  {
+    source: 'risk-fork/src/mcp-transport-contract.mjs',
+    target: 'e2b-context/risk-fork/src/mcp-transport-contract.mjs',
   },
   {
     source: 'risk-fork/src/util.mjs',

@@ -319,6 +319,8 @@ test('template build attempt intent is durable, sanitized, one-shot, and precede
     'runner_artifact_hash',
     'runtime_contract_hash',
     'birth_contract_hash',
+    'mcp_http_phase_artifact_hash',
+    'mcp_transport_contract_hash',
     'child_operation_hash',
     'canonical_hash',
     'transaction_assurance_canonical_hash',

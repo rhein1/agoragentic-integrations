@@ -1,17 +1,28 @@
 import { randomUUID } from 'node:crypto';
-import { BlockList, isIP } from 'node:net';
 
 import { canonicalize, sha256Ref } from './canonical.mjs';
 import { networkPolicy } from './contracts.mjs';
 import { assertPreparedForCleanCommit } from './controller.mjs';
 import { isRiskForkHostBoundary } from './host-boundary.mjs';
 import {
+  RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
+  RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
+  RISK_FORK_MCP_MAX_RESPONSE_BYTES as MAX_CHILD_RESPONSE_BYTES,
+  RISK_FORK_MCP_MAX_TIMEOUT_MS as MAX_TIMEOUT_MS,
+  RISK_FORK_MCP_PROTOCOL_VERSION as MCP_PROTOCOL_VERSION,
+  RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA,
+  createMcpDestinationPolicy as createDestinationPolicy,
+  createMcpTransportResultSchema as transportResultSchema,
+  publicMcpEndpoint,
+  validateMcpHttpPhaseOperation,
+  verifyMcpTransportResult as verifyTransportResult,
+} from './mcp-transport-contract.mjs';
+import {
   assertAllowedKeys,
   assertPlainObject,
   boundedInteger,
   containsSecretShapedText,
   deepFreeze,
-  requireExternalEndpoint,
   requireIsoDate,
   requireOpaqueRef,
   requireSha256Ref,
@@ -24,12 +35,11 @@ export const RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA =
   'agoragentic.risk-fork.mcp-phase-plan-request.v1';
 export const RISK_FORK_MCP_PHASE_PLAN_SCHEMA =
   'agoragentic.risk-fork.mcp-phase-plan.v1';
-export const RISK_FORK_MCP_CHILD_OPERATION_SCHEMA =
-  'agoragentic.risk-fork.mcp-child-operation.v1';
-export const RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA =
-  'agoragentic.risk-fork.mcp-destination-policy.v1';
-export const RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA =
-  'agoragentic.risk-fork.mcp-transport-result.v1';
+export {
+  RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
+  RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
+  RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA,
+};
 
 const MCP_SCHEMAS = Object.freeze({
   sessionOpenRequest: 'agoragentic.mcp.enforced-session-open-request.v1',
@@ -38,7 +48,6 @@ const MCP_SCHEMAS = Object.freeze({
   cleanImportedResult: 'agoragentic.mcp.clean-imported-result.v1',
 });
 
-const MCP_PROTOCOL_VERSION = '2026-07-28';
 const OPEN_PHASE = 'server/discover';
 const REQUEST_PHASES = Object.freeze([
   'tools/list',
@@ -117,63 +126,8 @@ const DEFAULT_TIMEOUTS = Object.freeze({
   close_ms: 5_000,
   fallback_ms: 30_000,
 });
-const MAX_TIMEOUT_MS = 10 * 60 * 1000;
 const MIN_TIMEOUT_MS = 10;
 const MAX_PLAN_BYTES = 1024 * 1024;
-const MAX_CHILD_RESPONSE_BYTES = 4 * 1024 * 1024;
-const MAX_DNS_ANSWERS = 64;
-const MAX_CNAME_DEPTH = 16;
-const BLOCKED_DNS_SUFFIXES = Object.freeze([
-  'localhost',
-  'local',
-  'internal',
-  'home.arpa',
-  'invalid',
-  'test',
-  'example',
-  'onion',
-]);
-const BLOCKED_IPV4_DESTINATIONS = new BlockList();
-const BLOCKED_IPV6_DESTINATIONS = new BlockList();
-const GLOBAL_IPV6_DESTINATIONS = new BlockList();
-GLOBAL_IPV6_DESTINATIONS.addSubnet('2000::', 3, 'ipv6');
-for (const [network, prefix, family] of [
-  ['0.0.0.0', 8, 'ipv4'],
-  ['10.0.0.0', 8, 'ipv4'],
-  ['100.64.0.0', 10, 'ipv4'],
-  ['127.0.0.0', 8, 'ipv4'],
-  ['169.254.0.0', 16, 'ipv4'],
-  ['172.16.0.0', 12, 'ipv4'],
-  ['192.0.0.0', 24, 'ipv4'],
-  ['192.0.2.0', 24, 'ipv4'],
-  ['192.31.196.0', 24, 'ipv4'],
-  ['192.52.193.0', 24, 'ipv4'],
-  ['192.88.99.0', 24, 'ipv4'],
-  ['192.168.0.0', 16, 'ipv4'],
-  ['192.175.48.0', 24, 'ipv4'],
-  ['198.18.0.0', 15, 'ipv4'],
-  ['198.51.100.0', 24, 'ipv4'],
-  ['203.0.113.0', 24, 'ipv4'],
-  ['224.0.0.0', 4, 'ipv4'],
-  ['240.0.0.0', 4, 'ipv4'],
-  ['::', 128, 'ipv6'],
-  ['::1', 128, 'ipv6'],
-  ['::ffff:0:0', 96, 'ipv6'],
-  ['64:ff9b::', 96, 'ipv6'],
-  ['64:ff9b:1::', 48, 'ipv6'],
-  ['100::', 64, 'ipv6'],
-  ['2001::', 23, 'ipv6'],
-  ['2001:db8::', 32, 'ipv6'],
-  ['2002::', 16, 'ipv6'],
-  ['3fff::', 20, 'ipv6'],
-  ['5f00::', 16, 'ipv6'],
-  ['fc00::', 7, 'ipv6'],
-  ['fe80::', 10, 'ipv6'],
-  ['ff00::', 8, 'ipv6'],
-]) {
-  (family === 'ipv4' ? BLOCKED_IPV4_DESTINATIONS : BLOCKED_IPV6_DESTINATIONS)
-    .addSubnet(network, prefix, family);
-}
 
 export const RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_CONFIGURATION: 'RISK_FORK_MCP_INVALID_CONFIGURATION',
@@ -252,208 +206,6 @@ function scanSecretValues(value, field) {
     }
   }
   walk(value);
-}
-
-function canonicalDnsName(value, field) {
-  if (typeof value !== 'string' || value !== value.toLowerCase() || value.endsWith('.')) {
-    throw new TypeError(`${field} must be a canonical lowercase DNS name`);
-  }
-  if (isIP(value) !== 0
-    || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value)
-    || BLOCKED_DNS_SUFFIXES.some((suffix) => value === suffix || value.endsWith(`.${suffix}`))) {
-    throw new TypeError(`${field} must be a public DNS name`);
-  }
-  return value;
-}
-
-function publicUnicastAddress(value, field) {
-  if (typeof value !== 'string') throw new TypeError(`${field} must be an IP address`);
-  const familyNumber = isIP(value);
-  if (familyNumber === 0) throw new TypeError(`${field} must be an IP address`);
-  const family = familyNumber === 4 ? 'ipv4' : 'ipv6';
-  const blockList = familyNumber === 4
-    ? BLOCKED_IPV4_DESTINATIONS
-    : BLOCKED_IPV6_DESTINATIONS;
-  if ((familyNumber === 6 && !GLOBAL_IPV6_DESTINATIONS.check(value, family))
-    || blockList.check(value, family)) {
-    throw new TypeError(`${field} must be a public unicast address`);
-  }
-  return value;
-}
-
-function publicMcpEndpoint(value, field) {
-  const href = requireExternalEndpoint(value, field);
-  const parsed = new URL(href);
-  if (parsed.protocol !== 'https:') {
-    throw new TypeError(`${field} must use HTTPS`);
-  }
-  canonicalDnsName(parsed.hostname.toLowerCase(), `${field} hostname`);
-  return href;
-}
-
-function createDestinationPolicy(target) {
-  const href = publicMcpEndpoint(target.href, 'MCP destination URL');
-  const parsed = new URL(href);
-  if (href !== target.href || target.origin !== parsed.origin) {
-    throw new TypeError('MCP destination URL and origin must be exact and canonical');
-  }
-  const policy = {
-    schema: RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
-    requested_url: href,
-    requested_origin: parsed.origin,
-    dns_name: canonicalDnsName(parsed.hostname.toLowerCase(), 'MCP destination DNS name'),
-    dns_resolution: 'child_before_each_connection_attempt',
-    accepted_dns_record_types: ['A', 'AAAA', 'CNAME'],
-    address_scope: 'public_unicast_only',
-    pin_selected_address: true,
-    preserve_tls_server_name: true,
-    preserve_http_host: true,
-    proxy_environment_allowed: false,
-    redirects: 'error',
-    max_redirects: 0,
-    transport_evidence_required: true,
-    policy_hash: null,
-  };
-  policy.policy_hash = sha256Ref(policy);
-  return deepFreeze(policy);
-}
-
-function transportResultSchema(mcpResultSchema) {
-  return deepFreeze({
-    type: 'object',
-    additionalProperties: false,
-    required: ['schema', 'transport_evidence', 'mcp_result'],
-    properties: {
-      schema: { const: RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA },
-      transport_evidence: {
-        type: 'object',
-        additionalProperties: false,
-        required: [
-          'schema',
-          'destination_policy_hash',
-          'requested_url',
-          'final_url',
-          'redirect_count',
-          'dns_name',
-          'cname_chain',
-          'resolved_addresses',
-          'selected_address',
-          'tls_authorized',
-          'tls_server_name',
-          'http_host',
-          'proxy_used',
-          'evidence_hash',
-        ],
-        properties: {
-          schema: { const: 'agoragentic.risk-fork.mcp-transport-evidence.v1' },
-          destination_policy_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
-          requested_url: { type: 'string', maxLength: 4096 },
-          final_url: { type: 'string', maxLength: 4096 },
-          redirect_count: { type: 'integer', minimum: 0, maximum: 0 },
-          dns_name: { type: 'string', maxLength: 253 },
-          cname_chain: {
-            type: 'array',
-            minItems: 1,
-            maxItems: MAX_CNAME_DEPTH,
-            items: { type: 'string', maxLength: 253 },
-          },
-          resolved_addresses: {
-            type: 'array',
-            minItems: 1,
-            maxItems: MAX_DNS_ANSWERS,
-            items: { type: 'string', maxLength: 64 },
-          },
-          selected_address: { type: 'string', maxLength: 64 },
-          tls_authorized: { const: true },
-          tls_server_name: { type: 'string', maxLength: 253 },
-          http_host: { type: 'string', maxLength: 512 },
-          proxy_used: { const: false },
-          evidence_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
-        },
-      },
-      mcp_result: mcpResultSchema,
-    },
-  });
-}
-
-function verifyTransportResult(value, operation) {
-  exactKeys(
-    value,
-    ['schema', 'transport_evidence', 'mcp_result'],
-    'Risk Fork MCP transport result',
-  );
-  if (value.schema !== RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA) {
-    throw new TypeError('Risk Fork MCP transport result schema is invalid');
-  }
-  const evidence = assertPlainObject(
-    value.transport_evidence,
-    'Risk Fork MCP transport evidence',
-  );
-  exactKeys(evidence, [
-    'schema',
-    'destination_policy_hash',
-    'requested_url',
-    'final_url',
-    'redirect_count',
-    'dns_name',
-    'cname_chain',
-    'resolved_addresses',
-    'selected_address',
-    'tls_authorized',
-    'tls_server_name',
-    'http_host',
-    'proxy_used',
-    'evidence_hash',
-  ], 'Risk Fork MCP transport evidence');
-  const destination = operation.destination_policy;
-  const parsed = new URL(destination.requested_url);
-  if (evidence.schema !== 'agoragentic.risk-fork.mcp-transport-evidence.v1'
-    || !safeEqual(evidence.destination_policy_hash, destination.policy_hash)
-    || evidence.requested_url !== destination.requested_url
-    || evidence.final_url !== destination.requested_url
-    || evidence.redirect_count !== 0
-    || evidence.dns_name !== destination.dns_name
-    || evidence.tls_authorized !== true
-    || evidence.tls_server_name !== destination.dns_name
-    || evidence.http_host !== parsed.host
-    || evidence.proxy_used !== false) {
-    throw new TypeError('Risk Fork MCP transport evidence does not match its destination policy');
-  }
-  if (!Array.isArray(evidence.cname_chain)
-    || evidence.cname_chain.length < 1
-    || evidence.cname_chain.length > MAX_CNAME_DEPTH
-    || evidence.cname_chain[0] !== destination.dns_name) {
-    throw new TypeError('Risk Fork MCP transport CNAME evidence is invalid');
-  }
-  const cnameNames = evidence.cname_chain.map((entry, index) => (
-    canonicalDnsName(entry, `Risk Fork MCP transport CNAME[${index}]`)
-  ));
-  if (new Set(cnameNames).size !== cnameNames.length) {
-    throw new TypeError('Risk Fork MCP transport CNAME evidence contains a cycle');
-  }
-  if (!Array.isArray(evidence.resolved_addresses)
-    || evidence.resolved_addresses.length < 1
-    || evidence.resolved_addresses.length > MAX_DNS_ANSWERS) {
-    throw new TypeError('Risk Fork MCP transport address evidence is invalid');
-  }
-  const addresses = evidence.resolved_addresses.map((entry, index) => (
-    publicUnicastAddress(entry, `Risk Fork MCP transport address[${index}]`)
-  ));
-  if (new Set(addresses).size !== addresses.length
-    || !addresses.includes(publicUnicastAddress(
-      evidence.selected_address,
-      'Risk Fork MCP selected transport address',
-    ))) {
-    throw new TypeError('Risk Fork MCP selected address is not pinned to the resolved set');
-  }
-  requireSha256Ref(evidence.evidence_hash, 'Risk Fork MCP transport evidence hash');
-  if (!safeEqual(
-    evidence.evidence_hash,
-    sha256Ref({ ...evidence, evidence_hash: null }),
-  )) {
-    throw new TypeError('Risk Fork MCP transport evidence hash mismatch');
-  }
-  return value.mcp_result;
 }
 
 function normalizeTarget(refValue, originValue) {
@@ -563,6 +315,10 @@ function normalizeEnforcementRequest(value, {
         throw new TypeError('tools/call requires a bound tool descriptor');
       }
       assertPlainObject(request.tool_descriptor, 'MCP enforcement request.tool_descriptor');
+      assertPlainObject(
+        request.tool_descriptor.inputSchema,
+        'MCP enforcement request.tool_descriptor.inputSchema',
+      );
       requireOpaqueRef(request.tool_name, 'MCP enforcement request.tool_name', { maxLength: 500 });
       if (request.tool_descriptor.name !== request.tool_name) {
         throw new TypeError('tools/call tool name does not match its bound descriptor');
@@ -661,6 +417,10 @@ function createPlanRequest(request, clock) {
     session_binding_hash: request.session_binding_hash,
     tool_name: request.tool_name,
     tool_descriptor_hash: request.tool_descriptor_hash,
+    tool_input_schema: request.tool_descriptor?.inputSchema ?? null,
+    tool_input_schema_hash: request.tool_descriptor
+      ? sha256Ref(request.tool_descriptor.inputSchema)
+      : null,
     tool_annotations: request.tool_annotations,
     tool_capabilities: request.tool_capabilities,
     tool_effect_status: request.tool_effect_status,
@@ -687,6 +447,8 @@ function normalizePhasePlanRequest(planRequestValue) {
     'session_binding_hash',
     'tool_name',
     'tool_descriptor_hash',
+    'tool_input_schema',
+    'tool_input_schema_hash',
     'tool_annotations',
     'tool_capabilities',
     'tool_effect_status',
@@ -722,6 +484,16 @@ export function createRiskForkMcpChildOperation(planRequestValue, input = {}) {
     href: planRequest.mcp_server_ref,
     origin: planRequest.mcp_server_origin,
   });
+  const toolSafetyBindingHash = planRequest.phase === 'tools/call'
+    ? sha256Ref({
+        tool_name: planRequest.tool_name,
+        tool_descriptor_hash: planRequest.tool_descriptor_hash,
+        tool_input_schema_hash: planRequest.tool_input_schema_hash,
+        tool_annotations: planRequest.tool_annotations,
+        tool_capabilities: planRequest.tool_capabilities,
+        tool_effect_status: planRequest.tool_effect_status,
+      })
+    : null;
   const operation = {
     schema: RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
     kind: 'mcp_http_phase',
@@ -730,11 +502,16 @@ export function createRiskForkMcpChildOperation(planRequestValue, input = {}) {
     mcp_server_ref: planRequest.mcp_server_ref,
     mcp_server_origin: planRequest.mcp_server_origin,
     tool_name: planRequest.tool_name,
+    tool_descriptor_hash: planRequest.tool_descriptor_hash,
+    tool_input_schema: planRequest.tool_input_schema,
+    tool_input_schema_hash: planRequest.tool_input_schema_hash,
+    tool_effect_status: planRequest.tool_effect_status,
+    tool_safety_binding_hash: toolSafetyBindingHash,
     params: planRequest.params,
     protocol_version: MCP_PROTOCOL_VERSION,
     destination_policy: destinationPolicy,
     redirects: 'error',
-    response_mode: 'json',
+    response_mode: 'json_or_sse',
     mcp_result_schema: mcpResultSchema,
     mcp_result_schema_hash: sha256Ref(mcpResultSchema),
     response_schema: responseSchema,
@@ -752,7 +529,7 @@ export function createRiskForkMcpChildOperation(planRequestValue, input = {}) {
     operation_hash: null,
   };
   operation.operation_hash = sha256Ref(operation);
-  return deepFreeze(operation);
+  return validateMcpHttpPhaseOperation(operation);
 }
 
 export function createRiskForkMcpPhasePlan(planRequestValue, input = {}) {
@@ -794,6 +571,11 @@ function assertMcpChildOperationMatchesRequest(operation, planRequest, request) 
     'mcp_server_ref',
     'mcp_server_origin',
     'tool_name',
+    'tool_descriptor_hash',
+    'tool_input_schema',
+    'tool_input_schema_hash',
+    'tool_effect_status',
+    'tool_safety_binding_hash',
     'params',
     'protocol_version',
     'destination_policy',
@@ -815,6 +597,27 @@ function assertMcpChildOperationMatchesRequest(operation, planRequest, request) 
     || operation.mcp_server_ref !== request.mcp_server_ref
     || operation.mcp_server_origin !== request.mcp_server_origin
     || operation.tool_name !== request.tool_name
+    || operation.tool_descriptor_hash !== request.tool_descriptor_hash
+    || !safeEqual(
+      sha256Ref(operation.tool_input_schema),
+      sha256Ref(request.tool_descriptor?.inputSchema ?? null),
+    )
+    || operation.tool_input_schema_hash !== (request.tool_descriptor
+      ? sha256Ref(request.tool_descriptor.inputSchema)
+      : null)
+    || operation.tool_effect_status !== request.tool_effect_status
+    || operation.tool_safety_binding_hash !== (request.phase === 'tools/call'
+      ? sha256Ref({
+          tool_name: request.tool_name,
+          tool_descriptor_hash: request.tool_descriptor_hash,
+          tool_input_schema_hash: request.tool_descriptor
+            ? sha256Ref(request.tool_descriptor.inputSchema)
+            : null,
+          tool_annotations: request.tool_annotations,
+          tool_capabilities: request.tool_capabilities,
+          tool_effect_status: request.tool_effect_status,
+        })
+      : null)
     || !safeEqual(sha256Ref(operation.params), sha256Ref(request.params))
     || operation.protocol_version !== MCP_PROTOCOL_VERSION
     || !safeEqual(
@@ -825,7 +628,7 @@ function assertMcpChildOperationMatchesRequest(operation, planRequest, request) 
       })),
     )
     || operation.redirects !== 'error'
-    || operation.response_mode !== 'json'
+    || operation.response_mode !== 'json_or_sse'
     || !safeEqual(operation.mcp_result_schema_hash, sha256Ref(operation.mcp_result_schema))
     || !safeEqual(
       sha256Ref(operation.response_schema),

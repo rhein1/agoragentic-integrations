@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 49,
-    "sha256": "sha256:6087698b409f264a811a9866df6d6446ced009ca97abb2947a070ff89f114de4"
+    "files": 51,
+    "sha256": "sha256:e8a14801c92f70ad394287c13ae22ce940e6fb0b10afe0c65100fc8737bd15d9"
   },
   "reviewed_sources": [
     {
@@ -44,8 +44,13 @@
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 11395,
-      "sha256": "sha256:5866828f6884bff8c2c68a4fe09c016c0d0d2367aef6c874c080760d50ad88fa"
+      "bytes": 12943,
+      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+    },
+    {
+      "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
+      "bytes": 30337,
+      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -54,8 +59,8 @@
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
-      "bytes": 3145,
-      "sha256": "sha256:39ad3dbceb4538ec8390f9e5c6dc2182e35560519e83d5ea8a5acf6717c50393"
+      "bytes": 3199,
+      "sha256": "sha256:1caede3794f621f64e11cd7cb6fba955eca40a7b8fbd52856c9d133bc77bfcf6"
     },
     {
       "path": "risk-fork/migrations/001_distributed_authority.pg.sql",
@@ -74,8 +79,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 3725,
-      "sha256": "sha256:51edfb3ac7b7a46eaa93adf58f709bb5548ce0faeffcbef0fa56c733efd02ec9"
+      "bytes": 3871,
+      "sha256": "sha256:4bd9a62659de55f845b28daaf2f06593bc9fb782355d131a7cc660035713a6f1"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -189,8 +194,13 @@
     },
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
-      "bytes": 53361,
-      "sha256": "sha256:3e0579c2daa5974bb7994232230eaa2e233e0ce79cffa173bacbcc182769b1b1"
+      "bytes": 46749,
+      "sha256": "sha256:b2641864ebf1b594a3df42ae1c463d8aa1012ac339df948ccb3fdf00272ea5e8"
+    },
+    {
+      "path": "risk-fork/src/mcp-transport-contract.mjs",
+      "bytes": 28508,
+      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -2294,8 +2304,14 @@
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
       "source": "reviewed_source",
-      "bytes": 11395,
-      "sha256": "sha256:5866828f6884bff8c2c68a4fe09c016c0d0d2367aef6c874c080760d50ad88fa"
+      "bytes": 12943,
+      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+    },
+    {
+      "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
+      "source": "reviewed_source",
+      "bytes": 30337,
+      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -2306,8 +2322,8 @@
     {
       "path": "risk-fork/e2b-template/template.mjs",
       "source": "reviewed_source",
-      "bytes": 3145,
-      "sha256": "sha256:39ad3dbceb4538ec8390f9e5c6dc2182e35560519e83d5ea8a5acf6717c50393"
+      "bytes": 3199,
+      "sha256": "sha256:1caede3794f621f64e11cd7cb6fba955eca40a7b8fbd52856c9d133bc77bfcf6"
     },
     {
       "path": "risk-fork/migrations/001_distributed_authority.pg.sql",
@@ -2444,8 +2460,14 @@
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
       "source": "reviewed_source",
-      "bytes": 53361,
-      "sha256": "sha256:3e0579c2daa5974bb7994232230eaa2e233e0ce79cffa173bacbcc182769b1b1"
+      "bytes": 46749,
+      "sha256": "sha256:b2641864ebf1b594a3df42ae1c463d8aa1012ac339df948ccb3fdf00272ea5e8"
+    },
+    {
+      "path": "risk-fork/src/mcp-transport-contract.mjs",
+      "source": "reviewed_source",
+      "bytes": 28508,
+      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -2729,8 +2751,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2463817,
-    "sha256": "sha256:dc391528f239e38302096d9071dea12188445ad665bb7e1d698ee065a94d57e4"
+    "bytes": 2483304,
+    "sha256": "sha256:6a21ccba79a76ea53baba1b3eacebe0a282c80ada911e3075228f538bcbc6afb"
   },
   "packaged_assets": [
     {
@@ -2765,8 +2787,14 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/run.mjs",
       "source_path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 11395,
-      "sha256": "sha256:5866828f6884bff8c2c68a4fe09c016c0d0d2367aef6c874c080760d50ad88fa"
+      "bytes": 12943,
+      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+    },
+    {
+      "path": "e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs",
+      "source_path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
+      "bytes": 30337,
+      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -2777,8 +2805,8 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/template.mjs",
       "source_path": "risk-fork/e2b-template/template.mjs",
-      "bytes": 3145,
-      "sha256": "sha256:39ad3dbceb4538ec8390f9e5c6dc2182e35560519e83d5ea8a5acf6717c50393"
+      "bytes": 3199,
+      "sha256": "sha256:1caede3794f621f64e11cd7cb6fba955eca40a7b8fbd52856c9d133bc77bfcf6"
     },
     {
       "path": "e2b-context/risk-fork/src/canonical.mjs",
@@ -2791,6 +2819,12 @@
       "source_path": "risk-fork/src/child-operation.mjs",
       "bytes": 5559,
       "sha256": "sha256:d3f8ab30945fc87cf77d6e0791fba6d9cf6cd3edd1f895d9a31ac8e8505b0926"
+    },
+    {
+      "path": "e2b-context/risk-fork/src/mcp-transport-contract.mjs",
+      "source_path": "risk-fork/src/mcp-transport-contract.mjs",
+      "bytes": 28508,
+      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
     },
     {
       "path": "e2b-context/risk-fork/src/util.mjs",
