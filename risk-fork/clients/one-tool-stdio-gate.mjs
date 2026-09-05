@@ -14,7 +14,7 @@ import { spawn } from 'node:child_process';
 import { TextDecoder } from 'node:util';
 
 import { RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES } from '../src/client-adoption.mjs';
-import { containsSecretShapedText } from '../src/util.mjs';
+import { containsSerializedCredentialMaterial } from '../src/util.mjs';
 
 const TOOL_NAME = 'risk_fork_protect';
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -33,9 +33,6 @@ const SHUTDOWN_FORCE_EXIT_MS = 1500;
 const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
 const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
-const BASIC_AUTH_VALUE_PATTERN = /(?:^|[\s:=])basic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;'\"])/gi;
-const PROXY_AUTHORIZATION_VALUE_PATTERN = /\bproxy-authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
-const URL_USERINFO_PATTERN = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
 const VERIFIED_GATEWAY_BOOTSTRAP = String.raw`
 'use strict';
 const fs = require('node:fs');
@@ -118,7 +115,7 @@ function parseArgs(argv) {
     || path.basename(gatewayEntrypoint) !== 'risk-forkd.js'
     || gatewayEntrypoint.length > 4096
     || /[\u0000-\u001f\u007f]/.test(gatewayEntrypoint)
-    || containsSecretShapedText(gatewayEntrypoint)) {
+    || containsSerializedCredentialMaterial(gatewayEntrypoint)) {
     throw fail('Gateway entrypoint must be an absolute path ending in risk-forkd.js');
   }
   if (!/^sha256:[a-f0-9]{64}$/.test(gatewaySha256)) {
@@ -198,32 +195,13 @@ function isAuthorityOrSecretKey(value) {
     || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized);
 }
 
-function containsBasicAuthorization(value) {
-  BASIC_AUTH_VALUE_PATTERN.lastIndex = 0;
-  let match;
-  while ((match = BASIC_AUTH_VALUE_PATTERN.exec(value)) !== null) {
-    const encoded = match[1];
-    const unpadded = encoded.replace(/=+$/, '');
-    const remainder = unpadded.length % 4;
-    if (remainder === 1) continue;
-    const padded = `${unpadded}${'='.repeat((4 - remainder) % 4)}`;
-    const decoded = Buffer.from(padded, 'base64');
-    const canonical = decoded.toString('base64');
-    if (canonical.replace(/=+$/, '') === unpadded
-      && (!encoded.includes('=') || encoded === canonical)
-      && decoded.includes(0x3a)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function containsCredentialMaterial(value) {
-  return containsSecretShapedText(value)
-    || normalizedKey(value) === 'proxy_authorization'
-    || containsBasicAuthorization(value)
-    || PROXY_AUTHORIZATION_VALUE_PATTERN.test(value)
-    || URL_USERINFO_PATTERN.test(value);
+  const normalized = normalizedKey(value);
+  return containsSerializedCredentialMaterial(value)
+    || normalized === 'authorization'
+    || normalized === 'authorisation'
+    || normalized === 'proxy_authorization'
+    || normalized === 'proxy_authorisation';
 }
 
 function decimalRationalKey(token) {
@@ -941,7 +919,10 @@ async function serve(options) {
     );
     inputEndTimer.unref();
   });
-  for (const signal of ['SIGINT', 'SIGTERM']) {
+  const terminationSignals = process.platform === 'win32'
+    ? ['SIGINT', 'SIGTERM']
+    : ['SIGHUP', 'SIGINT', 'SIGTERM'];
+  for (const signal of terminationSignals) {
     process.once(signal, () => close(0, `Client gate received ${signal}`));
   }
 }

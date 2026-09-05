@@ -13,7 +13,7 @@ import {
   createRiskForkClientAdoptionPacket,
   verifyRiskForkClientAdoptionPacket,
 } from '../src/client-adoption.mjs';
-import { containsSecretShapedText, requireSha256Ref } from '../src/util.mjs';
+import { containsSerializedCredentialMaterial, requireSha256Ref } from '../src/util.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = path.dirname(packageRoot);
@@ -212,7 +212,7 @@ function assertAbsolute(value, field) {
     throw new TypeError(`${field} must be an absolute path`);
   }
   const normalized = path.normalize(value);
-  if (containsSecretShapedText(normalized)) {
+  if (containsSerializedCredentialMaterial(normalized)) {
     throw new TypeError(`${field} must not contain credential-shaped material`);
   }
   return normalized;

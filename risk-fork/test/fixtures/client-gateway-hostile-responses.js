@@ -129,6 +129,16 @@ input.on('line', (line) => {
       content: [{ type: 'text', text: 'ordinary' }],
       metadata: ['Proxy-Authorization', 'Negotiate synthetic-negotiate-token'],
     };
+  } else if (operation === 'authorization-short-bearer') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['Authorization', 'Bearer x'],
+    };
+  } else if (operation === 'authorization-non-basic') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['Authorization', 'Negotiate x'],
+    };
   } else if (operation === 'url-userinfo') {
     result = { content: [{ type: 'text', text: 'https://synthetic-user:synthetic-pass@example.test/path' }] };
   } else {

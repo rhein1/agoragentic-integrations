@@ -912,6 +912,18 @@ serveTest('stdio client gate scans decoded request and response values for crede
       /synthetic-negotiate-token/,
     ],
     [
+      'separated Authorization pair with a short Bearer value',
+      'authorization-short-bearer',
+      ['Authorization', 'Bearer x'],
+      /Bearer x/,
+    ],
+    [
+      'separated Authorization pair with a non-Basic value',
+      'authorization-non-basic',
+      ['Authorization', 'Negotiate x'],
+      /Negotiate x/,
+    ],
+    [
       'URL userinfo',
       'url-userinfo',
       'https://synthetic-user:synthetic-pass@example.test/path',
@@ -1365,6 +1377,61 @@ test('stdio client gate terminates the POSIX process group after its leader exit
       try { process.kill(descendantPid, 'SIGKILL'); } catch {}
     }
     await session.cleanup();
+  }
+});
+
+test('stdio client gate routes SIGHUP through bounded POSIX gateway cleanup', {
+  skip: process.platform === 'win32' ? 'POSIX SIGHUP process-group boundary' : false,
+}, async () => {
+  const session = await startGate('client-gateway-start-marker.js', { ready: false });
+  let gatewayPid = null;
+  try {
+    const pidFile = path.join(session.temporaryRoot, 'gateway.pid');
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        gatewayPid = Number.parseInt(await readFile(pidFile, 'utf8'), 10);
+        break;
+      } catch {
+        await delay(10);
+      }
+    }
+    assert.equal(Number.isSafeInteger(gatewayPid), true, 'gateway pid must be recorded');
+    session.child.kill('SIGHUP');
+    const outcome = await withTimeout(session.exit, 2_500);
+    assert.notEqual(outcome, null, 'SIGHUP cleanup must remain bounded');
+    assert.deepEqual(outcome, { code: 0, signal: null });
+    await delay(100);
+    assert.equal(await isProcessExecutable(gatewayPid), false, 'gateway must not remain executable');
+    assert.doesNotMatch(session.stderr.join(''), /uncaught|node:internal/i);
+  } finally {
+    if (Number.isSafeInteger(gatewayPid)) {
+      try { process.kill(gatewayPid, 'SIGKILL'); } catch {}
+    }
+    await session.cleanup();
+  }
+});
+
+test('stdio client gate rejects serialized gateway paths containing full credential forms', () => {
+  const unsafePaths = [
+    path.join(path.parse(packageRoot).root, 'synthetic', 'Basic dTpw', 'risk-forkd.js'),
+    path.join(
+      path.parse(packageRoot).root,
+      'synthetic',
+      'synthetic-user:synthetic-pass@example.test',
+      'risk-forkd.js',
+    ),
+  ];
+  for (const gateway of unsafePaths) {
+    const refused = spawnSync(process.execPath, [
+      gateEntrypoint,
+      'serve',
+      '--gateway-entrypoint', gateway,
+      '--gateway-sha256', `sha256:${'0'.repeat(64)}`,
+    ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
+    assert.equal(refused.status, 78);
+    assert.equal(refused.stdout, '');
+    assert.match(JSON.parse(refused.stderr).message, /absolute path ending in risk-forkd\.js/);
+    assert.doesNotMatch(refused.stderr, /dTpw|synthetic-user|synthetic-pass/);
   }
 });
 

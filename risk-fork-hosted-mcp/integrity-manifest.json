@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 56,
-    "sha256": "sha256:2f9f4608f992158597e927a95b219106c54d1ac5ca97786bab07790d7599c530"
+    "sha256": "sha256:686439eeeb29333864a30e22b4ffba9b1d584a4b40d8d1698c51519b6bcf165d"
   },
   "reviewed_sources": [
     {
@@ -149,8 +149,8 @@
     },
     {
       "path": "risk-fork/src/client-adoption.mjs",
-      "bytes": 13162,
-      "sha256": "sha256:a6b16e1e525b58c49ceff88fa788a12f047581c02959e540add06c7fb7a558f6"
+      "bytes": 13186,
+      "sha256": "sha256:8d9bb239aa3a1b9e628067009f0b113d07aeb5b1d66ee39f25ff2e0b82a267dc"
     },
     {
       "path": "risk-fork/src/constants.mjs",
@@ -249,8 +249,8 @@
     },
     {
       "path": "risk-fork/src/util.mjs",
-      "bytes": 10006,
-      "sha256": "sha256:523e3b918925812f4d37bd1ac19e0384e4c5474f07144b077ebc2597854f3b0c"
+      "bytes": 11435,
+      "sha256": "sha256:d198096f9ea346ab3b5e8619e878bc90f76b965de121a67eaee1eb1b7a1a4187"
     },
     {
       "path": "transaction-assurance/src/canonical.mjs",
@@ -2515,8 +2515,8 @@
     {
       "path": "risk-fork/src/util.mjs",
       "source": "reviewed_source",
-      "bytes": 10006,
-      "sha256": "sha256:523e3b918925812f4d37bd1ac19e0384e4c5474f07144b077ebc2597854f3b0c"
+      "bytes": 11435,
+      "sha256": "sha256:d198096f9ea346ab3b5e8619e878bc90f76b965de121a67eaee1eb1b7a1a4187"
     },
     {
       "path": "transaction-assurance/src/canonical.mjs",
@@ -2777,7 +2777,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 2483304,
-    "sha256": "sha256:9b6984c01f081790ccfbef8021826efa38e47504247e67e12deca05b201a89b7"
+    "sha256": "sha256:dbdfa5afbad3b3a1132b35ce9a01b0f0e88399aaf1845fa96cd688c2471815ce"
   },
   "packaged_assets": [
     {
@@ -2854,8 +2854,8 @@
     {
       "path": "e2b-context/risk-fork/src/util.mjs",
       "source_path": "risk-fork/src/util.mjs",
-      "bytes": 10006,
-      "sha256": "sha256:523e3b918925812f4d37bd1ac19e0384e4c5474f07144b077ebc2597854f3b0c"
+      "bytes": 11435,
+      "sha256": "sha256:d198096f9ea346ab3b5e8619e878bc90f76b965de121a67eaee1eb1b7a1a4187"
     },
     {
       "path": "e2b-context/transaction-assurance/src/canonical.mjs",

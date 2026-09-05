@@ -140,12 +140,50 @@ const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
 ]));
 
+const BASIC_AUTH_VALUE_PATTERN =
+  /(?:^|[\s:=\\/])basic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;'"\\/])/gi;
+const AUTHORIZATION_VALUE_PATTERN =
+  /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+const URL_USERINFO_PATTERN =
+  /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+const PATH_USERINFO_PATTERN =
+  /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
+
 export function containsSecretShapedText(value) {
   if (typeof value !== 'string') return false;
   for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
     if (SECRET_SHAPED_TEXT[index].test(value)) return true;
   }
   return false;
+}
+
+function containsBasicAuthorization(value) {
+  BASIC_AUTH_VALUE_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = BASIC_AUTH_VALUE_PATTERN.exec(value)) !== null) {
+    const encoded = match[1];
+    const unpadded = encoded.replace(/=+$/, '');
+    const remainder = unpadded.length % 4;
+    if (remainder === 1) continue;
+    const padded = `${unpadded}${'='.repeat((4 - remainder) % 4)}`;
+    const decoded = Buffer.from(padded, 'base64');
+    const canonical = decoded.toString('base64');
+    if (canonical.replace(/=+$/, '') === unpadded
+      && (!encoded.includes('=') || encoded === canonical)
+      && decoded.includes(0x3a)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== 'string') return false;
+  return containsSecretShapedText(value)
+    || containsBasicAuthorization(value)
+    || AUTHORIZATION_VALUE_PATTERN.test(value)
+    || URL_USERINFO_PATTERN.test(value)
+    || PATH_USERINFO_PATTERN.test(value);
 }
 
 export function assertNoSecretShapedText(value, field) {

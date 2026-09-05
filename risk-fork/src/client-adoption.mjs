@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { isDeepStrictEqual, types as utilTypes } from 'node:util';
 
-import { containsSecretShapedText, deepFreeze, requireSha256Ref } from './util.mjs';
+import { containsSerializedCredentialMaterial, deepFreeze, requireSha256Ref } from './util.mjs';
 
 export const RISK_FORK_CLIENT_ADOPTION_SCHEMA =
   'agoragentic.risk-fork.client-adoption-packet.v1';
@@ -86,7 +86,7 @@ function requireAbsoluteFile(value, field, basename) {
     throw fail(`${field} must be an absolute path ending in ${basename}`);
   }
   const normalized = path.normalize(value);
-  if (containsSecretShapedText(normalized)) {
+  if (containsSerializedCredentialMaterial(normalized)) {
     throw fail(`${field} must not contain credential-shaped material`);
   }
   return normalized;

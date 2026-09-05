@@ -559,6 +559,43 @@ test('client adoption rejects credential-shaped paths before packet serializatio
     assert.match(JSON.parse(planned.stderr).message, /credential-shaped material/);
     assert.doesNotMatch(planned.stderr, /amk_[a-f0-9]{64}/);
 
+    const fullCredentialPaths = [
+      {
+        gateway: path.join(temporaryRoot, 'Basic dTpw', 'risk-forkd.js'),
+        forbidden: /dTpw/,
+      },
+      {
+        gateway: path.join(
+          temporaryRoot,
+          'synthetic-user:synthetic-pass@example.test',
+          'risk-forkd.js',
+        ),
+        forbidden: /synthetic-user|synthetic-pass/,
+      },
+    ];
+    for (const { gateway, forbidden } of fullCredentialPaths) {
+      const fullCredentialPlan = runCli([
+        'plan', '--client', 'all', '--gateway', gateway,
+        '--gateway-sha256', `sha256:${'0'.repeat(64)}`,
+      ]);
+      assert.equal(fullCredentialPlan.status, 64);
+      assert.equal(fullCredentialPlan.stdout, '');
+      assert.match(JSON.parse(fullCredentialPlan.stderr).message, /credential-shaped material/);
+      assert.doesNotMatch(fullCredentialPlan.stderr, forbidden);
+
+      assert.throws(
+        () => createRiskForkClientAdoptionPacket({
+          client: 'all',
+          gateEntrypoint,
+          gateSha256: `sha256:${'0'.repeat(64)}`,
+          gatewayEntrypoint: gateway,
+          gatewaySha256: `sha256:${'1'.repeat(64)}`,
+          nodeExecutable: process.execPath,
+        }),
+        /credential-shaped material/,
+      );
+    }
+
     assert.throws(
       () => createRiskForkClientAdoptionPacket({
         client: 'all',
