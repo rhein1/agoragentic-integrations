@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rm,
@@ -11,8 +12,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -33,8 +33,12 @@ const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mj
 const gatewayEntrypoint = path.join(repositoryRoot, 'mcp', 'risk-forkd.js');
 const cliEntrypoint = path.join(packageRoot, 'scripts', 'client-adoption.mjs');
 
+function hashBytes(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
 async function hashFile(filename) {
-  return `sha256:${createHash('sha256').update(await readFile(filename)).digest('hex')}`;
+  return hashBytes(await readFile(filename));
 }
 
 async function createPacket(client = 'all') {
@@ -357,8 +361,25 @@ test('client adoption CLI previews without writes and writes only inactive revie
       Buffer.alloc(RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES + 1, 0x61),
     );
     const before = await readdir(temporaryRoot);
+    const unpairedGateway = runCli([
+      'plan', '--client', 'all', '--gateway', gatewayEntrypoint,
+    ]);
+    assert.equal(unpairedGateway.status, 64);
+    assert.match(
+      JSON.parse(unpairedGateway.stderr).message,
+      /--gateway and --gateway-sha256 must be supplied together/,
+    );
+    const unpairedGatewayHash = runCli([
+      'plan', '--client', 'all', '--gateway-sha256', await hashFile(gatewayEntrypoint),
+    ]);
+    assert.equal(unpairedGatewayHash.status, 64);
+    assert.match(
+      JSON.parse(unpairedGatewayHash.stderr).message,
+      /--gateway and --gateway-sha256 must be supplied together/,
+    );
     const oversizedPlan = runCli([
       'plan', '--client', 'all', '--gateway', oversizedGateway,
+      '--gateway-sha256', await hashFile(oversizedGateway),
     ]);
     assert.equal(oversizedPlan.status, 64);
     assert.match(
@@ -368,6 +389,7 @@ test('client adoption CLI previews without writes and writes only inactive revie
     const oversizedOutput = path.join(temporaryRoot, 'oversized-output');
     const oversizedWrite = runCli([
       'write-review', '--client', 'all', '--gateway', oversizedGateway,
+      '--gateway-sha256', await hashFile(oversizedGateway),
       '--output', oversizedOutput, '--yes',
     ]);
     assert.equal(oversizedWrite.status, 64);
@@ -376,6 +398,34 @@ test('client adoption CLI previews without writes and writes only inactive revie
     const preview = runCli(['plan', '--client', 'all']);
     assert.equal(preview.status, 0, preview.stderr);
     const previewPacket = JSON.parse(preview.stdout);
+    const currentGatewayBytes = await readFile(gatewayEntrypoint);
+    const currentGatewayHash = hashBytes(currentGatewayBytes);
+    const plannerSource = await readFile(cliEntrypoint, 'utf8');
+    const reviewedSourceBinding = plannerSource.match(
+      /const REVIEWED_SOURCE_CHECKOUT_GATEWAY_SHA256_ALLOWLIST = Object\.freeze\(\[([\s\S]*?)\]\);/,
+    );
+    assert.ok(reviewedSourceBinding, 'planner must expose literal reviewed source bindings');
+    const reviewedSourceHashes = [...reviewedSourceBinding[1].matchAll(
+      /'(sha256:[a-f0-9]{64})'/g,
+    )].map((match) => match[1]);
+    const workingGatewayText = currentGatewayBytes.toString('utf8');
+    assert.equal(Buffer.from(workingGatewayText, 'utf8').equals(currentGatewayBytes), true);
+    assert.equal(/\r(?!\n)/.test(workingGatewayText), false, 'gateway must contain no bare CR');
+    const lfSource = Buffer.from(workingGatewayText.replaceAll('\r\n', '\n'), 'utf8');
+    assert.equal(lfSource.includes(0x0d), false, 'reviewed LF form must contain no CR bytes');
+    const crlfSource = Buffer.from(lfSource.toString('utf8').replaceAll('\n', '\r\n'), 'utf8');
+    assert.equal(/\r(?!\n)/.test(crlfSource.toString('utf8')), false);
+    assert.equal(
+      Buffer.from(crlfSource.toString('utf8').replaceAll('\r\n', '\n'), 'utf8').equals(lfSource),
+      true,
+    );
+    assert.deepEqual(reviewedSourceHashes, [hashBytes(lfSource), hashBytes(crlfSource)]);
+    assert.equal(
+      currentGatewayBytes.equals(lfSource) || currentGatewayBytes.equals(crlfSource),
+      true,
+      'working gateway must be exactly the reviewed LF or CRLF byte form',
+    );
+    assert.equal(previewPacket.gateway.gateway_sha256, currentGatewayHash);
     assert.equal(previewPacket.controls.writes_performed, false);
     assert.deepEqual(await readdir(temporaryRoot), before);
 
@@ -427,6 +477,7 @@ test('client adoption CLI previews without writes and writes only inactive revie
     const oversizedVerify = runCli([
       'verify-review', '--manifest', path.join(output, 'manifest.json'),
       '--gateway', oversizedGateway,
+      '--gateway-sha256', await hashFile(oversizedGateway),
     ]);
     assert.equal(oversizedVerify.status, 64);
     assert.match(
@@ -468,7 +519,10 @@ test('client adoption planning rejects a gateway reached through a linked ancest
       throw error;
     }
     const linkedGateway = path.join(linkedParent, 'risk-forkd.js');
-    const planned = runCli(['plan', '--client', 'all', '--gateway', linkedGateway]);
+    const planned = runCli([
+      'plan', '--client', 'all', '--gateway', linkedGateway,
+      '--gateway-sha256', await hashFile(linkedGateway),
+    ]);
     assert.equal(planned.status, 64);
     assert.match(JSON.parse(planned.stderr).message, /exact canonical path/);
   } finally {
@@ -486,6 +540,7 @@ test('client adoption rejects credential-shaped paths before packet serializatio
 
     const planned = runCli([
       'plan', '--client', 'all', '--gateway', credentialShapedGateway,
+      '--gateway-sha256', `sha256:${'0'.repeat(64)}`,
     ]);
     assert.equal(planned.status, 64);
     assert.equal(planned.stdout, '');
@@ -508,59 +563,57 @@ test('client adoption rejects credential-shaped paths before packet serializatio
   }
 });
 
-test('client adoption planning never emits a torn same-size gateway snapshot', async () => {
+test('client adoption planning rejects a paused same-size partial version by reviewed hash', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-stability-'));
-  let writer;
-  let writerExit;
   try {
     const gateway = path.join(temporaryRoot, 'risk-forkd.js');
-    const size = RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES;
+    const size = 256 * 1024;
     const firstVersion = Buffer.alloc(size, 0x61);
     const secondVersion = Buffer.alloc(size, 0x62);
+    const firstHash = `sha256:${createHash('sha256').update(firstVersion).digest('hex')}`;
+    const secondHash = `sha256:${createHash('sha256').update(secondVersion).digest('hex')}`;
     await writeFile(gateway, firstVersion);
-    const stableHashes = new Set([firstVersion, secondVersion].map(
-      (bytes) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
-    ));
-    writer = spawn(process.execPath, [
-      path.join(packageRoot, 'test', 'fixtures', 'client-gateway-same-size-mutator.js'),
-      gateway,
-      String(size),
-    ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-    writerExit = new Promise((resolve) => writer.once('close', resolve));
-    const ready = new Promise((resolve, reject) => {
-      writer.once('error', reject);
-      writer.stdout.once('data', (chunk) => {
-        if (chunk.toString().includes('ready')) resolve();
-        else reject(new Error('same-size mutator did not become ready'));
-      });
-    });
-    await Promise.race([
-      ready,
-      delay(2_000).then(() => { throw new Error('same-size mutator startup timed out'); }),
-    ]);
 
-    let refused = 0;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const planned = runCli(['plan', '--client', 'all', '--gateway', gateway]);
-      if (planned.status === 0) {
-        const emitted = JSON.parse(planned.stdout).gateway.gateway_sha256;
-        assert.equal(stableHashes.has(emitted), true, 'planner must never hash torn bytes');
-      } else {
-        refused += 1;
-        assert.equal(planned.status, 64);
-        assert.match(JSON.parse(planned.stderr).message, /changed while its exact bytes/);
-      }
+    const handle = await open(gateway, 'r+');
+    try {
+      const partial = secondVersion.subarray(0, size / 2);
+      const { bytesWritten } = await handle.write(partial, 0, partial.length, 0);
+      assert.equal(bytesWritten, partial.length);
+      await handle.sync();
+    } finally {
+      await handle.close();
     }
-    assert.ok(refused > 0, 'continuous mutation must be detected');
+
+    for (const reviewedHash of [firstHash, secondHash]) {
+      const refused = runCli([
+        'plan', '--client', 'all', '--gateway', gateway,
+        '--gateway-sha256', reviewedHash,
+      ]);
+      assert.equal(refused.status, 64);
+      assert.equal(refused.stdout, '');
+      assert.match(
+        JSON.parse(refused.stderr).message,
+        /exact bytes do not match the reviewed SHA-256/,
+      );
+    }
+
+    await writeFile(gateway, secondVersion);
+    const mismatchedFullVersion = runCli([
+      'plan', '--client', 'all', '--gateway', gateway,
+      '--gateway-sha256', firstHash,
+    ]);
+    assert.equal(mismatchedFullVersion.status, 64);
+    assert.match(
+      JSON.parse(mismatchedFullVersion.stderr).message,
+      /exact bytes do not match the reviewed SHA-256/,
+    );
+    const planned = runCli([
+      'plan', '--client', 'all', '--gateway', gateway,
+      '--gateway-sha256', secondHash,
+    ]);
+    assert.equal(planned.status, 0, planned.stderr);
+    assert.equal(JSON.parse(planned.stdout).gateway.gateway_sha256, secondHash);
   } finally {
-    if (writer?.exitCode === null) writer.kill();
-    if (writerExit) {
-      const stopped = await Promise.race([writerExit.then(() => true), delay(2_000, false)]);
-      if (!stopped && writer?.exitCode === null) {
-        writer.kill('SIGKILL');
-        await writerExit;
-      }
-    }
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 });

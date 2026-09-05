@@ -13,21 +13,25 @@ import {
   createRiskForkClientAdoptionPacket,
   verifyRiskForkClientAdoptionPacket,
 } from '../src/client-adoption.mjs';
-import { containsSecretShapedText } from '../src/util.mjs';
+import { containsSecretShapedText, requireSha256Ref } from '../src/util.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = path.dirname(packageRoot);
 const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mjs');
 const sourceCheckoutGatewayEntrypoint = path.join(repositoryRoot, 'mcp', 'risk-forkd.js');
+const REVIEWED_SOURCE_CHECKOUT_GATEWAY_SHA256_ALLOWLIST = Object.freeze([
+  'sha256:7add1f82a164693fec07b9aecb97c25a5505ac0ff516d47d8603a975126f4de8',
+  'sha256:6a36c3ae1c755b7b0a4d857aad143bf190c8e2003591218480de585aedd579d4',
+]);
 const FILE_STABILITY_WINDOW_MS = 5;
 
 function usage() {
   return [
     'Usage:',
     '  client-adoption.mjs status',
-    '  client-adoption.mjs plan --client <all|claude-code|codex|cursor> [--gateway <absolute risk-forkd.js>]',
-    '  client-adoption.mjs write-review --client <...> --output <new-absolute-directory> [--gateway <absolute risk-forkd.js>] --yes',
-    '  client-adoption.mjs verify-review --manifest <absolute-manifest.json> [--gateway <absolute risk-forkd.js>]',
+    '  client-adoption.mjs plan --client <all|claude-code|codex|cursor> [--gateway <absolute risk-forkd.js> --gateway-sha256 <reviewed sha256:hex>]',
+    '  client-adoption.mjs write-review --client <...> --output <new-absolute-directory> [--gateway <absolute risk-forkd.js> --gateway-sha256 <reviewed sha256:hex>] --yes',
+    '  client-adoption.mjs verify-review --manifest <absolute-manifest.json> [--gateway <absolute risk-forkd.js> --gateway-sha256 <reviewed sha256:hex>]',
   ].join('\n');
 }
 
@@ -42,6 +46,7 @@ function parseFlags(values) {
     }
     const takesValue = flag === '--client'
       || flag === '--gateway'
+      || flag === '--gateway-sha256'
       || flag === '--manifest'
       || flag === '--output';
     if (!takesValue || index + 1 >= values.length) {
@@ -55,7 +60,21 @@ function parseFlags(values) {
   return flags;
 }
 
-async function exactRegularFile(filename, field, { requireCanonical = false } = {}) {
+async function exactRegularFile(
+  filename,
+  field,
+  { requireCanonical = false, expectedSha256 } = {},
+) {
+  let reviewedSha256;
+  if (expectedSha256 === undefined) {
+    reviewedSha256 = undefined;
+  } else if (Array.isArray(expectedSha256) && expectedSha256.length > 0) {
+    reviewedSha256 = expectedSha256.map((value) => (
+      requireSha256Ref(value, `${field} reviewed SHA-256`)
+    ));
+  } else {
+    reviewedSha256 = [requireSha256Ref(expectedSha256, `${field} reviewed SHA-256`)];
+  }
   if (requireCanonical && await realpath(filename) !== filename) {
     throw new TypeError(`${field} must use its exact canonical path`);
   }
@@ -119,6 +138,11 @@ async function exactRegularFile(filename, field, { requireCanonical = false } = 
       || (requireCanonical && await realpath(filename) !== filename)) {
       throw new TypeError(`${field} changed while its exact bytes were being read`);
     }
+    const actualSha256 = sha256Ref(first);
+    if (reviewedSha256 !== undefined
+      && !reviewedSha256.some((expected) => expected === actualSha256)) {
+      throw new TypeError(`${field} exact bytes do not match the reviewed SHA-256`);
+    }
     return first;
   } finally {
     await handle.close();
@@ -129,13 +153,19 @@ function sha256Ref(bytes) {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
-async function packetFor(client, gatewayEntrypoint = sourceCheckoutGatewayEntrypoint) {
+async function packetFor(client, gatewayBinding) {
   const normalizedGateEntrypoint = assertAbsolute(gateEntrypoint, 'client gate');
-  const normalizedGatewayEntrypoint = assertAbsolute(gatewayEntrypoint, 'risk-forkd gateway');
+  const normalizedGatewayEntrypoint = assertAbsolute(
+    gatewayBinding.entrypoint,
+    'risk-forkd gateway',
+  );
   const normalizedNodeExecutable = assertAbsolute(process.execPath, 'Node executable');
   const [gateBytes, gatewayBytes] = await Promise.all([
     exactRegularFile(normalizedGateEntrypoint, 'client gate'),
-    exactRegularFile(normalizedGatewayEntrypoint, 'risk-forkd gateway', { requireCanonical: true }),
+    exactRegularFile(normalizedGatewayEntrypoint, 'risk-forkd gateway', {
+      requireCanonical: true,
+      expectedSha256: gatewayBinding.sha256,
+    }),
   ]);
   const packet = createRiskForkClientAdoptionPacket({
     client,
@@ -149,13 +179,24 @@ async function packetFor(client, gatewayEntrypoint = sourceCheckoutGatewayEntryp
   return packet;
 }
 
-function assertGateway(value) {
-  if (value === undefined) return sourceCheckoutGatewayEntrypoint;
+function assertGatewayBinding(value, expectedSha256) {
+  if ((value === undefined) !== (expectedSha256 === undefined)) {
+    throw new TypeError('--gateway and --gateway-sha256 must be supplied together');
+  }
+  if (value === undefined) {
+    return {
+      entrypoint: sourceCheckoutGatewayEntrypoint,
+      sha256: REVIEWED_SOURCE_CHECKOUT_GATEWAY_SHA256_ALLOWLIST,
+    };
+  }
   const entrypoint = assertAbsolute(value, '--gateway');
   if (path.basename(entrypoint) !== 'risk-forkd.js') {
     throw new TypeError('--gateway must end in risk-forkd.js');
   }
-  return entrypoint;
+  return {
+    entrypoint,
+    sha256: requireSha256Ref(expectedSha256, '--gateway-sha256'),
+  };
 }
 
 function assertClient(value) {
@@ -224,7 +265,7 @@ async function writeReview(packet, output) {
   return { manifest, manifest_path: manifestPath };
 }
 
-async function verifyReview(manifestPath, gatewayEntrypoint) {
+async function verifyReview(manifestPath, gatewayBinding) {
   const manifestBytes = await exactRegularFile(manifestPath, 'manifest');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (manifest?.schema !== 'agoragentic.risk-fork.client-adoption-review-manifest.v1'
@@ -242,7 +283,7 @@ async function verifyReview(manifestPath, gatewayEntrypoint) {
     || manifest.controls?.live_traffic_protected !== false) {
     throw new TypeError('Review manifest failed the closed source-only contract');
   }
-  const packet = await packetFor(assertClient(manifest.client), gatewayEntrypoint);
+  const packet = await packetFor(assertClient(manifest.client), gatewayBinding);
   const root = path.dirname(manifestPath);
   const expectedFiles = packet.outputs.map((entry) => ({
     client: entry.client,
@@ -311,7 +352,10 @@ try {
     && flags.manifest === undefined
     && flags.yes === undefined) {
     process.stdout.write(`${JSON.stringify(
-      await packetFor(assertClient(flags.client), assertGateway(flags.gateway)),
+      await packetFor(
+        assertClient(flags.client),
+        assertGatewayBinding(flags.gateway, flags['gateway-sha256']),
+      ),
       null,
       2,
     )}\n`);
@@ -320,7 +364,10 @@ try {
     && flags.output
     && flags.yes === true
     && flags.manifest === undefined) {
-    const packet = await packetFor(assertClient(flags.client), assertGateway(flags.gateway));
+    const packet = await packetFor(
+      assertClient(flags.client),
+      assertGatewayBinding(flags.gateway, flags['gateway-sha256']),
+    );
     process.stdout.write(`${JSON.stringify(
       await writeReview(packet, assertAbsolute(flags.output, '--output')),
       null,
@@ -334,7 +381,7 @@ try {
     process.stdout.write(`${JSON.stringify(
       await verifyReview(
         assertAbsolute(flags.manifest, '--manifest'),
-        assertGateway(flags.gateway),
+        assertGatewayBinding(flags.gateway, flags['gateway-sha256']),
       ),
       null,
       2,

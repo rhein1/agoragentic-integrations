@@ -26,7 +26,7 @@ The local stdio gate accepts only MCP initialization, ping, `tools/list`, `tools
 
 The future `risk-forkd` gateway must own the exact `risk_fork_protect` input schema. The client snippets do not invent a competing schema, and the gate currently requires an object-root `inputSchema` before forwarding the descriptor. This is not yet a schema-integrity proof: the recorded `risk-forkd.js` hash binds only that launcher file, not its generated sibling runtime closure or eventual descriptor. The machine-readable packet therefore sets `runtime_closure_bound` and `tool_input_schema_bound` to `false`. Activation requires a separately reviewed immutable closure/descriptor binding and a regenerated client packet.
 
-The packet JSON Schema is a structural guardrail, not a closed proof of canonical client semantics. Consumers must call the exported `verifyRiskForkClientAdoptionPacket(packet)` function from `@agoragentic/risk-fork/client-adoption` after parsing a packet and before relying on it. The verifier performs no filesystem, network, client SDK, gateway, or provider I/O. It deterministically reconstructs the selected client's exact canonical output count, order, filenames, active destinations, content, prompt posture, and default-off control flags from the recorded gateway binding and the current Node executable, then rejects missing, extra, duplicate, cross-client, reordered, active, or contradictory output records. Because it is pure, it does not attest that recorded hashes match current files; the planning CLI reads exact file bytes, while `verify-review` re-reads those files and compares the complete review directory against regenerated content. JSON Schema acceptance alone is insufficient.
+The packet JSON Schema is a structural guardrail, not a closed proof of canonical client semantics. Consumers must call the exported `verifyRiskForkClientAdoptionPacket(packet)` function from `@agoragentic/risk-fork/client-adoption` after parsing a packet and before relying on it. The verifier performs no filesystem, network, client SDK, gateway, or provider I/O. It deterministically reconstructs the selected client's exact canonical output count, order, filenames, active destinations, content, prompt posture, and default-off control flags from the recorded gateway binding and the current Node executable, then rejects missing, extra, duplicate, cross-client, reordered, active, or contradictory output records. Because it is pure, it does not attest that recorded hashes match current files; the planning CLI compares the gateway's exact bytes with a reviewed expected digest, while `verify-review` re-reads those files and compares the complete review directory against regenerated content. JSON Schema acceptance alone is insufficient.
 
 This gate is an interface-reduction control, not an isolation boundary. It cannot turn an unqualified gateway or provider into real protection.
 
@@ -42,13 +42,13 @@ node risk-fork/scripts/client-adoption.mjs status
 node risk-fork/scripts/client-adoption.mjs plan --client all
 ```
 
-The source checkout uses its sibling `mcp/risk-forkd.js` by default. An installed tarball has no monorepo sibling, so supply the exact external gateway explicitly:
+The source checkout uses its sibling `mcp/risk-forkd.js` and a finite reviewed digest allowlist pinned in the planning script by default. The allowlist contains only the exact LF and CRLF raw-byte forms of the checked-in source, and the packet records which matching raw digest was read. An installed tarball has no monorepo sibling, so supply the exact external gateway and its independently reviewed digest explicitly:
 
 ```bash
-npm run client:plan -- --gateway /absolute/path/to/risk-forkd.js
+npm run client:plan -- --gateway /absolute/path/to/risk-forkd.js --gateway-sha256 "$REVIEWED_GATEWAY_SHA256"
 ```
 
-The explicit path must be absolute, canonical, free of credential-shaped material, and end in `risk-forkd.js`. Packet generation uses a nonblocking descriptor, a bounded allocation, metadata checks, and two identical reads separated by a short stability window; special files and unstable same-size content are rejected. This does not qualify that gateway or its dependency closure.
+Set `REVIEWED_GATEWAY_SHA256` only from the gateway's signed release or other independently authenticated provenance; it must have the form `sha256:` plus 64 lowercase hexadecimal characters. Do not derive that expected value from the same mutable path immediately before planning. The explicit path and digest must be supplied together, the path must be absolute, canonical, free of credential-shaped material, and end in `risk-forkd.js`, and the accepted bytes must match the reviewed digest. Packet generation also uses a nonblocking descriptor, a bounded allocation, metadata checks, and repeated identical reads separated by a short stability window to detect observed changes. Those reads are defense in depth, not an atomic filesystem snapshot or provenance proof. The digest is the acceptance authority. The planner, one-tool gate, package-integrity evidence, and mechanism that supplies the expected digest remain part of the trusted local-host boundary. This does not qualify the gateway or its dependency closure, and it does not defend against a same-privilege local host that can replace both the trusted command inputs and executable files.
 
 `plan` prints the complete packet to stdout and writes nothing. To create review files in a new local directory:
 
@@ -56,6 +56,7 @@ The explicit path must be absolute, canonical, free of credential-shaped materia
 node risk-fork/scripts/client-adoption.mjs write-review \
   --client all \
   --gateway /absolute/path/to/risk-forkd.js \
+  --gateway-sha256 "$REVIEWED_GATEWAY_SHA256" \
   --output /absolute/path/to/new-review-directory \
   --yes
 ```
@@ -63,7 +64,8 @@ node risk-fork/scripts/client-adoption.mjs write-review \
 On Windows PowerShell, use an absolute Windows path on one line:
 
 ```powershell
-node risk-fork/scripts/client-adoption.mjs write-review --client all --gateway C:\absolute\path\to\risk-forkd.js --output C:\temp\risk-fork-client-review --yes
+$reviewedGatewaySha256 = 'sha256:<64 lowercase hexadecimal characters from signed provenance>'
+node risk-fork/scripts/client-adoption.mjs write-review --client all --gateway C:\absolute\path\to\risk-forkd.js --gateway-sha256 $reviewedGatewaySha256 --output C:\temp\risk-fork-client-review --yes
 ```
 
 The helper creates only filenames containing `.disabled.` plus `manifest.json`. It refuses an existing output directory and never writes `.mcp.json`, `.codex/config.toml`, `.cursor/mcp.json`, `.claude/settings.json`, or a user-level client configuration.
@@ -73,10 +75,11 @@ Verify the review packet offline:
 ```bash
 node risk-fork/scripts/client-adoption.mjs verify-review \
   --manifest /absolute/path/to/new-review-directory/manifest.json \
-  --gateway /absolute/path/to/risk-forkd.js
+  --gateway /absolute/path/to/risk-forkd.js \
+  --gateway-sha256 "$REVIEWED_GATEWAY_SHA256"
 ```
 
-Verification requires the exact current gate and gateway hashes, exact expected filenames, byte-for-byte generated content, and no extra directory entries. Editing a file and rewriting its manifest hash is rejected.
+Verification requires the exact current gate, the independently reviewed gateway digest, exact expected filenames, byte-for-byte generated content, and no extra directory entries. Editing a file and rewriting its manifest hash is rejected because the manifest cannot supply its own replacement gateway authority.
 
 Each output's `prompt_posture` describes only what that one candidate file contributes. It does not claim every client or higher-precedence policy must prompt: standalone MCP files carry no prompt rule, Claude's separate settings file supplies the explicit `ask` rule, Codex supplies an explicit per-tool prompt, and Cursor supplies only default/best-effort posture.
 

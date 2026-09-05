@@ -138,7 +138,11 @@ try {
     await readFile(path.join(packageRoot, 'NOTICE'), 'utf8'),
   );
   const externalGateway = path.join(tempRoot, 'risk-forkd.js');
-  await writeFile(externalGateway, "'use strict';\nprocess.exitCode = 78;\n", 'utf8');
+  const externalGatewayBytes = Buffer.from("'use strict';\nprocess.exitCode = 78;\n", 'utf8');
+  const externalGatewaySha256 = `sha256:${createHash('sha256')
+    .update(externalGatewayBytes)
+    .digest('hex')}`;
+  await writeFile(externalGateway, externalGatewayBytes);
   const installedClientPlan = JSON.parse(run(
     'installed client adoption plan',
     process.execPath,
@@ -150,6 +154,8 @@ try {
       '--',
       '--gateway',
       externalGateway,
+      '--gateway-sha256',
+      externalGatewaySha256,
     ],
     installedRoot,
   ));
