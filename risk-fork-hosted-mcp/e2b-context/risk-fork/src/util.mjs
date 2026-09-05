@@ -140,12 +140,136 @@ const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
 ]));
 
+const AUTHORIZATION_VALUE_PATTERN =
+  /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+const URL_USERINFO_PATTERN =
+  /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+const PATH_USERINFO_PATTERN =
+  /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
+
 export function containsSecretShapedText(value) {
   if (typeof value !== 'string') return false;
   for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
     if (SECRET_SHAPED_TEXT[index].test(value)) return true;
   }
   return false;
+}
+
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+
+function isAsciiAlphanumericCharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a);
+}
+
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 0x2d || code === 0x2e || code === 0x5f;
+}
+
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
+}
+
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 0x20) === 0x62
+    && (value.charCodeAt(index + 1) | 0x20) === 0x61
+    && (value.charCodeAt(index + 2) | 0x20) === 0x73
+    && (value.charCodeAt(index + 3) | 0x20) === 0x69
+    && (value.charCodeAt(index + 4) | 0x20) === 0x63;
+}
+
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length ? cursor : -1;
+}
+
+function basicBase64Value(code) {
+  if (code >= 0x41 && code <= 0x5a) return code - 0x41;
+  if (code >= 0x61 && code <= 0x7a) return code - 0x61 + 26;
+  if (code >= 0x30 && code <= 0x39) return code - 0x30 + 52;
+  if (code === 0x2b || code === 0x2d) return 62;
+  if (code === 0x2f || code === 0x5f) return 63;
+  return -1;
+}
+
+function advanceBasicDecoder(state, code) {
+  const activeOffsets = state & 0x0f;
+  if (activeOffsets === 0 || code === 0x3d) return code === 0x3d ? 0 : state;
+  const decoded = basicBase64Value(code);
+  if (decoded === -1) return state;
+  const previous = state >> 4;
+
+  if ((activeOffsets & 0x02) !== 0
+    && ((previous << 2) | (decoded >> 4)) === 0x3a) {
+    return -1;
+  }
+  if ((activeOffsets & 0x04) !== 0
+    && (((previous & 0x0f) << 4) | (decoded >> 2)) === 0x3a) {
+    return -1;
+  }
+  if ((activeOffsets & 0x08) !== 0
+    && (((previous & 0x03) << 6) | decoded) === 0x3a) {
+    return -1;
+  }
+
+  const nextOffsets = ((activeOffsets << 1) & 0x0e) | (activeOffsets >> 3);
+  return (decoded << 4) | nextOffsets;
+}
+
+function containsBasicAuthorization(value) {
+  let pendingStart = -1;
+  let nodeDecoderState = 0;
+  let whitespaceFoldDecoderState = 0;
+
+  // Each low nibble is the set of live Base64 quartet offsets for every Basic
+  // candidate seen so far. There are only four possible offsets, so nested
+  // candidates merge into constant-size state instead of causing rescans.
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    if (cursor === pendingStart) {
+      nodeDecoderState |= 0x01;
+      whitespaceFoldDecoderState |= 0x01;
+      pendingStart = -1;
+    }
+
+    const tokenStart = basicTokenStartAt(value, cursor);
+    if (tokenStart !== -1) pendingStart = tokenStart;
+
+    // Buffer consumes the low byte of each UTF-16 code unit before classifying
+    // it. Preserve that behavior while also retaining the scanner's historical
+    // complete-ECMAScript-whitespace fold as a second conservative decoder.
+    const code = value.charCodeAt(cursor) & 0xff;
+    nodeDecoderState = advanceBasicDecoder(nodeDecoderState, code);
+    if (nodeDecoderState === -1) return true;
+
+    if (!isWhitespaceCharacter(value[cursor])) {
+      whitespaceFoldDecoderState = advanceBasicDecoder(whitespaceFoldDecoderState, code);
+      if (whitespaceFoldDecoderState === -1) return true;
+    }
+  }
+  return false;
+}
+
+export function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== 'string') return false;
+  return containsSecretShapedText(value)
+    || containsBasicAuthorization(value)
+    || AUTHORIZATION_VALUE_PATTERN.test(value)
+    || URL_USERINFO_PATTERN.test(value)
+    || PATH_USERINFO_PATTERN.test(value);
 }
 
 export function assertNoSecretShapedText(value, field) {
