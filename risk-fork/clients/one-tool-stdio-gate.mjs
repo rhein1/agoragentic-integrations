@@ -27,11 +27,15 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_JSON_DEPTH = 32;
 const MAX_JSON_NODES = 20_000;
 const MAX_JSON_NUMBER_TOKEN_CHARACTERS = 1024;
+const MAX_GATEWAY_STDERR_BYTES = 64 * 1024;
 const SHUTDOWN_GRACE_MS = 500;
 const SHUTDOWN_FORCE_EXIT_MS = 1500;
 const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
 const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
+const BASIC_AUTH_VALUE_PATTERN = /(?:^|[\s:=])basic\s+([A-Za-z0-9+/]+={0,2})(?=$|[\s,;'\"])/gi;
+const PROXY_AUTHORIZATION_VALUE_PATTERN = /\bproxy-authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+const URL_USERINFO_PATTERN = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
 const VERIFIED_GATEWAY_BOOTSTRAP = String.raw`
 'use strict';
 const fs = require('node:fs');
@@ -80,10 +84,16 @@ const STATUS = Object.freeze({
   live_traffic_protected: false,
   inherited_environment_forwarded: false,
   recognized_credential_pattern_matches_forwarded: false,
+  serve_supported_on_current_platform: process.platform !== 'win32',
+  descendant_containment: process.platform === 'win32'
+    ? 'unavailable'
+    : 'posix_process_group',
   max_active_gateway_requests: MAX_PENDING_REQUESTS,
   max_cancelled_gateway_requests: MAX_CANCELLED_GATEWAY_REQUESTS,
   max_total_gateway_requests: MAX_GATEWAY_REQUESTS,
   max_retired_cancelled_client_ids: MAX_RETIRED_CANCELLED_CLIENT_IDS,
+  max_gateway_stderr_bytes: MAX_GATEWAY_STDERR_BYTES,
+  max_concurrent_lifecycle_requests: 1,
   provider_calls: 0,
   network_implementation_included: false,
 });
@@ -188,6 +198,34 @@ function isAuthorityOrSecretKey(value) {
     || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized);
 }
 
+function containsBasicAuthorization(value) {
+  BASIC_AUTH_VALUE_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = BASIC_AUTH_VALUE_PATTERN.exec(value)) !== null) {
+    const encoded = match[1];
+    const unpadded = encoded.replace(/=+$/, '');
+    const remainder = unpadded.length % 4;
+    if (remainder === 1) continue;
+    const padded = `${unpadded}${'='.repeat((4 - remainder) % 4)}`;
+    const decoded = Buffer.from(padded, 'base64');
+    const canonical = decoded.toString('base64');
+    if (canonical.replace(/=+$/, '') === unpadded
+      && (!encoded.includes('=') || encoded === canonical)
+      && decoded.includes(0x3a)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function containsCredentialMaterial(value) {
+  return containsSecretShapedText(value)
+    || normalizedKey(value) === 'proxy_authorization'
+    || containsBasicAuthorization(value)
+    || PROXY_AUTHORIZATION_VALUE_PATTERN.test(value)
+    || URL_USERINFO_PATTERN.test(value);
+}
+
 function decimalRationalKey(token) {
   if (token.length > MAX_JSON_NUMBER_TOKEN_CHARACTERS) return null;
   const match = /^(-?)(0|[1-9]\d*)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(token);
@@ -239,15 +277,15 @@ function validateCanonicalJsonNumbers(line, boundary) {
   }
 }
 
-function encodeBoundedSecretFreeJson(value, boundary) {
-  const stack = [{ value, depth: 0 }];
+function encodeBoundedSecretFreeJson(value, boundary, { allowRequestProgressToken = false } = {}) {
+  const stack = [{ value, depth: 0, location: 'root' }];
   let nodes = 1;
-  function pushNode(nodeValue, depth) {
+  function pushNode(nodeValue, depth, location = 'other') {
     nodes += 1;
     if (nodes > MAX_JSON_NODES) {
       throw fail(`${boundary} exceeded the decoded JSON structure limit`);
     }
-    stack.push({ value: nodeValue, depth });
+    stack.push({ value: nodeValue, depth, location });
   }
   while (stack.length > 0) {
     const current = stack.pop();
@@ -255,7 +293,7 @@ function encodeBoundedSecretFreeJson(value, boundary) {
       throw fail(`${boundary} exceeded the decoded JSON structure limit`);
     }
     if (typeof current.value === 'string') {
-      if (containsSecretShapedText(current.value)) {
+      if (containsCredentialMaterial(current.value)) {
         throw fail(`${boundary} contained credential-shaped material`);
       }
       continue;
@@ -276,10 +314,23 @@ function encodeBoundedSecretFreeJson(value, boundary) {
       continue;
     }
     for (const key of Object.keys(current.value)) {
-      if (isAuthorityOrSecretKey(key) || containsSecretShapedText(key)) {
+      const isStandardProgressToken = allowRequestProgressToken
+        && current.location === 'params_meta'
+        && key === 'progressToken';
+      if (isStandardProgressToken
+        && !(typeof current.value[key] === 'string'
+          || (Number.isSafeInteger(current.value[key])
+            && !Object.is(current.value[key], -0)))) {
+        throw fail(`${boundary} contained an invalid MCP progress token`);
+      }
+      if (!isStandardProgressToken
+        && (isAuthorityOrSecretKey(key) || containsCredentialMaterial(key))) {
         throw fail(`${boundary} contained a credential-shaped property`);
       }
-      pushNode(current.value[key], current.depth + 1);
+      let childLocation = 'other';
+      if (current.location === 'root' && key === 'params') childLocation = 'params';
+      if (current.location === 'params' && key === '_meta') childLocation = 'params_meta';
+      pushNode(current.value[key], current.depth + 1, childLocation);
     }
   }
   let encoded;
@@ -288,7 +339,7 @@ function encodeBoundedSecretFreeJson(value, boundary) {
   } catch {
     throw fail(`${boundary} could not be encoded safely`);
   }
-  if (typeof encoded !== 'string' || containsSecretShapedText(encoded)) {
+  if (typeof encoded !== 'string' || containsCredentialMaterial(encoded)) {
     throw fail(`${boundary} contained credential-shaped material`);
   }
   return encoded;
@@ -444,6 +495,12 @@ function validateToolsList(message) {
 }
 
 async function serve(options) {
+  if (process.platform === 'win32') {
+    throw fail(
+      'Serve is unavailable on Windows until enforceable descendant-process containment exists',
+      'RISK_FORK_CLIENT_GATE_PLATFORM_UNSUPPORTED',
+    );
+  }
   const gatewayBytes = verifyGateway(options.gatewayEntrypoint, options.gatewaySha256);
   const child = spawn(process.execPath, [
     '--eval',
@@ -470,6 +527,11 @@ async function serve(options) {
   let escalationTimer = null;
   let forceExitTimer = null;
   let inputEndTimer = null;
+  let initializeValidated = false;
+  let toolInventoryValidated = false;
+  let initializeRequestPending = false;
+  let toolsListRequestPending = false;
+  let gatewayStderrBytes = 0;
   const gatewayProcessGroup = process.platform !== 'win32' && Number.isSafeInteger(child.pid)
     ? -child.pid
     : null;
@@ -524,6 +586,8 @@ async function serve(options) {
     }
     pendingByGatewayId.delete(request.gatewayId);
     if (request.cancelled) cancelledGatewayRequests -= 1;
+    if (request.method === 'initialize') initializeRequestPending = false;
+    if (request.method === 'tools/list') toolsListRequestPending = false;
   }
 
   function close(code, reason) {
@@ -579,7 +643,7 @@ async function serve(options) {
 
   createBoundedLineReader(process.stdin, (line) => {
     if (closing) return;
-    if (containsSecretShapedText(line)) {
+    if (containsCredentialMaterial(line)) {
       close(78, 'Client request contained credential-shaped material');
       return;
     }
@@ -598,7 +662,11 @@ async function serve(options) {
     }
     let encodedMessage;
     try {
-      encodedMessage = encodeBoundedSecretFreeJson(message, 'Client request');
+      encodedMessage = encodeBoundedSecretFreeJson(
+        message,
+        'Client request',
+        { allowRequestProgressToken: true },
+      );
     } catch (error) {
       close(78, error.message);
       return;
@@ -624,6 +692,32 @@ async function serve(options) {
         message.id ?? null,
         -32602,
         `Only ${TOOL_NAME} is available through this client gate`,
+      ));
+      return;
+    }
+    if (message.method === 'tools/list' && !initializeValidated) {
+      writeClient(errorResponse(
+        message.id,
+        -32004,
+        'A successful validated initialize response is required before tools/list',
+      ));
+      return;
+    }
+    if (message.method === 'tools/call'
+      && (!initializeValidated || !toolInventoryValidated)) {
+      writeClient(errorResponse(
+        message.id,
+        -32004,
+        'Successful validated initialize and tools/list responses are required before tools/call',
+      ));
+      return;
+    }
+    if ((message.method === 'initialize' || message.method === 'tools/list')
+      && (initializeRequestPending || toolsListRequestPending)) {
+      writeClient(errorResponse(
+        message.id,
+        -32005,
+        'At most one initialize or tools/list lifecycle request may be unresolved',
       ));
       return;
     }
@@ -656,10 +750,14 @@ async function serve(options) {
       retiredCancelledClientIds.add(retiredClientIdKey(cancellationKey));
       cancelledGatewayRequests += 1;
       try {
-        encodedMessage = encodeBoundedSecretFreeJson({
-          ...message,
-          params: { ...message.params, requestId: request.gatewayId },
-        }, 'Gateway cancellation');
+        encodedMessage = encodeBoundedSecretFreeJson(
+          {
+            ...message,
+            params: { ...message.params, requestId: request.gatewayId },
+          },
+          'Gateway cancellation',
+          { allowRequestProgressToken: true },
+        );
       } catch (error) {
         close(78, error.message);
         return;
@@ -693,11 +791,21 @@ async function serve(options) {
         ));
         return;
       }
+      if (message.method === 'initialize') {
+        initializeValidated = false;
+        toolInventoryValidated = false;
+        initializeRequestPending = true;
+      }
+      if (message.method === 'tools/list') {
+        toolInventoryValidated = false;
+        toolsListRequestPending = true;
+      }
       const gatewayId = issueGatewayRequestId();
       try {
         encodedMessage = encodeBoundedSecretFreeJson(
           { ...message, id: gatewayId },
           'Gateway request',
+          { allowRequestProgressToken: true },
         );
       } catch (error) {
         close(78, error.message);
@@ -725,7 +833,7 @@ async function serve(options) {
 
   createBoundedLineReader(child.stdout, (line) => {
     if (closing) return;
-    if (containsSecretShapedText(line)) {
+    if (containsCredentialMaterial(line)) {
       close(78, 'Gateway response contained credential-shaped material');
       return;
     }
@@ -762,8 +870,14 @@ async function serve(options) {
     try {
       validateGatewayResponse(message);
       if (!request.cancelled && message.error === undefined) {
-        if (request.method === 'initialize') validateInitialize(message);
-        if (request.method === 'tools/list') validateToolsList(message);
+        if (request.method === 'initialize') {
+          validateInitialize(message);
+          initializeValidated = true;
+        }
+        if (request.method === 'tools/list') {
+          validateToolsList(message);
+          toolInventoryValidated = true;
+        }
       }
     } catch (error) {
       removePendingRequest(request);
@@ -797,7 +911,15 @@ async function serve(options) {
     }
   });
 
-  child.stderr.on('data', () => {});
+  child.stderr.on('data', (chunk) => {
+    if (closing) return;
+    const chunkBytes = Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
+    if (chunkBytes > MAX_GATEWAY_STDERR_BYTES - gatewayStderrBytes) {
+      close(78, `Gateway diagnostic output exceeded ${MAX_GATEWAY_STDERR_BYTES} bytes`);
+      return;
+    }
+    gatewayStderrBytes += chunkBytes;
+  });
   child.stderr.on('error', () => close(78, 'Gateway diagnostic pipe failed'));
   child.on('error', () => close(78, 'Gateway process could not start'));
   child.on('exit', (code) => {

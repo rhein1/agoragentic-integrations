@@ -9,12 +9,26 @@ input.on('line', (line) => {
   if (message.id === undefined) return;
   let result;
   if (message.method === 'initialize') {
+    if (message.params?.mode === 'error') {
+      process.stdout.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: message.id, error: { code: -32090, message: 'fixture initialize error' },
+      })}\n`);
+      return;
+    }
+    if (message.params?.mode === 'hang') return;
     result = {
       protocolVersion: '2025-06-18',
       capabilities: { tools: {} },
       serverInfo: { name: 'fixture-risk-forkd', version: '1.0.0' },
     };
   } else if (message.method === 'tools/list') {
+    if (message.params?.mode === 'error') {
+      process.stdout.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: message.id, error: { code: -32091, message: 'fixture list error' },
+      })}\n`);
+      return;
+    }
+    if (message.params?.mode === 'hang') return;
     result = {
       tools: [{
         name: 'risk_fork_protect',

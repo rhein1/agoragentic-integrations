@@ -22,6 +22,7 @@ const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const repositoryRoot = path.dirname(packageRoot);
 const gateEntrypoint = path.join(packageRoot, 'clients', 'one-tool-stdio-gate.mjs');
 const fixtureRoot = path.join(packageRoot, 'test', 'fixtures');
+const serveTest = process.platform === 'win32' ? test.skip : test;
 
 async function sha256(filename) {
   return `sha256:${createHash('sha256').update(await readFile(filename)).digest('hex')}`;
@@ -52,7 +53,7 @@ async function isProcessExecutable(pid) {
   }
 }
 
-async function startGate(fixtureName, { consumeOutput = true } = {}) {
+async function startGate(fixtureName, { consumeOutput = true, ready = true } = {}) {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
   await copyFile(path.join(fixtureRoot, fixtureName), gateway);
@@ -69,7 +70,7 @@ async function startGate(fixtureName, { consumeOutput = true } = {}) {
   const pending = new Map();
   const messages = [];
   const stderr = [];
-  const output = consumeOutput ? createInterface({ input: child.stdout }) : null;
+  const output = (consumeOutput || ready) ? createInterface({ input: child.stdout }) : null;
   const exit = new Promise((resolve) => child.once('close', (code, signal) => resolve({ code, signal })));
   if (output) {
     output.on('line', (line) => {
@@ -113,11 +114,36 @@ async function startGate(fixtureName, { consumeOutput = true } = {}) {
     }
     await rm(temporaryRoot, { recursive: true, force: true });
   }
-  return { child, cleanup, exit, gateway, messages, request, stderr, temporaryRoot };
+  const session = {
+    child, cleanup, exit, gateway, messages, request, stderr, temporaryRoot,
+  };
+  if (ready) {
+    try {
+      const initialized = await request('__test_initialize__', 'initialize', {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'client-gate-test', version: '1.0.0' },
+      });
+      assert.equal(initialized.error, undefined, 'test gateway initialization must succeed');
+      child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', method: 'notifications/initialized', params: {},
+      })}\n`);
+      const listed = await request('__test_tools_list__', 'tools/list');
+      assert.equal(listed.error, undefined, 'test gateway inventory must validate');
+      if (!consumeOutput) {
+        output?.close();
+        child.stdout.pause();
+      }
+    } catch (error) {
+      await cleanup();
+      throw error;
+    }
+  }
+  return session;
 }
 
-test('stdio client gate exposes and forwards only risk_fork_protect', async () => {
-  const session = await startGate('client-gateway-good.js');
+serveTest('stdio client gate exposes and forwards only risk_fork_protect', async () => {
+  const session = await startGate('client-gateway-good.js', { ready: false });
   try {
     const initialized = await session.request(1, 'initialize', {
       protocolVersion: '2025-06-18',
@@ -161,8 +187,157 @@ test('stdio client gate exposes and forwards only risk_fork_protect', async () =
   }
 });
 
-test('stdio client gate fails closed when a gateway advertises any second tool', async () => {
-  const session = await startGate('client-gateway-extra-tool.js');
+serveTest('stdio client gate allows only standard params._meta progress tokens', async (t) => {
+  for (const [name, progressToken] of [['string', 'progress-fixture-1'], ['integer', 17]]) {
+    await t.test(`${name} progress token`, async () => {
+      const session = await startGate('client-gateway-good.js');
+      try {
+        const called = await session.request(1, 'tools/call', {
+          name: 'risk_fork_protect',
+          arguments: { operation: `progress-${name}` },
+          _meta: { progressToken },
+        });
+        assert.equal(called.error, undefined);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  await t.test('progress token value remains credential-scanned', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect',
+          arguments: { operation: 'progress-secret' },
+          _meta: { progressToken: 'Basic c3ludGhldGljOnBhc3M=' },
+        },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null);
+      assert.equal(outcome.code, 78);
+      assert.doesNotMatch(session.stderr.join(''), /c3ludGhldGljOnBhc3M|uncaught|node:internal/i);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('progressToken outside request params._meta remains rejected', async () => {
+    const session = await startGate('client-gateway-good.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect',
+          arguments: { operation: 'nested-progress', progressToken: 'ordinary' },
+        },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null);
+      assert.equal(outcome.code, 78);
+    } finally {
+      await session.cleanup();
+    }
+  });
+
+  await t.test('gateway response nesting cannot imitate request progress metadata', async () => {
+    const session = await startGate('client-gateway-hostile-responses.js');
+    try {
+      session.child.stdin.write(`${JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name: 'risk_fork_protect', arguments: { operation: 'root-progress-token' },
+        },
+      })}\n`);
+      const outcome = await withTimeout(session.exit, 2_000);
+      assert.notEqual(outcome, null);
+      assert.equal(outcome.code, 78);
+    } finally {
+      await session.cleanup();
+    }
+  });
+});
+
+serveTest('stdio client gate requires a fresh validated lifecycle before tools/call', async () => {
+  const session = await startGate('client-gateway-good.js', { ready: false });
+  try {
+    async function expectLifecycleRejection(id) {
+      const rejected = await session.request(id, 'tools/call', {
+        name: 'risk_fork_protect', arguments: { operation: 'must-not-forward' },
+      });
+      assert.equal(rejected.error.code, -32004);
+    }
+
+    await expectLifecycleRejection(1);
+    const failedInitialize = await session.request(2, 'initialize', { mode: 'error' });
+    assert.equal(failedInitialize.error.code, -32090);
+    await expectLifecycleRejection(3);
+
+    const initialized = await session.request(4, 'initialize');
+    assert.equal(initialized.error, undefined);
+    await expectLifecycleRejection(5);
+
+    const failedList = await session.request(6, 'tools/list', { mode: 'error' });
+    assert.equal(failedList.error.code, -32091);
+    await expectLifecycleRejection(7);
+
+    const listed = await session.request(10, 'tools/list');
+    assert.equal(listed.error, undefined);
+    const firstCall = await session.request(11, 'tools/call', {
+      name: 'risk_fork_protect', arguments: { operation: 'authorized-once' },
+    });
+    assert.equal(firstCall.error, undefined);
+    assert.match(firstCall.result.content[0].text, /"invocation_count":1/);
+
+    const secondFailedList = await session.request(12, 'tools/list', { mode: 'error' });
+    assert.equal(secondFailedList.error.code, -32091);
+    await expectLifecycleRejection(13);
+    const relisted = await session.request(14, 'tools/list');
+    assert.equal(relisted.error, undefined);
+
+    const secondFailedInitialize = await session.request(15, 'initialize', { mode: 'error' });
+    assert.equal(secondFailedInitialize.error.code, -32090);
+    await expectLifecycleRejection(16);
+
+    const reinitialized = await session.request(17, 'initialize');
+    assert.equal(reinitialized.error, undefined);
+    const finalList = await session.request(18, 'tools/list');
+    assert.equal(finalList.error, undefined);
+    session.child.stdin.write(`${JSON.stringify({
+      jsonrpc: '2.0', id: 19, method: 'tools/list', params: { mode: 'hang' },
+    })}\n`);
+    const concurrentList = await session.request(20, 'tools/list');
+    assert.equal(concurrentList.error.code, -32005);
+    session.child.stdin.write(`${JSON.stringify({
+      jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 19 },
+    })}\n`);
+    await expectLifecycleRejection(21);
+  } finally {
+    await session.cleanup();
+  }
+});
+
+serveTest('stdio client gate serializes and invalidates cancelled initialize attempts', async () => {
+  const session = await startGate('client-gateway-good.js');
+  try {
+    session.child.stdin.write(`${JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'initialize', params: { mode: 'hang' },
+    })}\n`);
+    const concurrentInitialize = await session.request(2, 'initialize');
+    assert.equal(concurrentInitialize.error.code, -32005);
+    session.child.stdin.write(`${JSON.stringify({
+      jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 1 },
+    })}\n`);
+    const rejected = await session.request(3, 'tools/call', {
+      name: 'risk_fork_protect', arguments: { operation: 'must-not-forward' },
+    });
+    assert.equal(rejected.error.code, -32004);
+  } finally {
+    await session.cleanup();
+  }
+});
+
+serveTest('stdio client gate fails closed when a gateway advertises any second tool', async () => {
+  const session = await startGate('client-gateway-extra-tool.js', { ready: false });
   try {
     const initialized = await session.request(1, 'initialize');
     assert.equal(initialized.error, undefined);
@@ -176,7 +351,7 @@ test('stdio client gate fails closed when a gateway advertises any second tool',
   }
 });
 
-test('stdio client gate rejects gateway-to-client requests even when they reuse a pending id', async () => {
+serveTest('stdio client gate rejects gateway-to-client requests even when they reuse a pending id', async () => {
   const session = await startGate('client-gateway-good.js');
   try {
     const bypass = await session.request(1, 'tools/call', {
@@ -191,7 +366,7 @@ test('stdio client gate rejects gateway-to-client requests even when they reuse 
   }
 });
 
-test('stdio client gate bounds concurrent pending gateway requests', async () => {
+serveTest('stdio client gate bounds concurrent pending gateway requests', async () => {
   const session = await startGate('client-gateway-good.js');
   try {
     for (let id = 1; id <= 16; id += 1) {
@@ -212,7 +387,7 @@ test('stdio client gate bounds concurrent pending gateway requests', async () =>
   }
 });
 
-test('stdio client gate cancellation releases slots and tolerates one bounded late response', async (t) => {
+serveTest('stdio client gate cancellation releases slots and tolerates one bounded late response', async (t) => {
   await t.test('cancelled requests need no gateway response to release every pending slot', async () => {
     const session = await startGate('client-gateway-cancellation.js');
     try {
@@ -459,8 +634,8 @@ test('stdio client gate cancellation releases slots and tolerates one bounded la
   });
 });
 
-test('stdio client gate leaves the exact schema to the gateway but requires an object input', async () => {
-  const session = await startGate('client-gateway-invalid-schema.js');
+serveTest('stdio client gate leaves the exact schema to the gateway but requires an object input', async () => {
+  const session = await startGate('client-gateway-invalid-schema.js', { ready: false });
   try {
     const initialized = await session.request(1, 'initialize');
     assert.equal(initialized.error, undefined);
@@ -474,7 +649,7 @@ test('stdio client gate leaves the exact schema to the gateway but requires an o
   }
 });
 
-test('stdio client gate verifies exact gateway bytes and current gateway stays unavailable', async () => {
+serveTest('stdio client gate verifies exact gateway bytes and current gateway stays unavailable', async () => {
   const mismatch = spawnSync(process.execPath, [
     gateEntrypoint,
     'serve',
@@ -494,6 +669,9 @@ test('stdio client gate verifies exact gateway bytes and current gateway stays u
   assert.equal(unavailable.status, 78);
   assert.equal(unavailable.stdout, '');
 
+});
+
+test('stdio client gate reports its exact platform and resource boundaries', async () => {
   const status = spawnSync(process.execPath, [gateEntrypoint, 'status'], {
     cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true,
   });
@@ -513,10 +691,16 @@ test('stdio client gate verifies exact gateway bytes and current gateway stays u
     live_traffic_protected: false,
     inherited_environment_forwarded: false,
     recognized_credential_pattern_matches_forwarded: false,
+    serve_supported_on_current_platform: process.platform !== 'win32',
+    descendant_containment: process.platform === 'win32'
+      ? 'unavailable'
+      : 'posix_process_group',
     max_active_gateway_requests: 16,
     max_cancelled_gateway_requests: 16,
     max_total_gateway_requests: 32,
     max_retired_cancelled_client_ids: 1024,
+    max_gateway_stderr_bytes: 65536,
+    max_concurrent_lifecycle_requests: 1,
     provider_calls: 0,
     network_implementation_included: false,
   });
@@ -526,7 +710,33 @@ test('stdio client gate verifies exact gateway bytes and current gateway stays u
   assert.doesNotMatch(source, /from ['"](?:node:)?(?:dns|http|https|net|tls|undici)['"]/);
 });
 
-test('stdio client gate preserves a clean exit after client EOF', async () => {
+test('stdio client gate refuses Windows serve before starting gateway code', {
+  skip: process.platform !== 'win32' ? 'Windows-specific descendant-containment boundary' : false,
+}, async () => {
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-win32-'));
+  const gateway = path.join(temporaryRoot, 'risk-forkd.js');
+  const marker = path.join(temporaryRoot, 'gateway-started.txt');
+  try {
+    await copyFile(path.join(fixtureRoot, 'client-gateway-start-marker.js'), gateway);
+    const refused = spawnSync(process.execPath, [
+      gateEntrypoint,
+      'serve',
+      '--gateway-entrypoint', gateway,
+      '--gateway-sha256', await sha256(gateway),
+    ], { cwd: packageRoot, encoding: 'utf8', timeout: 5000, windowsHide: true });
+    assert.equal(refused.status, 78);
+    assert.equal(refused.stdout, '');
+    assert.equal(
+      JSON.parse(refused.stderr).reason_code,
+      'RISK_FORK_CLIENT_GATE_PLATFORM_UNSUPPORTED',
+    );
+    await assert.rejects(readFile(marker), { code: 'ENOENT' });
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+serveTest('stdio client gate preserves a clean exit after client EOF', async () => {
   const session = await startGate('client-gateway-good.js');
   try {
     session.child.stdin.end();
@@ -541,7 +751,7 @@ test('stdio client gate preserves a clean exit after client EOF', async () => {
 test('stdio client gate cleans inherited POSIX gateway descendants after clean EOF', {
   skip: process.platform === 'win32' ? 'POSIX clean-EOF process-group boundary' : false,
 }, async () => {
-  const session = await startGate('client-gateway-clean-eof-descendant.js');
+  const session = await startGate('client-gateway-clean-eof-descendant.js', { ready: false });
   let descendantPid = null;
   try {
     const pidFile = path.join(session.temporaryRoot, 'descendant.pid');
@@ -573,7 +783,7 @@ test('stdio client gate fails closed when the gateway response stream ends early
   skip: process.platform === 'win32' ? 'POSIX response-stream EOF boundary' : false,
 }, async (t) => {
   await t.test('idle gateway', async () => {
-    const session = await startGate('client-gateway-closes-output.js');
+    const session = await startGate('client-gateway-closes-output.js', { ready: false });
     try {
       const outcome = await withTimeout(session.exit, 2_000);
       assert.notEqual(outcome, null, 'idle response-stream EOF must terminate promptly');
@@ -585,10 +795,10 @@ test('stdio client gate fails closed when the gateway response stream ends early
   });
 
   await t.test('pending request', async () => {
-    const session = await startGate('client-gateway-closes-output.js');
+    const session = await startGate('client-gateway-closes-output.js', { ready: false });
     try {
       session.child.stdin.write(`${JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'tools/list', params: {},
+        jsonrpc: '2.0', id: 1, method: 'initialize', params: {},
       })}\n`);
       const outcome = await withTimeout(session.exit, 2_000);
       assert.notEqual(outcome, null, 'pending response-stream EOF must terminate promptly');
@@ -600,19 +810,27 @@ test('stdio client gate fails closed when the gateway response stream ends early
   });
 });
 
-test('stdio client gate contains closed and backpressured gateway pipe errors', async (t) => {
+serveTest('stdio client gate contains closed and backpressured gateway pipe errors', async (t) => {
   await t.test('closed child input', async () => {
-    const session = await startGate('client-gateway-closed-input.js');
+    const session = await startGate('client-gateway-closed-input.js', { ready: false });
     try {
-      await delay(100);
+      const marker = path.join(session.temporaryRoot, 'gateway-input-closed.txt');
+      let inputClosed = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        try {
+          await readFile(marker);
+          inputClosed = true;
+          break;
+        } catch {
+          await delay(10);
+        }
+      }
+      assert.equal(inputClosed, true, 'fixture must close gateway input before the probe');
       session.child.stdin.write(`${JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
-        method: 'tools/call',
-        params: {
-          name: 'risk_fork_protect',
-          arguments: { operation: 'closed-'.repeat(25_000) },
-        },
+        method: 'ping',
+        params: { payload: 'closed-'.repeat(25_000) },
       })}\n`);
       const outcome = await withTimeout(session.exit, 2_000);
       assert.notEqual(outcome, null, 'closed-input failure must terminate promptly');
@@ -624,16 +842,13 @@ test('stdio client gate contains closed and backpressured gateway pipe errors', 
   });
 
   await t.test('backpressured child input', async () => {
-    const session = await startGate('client-gateway-no-input-read.js');
+    const session = await startGate('client-gateway-no-input-read.js', { ready: false });
     try {
       session.child.stdin.write(`${JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
-        method: 'tools/call',
-        params: {
-          name: 'risk_fork_protect',
-          arguments: { operation: 'x'.repeat(900_000) },
-        },
+        method: 'initialize',
+        params: { clientInfo: { name: 'x'.repeat(900_000) } },
       })}\n`);
       const outcome = await withTimeout(session.exit, 2_000);
       assert.notEqual(outcome, null, 'backpressure failure must terminate promptly');
@@ -645,7 +860,20 @@ test('stdio client gate contains closed and backpressured gateway pipe errors', 
   });
 });
 
-test('stdio client gate scans decoded request and response values for credentials', async (t) => {
+serveTest('stdio client gate bounds cumulative gateway stderr while idle', async () => {
+  const session = await startGate('client-gateway-stderr-flood.js', { ready: false });
+  try {
+    const outcome = await withTimeout(session.exit, 2_000);
+    assert.notEqual(outcome, null, 'idle stderr flood must terminate promptly');
+    assert.equal(outcome.code, 78);
+    assert.ok(Buffer.byteLength(session.stderr.join('')) < 4096);
+    assert.doesNotMatch(session.stderr.join(''), /xxxxxxxx|uncaught|node:internal/i);
+  } finally {
+    await session.cleanup();
+  }
+});
+
+serveTest('stdio client gate scans decoded request and response values for credentials', async (t) => {
   const sensitiveProperties = [
     'token',
     'session_token',
@@ -666,6 +894,29 @@ test('stdio client gate scans decoded request and response values for credential
     'tokenPayload',
     'openAIKeyValue',
     'awsAccessKeyIdValue',
+  ];
+  const credentialValues = [
+    ['Basic authorization', 'basic-auth', 'Basic c3ludGhldGljOnBhc3M=', /c3ludGhldGljOnBhc3M/],
+    ['short Basic authorization', 'basic-auth-short', 'Basic dTpw', /dTpw/],
+    ['unpadded Basic authorization', 'basic-auth-unpadded', 'Basic dTpwZA', /dTpwZA/],
+    [
+      'Proxy-Authorization header',
+      'proxy-authorization',
+      'Proxy-Authorization: Basic c3ludGhldGljOnBhc3M=',
+      /c3ludGhldGljOnBhc3M/,
+    ],
+    [
+      'separated Proxy-Authorization pair',
+      'proxy-authorization-pair',
+      ['Proxy-Authorization', 'Negotiate synthetic-negotiate-token'],
+      /synthetic-negotiate-token/,
+    ],
+    [
+      'URL userinfo',
+      'url-userinfo',
+      'https://synthetic-user:synthetic-pass@example.test/path',
+      /synthetic-user|synthetic-pass/,
+    ],
   ];
   await t.test('decoded client request', async () => {
     const session = await startGate('client-gateway-good.js');
@@ -718,6 +969,47 @@ test('stdio client gate scans decoded request and response values for credential
     }
   });
 
+  for (const [name, , value, forbiddenOutput] of credentialValues) {
+    await t.test(`neutral client value containing ${name}`, async () => {
+      const session = await startGate('client-gateway-good.js');
+      try {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+            name: 'risk_fork_protect',
+            arguments: { operation: 'ordinary', metadata: { note: value } },
+          },
+        })}\n`);
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, `${name} request must terminate promptly`);
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), forbiddenOutput);
+        assert.doesNotMatch(JSON.stringify(session.messages), forbiddenOutput);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
+  for (const [name, operation, , forbiddenOutput] of credentialValues) {
+    await t.test(`neutral gateway value containing ${name}`, async () => {
+      const session = await startGate('client-gateway-hostile-responses.js');
+      try {
+        session.child.stdin.write(`${JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+            name: 'risk_fork_protect', arguments: { operation },
+          },
+        })}\n`);
+        const outcome = await withTimeout(session.exit, 2_000);
+        assert.notEqual(outcome, null, `${name} response must terminate promptly`);
+        assert.equal(outcome.code, 78);
+        assert.doesNotMatch(session.stderr.join(''), forbiddenOutput);
+        assert.doesNotMatch(JSON.stringify(session.messages), forbiddenOutput);
+      } finally {
+        await session.cleanup();
+      }
+    });
+  }
+
   for (const property of sensitiveProperties) {
     await t.test(`sensitive client property ${property}`, async () => {
       const session = await startGate('client-gateway-good.js');
@@ -751,6 +1043,7 @@ test('stdio client gate scans decoded request and response values for credential
           token_count: 12,
           tokenizer: 'fixture',
           api_keynote: 'fixture',
+          description: 'run a basic test',
         },
       });
       assert.equal(called.error, undefined);
@@ -779,7 +1072,7 @@ test('stdio client gate scans decoded request and response values for credential
   }
 });
 
-test('stdio client gate rejects numbers that JSON cannot round-trip canonically', async (t) => {
+serveTest('stdio client gate rejects numbers that JSON cannot round-trip canonically', async (t) => {
   const nonCanonicalNumbers = [
     ['non-finite number', '1e400', 'non-finite-number'],
     ['negative zero', '-0', 'negative-zero'],
@@ -901,7 +1194,7 @@ test('stdio client gate rejects numbers that JSON cannot round-trip canonically'
   }
 });
 
-test('stdio client gate requires fatal UTF-8 decoding and preserves BOM framing', async (t) => {
+serveTest('stdio client gate requires fatal UTF-8 decoding and preserves BOM framing', async (t) => {
   await t.test('malformed client bytes fail closed', async () => {
     const session = await startGate('client-gateway-good.js');
     try {
@@ -978,7 +1271,7 @@ test('stdio client gate requires fatal UTF-8 decoding and preserves BOM framing'
   });
 });
 
-test('stdio client gate bounds decoded JSON depth in both directions', async (t) => {
+serveTest('stdio client gate bounds decoded JSON depth in both directions', async (t) => {
   const deepValue = `${'['.repeat(10_000)}0${']'.repeat(10_000)}`;
   await t.test('deep client request', async () => {
     const session = await startGate('client-gateway-good.js');
@@ -1032,8 +1325,8 @@ test('stdio client gate force-exits while client output remains blocked', {
   }
 });
 
-test('stdio client gate force-terminates a gateway that ignores graceful shutdown', async () => {
-  const session = await startGate('client-gateway-ignores-termination.js');
+serveTest('stdio client gate force-terminates a gateway that ignores graceful shutdown', async () => {
+  const session = await startGate('client-gateway-ignores-termination.js', { ready: false });
   try {
     const started = Date.now();
     const outcome = await withTimeout(session.exit, 2_500);
@@ -1049,7 +1342,7 @@ test('stdio client gate force-terminates a gateway that ignores graceful shutdow
 test('stdio client gate terminates the POSIX process group after its leader exits', {
   skip: process.platform === 'win32' ? 'POSIX process-group boundary' : false,
 }, async () => {
-  const session = await startGate('client-gateway-descendant.js');
+  const session = await startGate('client-gateway-descendant.js', { ready: false });
   let descendantPid = null;
   try {
     const pidFile = path.join(session.temporaryRoot, 'descendant.pid');
@@ -1075,7 +1368,7 @@ test('stdio client gate terminates the POSIX process group after its leader exit
   }
 });
 
-test('stdio client gate bounds descriptor reads while the gateway file changes size', async () => {
+serveTest('stdio client gate bounds descriptor reads while the gateway file changes size', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-size-race-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
   const source = await readFile(path.join(fixtureRoot, 'client-gateway-good.js'));
@@ -1147,7 +1440,7 @@ test('stdio client gate rejects a FIFO gateway without blocking', {
   }
 });
 
-test('stdio client gate never executes gateway bytes swapped after launch begins', async () => {
+serveTest('stdio client gate never executes gateway bytes swapped after launch begins', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-race-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
   const verifiedBytes = await readFile(path.join(fixtureRoot, 'client-gateway-good.js'));

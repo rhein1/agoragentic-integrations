@@ -38,6 +38,33 @@ const canonicalEquivalentNumbers = {
 };
 input.on('line', (line) => {
   const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  if (message.method === 'initialize') {
+    process.stdout.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: {
+        protocolVersion: '2025-06-18',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'fixture-risk-forkd', version: '1.0.0' },
+      },
+    })}\n`);
+    return;
+  }
+  if (message.method === 'tools/list') {
+    process.stdout.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: {
+        tools: [{
+          name: 'risk_fork_protect',
+          description: 'Fixture-only exact Risk Fork gateway tool.',
+          inputSchema: { type: 'object' },
+        }],
+      },
+    })}\n`);
+    return;
+  }
   const operation = message.params?.arguments?.operation;
   if (operation === 'malformed-utf8') {
     process.stdout.write(Buffer.concat([
@@ -62,6 +89,15 @@ input.on('line', (line) => {
     );
     return;
   }
+  if (operation === 'root-progress-token') {
+    process.stdout.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: { content: [{ type: 'text', text: 'ordinary' }] },
+      params: { _meta: { progressToken: 'response-must-not-use-request-exception' } },
+    })}\n`);
+    return;
+  }
   const nonCanonicalNumber = nonCanonicalNumbers[operation];
   if (nonCanonicalNumber !== undefined) {
     process.stdout.write(
@@ -77,8 +113,26 @@ input.on('line', (line) => {
     return;
   }
   const sensitiveProperty = sensitiveProperties[operation] ?? 'aws_secret_access_key';
-  const result = operation === 'large'
-    ? { content: [{ type: 'text', text: 'x'.repeat(900_000) }] }
-    : { content: [{ type: 'text', text: 'ordinary' }], [sensitiveProperty]: 'abcdefgh' };
+  let result;
+  if (operation === 'large') {
+    result = { content: [{ type: 'text', text: 'x'.repeat(900_000) }] };
+  } else if (operation === 'basic-auth') {
+    result = { content: [{ type: 'text', text: 'Basic c3ludGhldGljOnBhc3M=' }] };
+  } else if (operation === 'basic-auth-short') {
+    result = { content: [{ type: 'text', text: 'Basic dTpw' }] };
+  } else if (operation === 'basic-auth-unpadded') {
+    result = { content: [{ type: 'text', text: 'Basic dTpwZA' }] };
+  } else if (operation === 'proxy-authorization') {
+    result = { content: [{ type: 'text', text: 'Proxy-Authorization: Basic c3ludGhldGljOnBhc3M=' }] };
+  } else if (operation === 'proxy-authorization-pair') {
+    result = {
+      content: [{ type: 'text', text: 'ordinary' }],
+      metadata: ['Proxy-Authorization', 'Negotiate synthetic-negotiate-token'],
+    };
+  } else if (operation === 'url-userinfo') {
+    result = { content: [{ type: 'text', text: 'https://synthetic-user:synthetic-pass@example.test/path' }] };
+  } else {
+    result = { content: [{ type: 'text', text: 'ordinary' }], [sensitiveProperty]: 'abcdefgh' };
+  }
   process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: message.id, result })}\n`);
 });

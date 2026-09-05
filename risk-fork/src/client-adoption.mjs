@@ -15,6 +15,7 @@ const GATEWAY_STATUS = 'diagnostic_only_refuses_standalone_startup';
 const MAX_PACKET_DEPTH = 32;
 const MAX_PACKET_NODES = 5_000;
 const MAX_PACKET_STRING_BYTES = 4 * 1024 * 1024;
+const MAX_PACKET_UTF8_BYTES = 8 * 1024 * 1024;
 const issuedPackets = new WeakSet();
 
 function fail(message) {
@@ -94,6 +95,16 @@ function requireAbsoluteFile(value, field, basename) {
 function assertOrdinaryPacketTree(value) {
   const seen = new WeakSet();
   let nodes = 0;
+  let utf8Bytes = 0;
+
+  function accountUtf8Bytes(current) {
+    const bytes = Buffer.byteLength(current, 'utf8');
+    if (bytes > MAX_PACKET_UTF8_BYTES - utf8Bytes) {
+      throw fail('Client-adoption packet exceeds the aggregate UTF-8 verification limit');
+    }
+    utf8Bytes += bytes;
+    return bytes;
+  }
 
   function walk(current, depth) {
     nodes += 1;
@@ -102,7 +113,7 @@ function assertOrdinaryPacketTree(value) {
     }
     if (current === null || typeof current === 'boolean') return;
     if (typeof current === 'string') {
-      if (Buffer.byteLength(current, 'utf8') > MAX_PACKET_STRING_BYTES) {
+      if (accountUtf8Bytes(current) > MAX_PACKET_STRING_BYTES) {
         throw fail('Client-adoption packet contains an oversized string');
       }
       return;
@@ -134,6 +145,7 @@ function assertOrdinaryPacketTree(value) {
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
         throw fail('Client-adoption packet contains a non-data property');
       }
+      accountUtf8Bytes(key);
     }
     if (isArray) {
       if (Object.keys(current).length !== current.length) {

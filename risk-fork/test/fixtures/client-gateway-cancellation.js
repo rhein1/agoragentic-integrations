@@ -35,6 +35,32 @@ input.on('line', (line) => {
     return;
   }
   if (message.id === undefined) return;
+  if (message.method === 'initialize') {
+    process.stdout.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: {
+        protocolVersion: '2025-06-18',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'fixture-risk-forkd', version: '1.0.0' },
+      },
+    })}\n`);
+    return;
+  }
+  if (message.method === 'tools/list') {
+    process.stdout.write(`${JSON.stringify({
+      jsonrpc: '2.0',
+      id: message.id,
+      result: {
+        tools: [{
+          name: 'risk_fork_protect',
+          description: 'Fixture-only exact Risk Fork gateway tool.',
+          inputSchema: { type: 'object' },
+        }],
+      },
+    })}\n`);
+    return;
+  }
   gatewayOperationCount += 1;
   writeFileSync(
     path.join(__dirname, 'gateway-operation-count.txt'),

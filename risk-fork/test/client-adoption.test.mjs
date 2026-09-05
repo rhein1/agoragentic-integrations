@@ -350,6 +350,18 @@ test('client adoption rejects structural ambiguity without invoking accessors or
   assert.equal(packetProxyTraps, 0);
 });
 
+test('client adoption caps aggregate UTF-8 verification for repeated large primitives', async () => {
+  const packet = JSON.parse(JSON.stringify(await createPacket('codex')));
+  const repeated = '\u00e9'.repeat(RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES / 2);
+  packet.outputs = [repeated, repeated, repeated];
+
+  assert.throws(
+    () => verifyRiskForkClientAdoptionPacket(packet),
+    (error) => error?.code === 'RISK_FORK_CLIENT_ADOPTION_INVALID'
+      && /aggregate UTF-8 verification limit/.test(error.message),
+  );
+});
+
 test('client adoption CLI previews without writes and writes only inactive review files', async () => {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-adoption-'));
   try {
