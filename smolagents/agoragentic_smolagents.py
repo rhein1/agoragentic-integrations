@@ -24,9 +24,20 @@ Or use the Hub:
 import json
 import os
 import requests
+import urllib.parse
 from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
+
+def _safe_response_json(resp: requests.Response):
+    """Deterministically decode response JSON with HTTP status and content fallbacks."""
+    try:
+        return resp.json()
+    except Exception:
+        if resp.status_code >= 400:
+            return {"error": f"HTTP {resp.status_code}: {resp.text[:200].strip()}"}
+        return {"error": "Invalid JSON returned by upstream gateway", "raw": resp.text[:200].strip()}
+
 
 try:
     from smolagents import Tool
@@ -84,7 +95,7 @@ class AgoragenticExecuteTool(Tool):
                 headers=headers,
                 timeout=60,
             )
-            data = resp.json()
+            data = _safe_response_json(resp)
             if resp.status_code == 200:
                 return json.dumps({
                     "status": data.get("status"),
@@ -132,7 +143,7 @@ class AgoragenticMatchTool(Tool):
                 headers=headers,
                 timeout=15,
             )
-            data = resp.json()
+            data = _safe_response_json(resp)
             providers = [
                 {"name": p.get("name"), "price": p.get("price"), "score": p.get("score", {}).get("composite")}
                 for p in data.get("providers", [])[:5]
@@ -163,7 +174,7 @@ class AgoragenticRegisterTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                 json={"name": agent_name, "intent": intent},
                 headers={"Content-Type": "application/json"}, timeout=30)
-            data = resp.json()
+            data = _safe_response_json(resp)
             if resp.status_code == 201:
                 return json.dumps({
                     "status": "registered",
@@ -208,7 +219,7 @@ class AgoragenticSearchTool(Tool):
                 headers["Authorization"] = f"Bearer {self.api_key}"
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/capabilities",
                                 params=params, headers=headers, timeout=15)
-            caps = resp.json() if isinstance(resp.json(), list) else resp.json().get("capabilities", [])
+            caps = _safe_response_json(resp) if isinstance(_safe_response_json(resp), list) else _safe_response_json(resp).get("capabilities", [])
             if max_price >= 0:
                 caps = [c for c in caps if (c.get("price_per_unit") or 0) <= max_price]
             results = [{
@@ -250,7 +261,7 @@ class AgoragenticInvokeTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                 json={"input": json.loads(input_data) if input_data else {}},
                 headers=headers, timeout=60)
-            data = resp.json()
+            data = _safe_response_json(resp)
             if resp.status_code == 200:
                 return json.dumps({
                     "status": "success",
@@ -287,7 +298,7 @@ class AgoragenticVaultTool(Tool):
                 params["type"] = item_type
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_safe_response_json(resp), indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -315,7 +326,7 @@ class AgoragenticMemoryWriteTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                 json={"input": {"key": key, "value": value, "namespace": namespace}},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_safe_response_json(resp), indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -343,7 +354,7 @@ class AgoragenticMemoryReadTool(Tool):
                 params["key"] = key
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/memory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
-            data = resp.json()
+            data = _safe_response_json(resp)
             return json.dumps(data.get("output", data), indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -377,7 +388,7 @@ class AgoragenticSecretStoreTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/vault/secrets",
                 json={"input": payload},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_safe_response_json(resp), indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -404,16 +415,17 @@ class AgoragenticPassportTool(Tool):
         try:
             if action == "info":
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
-                return json.dumps(resp.json(), indent=2)
+                return json.dumps(_safe_response_json(resp), indent=2)
             if action == "verify" and wallet_address:
-                resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/verify/{wallet_address}", timeout=15)
-                return json.dumps(resp.json(), indent=2)
+                safe_addr = urllib.parse.quote(wallet_address.strip(), safe="")
+                resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/verify/{safe_addr}", timeout=15)
+                return json.dumps(_safe_response_json(resp), indent=2)
             if not self.api_key:
                 return json.dumps({"error": "API key required to check your passport."})
             resp = requests.get(
                 f"{AGORAGENTIC_BASE_URL}/api/passport/check",
                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
-            return json.dumps(resp.json(), indent=2)
+            return json.dumps(_safe_response_json(resp), indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
