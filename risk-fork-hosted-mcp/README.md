@@ -2,11 +2,12 @@
 
 This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.1` into one integrity-bound ESM file. Upstream source inputs are pinned by a sorted exact-digest inventory in `integrity-manifest.json`; packaged operational assets are independently exact-hashed. Reviewed UTF-8 source bytes canonicalize CRLF pairs to LF while preserving lone CR bytes. Ordinary builds require no Git history or object database, reject mismatched source, and accept a changed digest only through the explicit `--refresh-reviewed-sources` review action.
 
-The artifact supplies library code only. It exports the source-only Risk Fork MCP
-host adapter contract, but no provider in the bundle implements its child-side
-MCP transport. It does not supply a production host, credentials, trust decisions,
-deployment authority, approval, or permission to route live traffic. Publication
-is deliberately disabled.
+The artifact supplies library code only. It bundles the reviewed default-off
+child transport and E2B adapter source, but no bundled provider has a
+live-enabled or qualified execution path, and it supplies no operational
+provider. It does not supply a production host, credentials, trust decisions,
+deployment authority, approval, or permission to route live traffic.
+Publication is deliberately disabled.
 
 ## Private host contract
 
@@ -44,6 +45,19 @@ terminal reconciliation is qualified.
 The lower-level `MCP_ENFORCEMENT_SCHEMAS` and clean-import helpers remain exported
 for contract verification. A custom host adapter using them is responsible for
 the same opaque-session, exact-binding, cleanup, and no-bypass invariants.
+
+The bundled validator implements the following targeted MCP `2026-07-28` Tools
+schema rules.
+`x-mcp-header` may annotate only `string`, `integer`, or `boolean` parameters;
+`number` declarations and non-safe-integer runtime values fail before an
+outbound MCP request. Typed results use JSON Schema 2020-12 by default, retain
+only explicit draft-07 compatibility, and reject unsupported declared
+dialects. An MCP `structuredContent` member may use any JSON type, including an
+array or primitive, when the exact bound result schema permits it, subject
+to taint and size, depth, and node bounds. Local pointer, nested-resource, and
+anchor references in that schema remain resolvable after embedding in the
+host-owned envelope. These source and bundle validation rules are not a claim
+of full hosted MCP conformance or live provider qualification.
 
 The embedding host owns trusted planning, owner policy, and the outer kill switch.
 The provider executor must own and enforce the actual child network allowlist,

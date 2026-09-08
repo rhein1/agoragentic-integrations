@@ -27,6 +27,10 @@ import {
 const ENDPOINT = 'https://mcp.public-example.net/rpc';
 const PUBLIC_IPV4 = '104.18.6.229';
 const PUBLIC_IPV6 = '2606:4700::6812:7e5';
+const MCP_HEADER_FIXTURE = JSON.parse(await readFile(
+  new URL('../schema/fixtures/mcp-2026-07-28-x-mcp-header.json', import.meta.url),
+  'utf8',
+));
 
 function makeOperation(overrides = {}) {
   const phase = overrides.phase ?? 'tools/list';
@@ -461,39 +465,95 @@ test('all bounded methods carry self-describing 2026 headers and host-owned meta
   }
 });
 
-test('x-mcp-header supports finite protocol numbers and rejects mismatched values', () => {
-  const descriptor = {
-    name: 'read_public_data',
-    inputSchema: {
+test('x-mcp-header accepts only final-spec string, integer, and boolean declarations', () => {
+  assert.equal(MCP_HEADER_FIXTURE.protocol_version, '2026-07-28');
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.accepted.map((item) => item.label),
+    ['string', 'integer', 'maximum_safe_integer', 'minimum_safe_integer', 'boolean', 'boolean_false'],
+  );
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.rejected.map((item) => item.label),
+    ['fractional_number', 'integer_valued_number'],
+  );
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.rejected_values.map((item) => item.label),
+    ['unsafe_integer'],
+  );
+  for (const item of MCP_HEADER_FIXTURE.accepted) {
+    const descriptor = {
+      name: 'read_public_data',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          value: { type: item.type, 'x-mcp-header': item.header_name },
+        },
+      },
+    };
+    assert.equal(validateMcpToolHeaderAnnotations(descriptor.inputSchema), true, item.label);
+    const operation = makeOperation({
+      phase: 'tools/call',
+      params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+      tool_descriptor: descriptor,
+    });
+    assert.equal(
+      createMcpWireHeaders(operation)[`Mcp-Param-${item.header_name}`],
+      item.expected_header_value,
+      item.label,
+    );
+    const wrongType = makeOperation({
+      phase: 'tools/call',
+      params: { name: 'read_public_data', arguments: { value: item.mismatched_value } },
+      tool_descriptor: descriptor,
+    });
+    assert.throws(
+      () => createMcpWireHeaders(wrongType),
+      /does not match its annotated type/i,
+      item.label,
+    );
+  }
+
+  for (const item of MCP_HEADER_FIXTURE.rejected) {
+    const inputSchema = {
       type: 'object',
       properties: {
-        threshold: { type: 'number', 'x-mcp-header': 'Threshold' },
+        value: { type: item.type, 'x-mcp-header': item.header_name },
       },
-    },
-  };
-  const operation = makeOperation({
-    phase: 'tools/call',
-    params: { name: 'read_public_data', arguments: { threshold: 1.25 } },
-    tool_descriptor: descriptor,
-  });
-  assert.equal(createMcpWireHeaders(operation)['Mcp-Param-Threshold'], '1.25');
+    };
+    assert.throws(
+      () => validateMcpToolHeaderAnnotations(inputSchema),
+      /string, integer, or boolean/i,
+      item.label,
+    );
+    assert.throws(
+      () => createMcpWireHeaders(makeOperation({
+        phase: 'tools/call',
+        params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+        tool_descriptor: { name: 'read_public_data', inputSchema },
+      })),
+      /string, integer, or boolean/i,
+      item.label,
+    );
+  }
 
-  const wrongType = makeOperation({
-    phase: 'tools/call',
-    params: { name: 'read_public_data', arguments: { threshold: '1.25' } },
-    tool_descriptor: descriptor,
-  });
-  assert.throws(
-    () => createMcpWireHeaders(wrongType),
-    /does not match its annotated type/i,
-  );
-
-  const nonFinite = structuredClone(operation);
-  nonFinite.params.arguments.threshold = Number.POSITIVE_INFINITY;
-  assert.throws(
-    () => createMcpWireHeaders(nonFinite),
-    /not finite/i,
-  );
+  for (const item of MCP_HEADER_FIXTURE.rejected_values) {
+    assert.throws(
+      () => makeOperation({
+        phase: 'tools/call',
+        params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+        tool_descriptor: {
+          name: 'read_public_data',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              value: { type: item.type, 'x-mcp-header': item.header_name },
+            },
+          },
+        },
+      }),
+      /safe (?:integer|range)/i,
+      item.label,
+    );
+  }
 });
 
 test('Mcp-Name uses the required Base64 sentinel encoding and rejects unsafe header schemas', () => {
@@ -581,6 +641,15 @@ test('tools/list excludes every invalid x-mcp-header tool and retains valid sibl
         type: 'object',
         properties: {
           region: { type: 'object', 'x-mcp-header': 'Region' },
+        },
+      },
+    },
+    {
+      name: 'number_annotation',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          threshold: { type: 'number', 'x-mcp-header': 'Threshold' },
         },
       },
     },
