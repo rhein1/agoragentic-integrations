@@ -47,6 +47,12 @@ jobs:
       PIP_NO_INPUT: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check out pinned platform evidence contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: rhein1/agent-marketplace
+          ref: e518da94ede8c30d2f33475ef5307576b3d4491d
+          path: platform-contract
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
@@ -66,6 +72,15 @@ jobs:
           python -m agoragentic_matraix_assurance validate
           python -m agoragentic_matraix_assurance replay --verify-expected --out "${RUNNER_TEMP}/cohort-evidence.json"
           python -m pytest tests -q
+      - name: Replay proof fixtures and validate pinned platform contract
+        env:
+          AGORAGENTIC_MATRAIX_LIVE: '0'
+          AGORAGENTIC_NO_SPEND: '1'
+        run: |
+          python matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/replay.py
+          python -m unittest discover -s matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/tests -v
+          npm ci --ignore-scripts --prefix platform-contract
+          node matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/validate-platform-contract.cjs platform-contract
       - name: Build and inspect distribution
         working-directory: matraix-cohort-assurance
         run: |
