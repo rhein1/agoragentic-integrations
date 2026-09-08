@@ -68,8 +68,9 @@ upstream provenance, guardrail, or approval checks. It also proves that an upstr
 approval mark alone cannot bypass the fixture backend's separate apply gate.
 
 Missing dependencies, wrong source, or failed checks exit with an error. There is
-no mock fallback and no silent skip. The driver has **not yet been executed in the
-implementation environment**; syntax checks alone do not qualify the adapter.
+no mock fallback and no silent skip. The driver passed locally on September 8,
+2026, including provenance, both approval gates, expiry, revocation, changed
+requests, and current upstream guardrails. See [qualification evidence](QUALIFICATION.md).
 Git checks are drift detection for a trusted developer checkout, not containment
 of hostile filesystem/Git configuration or full dependency supply-chain assurance.
 
@@ -97,8 +98,8 @@ an action, and the JSON hash is not a signature. It emits no invented file-artif
 references. Its Harness policy mapping is advisory, not in-path enforcement.
 
 The dependency-free JavaScript tests exercise evidence validation and cross-language
-hash consistency. Actual composition against the installed Harness package remains
-unverified until the separate dependency-backed check is run.
+hash consistency. Actual composition against installed Harness Core 0.4.2 and its
+exported proof/receipt schemas passes in `dependencies.test.mjs`.
 
 ## Deliberate limits
 

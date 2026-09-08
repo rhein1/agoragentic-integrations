@@ -13,7 +13,7 @@ isolation, verify settlements, or provide a production approval service.
 | Component | Scope |
 | --- | --- |
 | Python and TypeScript preflight | Decimal spend-cap validation; unknown tools denied; paid execution always blocked |
-| SDK callback and registration factory | Explicit `PreToolUse` hook shape; real SDK/host qualification still required |
+| SDK callback and registration factory | Installed Python/TypeScript SDK registration and control-wire denial tested; real CLI enforcement still unqualified |
 | Receipt display projection | Drops freeform/nested receipt fields; not a verifier or a general PII filter |
 | [Commerce Agents integration](commerce/README.md) | Pinned upstream interface bridge, local SQLite fixture, shared-executor conformance driver, optional canonical Harness composition |
 
@@ -61,7 +61,13 @@ do not install them globally and assume other tools have been integrated.
 The callback denies pending work instead of emitting a textual approval request
 while returning success. It starts no SDK client, network request, or tool call.
 An external authenticated approval-and-execution path remains separate work.
-The Python registration test uses a constructor stub; it is not host evidence.
+The hermetic Python registration test uses a constructor stub. The separate
+dependency-backed tests instantiate the actual SDK and dispatch callbacks through
+its real control protocol using a synthetic CLI peer. This verifies serialization
+of deny decisions, not enforcement by a real Claude Code process.
+
+See [qualification evidence](commerce/QUALIFICATION.md) for exact versions and
+reproduction commands. The private npm package is development tooling only.
 
 The current official hook contract is documented in the
 [SDK hooks reference](https://code.claude.com/docs/en/agent-sdk/hooks).

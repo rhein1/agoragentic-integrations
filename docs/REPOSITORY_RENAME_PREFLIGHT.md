@@ -7,7 +7,7 @@
 - Safe to rename now: **false**
 - Authorized target: **none**
 - Affected tracked files: **154**
-- Exact repository references: **301**
+- Exact repository references: **306**
 
 ## Reference Classes
 
