@@ -6,13 +6,13 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 154,
-    "occurrence_count": 306,
+    "file_count": 156,
+    "occurrence_count": 310,
     "category_file_counts": {
       "installer_or_clone": 30,
       "machine_discovery": 52,
       "package_registry_metadata": 23,
-      "public_documentation": 74,
+      "public_documentation": 76,
       "raw_content_url": 2,
       "release_or_provenance": 12,
       "reusable_action": 2,
@@ -820,6 +820,28 @@
       "line_numbers": [
         4,
         6
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/work-packs/MATRAIX_PROOF_REPRESENTATION_INTEGRITY.md",
+      "occurrences": 2,
+      "line_numbers": [
+        4,
+        6
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "docs/work-packs/MATRAIX_REPRODUCIBLE_EXTERNAL_PROOF.md",
+      "occurrences": 2,
+      "line_numbers": [
+        4,
+        8
       ],
       "categories": [
         "public_documentation"
