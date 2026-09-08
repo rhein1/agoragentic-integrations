@@ -432,6 +432,7 @@ jobs:
           npm audit --audit-level=moderate
           npm run typecheck
           npm test
+          npm run test:cli
       - name: Upload conformance evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1

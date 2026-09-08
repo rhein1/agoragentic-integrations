@@ -31,7 +31,7 @@ Capability records: **13** of **110** catalog entries.
 | Agent OS Control Plane | unknown | static | 2026-08-20T18:45:00Z | [agent-os/agent_os_node.mjs](../agent-os/agent_os_node.mjs) | yes | yes |
 | Anchor Safe Pay + Harness Core Reference | anchor-x402-safe-pay 0.3.0 + Harness Core 0.4.2 fixture contract | local | 2026-09-04T20:31:20Z | [anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs](../anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs) | no | no |
 | Agentic Resource Discovery v0.91 source profile | ARD proposal v0.91 at aa3e598bb7752a9175897823234311216acfa864 | local | 2026-08-31T00:00:00Z | [ard/test/ard-profile.test.mjs](../ard/test/ard-profile.test.mjs) | no | no |
-| Claude Agent SDK Gating | unknown; SDK control-wire contracts only | local | 2026-09-08T00:00:00Z | [claude-agent-sdk/commerce/QUALIFICATION.md](../claude-agent-sdk/commerce/QUALIFICATION.md) | no | no |
+| Claude Agent SDK Gating | CLI 2.1.263 local TypeScript Write denial fixture; complete Commerce runtime unqualified | local | 2026-09-08T00:00:00Z | [claude-agent-sdk/commerce/QUALIFICATION.md](../claude-agent-sdk/commerce/QUALIFICATION.md) | no | no |
 | Claude Code Plugin | unknown | static | 2026-08-20T18:45:00Z | [claude-code/README.md](../claude-code/README.md) | no | no |
 | Codex Harness Mapping Stub | unknown | static | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |

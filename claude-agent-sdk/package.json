@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test adapter.test.mjs commerce/dependencies.test.mjs commerce/sdk-wire.test.mjs",
+    "test:cli": "node --test commerce/cli-enforcement.test.mjs",
     "typecheck": "tsc --noEmit --strict --target ES2022 --module nodenext --allowImportingTsExtensions commerce/sdk-contract.ts"
   },
   "devDependencies": {

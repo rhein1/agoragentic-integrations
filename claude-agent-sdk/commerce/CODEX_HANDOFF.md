@@ -24,27 +24,28 @@ The existing adapter-conformance job now runs all dependency-backed lanes.
 The catalog records experimental local evidence without adding an integration.
 Canonical integration-skill guidance is propagated through the existing generator.
 
-## Remaining implementation and review gate
+## Real CLI enforcement and remaining review gate
 
-Real Claude Code deny enforcement is still unqualified. The SDK wire tests prove
-callback registration, dispatch, and serialization; they do not prove a real CLI
-prevented a tool effect. Keep qualified_runtimes empty and this PR draft until
-that gate is resolved explicitly against the owner's intended scope.
+The TypeScript adapter now has a provider-free actual-CLI enforcement test.
+The pinned native CLI 2.1.263 consumes deterministic loopback Messages responses.
+Its real Write tool produces one exact temporary file and one PostToolUse event
+in the control; the adapter's registered Unsupported_Tool denial produces zero
+files, zero successful PostToolUse events, and an error tool result.
+The test verifies the native binary checksum and uses fresh temporary settings,
+an allowlisted environment, and a synthetic key. CI runs it with `npm run test:cli`.
 
-A follow-up engineer should:
+A follow-up reviewer should:
 
 1. Refresh exact-head CI and reviews; fix reproducible failures without loosening
-   the approval, provenance, backend, or money boundaries.
-2. Determine whether the pinned SDK/CLI exposes a provider-free supported way to
-   invoke an inert fixture tool through actual host enforcement. If it does,
-   exercise denied and permitted controls and record observable effect counts.
-   Never claim that another synthetic CLI peer closes this gate.
-3. If real-host qualification requires a paid/model canary, prepare its exact
-   bounded procedure and request separate owner authorization before running it.
-   Do not read credentials or activate provider calls as part of this PR.
-4. Preserve source/local, shared-executor, SDK-wire, real-host, and production
-   evidence as separate states. Only expand compatibility claims when the matching
-   path has actual evidence and independent review.
+   approval, provenance, backend, or money boundaries.
+2. Independently review the actual-CLI fixture, positive control, hook registration,
+   and effect assertions against the bounded claim in QUALIFICATION.md.
+3. Keep shared-executor, SDK-wire, local real-CLI, and production evidence separate.
+   This test covers TypeScript unsupported-tool denial; Python CLI and commerce
+   tool approval through MCP remain unqualified. Keep qualified_runtimes empty.
+4. Keep this PR draft until independent review and scope acceptance. Any future
+   paid/model canary requires separate owner authorization; do not read credentials
+   or activate provider calls as part of this PR.
 
 ## Reproduce and validate
 

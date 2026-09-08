@@ -13,7 +13,7 @@ isolation, verify settlements, or provide a production approval service.
 | Component | Scope |
 | --- | --- |
 | Python and TypeScript preflight | Decimal spend-cap validation; unknown tools denied; paid execution always blocked |
-| SDK callback and registration factory | Installed Python/TypeScript SDK registration and control-wire denial tested; real CLI enforcement still unqualified |
+| SDK callback and registration factory | Installed Python/TypeScript SDK wire contracts; real CLI 2.1.263 enforces the TypeScript adapter's unsupported-tool deny in a local Messages fixture |
 | Receipt display projection | Drops freeform/nested receipt fields; not a verifier or a general PII filter |
 | [Commerce Agents integration](commerce/README.md) | Pinned upstream interface bridge, local SQLite fixture, shared-executor conformance driver, optional canonical Harness composition |
 
@@ -65,6 +65,12 @@ The hermetic Python registration test uses a constructor stub. The separate
 dependency-backed tests instantiate the actual SDK and dispatch callbacks through
 its real control protocol using a synthetic CLI peer. This verifies serialization
 of deny decisions, not enforcement by a real Claude Code process.
+
+The separate `npm --prefix claude-agent-sdk run test:cli` lane runs the actual
+checksum-verified CLI against a loopback Messages fixture. Its inert Write control
+produces one effect and one successful PostToolUse event; the adapter's deny produces
+neither. This covers TypeScript unsupported-tool denial, not Python CLI enforcement,
+commerce-tool approval through a model, MCP, or a production runtime.
 
 See [qualification evidence](commerce/QUALIFICATION.md) for exact versions and
 reproduction commands. The private npm package is development tooling only.
