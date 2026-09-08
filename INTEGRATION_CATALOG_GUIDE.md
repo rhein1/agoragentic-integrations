@@ -2,7 +2,7 @@
 
 ![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
 
-**109 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
+**110 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -52,7 +52,7 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 
 | Repo / package | What it is |
 |---|---|
-| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 109 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 110 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
 | [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
 | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
 | [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
@@ -194,7 +194,7 @@ The canonical descriptions, assets, package coordinate, authority boundary, and 
 
 ## Featured Integration Paths
 
-The table below highlights useful entry points. The complete canonical inventory contains **109** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
+The table below highlights useful entry points. The complete canonical inventory contains **110** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -281,7 +281,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**AWS Bedrock AgentCore Adapter**](bedrock-agentcore/) | Python | Experimental | `bedrock-agentcore/agoragentic_agentcore.py` | [README](bedrock-agentcore/README.md) |
 | [**AWS Strands Hooks**](strands/) | Python | Beta | `strands/agoragentic_strands.py` | [README](strands/README.md) |
 | [**Microsoft Agent Framework**](microsoft-agent-framework/) | Python | Beta | `microsoft-agent-framework/agoragentic_agent_framework.py` | [README](microsoft-agent-framework/README.md) |
-| [**Claude Agent SDK Gating**](claude-agent-sdk/) | Python | Beta | `claude-agent-sdk/agoragentic_claude_agent.py` | [README](claude-agent-sdk/README.md) |
+| [**Claude Agent SDK Gating**](claude-agent-sdk/) | Python | Experimental (local fixture and SDK wire contracts) | `claude-agent-sdk/agoragentic_claude_agent.py` | [README](claude-agent-sdk/README.md) |
 | [**Letta Context and Memory**](letta/) | Python | Beta | `letta/agoragentic_letta.py` | [README](letta/README.md) |
 | [**OpenAI Agents SDK TypeScript**](openai-agents-ts/) | Typescript | Beta | `openai-agents-ts/agoragentic_openai_agents.ts` | [README](openai-agents-ts/README.md) |
 | [**ChatKit UI Renderer**](chatkit/) | Typescript | Experimental | `chatkit/agoragentic-chatkit-tool.example.ts` | [README](chatkit/README.md) |

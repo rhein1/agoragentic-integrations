@@ -8,14 +8,19 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 56,
-    "sha256": "sha256:474f5e379506c726cd1d32f8f25d6c288f4401dbb2989145107873f8fbb8aa66"
+    "files": 58,
+    "sha256": "sha256:065decf9fa553e19f2f220f86100c17d463611a9026fb023aa7fd8fb24ca01a0"
   },
   "reviewed_sources": [
     {
+      "path": "mcp/LICENSE",
+      "bytes": 1061,
+      "sha256": "sha256:5c4813b2fa0e7f77d4f092688d6aac7809e8ceeae0f8f92f20e0378bcd1774f9"
+    },
+    {
       "path": "mcp/mcp-server.js",
-      "bytes": 104536,
-      "sha256": "sha256:f20571c15099474ff907b0cef7ddc1c1f09482490cf7827776db07f952f9df21"
+      "bytes": 118705,
+      "sha256": "sha256:b316ef039fe43e83033f5785f773a2c060929093f4fb429e433756907744aca1"
     },
     {
       "path": "mcp/package.json",
@@ -44,13 +49,13 @@
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 12943,
-      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+      "bytes": 14173,
+      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
     },
     {
       "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
-      "bytes": 30337,
-      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
+      "bytes": 30861,
+      "sha256": "sha256:64fa4076a9c941d390a691f956cb35296e8ce4bac74dc016e5378f15f8b330fd"
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -79,8 +84,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 4519,
-      "sha256": "sha256:1456baf522a9c9f12ffa55da8cdd0c593a91f3c8195b013cd55e747b9fab5c01"
+      "bytes": 4677,
+      "sha256": "sha256:162af5f164145d6f8876d372a79e76b2fd15d5c73c5b25c2e294c15ca8c45960"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -104,8 +109,8 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
-      "bytes": 113493,
-      "sha256": "sha256:4572865b82363e37e43abfd0138949c3fd09af9b45ecb1f292a743c089783836"
+      "bytes": 117203,
+      "sha256": "sha256:d77681f76cd65e9956cf0650c4b6c97a36dc812f40e2cae0d18265cb29a433ae"
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
@@ -204,8 +209,8 @@
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 4947,
-      "sha256": "sha256:b26bf9d9f63c3f2d7bbac2b5875a907b8fb1aba26a7e002685535e013d83dbbe"
+      "bytes": 5302,
+      "sha256": "sha256:574d648276e0b70c2df7e1c07efa2394248e720323b014b5021e1123a966b6e4"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -219,13 +224,18 @@
     },
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
-      "bytes": 46749,
-      "sha256": "sha256:b2641864ebf1b594a3df42ae1c463d8aa1012ac339df948ccb3fdf00272ea5e8"
+      "bytes": 48209,
+      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
+    },
+    {
+      "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
+      "bytes": 21109,
+      "sha256": "sha256:619826af7cb6716307ecee95f5e30f2ccba88705e20ad7a2f5faa6c4bccfbd3b"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
-      "bytes": 28508,
-      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -244,8 +254,8 @@
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
-      "bytes": 33013,
-      "sha256": "sha256:a0139961ea5d0fdcacc3109c3ee182d49d5e6dda917413246625a220a4c4a128"
+      "bytes": 35640,
+      "sha256": "sha256:7f12dce93571f701f3d955b96bf6f423d21985562d409c58efc4f3c59215fcf6"
     },
     {
       "path": "risk-fork/src/util.mjs",
@@ -455,10 +465,16 @@
   ],
   "inputs": [
     {
+      "path": "mcp/LICENSE",
+      "source": "reviewed_source",
+      "bytes": 1061,
+      "sha256": "sha256:5c4813b2fa0e7f77d4f092688d6aac7809e8ceeae0f8f92f20e0378bcd1774f9"
+    },
+    {
       "path": "mcp/mcp-server.js",
       "source": "reviewed_source",
-      "bytes": 104536,
-      "sha256": "sha256:f20571c15099474ff907b0cef7ddc1c1f09482490cf7827776db07f952f9df21"
+      "bytes": 118705,
+      "sha256": "sha256:b316ef039fe43e83033f5785f773a2c060929093f4fb429e433756907744aca1"
     },
     {
       "path": "mcp/package.json",
@@ -467,82 +483,88 @@
       "sha256": "sha256:344b93e85381f7d80b6ac581a1469108b83ba3992a86c9e9670b60233047ec17"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/LICENSE",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE",
       "source": "workspace_dependency",
-      "bytes": 1071,
-      "sha256": "sha256:5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d"
+      "bytes": 12227,
+      "sha256": "sha256:0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/experimental/tasks/helpers.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/auth-CfDMXiII.cjs",
       "source": "workspace_dependency",
-      "bytes": 2610,
-      "sha256": "sha256:cc82f45b41c2f33551a1daeeb3c8e4647a944c91245e4fc1c8a862de81265246"
+      "bytes": 95518,
+      "sha256": "sha256:96c04c491ce6d6e654e84e94a0cf860cf6d1b0a5a0aa2ce25dbd070f2e4d6a5c"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/experimental/tasks/interfaces.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/dist/internal.cjs",
       "source": "workspace_dependency",
-      "bytes": 671,
-      "sha256": "sha256:abc43f2f13a03e80cd24af4c97d2e1c3892411b85ebfbed1e36db8e4cd99abc9"
+      "bytes": 14675,
+      "sha256": "sha256:821524fc4e0c2a41bef38f5827130b7918560e485ecfbcee608f4135a80e5cba"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/experimental/tasks/server.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/package.json",
       "source": "workspace_dependency",
-      "bytes": 10254,
-      "sha256": "sha256:5b9c780681fe06fe681da99a1027d6eded807c45526e9e18e98adac1e1ea352b"
+      "bytes": 2282,
+      "sha256": "sha256:dc2e8e1fc31878b0b537b0ea034d4a11284cce20fe81f4c6ea823dd6db7e7ad5"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/index.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/LICENSE",
       "source": "workspace_dependency",
-      "bytes": 20924,
-      "sha256": "sha256:710624ac309f70a33995010301e2aa020cabbd1a5746a7b0e2c0a501c781993a"
+      "bytes": 12227,
+      "sha256": "sha256:0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/stdio.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/ajvProvider-ZaoO9afR.cjs",
       "source": "workspace_dependency",
-      "bytes": 3195,
-      "sha256": "sha256:1943b9fb037788c7ec04b0dc34a23bfcba0395b4ea4aa914b40a4348a5d890bf"
+      "bytes": 275410,
+      "sha256": "sha256:289d945a40218fdd3da0a020f2d0a636e5378d36287a4d7d59b32515817cb03b"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/zod-compat.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/chunk-Bnu9O96Y.cjs",
       "source": "workspace_dependency",
-      "bytes": 8923,
-      "sha256": "sha256:083cdae912fcc72bfaf7f072f10471d7a07fb8b9d5388b9f5389394802c874da"
+      "bytes": 1723,
+      "sha256": "sha256:36cac11e0ad41ced410de65f13cd7f2a91332a1eb05e93e218cc2071d169ed87"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/server/zod-json-schema-compat.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/dialects-D8eXzoGv.cjs",
       "source": "workspace_dependency",
-      "bytes": 3145,
-      "sha256": "sha256:1e642542a22f273cb3b9cd17f8c9deb540be84ba35cc0c3e0872a0185760541a"
+      "bytes": 2315,
+      "sha256": "sha256:9bb247d39ed372257859080cf04bc45ac0386119cd78c98ec32ccdf3fc5227fe"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/shared/protocol.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/index.cjs",
       "source": "workspace_dependency",
-      "bytes": 52787,
-      "sha256": "sha256:cd1451d0a079cac3783e5259ab27fd547bb8aec75fbe04c57f7cf3961b1ca97e"
+      "bytes": 84708,
+      "sha256": "sha256:c76c1228e92286e0a0d844ce8d5aaeef2185e50df62beb495a8f34139cc47248"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/shared/stdio.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/mcp-D7GmuPnv.cjs",
       "source": "workspace_dependency",
-      "bytes": 1614,
-      "sha256": "sha256:edf22693bf4e4693d0fdca325ae52071de9fc777c9c45ae7af9037ebfc186028"
+      "bytes": 90315,
+      "sha256": "sha256:b0afb7de7a8d17edc6f49e3b690afd8baf58c2fa975d1d41b29dababb8ee9f02"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/types.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/shimsNode.cjs",
       "source": "workspace_dependency",
-      "bytes": 82159,
-      "sha256": "sha256:2995d96aaf118ae001a6c673ff386bb7edb97b2ed7f3214549ba005b4a6c99be"
+      "bytes": 425,
+      "sha256": "sha256:cdc43bbac0b2349278c244d86ea66fc2e42dd9789cce70e73b32f121da2eede3"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/validation/ajv-provider.js",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/src-STyD_Vvf.cjs",
       "source": "workspace_dependency",
-      "bytes": 3189,
-      "sha256": "sha256:697c11d91d249750a3e44d4423c415264f102631b4fe755ff998ccc9b8402bff"
+      "bytes": 348065,
+      "sha256": "sha256:e942bd5edc709d40d8bfc955306a179cdee3d4d35ad236deaac19bb14ecd5ba1"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/package.json",
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/stdio.cjs",
       "source": "workspace_dependency",
-      "bytes": 6511,
-      "sha256": "sha256:0690cbe02511a95d1ff199acf20b5a12ac4dfde1bbe30c82a0de73afa92dffc9"
+      "bytes": 20864,
+      "sha256": "sha256:87793e7807897eb57c266b39280151b616204d6e66a81d4ddb250d987d189bd8"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/package.json",
+      "source": "workspace_dependency",
+      "bytes": 4390,
+      "sha256": "sha256:ff7f23c4a4a3162a34a2cb21087e1844bb8631724d8e43aa14aaa86d3f7e07c2"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv-formats/LICENSE",
@@ -579,6 +601,12 @@
       "source": "workspace_dependency",
       "bytes": 1090,
       "sha256": "sha256:a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/2020.js",
+      "source": "workspace_dependency",
+      "bytes": 2894,
+      "sha256": "sha256:908e9670b478b2ba126802a221b7e47006f50cf467e2c5dd7935d3dbef10a20a"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/ajv.js",
@@ -701,6 +729,60 @@
       "sha256": "sha256:d24ab8a97c18b3f5afdde7d7024a0e0ac1df0614a16a41cb88f81379edcc2db3"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/index.js",
+      "source": "workspace_dependency",
+      "bytes": 1026,
+      "sha256": "sha256:2e39089b0aaa14efa7901ecf5384622ec3d5897b206e1d589d2420f17b9fa6e1"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json",
+      "source": "workspace_dependency",
+      "bytes": 1441,
+      "sha256": "sha256:f1e465ff0c0cc86bee5c0cc4b51d2734c532e6ea12c75b60a2ac093a4577b2d4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json",
+      "source": "workspace_dependency",
+      "bytes": 479,
+      "sha256": "sha256:7ede86f2c48d646202bf1332aefaf46db268c943d59752727db7247dc2920516"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json",
+      "source": "workspace_dependency",
+      "bytes": 1344,
+      "sha256": "sha256:c3a5947992d4fe67c95cda7910911207376bbae41c0a124ec9e7e699172e7a49"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json",
+      "source": "workspace_dependency",
+      "bytes": 420,
+      "sha256": "sha256:1e31131b1ed21f98c007f04deb501343b8c4dd77f1c5a8494a9c2085f68d769d"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json",
+      "source": "workspace_dependency",
+      "bytes": 758,
+      "sha256": "sha256:eb008c756b29bdaa237c1f06d32ea4a21f6ef22148b03c6372cea5e4c0782273"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json",
+      "source": "workspace_dependency",
+      "bytes": 472,
+      "sha256": "sha256:8f7f75f4274745faa32e4abdba12de99f49b21df225f52f723b5c62043b0edca"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json",
+      "source": "workspace_dependency",
+      "bytes": 2264,
+      "sha256": "sha256:3cae7069843679429e4ada7df261bb8961fa34cac15be89296026e69af312092"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json",
+      "source": "workspace_dependency",
+      "bytes": 2166,
+      "sha256": "sha256:5333c7df76bceee098e865881d0808238dea836126c6c60b49299ec85c6c7a56"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-draft-07.json",
       "source": "workspace_dependency",
       "bytes": 3811,
@@ -765,6 +847,12 @@
       "source": "workspace_dependency",
       "bytes": 3198,
       "sha256": "sha256:c1a83bf484b6fde4d268935f079ddba5e74a2f589dfc6d15ca2e20ba4d06ee5b"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js",
+      "source": "workspace_dependency",
+      "bytes": 354,
+      "sha256": "sha256:d17d23755b0cf8699c180dd98b8b7270b688d2e4fe5a4c4fcc53ffdcc18ee58e"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/if.js",
@@ -869,10 +957,46 @@
       "sha256": "sha256:2365341d1f30dc72cece7703e908e47aacb8f904b9f66ec4019fe889ae1e57fa"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft2020.js",
+      "source": "workspace_dependency",
+      "bytes": 762,
+      "sha256": "sha256:2d0dc3a14abd48a45ad1407a97f23a0f943fa5244923037f86e95a7de04a7445"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft7.js",
       "source": "workspace_dependency",
       "bytes": 557,
       "sha256": "sha256:8c62022c6c3aa302c3ea6f6709a697fc9eb6385d243fa7c2156dbe9f02228170"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js",
+      "source": "workspace_dependency",
+      "bytes": 1261,
+      "sha256": "sha256:78222a5b42bab186253d880f9af4b012394ae5988bfab78e79f2510caed0ccf7"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js",
+      "source": "workspace_dependency",
+      "bytes": 1985,
+      "sha256": "sha256:acc2913c91d11ff57150dde1751cdd5d9f486a0cb156037870ede203273af917"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/index.js",
+      "source": "workspace_dependency",
+      "bytes": 457,
+      "sha256": "sha256:8c05d09948653957427f351d9c6172965b932a5663f7dcb63014a491a533cc0b"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js",
+      "source": "workspace_dependency",
+      "bytes": 522,
+      "sha256": "sha256:9f6cb7e509f9deada1b884010f08c52876f8eace32dcf0e7da28f6d0d91f3f76"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js",
+      "source": "workspace_dependency",
+      "bytes": 325,
+      "sha256": "sha256:7b0c651e2c5b5218639cd3ad7e5162f1e226fc9814107a85f4c3e47f5138670d"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/format/format.js",
@@ -893,10 +1017,40 @@
       "sha256": "sha256:45c178744a7ec57e20c85ceeaea8d9f36b5663636ab7e495ea2c3c1bf4a58609"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/next.js",
+      "source": "workspace_dependency",
+      "bytes": 433,
+      "sha256": "sha256:491c4d9738e50a6c22b3090cb1df49911b4bb7c3b7dcafc2f2dd4c074c4d82e7"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/index.js",
+      "source": "workspace_dependency",
+      "bytes": 350,
+      "sha256": "sha256:4e7936d1a55051e70e2ebbbfc8de94fbe7f1e7b055252df5a984481ea7c156a4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js",
+      "source": "workspace_dependency",
+      "bytes": 1588,
+      "sha256": "sha256:4d7010c39f1b7af4a2fe1a62e5b65c8f763d4e58ac3d710099d367659f5e4fda"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js",
+      "source": "workspace_dependency",
+      "bytes": 2608,
+      "sha256": "sha256:665029a99612ec32e9bef99c9c4b09a4dc0be6c71d7b920594d414d404806ebe"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/const.js",
       "source": "workspace_dependency",
       "bytes": 852,
       "sha256": "sha256:ace994e9ab97a70899a9484794794f4be5ee03bfb3cf32242d3f091d77f0329a"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js",
+      "source": "workspace_dependency",
+      "bytes": 403,
+      "sha256": "sha256:cd69a90089328b24d2232c12edae57858c14f66aaa56923c12929eb3d673e8fa"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/enum.js",
@@ -909,6 +1063,12 @@
       "source": "workspace_dependency",
       "bytes": 1036,
       "sha256": "sha256:4a1839832de5f10ff423c1c0c6cb232b5b6e1b34980a28862cf56b2763136de4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitContains.js",
+      "source": "workspace_dependency",
+      "bytes": 495,
+      "sha256": "sha256:0ea6f2e43359add298e1ed9306fe5020c62e086392f2915f10226b01394b200d"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitItems.js",
@@ -1451,252 +1611,6 @@
       "sha256": "sha256:b02ffef8cda96c5c3ee00a00390e63f608362c2ddfb3ed754e181d013a45d48a"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/LICENSE",
-      "source": "workspace_dependency",
-      "bytes": 745,
-      "sha256": "sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/Options.js",
-      "source": "workspace_dependency",
-      "bytes": 1552,
-      "sha256": "sha256:16bc4725c3ef004d14e727b04a276fd6200b4e0257837320b91745e2878704c2"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/Refs.js",
-      "source": "workspace_dependency",
-      "bytes": 1017,
-      "sha256": "sha256:d290d068f4643edc3baba64f65feb299dd87e0a7a1a334478e6dd3642224a4b2"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/errorMessages.js",
-      "source": "workspace_dependency",
-      "bytes": 643,
-      "sha256": "sha256:166def58b045110559d6dde42eec0f446f4b1dd435835460b0cfd0d1640bf323"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/getRelativePath.js",
-      "source": "workspace_dependency",
-      "bytes": 405,
-      "sha256": "sha256:ce000c24b0e815fa7e97a19714127970c990123265dd1a498c91eea1ac6d95ac"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/index.js",
-      "source": "workspace_dependency",
-      "bytes": 2945,
-      "sha256": "sha256:b11a49bb4d13d0847ee2aef6487e8c3cf66cb1fef14065cac1f9ea5553952737"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parseDef.js",
-      "source": "workspace_dependency",
-      "bytes": 2645,
-      "sha256": "sha256:7cd2c3437fa7fe21ae7182a34b045685b4bc75fb47fd26242a4612608b10412d"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parseTypes.js",
-      "source": "workspace_dependency",
-      "bytes": 77,
-      "sha256": "sha256:d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/any.js",
-      "source": "workspace_dependency",
-      "bytes": 676,
-      "sha256": "sha256:36d38673c0e3fba1cb9fc7d1b6a5944f35b9a54425ae652d4513570b6fd1e882"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/array.js",
-      "source": "workspace_dependency",
-      "bytes": 1258,
-      "sha256": "sha256:78ce48347504a2c03cc72cc1240287d26ce440c4665890e10c15c3de05700dfe"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/bigint.js",
-      "source": "workspace_dependency",
-      "bytes": 2183,
-      "sha256": "sha256:9b9dfbc9ce8618231e0b81afd858d9588216394f03eb971979b363a820237030"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/boolean.js",
-      "source": "workspace_dependency",
-      "bytes": 230,
-      "sha256": "sha256:dcafed3c754003c34fd4382a5b19e2c807512236df6cf05235d62b4fada2e453"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/branded.js",
-      "source": "workspace_dependency",
-      "bytes": 306,
-      "sha256": "sha256:5c16deba1f9c989d901ec317076cbcf10952a40ab880c6e740b8ca2420bf107a"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/catch.js",
-      "source": "workspace_dependency",
-      "bytes": 305,
-      "sha256": "sha256:f413388d6ffde7a306fc6d8ecc5731c050c5bc17739723f013909f638c879179"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/date.js",
-      "source": "workspace_dependency",
-      "bytes": 1568,
-      "sha256": "sha256:2cad7157d005a5e601b77aff5e10040ba79d3b369b6fdd117fe73e0290ee6eb5"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/default.js",
-      "source": "workspace_dependency",
-      "bytes": 369,
-      "sha256": "sha256:8dfa1a3a4bc3459311350cde1e45a0ba60d21fbd97037303eaef44bc1771f0c2"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/effects.js",
-      "source": "workspace_dependency",
-      "bytes": 430,
-      "sha256": "sha256:d518d9784643e748e676f34c152635ee522a217377d3cee948ed4ad6af9b17b4"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/enum.js",
-      "source": "workspace_dependency",
-      "bytes": 258,
-      "sha256": "sha256:8a4cde2c93cf4589f64c5d4e224692968c286f10079d78143906bfd295fb5352"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/intersection.js",
-      "source": "workspace_dependency",
-      "bytes": 2100,
-      "sha256": "sha256:f2910133c2d1694b32c5cd66adc966ca98ed90fbffd106275884249282773208"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/literal.js",
-      "source": "workspace_dependency",
-      "bytes": 756,
-      "sha256": "sha256:c3c401cf063a48ed66ac6f27e1a85465a7064cd55b6a5a4d3b73378b867d8038"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/map.js",
-      "source": "workspace_dependency",
-      "bytes": 1009,
-      "sha256": "sha256:fd1a011c7a3861e3723103c077274ee4bed4d504a6b64e62cdb6b80524e58b76"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/nativeEnum.js",
-      "source": "workspace_dependency",
-      "bytes": 732,
-      "sha256": "sha256:3bccc4910f55760a8af8bfcfba7a1d8d956f821125012d27fd4f2cc5806b9056"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/never.js",
-      "source": "workspace_dependency",
-      "bytes": 443,
-      "sha256": "sha256:dceeb8178cd51e96a042fa1e250cde9e49cb40219e02e29140c703306b7997ac"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/null.js",
-      "source": "workspace_dependency",
-      "bytes": 342,
-      "sha256": "sha256:4bbfd47ab912971799b529c74a5c4903ed089b20875706eb79e124c165079229"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/nullable.js",
-      "source": "workspace_dependency",
-      "bytes": 1393,
-      "sha256": "sha256:82ba5711dcec5c50431e984dc07363945325db64498eb825001b7dad1e6cfa8c"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/number.js",
-      "source": "workspace_dependency",
-      "bytes": 2333,
-      "sha256": "sha256:361a6048591db2539d02a63f5d0fa51ad77a63c07467a84f05983edf37c94268"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/object.js",
-      "source": "workspace_dependency",
-      "bytes": 2497,
-      "sha256": "sha256:adb4715d0e13dafa4bfe27ee2f12a7bf9e1b464a1b15f313bfa6eb61d5558306"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/optional.js",
-      "source": "workspace_dependency",
-      "bytes": 843,
-      "sha256": "sha256:a95e4de5ff5fcd3d954e35bc72afc79122ae21fa22ccf62ffda87ba82c5b364d"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/pipeline.js",
-      "source": "workspace_dependency",
-      "bytes": 843,
-      "sha256": "sha256:849c69aea58c0202ba4dd91554a31274e46f62bb62e8e4f05acf860d214e55b8"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/promise.js",
-      "source": "workspace_dependency",
-      "bytes": 304,
-      "sha256": "sha256:17321b9d654414288a14c9afd6fa143bfb4d3628a71052a25c3f4ee5792f1f39"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/readonly.js",
-      "source": "workspace_dependency",
-      "bytes": 317,
-      "sha256": "sha256:daa4a0057d742d93b637096268355241e84367875851993957c01208943c1642"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/record.js",
-      "source": "workspace_dependency",
-      "bytes": 2514,
-      "sha256": "sha256:748e8948e50ef966cd6fb3d44f00a3de8f8ea91afee5f7db47aeee2cf48540e0"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/set.js",
-      "source": "workspace_dependency",
-      "bytes": 852,
-      "sha256": "sha256:be69b0195ac846df7bbff9892cffbd8ae33caacda5c73ca31972b98a245be00c"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/string.js",
-      "source": "workspace_dependency",
-      "bytes": 15365,
-      "sha256": "sha256:bd01fa160d1d947549181835ea45c7e971dc4722ce3898a749274f614301cfc5"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/tuple.js",
-      "source": "workspace_dependency",
-      "bytes": 1270,
-      "sha256": "sha256:849c4d96bfe8bac8a148c01a318d526ed8e78b1020ba1ee46d7f8956251dea82"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/undefined.js",
-      "source": "workspace_dependency",
-      "bytes": 301,
-      "sha256": "sha256:b960156894b2bd28c27ef2f4993997270d85a4af085fb08513d77d94d956bfbf"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/union.js",
-      "source": "workspace_dependency",
-      "bytes": 3347,
-      "sha256": "sha256:334eef45737d8caab855d132c7bdc34adf97729f3d136ef4a3556e39e3024281"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/parsers/unknown.js",
-      "source": "workspace_dependency",
-      "bytes": 271,
-      "sha256": "sha256:b239e4929d6b69f397a5646d2bfa5ce25df9fb2c2820ffd63b580665467e464d"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/selectParser.js",
-      "source": "workspace_dependency",
-      "bytes": 5685,
-      "sha256": "sha256:877e593bac5eb5cc309bde8b5f4f653042c221c15957cbbf3cbeb0f2c2929dea"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/dist/cjs/zodToJsonSchema.js",
-      "source": "workspace_dependency",
-      "bytes": 3402,
-      "sha256": "sha256:7fa047cc65554e018907f017f5ec8245e2c537a5c638f8f8507571ff8b8ee3e2"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/package.json",
-      "source": "workspace_dependency",
-      "bytes": 2968,
-      "sha256": "sha256:1f78f7c62913083878cd5bb0e9d10b8f5893d5799bbe1295068046707c24de3c"
-    },
-    {
       "path": "risk-fork-hosted-mcp/node_modules/zod/LICENSE",
       "source": "workspace_dependency",
       "bytes": 1072,
@@ -1707,72 +1621,6 @@
       "source": "workspace_dependency",
       "bytes": 3796,
       "sha256": "sha256:c630bd10b52dcf71c112a2bf78dbf2734b9db58d62de663b8d86c2ec2c8cda2e"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/ZodError.cjs",
-      "source": "workspace_dependency",
-      "bytes": 4593,
-      "sha256": "sha256:18d8de3c22805d8f8fe725d5925fe3b65ee46d5a3ce068e83642d335958c6656"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/errors.cjs",
-      "source": "workspace_dependency",
-      "bytes": 579,
-      "sha256": "sha256:bd32dbc86faeec2de1cc8e42ee3b29af2cbeb24fb5e3b57d7f056bb09cf8d4bd"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/external.cjs",
-      "source": "workspace_dependency",
-      "bytes": 1076,
-      "sha256": "sha256:224ff76e204434ec469f71dbba41d475db1ea873d3f3a5c26d75ab3a9c9f5f11"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/helpers/errorUtil.cjs",
-      "source": "workspace_dependency",
-      "bytes": 418,
-      "sha256": "sha256:9c9e5dec7d1e9fce6a967735adf0333abd44d5e94a0225537c60ceed0c4f606a"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/helpers/parseUtil.cjs",
-      "source": "workspace_dependency",
-      "bytes": 4272,
-      "sha256": "sha256:40aaa18765f13ae1a933c6f215ecceb6d3afee89eaa23bb080997e08c30a5b00"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/helpers/typeAliases.cjs",
-      "source": "workspace_dependency",
-      "bytes": 77,
-      "sha256": "sha256:d43aa81f5bc89faa359e0f97c814ba25155591ff078fbb9bfd40f8c7c9683230"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/helpers/util.cjs",
-      "source": "workspace_dependency",
-      "bytes": 4401,
-      "sha256": "sha256:9b75d4955de684d11371054bbf8e4d747cb1ad7284ae1eda85d4c188b84c47fc"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/index.cjs",
-      "source": "workspace_dependency",
-      "bytes": 1464,
-      "sha256": "sha256:d58a1fea61e0f0bccdb2f4fd3b7b098adcfddb44f036302c4d2c4e173540a292"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/locales/en.cjs",
-      "source": "workspace_dependency",
-      "bytes": 6005,
-      "sha256": "sha256:5fe55414e39de7fff8ec19983adc1421c238b679f8aa6b9d3311c7f9f12a21f3"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v3/types.cjs",
-      "source": "workspace_dependency",
-      "bytes": 140156,
-      "sha256": "sha256:9c7618e57545b5e44faecbcfc3bb00eed67ca46efbb11bd1b6ad3a1d69de95eb"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4-mini/index.cjs",
-      "source": "workspace_dependency",
-      "bytes": 1461,
-      "sha256": "sha256:7c39e9eb736f0a705a8127b9837e1bd220fee43b25d3416e91fc1509267bf0db"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/zod/v4/classic/checks.cjs",
@@ -2255,42 +2103,6 @@
       "sha256": "sha256:e534adb851ef96b0678bfa755a4d4440453245fcc8137f801500cbe05e47d491"
     },
     {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/checks.cjs",
-      "source": "workspace_dependency",
-      "bytes": 4141,
-      "sha256": "sha256:751987cbe8e6346d30c25dc3ca04643e3ab7301a83cf31d0ee0ecf4dfb8b9149"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/coerce.cjs",
-      "source": "workspace_dependency",
-      "bytes": 1912,
-      "sha256": "sha256:192c0fa8133f79cb958d02e68dfaad35e37df80f078000c25b974ed2a9d25cad"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/external.cjs",
-      "source": "workspace_dependency",
-      "bytes": 4860,
-      "sha256": "sha256:286a0197505796e76232eebab0d75216b1db86b9dddc00bde0c13b4833911e65"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/iso.cjs",
-      "source": "workspace_dependency",
-      "bytes": 2589,
-      "sha256": "sha256:4bed46b46d2dc8ea8b82477855573807153e62223a5e7e08eea1eb39124e4bff"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/parse.cjs",
-      "source": "workspace_dependency",
-      "bytes": 1830,
-      "sha256": "sha256:3a1db8a15f2d19426e3a774543a1988e11d112c1e345a51b038d33eeaff573ac"
-    },
-    {
-      "path": "risk-fork-hosted-mcp/node_modules/zod/v4/mini/schemas.cjs",
-      "source": "workspace_dependency",
-      "bytes": 35504,
-      "sha256": "sha256:62f365ad92f87398e019c0f49fd3d809fec8ac6929c0eaee1cff879fa1250a9f"
-    },
-    {
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
       "bytes": 4918,
@@ -2329,14 +2141,14 @@
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
       "source": "reviewed_source",
-      "bytes": 12943,
-      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+      "bytes": 14173,
+      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
     },
     {
       "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
       "source": "reviewed_source",
-      "bytes": 30337,
-      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
+      "bytes": 30861,
+      "sha256": "sha256:64fa4076a9c941d390a691f956cb35296e8ce4bac74dc016e5378f15f8b330fd"
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -2395,8 +2207,8 @@
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
       "source": "reviewed_source",
-      "bytes": 113493,
-      "sha256": "sha256:4572865b82363e37e43abfd0138949c3fd09af9b45ecb1f292a743c089783836"
+      "bytes": 117203,
+      "sha256": "sha256:d77681f76cd65e9956cf0650c4b6c97a36dc812f40e2cae0d18265cb29a433ae"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
@@ -2485,14 +2297,14 @@
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
       "source": "reviewed_source",
-      "bytes": 46749,
-      "sha256": "sha256:b2641864ebf1b594a3df42ae1c463d8aa1012ac339df948ccb3fdf00272ea5e8"
+      "bytes": 48209,
+      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
       "source": "reviewed_source",
-      "bytes": 28508,
-      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -2509,8 +2321,8 @@
     {
       "path": "risk-fork/src/taint-gate.mjs",
       "source": "reviewed_source",
-      "bytes": 33013,
-      "sha256": "sha256:a0139961ea5d0fdcacc3109c3ee182d49d5e6dda917413246625a220a4c4a128"
+      "bytes": 35640,
+      "sha256": "sha256:7f12dce93571f701f3d955b96bf6f423d21985562d409c58efc4f3c59215fcf6"
     },
     {
       "path": "risk-fork/src/util.mjs",
@@ -2527,19 +2339,30 @@
   ],
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
-    "bytes": 34222,
-    "sha256": "sha256:40d67bdc1b74834da6d693705b56d225fd69fb29bf86a1be02dcea783e738efc",
+    "bytes": 56885,
+    "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd",
     "sources": [
       {
-        "package": "@modelcontextprotocol/sdk",
-        "version": "1.30.0",
+        "package": "@modelcontextprotocol/core",
+        "version": "2.0.0",
         "declared_license": "MIT",
         "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/LICENSE",
-        "source_bytes": 1071,
-        "source_sha256": "sha256:5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d",
-        "notice_bytes": 1070,
-        "notice_sha256": "sha256:8694aa57bec3f3e9ad0559e91c63a795904e967104efb9d6fc9d153e56f567c2"
+        "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE",
+        "source_bytes": 12227,
+        "source_sha256": "sha256:0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+        "notice_bytes": 12226,
+        "notice_sha256": "sha256:f5854c00454b526e423bde71d45f2ae4d60678833360eac1327b900a79396ea6"
+      },
+      {
+        "package": "@modelcontextprotocol/server",
+        "version": "2.0.0",
+        "declared_license": "MIT",
+        "method": "standalone_license_file",
+        "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/LICENSE",
+        "source_bytes": 12227,
+        "source_sha256": "sha256:0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+        "notice_bytes": 12226,
+        "notice_sha256": "sha256:f5854c00454b526e423bde71d45f2ae4d60678833360eac1327b900a79396ea6"
       },
       {
         "package": "ajv",
@@ -2760,24 +2583,13 @@
         "source_sha256": "sha256:3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
         "notice_bytes": 1071,
         "notice_sha256": "sha256:f61cacc2acb8b71aa79a128b3e732bf25e02aab40747bbbd5bf00c97c9cda28d"
-      },
-      {
-        "package": "zod-to-json-schema",
-        "version": "3.25.2",
-        "declared_license": "ISC",
-        "method": "standalone_license_file",
-        "path": "risk-fork-hosted-mcp/node_modules/zod-to-json-schema/LICENSE",
-        "source_bytes": 745,
-        "source_sha256": "sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4",
-        "notice_bytes": 745,
-        "notice_sha256": "sha256:80d3168ad2f70f6f5bb2ab22b23414707abf6f0a392034891481ae36a1a429d4"
       }
     ]
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2483304,
-    "sha256": "sha256:394ae1c3af2326cf661cc6d27628cbc48b766004ebcb96693a4bea4fa9db03f8"
+    "bytes": 2970388,
+    "sha256": "sha256:a9243c2dd0458cd592a2356c79b6ecdc460f3d127ae196d86b6afcf33d346fa7"
   },
   "packaged_assets": [
     {
@@ -2787,6 +2599,12 @@
       "sha256": "sha256:f92d616fa9900548de8e8d90a5fef33b0dbce594998868e225e48f69c80c3e6d"
     },
     {
+      "path": "LICENSE-MCP-MIT.txt",
+      "source_path": "mcp/LICENSE",
+      "bytes": 1061,
+      "sha256": "sha256:5c4813b2fa0e7f77d4f092688d6aac7809e8ceeae0f8f92f20e0378bcd1774f9"
+    },
+    {
       "path": "NOTICE",
       "source_path": "risk-fork/NOTICE",
       "bytes": 199,
@@ -2794,8 +2612,8 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.txt",
-      "bytes": 34222,
-      "sha256": "sha256:40d67bdc1b74834da6d693705b56d225fd69fb29bf86a1be02dcea783e738efc"
+      "bytes": 56885,
+      "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
@@ -2812,14 +2630,14 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/run.mjs",
       "source_path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 12943,
-      "sha256": "sha256:a15fd85fd5b165566294d5adb9b7c0014b4b4ba348488e9c6d5e3fcac36d2f3a"
+      "bytes": 14173,
+      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs",
       "source_path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
-      "bytes": 30337,
-      "sha256": "sha256:0ed0260c8d920a1c3ab474e83c53b3724f0d61b761a92b5f48be1986df532bd4"
+      "bytes": 30861,
+      "sha256": "sha256:64fa4076a9c941d390a691f956cb35296e8ce4bac74dc016e5378f15f8b330fd"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs",
@@ -2848,8 +2666,8 @@
     {
       "path": "e2b-context/risk-fork/src/mcp-transport-contract.mjs",
       "source_path": "risk-fork/src/mcp-transport-contract.mjs",
-      "bytes": 28508,
-      "sha256": "sha256:b22ad7cc09d67376e8491a56c6653472461a83611573e4a4f5f5af42e33cc9fa"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "e2b-context/risk-fork/src/util.mjs",

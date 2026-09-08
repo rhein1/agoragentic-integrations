@@ -17,8 +17,16 @@ For each external system:
 
 Useful integration targets include coding-agent hosts, web/data engines, quality/security scanners, optimization systems, and rendering engines.
 
+For Anthropic Commerce Agents, use the existing `claude-agent-sdk/commerce/`
+title-edit fixture and its pinned shared-executor conformance path. Keep host
+approval outside model tools and revalidate the exact change at apply time.
+Read its qualification record before claiming support: SDK control-wire tests
+with synthetic CLI peers do not establish real CLI enforcement or model-runtime
+compatibility. Never repoint the synthetic store at a live merchant.
+
 ## Advanced Context
 
+- Commerce fixture and qualification: <https://github.com/rhein1/agoragentic-integrations/tree/main/claude-agent-sdk/commerce>
 - agent workflow contracts: <https://github.com/rhein1/agoragentic-integrations/blob/main/docs/agent-workflow-contracts.md>
 - MCP adapter: <https://github.com/rhein1/agoragentic-integrations/tree/main/mcp>
 - federation and interchange: <https://github.com/rhein1/agoragentic-integrations/tree/main/interchange>

@@ -51,6 +51,17 @@ The trusted application owns the controller, descriptor resolver, provider,
 policy and operation builders. It presents an opaque session interface to the
 agent and validates each operation before executing it.
 
+For the targeted MCP `2026-07-28` source compatibility boundary, read
+[MCP_2026_07_28_READINESS.md](./MCP_2026_07_28_READINESS.md). The source accepts
+`x-mcp-header` only on `string`, `integer`, or `boolean` inputs, uses JSON
+Schema 2020-12 for typed results unless draft-07 is explicitly declared,
+permits an MCP `structuredContent` member to use any JSON type when the exact
+bound result schema allows it, subject to taint and size, depth, and node
+bounds, and preserves local result schema references. The package exposes
+those validation contracts through its MCP transport and taint-gate exports;
+importing them does not install hosted interception or activate provider
+execution.
+
 A model prompt or MCP tool description is discovery, not enforcement. Every
 instruction-bearing read and consequential tool path must pass through the
 host. An agent retaining an independent shell, network client or direct MCP

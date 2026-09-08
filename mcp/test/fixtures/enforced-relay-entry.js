@@ -69,6 +69,12 @@ const boundary = createMcpEnforcementBoundary({
             discovery: cleanImported(openRequest, {
                 protocol_version: MCP_V2_PROTOCOL_VERSION,
                 stateless: true,
+                capabilities: Object.fromEntries(
+                    ['tools', 'resources', 'prompts'].map((key) => [
+                        key,
+                        Object.hasOwn(client.getServerCapabilities() ?? {}, key),
+                    ]),
+                ),
             }),
             async request(request) {
                 let result;

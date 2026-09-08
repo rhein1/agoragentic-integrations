@@ -3,20 +3,20 @@
 > **No repository rename has been executed or authorized.** This is a deterministic dependency inventory and rollback plan.
 
 - Source repository: `rhein1/agoragentic-integrations`
-- Canonical manifest: `2.53.0` as of `2026-09-01`
+- Canonical manifest: `2.54.0` as of `2026-09-01`
 - Safe to rename now: **false**
 - Authorized target: **none**
-- Affected tracked files: **153**
-- Exact repository references: **300**
+- Affected tracked files: **156**
+- Exact repository references: **310**
 
 ## Reference Classes
 
 | Class | Files |
 |---|---:|
-| `installer_or_clone` | 29 |
-| `machine_discovery` | 51 |
-| `package_registry_metadata` | 22 |
-| `public_documentation` | 74 |
+| `installer_or_clone` | 30 |
+| `machine_discovery` | 52 |
+| `package_registry_metadata` | 23 |
+| `public_documentation` | 76 |
 | `raw_content_url` | 2 |
 | `release_or_provenance` | 12 |
 | `reusable_action` | 2 |

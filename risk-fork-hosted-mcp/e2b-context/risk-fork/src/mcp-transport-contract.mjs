@@ -18,9 +18,15 @@ export const RISK_FORK_MCP_CHILD_OPERATION_SCHEMA =
 export const RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA =
   'agoragentic.risk-fork.mcp-destination-policy.v1';
 export const RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA =
-  'agoragentic.risk-fork.mcp-transport-result.v1';
+  'agoragentic.risk-fork.mcp-transport-result.v2';
 export const RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA =
-  'agoragentic.risk-fork.mcp-transport-evidence.v1';
+  'agoragentic.risk-fork.mcp-transport-evidence.v2';
+export const RISK_FORK_MCP_WIRE_METADATA_EVIDENCE_SCHEMA =
+  'agoragentic.risk-fork.mcp-wire-metadata-evidence.v1';
+export const RISK_FORK_MCP_WIRE_REJECTION_EVIDENCE_SCHEMA =
+  'agoragentic.risk-fork.mcp-wire-rejection-evidence.v1';
+export const RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA =
+  'agoragentic.risk-fork.runner-mcp-rejection.v1';
 export const RISK_FORK_MCP_PROTOCOL_VERSION = '2026-07-28';
 export const RISK_FORK_MCP_CLIENT_INFO = Object.freeze({
   name: '@agoragentic/risk-fork',
@@ -35,10 +41,22 @@ export const RISK_FORK_MCP_PHASES = Object.freeze([
   'prompts/list',
   'prompts/get',
 ]);
+export const RISK_FORK_MCP_CACHEABLE_PHASES = Object.freeze([
+  'server/discover',
+  'tools/list',
+  'resources/list',
+  'resources/read',
+  'prompts/list',
+]);
 export const RISK_FORK_MCP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 export const RISK_FORK_MCP_MAX_TIMEOUT_MS = 10 * 60 * 1000;
 export const RISK_FORK_MCP_MAX_DNS_ANSWERS = 64;
 export const RISK_FORK_MCP_MAX_CNAME_DEPTH = 16;
+
+const JSON_SCHEMA_2020_12_URI = 'https://json-schema.org/draft/2020-12/schema';
+const JSON_SCHEMA_DRAFT_07_URI = 'http://json-schema.org/draft-07/schema#';
+const MCP_RESULT_SCHEMA_RESOURCE_URI =
+  'https://agoragentic.com/schema/risk-fork-embedded-mcp-result.json';
 
 const BLOCKED_DNS_SUFFIXES = Object.freeze([
   'localhost',
@@ -153,8 +171,32 @@ const TRANSPORT_EVIDENCE_KEYS = Object.freeze([
   'response_body_hash',
   'wire_result_hash',
   'wire_result_type',
+  'wire_result_metadata',
   'measurements',
   'evidence_hash',
+]);
+const TRANSPORT_EVIDENCE_REQUIRED_KEYS = TRANSPORT_EVIDENCE_KEYS;
+const WIRE_RESULT_METADATA_KEYS = Object.freeze([
+  'schema',
+  'result_type',
+  'cacheable_result',
+  'ttl_ms',
+  'cache_scope',
+  'result_meta_hash',
+  'metadata_hash',
+]);
+const WIRE_RESULT_REJECTION_EVIDENCE_KEYS = Object.freeze([
+  'schema',
+  'phase',
+  'rejection_kind',
+  'reported_result_type',
+  'reported_result_type_hash',
+  'wire_result_hash',
+  'input_requests_hash',
+  'request_state_hash',
+  'automatic_retry',
+  'task_extension_enabled',
+  'subscription_stream_enabled',
 ]);
 const TRANSPORT_MEASUREMENT_KEYS = Object.freeze([
   'dns_query_count',
@@ -194,6 +236,209 @@ function exactJson(left, right) {
   return safeEqual(sha256Ref(left), sha256Ref(right));
 }
 
+function assertMcpImplementation(value, field) {
+  const implementation = assertPlainObject(value, field);
+  for (const key of ['name', 'version']) {
+    if (typeof implementation[key] !== 'string'
+      || implementation[key].length < 1
+      || implementation[key].length > 1024) {
+      throw new TypeError(`${field}.${key} must be a bounded non-empty string`);
+    }
+  }
+  return implementation;
+}
+
+function requireMcpPhase(value) {
+  if (!RISK_FORK_MCP_PHASES.includes(value)) {
+    throw new TypeError('MCP wire-result phase is outside the closed protection profile');
+  }
+  return value;
+}
+
+function rejectionKind(resultType) {
+  if (resultType === 'input_required') return 'mrtr_input_required_unsupported';
+  if (resultType === 'task') return 'task_extension_unsupported';
+  return 'result_type_unsupported';
+}
+
+function rejectionCode(kind) {
+  const codes = {
+    mrtr_input_required_unsupported: 'ERR_RISK_FORK_MCP_INPUT_REQUIRED_UNSUPPORTED',
+    task_extension_unsupported: 'ERR_RISK_FORK_MCP_TASK_UNSUPPORTED',
+    result_type_unsupported: 'ERR_RISK_FORK_MCP_RESULT_TYPE_UNSUPPORTED',
+  };
+  return codes[kind];
+}
+
+export function validateMcpWireResultRejectionEvidence(value, phaseValue) {
+  const evidence = assertPlainObject(value, 'MCP wire-result rejection evidence');
+  exactKeys(
+    evidence,
+    WIRE_RESULT_REJECTION_EVIDENCE_KEYS,
+    'MCP wire-result rejection evidence',
+  );
+  const phase = requireMcpPhase(phaseValue);
+  if (evidence.schema !== RISK_FORK_MCP_WIRE_REJECTION_EVIDENCE_SCHEMA
+    || evidence.phase !== phase
+    || !['input_required', 'task', 'unsupported'].includes(evidence.reported_result_type)
+    || evidence.rejection_kind !== rejectionKind(evidence.reported_result_type)
+    || evidence.automatic_retry !== false
+    || evidence.task_extension_enabled !== false
+    || evidence.subscription_stream_enabled !== false) {
+    throw new TypeError('MCP wire-result rejection evidence is invalid for its phase');
+  }
+  requireSha256Ref(
+    evidence.reported_result_type_hash,
+    'MCP rejected result type hash',
+  );
+  requireSha256Ref(evidence.wire_result_hash, 'MCP rejected wire result hash');
+  for (const [field, label] of [
+    ['input_requests_hash', 'MCP rejected inputRequests hash'],
+    ['request_state_hash', 'MCP rejected requestState hash'],
+  ]) {
+    if (evidence[field] !== null) requireSha256Ref(evidence[field], label);
+  }
+  if (evidence.reported_result_type !== 'unsupported'
+    && !safeEqual(
+      evidence.reported_result_type_hash,
+      sha256Ref(evidence.reported_result_type),
+    )) {
+    throw new TypeError('MCP rejected result type hash mismatch');
+  }
+  if (evidence.reported_result_type === 'input_required'
+    && evidence.input_requests_hash === null
+    && evidence.request_state_hash === null) {
+    throw new TypeError(
+      'MCP input_required rejection evidence lacks an inputRequests or requestState binding',
+    );
+  }
+  return deepFreeze(JSON.parse(canonicalize(evidence)));
+}
+
+export function mcpWireResultRejectionCode(value, phaseValue) {
+  const evidence = validateMcpWireResultRejectionEvidence(value, phaseValue);
+  return rejectionCode(evidence.rejection_kind);
+}
+
+export function createUnsupportedMcpWireResultError(wireResultValue, phaseValue) {
+  const wireResult = assertPlainObject(wireResultValue, 'MCP JSON-RPC result');
+  const phase = requireMcpPhase(phaseValue);
+  const kind = rejectionKind(wireResult.resultType);
+  const evidence = deepFreeze({
+    schema: RISK_FORK_MCP_WIRE_REJECTION_EVIDENCE_SCHEMA,
+    phase,
+    rejection_kind: kind,
+    reported_result_type: typeof wireResult.resultType === 'string'
+      && ['input_required', 'task'].includes(wireResult.resultType)
+      ? wireResult.resultType
+      : 'unsupported',
+    reported_result_type_hash: sha256Ref(
+      Object.hasOwn(wireResult, 'resultType') ? wireResult.resultType : null,
+    ),
+    wire_result_hash: sha256Ref(wireResult),
+    input_requests_hash: Object.hasOwn(wireResult, 'inputRequests')
+      ? sha256Ref(wireResult.inputRequests)
+      : null,
+    request_state_hash: Object.hasOwn(wireResult, 'requestState')
+      ? sha256Ref(wireResult.requestState)
+      : null,
+    automatic_retry: false,
+    task_extension_enabled: false,
+    subscription_stream_enabled: false,
+  });
+  const messages = {
+    mrtr_input_required_unsupported:
+      'MCP input_required result is not accepted by the no-retry protection profile',
+    task_extension_unsupported:
+      'MCP task result is not accepted because the task extension is not enabled',
+    result_type_unsupported: 'MCP JSON-RPC result requires resultType complete',
+  };
+  const error = new Error(messages[kind]);
+  error.name = 'UnsupportedMcpWireResultError';
+  Object.defineProperties(error, {
+    code: { enumerable: true, value: rejectionCode(kind) },
+    rejection_evidence: { enumerable: true, value: evidence },
+  });
+  return error;
+}
+
+export function createMcpWireResultMetadataEvidence(wireResultValue, phaseValue) {
+  const wireResult = assertPlainObject(wireResultValue, 'MCP JSON-RPC result');
+  const phase = requireMcpPhase(phaseValue);
+  if (wireResult.resultType !== 'complete') {
+    throw createUnsupportedMcpWireResultError(wireResult, phase);
+  }
+
+  const cacheableResult = RISK_FORK_MCP_CACHEABLE_PHASES.includes(phase);
+  const hasTtl = Object.hasOwn(wireResult, 'ttlMs');
+  const hasScope = Object.hasOwn(wireResult, 'cacheScope');
+  if (cacheableResult && (!hasTtl || !hasScope)) {
+    throw new TypeError(`MCP ${phase} complete result requires ttlMs and cacheScope`);
+  }
+  if (!cacheableResult && (hasTtl || hasScope)) {
+    throw new TypeError(`MCP ${phase} result must not claim cache metadata`);
+  }
+  if (hasTtl && (!Number.isSafeInteger(wireResult.ttlMs)
+    || wireResult.ttlMs < 0)) {
+    throw new TypeError('MCP cache ttlMs must be a non-negative safe integer');
+  }
+  if (hasScope && !['public', 'private'].includes(wireResult.cacheScope)) {
+    throw new TypeError('MCP cache cacheScope must be public or private');
+  }
+
+  let resultMetaHash = null;
+  if (Object.hasOwn(wireResult, '_meta')) {
+    const resultMeta = assertPlainObject(wireResult._meta, 'MCP result _meta');
+    if (Object.hasOwn(resultMeta, 'io.modelcontextprotocol/serverInfo')) {
+      assertMcpImplementation(
+        resultMeta['io.modelcontextprotocol/serverInfo'],
+        'MCP result _meta io.modelcontextprotocol/serverInfo',
+      );
+    }
+    resultMetaHash = sha256Ref(resultMeta);
+  }
+
+  const evidence = {
+    schema: RISK_FORK_MCP_WIRE_METADATA_EVIDENCE_SCHEMA,
+    result_type: 'complete',
+    cacheable_result: cacheableResult,
+    ttl_ms: hasTtl ? wireResult.ttlMs : null,
+    cache_scope: hasScope ? wireResult.cacheScope : null,
+    result_meta_hash: resultMetaHash,
+    metadata_hash: null,
+  };
+  evidence.metadata_hash = sha256Ref(evidence);
+  return deepFreeze(evidence);
+}
+
+export function validateMcpWireResultMetadataEvidence(value, phaseValue) {
+  const evidence = assertPlainObject(value, 'MCP wire-result metadata evidence');
+  exactKeys(evidence, WIRE_RESULT_METADATA_KEYS, 'MCP wire-result metadata evidence');
+  const phase = requireMcpPhase(phaseValue);
+  const cacheableResult = RISK_FORK_MCP_CACHEABLE_PHASES.includes(phase);
+  if (evidence.schema !== RISK_FORK_MCP_WIRE_METADATA_EVIDENCE_SCHEMA
+    || evidence.result_type !== 'complete'
+    || evidence.cacheable_result !== cacheableResult
+    || (cacheableResult
+      ? (!Number.isSafeInteger(evidence.ttl_ms)
+        || evidence.ttl_ms < 0
+        || !['public', 'private'].includes(evidence.cache_scope))
+      : (evidence.ttl_ms !== null || evidence.cache_scope !== null))) {
+    throw new TypeError('MCP wire-result metadata evidence is invalid for its phase');
+  }
+  if (evidence.result_meta_hash !== null) {
+    requireSha256Ref(evidence.result_meta_hash, 'MCP result _meta hash');
+  }
+  requireSha256Ref(evidence.metadata_hash, 'MCP wire-result metadata evidence hash');
+  if (!safeEqual(
+    evidence.metadata_hash,
+    sha256Ref({ ...evidence, metadata_hash: null }),
+  )) {
+    throw new TypeError('MCP wire-result metadata evidence hash mismatch');
+  }
+  return evidence;
+}
+
 function encodeMcpHeaderValue(value) {
   const text = String(value);
   const sentinel = text.startsWith('=?base64?') && text.endsWith('?=');
@@ -226,7 +471,9 @@ function collectMcpParameterHeaderSpecs(inputSchema) {
         throw new TypeError('MCP x-mcp-header name is invalid');
       }
       if (!['string', 'integer', 'boolean'].includes(node.type)) {
-        throw new TypeError('MCP x-mcp-header must annotate a string, integer, or boolean');
+        throw new TypeError(
+          'MCP x-mcp-header must annotate a string, integer, or boolean',
+        );
       }
       const normalizedName = annotation.toLowerCase();
       if (names.has(normalizedName)) {
@@ -301,9 +548,10 @@ export function createMcpWireHeaders(operationValue) {
     for (const spec of collectMcpParameterHeaderSpecs(inputSchema)) {
       const extracted = valueAtOwnPath(argumentsValue, spec.path);
       if (!extracted.present || extracted.value === null) continue;
-      if ((spec.type === 'integer'
-          && (!Number.isSafeInteger(extracted.value)))
-        || (spec.type !== 'integer' && typeof extracted.value !== spec.type)) {
+      const typeMatches = spec.type === 'integer'
+        ? Number.isSafeInteger(extracted.value)
+        : typeof extracted.value === spec.type;
+      if (!typeMatches) {
         throw new TypeError(`MCP ${spec.header} value does not match its annotated type`);
       }
       headers[spec.header] = encodeMcpHeaderValue(extracted.value);
@@ -440,9 +688,31 @@ function measurementSchema() {
   };
 }
 
+function mcpResultSchemaDialect(schema) {
+  if (!Object.hasOwn(schema, '$schema')) return JSON_SCHEMA_2020_12_URI;
+  if (typeof schema.$schema !== 'string') {
+    throw new TypeError('MCP result schema $schema must be a string');
+  }
+  const declared = schema.$schema.replace(/#$/, '');
+  if (declared === JSON_SCHEMA_2020_12_URI) return JSON_SCHEMA_2020_12_URI;
+  if (declared === JSON_SCHEMA_DRAFT_07_URI.slice(0, -1)) {
+    return JSON_SCHEMA_DRAFT_07_URI;
+  }
+  throw new TypeError('MCP result schema declares an unsupported JSON Schema dialect');
+}
+
+function isolateMcpResultSchemaResource(schema) {
+  if (Object.hasOwn(schema, '$id')) return schema;
+  return {
+    $id: MCP_RESULT_SCHEMA_RESOURCE_URI,
+    ...schema,
+  };
+}
+
 export function createMcpTransportResultSchema(mcpResultSchema) {
   assertPlainObject(mcpResultSchema, 'MCP result schema');
   return deepFreeze({
+    $schema: mcpResultSchemaDialect(mcpResultSchema),
     type: 'object',
     additionalProperties: false,
     required: ['schema', 'transport_evidence', 'mcp_result'],
@@ -451,7 +721,7 @@ export function createMcpTransportResultSchema(mcpResultSchema) {
       transport_evidence: {
         type: 'object',
         additionalProperties: false,
-        required: [...TRANSPORT_EVIDENCE_KEYS],
+        required: [...TRANSPORT_EVIDENCE_REQUIRED_KEYS],
         properties: {
           schema: { const: RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA },
           destination_policy_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
@@ -480,11 +750,40 @@ export function createMcpTransportResultSchema(mcpResultSchema) {
           response_body_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
           wire_result_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
           wire_result_type: { const: 'complete' },
+          wire_result_metadata: {
+            type: 'object',
+            additionalProperties: false,
+            required: [...WIRE_RESULT_METADATA_KEYS],
+            properties: {
+              schema: { const: RISK_FORK_MCP_WIRE_METADATA_EVIDENCE_SCHEMA },
+              result_type: { const: 'complete' },
+              cacheable_result: { type: 'boolean' },
+              ttl_ms: {
+                anyOf: [
+                  { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+                  { type: 'null' },
+                ],
+              },
+              cache_scope: {
+                anyOf: [
+                  { type: 'string', enum: ['public', 'private'] },
+                  { type: 'null' },
+                ],
+              },
+              result_meta_hash: {
+                anyOf: [
+                  { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+                  { type: 'null' },
+                ],
+              },
+              metadata_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
+            },
+          },
           measurements: measurementSchema(),
           evidence_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
         },
       },
-      mcp_result: mcpResultSchema,
+      mcp_result: isolateMcpResultSchemaResource(mcpResultSchema),
     },
   });
 }
@@ -567,11 +866,7 @@ export function verifyMcpTransportResult(value, operationValue) {
     value.transport_evidence,
     'Risk Fork MCP transport evidence',
   );
-  exactKeys(
-    evidence,
-    TRANSPORT_EVIDENCE_KEYS,
-    'Risk Fork MCP transport evidence',
-  );
+  exactKeys(evidence, TRANSPORT_EVIDENCE_KEYS, 'Risk Fork MCP transport evidence');
   const destination = operation.destination_policy;
   const parsed = new URL(destination.requested_url);
   if (evidence.schema !== RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA
@@ -590,6 +885,7 @@ export function verifyMcpTransportResult(value, operationValue) {
   requireSha256Ref(evidence.request_body_hash, 'Risk Fork MCP request body hash');
   requireSha256Ref(evidence.response_body_hash, 'Risk Fork MCP response body hash');
   requireSha256Ref(evidence.wire_result_hash, 'Risk Fork MCP wire result hash');
+  validateMcpWireResultMetadataEvidence(evidence.wire_result_metadata, operation.phase);
   if (!Array.isArray(evidence.cname_chain)
     || evidence.cname_chain.length < 1
     || evidence.cname_chain.length > RISK_FORK_MCP_MAX_CNAME_DEPTH

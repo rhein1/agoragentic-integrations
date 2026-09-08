@@ -1,0 +1,28 @@
+{
+  "schema": "agoragentic.anchor-safe-pay.owner-mandate.v1",
+  "mandate_ref": "mandate:fixture-2030-01",
+  "principal_ref": "owner:fixture",
+  "agent_ref": "agent:safe-pay-demo",
+  "authority_granted": true,
+  "authority_evidence": "caller_supplied_local_fixture",
+  "allowed_actions": [
+    "x402_payment_send"
+  ],
+  "allowed_recipients": [
+    "0x1111111111111111111111111111111111111111",
+    "0x2222222222222222222222222222222222222222"
+  ],
+  "allowed_assets": [
+    "USDC",
+    "EURC"
+  ],
+  "allowed_networks": [
+    "eip155:8453",
+    "eip155:84532"
+  ],
+  "per_action_limit_atomic": "1500000",
+  "cumulative_limit_atomic": "2000000",
+  "approval_required": true,
+  "issued_at": "2029-12-31T00:00:00.000Z",
+  "expires_at": "2030-01-02T00:00:00.000Z"
+}

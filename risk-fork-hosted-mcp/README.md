@@ -2,11 +2,12 @@
 
 This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.1` into one integrity-bound ESM file. Upstream source inputs are pinned by a sorted exact-digest inventory in `integrity-manifest.json`; packaged operational assets are independently exact-hashed. Reviewed UTF-8 source bytes canonicalize CRLF pairs to LF while preserving lone CR bytes. Ordinary builds require no Git history or object database, reject mismatched source, and accept a changed digest only through the explicit `--refresh-reviewed-sources` review action.
 
-The artifact supplies library code only. It exports the source-only Risk Fork MCP
-host adapter contract, but no provider in the bundle implements its child-side
-MCP transport. It does not supply a production host, credentials, trust decisions,
-deployment authority, approval, or permission to route live traffic. Publication
-is deliberately disabled.
+The artifact supplies library code only. It bundles the reviewed default-off
+child transport and E2B adapter source, but no bundled provider has a
+live-enabled or qualified execution path, and it supplies no operational
+provider. It does not supply a production host, credentials, trust decisions,
+deployment authority, approval, or permission to route live traffic.
+Publication is deliberately disabled.
 
 ## Private host contract
 
@@ -44,6 +45,19 @@ terminal reconciliation is qualified.
 The lower-level `MCP_ENFORCEMENT_SCHEMAS` and clean-import helpers remain exported
 for contract verification. A custom host adapter using them is responsible for
 the same opaque-session, exact-binding, cleanup, and no-bypass invariants.
+
+The bundled validator implements the following targeted MCP `2026-07-28` Tools
+schema rules.
+`x-mcp-header` may annotate only `string`, `integer`, or `boolean` parameters;
+`number` declarations and non-safe-integer runtime values fail before an
+outbound MCP request. Typed results use JSON Schema 2020-12 by default, retain
+only explicit draft-07 compatibility, and reject unsupported declared
+dialects. An MCP `structuredContent` member may use any JSON type, including an
+array or primitive, when the exact bound result schema permits it, subject
+to taint and size, depth, and node bounds. Local pointer, nested-resource, and
+anchor references in that schema remain resolvable after embedding in the
+host-owned envelope. These source and bundle validation rules are not a claim
+of full hosted MCP conformance or live provider qualification.
 
 The embedding host owns trusted planning, owner policy, and the outer kill switch.
 The provider executor must own and enforce the actual child network allowlist,
@@ -96,4 +110,4 @@ npm run verify
 # equivalent: node scripts/verify-integrity.mjs
 ```
 
-`integrity-manifest.json` records the source-attestation normalization contract, sorted reviewed-source digest inventory, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. The bundle is licensed under Apache-2.0. Its top-level `LICENSE` and `NOTICE` are exact, integrity-bound copies of the canonicalized reviewed Risk Fork core files, so Risk Fork attribution survives both the build and npm packing. `THIRD_PARTY_NOTICES.txt` remains separate and is generated from exact dependency source bytes under each dependency's original license: a standalone license file is preferred, discovered from the package's actual directory entries, and recorded with its exact on-disk casing. Ambiguous or non-file license entries fail closed. Only the reviewed `pg-types@2.2.0` and `pgpass@1.0.5` fallbacks may use their complete single README license sections. The source path, byte count, source hash, extraction method, extracted byte count, and extracted hash are recorded and verified; a missing, ambiguous, unsupported, or incomplete fallback fails the build. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.
+`integrity-manifest.json` records the source-attestation normalization contract, sorted reviewed-source digest inventory, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. The bundle is licensed under Apache-2.0. Its top-level `LICENSE` and `NOTICE` are exact, integrity-bound copies of the canonicalized reviewed Risk Fork core files, so Risk Fork attribution survives both the build and npm packing. The separately bundled MIT-licensed `agoragentic-mcp` source retains its complete ACRE copyright and permission notice in the exact, integrity-bound `LICENSE-MCP-MIT.txt` artifact. `THIRD_PARTY_NOTICES.txt` remains separate and is generated from exact dependency source bytes under each dependency's original license: a standalone license file is preferred, discovered from the package's actual directory entries, and recorded with its exact on-disk casing. Ambiguous or non-file license entries fail closed. Only the reviewed `pg-types@2.2.0` and `pgpass@1.0.5` fallbacks may use their complete single README license sections. The source path, byte count, source hash, extraction method, extracted byte count, and extracted hash are recorded and verified; a missing, ambiguous, unsupported, or incomplete fallback fails the build. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.

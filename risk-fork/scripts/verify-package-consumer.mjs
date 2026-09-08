@@ -51,9 +51,13 @@ try {
   const included = new Set(entry.files.map(file => file.path));
   for (const expected of [
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
-    'CLIENT_ADOPTION.md', 'clients/one-tool-stdio-gate.mjs',
+    'CLIENT_ADOPTION.md', 'MCP_2026_07_28_READINESS.md',
+    'managed-service/DEPLOYMENT_GATES.md', 'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
-    'src/mcp-host-adapter.mjs', 'src/mcp-transport-contract.mjs',
+    'src/mcp-host-adapter.mjs', 'src/mcp-portable-handle-boundary.mjs',
+    'src/mcp-transport-contract.mjs',
+    'schema/fixtures/mcp-2026-07-28-structured-content.json',
+    'schema/fixtures/mcp-2026-07-28-x-mcp-header.json',
     'e2b-template/lib/mcp-http-phase.mjs', 'examples/mcp-host-adapter.mjs',
     'src/framework-tool-adapter.mjs', 'src/frameworks/openai-agents.mjs',
     'src/frameworks/langchain.mjs', 'src/frameworks/langgraph.mjs',
@@ -69,6 +73,7 @@ try {
     'GETTING_STARTED.md',
     'AUTHORS.md',
     'MCP_HOST_ADAPTER.md',
+    'MCP_2026_07_28_READINESS.md',
     'FRAMEWORK_ADAPTERS.md',
     'CLIENT_ADOPTION.md',
   ]) {
@@ -171,6 +176,7 @@ try {
     import * as core from '@agoragentic/risk-fork';
     import * as host from '@agoragentic/risk-fork/host-boundary';
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
+    import * as portableHandles from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
     import * as mcpTransport from '@agoragentic/risk-fork/mcp-transport-contract';
     import * as mcpRuntime from '@agoragentic/risk-fork/e2b-template/mcp-http-phase';
     import * as framework from '@agoragentic/risk-fork/framework-tool-adapter';
@@ -185,9 +191,100 @@ try {
     assert.equal(typeof mcp.createRiskForkMcpHostAdapter, 'function');
     assert.equal(typeof mcp.createTrustedRiskForkMcpPhasePlanSource, 'function');
     assert.equal(typeof mcpTransport.validateMcpHttpPhaseOperation, 'function');
+    for (const type of ['string', 'integer', 'boolean']) {
+      assert.equal(mcpTransport.validateMcpToolHeaderAnnotations({
+        type: 'object',
+        properties: { value: { type, 'x-mcp-header': 'Value' } },
+      }), true);
+    }
+    assert.throws(
+      () => mcpTransport.validateMcpToolHeaderAnnotations({
+        type: 'object',
+        properties: { value: { type: 'number', 'x-mcp-header': 'Value' } },
+      }),
+      /string, integer, or boolean/i,
+    );
+    assert.equal(
+      mcpTransport.createMcpTransportResultSchema({ type: 'object' }).$schema,
+      'https://json-schema.org/draft/2020-12/schema',
+    );
+    assert.equal(
+      mcpTransport.createMcpTransportResultSchema({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+      }).$schema,
+      'http://json-schema.org/draft-07/schema#',
+    );
+    const structuredContentSchema = {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      additionalProperties: false,
+      required: ['structuredContent'],
+      properties: { structuredContent: true },
+    };
+    const validatePackedResult = (payload, payloadSchema) => core.validateCommitCandidate({
+      candidate: {
+        type: 'TYPED_RESULT',
+        payload,
+        payload_schema: payloadSchema,
+      },
+      source_fork_id: 'fork:packed-consumer-schema',
+      validated_at: '2026-09-08T00:00:00.000Z',
+    });
+    for (const structuredContent of [['array', 2], 'primitive', 1.25, true, null]) {
+      const artifact = validatePackedResult({ structuredContent }, structuredContentSchema);
+      assert.deepEqual(artifact.body.payload.structuredContent, structuredContent);
+    }
+    const prefixItemsSchema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['structuredContent'],
+      properties: {
+        structuredContent: {
+          type: 'array',
+          prefixItems: [{ const: 'label' }, { type: 'integer' }],
+          items: false,
+          minItems: 2,
+        },
+      },
+    };
+    assert.deepEqual(
+      validatePackedResult({ structuredContent: ['label', 7] }, prefixItemsSchema)
+        .body.payload.structuredContent,
+      ['label', 7],
+    );
+    assert.throws(
+      () => validatePackedResult({ structuredContent: ['label', '7'] }, prefixItemsSchema),
+      /does not satisfy its schema/i,
+    );
+    const nestedLocalRefSchema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['value'],
+      properties: {
+        value: {
+          $id: 'https://public-example.net/schema/packed-local-ref.json',
+          $defs: { accepted: { type: 'string' } },
+          $ref: '#/$defs/accepted',
+        },
+      },
+    };
+    assert.equal(
+      validatePackedResult({ value: 'accepted' }, nestedLocalRefSchema).body.payload.value,
+      'accepted',
+    );
+    assert.throws(
+      () => validatePackedResult({ value: 7 }, nestedLocalRefSchema),
+      /does not satisfy its schema/i,
+    );
     assert.equal(typeof mcpRuntime.createMcpHttpPhaseRuntime, 'function');
     assert.equal(mcpRuntime.isMcpHttpPhaseRuntime(mcpRuntime.executeMcpHttpPhase), true);
     assert.equal(core.createRiskForkMcpHostAdapter, mcp.createRiskForkMcpHostAdapter);
+    assert.equal(typeof portableHandles.createMcpPortableHandleRegistry, 'function');
+    assert.equal(
+      core.createMcpPortableHandleRegistry,
+      portableHandles.createMcpPortableHandleRegistry,
+    );
     assert.equal(typeof framework.createRiskForkFrameworkToolAdapter, 'function');
     assert.equal(typeof framework.createTrustedRiskForkFrameworkExecutor, 'function');
     assert.equal(typeof openai.createOpenAIAgentsRiskForkTool, 'function');

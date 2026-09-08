@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+- Align `x-mcp-header` with the final MCP 2026-07-28 Tools specification by
+  permitting only `string`, `integer`, and `boolean` annotations and rejecting
+  JSON Schema `number` declarations before the outbound MCP request.
+- Validate typed results with JSON Schema 2020-12 by default while preserving
+  explicit draft-07 compatibility; add final-spec fixtures for 2020-12 tuple
+  semantics and array or primitive MCP `structuredContent` values, and preserve
+  local result-schema references after transport-envelope embedding.
+- Make the POSIX client-adoption backlog fixture publish its test-only counter
+  with an atomic same-directory rename so concurrent polling cannot observe a
+  truncate/write intermediate state. Product concurrency limits are unchanged.
+- Target the stateless MCP `2026-07-28` wire contract: validate complete-result
+  metadata and cache hints, retain only bounded hash evidence for result
+  `_meta`, require that evidence in versioned v2 transport results, and return
+  typed no-retry errors for unsupported MRTR and Tasks.
+- Add an explicit process-local portable-handle registry that binds recognized
+  handles to a host-derived principal hash, issuer, audience/origin, allowed
+  consuming methods, originating and consuming request hashes, expiry, and
+  replay limits. It is not wired into hosted admission and is not durable.
+- Reject MCP Apps declarations, UI resources, and active HTML at the local
+  relay import boundary by default. A separately qualified renderer, CSP,
+  domain policy, and message bridge remain required before enabling Apps.
+- Add an MCP 2026-07-28 readiness record that keeps MRTR, Tasks,
+  subscriptions, authenticated remote MCP, provider qualification, deployment,
+  activation, and live protection explicitly incomplete.
+
 ## 0.1.0-alpha.1 — release candidate
 
 - Add default-off, source-only OpenAI Agents JS, LangChain JS, and LangGraph JS

@@ -15,6 +15,7 @@ on:
       - 'cursor/**'
       - 'gemini-cli/**'
       - 'claude-code/**'
+      - 'claude-agent-sdk/**'
       - 'cline/**'
       - 'gemini-extension.json'
       - 'GEMINI.md'
@@ -24,6 +25,7 @@ on:
       - 'mcp/**'
       - 'deepagents/**'
       - 'langchain/**'
+      - 'smolagents/**'
       - 'glama.json'
       - 'micro-ecf/**'
       - 'harness-core/**'
@@ -407,16 +409,30 @@ jobs:
         uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
+      - name: Install smolagents runtime contract dependency
+        run: python -m pip install "smolagents==1.24.0"
       - name: Test forked conformance agent
         run: |
           node --test test/adapter-conformance-agent.test.mjs
           node --test test/adapter-conformance-worker-order.test.mjs
       - name: Test framework adapter contracts
+        env:
+          AGORAGENTIC_REQUIRE_REAL_SMOLAGENTS: '1'
         run: |
           node --test test/framework-adapter-contracts.test.mjs
           node --test world-agentkit/adapter.test.mjs
       - name: Validate every integration offline
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
+      - name: Qualify pinned Commerce shared executor and Python SDK wire contract
+        run: python claude-agent-sdk/commerce/qualify.py --checkout "${RUNNER_TEMP}/commerce-upstream" --venv "${RUNNER_TEMP}/commerce-venv"
+      - name: Qualify Claude TypeScript SDK wire contract and canonical Harness schemas
+        working-directory: claude-agent-sdk
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=moderate
+          npm run typecheck
+          npm test
+          npm run test:cli
       - name: Upload conformance evidence
         if: always()
         uses: actions/upload-artifact@v7.0.1

@@ -488,9 +488,12 @@ serveTest('stdio client gate cancellation releases slots and tolerates one bound
 
       const countFile = path.join(session.temporaryRoot, 'gateway-operation-count.txt');
       let gatewayOperationCount = 0;
-      for (let attempt = 0; attempt < 100; attempt += 1) {
+      for (let attempt = 0; attempt < 500; attempt += 1) {
         try {
-          gatewayOperationCount = Number.parseInt(await readFile(countFile, 'utf8'), 10);
+          const serializedCount = await readFile(countFile, 'utf8');
+          if (/^(?:0|[1-9]\d*)$/.test(serializedCount)) {
+            gatewayOperationCount = Number(serializedCount);
+          }
         } catch {}
         if (gatewayOperationCount === 32) break;
         await delay(10);
@@ -503,7 +506,7 @@ serveTest('stdio client gate cancellation releases slots and tolerates one bound
       const outcome = await withTimeout(session.exit, 2_000);
       assert.notEqual(outcome, null, 'cancelled backlog overflow must terminate promptly');
       assert.equal(outcome.code, 78);
-      assert.equal(Number.parseInt(await readFile(countFile, 'utf8'), 10), 32);
+      assert.equal(await readFile(countFile, 'utf8'), '32');
       assert.deepEqual(
         session.messages.filter((message) => Number.isInteger(message.id) && message.id <= 16),
         [],

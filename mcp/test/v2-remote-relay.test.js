@@ -38,6 +38,11 @@ const RELAY_ENTRYPOINT = path.join(PACKAGE_ROOT, 'mcp-server.js');
 const ENFORCED_RELAY_ENTRYPOINT = path.join(__dirname, 'fixtures', 'enforced-relay-entry.js');
 const FIXTURE_API_KEY = 'amk_loopback_fixture_key';
 const REGISTERED_FIXTURE_API_KEY = 'amk_loopback_registered_key';
+const TEST_DISCOVERY_CAPABILITIES = Object.freeze({
+    tools: true,
+    resources: true,
+    prompts: true,
+});
 
 function createFixtureServer({ onRequest, onResponse } = {}) {
     const requests = [];
@@ -130,6 +135,9 @@ function createFixtureServer({ onRequest, onResponse } = {}) {
 }
 
 function cleanImported(request, result) {
+    const importedResult = request.phase === 'server/discover'
+        ? { capabilities: TEST_DISCOVERY_CAPABILITIES, ...result }
+        : result;
     const evidenceRef = `loopback:${request.request_id}`;
     return {
         schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
@@ -141,10 +149,10 @@ function cleanImported(request, result) {
         evidence_ref: evidenceRef,
         evidence_hash: computeMcpCleanImportEvidenceHash(
             request.request_hash,
-            result,
+            importedResult,
             evidenceRef,
         ),
-        result,
+        result: importedResult,
     };
 }
 
@@ -186,6 +194,12 @@ function createLoopbackBoundary({ apiKey = '', beforeOpen, onPhase, importResult
                 discovery: cleanImported(openRequest, {
                     protocol_version: MCP_V2_PROTOCOL_VERSION,
                     stateless: true,
+                    capabilities: Object.fromEntries(
+                        ['tools', 'resources', 'prompts'].map((key) => [
+                            key,
+                            Object.hasOwn(client.getServerCapabilities() ?? {}, key),
+                        ]),
+                    ),
                 }),
                 async request(request) {
                     onPhase?.(request);
@@ -244,6 +258,7 @@ function spawnLegacyStdioClient(
     });
     const pending = new Map();
     const stderr = [];
+    const messages = [];
     let nextId = 1;
     const output = readline.createInterface({ input: child.stdout });
 
@@ -254,6 +269,7 @@ function spawnLegacyStdioClient(
         } catch {
             return;
         }
+        messages.push(message);
         const pendingRequest = pending.get(message.id);
         if (!pendingRequest) return;
         pending.delete(message.id);
@@ -278,11 +294,29 @@ function spawnLegacyStdioClient(
         });
     }
 
+    function requestModern(method, params = {}) {
+        return request(method, {
+            ...params,
+            _meta: {
+                'io.modelcontextprotocol/protocolVersion': MCP_V2_PROTOCOL_VERSION,
+                'io.modelcontextprotocol/clientCapabilities': {},
+                'io.modelcontextprotocol/clientInfo': {
+                    name: 'modern-stdio-fixture',
+                    version: '1.0.0',
+                },
+            },
+        });
+    }
+
     return {
         child,
         request,
+        requestModern,
         getStderr() {
             return stderr.join('');
+        },
+        getMessages() {
+            return [...messages];
         },
         async initialize() {
             const initialized = await request('initialize', {
@@ -301,6 +335,96 @@ function spawnLegacyStdioClient(
             output.close();
             if (!child.killed) child.kill();
             await new Promise((resolve) => child.once('exit', resolve));
+        },
+    };
+}
+
+function spawnInlineMcpRelay(source) {
+    const child = spawn(process.execPath, ['-e', source], {
+        cwd: PACKAGE_ROOT,
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const output = readline.createInterface({ input: child.stdout });
+    const pending = new Map();
+    const messages = [];
+    let stderr = '';
+    let nextId = 1;
+    output.on('line', (line) => {
+        const message = JSON.parse(line);
+        messages.push(message);
+        const waiter = pending.get(message.id);
+        if (!waiter) return;
+        pending.delete(message.id);
+        waiter.resolve(message);
+    });
+    child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+    });
+    const exit = new Promise((resolve) => child.once(
+        'exit',
+        (code, signal) => resolve({ code, signal }),
+    ));
+
+    function request(method, params = {}) {
+        const id = nextId++;
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                pending.delete(id);
+                reject(new Error(`inline MCP relay timed out waiting for ${method}\n${stderr}`));
+            }, 5000);
+            pending.set(id, {
+                resolve(message) {
+                    clearTimeout(timeout);
+                    resolve(message);
+                },
+            });
+            child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+        });
+    }
+
+    return {
+        child,
+        exit,
+        messages,
+        request,
+        requestModern(method, params = {}) {
+            return request(method, {
+                ...params,
+                _meta: {
+                    'io.modelcontextprotocol/protocolVersion': MCP_V2_PROTOCOL_VERSION,
+                    'io.modelcontextprotocol/clientCapabilities': {},
+                    'io.modelcontextprotocol/clientInfo': {
+                        name: 'inline-relay-fixture',
+                        version: '1.0.0',
+                    },
+                },
+            });
+        },
+        getStderr: () => stderr,
+        waitForStderr(pattern, timeoutMs = 5000) {
+            return new Promise((resolve, reject) => {
+                if (pattern.test(stderr)) {
+                    resolve();
+                    return;
+                }
+                const timeout = setTimeout(() => {
+                    child.stderr.off('data', onData);
+                    reject(new Error(`inline MCP relay did not emit ${pattern}\n${stderr}`));
+                }, timeoutMs);
+                function onData() {
+                    pattern.lastIndex = 0;
+                    if (!pattern.test(stderr)) return;
+                    clearTimeout(timeout);
+                    child.stderr.off('data', onData);
+                    resolve();
+                }
+                child.stderr.on('data', onData);
+            });
+        },
+        async forceClose() {
+            output.close();
+            if (child.exitCode === null && child.signalCode === null) child.kill();
+            await exit;
         },
     };
 }
@@ -436,6 +560,104 @@ test('the factory-created host capability owns server/discover before remote I/O
         await closeRemoteSession(remoteSession);
         await fixture.close();
     }
+});
+
+test('empty remote capabilities perform no phase calls and missing capability evidence fails closed', async () => {
+    const noCapabilities = Object.freeze({ tools: false, resources: false, prompts: false });
+    let phaseCalls = 0;
+    let closes = 0;
+    const emptyBoundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                    capabilities: noCapabilities,
+                }),
+                async request() {
+                    phaseCalls += 1;
+                    throw new Error('an unadvertised phase must never reach the host');
+                },
+                async close() {
+                    closes += 1;
+                },
+            };
+        },
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    const session = await connectRemoteClient({
+        remoteUrl: 'https://empty-capabilities.example.invalid/api/mcp',
+        enforcementBoundary: emptyBoundary,
+    });
+    assert.deepEqual(session.capabilities, noCapabilities);
+    for (const operation of [
+        () => session.listTools(),
+        () => session.callTool({ name: 'not_advertised', arguments: {} }),
+        () => session.listResources(),
+        () => session.readResource({ uri: 'agoragentic://not-advertised' }),
+        () => session.listPrompts(),
+        () => session.getPrompt({ name: 'not-advertised' }),
+    ]) {
+        await assert.rejects(
+            operation(),
+            (error) => error?.code === 'MCP_REMOTE_CAPABILITY_NOT_ADVERTISED',
+        );
+    }
+    assert.equal(phaseCalls, 0);
+    await session.close();
+    assert.equal(closes, 1);
+
+    let missingCapabilityPhaseCalls = 0;
+    let missingCapabilityCloses = 0;
+    const missingBoundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            const result = {
+                protocol_version: MCP_V2_PROTOCOL_VERSION,
+                stateless: true,
+            };
+            const evidenceRef = `missing-capabilities:${openRequest.request_id}`;
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: {
+                    schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+                    request_id: openRequest.request_id,
+                    request_hash: openRequest.request_hash,
+                    phase: openRequest.phase,
+                    clean_imported: true,
+                    authority_granted: false,
+                    evidence_ref: evidenceRef,
+                    evidence_hash: computeMcpCleanImportEvidenceHash(
+                        openRequest.request_hash,
+                        result,
+                        evidenceRef,
+                    ),
+                    result,
+                },
+                async request() {
+                    missingCapabilityPhaseCalls += 1;
+                },
+                async close() {
+                    missingCapabilityCloses += 1;
+                },
+            };
+        },
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    await assert.rejects(
+        connectRemoteClient({
+            remoteUrl: 'https://missing-capabilities.example.invalid/api/mcp',
+            enforcementBoundary: missingBoundary,
+        }),
+        (error) => error?.code === 'MCP_REMOTE_CAPABILITY_PROFILE_REJECTED'
+            && /discovery result\.capabilities/.test(error?.message ?? ''),
+    );
+    assert.equal(missingCapabilityPhaseCalls, 0);
+    assert.equal(missingCapabilityCloses, 1);
 });
 
 test('does not retain a registration-returned key for later stateless requests', async () => {
@@ -822,6 +1044,228 @@ test('refuses fallback decisions when remote tool pagination cannot be completed
     }
 });
 
+test('stdio advertises no remote families when discovery capabilities are all false', async () => {
+    const source = `
+        const mcp = require(${JSON.stringify(RELAY_ENTRYPOINT)});
+        function cleanImported(request, result) {
+            const evidenceRef = 'capability-profile:' + request.request_id;
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+                request_id: request.request_id,
+                request_hash: request.request_hash,
+                phase: request.phase,
+                clean_imported: true,
+                authority_granted: false,
+                evidence_ref: evidenceRef,
+                evidence_hash: mcp.computeMcpCleanImportEvidenceHash(
+                    request.request_hash,
+                    result,
+                    evidenceRef,
+                ),
+                result,
+            };
+        }
+        const boundary = mcp.createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                return {
+                    schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                        capabilities: { tools: false, resources: false, prompts: false },
+                    }),
+                    async request(request) {
+                        console.error('UNADVERTISED_PHASE_CALLED ' + request.phase);
+                        throw new Error('unadvertised phase must not run');
+                    },
+                    async close() {
+                        console.error('CAPABILITY_PROFILE_CLOSE_FINISHED');
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+        mcp.runMcpRelay({ enforcementBoundary: boundary }).catch((error) => {
+            console.error(error);
+            process.exit(1);
+        });
+    `;
+    const relay = spawnInlineMcpRelay(source);
+    try {
+        await relay.waitForStderr(/stdio relay/);
+        const discover = await relay.requestModern('server/discover');
+        assert.deepEqual(discover.result.capabilities, {});
+
+        const unadvertised = await relay.requestModern('tools/list');
+        assert.equal(unadvertised.error.code, -32601);
+        assert.doesNotMatch(relay.getStderr(), /UNADVERTISED_PHASE_CALLED/);
+
+        relay.child.stdin.end();
+        const outcome = await relay.exit;
+        assert.deepEqual(outcome, { code: 0, signal: null }, relay.getStderr());
+        assert.match(relay.getStderr(), /CAPABILITY_PROFILE_CLOSE_FINISHED/);
+    } finally {
+        if (relay.child.exitCode === null && relay.child.signalCode === null) {
+            await relay.forceClose();
+        }
+    }
+});
+
+test('stdio shutdown awaits a late probe-to-legacy remote session cleanup', async () => {
+    const source = `
+        const mcp = require(${JSON.stringify(RELAY_ENTRYPOINT)});
+        let opens = 0;
+        function cleanImported(request, result) {
+            const evidenceRef = 'late-factory:' + request.request_id;
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+                request_id: request.request_id,
+                request_hash: request.request_hash,
+                phase: request.phase,
+                clean_imported: true,
+                authority_granted: false,
+                evidence_ref: evidenceRef,
+                evidence_hash: mcp.computeMcpCleanImportEvidenceHash(
+                    request.request_hash,
+                    result,
+                    evidenceRef,
+                ),
+                result,
+            };
+        }
+        const boundary = mcp.createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                opens += 1;
+                const index = opens;
+                if (index === 2) {
+                    console.error('SECOND_OPEN_STARTED');
+                    await new Promise((resolve) => setTimeout(resolve, 150));
+                    console.error('SECOND_OPEN_RESOLVED');
+                }
+                return {
+                    schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
+                    }),
+                    async request(request) {
+                        if (request.phase === 'tools/list') {
+                            return cleanImported(request, { tools: [] });
+                        }
+                        throw new Error('unexpected phase ' + request.phase);
+                    },
+                    async close() {
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                        console.error(index === 2 ? 'SECOND_CLOSE_FINISHED' : 'FIRST_CLOSE_FINISHED');
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+        mcp.runMcpRelay({ enforcementBoundary: boundary }).catch((error) => {
+            console.error(error);
+            process.exit(1);
+        });
+    `;
+    const relay = spawnInlineMcpRelay(source);
+    try {
+        await relay.waitForStderr(/stdio relay/);
+        const discover = await relay.requestModern('server/discover');
+        assert.equal(discover.error, undefined, JSON.stringify(discover));
+        relay.child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 91,
+            method: 'initialize',
+            params: {
+                protocolVersion: '2025-06-18',
+                capabilities: {},
+                clientInfo: { name: 'late-factory-fixture', version: '1.0.0' },
+            },
+        })}\n`);
+        await relay.waitForStderr(/SECOND_OPEN_STARTED/);
+        relay.child.stdin.end();
+        const outcome = await relay.exit;
+        assert.deepEqual(outcome, { code: 0, signal: null }, relay.getStderr());
+        assert.match(relay.getStderr(), /SECOND_OPEN_RESOLVED/);
+        assert.match(relay.getStderr(), /SECOND_CLOSE_FINISHED/);
+    } finally {
+        if (relay.child.exitCode === null && relay.child.signalCode === null) {
+            await relay.forceClose();
+        }
+    }
+});
+
+test('SIGTERM during the initial server build awaits the acquired session cleanup', {
+    skip: process.platform === 'win32' ? 'Node cannot deliver a catchable SIGTERM on Windows' : false,
+}, async () => {
+    const source = `
+        const mcp = require(${JSON.stringify(RELAY_ENTRYPOINT)});
+        function cleanImported(request, result) {
+            const evidenceRef = 'initial-shutdown:' + request.request_id;
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+                request_id: request.request_id,
+                request_hash: request.request_hash,
+                phase: request.phase,
+                clean_imported: true,
+                authority_granted: false,
+                evidence_ref: evidenceRef,
+                evidence_hash: mcp.computeMcpCleanImportEvidenceHash(
+                    request.request_hash,
+                    result,
+                    evidenceRef,
+                ),
+                result,
+            };
+        }
+        const boundary = mcp.createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                console.error('INITIAL_OPEN_STARTED');
+                await new Promise((resolve) => setTimeout(resolve, 150));
+                return {
+                    schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
+                    }),
+                    async request(request) {
+                        return cleanImported(request, { tools: [] });
+                    },
+                    async close() {
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                        console.error('INITIAL_CLOSE_FINISHED');
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+        mcp.runMcpRelay({ enforcementBoundary: boundary }).catch((error) => {
+            console.error(error);
+            process.exit(1);
+        });
+    `;
+    const relay = spawnInlineMcpRelay(source);
+    try {
+        await relay.waitForStderr(/INITIAL_OPEN_STARTED/);
+        relay.child.kill('SIGTERM');
+        const outcome = await relay.exit;
+        assert.deepEqual(outcome, { code: 0, signal: null }, relay.getStderr());
+        assert.match(relay.getStderr(), /INITIAL_CLOSE_FINISHED/);
+    } finally {
+        if (relay.child.exitCode === null && relay.child.signalCode === null) {
+            await relay.forceClose();
+        }
+    }
+});
+
 test('the default CLI exposes owned fallback metadata but performs no remote or fallback I/O', async () => {
     const fixture = createUnavailableMcpWithFallbackFixture();
     const origin = await fixture.listen();
@@ -846,6 +1290,72 @@ test('the default CLI exposes owned fallback metadata but performs no remote or 
             'risk_fork_enforcement_required',
         );
         assert.deepEqual(fixture.requests, [], 'missing enforcement must block discover and fallback HTTP');
+    } finally {
+        await relay.close();
+        await fixture.close();
+    }
+});
+
+test('stdio serves stateless MCP 2026-07-28 without initialize and requires every request envelope', async () => {
+    const fixture = createUnavailableMcpWithFallbackFixture();
+    const origin = await fixture.listen();
+    const relay = spawnLegacyStdioClient(`${origin}/api/mcp`, FIXTURE_API_KEY, null);
+
+    try {
+        const discover = await relay.requestModern('server/discover');
+        assert.equal(discover.error, undefined, JSON.stringify(discover));
+        assert.deepEqual(discover.result.supportedVersions, [MCP_V2_PROTOCOL_VERSION]);
+        assert.deepEqual(discover.result.capabilities, {
+            tools: {},
+            resources: {},
+            prompts: {},
+        });
+        assert.equal(Object.hasOwn(discover.result.capabilities, 'extensions'), false);
+        assert.equal(discover.result.resultType, 'complete');
+
+        const tools = await relay.requestModern('tools/list');
+        assert.equal(tools.error, undefined, JSON.stringify(tools));
+        assert.equal(tools.result.resultType, 'complete');
+        assert.ok(tools.result.tools.some((tool) => tool.name === 'agoragentic_search'));
+
+        const beforeListen = relay.getMessages().length;
+        const listen = await relay.requestModern('subscriptions/listen', {
+            notifications: { tools: { listChanged: true } },
+        });
+        assert.equal(listen.error.code, -32603);
+        assert.equal(listen.error.message, 'Subscription limit reached');
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(
+            relay.getMessages().slice(beforeListen).some(
+                (message) => message.method === 'notifications/subscriptions/acknowledged',
+            ),
+            false,
+        );
+
+        const toolsAfterListen = await relay.requestModern('tools/list');
+        assert.equal(toolsAfterListen.error, undefined, JSON.stringify(toolsAfterListen));
+
+        const missingEnvelope = await relay.request('tools/list');
+        assert.equal(missingEnvelope.error.code, -32602);
+        assert.match(missingEnvelope.error.message, /_meta envelope/i);
+
+        const resources = await relay.requestModern('resources/list');
+        assert.deepEqual(resources.result.resources, []);
+        assert.equal(resources.result.resultType, 'complete');
+
+        const prompts = await relay.requestModern('prompts/list');
+        assert.deepEqual(prompts.result.prompts, []);
+        assert.equal(prompts.result.resultType, 'complete');
+
+        const call = await relay.requestModern('tools/call', {
+            name: 'agoragentic_search',
+            arguments: { query: 'modern fail-closed probe' },
+        });
+        assert.equal(call.error, undefined, JSON.stringify(call));
+        assert.equal(call.result.resultType, 'complete');
+        assert.equal(call.result.isError, true);
+        assert.equal(JSON.parse(call.result.content[0].text).error, 'risk_fork_enforcement_required');
+        assert.deepEqual(fixture.requests, [], 'missing enforcement must block modern remote and fallback I/O');
     } finally {
         await relay.close();
         await fixture.close();

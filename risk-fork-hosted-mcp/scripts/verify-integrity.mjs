@@ -60,6 +60,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'LICENSE-MCP-MIT.txt',
     'NOTICE',
   ],
   scripts: {
@@ -206,6 +207,7 @@ const EXPECTED_EXPORTS = Object.freeze([
   'verifySavepointCapsule',
 ]);
 const REVIEWED_SOURCE_EXACT_FILES = Object.freeze([
+  'mcp/LICENSE',
   'mcp/mcp-server.js',
   'mcp/package.json',
   'risk-fork/LICENSE',
@@ -222,6 +224,7 @@ const REVIEWED_SOURCE_RECURSIVE_ROOTS = Object.freeze([
 ]);
 const PACKAGED_REVIEWED_ASSETS = Object.freeze([
   { source: 'risk-fork/LICENSE', target: 'LICENSE' },
+  { source: 'mcp/LICENSE', target: 'LICENSE-MCP-MIT.txt' },
   { source: 'risk-fork/NOTICE', target: 'NOTICE' },
   { source: 'risk-fork/e2b-template/bin/boot-guard.mjs', target: 'e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs' },
   { source: 'risk-fork/e2b-template/bin/bootstrap.mjs', target: 'e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs' },
@@ -248,6 +251,7 @@ const PACKAGED_PHYSICAL_ROOTS = Object.freeze([
 ]);
 const PACKAGED_TOP_LEVEL_REVIEWED_ASSETS = Object.freeze([
   'LICENSE',
+  'LICENSE-MCP-MIT.txt',
   'NOTICE',
 ]);
 

@@ -30,6 +30,7 @@ const repositoryRoot = path.resolve(packageRoot, '..');
 const REVIEWED_SOURCE_ATTESTATION_SCHEMA = 'agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2';
 const REVIEWED_SOURCE_NORMALIZATION = 'utf8_crlf_to_lf_lone_cr_preserved';
 const HOSTED_FIXTURE_COPIES = Object.freeze([
+  ['mcp/LICENSE', 'mcp/LICENSE'],
   ['mcp/mcp-server.js', 'mcp/mcp-server.js'],
   ['mcp/package.json', 'mcp/package.json'],
   ['risk-fork/LICENSE', 'risk-fork/LICENSE'],
@@ -56,6 +57,7 @@ const GENERATED_HOSTED_ROOTS = Object.freeze([
 ]);
 const GENERATED_HOSTED_OUTPUT_PATHS = Object.freeze([
   'LICENSE',
+  'LICENSE-MCP-MIT.txt',
   'NOTICE',
   'THIRD_PARTY_NOTICES.txt',
   'dist/runtime/index.mjs',
@@ -213,6 +215,7 @@ async function listFiles(directory, prefix = '') {
 async function snapshotGeneratedHostedOutputs(root) {
   const actualPaths = [
     'LICENSE',
+    'LICENSE-MCP-MIT.txt',
     'NOTICE',
     'THIRD_PARTY_NOTICES.txt',
     'integrity-manifest.json',
@@ -279,6 +282,7 @@ test('package contract is private, exact-version, and has no mandatory runtime d
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'LICENSE-MCP-MIT.txt',
     'NOTICE',
   ]);
 });
@@ -359,6 +363,18 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.deepEqual(apacheLicenseBytes, riskForkLicenseBytes);
   assert.match(apacheLicenseBytes.toString('utf8'), /^Apache License\r?\n/);
   assert.match(apacheLicenseBytes.toString('utf8'), /Version 2\.0, January 2004/);
+  const mcpMitLicenseBytes = canonicalReviewedSourceBytes(
+    await readFile(path.join(repositoryRoot, 'mcp', 'LICENSE')),
+  );
+  const packagedMcpMitLicenseBytes = await readFile(
+    path.join(packageRoot, 'LICENSE-MCP-MIT.txt'),
+  );
+  assert.deepEqual(packagedMcpMitLicenseBytes, mcpMitLicenseBytes);
+  assert.match(packagedMcpMitLicenseBytes.toString('utf8'), /^MIT License\r?\n/);
+  assert.match(
+    packagedMcpMitLicenseBytes.toString('utf8'),
+    /Copyright \(c\) 2026 ACRE/,
+  );
   const riskForkNoticeBytes = canonicalReviewedSourceBytes(
     await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
   );
@@ -370,6 +386,11 @@ test('build is deterministic and records exact source and artifact integrity', a
       path: 'LICENSE',
       source_path: 'risk-fork/LICENSE',
       bytes: riskForkLicenseBytes,
+    },
+    {
+      path: 'LICENSE-MCP-MIT.txt',
+      source_path: 'mcp/LICENSE',
+      bytes: mcpMitLicenseBytes,
     },
     {
       path: 'NOTICE',
@@ -403,7 +424,8 @@ test('build is deterministic and records exact source and artifact integrity', a
     (source) => source.declared_license === 'MIT',
   );
   assert.ok(mitNoticeSources.length > 0);
-  assert.match(noticesText, /@modelcontextprotocol\/sdk@1\.30\.0\nDeclared license: MIT/);
+  assert.match(noticesText, /@modelcontextprotocol\/core@2\.0\.0\nDeclared license: MIT/);
+  assert.match(noticesText, /@modelcontextprotocol\/server@2\.0\.0\nDeclared license: MIT/);
   assert.match(noticesText, /Permission is hereby granted, free of charge/);
   const readmeFallbacks = [
     {
@@ -480,6 +502,7 @@ test('build is deterministic and records exact source and artifact integrity', a
     assert.ok(Number.isSafeInteger(input.bytes) && input.bytes > 0);
   }
   for (const required of [
+    'mcp/LICENSE',
     'mcp/mcp-server.js',
     'risk-fork/e2b-template/template.mjs',
     'risk-fork/ops/postgres/owner-bootstrap.sql.template',
@@ -727,7 +750,7 @@ test('source verification independently rejects extra unused and omitted bundled
       /Manifest build inputs do not exactly match the independently derived esbuild dependency closure; omitted_count: 0; unexpected_count: 1/,
     );
 
-    const bundledInputPath = 'risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/sdk/dist/cjs/experimental/tasks/helpers.js';
+    const bundledInputPath = 'risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/server/dist/index.cjs';
     assert.equal(baseline.inputs.some((input) => input.path === bundledInputPath), true);
     const omittedInputManifest = structuredClone(baseline);
     omittedInputManifest.inputs = omittedInputManifest.inputs.filter(
@@ -1376,17 +1399,17 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     await writeFile(path.join(temporary, 'package.json'), '{"private":true}\n', 'utf8');
     await writeFile(path.join(temporary, 'consumer-check.mjs'), [
       "import assert from 'node:assert/strict';",
-      "import { applyE2BExternalQualificationObservation, createCleanupVerificationRequest, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, createRiskForkHostBoundary, createRiskForkImportEnvelope, createTrustedRiskDescriptor, createTrustedRiskDescriptorSource, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA, RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, verifyCleanupVerificationEvidence, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
+      "import { applyE2BExternalQualificationObservation, createCleanupVerificationRequest, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, createRiskForkHostBoundary, createRiskForkImportEnvelope, createTrustedRiskDescriptor, createTrustedRiskDescriptorSource, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA, RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, validateCommitCandidate, verifyCleanupVerificationEvidence, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
       "import { createRiskForkE2BTemplate } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/e2b-template/template.mjs';",
       "import { createMcpHttpPhaseRuntime } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs';",
-      "import { validateMcpHttpPhaseOperation } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/src/mcp-transport-contract.mjs';",
+      "import { createMcpTransportResultSchema, validateMcpHttpPhaseOperation, validateMcpToolHeaderAnnotations } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/src/mcp-transport-contract.mjs';",
       "assert.equal(typeof createMcpEnforcementBoundary, 'function');",
       "assert.equal(typeof createMcpInterceptionPlan, 'function');",
       "assert.equal(typeof createRiskForkHostBoundary, 'function');",
       "assert.equal(typeof createRiskForkImportEnvelope, 'function');",
       "assert.equal(typeof verifyCleanupVerificationEvidence, 'function');",
       "assert.equal(RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA, 'agoragentic.risk-fork.mcp-destination-policy.v1');",
-      "assert.equal(RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, 'agoragentic.risk-fork.mcp-transport-result.v1');",
+      "assert.equal(RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, 'agoragentic.risk-fork.mcp-transport-result.v2');",
       "const descriptorSource = createTrustedRiskDescriptorSource((request) => createTrustedRiskDescriptor(request, { mcp_phase: 'tools/call', raw_method: null, mcp_server_ref: 'server:packed', mcp_server_origin: 'https://mcp.example.test', mcp_server_trust: 'reachable', mcp_server_attestation: null, tool_name: 'workspace_apply_patch', tool_annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }, capabilities: { network_access: false, filesystem_read: false, filesystem_write: true, credential_access: false, wallet_or_payment: false, deployment: false, publication: false, communication: false, database_mutation: false, trust_or_reputation_mutation: false, external_side_effect: false, unknown_or_unclassified: false }, prompt_injection_indicators: [], owner_policy: { minimum_level: 'LOW', force_risk_fork: false, deny_irreversible: false, trusted_server_refs: [], trusted_attestor_refs: [], trusted_attestation_hashes: [], trust_registry_version: null, allowed_egress: [] } }));",
       "const hostBoundary = createRiskForkHostBoundary({ controller: { async prepare() { return { mode: 'denied', authority_granted: false }; } }, trusted_descriptor_source: descriptorSource, clock: () => '2026-08-29T00:00:00.000Z' });",
       "const hostResult = await hostBoundary.preEffect({ descriptor_ref: 'descriptor:packed', operation_input: { operation: { kind: 'bounded_file_batch', actions: [] }, expected_commit_type: 'TYPED_RESULT' } });",
@@ -1409,6 +1432,23 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       "assert.equal(typeof createRiskForkE2BTemplate, 'function');",
       "assert.equal(typeof createMcpHttpPhaseRuntime, 'function');",
       "assert.equal(typeof validateMcpHttpPhaseOperation, 'function');",
+      "for (const type of ['string', 'integer', 'boolean']) {",
+      "  assert.equal(validateMcpToolHeaderAnnotations({ type: 'object', properties: { value: { type, 'x-mcp-header': 'Value' } } }), true);",
+      "}",
+      "assert.throws(() => validateMcpToolHeaderAnnotations({ type: 'object', properties: { value: { type: 'number', 'x-mcp-header': 'Value' } } }), /must annotate a string, integer, or boolean/);",
+      "assert.equal(createMcpTransportResultSchema({ type: 'array', items: { type: 'string' } }).$schema, 'https://json-schema.org/draft/2020-12/schema');",
+      "assert.equal(createMcpTransportResultSchema({ $schema: 'http://json-schema.org/draft-07/schema#', type: 'object' }).$schema, 'http://json-schema.org/draft-07/schema#');",
+      "const typedResult = (payload, payload_schema) => validateCommitCandidate({ candidate: { type: 'TYPED_RESULT', payload, payload_schema }, source_fork_id: 'fork:packed', validated_at: '2026-08-29T00:00:00.000Z' });",
+      "const tupleSchema = { type: 'object', additionalProperties: false, required: ['structuredContent'], properties: { structuredContent: { type: 'array', prefixItems: [{ const: 'tuple' }, { type: 'integer' }], items: false, minItems: 2 } } };",
+      "assert.deepEqual(typedResult({ structuredContent: ['tuple', 7] }, tupleSchema).body.payload.structuredContent, ['tuple', 7]);",
+      "assert.throws(() => typedResult({ structuredContent: ['tuple', '7'] }, tupleSchema), /does not satisfy its schema/i);",
+      "const anyStructuredContentSchema = { type: 'object', additionalProperties: false, required: ['structuredContent'], properties: { structuredContent: true } };",
+      "for (const structuredContent of [['array'], 'string', 7, true, null]) assert.deepEqual(typedResult({ structuredContent }, anyStructuredContentSchema).body.payload.structuredContent, structuredContent);",
+      "const localRefResource = createMcpTransportResultSchema({ $defs: { value: { type: 'string' } }, $ref: '#/$defs/value' }).properties.mcp_result;",
+      "assert.equal(localRefResource.$id, 'https://agoragentic.com/schema/risk-fork-embedded-mcp-result.json');",
+      "const localRefSchema = { type: 'object', additionalProperties: false, required: ['resource'], properties: { resource: localRefResource } };",
+      "assert.equal(typedResult({ resource: 'modern' }, localRefSchema).body.payload.resource, 'modern');",
+      "assert.throws(() => typedResult({ resource: 7 }, localRefSchema), /does not satisfy its schema/i);",
       "let providerLoads = 0;",
       "const hash = 'sha256:' + 'a'.repeat(64);",
       "const adapter = new E2BRiskForkAdapter({ cleanTemplateId: 'template-risk-fork-clean-immutable-v1', cleanTemplateHash: hash, cleanTemplateProvenanceHash: hash, workspaceExportDirectory: process.cwd() + '/unused-exports', cleanupJournalDirectory: process.cwd() + '/unused-journal', verifyAuthorityFreeSource: async () => { throw new Error('not called'); }, trustedBootstrapArtifactHash: hash, trustedRunnerArtifactHash: hash });",
@@ -1438,6 +1478,7 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     const installedFiles = await listFiles(installed);
     assert.deepEqual(installedFiles, [
       'LICENSE',
+      'LICENSE-MCP-MIT.txt',
       'NOTICE',
       'README.md',
       'THIRD_PARTY_NOTICES.txt',
@@ -1465,6 +1506,12 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       await readFile(path.join(installed, 'LICENSE')),
       canonicalReviewedSourceBytes(
         await readFile(path.join(repositoryRoot, 'risk-fork', 'LICENSE')),
+      ),
+    );
+    assert.deepEqual(
+      await readFile(path.join(installed, 'LICENSE-MCP-MIT.txt')),
+      canonicalReviewedSourceBytes(
+        await readFile(path.join(repositoryRoot, 'mcp', 'LICENSE')),
       ),
     );
     assert.deepEqual(

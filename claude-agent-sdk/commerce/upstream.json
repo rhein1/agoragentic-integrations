@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/anthropics/commerce-agents",
+  "commit": "fd4d59224ab96b43c6dc6888207c67b3bd5a24cf",
+  "license": "Apache-2.0",
+  "source_role": "external reference; not vendored or forked",
+  "reviewed_git_blobs": {
+    "merchant-agent/core/merchant_agent/backend.py": "566ce1f70c8edf92c0ee8584bd0014714d8ac71f",
+    "merchant-agent/core/merchant_agent/types.py": "351975a402f99d2905d6afa5aee44f8d0cf98463",
+    "merchant-agent/core/merchant_agent/executor.py": "884728c999b3efb118c28d5058557f800d003928",
+    "merchant-agent/core/merchant_agent/gates.py": "70c07d022df80d54f59ed64bcce2b1eab6b14cef",
+    "commerce-common/commerce_common/execution.py": "595c9986dd9aef351508ec189111b6e599872161"
+  },
+  "qualified_runtimes": [],
+  "production_authority": false,
+  "payment_authority": false
+}

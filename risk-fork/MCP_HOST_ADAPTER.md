@@ -135,6 +135,31 @@ same exact endpoint in `allowed_egress`. The descriptor registered for a
 capabilities supplied in `planRequest`; the adapter checks them again against the
 controller decision before import.
 
+### Portable handle binding
+
+MCP application handles (for example a remote browser or task reference) are not
+credentials, but a server may treat possession as authority. The opt-in
+`@agoragentic/risk-fork/mcp-portable-handle-boundary` module provides a host-owned,
+in-memory registry for those values. The host must explicitly register each handle;
+the module never guesses handle fields from names or model output. A registration is
+bound to a keyed hash of the principal reference, exact issuer, exact audience and
+MCP server origin, originating method and salient request hash, a maximum five-minute
+expiry, a canonical nonempty allowlist of consuming methods, and an explicit
+single-use and bounded-consumption policy. `principal_ref` must already be a
+host-derived SHA-256 reference, not raw identity or PII. Each consumption also
+requires a new request hash, so exact request replay fails even for a reusable
+handle, and reusable-handle replay tracking cannot grow without a configured bound.
+
+The registry stores only keyed handle/principal hashes and returns only hash-bound
+receipts. It never stores or returns the raw handle or principal reference and
+rejects recognized serialized credential material. Call `close()` to clear records
+and overwrite the process-local HMAC key. A receipt is audit evidence, not a
+transferable capability; only a successful call against the same opaque registry is
+authorization. This source is not wired into MCP admission automatically and does
+not make the current source-only transport live or authenticated. Registry state and
+its HMAC key are process-local, in-memory, and non-durable; a restart invalidates all
+bindings.
+
 The `mcp_http_phase` object returned by `createRiskForkMcpChildOperation()` is a
 closed, authority-free provider contract. It carries the exact request binding,
 redirect rejection, response schema, byte bound, timeout, and (for `tools/call`)
@@ -157,7 +182,10 @@ header observations, closed no-state/no-decompression controls, and evidence has
 before exposing the MCP result. Each request sends both required response media
 types, `MCP-Protocol-Version`, `Mcp-Method`, conditional safely encoded
 `Mcp-Name`, and any `Mcp-Param-*` values derived from valid `x-mcp-header`
-annotations in the exact hash-bound tool input schema. Invalid annotated tools are
+annotations in the exact hash-bound tool input schema. Only `string`, `integer`,
+and `boolean` annotations are valid, and an annotated integer value must be a
+safe integer; JSON Schema `number` is rejected by the normative 2026-07-28
+Tools contract. Invalid annotated tools are
 excluded from `tools/list` before the application result is exposed. The runtime
 accepts bounded duplicate-key-aware UTF-8 JSON or bounded request-scoped SSE with
 at most 256 events. SSE comments are discarded inside the child. Progress and
@@ -172,13 +200,22 @@ Every request carries fixed `2026-07-28` client metadata. Every wire result must
 declare `resultType: "complete"`; `input_required`, tasks, missing or unknown
 result types fail closed without another request. `server/discover` goes over the
 wire with only the reserved `_meta`, validates standard `supportedVersions` and
-`capabilities`, then becomes the package's internal
-`{ protocol_version, stateless: true }` binding. Wire-only `resultType`, `_meta`,
-and cache hints are removed before application-schema validation. This bounded
-profile does not implement older `initialize` negotiation, authorization-bearing
-servers, subscriptions, tasks, or MRTR retries. See the
+`capabilities`, then becomes the exact clean binding
+`{ protocol_version, stateless: true, capabilities: { tools, resources, prompts } }`.
+All three clean capability fields are required booleans derived only from own
+properties of the wire capability object. The capability record participates in
+the session binding, and the adapter rejects an unadvertised phase before it can
+start another child or network operation. Wire-only `resultType`, `_meta`, and
+cache hints are removed before application-schema validation. Unsupported MRTR
+and task results cross the E2B runner boundary only as an exact-bound typed code
+plus hashes of the rejected wire result and any input/state fields; raw input or
+continuation state is never imported and no retry occurs. This bounded profile
+does not implement older `initialize` negotiation, authorization-bearing servers,
+subscriptions, tasks, or MRTR retries. See the
 [2026-07-28 Streamable HTTP specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
 and [discovery contract](https://modelcontextprotocol.io/specification/2026-07-28/server/discover).
+Final-spec parameter-header and structured-content fixtures are linked from
+[`MCP_2026_07_28_READINESS.md`](./MCP_2026_07_28_READINESS.md).
 
 That wrapper is a contract, not independent network proof. A production claim
 requires a qualified executor to originate the observations at the actual socket
