@@ -1823,6 +1823,7 @@
     "ard_compatibility_manifest_candidate": "ard/generated/ai-catalog.json",
     "ard_upstream_provenance": "ard/provenance.json",
     "risk_fork": "risk-fork/README.md",
+    "risk_fork_mcp_2026_07_28_readiness": "risk-fork/MCP_2026_07_28_READINESS.md",
     "risk_fork_client_adoption": "risk-fork/CLIENT_ADOPTION.md",
     "risk_fork_client_adoption_module": "risk-fork/src/client-adoption.mjs",
     "risk_fork_client_adoption_cli": "risk-fork/scripts/client-adoption.mjs",

@@ -51,9 +51,11 @@ try {
   const included = new Set(entry.files.map(file => file.path));
   for (const expected of [
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
-    'CLIENT_ADOPTION.md', 'clients/one-tool-stdio-gate.mjs',
+    'CLIENT_ADOPTION.md', 'MCP_2026_07_28_READINESS.md',
+    'managed-service/DEPLOYMENT_GATES.md', 'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
-    'src/mcp-host-adapter.mjs', 'src/mcp-transport-contract.mjs',
+    'src/mcp-host-adapter.mjs', 'src/mcp-portable-handle-boundary.mjs',
+    'src/mcp-transport-contract.mjs',
     'e2b-template/lib/mcp-http-phase.mjs', 'examples/mcp-host-adapter.mjs',
     'src/framework-tool-adapter.mjs', 'src/frameworks/openai-agents.mjs',
     'src/frameworks/langchain.mjs', 'src/frameworks/langgraph.mjs',
@@ -69,6 +71,7 @@ try {
     'GETTING_STARTED.md',
     'AUTHORS.md',
     'MCP_HOST_ADAPTER.md',
+    'MCP_2026_07_28_READINESS.md',
     'FRAMEWORK_ADAPTERS.md',
     'CLIENT_ADOPTION.md',
   ]) {
@@ -171,6 +174,7 @@ try {
     import * as core from '@agoragentic/risk-fork';
     import * as host from '@agoragentic/risk-fork/host-boundary';
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
+    import * as portableHandles from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
     import * as mcpTransport from '@agoragentic/risk-fork/mcp-transport-contract';
     import * as mcpRuntime from '@agoragentic/risk-fork/e2b-template/mcp-http-phase';
     import * as framework from '@agoragentic/risk-fork/framework-tool-adapter';
@@ -188,6 +192,11 @@ try {
     assert.equal(typeof mcpRuntime.createMcpHttpPhaseRuntime, 'function');
     assert.equal(mcpRuntime.isMcpHttpPhaseRuntime(mcpRuntime.executeMcpHttpPhase), true);
     assert.equal(core.createRiskForkMcpHostAdapter, mcp.createRiskForkMcpHostAdapter);
+    assert.equal(typeof portableHandles.createMcpPortableHandleRegistry, 'function');
+    assert.equal(
+      core.createMcpPortableHandleRegistry,
+      portableHandles.createMcpPortableHandleRegistry,
+    );
     assert.equal(typeof framework.createRiskForkFrameworkToolAdapter, 'function');
     assert.equal(typeof framework.createTrustedRiskForkFrameworkExecutor, 'function');
     assert.equal(typeof openai.createOpenAIAgentsRiskForkTool, 'function');

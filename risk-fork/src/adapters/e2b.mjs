@@ -30,6 +30,11 @@ import {
   verifySavepointCapsule,
 } from '../contracts.mjs';
 import {
+  RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA,
+  mcpWireResultRejectionCode,
+  validateMcpWireResultRejectionEvidence,
+} from '../mcp-transport-contract.mjs';
+import {
   RiskForkProvider,
   createCleanupVerificationEvidence,
   createCleanupVerificationRequest,
@@ -1149,7 +1154,7 @@ function parseBootstrapAttestation(commandResult, expected, now) {
 
 function parseRunnerResult(value, expected) {
   assertPlainObject(value, 'E2B runner result');
-  assertAllowedKeys(value, [
+  const bindingKeys = [
     'schema',
     'status',
     'job_id',
@@ -1168,14 +1173,57 @@ function parseRunnerResult(value, expected) {
     'execution_mode',
     'trusted_runner_artifact_hash',
     'expected_result_schema_hash',
-    'commit_candidate',
-    'commit_candidate_hash',
-  ], 'E2B runner result');
+  ];
+  const rejectionResult = value.schema === RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA;
+  assertAllowedKeys(value, rejectionResult
+    ? [
+        ...bindingKeys,
+        'rejection_code',
+        'rejection_evidence',
+        'rejection_evidence_hash',
+      ]
+    : [...bindingKeys, 'commit_candidate', 'commit_candidate_hash'], 'E2B runner result');
+  const expectedKeyCount = bindingKeys.length + (rejectionResult ? 3 : 2);
+  if (Object.keys(value).length !== expectedKeyCount) {
+    throw new Error('E2B trusted runner result is missing required fields');
+  }
+  if (rejectionResult) {
+    if (value.status !== 'rejected' || expected.operation_kind !== 'mcp_http_phase') {
+      throw new Error('E2B trusted runner returned an unsupported rejection envelope');
+    }
+    for (const [field, wanted] of Object.entries(expected)) {
+      if (field === 'operation_kind') continue;
+      if (value[field] !== wanted) throw new Error(`E2B runner result binding mismatch: ${field}`);
+    }
+    const rejectionEvidence = validateMcpWireResultRejectionEvidence(
+      value.rejection_evidence,
+      expected.mcp_phase,
+    );
+    const rejectionCode = mcpWireResultRejectionCode(
+      rejectionEvidence,
+      expected.mcp_phase,
+    );
+    if (value.rejection_code !== rejectionCode) {
+      throw new Error('E2B runner rejection code does not match its typed evidence');
+    }
+    const rejectionEvidenceHash = requireSha256Ref(
+      value.rejection_evidence_hash,
+      'E2B runner rejection evidence hash',
+    );
+    if (!safeEqual(rejectionEvidenceHash, sha256Ref(rejectionEvidence))) {
+      throw new Error('E2B runner rejection evidence hash mismatch');
+    }
+    return deepFreeze({
+      ...cloneJson(value),
+      rejection_evidence: rejectionEvidence,
+    });
+  }
   if (value.schema !== 'agoragentic.risk-fork.runner-result.v1'
     || value.status !== 'completed') {
     throw new Error('E2B trusted runner returned an unsupported result envelope');
   }
   for (const [field, wanted] of Object.entries(expected)) {
+    if (field === 'operation_kind') continue;
     if (value[field] !== wanted) throw new Error(`E2B runner result binding mismatch: ${field}`);
   }
   const candidate = assertStrictSecretFreeJson(
@@ -2539,7 +2587,30 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
         execution_mode: job.execution_mode,
         trusted_runner_artifact_hash: this.trustedRunnerArtifactHash,
         expected_result_schema_hash: job.expected_result_schema_hash,
+        operation_kind: operation.kind,
       });
+      if (parsed.status === 'rejected') {
+        const rejectionError = new Error(
+          'E2B trusted runner rejected an unsupported MCP result without retry',
+        );
+        rejectionError.name = 'E2BMcpWireResultRejectedError';
+        Object.defineProperties(rejectionError, {
+          code: { enumerable: true, value: parsed.rejection_code },
+          rejection_evidence: {
+            enumerable: true,
+            value: parsed.rejection_evidence,
+          },
+          rejection_evidence_hash: {
+            enumerable: true,
+            value: parsed.rejection_evidence_hash,
+          },
+          runner_rejection_artifact_hash: {
+            enumerable: true,
+            value: sha256Ref(parsed),
+          },
+        });
+        throw rejectionError;
+      }
       const completed = this.clock();
       const executionRecord = {
         started_at: started.toISOString(),
@@ -2575,11 +2646,35 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       if (cleanup.status === 'verified') {
         record.destroyed_verified = true;
         record.destruction_status = 'verified_destroyed_after_execution_failure';
+        const typedMcpRejection = error?.name === 'E2BMcpWireResultRejectedError'
+          && typeof error?.code === 'string'
+          && error?.rejection_evidence;
         const executionError = new Error(
-          'E2B execution or result binding failed; child destruction and absence were independently verified',
+          typedMcpRejection
+            ? 'E2B child rejected an unsupported MCP result; child destruction and absence were independently verified'
+            : 'E2B execution or result binding failed; child destruction and absence were independently verified',
           { cause: error },
         );
-        executionError.code = 'E2B_EXECUTION_FAILED_CHILD_VERIFIED_ABSENT';
+        if (typedMcpRejection) {
+          executionError.name = 'E2BMcpWireResultRejectedError';
+          Object.defineProperties(executionError, {
+            code: { enumerable: true, value: error.code },
+            rejection_evidence: {
+              enumerable: true,
+              value: error.rejection_evidence,
+            },
+            rejection_evidence_hash: {
+              enumerable: true,
+              value: error.rejection_evidence_hash,
+            },
+            runner_rejection_artifact_hash: {
+              enumerable: true,
+              value: error.runner_rejection_artifact_hash,
+            },
+          });
+        } else {
+          executionError.code = 'E2B_EXECUTION_FAILED_CHILD_VERIFIED_ABSENT';
+        }
         throw executionError;
       }
       const cleanupError = new Error(`E2B execution failed and child cleanup is ${cleanup.status}`);

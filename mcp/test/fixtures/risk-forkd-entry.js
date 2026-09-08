@@ -72,6 +72,11 @@ const enforcementBoundary = mcp.createMcpEnforcementBoundary({
             discovery: cleanImported(openRequest, {
                 protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
                 stateless: true,
+                capabilities: {
+                    tools: true,
+                    resources: false,
+                    prompts: false,
+                },
             }),
             async request(request) {
                 record('host_request', { phase: request.phase });

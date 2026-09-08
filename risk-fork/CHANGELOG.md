@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Target the stateless MCP `2026-07-28` wire contract: validate complete-result
+  metadata and cache hints, retain only bounded hash evidence for result
+  `_meta`, require that evidence in versioned v2 transport results, and return
+  typed no-retry errors for unsupported MRTR and Tasks.
+- Add an explicit process-local portable-handle registry that binds recognized
+  handles to a host-derived principal hash, issuer, audience/origin, allowed
+  consuming methods, originating and consuming request hashes, expiry, and
+  replay limits. It is not wired into hosted admission and is not durable.
+- Reject MCP Apps declarations, UI resources, and active HTML at the local
+  relay import boundary by default. A separately qualified renderer, CSP,
+  domain policy, and message bridge remain required before enabling Apps.
+- Add an MCP 2026-07-28 readiness record that keeps MRTR, Tasks,
+  subscriptions, authenticated remote MCP, provider qualification, deployment,
+  activation, and live protection explicitly incomplete.
+
 ## 0.1.0-alpha.1 — release candidate
 
 - Add default-off, source-only OpenAI Agents JS, LangChain JS, and LangGraph JS

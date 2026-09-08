@@ -11,6 +11,21 @@
     "code_execution"
   ],
   "intercepts_live_traffic": false,
+  "mcp_2026_07_28": {
+    "status": "source_only_default_off",
+    "per_request_metadata": "implemented_child_http_phase",
+    "session_state": "rejected",
+    "complete_and_cache_metadata": "validated_hash_evidence",
+    "portable_handle_boundary": "explicit_process_local_reference_only",
+    "mcp_apps_active_content": "default_deny_local_relay_import",
+    "mrtr": "disabled_fail_closed",
+    "tasks": "not_advertised",
+    "subscriptions": "not_advertised",
+    "authenticated_remote_mcp": "disabled",
+    "hosted_wiring": false,
+    "production_qualified": false,
+    "live_traffic_protected": false
+  },
   "risk_levels": [
     "HIGH",
     "IRREVERSIBLE"
@@ -195,6 +210,7 @@
     "quickstart": "risk-fork/hackathon/docs/QUICKSTART.md",
     "cleanup": "risk-fork/hackathon/docs/CLEANUP_TROUBLESHOOTING.md",
     "status": "risk-fork/hackathon/demo-status.json",
-    "skill": "risk-fork/discovery/skill.md"
+    "skill": "risk-fork/discovery/skill.md",
+    "mcp_2026_07_28_readiness": "risk-fork/MCP_2026_07_28_READINESS.md"
   }
 }

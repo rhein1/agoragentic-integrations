@@ -82,14 +82,28 @@ function completeCapabilities() {
 function resultForPhase(phase) {
   if (phase === 'server/discover') {
     return {
-      payload: { protocol_version: '2026-07-28', stateless: true },
+      payload: {
+        protocol_version: '2026-07-28',
+        stateless: true,
+        capabilities: { tools: true, resources: false, prompts: false },
+      },
       schema: {
         type: 'object',
         additionalProperties: false,
-        required: ['protocol_version', 'stateless'],
+        required: ['protocol_version', 'stateless', 'capabilities'],
         properties: {
           protocol_version: { type: 'string', maxLength: 20 },
           stateless: { type: 'boolean' },
+          capabilities: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['tools', 'resources', 'prompts'],
+            properties: {
+              tools: { type: 'boolean' },
+              resources: { type: 'boolean' },
+              prompts: { type: 'boolean' },
+            },
+          },
         },
       },
     };
@@ -262,6 +276,7 @@ try {
     discovery_result_hash: sha256Ref(session.discovery.result),
     protocol_version: session.discovery.result.protocol_version,
     stateless: session.discovery.result.stateless,
+    capabilities_hash: sha256Ref(session.discovery.result.capabilities),
   });
   const listResult = await session.request(enforcementRequest({
     schema: 'agoragentic.mcp.enforced-phase-request.v1',

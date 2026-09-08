@@ -128,6 +128,15 @@ export {
   isRiskForkMcpHostAdapter,
 } from './mcp-host-adapter.mjs';
 export {
+  RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA,
+  RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA,
+  RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES,
+  RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
+  RiskForkMcpPortableHandleError,
+  createMcpPortableHandleRegistry,
+  isMcpPortableHandleRegistry,
+} from './mcp-portable-handle-boundary.mjs';
+export {
   RISK_FORK_CLIENTS,
   RISK_FORK_CLIENT_ADOPTION_SCHEMA,
   RISK_FORK_GATEWAY_TOOL,

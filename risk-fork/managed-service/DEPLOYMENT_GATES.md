@@ -7,6 +7,9 @@ This checklist separates source completion from a real hosted protection service
 - review tenant isolation, bearer handling, body bounds, idempotency, budget arithmetic, state transitions, lease theft, claim-delivery replay, historical-token reuse, reaper races, and cleanup evidence;
 - fuzz hostile JSON descriptors, deep/sparse objects, duplicate headers, malformed routes, and PostgreSQL values;
 - add static analysis, dependency review, secret scanning, and exact-source provenance;
+- adversarially review MCP 2026-07-28 per-request metadata, header/body binding,
+  portable-handle ownership, MRTR/task rejection, cache metadata, and MCP Apps
+  active-content rejection;
 - resolve every material review finding on the exact candidate commit.
 
 ## 2. Worker/enforcement bridge
@@ -20,6 +23,13 @@ This checklist separates source completion from a real hosted protection service
 - ensure no parent credentials, bearer values, wallet material, deployment authority, or unrelated workspace state enters the child;
 - prove every risky tool call is intercepted before effect, not merely logged afterward;
 - prove result validation and clean commit happen only after verified destruction.
+- integrate explicit portable-handle registration and authorization into the
+  pre-effect bridge using the currently authenticated principal; replace the
+  process-local reference registry with durable, transactional, tenant-scoped
+  state for multi-instance, restart, MRTR, or Task workflows;
+- never infer a handle from arbitrary argument names, conversation content, or
+  model output; each supported tool contract must identify its exact handle
+  field and allowed consuming methods.
 
 ## 3. Provider qualification
 
@@ -48,6 +58,12 @@ This checklist separates source completion from a real hosted protection service
 - build a real HTTP runtime around the handler with bounded headers, body streaming, deadlines, connection limits, structured redacted logs that cannot emit bearer or lease tokens, and graceful shutdown;
 - keep internal worker routes on a separate authenticated network surface;
 - split execution, cleanup, and recovery into distinct least-privilege credentials and route authorization scopes;
+- add an identity-aware MCP gateway that validates OAuth issuer and exact
+  resource audience on every request and never derives authority from client
+  metadata, connection identity, a legacy session, or a portable handle alone;
+- keep MCP Apps/active HTML disabled until a separately qualified renderer has
+  an allowlisted origin policy, restrictive CSP and iframe sandbox, bounded
+  resource fetching, content integrity, and a closed host-message bridge;
 - add per-key and per-tenant admission-rate limits in addition to cost/concurrency bounds;
 - provision metrics and alerts for admission rejection, budget pressure, lease expiry, cleanup backlog, cleanup failure, audit-chain failure, provider error, and database health;
 - define key issuance, expiry, revocation, rotation, tenant suspension, incident response, and emergency disable procedures;
@@ -58,6 +74,10 @@ This checklist separates source completion from a real hosted protection service
 - decide the independently reviewable distribution artifact and publish provenance/SBOM/signatures;
 - deploy to a non-production environment with no live agent traffic;
 - run exact-client conformance, claim-response-loss/retry-storm tests, duplicate-work detection, and malicious MCP scenarios against the hosted candidate;
+- run hosted MCP 2026-07-28 stateless conformance across multiple server
+  instances, including planted/cross-principal handles, issuer/audience mix-up,
+  replay, expiry, malicious Apps markup, cache poisoning, MRTR/task fail-closed
+  behavior, and header/body substitution;
 - run a bounded canary only after credentials and a hard spend cap are separately authorized;
 - verify cleanup and absence out of band, then review evidence;
 - deploy production default-off;
