@@ -16,6 +16,12 @@ const REMOTE_URL = 'https://mcp.agoragentic.com/rpc';
 const OPAQUE_MARKER = 'opaque-client-metadata-must-not-cross';
 
 function imported(request, result) {
+    const importedResult = request.phase === 'server/discover'
+        ? {
+            capabilities: { tools: true, resources: true, prompts: true },
+            ...result,
+        }
+        : result;
     const evidenceRef = `test:${request.phase.replace('/', '-')}`;
     return {
         schema: MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
@@ -27,10 +33,10 @@ function imported(request, result) {
         evidence_ref: evidenceRef,
         evidence_hash: computeMcpCleanImportEvidenceHash(
             request.request_hash,
-            result,
+            importedResult,
             evidenceRef,
         ),
-        result,
+        result: importedResult,
     };
 }
 

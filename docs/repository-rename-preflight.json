@@ -1190,7 +1190,7 @@
       "path": "mcp/README.md",
       "occurrences": 1,
       "line_numbers": [
-        111
+        114
       ],
       "categories": [
         "installer_or_clone",
@@ -1359,7 +1359,7 @@
       "path": "risk-fork-hosted-mcp/package.json",
       "occurrences": 1,
       "line_numbers": [
-        61
+        62
       ],
       "categories": [
         "installer_or_clone",
@@ -1371,7 +1371,7 @@
       "path": "risk-fork-hosted-mcp/scripts/build.mjs",
       "occurrences": 1,
       "line_numbers": [
-        100
+        101
       ],
       "categories": [
         "installer_or_clone"
@@ -1381,7 +1381,7 @@
       "path": "risk-fork-hosted-mcp/scripts/verify-integrity.mjs",
       "occurrences": 1,
       "line_numbers": [
-        89
+        90
       ],
       "categories": [
         "installer_or_clone"
@@ -1457,8 +1457,8 @@
       "occurrences": 3,
       "line_numbers": [
         12,
-        122,
-        126
+        125,
+        129
       ],
       "categories": [
         "installer_or_clone",
@@ -1482,7 +1482,7 @@
       "occurrences": 4,
       "line_numbers": [
         11,
-        72
+        73
       ],
       "categories": [
         "public_documentation"

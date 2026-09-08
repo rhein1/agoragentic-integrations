@@ -2,7 +2,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { types: { isProxy } } = require('node:util');
+const { TextDecoder, types: { isProxy } } = require('node:util');
 const { version: PACKAGE_VERSION } = require('./package.json');
 
 const DEFAULT_REMOTE_MCP_URL = 'https://agoragentic.com/api/mcp';
@@ -21,6 +21,12 @@ function fallbackBaseForRemote(remoteMcpUrl) {
 const AGORAGENTIC_BASE = fallbackBaseForRemote(REMOTE_MCP_URL);
 const MCP_V2_PROTOCOL_VERSION = '2026-07-28';
 const ACP_MODE = process.argv.includes('--acp');
+const MCP_REMOTE_CAPABILITY_KEYS = Object.freeze(['tools', 'resources', 'prompts']);
+const MCP_LOCAL_SERVER_CAPABILITIES = Object.freeze({
+    tools: Object.freeze({}),
+    resources: Object.freeze({}),
+    prompts: Object.freeze({}),
+});
 
 const MCP_ENFORCEMENT_SCHEMAS = Object.freeze({
     boundary: 'agoragentic.mcp.host-enforcement-capability.v1',
@@ -148,6 +154,18 @@ const CREDENTIAL_VALUE_PATTERNS = Object.freeze([
     GENERIC_CREDENTIAL_TOKEN_PATTERN,
     /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
 ]);
+const MCP_ACTIVE_DOCUMENT_MEDIA_TYPES = new Set([
+    'application/xhtml+xml',
+    'image/svg+xml',
+    'text/html',
+    'text/html+skybridge',
+]);
+const MCP_APP_METADATA_KEYS = new Set([
+    'iomodelcontextprotocolui',
+    'openaioutputtemplate',
+    'uiresourceuri',
+]);
+const ACTIVE_HTML_MARKUP_PATTERN = /(?:<(?=!|\/?[A-Za-z_:]|\?)|\bon[a-z]{2,32}\s*=|\b(?:java|vb)script\s*:|\bblob\s*:|\bdata\s*:\s*(?:text\/html|application\/xhtml\+xml|image\/svg\+xml)\b)/i;
 
 function containsCredentialMaterial(value) {
     return typeof value === 'string'
@@ -803,6 +821,168 @@ function assertNoCredentialMaterial(value, field, { phase = null } = {}) {
     walk(value, field);
 }
 
+function normalizeImportedContentKey(key) {
+    return String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isMcpAppOrActiveDocumentMediaType(value) {
+    if (typeof value !== 'string') return false;
+    const parts = value.trim().toLowerCase().split(';');
+    const essence = parts.shift()?.trim() ?? '';
+    if (MCP_ACTIVE_DOCUMENT_MEDIA_TYPES.has(essence)) return true;
+    return parts.some((parameter) => {
+        const [rawName, ...rawValue] = parameter.split('=');
+        if (rawName?.trim() !== 'profile') return false;
+        const profile = rawValue.join('=').trim().replace(/^['"]|['"]$/g, '');
+        return profile === 'mcp-app';
+    });
+}
+
+function containsActiveHtmlMarkup(value) {
+    return typeof value === 'string' && ACTIVE_HTML_MARKUP_PATTERN.test(value);
+}
+
+function decodeUtf32(value, littleEndian) {
+    let offset = 0;
+    if (value.length >= 4) {
+        const bom = value.subarray(0, 4);
+        if ((littleEndian && bom.equals(Buffer.from([0xff, 0xfe, 0x00, 0x00])))
+            || (!littleEndian && bom.equals(Buffer.from([0x00, 0x00, 0xfe, 0xff])))) {
+            offset = 4;
+        }
+    }
+
+    const chunks = [];
+    let chunk = '';
+    for (; offset + 4 <= value.length; offset += 4) {
+        const codePoint = littleEndian
+            ? value.readUInt32LE(offset)
+            : value.readUInt32BE(offset);
+        chunk += codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+            ? String.fromCodePoint(codePoint)
+            : '\ufffd';
+        if (chunk.length >= 4096) {
+            chunks.push(chunk);
+            chunk = '';
+        }
+    }
+    if (offset !== value.length) chunk += '\ufffd';
+    chunks.push(chunk);
+    return chunks.join('');
+}
+
+function containsActiveMarkupBytes(value) {
+    if (!Buffer.isBuffer(value)) return false;
+    if (value.length > MAX_ENFORCEMENT_JSON_BYTES) return true;
+    if (containsActiveHtmlMarkup(value.toString('utf8'))) return true;
+
+    for (const encoding of ['utf-16le', 'utf-16be']) {
+        if (containsActiveHtmlMarkup(new TextDecoder(encoding).decode(value))) return true;
+    }
+    return containsActiveHtmlMarkup(decodeUtf32(value, true))
+        || containsActiveHtmlMarkup(decodeUtf32(value, false));
+}
+
+function decodeCanonicalBase64(value) {
+    if (typeof value !== 'string') return null;
+    const compact = value.replace(/[\t\n\r ]/g, '');
+    if (compact.length === 0) return Buffer.alloc(0);
+    if (compact.length === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact)) {
+        return null;
+    }
+    const unpadded = compact.replace(/=+$/, '');
+    if (unpadded.length % 4 === 1) return null;
+    const decoded = Buffer.from(unpadded, 'base64');
+    const canonicalInput = compact.replace(/=+$/, '');
+    const canonicalDecoded = decoded.toString('base64').replace(/=+$/, '');
+    return canonicalInput === canonicalDecoded ? decoded : null;
+}
+
+function normalizeRemoteCapabilities(value) {
+    const capabilities = deepFreezeJson(cloneBoundedJson(
+        value,
+        'clean discovery capabilities',
+    ));
+    assertExactKeys(
+        capabilities,
+        MCP_REMOTE_CAPABILITY_KEYS,
+        'clean discovery capabilities',
+    );
+    for (const key of MCP_REMOTE_CAPABILITY_KEYS) {
+        if (!Object.hasOwn(capabilities, key) || typeof capabilities[key] !== 'boolean') {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_CAPABILITY_PROFILE_REJECTED',
+                `Clean discovery must declare ${key} as an exact boolean`,
+            );
+        }
+    }
+    return capabilities;
+}
+
+function localCapabilitiesForRemote(capabilities) {
+    return Object.freeze(Object.fromEntries(
+        MCP_REMOTE_CAPABILITY_KEYS
+            .filter((key) => capabilities[key] === true)
+            .map((key) => [key, Object.freeze({})]),
+    ));
+}
+
+function assertNoImportedMcpAppContent(value, phase) {
+    function reject(reason) {
+        throw new McpEnforcementError(
+            'MCP_ACTIVE_CONTENT_REJECTED',
+            `Clean-imported ${phase} result contains ${reason}; MCP Apps and active documents are disabled`,
+        );
+    }
+
+    function walk(current, parentKey = null) {
+        if (!current || typeof current !== 'object') return;
+        if (Array.isArray(current)) {
+            current.forEach((child) => walk(child, parentKey));
+            return;
+        }
+
+        const normalizedParentKey = normalizeImportedContentKey(parentKey ?? '');
+        for (const [key, child] of Object.entries(current)) {
+            const normalizedKey = normalizeImportedContentKey(key);
+            if (MCP_APP_METADATA_KEYS.has(normalizedKey)
+                || (normalizedParentKey === 'meta' && normalizedKey === 'ui')) {
+                reject('MCP App UI metadata');
+            }
+            if ((normalizedKey === 'uri' || normalizedKey.endsWith('resourceuri'))
+                && typeof child === 'string'
+                && /^\s*(?:ui|data|javascript|vbscript|blob):/i.test(child)) {
+                reject('an active or MCP App resource reference');
+            }
+            if (['mimetype', 'mediatype', 'contenttype'].includes(normalizedKey)
+                && isMcpAppOrActiveDocumentMediaType(child)) {
+                reject('an active HTML or MCP App media type');
+            }
+        }
+
+        const typedTextContent = current.type === 'text' && typeof current.text === 'string';
+        const resourceContent = typeof current.uri === 'string'
+            && (typeof current.text === 'string' || typeof current.blob === 'string');
+        if ((typedTextContent || resourceContent) && containsActiveHtmlMarkup(current.text)) {
+            reject('active HTML markup');
+        }
+        if (resourceContent && typeof current.blob === 'string') {
+            const decoded = decodeCanonicalBase64(current.blob);
+            if (decoded === null) reject('non-canonical binary resource content');
+            if (containsActiveMarkupBytes(decoded)) reject('base64-encoded active HTML markup');
+        }
+        if (current.type === 'image' && typeof current.data === 'string') {
+            const decoded = decodeCanonicalBase64(current.data);
+            if (decoded === null) reject('non-canonical image content');
+            if (containsActiveMarkupBytes(decoded)) reject('base64-encoded active image markup');
+        }
+
+        for (const [key, child] of Object.entries(current)) walk(child, key);
+    }
+
+    walk(value);
+}
+
 function sha256Ref(value) {
     return `sha256:${crypto.createHash('sha256').update(stableJson(value)).digest('hex')}`;
 }
@@ -1208,6 +1388,7 @@ function verifyCleanImportedEnvelope(value, request) {
             'The host did not return an exact clean-imported result for this request',
         );
     }
+    assertNoImportedMcpAppContent(imported.result, request.phase);
     assertCanonicalEvidenceRef(imported.evidence_ref, 'clean imported result.evidence_ref');
     if (!/^sha256:[a-f0-9]{64}$/.test(imported.evidence_hash)) {
         throw new TypeError('clean imported result.evidence_hash is invalid');
@@ -1876,6 +2057,7 @@ async function connectRemoteClient(options = {}) {
     let hostSession;
     let discoveryEnvelope;
     let discovery;
+    let remoteCapabilities;
     try {
         assertExactKeys(
             rawHostSession,
@@ -1897,13 +2079,24 @@ async function connectRemoteClient(options = {}) {
         });
         discoveryEnvelope = verifyCleanImportedEnvelope(hostSession.discovery, openRequest);
         discovery = discoveryEnvelope.result;
-        assertExactKeys(discovery, ['protocol_version', 'stateless'], 'clean discovery result');
+        assertExactKeys(
+            discovery,
+            ['protocol_version', 'stateless', 'capabilities'],
+            'clean discovery result',
+        );
+        if (!Object.hasOwn(discovery, 'capabilities')) {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_CAPABILITY_PROFILE_REJECTED',
+                'Clean discovery result.capabilities is required',
+            );
+        }
         if (discovery.protocol_version !== MCP_V2_PROTOCOL_VERSION || discovery.stateless !== true) {
             throw new McpEnforcementError(
                 'MCP_REMOTE_NEGOTIATION_REJECTED',
                 `Hosted MCP did not establish an enforced stateless ${MCP_V2_PROTOCOL_VERSION} connection`,
             );
         }
+        remoteCapabilities = normalizeRemoteCapabilities(discovery.capabilities);
     } catch (error) {
         try {
             if (emergencyClose) {
@@ -1927,9 +2120,11 @@ async function connectRemoteClient(options = {}) {
             open_request_hash: openRequest.request_hash,
             discovery_evidence_hash: discoveryEnvelope.evidence_hash,
             discovery_result_hash: sha256Ref(discovery),
+            capabilities_hash: sha256Ref(remoteCapabilities),
             protocol_version: discovery.protocol_version,
             stateless: discovery.stateless,
         }),
+        remoteCapabilities,
         hostRequest: hostSession.request,
         hostClose: hostSession.close,
         closed: false,
@@ -1969,6 +2164,14 @@ async function connectRemoteClient(options = {}) {
         const current = enforcedSessionRecords.get(session);
         if (!current || current.closed) {
             throw new McpEnforcementError('MCP_ENFORCED_SESSION_CLOSED', 'The enforced MCP session is closed');
+        }
+        const capability = phase.split('/')[0];
+        if (MCP_REMOTE_CAPABILITY_KEYS.includes(capability)
+            && current.remoteCapabilities[capability] !== true) {
+            throw new McpEnforcementError(
+                'MCP_REMOTE_CAPABILITY_NOT_ADVERTISED',
+                `Remote MCP did not advertise the ${capability} capability required for ${phase}`,
+            );
         }
         // MCP `_meta` is opaque client/transport metadata. Validate it inside the
         // existing raw wire-size/shape bound, then erase it before classification,
@@ -2053,6 +2256,7 @@ async function connectRemoteClient(options = {}) {
         schema: MCP_ENFORCEMENT_SCHEMAS.session,
         protocol_version: MCP_V2_PROTOCOL_VERSION,
         stateless: true,
+        capabilities: remoteCapabilities,
         remote_url: openRequest.mcp_server_ref,
         remote_origin: openRequest.mcp_server_origin,
         listTools: (params = {}) => request('tools/list', params),
@@ -2066,8 +2270,10 @@ async function connectRemoteClient(options = {}) {
     enforcedSessionRecords.set(session, record);
 
     try {
-        await session.listTools();
-        createRemoteToolDirectory(session);
+        if (remoteCapabilities.tools) {
+            await session.listTools();
+            createRemoteToolDirectory(session);
+        }
         return session;
     } catch (error) {
         try {
@@ -2088,105 +2294,186 @@ async function closeRemoteSession(remoteSession) {
 }
 
 async function runMcpRelay({ enforcementBoundary } = {}) {
-    const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
-    const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
-    const {
-        CallToolRequestSchema,
-        ListToolsRequestSchema,
-        ListResourcesRequestSchema,
-        ReadResourceRequestSchema,
-        ListPromptsRequestSchema,
-        GetPromptRequestSchema,
-    } = require('@modelcontextprotocol/sdk/types.js');
+    const { ProtocolError, ProtocolErrorCode, Server } = require('@modelcontextprotocol/server');
+    const { serveStdio, StdioServerTransport } = require('@modelcontextprotocol/server/stdio');
+    const activeRemoteSessions = new Set();
+    const ownedRemoteSessions = new Set();
+    const cleanupPromises = new WeakMap();
+    const pendingCleanupPromises = new Set();
+    const pendingServerBuilds = new Set();
+    let shutdownRequested = false;
 
-    const server = new Server(
-        { name: 'agoragentic', version: PACKAGE_VERSION },
-        { capabilities: { tools: {}, resources: {}, prompts: {} } }
-    );
-
-    let remoteSession = null;
-    try {
-        remoteSession = await connectRemoteClient({ enforcementBoundary });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[agoragentic-mcp] remote relay unavailable; exposing fail-closed local tool metadata only: ${message}`);
+    function reportRelayError(error) {
+        const message = error instanceof Error ? error.stack || error.message : String(error);
+        console.error(`[agoragentic-mcp] stdio relay error: ${message}`);
     }
 
-    if (remoteSession) {
-        const remoteTools = createRemoteToolDirectory(remoteSession);
+    function cleanupRemote(remoteSession) {
+        if (!remoteSession) return Promise.resolve();
+        const existing = cleanupPromises.get(remoteSession);
+        if (existing) return existing;
+        activeRemoteSessions.delete(remoteSession);
+        const cleanup = closeRemoteSession(remoteSession);
+        cleanupPromises.set(remoteSession, cleanup);
+        pendingCleanupPromises.add(cleanup);
+        void cleanup.finally(() => pendingCleanupPromises.delete(cleanup)).catch(() => {});
+        return cleanup;
+    }
 
-        server.setRequestHandler(ListToolsRequestSchema, async (request) => {
-            return remoteTools.list(request.params);
-        });
+    function assertModernClientEnvelope(server, request, context) {
+        if (server.getNegotiatedProtocolVersion() !== MCP_V2_PROTOCOL_VERSION) return;
+        const metadata = context?.mcpReq?.envelope ?? request.params?._meta;
+        const validMetadata = metadata
+            && typeof metadata === 'object'
+            && !Array.isArray(metadata)
+            && metadata['io.modelcontextprotocol/protocolVersion'] === MCP_V2_PROTOCOL_VERSION
+            && metadata['io.modelcontextprotocol/clientCapabilities']
+            && typeof metadata['io.modelcontextprotocol/clientCapabilities'] === 'object'
+            && !Array.isArray(metadata['io.modelcontextprotocol/clientCapabilities']);
+        if (!validMetadata) {
+            throw new ProtocolError(
+                ProtocolErrorCode.InvalidParams,
+                `Every stateless ${MCP_V2_PROTOCOL_VERSION} request requires an exact _meta envelope`,
+            );
+        }
+    }
 
-        server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await remoteTools.has(request.params.name))) {
-                return executeFallbackTool(request.params.name, request.params.arguments || {}, {
-                    enforcementBoundary,
-                });
+    function modernEnvelopeGuard(server, handler) {
+        return async (request, context) => {
+            assertModernClientEnvelope(server, request, context);
+            return handler(request, context);
+        };
+    }
+
+    function relayShuttingDownError() {
+        return new McpEnforcementError(
+            'MCP_RELAY_SHUTTING_DOWN',
+            'The MCP stdio relay is shutting down and cannot create another server instance',
+        );
+    }
+
+    async function buildRelayServer() {
+        if (shutdownRequested) throw relayShuttingDownError();
+        let remoteSession = null;
+        try {
+            remoteSession = await connectRemoteClient({ enforcementBoundary });
+            ownedRemoteSessions.add(remoteSession);
+            activeRemoteSessions.add(remoteSession);
+        } catch (error) {
+            if (shutdownRequested) throw relayShuttingDownError();
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[agoragentic-mcp] remote relay unavailable; exposing fail-closed local tool metadata only: ${message}`);
+        }
+        if (shutdownRequested) {
+            await cleanupRemote(remoteSession);
+            throw relayShuttingDownError();
+        }
+
+        try {
+            const server = new Server(
+                { name: 'agoragentic', version: PACKAGE_VERSION },
+                {
+                    capabilities: remoteSession
+                        ? localCapabilitiesForRemote(remoteSession.capabilities)
+                        : MCP_LOCAL_SERVER_CAPABILITIES,
+                },
+            );
+
+            server.onclose = () => {
+                void cleanupRemote(remoteSession).catch(reportRelayError);
+            };
+
+            if (remoteSession) {
+                if (remoteSession.capabilities.tools) {
+                    const remoteTools = createRemoteToolDirectory(remoteSession);
+                    server.setRequestHandler('tools/list', modernEnvelopeGuard(server, async (request) => remoteTools.list(request.params)));
+                    server.setRequestHandler('tools/call', modernEnvelopeGuard(server, async (request) => {
+                        if (FALLBACK_TOOL_NAMES.has(request.params.name) && !(await remoteTools.has(request.params.name))) {
+                            return executeFallbackTool(request.params.name, request.params.arguments || {}, {
+                                enforcementBoundary,
+                            });
+                        }
+                        return remoteSession.callTool(request.params);
+                    }));
+                }
+                if (remoteSession.capabilities.resources) {
+                    server.setRequestHandler('resources/list', modernEnvelopeGuard(server, async (request) => remoteSession.listResources(request.params)));
+                    server.setRequestHandler('resources/read', modernEnvelopeGuard(server, async (request) => remoteSession.readResource(request.params)));
+                }
+                if (remoteSession.capabilities.prompts) {
+                    server.setRequestHandler('prompts/list', modernEnvelopeGuard(server, async (request) => remoteSession.listPrompts(request.params)));
+                    server.setRequestHandler('prompts/get', modernEnvelopeGuard(server, async (request) => remoteSession.getPrompt(request.params)));
+                }
+                console.error(`[agoragentic-mcp] stdio relay ${PACKAGE_VERSION} connected to ${REMOTE_MCP_URL}`);
+            } else {
+                server.setRequestHandler('tools/list', modernEnvelopeGuard(server, async () => ({ tools: buildFallbackToolList() })));
+                server.setRequestHandler('tools/call', modernEnvelopeGuard(server, async (request) => executeFallbackTool(
+                    request.params.name,
+                    request.params.arguments || {},
+                    { enforcementBoundary },
+                )));
+                server.setRequestHandler('resources/list', modernEnvelopeGuard(server, async () => ({ resources: [] })));
+                server.setRequestHandler('resources/read', modernEnvelopeGuard(server, async () => {
+                    throw new Error('Resources are unavailable while the remote Agoragentic MCP relay is unreachable.');
+                }));
+                server.setRequestHandler('prompts/list', modernEnvelopeGuard(server, async () => ({ prompts: [] })));
+                server.setRequestHandler('prompts/get', modernEnvelopeGuard(server, async () => {
+                    throw new Error('Prompts are unavailable while the remote Agoragentic MCP relay is unreachable.');
+                }));
+                console.error(`[agoragentic-mcp] stdio adapter ${PACKAGE_VERSION} is fail-closed; desired fallback origin is ${AGORAGENTIC_BASE}`);
             }
-            return remoteSession.callTool(request.params);
-        });
-
-        server.setRequestHandler(ListResourcesRequestSchema, async (request) => {
-            return remoteSession.listResources(request.params);
-        });
-
-        server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-            return remoteSession.readResource(request.params);
-        });
-
-        server.setRequestHandler(ListPromptsRequestSchema, async (request) => {
-            return remoteSession.listPrompts(request.params);
-        });
-
-        server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-            return remoteSession.getPrompt(request.params);
-        });
-    } else {
-        server.setRequestHandler(ListToolsRequestSchema, async () => {
-            return { tools: buildFallbackToolList() };
-        });
-
-        server.setRequestHandler(CallToolRequestSchema, async (request) => {
-            return executeFallbackTool(request.params.name, request.params.arguments || {}, {
-                enforcementBoundary,
-            });
-        });
-
-        server.setRequestHandler(ListResourcesRequestSchema, async () => {
-            return { resources: [] };
-        });
-
-        server.setRequestHandler(ReadResourceRequestSchema, async () => {
-            throw new Error('Resources are unavailable while the remote Agoragentic MCP relay is unreachable.');
-        });
-
-        server.setRequestHandler(ListPromptsRequestSchema, async () => {
-            return { prompts: [] };
-        });
-
-        server.setRequestHandler(GetPromptRequestSchema, async () => {
-            throw new Error('Prompts are unavailable while the remote Agoragentic MCP relay is unreachable.');
-        });
+            return server;
+        } catch (error) {
+            try {
+                await cleanupRemote(remoteSession);
+            } catch (cleanupError) {
+                throw new AggregateError(
+                    [error, cleanupError],
+                    'MCP relay server construction failed and remote cleanup also failed',
+                );
+            }
+            throw error;
+        }
     }
 
+    function buildTrackedRelayServer() {
+        const build = buildRelayServer();
+        pendingServerBuilds.add(build);
+        void build.then(
+            () => pendingServerBuilds.delete(build),
+            () => pendingServerBuilds.delete(build),
+        );
+        return build;
+    }
+
+    let handle = null;
     let shutdownPromise = null;
     const shutdown = (reason) => {
         if (shutdownPromise) return shutdownPromise;
+        shutdownRequested = true;
         console.error(`[agoragentic-mcp] shutting down on ${reason}`);
         shutdownPromise = (async () => {
             let firstError = null;
-            try {
-                await closeRemoteSession(remoteSession);
-            } catch (error) {
-                firstError = error;
+            if (handle) {
+                try {
+                    await handle.close();
+                } catch (error) {
+                    firstError ??= error;
+                }
             }
-            try {
-                await server.close();
-            } catch (error) {
-                firstError ??= error;
+            while (pendingServerBuilds.size > 0) {
+                const buildResults = await Promise.allSettled([...pendingServerBuilds]);
+                const failedBuild = buildResults.find((result) => (
+                    result.status === 'rejected'
+                    && result.reason?.code !== 'MCP_RELAY_SHUTTING_DOWN'
+                ));
+                firstError ??= failedBuild?.reason ?? null;
             }
+            const requestedCleanups = [...ownedRemoteSessions].map((session) => cleanupRemote(session));
+            const cleanupResults = await Promise.allSettled([
+                ...new Set([...requestedCleanups, ...pendingCleanupPromises]),
+            ]);
+            firstError ??= cleanupResults.find((result) => result.status === 'rejected')?.reason ?? null;
             if (firstError) throw firstError;
         })();
         return shutdownPromise;
@@ -2207,20 +2494,46 @@ async function runMcpRelay({ enforcementBoundary } = {}) {
     process.once('SIGTERM', () => terminateAfterShutdown('SIGTERM'));
     process.stdin.once('end', () => terminateAfterShutdown('stdin EOF'));
     process.stdin.once('close', () => terminateAfterShutdown('stdin close'));
-
-    const stdio = new StdioServerTransport(undefined, undefined, {
-        maxBufferSize: MAX_ENFORCEMENT_JSON_BYTES,
-    });
-    await server.connect(stdio);
     if (process.stdin.readableEnded || process.stdin.destroyed) {
         terminateAfterShutdown('closed stdin');
     }
 
-    if (remoteSession) {
-        console.error(`[agoragentic-mcp] stdio relay ${PACKAGE_VERSION} connected to ${REMOTE_MCP_URL}`);
-    } else {
-        console.error(`[agoragentic-mcp] stdio adapter ${PACKAGE_VERSION} is fail-closed; desired fallback origin is ${AGORAGENTIC_BASE}`);
+    // Preserve the prior eager remote-enforcement setup and cleanup contract.
+    // Shutdown listeners are installed first so an initial host open cannot
+    // outlive SIGINT/SIGTERM. serveStdio may request a second instance only
+    // when a modern discovery probe deliberately falls back to a 2025-era
+    // initialize exchange; every such build is tracked through cleanup.
+    let firstServer;
+    try {
+        firstServer = await buildTrackedRelayServer();
+    } catch (error) {
+        if (shutdownRequested && error?.code === 'MCP_RELAY_SHUTTING_DOWN') {
+            await shutdownPromise;
+            return;
+        }
+        throw error;
     }
+    if (shutdownRequested) {
+        await shutdownPromise;
+        return;
+    }
+
+    let firstServerAvailable = true;
+    const stdio = new StdioServerTransport(undefined, undefined, {
+        maxBufferSize: MAX_ENFORCEMENT_JSON_BYTES,
+    });
+    handle = serveStdio(async () => {
+        if (firstServerAvailable) {
+            firstServerAvailable = false;
+            return firstServer;
+        }
+        return buildTrackedRelayServer();
+    }, {
+        legacy: 'serve',
+        maxSubscriptions: 0,
+        transport: stdio,
+        onerror: reportRelayError,
+    });
 }
 
 function buildAcpInitializeResult() {
@@ -2548,6 +2861,7 @@ if (require.main === module) {
 
 module.exports = Object.freeze({
     MCP_ENFORCEMENT_SCHEMAS,
+    MCP_LOCAL_SERVER_CAPABILITIES,
     MCP_V2_PROTOCOL_VERSION,
     buildFallbackToolList,
     closeRemoteSession,

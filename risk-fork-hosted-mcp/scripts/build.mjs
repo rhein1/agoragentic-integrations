@@ -71,6 +71,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'LICENSE-MCP-MIT.txt',
     'NOTICE',
   ],
   scripts: {
@@ -235,6 +236,7 @@ const buildFlags = parseExactFlags(
 );
 const refreshReviewedSources = buildFlags.has(REFRESH_REVIEWED_SOURCES_FLAG);
 const REVIEWED_SOURCE_EXACT_FILES = Object.freeze([
+  'mcp/LICENSE',
   'mcp/mcp-server.js',
   'mcp/package.json',
   'risk-fork/LICENSE',
@@ -253,6 +255,10 @@ const PACKAGED_REVIEWED_ASSETS = Object.freeze([
   {
     source: 'risk-fork/LICENSE',
     target: 'LICENSE',
+  },
+  {
+    source: 'mcp/LICENSE',
+    target: 'LICENSE-MCP-MIT.txt',
   },
   {
     source: 'risk-fork/NOTICE',

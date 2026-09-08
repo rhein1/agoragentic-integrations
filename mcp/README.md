@@ -6,7 +6,7 @@
 
 Version 2.0.0 is an unpublished, non-installable source candidate. Do not resolve the `agoragentic-mcp` name from npm: the registry currently serves a legacy direct relay that predates this fail-closed boundary.
 
-The standalone commands expose locally owned protocol responses and fallback tool metadata, but they perform no remote MCP or fallback REST network execution. Remote work requires a programmatic embedding host to provide an enforcement capability created by `createMcpEnforcementBoundary()`.
+The standalone commands expose locally owned protocol responses and fallback tool metadata, but they perform no remote MCP or fallback REST network execution. The stdio entrypoint uses the v2 SDK's dual-era server: a modern client can begin with `server/discover` and continue with self-describing MCP `2026-07-28` requests without `initialize`, while current 2025-era clients retain their explicit `initialize` compatibility path. Remote work requires a programmatic embedding host to provide an enforcement capability created by `createMcpEnforcementBoundary()`.
 
 That factory validates API shape and prevents a duck-typed callback from being accepted accidentally. It does **not** prove that the supplied callbacks use Risk Fork, provide isolation, protect credentials, or satisfy a production containment gate. The embedding host remains trusted and must be independently qualified.
 
@@ -27,6 +27,7 @@ Without an enforcement capability:
 - no remote `tools`, `resources`, or `prompts` request is sent;
 - fallback registration, search, preview, match, execute, and status calls make zero HTTP requests;
 - the stdio adapter can still answer `initialize` and `tools/list` with locally owned metadata;
+- the adapter does not advertise the `io.modelcontextprotocol/ui` MCP Apps extension; imported `ui://` resources, active URI schemes, MCP App UI metadata, active-document MIME types, and all HTML-like markup are rejected before the parent/client can observe them;
 - a fallback `tools/call` returns `risk_fork_enforcement_required`; and
 - ACP can answer its local session methods and `tools/list`, but advertised network-backed calls fail before remote discovery and unadvertised tools are rejected.
 
@@ -34,7 +35,7 @@ This is intentional. A green package smoke test proves fail-closed orchestration
 
 ## Protocol contract
 
-The package accepts a host session only when its clean discovery envelope reports stateless MCP `2026-07-28`. The trusted embedding host must actually pin and verify that protocol on the network leg. It must own all network activity for:
+The package accepts a host session only when its clean discovery envelope reports stateless MCP `2026-07-28` plus the exact closed capability record `{ tools, resources, prompts }`, with all three values present as booleans. That record and its hash are bound into the session. An unadvertised family is neither listed nor proxied and fails before the host request method runs. On the client-facing stdio leg, the v2 server advertises only the true families, requires every modern request to carry its own `_meta` protocol version and client-capability envelope, disables `subscriptions/listen`, and does not use `Mcp-Session-Id`. The trusted embedding host must actually pin and verify the same protocol on the network leg. It must own all network activity for:
 
 - `server/discover`;
 - `tools/list` and `tools/call`;
@@ -45,6 +46,8 @@ The package accepts a host session only when its clean discovery envelope report
 Each request descriptor is immutable and binds the phase, target URL and origin, parameters, tool name, risk profile, transport constraints, request hash, and—after discovery—the session binding hash. Before `tools/call`, the package resolves the complete bounded paginated tool directory and binds the exact advertised descriptor, descriptor hash, annotations, and closed capability record into the host request. Duplicate names, repeated/ambiguous pagination, unadvertised calls, name substitution, and descriptor drift fail closed. Missing or incomplete effect metadata is `unknown_effectfulness` and is routed as `IRREVERSIBLE`/`prepare_only`; remote annotation text is evidence input, never authority. The package requests `redirects: "error"`, forbids direct package network access, and accepts only a request-bound clean-import envelope. If a session closes while a host request is pending, the late result is discarded before import.
 
 Accepted imported JSON is copied into bounded plain JSON and recursively frozen. Envelopes must echo the exact request ID, request hash, and phase; assert `clean_imported: true` and `authority_granted: false`; and carry an evidence reference. `evidence_hash` must equal `computeMcpCleanImportEvidenceHash(request.request_hash, result, evidence_ref)`. The helper domain-separates and hashes canonical bounded JSON that binds `{ request_hash, evidence_ref, result }`; changing any one invalidates the envelope. Credential-shaped keys and values—including nested, camel-case, and plural credential containers—bearer material, `amk_` keys, private keys, credential query parameters, accessors, non-plain prototypes, sparse arrays, excessive depth, excessive nodes, and oversized JSON are rejected. A credential-shaped property name is allowed only as a `tools/list` input/output schema definition, and that schema may not embed `default`, `const`, `example(s)`, or `enum` values.
+
+MCP Apps are also default-denied at this boundary. Modern `_meta.ui` and `ui://` references, the `io.modelcontextprotocol/ui` extension marker, the standard `text/html;profile=mcp-app` resource type, legacy `openai/outputTemplate` / `text/html+skybridge` forms, active HTML media types, active URI schemes, and all HTML-like markup in typed text or embedded resources fail clean import. Ordinary plain text, non-App resources, and valid empty or non-active binary resources remain available. This package does not claim that arbitrary active content can be made safe by iframe sandboxing; a future Apps lane requires its own qualified renderer, CSP, permissions, origin, message, and tool-call enforcement model before the capability can be advertised.
 
 No API key, bearer token, payment signature, raw client, or transport is included in an enforcement request or accepted imported result. A qualified host must resolve credentials out of band, ideally at a privileged request broker that does not expose them to the disposable child.
 
@@ -101,7 +104,7 @@ const enforcementBoundary = createMcpEnforcementBoundary({
 await runMcpRelay({ enforcementBoundary });
 ```
 
-The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. Host-adapter and returned session methods are receiver-bound immediately. The factory calls each host method with its documented request followed by a controller-owned context containing `signal`, `timeout_ms`, `deadline_at`, and `operation`; implementations should stop owned work when the signal aborts. Open, request, and close waits have bounded configurable deadlines, a late-resolving open session is closed, and repeated `close()` calls share one close attempt. Closing a session synchronously prevents any queued host request from starting, aborts every tracked in-flight request signal, waits for those request wrappers to settle, and invokes the host's bounded close operation. AbortSignal alone is not an effect fence: every fallback callback, including `agoragentic_preview_x402`, is hard-disabled and never invoked until a trusted host supplies durable idempotency and terminal reconciliation. The preview endpoint mints a `quote_id`, so its name does not prove a no-effect contract. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
+The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. Host-adapter and returned session methods are receiver-bound immediately. The factory calls each host method with its documented request followed by a controller-owned context containing `signal`, `timeout_ms`, `deadline_at`, and `operation`; implementations should stop owned work when the signal aborts. Open, request, and close waits have bounded configurable deadlines, a late-resolving open session is closed, and repeated `close()` calls share one close attempt. Closing a session synchronously prevents any queued host request from starting, aborts every tracked in-flight request signal, waits for those request wrappers to settle, and invokes the host's bounded close operation. Relay shutdown is installed before the eager host open, stops stdio ingress, waits for every in-flight server factory, and awaits cleanup of every remote session it acquired, including a late probe-to-legacy fallback allocation. AbortSignal alone is not an effect fence: every fallback callback, including `agoragentic_preview_x402`, is hard-disabled and never invoked until a trusted host supplies durable idempotency and terminal reconciliation. The preview endpoint mints a `quote_id`, so its name does not prove a no-effect contract. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
 
 Do not use the example as production qualification. The host implementation must additionally demonstrate fresh child identity, no inherited authority or parent-writable state, target and argument revalidation, atomic one-use authorization/CAS, taint handling, clean commit, crash/retry safety, provider failure cleanup, and verified lifecycle enforcement.
 
@@ -115,7 +118,7 @@ npm --prefix mcp run build
 node mcp/dist/mcp-server.cjs
 ```
 
-The source-checkout command above is useful for checking local stdio compatibility and inspecting owned fallback tool metadata. It is not a live relay unless a separate embedding process supplies the enforcement capability programmatically.
+The source-checkout command above is useful for checking modern stateless `server/discover`, legacy stdio compatibility, and owned fallback tool metadata. It is not a live relay unless a separate embedding process supplies the enforcement capability programmatically.
 
 For ACP-local compatibility:
 
@@ -191,9 +194,10 @@ Before enabling remote traffic, verify that the embedding host:
 3. attaches credentials only out of band and never exposes them to imported JSON;
 4. enforces the exact target, method, parameters, session binding, and request hash;
 5. rejects redirects, protocol downgrade, stateful sessions, and unadvertised ACP tools;
-6. independently reconstructs and authorizes any clean commit rather than trusting child metadata;
-7. makes one-use authorization and CAS transitions atomic across concurrency, crashes, retries, and provider failure; and
-8. has verified idle TTL and cleanup behavior on the real provider, not just mocks.
+6. keeps MCP Apps and active HTML default-denied unless a separately qualified UI boundary owns rendering, CSP, permissions, origins, messages, and App-initiated tool calls;
+7. independently reconstructs and authorizes any clean commit rather than trusting child metadata;
+8. makes one-use authorization and CAS transitions atomic across concurrency, crashes, retries, and provider failure; and
+9. has verified idle TTL and cleanup behavior on the real provider, not just mocks.
 
 Until those checks have live evidence, keep production/live provider gates disabled and describe this package as a protocol/reference implementation.
 

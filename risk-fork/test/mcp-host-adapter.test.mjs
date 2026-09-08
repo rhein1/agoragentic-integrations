@@ -29,6 +29,10 @@ import {
   isRiskForkMcpHostAdapter,
 } from '../src/mcp-host-adapter.mjs';
 import {
+  RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA,
+  createMcpWireResultMetadataEvidence,
+} from '../src/mcp-transport-contract.mjs';
+import {
   RiskForkProvider,
   createCleanupVerificationEvidence,
 } from '../src/provider.mjs';
@@ -103,6 +107,7 @@ function sessionBinding(openRequest, discovery) {
     discovery_result_hash: sha256Ref(discovery.result),
     protocol_version: discovery.result.protocol_version,
     stateless: discovery.result.stateless,
+    capabilities_hash: sha256Ref(discovery.result.capabilities),
   });
 }
 
@@ -162,14 +167,28 @@ function ownerPolicy() {
 function resultForPhase(phase) {
   if (phase === 'server/discover') {
     return {
-      payload: { protocol_version: '2026-07-28', stateless: true },
+      payload: {
+        protocol_version: '2026-07-28',
+        stateless: true,
+        capabilities: { tools: true, resources: true, prompts: true },
+      },
       schema: {
         type: 'object',
         additionalProperties: false,
-        required: ['protocol_version', 'stateless'],
+        required: ['protocol_version', 'stateless', 'capabilities'],
         properties: {
           protocol_version: { type: 'string', maxLength: 20 },
           stateless: { type: 'boolean' },
+          capabilities: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['tools', 'resources', 'prompts'],
+            properties: {
+              tools: { type: 'boolean' },
+              resources: { type: 'boolean' },
+              prompts: { type: 'boolean' },
+            },
+          },
         },
       },
     };
@@ -386,8 +405,15 @@ class DynamicMcpTestProvider extends RiskForkProvider {
   async executeInFork(input) {
     this.operations.push(input.operation);
     const mcpResult = this.resultFactory(input.operation.phase, input.operation);
+    const wireResult = {
+      resultType: 'complete',
+      ...(['server/discover', 'tools/list'].includes(input.operation.phase)
+        ? { ttlMs: 0, cacheScope: 'private' }
+        : {}),
+      ...mcpResult,
+    };
     let transportEvidence = {
-      schema: 'agoragentic.risk-fork.mcp-transport-evidence.v1',
+      schema: RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA,
       destination_policy_hash: input.operation.destination_policy.policy_hash,
       requested_url: input.operation.mcp_server_ref,
       final_url: input.operation.mcp_server_ref,
@@ -402,8 +428,12 @@ class DynamicMcpTestProvider extends RiskForkProvider {
       proxy_used: false,
       request_body_hash: sha256Ref(`request:${input.operation.operation_hash}`),
       response_body_hash: sha256Ref(`response:${input.operation.operation_hash}`),
-      wire_result_hash: sha256Ref(mcpResult),
+      wire_result_hash: sha256Ref(wireResult),
       wire_result_type: 'complete',
+      wire_result_metadata: createMcpWireResultMetadataEvidence(
+        wireResult,
+        input.operation.phase,
+      ),
       measurements: {
         dns_query_count: 3,
         connection_attempt_count: 1,
@@ -768,6 +798,56 @@ test('live-default mode executes exact MCP phases only inside a request-bound ch
   );
   assert.equal(current.provider.destroyedForks.size, 2);
   assert.equal(current.provider.destroyedSavepoints.size, 2);
+});
+
+test('discovery rejects a missing or open advertised-capabilities record', async () => {
+  for (const capabilities of [
+    undefined,
+    { tools: true, resources: true, prompts: true, tasks: true },
+    { tools: true, resources: false, prompts: 'yes' },
+  ]) {
+    const current = dynamicFixture((phase) => {
+      if (phase !== 'server/discover') return resultForPhase(phase).payload;
+      return {
+        protocol_version: '2026-07-28',
+        stateless: true,
+        ...(capabilities === undefined ? {} : { capabilities }),
+      };
+    });
+    await assert.rejects(
+      openDirect(current.adapter),
+      (error) => error instanceof RiskForkMcpHostAdapterError,
+    );
+    assert.deepEqual(
+      current.provider.operations.map((operation) => operation.phase),
+      ['server/discover'],
+    );
+  }
+});
+
+test('an unadvertised phase is rejected before another child or network operation starts', async () => {
+  const current = dynamicFixture((phase) => {
+    if (phase !== 'server/discover') return resultForPhase(phase).payload;
+    return {
+      protocol_version: '2026-07-28',
+      stateless: true,
+      capabilities: { tools: true, resources: false, prompts: false },
+    };
+  });
+  const opened = await openDirect(current.adapter);
+  await assert.rejects(
+    opened.session.request(enforcementRequest({
+      schema: 'agoragentic.mcp.enforced-phase-request.v1',
+      phase: 'resources/list',
+      sessionBindingHash: opened.binding,
+    })),
+    (error) => error instanceof RiskForkMcpHostAdapterError
+      && error.code === RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.CAPABILITY_NOT_ADVERTISED,
+  );
+  assert.deepEqual(
+    current.provider.operations.map((operation) => operation.phase),
+    ['server/discover'],
+  );
 });
 
 test('live-default child transport retains the exact explicit-read-only tools/call binding', async () => {

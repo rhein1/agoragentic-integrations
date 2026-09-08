@@ -58,6 +58,15 @@ const REQUEST_PHASES = Object.freeze([
   'prompts/get',
 ]);
 const ALL_PHASES = Object.freeze([OPEN_PHASE, ...REQUEST_PHASES]);
+const SERVER_CAPABILITY_KEYS = Object.freeze(['tools', 'resources', 'prompts']);
+const SERVER_CAPABILITY_BY_PHASE = Object.freeze({
+  'tools/list': 'tools',
+  'tools/call': 'tools',
+  'resources/list': 'resources',
+  'resources/read': 'resources',
+  'prompts/list': 'prompts',
+  'prompts/get': 'prompts',
+});
 const TOOL_CAPABILITY_KEYS = Object.freeze([
   'network_access',
   'filesystem_read',
@@ -147,6 +156,7 @@ export const RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES = Object.freeze({
   ACTION_PROPOSAL_REQUIRED: 'RISK_FORK_MCP_ACTION_PROPOSAL_REQUIRED',
   PRE_EFFECT_REJECTED: 'RISK_FORK_MCP_PRE_EFFECT_REJECTED',
   PREPARED_RESULT_INVALID: 'RISK_FORK_MCP_PREPARED_RESULT_INVALID',
+  CAPABILITY_NOT_ADVERTISED: 'RISK_FORK_MCP_CAPABILITY_NOT_ADVERTISED',
   FALLBACK_BLOCKED: 'RISK_FORK_MCP_FALLBACK_BLOCKED',
   DEADLINE_EXCEEDED: 'RISK_FORK_MCP_DEADLINE_EXCEEDED',
   ABORTED: 'RISK_FORK_MCP_ABORTED',
@@ -171,6 +181,18 @@ function exactKeys(value, keys, field) {
   assertAllowedKeys(value, keys, field);
   const missing = keys.filter((key) => !Object.hasOwn(value, key));
   if (missing.length > 0) throw new TypeError(`${field} is missing required fields`);
+}
+
+function validateAdvertisedCapabilities(value) {
+  exactKeys(value, SERVER_CAPABILITY_KEYS, 'Risk Fork MCP discovery capabilities');
+  if (SERVER_CAPABILITY_KEYS.some((key) => typeof value[key] !== 'boolean')) {
+    throw new TypeError('Risk Fork MCP discovery capabilities must be booleans');
+  }
+  return deepFreeze({
+    tools: value.tools,
+    resources: value.resources,
+    prompts: value.prompts,
+  });
 }
 
 function boundedCanonicalClone(value, field, maxBytes = MAX_PLAN_BYTES) {
@@ -1088,7 +1110,11 @@ export function createRiskForkMcpHostAdapter(input = {}) {
       throw error;
     }
     try {
-      exactKeys(discovery.result, ['protocol_version', 'stateless'], 'Risk Fork MCP discovery result');
+      exactKeys(
+        discovery.result,
+        ['protocol_version', 'stateless', 'capabilities'],
+        'Risk Fork MCP discovery result',
+      );
       if (discovery.result.protocol_version !== MCP_PROTOCOL_VERSION
         || discovery.result.stateless !== true) {
         throw adapterError(
@@ -1096,6 +1122,9 @@ export function createRiskForkMcpHostAdapter(input = {}) {
           'Risk Fork MCP discovery did not establish the required stateless protocol',
         );
       }
+      const advertisedCapabilities = validateAdvertisedCapabilities(
+        discovery.result.capabilities,
+      );
       throwIfAborted(context);
       const sessionBindingHash = sha256Ref({
         open_request_hash: openRequest.request_hash,
@@ -1103,6 +1132,7 @@ export function createRiskForkMcpHostAdapter(input = {}) {
         discovery_result_hash: sha256Ref(discovery.result),
         protocol_version: discovery.result.protocol_version,
         stateless: discovery.result.stateless,
+        capabilities_hash: sha256Ref(advertisedCapabilities),
       });
       const state = {
         closed: false,
@@ -1113,6 +1143,7 @@ export function createRiskForkMcpHostAdapter(input = {}) {
         serverRef: openRequest.mcp_server_ref,
         serverOrigin: openRequest.mcp_server_origin,
         sessionBindingHash,
+        advertisedCapabilities,
       };
       let session;
 
@@ -1148,6 +1179,13 @@ export function createRiskForkMcpHostAdapter(input = {}) {
             throw adapterError(
               RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.SESSION_BINDING_MISMATCH,
               'MCP phase request does not match the enforced host session',
+            );
+          }
+          const requiredCapability = SERVER_CAPABILITY_BY_PHASE[normalized.phase];
+          if (!requiredCapability || state.advertisedCapabilities[requiredCapability] !== true) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.CAPABILITY_NOT_ADVERTISED,
+              'MCP phase requires a capability the discovered server did not advertise',
             );
           }
           if (state.seenRequestHashes.has(normalized.request_hash)) {

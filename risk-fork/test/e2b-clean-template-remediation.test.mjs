@@ -45,6 +45,12 @@ import {
   createE2BRuntimeSdkIntegrityVerifier,
   sha256BytesRef,
 } from '../src/e2b-qualification.mjs';
+import {
+  RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA,
+  createMcpDestinationPolicy,
+  createMcpTransportResultSchema,
+  createUnsupportedMcpWireResultError,
+} from '../src/mcp-transport-contract.mjs';
 import { NOW, hash, makeCapsule, makeForkIdentity } from './helpers.mjs';
 
 const TEMPLATE_ID = 'template-risk-fork-clean-immutable-v1';
@@ -242,6 +248,48 @@ function parseFlag(command, flag) {
   return match?.[1] ?? null;
 }
 
+function createMcpListOperation() {
+  const endpoint = 'https://mcp.public-example.net/rpc';
+  const mcpResultSchema = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['tools'],
+    properties: { tools: { type: 'array', maxItems: 10 } },
+  };
+  const responseSchema = createMcpTransportResultSchema(mcpResultSchema);
+  const operation = {
+    schema: 'agoragentic.risk-fork.mcp-child-operation.v1',
+    kind: 'mcp_http_phase',
+    mcp_request_hash: hash('e2b-mcp-rejection-request'),
+    phase: 'tools/list',
+    mcp_server_ref: endpoint,
+    mcp_server_origin: new URL(endpoint).origin,
+    tool_name: null,
+    tool_descriptor_hash: null,
+    tool_input_schema: null,
+    tool_input_schema_hash: null,
+    tool_effect_status: null,
+    tool_safety_binding_hash: null,
+    params: {},
+    protocol_version: '2026-07-28',
+    destination_policy: createMcpDestinationPolicy({
+      href: endpoint,
+      origin: new URL(endpoint).origin,
+    }),
+    redirects: 'error',
+    response_mode: 'json_or_sse',
+    mcp_result_schema: mcpResultSchema,
+    mcp_result_schema_hash: hash(mcpResultSchema),
+    response_schema: responseSchema,
+    response_schema_hash: hash(responseSchema),
+    max_response_bytes: 64 * 1024,
+    timeout_ms: 5_000,
+    operation_hash: null,
+  };
+  operation.operation_hash = hash({ ...operation, operation_hash: null });
+  return operation;
+}
+
 function createMockSdk(options = {}) {
   const events = [];
   const files = new Map();
@@ -411,9 +459,7 @@ function createMockSdk(options = {}) {
           result: { answer: 'bounded-result' },
           result_schema_hash: job.expected_result_schema_hash,
         };
-        const result = {
-          schema: 'agoragentic.risk-fork.runner-result.v1',
-          status: 'completed',
+        const binding = {
           job_id: job.job_id,
           job_hash: job.job_hash,
           parent_state_hash: job.parent_state_hash,
@@ -430,10 +476,31 @@ function createMockSdk(options = {}) {
           execution_mode: job.execution_mode,
           trusted_runner_artifact_hash: RUNNER_HASH,
           expected_result_schema_hash: job.expected_result_schema_hash,
-          commit_candidate: commitCandidate,
-          commit_candidate_hash: hash(commitCandidate),
-          ...(options.resultOverrides ?? {}),
         };
+        let result;
+        if (options.runnerRejection) {
+          const rejectionError = createUnsupportedMcpWireResultError(
+            options.runnerRejection,
+            job.mcp_phase,
+          );
+          result = {
+            schema: RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA,
+            status: 'rejected',
+            ...binding,
+            rejection_code: rejectionError.code,
+            rejection_evidence: rejectionError.rejection_evidence,
+            rejection_evidence_hash: hash(rejectionError.rejection_evidence),
+          };
+        } else {
+          result = {
+            schema: 'agoragentic.risk-fork.runner-result.v1',
+            status: 'completed',
+            ...binding,
+            commit_candidate: commitCandidate,
+            commit_candidate_hash: hash(commitCandidate),
+            ...(options.resultOverrides ?? {}),
+          };
+        }
         files.set(resultPath, Buffer.from(JSON.stringify(result)));
         return { exitCode: 0, stdout: '', stderr: '' };
       },
@@ -543,7 +610,13 @@ async function fixture(t, mockOptions = {}) {
   await import('node:fs/promises').then(({ mkdir }) => mkdir(source, { recursive: true }));
   await writeFile(path.join(source, 'input.txt'), 'bounded workspace input\n');
   const inspected = await inspectLocalWorkspace({ source_workspace: source });
-  const capsule = makeCapsule({ workspace: { digest: inspected.workspace_digest } });
+  const capsule = makeCapsule({
+    ...(mockOptions.capsuleOverrides ?? {}),
+    workspace: {
+      ...(mockOptions.capsuleOverrides?.workspace ?? {}),
+      digest: inspected.workspace_digest,
+    },
+  });
   const mock = createMockSdk(mockOptions);
   let qualificationEvidence = null;
   let externalQualificationObservationVerifier = null;
@@ -1038,6 +1111,64 @@ test('runner result is exact-bound to a unique job and stale or substituted evid
   const jobWrites = prepared.mock.events.filter((event) => event.type === 'file-write'
     && event.path.startsWith(`${E2B_RISK_FORK_PATHS.job}.`));
   assert.equal(jobWrites.length, 1);
+});
+
+test('typed MCP input-required rejection crosses the runner boundary as hash-only evidence', async (t) => {
+  const operation = createMcpListOperation();
+  const sensitivePrompt = 'sensitive approval prompt must remain in the child';
+  const sensitiveState = 'sensitive continuation state must remain in the child';
+  const prepared = await prepareFork(t, {
+    capsuleOverrides: {
+      result_schema: operation.response_schema,
+      proposed_interaction: {
+        mcp_server_ref: operation.mcp_server_ref,
+        mcp_server_origin: operation.mcp_server_origin,
+        mcp_method: operation.phase,
+        tool_name: null,
+        effective_arguments_hash: hash(operation.params),
+      },
+    },
+    runnerRejection: {
+      resultType: 'input_required',
+      inputRequests: { approval: { prompt: sensitivePrompt } },
+      requestState: sensitiveState,
+    },
+  });
+
+  await assert.rejects(
+    prepared.adapter.executeInFork({
+      fork_ref: prepared.fork.fork_ref,
+      execution_mode: 'isolated_execution',
+      operation,
+      timeout_ms: 5_000,
+    }),
+    (error) => {
+      assert.equal(error?.name, 'E2BMcpWireResultRejectedError');
+      assert.equal(error?.code, 'ERR_RISK_FORK_MCP_INPUT_REQUIRED_UNSUPPORTED');
+      assert.equal(error?.rejection_evidence?.reported_result_type, 'input_required');
+      assert.equal(error?.rejection_evidence?.automatic_retry, false);
+      assert.equal(
+        error?.rejection_evidence_hash,
+        hash(error?.rejection_evidence),
+      );
+      assert.match(error?.runner_rejection_artifact_hash, /^sha256:[a-f0-9]{64}$/);
+      const serialized = JSON.stringify(error);
+      assert.equal(serialized.includes(sensitivePrompt), false);
+      assert.equal(serialized.includes(sensitiveState), false);
+      return true;
+    },
+  );
+  assert.equal(prepared.mock.killed, true);
+  assert.equal(
+    prepared.mock.events.filter(
+      (event) => event.type === 'command' && event.command.startsWith('trusted-runner '),
+    ).length,
+    1,
+  );
+  assert.equal(
+    [...prepared.mock.files.keys()].some((file) => file.includes('.result.')),
+    false,
+  );
 });
 
 test('runner semantic scans reject exact credentials in values and keys without disclosing them', async (t) => {
