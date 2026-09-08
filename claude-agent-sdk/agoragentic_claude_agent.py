@@ -165,5 +165,6 @@ if __name__ == "__main__":
     adapter = ClaudeAgentSdkGatingAdapter()
     allowed, status = adapter.verify_tool_permission(
         "agoragentic_execute", {"constraints": {"max_cost_usdc": "0.15"}})
-    assert not allowed and status == "Approval_Required"
+    if allowed or status != "Approval_Required":
+        raise RuntimeError("offline_verification_fail_open")
     print(json.dumps({"allowed": allowed, "status": status, "network_calls": 0}))
