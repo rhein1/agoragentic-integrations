@@ -36,7 +36,8 @@ cash_capacity = max(0, supplied_balance - pending_debit_holds
                     - refund_reserve - principal_floor)
 
 profit_capacity = max(0, eligible_external_revenue_from_input
-                      - settled_costs - settled_refunds - prior_owner_distributions)
+                      - settled_costs - settled_refunds - prior_owner_distributions
+                      - pending_debit_holds - external_holds)
 
 surplus_preview = min(max(0, cash_capacity - proposed_cost),
                       max(0, profit_capacity - proposed_cost))
@@ -49,6 +50,8 @@ Costs are required estimates including failure/retry exposure; success probabili
 A settled external-revenue row contributes to the input projection only when both settlement and outcome references are present. Pending, failed, disputed, capital, internal-transfer, and test-revenue rows do not count as earned revenue. Pending/disputed outgoing costs, refunds, and owner distributions become cash holds. Settled costs/refunds reduce projected profit. Duplicate ledger IDs or settlement component references invalidate the snapshot, rather than being silently dropped.
 
 `settlement_ref` is a unique ledger/settlement-component reference, not necessarily a transaction hash: several economically distinct components of one transaction need distinct references after host reconciliation. `external_holds_usdc` covers obligations **not already represented** by pending/disputed debit rows. The supplied balance must be posted cash, not pending credits. `history_complete: true` is only a caller assertion: this module cannot verify coverage, reconcile the balance to history, identify undisclosed liabilities, establish payer independence, verify signatures, or confirm blockchain finality.
+
+Outstanding pending/disputed debits and external holds conservatively reserve both cash and projected earnings. This prevents a large capital balance from making already-committed earnings appear available for another distribution. External holds may over-reserve earnings; this preview does not infer which obligations could be funded from capital.
 
 Accordingly, the output always carries `evidence_verified: false`, an explicit warning, and `actual_revenue_verified_usdc: null`. A plausible reference, a self-hash, or the word `settled` is not payment proof. Do not use these projections as the sole basis for moving money.
 

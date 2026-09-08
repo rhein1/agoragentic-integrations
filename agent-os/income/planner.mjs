@@ -129,7 +129,9 @@ function treasuryProjection(t, m, now) {
   const reserve = parseUsdc(m.operating_reserve_usdc) + parseUsdc(m.refund_reserve_usdc) + parseUsdc(m.principal_floor_usdc);
   return {
     cashCapacity: max0(balance - holds - reserve),
-    profitCapacity: max0(revenue - expenses - distributions),
+    // Outstanding obligations reserve earnings as well as posted cash. Otherwise
+    // a large capital balance could mask a second allocation of the same profit.
+    profitCapacity: max0(revenue - expenses - distributions - holds),
     revenue, expenses, distributions, holds, reserve, excluded,
   };
 }

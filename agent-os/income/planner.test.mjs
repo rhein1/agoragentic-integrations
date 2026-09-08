@@ -134,6 +134,32 @@ for (const kind of ['operating_cost', 'refund', 'owner_distribution']) test(`pen
   assert.equal(r.accounting.input_holds_usdc, '15.000000');
   assert.equal(r.accounting.surplus_preview_usdc, '0.000000');
 });
+for (const kind of ['operating_cost', 'refund', 'owner_distribution']) {
+  for (const state of ['pending', 'disputed']) test(`${state} ${kind} reserves profit despite ample capital`, () => {
+    const r = run(x => {
+      x.opportunities = [];
+      x.treasury.entries[0].amount_usdc = '970';
+      x.treasury.balance_usdc = '1000';
+      x.treasury.entries.push({ id: 'outstanding_debit', kind, state, amount_usdc: '30', settlement_ref: null, outcome_ref: null });
+      x.withdrawal_request.amount_usdc = '30';
+    });
+    assert.equal(r.accounting.surplus_preview_usdc, '0.000000');
+    assert.equal(r.withdrawal.economically_feasible_in_snapshot, false);
+    assert.ok(r.withdrawal.reasons.includes('insufficient_surplus'));
+  });
+}
+
+test('external holds reserve profit despite ample capital', () => {
+  const r = run(x => {
+    x.opportunities = [];
+    x.treasury.entries[0].amount_usdc = '970';
+    x.treasury.balance_usdc = '1000';
+    x.treasury.external_holds_usdc = '25';
+  });
+  assert.equal(r.accounting.surplus_preview_usdc, '5.000000');
+  assert.equal(r.withdrawal.economically_feasible_in_snapshot, false);
+});
+
 test('settled refunds and prior distributions reduce available profit', () => {
   const r = run(x => {
     x.treasury.entries.push({ id: 'refund', kind: 'refund', state: 'settled', amount_usdc: '10', settlement_ref: 'refund_component', outcome_ref: null });
