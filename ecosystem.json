@@ -142,7 +142,7 @@
   ],
   "inventory": {
     "integration_manifest": "./integrations.json",
-    "integration_count": 109,
+    "integration_count": 110,
     "count_rule": "integration_count must equal integrations.json.integrations.length",
     "public_copy_rule": "Public surfaces should read the count from this profile or link to the manifest instead of independently hard-coding it."
   },

@@ -1,0 +1,30 @@
+{
+  "schema": "agoragentic.anchor-safe-pay.upstream-provenance.v1",
+  "recorded_at": "2026-08-31T00:00:00Z",
+  "safe_pay": {
+    "repository": "https://github.com/hypeprinter007-stack/anchor-x402-safe-pay",
+    "version": "0.3.0",
+    "commit": "1cf112758b58f43e0def20d558910822e6183487",
+    "license": "MIT",
+    "compatibility_surface": "screenAllows with an in-memory fixture fetch only",
+    "production_endpoint_called": false,
+    "partnership_claimed": false
+  },
+  "harness_core": {
+    "repository": "https://github.com/rhein1/agoragentic-harness-core",
+    "version": "0.4.2",
+    "commit": "d858f955023df8094855e36ca23d8399d9460000",
+    "license": "Apache-2.0",
+    "compatibility_surface": "public authority boundary, sanitization, stable hash, and stable id exports"
+  },
+  "authority": {
+    "network": false,
+    "paid_provider_call": false,
+    "wallet": false,
+    "spend": false,
+    "settlement": false,
+    "production_dispatch": false,
+    "publication": false,
+    "owner_approval_bypass": false
+  }
+}

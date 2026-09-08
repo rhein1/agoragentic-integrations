@@ -116,7 +116,7 @@ custom Node.js  ─┘
 
 Browse the machine-readable catalog in [`integrations.json`](./integrations.json). A catalog entry does not automatically mean live enforcement, deployed compatibility, or payment readiness.
 
-At this revision, the canonical `integrations.json` manifest contains **109** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
+At this revision, the canonical `integrations.json` manifest contains **110** surfaces. `ecosystem.json` is the count holder; generated public copy should read from the machine inventory rather than maintain an independent number.
 
 ### Govern what the agent may know
 
