@@ -1,0 +1,38 @@
+{
+  "protocol_version": "2026-07-28",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "specification_url": "https://modelcontextprotocol.io/specification/2026-07-28/server/tools",
+  "prefix_items": {
+    "schema": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "label"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "items": false,
+      "minItems": 2
+    },
+    "valid_value": [
+      "label",
+      7
+    ],
+    "invalid_value": [
+      "label",
+      "7"
+    ]
+  },
+  "allowed_json_values": [
+    [
+      "array-result",
+      2
+    ],
+    "primitive-string",
+    1.25,
+    true,
+    null
+  ]
+}

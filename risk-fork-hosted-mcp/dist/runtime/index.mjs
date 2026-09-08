@@ -30825,7 +30825,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       });
     }));
-    var require_dynamicAnchor = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_dynamicAnchor2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       exports2.dynamicAnchor = void 0;
       const codegen_1 = require_codegen2();
@@ -30862,7 +30862,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       }
       exports2.default = def;
     }));
-    var require_dynamicRef = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_dynamicRef2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       exports2.dynamicRef = void 0;
       const codegen_1 = require_codegen2();
@@ -30899,9 +30899,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       exports2.dynamicRef = dynamicRef;
       exports2.default = def;
     }));
-    var require_recursiveAnchor = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_recursiveAnchor2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const dynamicAnchor_1 = require_dynamicAnchor();
+      const dynamicAnchor_1 = require_dynamicAnchor2();
       const util_1 = require_util3();
       const def = {
         keyword: "$recursiveAnchor",
@@ -30913,9 +30913,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_recursiveRef = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_recursiveRef2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const dynamicRef_1 = require_dynamicRef();
+      const dynamicRef_1 = require_dynamicRef2();
       const def = {
         keyword: "$recursiveRef",
         schemaType: "string",
@@ -30923,12 +30923,12 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_dynamic = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_dynamic2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const dynamicAnchor_1 = require_dynamicAnchor();
-      const dynamicRef_1 = require_dynamicRef();
-      const recursiveAnchor_1 = require_recursiveAnchor();
-      const recursiveRef_1 = require_recursiveRef();
+      const dynamicAnchor_1 = require_dynamicAnchor2();
+      const dynamicRef_1 = require_dynamicRef2();
+      const recursiveAnchor_1 = require_recursiveAnchor2();
+      const recursiveRef_1 = require_recursiveRef2();
       const dynamic = [
         dynamicAnchor_1.default,
         dynamicRef_1.default,
@@ -30937,7 +30937,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       ];
       exports2.default = dynamic;
     }));
-    var require_dependentRequired = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_dependentRequired2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const dependencies_1 = require_dependencies2();
       const def = {
@@ -30949,7 +30949,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_dependentSchemas = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_dependentSchemas2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const dependencies_1 = require_dependencies2();
       const def = {
@@ -30960,7 +30960,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_limitContains = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_limitContains2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const util_1 = require_util3();
       const def = {
@@ -30973,11 +30973,11 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_next = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_next2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const dependentRequired_1 = require_dependentRequired();
-      const dependentSchemas_1 = require_dependentSchemas();
-      const limitContains_1 = require_limitContains();
+      const dependentRequired_1 = require_dependentRequired2();
+      const dependentSchemas_1 = require_dependentSchemas2();
+      const limitContains_1 = require_limitContains2();
       const next = [
         dependentRequired_1.default,
         dependentSchemas_1.default,
@@ -30985,7 +30985,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       ];
       exports2.default = next;
     }));
-    var require_unevaluatedProperties = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_unevaluatedProperties2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const codegen_1 = require_codegen2();
       const util_1 = require_util3();
@@ -31036,7 +31036,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       };
       exports2.default = def;
     }));
-    var require_unevaluatedItems = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_unevaluatedItems2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const codegen_1 = require_codegen2();
       const util_1 = require_util3();
@@ -31078,8 +31078,8 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
     }));
     var require_unevaluated$1 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const unevaluatedProperties_1 = require_unevaluatedProperties();
-      const unevaluatedItems_1 = require_unevaluatedItems();
+      const unevaluatedProperties_1 = require_unevaluatedProperties2();
+      const unevaluatedItems_1 = require_unevaluatedItems2();
       const unevaluated = [unevaluatedProperties_1.default, unevaluatedItems_1.default];
       exports2.default = unevaluated;
     }));
@@ -31388,8 +31388,8 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       exports2.MissingRefError = exports2.ValidationError = exports2.CodeGen = exports2.Name = exports2.nil = exports2.stringify = exports2.str = exports2._ = exports2.KeywordCxt = exports2.Ajv2019 = void 0;
       const core_1 = require_core$3();
       const draft7_1 = require_draft72();
-      const dynamic_1 = require_dynamic();
-      const next_1 = require_next();
+      const dynamic_1 = require_dynamic2();
+      const next_1 = require_next2();
       const unevaluated_1 = require_unevaluated$1();
       const discriminator_1 = require_discriminator2();
       const json_schema_2019_09_1 = require_json_schema_2019_09();
@@ -31486,13 +31486,13 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       });
     }));
-    var require_draft2020 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_draft20202 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
       const core_1 = require_core$2();
       const validation_1 = require_validation$2();
       const applicator_1 = require_applicator$2();
-      const dynamic_1 = require_dynamic();
-      const next_1 = require_next();
+      const dynamic_1 = require_dynamic2();
+      const next_1 = require_next2();
       const unevaluated_1 = require_unevaluated$1();
       const format_1 = require_format$1();
       const metadata_1 = require_metadata2();
@@ -31509,7 +31509,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       ];
       exports2.default = draft2020Vocabularies;
     }));
-    var require_schema = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_schema2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/schema",
@@ -31563,7 +31563,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_applicator2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_applicator3 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/applicator",
@@ -31608,7 +31608,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         } }
       };
     }));
-    var require_unevaluated = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_unevaluated3 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/unevaluated",
@@ -31622,7 +31622,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_content = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_content2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/content",
@@ -31637,7 +31637,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_core5 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_core6 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/core",
@@ -31683,7 +31683,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_format_annotation = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_format_annotation2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/format-annotation",
@@ -31694,7 +31694,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         "properties": { "format": { "type": "string" } }
       };
     }));
-    var require_meta_data = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_meta_data2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/meta-data",
@@ -31725,7 +31725,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_validation2 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
+    var require_validation3 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2, module2) => {
       module2.exports = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "https://json-schema.org/draft/2020-12/meta/validation",
@@ -31805,16 +31805,16 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         }
       };
     }));
-    var require_json_schema_2020_12 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
+    var require_json_schema_2020_122 = /* @__PURE__ */ require_chunk.__commonJSMin(((exports2) => {
       Object.defineProperty(exports2, "__esModule", { value: true });
-      const metaSchema = require_schema();
-      const applicator = require_applicator2();
-      const unevaluated = require_unevaluated();
-      const content = require_content();
-      const core = require_core5();
-      const format = require_format_annotation();
-      const metadata = require_meta_data();
-      const validation = require_validation2();
+      const metaSchema = require_schema2();
+      const applicator = require_applicator3();
+      const unevaluated = require_unevaluated3();
+      const content = require_content2();
+      const core = require_core6();
+      const format = require_format_annotation2();
+      const metadata = require_meta_data2();
+      const validation = require_validation3();
       const META_SUPPORT_DATA = ["/properties"];
       function addMetaSchema2020($data) {
         [
@@ -31838,11 +31838,11 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       Object.defineProperty(exports2, "__esModule", { value: true });
       exports2.MissingRefError = exports2.ValidationError = exports2.CodeGen = exports2.Name = exports2.nil = exports2.stringify = exports2.str = exports2._ = exports2.KeywordCxt = exports2.Ajv2020 = void 0;
       const core_1 = require_core$3();
-      const draft2020_1 = require_draft2020();
+      const draft2020_1 = require_draft20202();
       const discriminator_1 = require_discriminator2();
-      const json_schema_2020_12_1 = require_json_schema_2020_12();
+      const json_schema_2020_12_1 = require_json_schema_2020_122();
       const META_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
-      var Ajv2020 = class extends core_1.default {
+      var Ajv20202 = class extends core_1.default {
         constructor(opts = {}) {
           super({
             ...opts,
@@ -31867,11 +31867,11 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
         }
       };
-      exports2.Ajv2020 = Ajv2020;
-      module2.exports = exports2 = Ajv2020;
-      module2.exports.Ajv2020 = Ajv2020;
+      exports2.Ajv2020 = Ajv20202;
+      module2.exports = exports2 = Ajv20202;
+      module2.exports.Ajv2020 = Ajv20202;
       Object.defineProperty(exports2, "__esModule", { value: true });
-      exports2.default = Ajv2020;
+      exports2.default = Ajv20202;
       var validate_1 = require_validate2();
       Object.defineProperty(exports2, "KeywordCxt", {
         enumerable: true,
@@ -50783,6 +50783,830 @@ var require_ajv = __commonJS({
   }
 });
 
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js
+var require_dynamicAnchor = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.dynamicAnchor = void 0;
+    var codegen_1 = require_codegen();
+    var names_1 = require_names();
+    var compile_1 = require_compile();
+    var ref_1 = require_ref();
+    var def = {
+      keyword: "$dynamicAnchor",
+      schemaType: "string",
+      code: (cxt) => dynamicAnchor(cxt, cxt.schema)
+    };
+    function dynamicAnchor(cxt, anchor) {
+      const { gen, it } = cxt;
+      it.schemaEnv.root.dynamicAnchors[anchor] = true;
+      const v = (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`;
+      const validate = it.errSchemaPath === "#" ? it.validateName : _getValidate(cxt);
+      gen.if((0, codegen_1._)`!${v}`, () => gen.assign(v, validate));
+    }
+    exports.dynamicAnchor = dynamicAnchor;
+    function _getValidate(cxt) {
+      const { schemaEnv, schema, self } = cxt.it;
+      const { root, baseId, localRefs, meta } = schemaEnv.root;
+      const { schemaId } = self.opts;
+      const sch = new compile_1.SchemaEnv({ schema, schemaId, root, baseId, localRefs, meta });
+      compile_1.compileSchema.call(self, sch);
+      return (0, ref_1.getValidate)(cxt, sch);
+    }
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js
+var require_dynamicRef = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.dynamicRef = void 0;
+    var codegen_1 = require_codegen();
+    var names_1 = require_names();
+    var ref_1 = require_ref();
+    var def = {
+      keyword: "$dynamicRef",
+      schemaType: "string",
+      code: (cxt) => dynamicRef(cxt, cxt.schema)
+    };
+    function dynamicRef(cxt, ref) {
+      const { gen, keyword, it } = cxt;
+      if (ref[0] !== "#")
+        throw new Error(`"${keyword}" only supports hash fragment reference`);
+      const anchor = ref.slice(1);
+      if (it.allErrors) {
+        _dynamicRef();
+      } else {
+        const valid = gen.let("valid", false);
+        _dynamicRef(valid);
+        cxt.ok(valid);
+      }
+      function _dynamicRef(valid) {
+        if (it.schemaEnv.root.dynamicAnchors[anchor]) {
+          const v = gen.let("_v", (0, codegen_1._)`${names_1.default.dynamicAnchors}${(0, codegen_1.getProperty)(anchor)}`);
+          gen.if(v, _callRef(v, valid), _callRef(it.validateName, valid));
+        } else {
+          _callRef(it.validateName, valid)();
+        }
+      }
+      function _callRef(validate, valid) {
+        return valid ? () => gen.block(() => {
+          (0, ref_1.callRef)(cxt, validate);
+          gen.let(valid, true);
+        }) : () => (0, ref_1.callRef)(cxt, validate);
+      }
+    }
+    exports.dynamicRef = dynamicRef;
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js
+var require_recursiveAnchor = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicAnchor_1 = require_dynamicAnchor();
+    var util_1 = require_util2();
+    var def = {
+      keyword: "$recursiveAnchor",
+      schemaType: "boolean",
+      code(cxt) {
+        if (cxt.schema)
+          (0, dynamicAnchor_1.dynamicAnchor)(cxt, "");
+        else
+          (0, util_1.checkStrictMode)(cxt.it, "$recursiveAnchor: false is ignored");
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js
+var require_recursiveRef = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicRef_1 = require_dynamicRef();
+    var def = {
+      keyword: "$recursiveRef",
+      schemaType: "string",
+      code: (cxt) => (0, dynamicRef_1.dynamicRef)(cxt, cxt.schema)
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/index.js
+var require_dynamic = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dynamicAnchor_1 = require_dynamicAnchor();
+    var dynamicRef_1 = require_dynamicRef();
+    var recursiveAnchor_1 = require_recursiveAnchor();
+    var recursiveRef_1 = require_recursiveRef();
+    var dynamic = [dynamicAnchor_1.default, dynamicRef_1.default, recursiveAnchor_1.default, recursiveRef_1.default];
+    exports.default = dynamic;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js
+var require_dependentRequired = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependencies_1 = require_dependencies();
+    var def = {
+      keyword: "dependentRequired",
+      type: "object",
+      schemaType: "object",
+      error: dependencies_1.error,
+      code: (cxt) => (0, dependencies_1.validatePropertyDeps)(cxt)
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js
+var require_dependentSchemas = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependencies_1 = require_dependencies();
+    var def = {
+      keyword: "dependentSchemas",
+      type: "object",
+      schemaType: "object",
+      code: (cxt) => (0, dependencies_1.validateSchemaDeps)(cxt)
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitContains.js
+var require_limitContains = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitContains.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var util_1 = require_util2();
+    var def = {
+      keyword: ["maxContains", "minContains"],
+      type: "array",
+      schemaType: "number",
+      code({ keyword, parentSchema, it }) {
+        if (parentSchema.contains === void 0) {
+          (0, util_1.checkStrictMode)(it, `"${keyword}" without "contains" is ignored`);
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/next.js
+var require_next = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/next.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var dependentRequired_1 = require_dependentRequired();
+    var dependentSchemas_1 = require_dependentSchemas();
+    var limitContains_1 = require_limitContains();
+    var next = [dependentRequired_1.default, dependentSchemas_1.default, limitContains_1.default];
+    exports.default = next;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js
+var require_unevaluatedProperties = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var codegen_1 = require_codegen();
+    var util_1 = require_util2();
+    var names_1 = require_names();
+    var error = {
+      message: "must NOT have unevaluated properties",
+      params: ({ params }) => (0, codegen_1._)`{unevaluatedProperty: ${params.unevaluatedProperty}}`
+    };
+    var def = {
+      keyword: "unevaluatedProperties",
+      type: "object",
+      schemaType: ["boolean", "object"],
+      trackErrors: true,
+      error,
+      code(cxt) {
+        const { gen, schema, data, errsCount, it } = cxt;
+        if (!errsCount)
+          throw new Error("ajv implementation error");
+        const { allErrors, props } = it;
+        if (props instanceof codegen_1.Name) {
+          gen.if((0, codegen_1._)`${props} !== true`, () => gen.forIn("key", data, (key) => gen.if(unevaluatedDynamic(props, key), () => unevaluatedPropCode(key))));
+        } else if (props !== true) {
+          gen.forIn("key", data, (key) => props === void 0 ? unevaluatedPropCode(key) : gen.if(unevaluatedStatic(props, key), () => unevaluatedPropCode(key)));
+        }
+        it.props = true;
+        cxt.ok((0, codegen_1._)`${errsCount} === ${names_1.default.errors}`);
+        function unevaluatedPropCode(key) {
+          if (schema === false) {
+            cxt.setParams({ unevaluatedProperty: key });
+            cxt.error();
+            if (!allErrors)
+              gen.break();
+            return;
+          }
+          if (!(0, util_1.alwaysValidSchema)(it, schema)) {
+            const valid = gen.name("valid");
+            cxt.subschema({
+              keyword: "unevaluatedProperties",
+              dataProp: key,
+              dataPropType: util_1.Type.Str
+            }, valid);
+            if (!allErrors)
+              gen.if((0, codegen_1.not)(valid), () => gen.break());
+          }
+        }
+        function unevaluatedDynamic(evaluatedProps, key) {
+          return (0, codegen_1._)`!${evaluatedProps} || !${evaluatedProps}[${key}]`;
+        }
+        function unevaluatedStatic(evaluatedProps, key) {
+          const ps = [];
+          for (const p in evaluatedProps) {
+            if (evaluatedProps[p] === true)
+              ps.push((0, codegen_1._)`${key} !== ${p}`);
+          }
+          return (0, codegen_1.and)(...ps);
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js
+var require_unevaluatedItems = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var codegen_1 = require_codegen();
+    var util_1 = require_util2();
+    var error = {
+      message: ({ params: { len } }) => (0, codegen_1.str)`must NOT have more than ${len} items`,
+      params: ({ params: { len } }) => (0, codegen_1._)`{limit: ${len}}`
+    };
+    var def = {
+      keyword: "unevaluatedItems",
+      type: "array",
+      schemaType: ["boolean", "object"],
+      error,
+      code(cxt) {
+        const { gen, schema, data, it } = cxt;
+        const items = it.items || 0;
+        if (items === true)
+          return;
+        const len = gen.const("len", (0, codegen_1._)`${data}.length`);
+        if (schema === false) {
+          cxt.setParams({ len: items });
+          cxt.fail((0, codegen_1._)`${len} > ${items}`);
+        } else if (typeof schema == "object" && !(0, util_1.alwaysValidSchema)(it, schema)) {
+          const valid = gen.var("valid", (0, codegen_1._)`${len} <= ${items}`);
+          gen.if((0, codegen_1.not)(valid), () => validateItems(valid, items));
+          cxt.ok(valid);
+        }
+        it.items = true;
+        function validateItems(valid, from) {
+          gen.forRange("i", from, len, (i) => {
+            cxt.subschema({ keyword: "unevaluatedItems", dataProp: i, dataPropType: util_1.Type.Num }, valid);
+            if (!it.allErrors)
+              gen.if((0, codegen_1.not)(valid), () => gen.break());
+          });
+        }
+      }
+    };
+    exports.default = def;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/index.js
+var require_unevaluated = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var unevaluatedProperties_1 = require_unevaluatedProperties();
+    var unevaluatedItems_1 = require_unevaluatedItems();
+    var unevaluated = [unevaluatedProperties_1.default, unevaluatedItems_1.default];
+    exports.default = unevaluated;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft2020.js
+var require_draft2020 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft2020.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var core_1 = require_core4();
+    var validation_1 = require_validation();
+    var applicator_1 = require_applicator();
+    var dynamic_1 = require_dynamic();
+    var next_1 = require_next();
+    var unevaluated_1 = require_unevaluated();
+    var format_1 = require_format2();
+    var metadata_1 = require_metadata();
+    var draft2020Vocabularies = [
+      dynamic_1.default,
+      core_1.default,
+      validation_1.default,
+      (0, applicator_1.default)(true),
+      format_1.default,
+      metadata_1.metadataVocabulary,
+      metadata_1.contentVocabulary,
+      next_1.default,
+      unevaluated_1.default
+    ];
+    exports.default = draft2020Vocabularies;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json
+var require_schema = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/schema",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true,
+        "https://json-schema.org/draft/2020-12/vocab/validation": true,
+        "https://json-schema.org/draft/2020-12/vocab/meta-data": true,
+        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true,
+        "https://json-schema.org/draft/2020-12/vocab/content": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Core and Validation specifications meta-schema",
+      allOf: [
+        { $ref: "meta/core" },
+        { $ref: "meta/applicator" },
+        { $ref: "meta/unevaluated" },
+        { $ref: "meta/validation" },
+        { $ref: "meta/meta-data" },
+        { $ref: "meta/format-annotation" },
+        { $ref: "meta/content" }
+      ],
+      type: ["object", "boolean"],
+      $comment: "This meta-schema also defines keywords that have appeared in previous drafts in order to prevent incompatible extensions as they remain in common use.",
+      properties: {
+        definitions: {
+          $comment: '"definitions" has been replaced by "$defs".',
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          deprecated: true,
+          default: {}
+        },
+        dependencies: {
+          $comment: '"dependencies" has been split and replaced by "dependentSchemas" and "dependentRequired" in order to serve their differing semantics.',
+          type: "object",
+          additionalProperties: {
+            anyOf: [{ $dynamicRef: "#meta" }, { $ref: "meta/validation#/$defs/stringArray" }]
+          },
+          deprecated: true,
+          default: {}
+        },
+        $recursiveAnchor: {
+          $comment: '"$recursiveAnchor" has been replaced by "$dynamicAnchor".',
+          $ref: "meta/core#/$defs/anchorString",
+          deprecated: true
+        },
+        $recursiveRef: {
+          $comment: '"$recursiveRef" has been replaced by "$dynamicRef".',
+          $ref: "meta/core#/$defs/uriReferenceString",
+          deprecated: true
+        }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json
+var require_applicator2 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/applicator",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/applicator": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Applicator vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        prefixItems: { $ref: "#/$defs/schemaArray" },
+        items: { $dynamicRef: "#meta" },
+        contains: { $dynamicRef: "#meta" },
+        additionalProperties: { $dynamicRef: "#meta" },
+        properties: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          default: {}
+        },
+        patternProperties: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          propertyNames: { format: "regex" },
+          default: {}
+        },
+        dependentSchemas: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" },
+          default: {}
+        },
+        propertyNames: { $dynamicRef: "#meta" },
+        if: { $dynamicRef: "#meta" },
+        then: { $dynamicRef: "#meta" },
+        else: { $dynamicRef: "#meta" },
+        allOf: { $ref: "#/$defs/schemaArray" },
+        anyOf: { $ref: "#/$defs/schemaArray" },
+        oneOf: { $ref: "#/$defs/schemaArray" },
+        not: { $dynamicRef: "#meta" }
+      },
+      $defs: {
+        schemaArray: {
+          type: "array",
+          minItems: 1,
+          items: { $dynamicRef: "#meta" }
+        }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json
+var require_unevaluated2 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/unevaluated",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/unevaluated": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Unevaluated applicator vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        unevaluatedItems: { $dynamicRef: "#meta" },
+        unevaluatedProperties: { $dynamicRef: "#meta" }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json
+var require_content = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/content",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/content": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Content vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        contentEncoding: { type: "string" },
+        contentMediaType: { type: "string" },
+        contentSchema: { $dynamicRef: "#meta" }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json
+var require_core5 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/core",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/core": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Core vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        $id: {
+          $ref: "#/$defs/uriReferenceString",
+          $comment: "Non-empty fragments not allowed.",
+          pattern: "^[^#]*#?$"
+        },
+        $schema: { $ref: "#/$defs/uriString" },
+        $ref: { $ref: "#/$defs/uriReferenceString" },
+        $anchor: { $ref: "#/$defs/anchorString" },
+        $dynamicRef: { $ref: "#/$defs/uriReferenceString" },
+        $dynamicAnchor: { $ref: "#/$defs/anchorString" },
+        $vocabulary: {
+          type: "object",
+          propertyNames: { $ref: "#/$defs/uriString" },
+          additionalProperties: {
+            type: "boolean"
+          }
+        },
+        $comment: {
+          type: "string"
+        },
+        $defs: {
+          type: "object",
+          additionalProperties: { $dynamicRef: "#meta" }
+        }
+      },
+      $defs: {
+        anchorString: {
+          type: "string",
+          pattern: "^[A-Za-z_][-A-Za-z0-9._]*$"
+        },
+        uriString: {
+          type: "string",
+          format: "uri"
+        },
+        uriReferenceString: {
+          type: "string",
+          format: "uri-reference"
+        }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json
+var require_format_annotation = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/format-annotation",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/format-annotation": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Format vocabulary meta-schema for annotation results",
+      type: ["object", "boolean"],
+      properties: {
+        format: { type: "string" }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json
+var require_meta_data = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/meta-data",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/meta-data": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Meta-data vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        title: {
+          type: "string"
+        },
+        description: {
+          type: "string"
+        },
+        default: true,
+        deprecated: {
+          type: "boolean",
+          default: false
+        },
+        readOnly: {
+          type: "boolean",
+          default: false
+        },
+        writeOnly: {
+          type: "boolean",
+          default: false
+        },
+        examples: {
+          type: "array",
+          items: true
+        }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json
+var require_validation2 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json"(exports, module) {
+    module.exports = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://json-schema.org/draft/2020-12/meta/validation",
+      $vocabulary: {
+        "https://json-schema.org/draft/2020-12/vocab/validation": true
+      },
+      $dynamicAnchor: "meta",
+      title: "Validation vocabulary meta-schema",
+      type: ["object", "boolean"],
+      properties: {
+        type: {
+          anyOf: [
+            { $ref: "#/$defs/simpleTypes" },
+            {
+              type: "array",
+              items: { $ref: "#/$defs/simpleTypes" },
+              minItems: 1,
+              uniqueItems: true
+            }
+          ]
+        },
+        const: true,
+        enum: {
+          type: "array",
+          items: true
+        },
+        multipleOf: {
+          type: "number",
+          exclusiveMinimum: 0
+        },
+        maximum: {
+          type: "number"
+        },
+        exclusiveMaximum: {
+          type: "number"
+        },
+        minimum: {
+          type: "number"
+        },
+        exclusiveMinimum: {
+          type: "number"
+        },
+        maxLength: { $ref: "#/$defs/nonNegativeInteger" },
+        minLength: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        pattern: {
+          type: "string",
+          format: "regex"
+        },
+        maxItems: { $ref: "#/$defs/nonNegativeInteger" },
+        minItems: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        uniqueItems: {
+          type: "boolean",
+          default: false
+        },
+        maxContains: { $ref: "#/$defs/nonNegativeInteger" },
+        minContains: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 1
+        },
+        maxProperties: { $ref: "#/$defs/nonNegativeInteger" },
+        minProperties: { $ref: "#/$defs/nonNegativeIntegerDefault0" },
+        required: { $ref: "#/$defs/stringArray" },
+        dependentRequired: {
+          type: "object",
+          additionalProperties: {
+            $ref: "#/$defs/stringArray"
+          }
+        }
+      },
+      $defs: {
+        nonNegativeInteger: {
+          type: "integer",
+          minimum: 0
+        },
+        nonNegativeIntegerDefault0: {
+          $ref: "#/$defs/nonNegativeInteger",
+          default: 0
+        },
+        simpleTypes: {
+          enum: ["array", "boolean", "integer", "null", "number", "object", "string"]
+        },
+        stringArray: {
+          type: "array",
+          items: { type: "string" },
+          uniqueItems: true,
+          default: []
+        }
+      }
+    };
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/index.js
+var require_json_schema_2020_12 = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/index.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    var metaSchema = require_schema();
+    var applicator = require_applicator2();
+    var unevaluated = require_unevaluated2();
+    var content = require_content();
+    var core = require_core5();
+    var format = require_format_annotation();
+    var metadata = require_meta_data();
+    var validation = require_validation2();
+    var META_SUPPORT_DATA = ["/properties"];
+    function addMetaSchema2020($data) {
+      ;
+      [
+        metaSchema,
+        applicator,
+        unevaluated,
+        content,
+        core,
+        with$data(this, format),
+        metadata,
+        with$data(this, validation)
+      ].forEach((sch) => this.addMetaSchema(sch, void 0, false));
+      return this;
+      function with$data(ajv, sch) {
+        return $data ? ajv.$dataMetaSchema(sch, META_SUPPORT_DATA) : sch;
+      }
+    }
+    exports.default = addMetaSchema2020;
+  }
+});
+
+// risk-fork-hosted-mcp/node_modules/ajv/dist/2020.js
+var require__ = __commonJS({
+  "risk-fork-hosted-mcp/node_modules/ajv/dist/2020.js"(exports, module) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv2020 = void 0;
+    var core_1 = require_core3();
+    var draft2020_1 = require_draft2020();
+    var discriminator_1 = require_discriminator();
+    var json_schema_2020_12_1 = require_json_schema_2020_12();
+    var META_SCHEMA_ID = "https://json-schema.org/draft/2020-12/schema";
+    var Ajv20202 = class extends core_1.default {
+      constructor(opts = {}) {
+        super({
+          ...opts,
+          dynamicRef: true,
+          next: true,
+          unevaluated: true
+        });
+      }
+      _addVocabularies() {
+        super._addVocabularies();
+        draft2020_1.default.forEach((v) => this.addVocabulary(v));
+        if (this.opts.discriminator)
+          this.addKeyword(discriminator_1.default);
+      }
+      _addDefaultMetaSchema() {
+        super._addDefaultMetaSchema();
+        const { $data, meta } = this.opts;
+        if (!meta)
+          return;
+        json_schema_2020_12_1.default.call(this, $data);
+        this.refs["http://json-schema.org/schema"] = META_SCHEMA_ID;
+      }
+      defaultMeta() {
+        return this.opts.defaultMeta = super.defaultMeta() || (this.getSchema(META_SCHEMA_ID) ? META_SCHEMA_ID : void 0);
+      }
+    };
+    exports.Ajv2020 = Ajv20202;
+    module.exports = exports = Ajv20202;
+    module.exports.Ajv2020 = Ajv20202;
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.default = Ajv20202;
+    var validate_1 = require_validate();
+    Object.defineProperty(exports, "KeywordCxt", { enumerable: true, get: function() {
+      return validate_1.KeywordCxt;
+    } });
+    var codegen_1 = require_codegen();
+    Object.defineProperty(exports, "_", { enumerable: true, get: function() {
+      return codegen_1._;
+    } });
+    Object.defineProperty(exports, "str", { enumerable: true, get: function() {
+      return codegen_1.str;
+    } });
+    Object.defineProperty(exports, "stringify", { enumerable: true, get: function() {
+      return codegen_1.stringify;
+    } });
+    Object.defineProperty(exports, "nil", { enumerable: true, get: function() {
+      return codegen_1.nil;
+    } });
+    Object.defineProperty(exports, "Name", { enumerable: true, get: function() {
+      return codegen_1.Name;
+    } });
+    Object.defineProperty(exports, "CodeGen", { enumerable: true, get: function() {
+      return codegen_1.CodeGen;
+    } });
+    var validation_error_1 = require_validation_error();
+    Object.defineProperty(exports, "ValidationError", { enumerable: true, get: function() {
+      return validation_error_1.default;
+    } });
+    var ref_error_1 = require_ref_error();
+    Object.defineProperty(exports, "MissingRefError", { enumerable: true, get: function() {
+      return ref_error_1.default;
+    } });
+  }
+});
+
 // risk-fork-hosted-mcp/node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
   "risk-fork-hosted-mcp/node_modules/ajv-formats/dist/formats.js"(exports) {
@@ -56519,6 +57343,7 @@ function isProductionPostgresDistributedCommitAuthority(value) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/taint-gate.mjs
 var import_ajv = __toESM(require_ajv(), 1);
+var import__ = __toESM(require__(), 1);
 var import_ajv_formats = __toESM(require_dist3(), 1);
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/authority-shape.mjs
@@ -56594,16 +57419,97 @@ var FORBIDDEN_CHILD_KEY_FINGERPRINTS = new Set([
   "parent_memory",
   "memory_update"
 ].map((key) => key.replace(/[^a-z0-9]+/g, "")));
+var JSON_SCHEMA_2020_12_URIS = /* @__PURE__ */ new Set([
+  "https://json-schema.org/draft/2020-12/schema"
+]);
+var JSON_SCHEMA_DRAFT_07_URIS = /* @__PURE__ */ new Set([
+  "http://json-schema.org/draft-07/schema"
+]);
+var SCHEMA_MAP_KEYWORDS = Object.freeze([
+  "$defs",
+  "definitions",
+  "properties",
+  "patternProperties",
+  "dependentSchemas"
+]);
+var SCHEMA_VALUE_KEYWORDS = Object.freeze([
+  "additionalProperties",
+  "unevaluatedProperties",
+  "propertyNames",
+  "contains",
+  "items",
+  "additionalItems",
+  "unevaluatedItems",
+  "not",
+  "if",
+  "then",
+  "else",
+  "contentSchema",
+  "prefixItems",
+  "allOf",
+  "anyOf",
+  "oneOf"
+]);
 function normalizeChildKey(value) {
   return value.normalize("NFKC").replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
 }
-function makeAjv() {
-  const ajv = new import_ajv.default({
+function declaredJsonSchemaDialect(schema) {
+  if (!Object.hasOwn(schema, "$schema")) return "2020-12";
+  if (typeof schema.$schema !== "string") {
+    throw new TypeError("Typed result schema $schema must be a string");
+  }
+  const declared = schema.$schema.replace(/#$/, "");
+  if (JSON_SCHEMA_2020_12_URIS.has(declared)) return "2020-12";
+  if (JSON_SCHEMA_DRAFT_07_URIS.has(declared)) return "draft-07";
+  throw new TypeError("Typed result schema declares an unsupported JSON Schema dialect");
+}
+function registerNestedSchemaResources(ajv, schema) {
+  const pending = [];
+  const seen = /* @__PURE__ */ new WeakSet();
+  const enqueue = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) enqueue(item);
+    } else if (value && typeof value === "object") {
+      pending.push(value);
+    }
+  };
+  const enqueueChildren = (value) => {
+    for (const keyword of SCHEMA_MAP_KEYWORDS) {
+      const schemaMap = value[keyword];
+      if (!schemaMap || typeof schemaMap !== "object" || Array.isArray(schemaMap)) continue;
+      for (const child of Object.values(schemaMap)) enqueue(child);
+    }
+    for (const keyword of SCHEMA_VALUE_KEYWORDS) enqueue(value[keyword]);
+    const dependencies = value.dependencies;
+    if (dependencies && typeof dependencies === "object" && !Array.isArray(dependencies)) {
+      for (const child of Object.values(dependencies)) enqueue(child);
+    }
+  };
+  enqueueChildren(schema);
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (seen.has(value)) continue;
+    seen.add(value);
+    if (Object.hasOwn(value, "$id")) {
+      ajv.addSchema(value);
+      continue;
+    }
+    enqueueChildren(value);
+  }
+}
+function makeAjv(schema) {
+  const dialect = declaredJsonSchemaDialect(schema);
+  const Validator = dialect === "draft-07" ? import_ajv.default : import__.default;
+  const ajv = new Validator({
     allErrors: true,
     strict: true,
     allowUnionTypes: false
   });
+  if (dialect === "2020-12") {
+    ajv.addKeyword({ keyword: "$anchor", schemaType: "string" });
+  }
   (0, import_ajv_formats.default)(ajv);
+  registerNestedSchemaResources(ajv, schema);
   return ajv;
 }
 function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", depth = 0) {
@@ -56763,7 +57669,7 @@ function validateTypedResult(candidate, context) {
   if (context.policy.typed_result_schema_hash && !safeEqual(schemaHash, context.policy.typed_result_schema_hash)) {
     throw new Error("Typed result schema does not match the authorized schema hash");
   }
-  const validate = makeAjv().compile(candidate.payload_schema);
+  const validate = makeAjv(candidate.payload_schema).compile(candidate.payload_schema);
   if (!validate(candidate.payload)) {
     const detail = validate.errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
     throw new Error(`Typed result does not satisfy its schema: ${detail}`);
@@ -62781,6 +63687,9 @@ var RISK_FORK_MCP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 var RISK_FORK_MCP_MAX_TIMEOUT_MS = 10 * 60 * 1e3;
 var RISK_FORK_MCP_MAX_DNS_ANSWERS = 64;
 var RISK_FORK_MCP_MAX_CNAME_DEPTH = 16;
+var JSON_SCHEMA_2020_12_URI = "https://json-schema.org/draft/2020-12/schema";
+var JSON_SCHEMA_DRAFT_07_URI = "http://json-schema.org/draft-07/schema#";
+var MCP_RESULT_SCHEMA_RESOURCE_URI = "https://agoragentic.com/schema/risk-fork-embedded-mcp-result.json";
 var BLOCKED_DNS_SUFFIXES = Object.freeze([
   "localhost",
   "local",
@@ -63058,9 +63967,9 @@ function collectMcpParameterHeaderSpecs(inputSchema) {
       if (typeof annotation !== "string" || annotation.length < 1 || annotation.length > 128 || !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(annotation)) {
         throw new TypeError("MCP x-mcp-header name is invalid");
       }
-      if (!["string", "number", "integer", "boolean"].includes(node.type)) {
+      if (!["string", "integer", "boolean"].includes(node.type)) {
         throw new TypeError(
-          "MCP x-mcp-header must annotate a string, number, integer, or boolean"
+          "MCP x-mcp-header must annotate a string, integer, or boolean"
         );
       }
       const normalizedName = annotation.toLowerCase();
@@ -63128,7 +64037,7 @@ function createMcpWireHeaders(operationValue) {
     for (const spec of collectMcpParameterHeaderSpecs(inputSchema)) {
       const extracted = valueAtOwnPath(argumentsValue, spec.path);
       if (!extracted.present || extracted.value === null) continue;
-      const typeMatches = spec.type === "integer" ? Number.isSafeInteger(extracted.value) : spec.type === "number" ? typeof extracted.value === "number" && Number.isFinite(extracted.value) : typeof extracted.value === spec.type;
+      const typeMatches = spec.type === "integer" ? Number.isSafeInteger(extracted.value) : typeof extracted.value === spec.type;
       if (!typeMatches) {
         throw new TypeError(`MCP ${spec.header} value does not match its annotated type`);
       }
@@ -63241,9 +64150,29 @@ function measurementSchema() {
     }
   };
 }
+function mcpResultSchemaDialect(schema) {
+  if (!Object.hasOwn(schema, "$schema")) return JSON_SCHEMA_2020_12_URI;
+  if (typeof schema.$schema !== "string") {
+    throw new TypeError("MCP result schema $schema must be a string");
+  }
+  const declared = schema.$schema.replace(/#$/, "");
+  if (declared === JSON_SCHEMA_2020_12_URI) return JSON_SCHEMA_2020_12_URI;
+  if (declared === JSON_SCHEMA_DRAFT_07_URI.slice(0, -1)) {
+    return JSON_SCHEMA_DRAFT_07_URI;
+  }
+  throw new TypeError("MCP result schema declares an unsupported JSON Schema dialect");
+}
+function isolateMcpResultSchemaResource(schema) {
+  if (Object.hasOwn(schema, "$id")) return schema;
+  return {
+    $id: MCP_RESULT_SCHEMA_RESOURCE_URI,
+    ...schema
+  };
+}
 function createMcpTransportResultSchema(mcpResultSchema) {
   assertPlainObject(mcpResultSchema, "MCP result schema");
   return deepFreeze({
+    $schema: mcpResultSchemaDialect(mcpResultSchema),
     type: "object",
     additionalProperties: false,
     required: ["schema", "transport_evidence", "mcp_result"],
@@ -63314,7 +64243,7 @@ function createMcpTransportResultSchema(mcpResultSchema) {
           evidence_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" }
         }
       },
-      mcp_result: mcpResultSchema
+      mcp_result: isolateMcpResultSchemaResource(mcpResultSchema)
     }
   });
 }
@@ -71245,7 +72174,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:9fcb0a0215ee8957b5fde50af56e9a6c0eeb91202364621b1ba82ab64b3a2ace" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:065decf9fa553e19f2f220f86100c17d463611a9026fb023aa7fd8fb24ca01a0" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 
 import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
@@ -62,6 +63,38 @@ const FORBIDDEN_CHILD_KEY_FINGERPRINTS = new Set([
   'memory_update',
 ].map((key) => key.replace(/[^a-z0-9]+/g, '')));
 
+const JSON_SCHEMA_2020_12_URIS = new Set([
+  'https://json-schema.org/draft/2020-12/schema',
+]);
+const JSON_SCHEMA_DRAFT_07_URIS = new Set([
+  'http://json-schema.org/draft-07/schema',
+]);
+const SCHEMA_MAP_KEYWORDS = Object.freeze([
+  '$defs',
+  'definitions',
+  'properties',
+  'patternProperties',
+  'dependentSchemas',
+]);
+const SCHEMA_VALUE_KEYWORDS = Object.freeze([
+  'additionalProperties',
+  'unevaluatedProperties',
+  'propertyNames',
+  'contains',
+  'items',
+  'additionalItems',
+  'unevaluatedItems',
+  'not',
+  'if',
+  'then',
+  'else',
+  'contentSchema',
+  'prefixItems',
+  'allOf',
+  'anyOf',
+  'oneOf',
+]);
+
 function normalizeChildKey(value) {
   return value
     .normalize('NFKC')
@@ -69,13 +102,66 @@ function normalizeChildKey(value) {
     .toLowerCase();
 }
 
-function makeAjv() {
-  const ajv = new Ajv({
+function declaredJsonSchemaDialect(schema) {
+  if (!Object.hasOwn(schema, '$schema')) return '2020-12';
+  if (typeof schema.$schema !== 'string') {
+    throw new TypeError('Typed result schema $schema must be a string');
+  }
+  const declared = schema.$schema.replace(/#$/, '');
+  if (JSON_SCHEMA_2020_12_URIS.has(declared)) return '2020-12';
+  if (JSON_SCHEMA_DRAFT_07_URIS.has(declared)) return 'draft-07';
+  throw new TypeError('Typed result schema declares an unsupported JSON Schema dialect');
+}
+
+function registerNestedSchemaResources(ajv, schema) {
+  const pending = [];
+  const seen = new WeakSet();
+  const enqueue = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) enqueue(item);
+    } else if (value && typeof value === 'object') {
+      pending.push(value);
+    }
+  };
+  const enqueueChildren = (value) => {
+    for (const keyword of SCHEMA_MAP_KEYWORDS) {
+      const schemaMap = value[keyword];
+      if (!schemaMap || typeof schemaMap !== 'object' || Array.isArray(schemaMap)) continue;
+      for (const child of Object.values(schemaMap)) enqueue(child);
+    }
+    for (const keyword of SCHEMA_VALUE_KEYWORDS) enqueue(value[keyword]);
+    const dependencies = value.dependencies;
+    if (dependencies && typeof dependencies === 'object' && !Array.isArray(dependencies)) {
+      for (const child of Object.values(dependencies)) enqueue(child);
+    }
+  };
+
+  enqueueChildren(schema);
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (seen.has(value)) continue;
+    seen.add(value);
+    if (Object.hasOwn(value, '$id')) {
+      ajv.addSchema(value);
+      continue;
+    }
+    enqueueChildren(value);
+  }
+}
+
+function makeAjv(schema) {
+  const dialect = declaredJsonSchemaDialect(schema);
+  const Validator = dialect === 'draft-07' ? Ajv : Ajv2020;
+  const ajv = new Validator({
     allErrors: true,
     strict: true,
     allowUnionTypes: false,
   });
+  if (dialect === '2020-12') {
+    ajv.addKeyword({ keyword: '$anchor', schemaType: 'string' });
+  }
   addFormats(ajv);
+  registerNestedSchemaResources(ajv, schema);
   return ajv;
 }
 
@@ -246,7 +332,7 @@ function validateTypedResult(candidate, context) {
     && !safeEqual(schemaHash, context.policy.typed_result_schema_hash)) {
     throw new Error('Typed result schema does not match the authorized schema hash');
   }
-  const validate = makeAjv().compile(candidate.payload_schema);
+  const validate = makeAjv(candidate.payload_schema).compile(candidate.payload_schema);
   if (!validate(candidate.payload)) {
     const detail = validate.errors
       .map((error) => `${error.instancePath || '/'} ${error.message}`)

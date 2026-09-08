@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import * as taintGate from '../src/taint-gate.mjs';
+import { createMcpTransportResultSchema } from '../src/mcp-transport-contract.mjs';
 import { NOW, hash } from './helpers.mjs';
+
+const MCP_STRUCTURED_CONTENT_FIXTURE = JSON.parse(await readFile(
+  new URL('../schema/fixtures/mcp-2026-07-28-structured-content.json', import.meta.url),
+  'utf8',
+));
 
 const WORKSPACE_POLICY = Object.freeze({
   path_allowlist: ['src'],
@@ -49,6 +56,251 @@ function closedStringPayloadSchema(keys) {
     properties: Object.fromEntries(keys.map((key) => [key, { type: 'string' }])),
   };
 }
+
+function closedStructuredContentSchema(structuredContentSchema, dialect) {
+  return {
+    ...(dialect === undefined ? {} : { $schema: dialect }),
+    type: 'object',
+    additionalProperties: false,
+    required: ['structuredContent'],
+    properties: {
+      structuredContent: structuredContentSchema,
+    },
+  };
+}
+
+function mcpTransportPayload(mcpResult) {
+  const digest = hash('mcp-transport-local-ref');
+  return {
+    schema: 'agoragentic.risk-fork.mcp-transport-result.v2',
+    transport_evidence: {
+      schema: 'agoragentic.risk-fork.mcp-transport-evidence.v2',
+      destination_policy_hash: digest,
+      requested_url: 'https://mcp.public-example.net/rpc',
+      final_url: 'https://mcp.public-example.net/rpc',
+      redirect_count: 0,
+      dns_name: 'mcp.public-example.net',
+      cname_chain: ['mcp.public-example.net'],
+      resolved_addresses: ['104.18.6.229'],
+      selected_address: '104.18.6.229',
+      tls_authorized: true,
+      tls_server_name: 'mcp.public-example.net',
+      http_host: 'mcp.public-example.net',
+      proxy_used: false,
+      request_body_hash: digest,
+      response_body_hash: digest,
+      wire_result_hash: digest,
+      wire_result_type: 'complete',
+      wire_result_metadata: {
+        schema: 'agoragentic.risk-fork.mcp-wire-metadata-evidence.v1',
+        result_type: 'complete',
+        cacheable_result: false,
+        ttl_ms: null,
+        cache_scope: null,
+        result_meta_hash: null,
+        metadata_hash: digest,
+      },
+      measurements: {
+        dns_query_count: 3,
+        connection_attempt_count: 1,
+        http_request_count: 1,
+        retry_count: 0,
+        request_body_bytes: 1,
+        response_body_bytes: 1,
+        elapsed_ms: 0,
+        http_status_code: 200,
+        tls_protocol: 'TLSv1.3',
+        response_content_type: 'application/json',
+        response_content_encoding: null,
+        decompression_used: false,
+        sse_used: false,
+        sse_event_count: 0,
+        sse_notification_count: 0,
+        protocol_metadata_sent: true,
+        method_header_sent: true,
+        name_header_sent: false,
+        parameter_header_count: 0,
+        access_header_sent: false,
+        cookie_header_sent: false,
+        state_header_sent: false,
+        response_cookie_received: false,
+        response_state_created: false,
+        access_challenge_received: false,
+      },
+      evidence_hash: digest,
+    },
+    mcp_result: mcpResult,
+  };
+}
+
+test('typed results use JSON Schema 2020-12 by default and preserve explicit draft-07', () => {
+  const fixture = MCP_STRUCTURED_CONTENT_FIXTURE;
+  assert.equal(fixture.protocol_version, '2026-07-28');
+  assert.equal(fixture.schema_dialect, 'https://json-schema.org/draft/2020-12/schema');
+  assert.deepEqual(
+    fixture.allowed_json_values.map((value) => (
+      value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
+    )),
+    ['array', 'string', 'number', 'boolean', 'null'],
+  );
+
+  for (const dialect of [fixture.schema_dialect, undefined]) {
+    const schema = closedStructuredContentSchema(fixture.prefix_items.schema, dialect);
+    const artifact = typedArtifact(
+      { structuredContent: fixture.prefix_items.valid_value },
+      schema,
+    );
+    assert.deepEqual(
+      artifact.body.payload.structuredContent,
+      fixture.prefix_items.valid_value,
+    );
+    assert.throws(
+      () => typedArtifact(
+        { structuredContent: fixture.prefix_items.invalid_value },
+        schema,
+      ),
+      /does not satisfy its schema/i,
+    );
+  }
+
+  const draft07Schema = closedStructuredContentSchema({
+    type: 'array',
+    items: [
+      { const: 'legacy' },
+      { type: 'integer' },
+    ],
+    additionalItems: false,
+    minItems: 2,
+  }, 'http://json-schema.org/draft-07/schema#');
+  assert.deepEqual(
+    typedArtifact({ structuredContent: ['legacy', 7] }, draft07Schema)
+      .body.payload.structuredContent,
+    ['legacy', 7],
+  );
+
+  assert.throws(
+    () => typedArtifact(
+      { structuredContent: 'unsupported-dialect' },
+      closedStructuredContentSchema(true, 'https://example.invalid/schema'),
+    ),
+    /unsupported JSON Schema dialect/i,
+  );
+});
+
+test('MCP transport envelopes propagate the result dialect before taint validation', () => {
+  const schemas = [
+    [
+      'https://json-schema.org/draft/2020-12/schema',
+      { type: 'object', additionalProperties: false, properties: {} },
+    ],
+    [
+      'http://json-schema.org/draft-07/schema#',
+      {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        additionalProperties: false,
+        properties: {},
+      },
+    ],
+  ];
+  for (const [dialect, mcpResultSchema] of schemas) {
+    const transportSchema = createMcpTransportResultSchema(mcpResultSchema);
+    assert.equal(transportSchema.$schema, dialect);
+    assert.throws(
+      () => typedArtifact({}, transportSchema),
+      /does not satisfy its schema/i,
+      dialect,
+    );
+  }
+  assert.throws(
+    () => createMcpTransportResultSchema({
+      $schema: 'https://example.invalid/schema',
+      type: 'object',
+    }),
+    /unsupported JSON Schema dialect/i,
+  );
+});
+
+test('MCP transport envelopes preserve local result-schema references', () => {
+  const cases = [
+    {
+      schema: {
+        $defs: { value: { type: 'string' } },
+        $ref: '#/$defs/value',
+      },
+      accepted: 'modern',
+      rejected: 7,
+    },
+    {
+      schema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        definitions: { value: { type: 'integer' } },
+        $ref: '#/definitions/value',
+      },
+      accepted: 7,
+      rejected: 'legacy',
+    },
+    {
+      schema: {
+        $defs: { value: { $anchor: 'value', type: 'string' } },
+        $ref: '#value',
+      },
+      accepted: 'anchored',
+      rejected: false,
+    },
+  ];
+  for (const item of cases) {
+    const transportSchema = createMcpTransportResultSchema(item.schema);
+    assert.match(
+      transportSchema.properties.mcp_result.$id,
+      /^https:\/\/agoragentic\.com\/schema\/risk-fork-/,
+    );
+    assert.deepEqual(
+      typedArtifact(mcpTransportPayload(item.accepted), transportSchema)
+        .body.payload.mcp_result,
+      item.accepted,
+    );
+    assert.throws(
+      () => typedArtifact(mcpTransportPayload(item.rejected), transportSchema),
+      /does not satisfy its schema/i,
+    );
+  }
+});
+
+test('schema resource discovery ignores instance-valued annotation and assertion data', () => {
+  const schema = closedStructuredContentSchema({
+    anyOf: [
+      { const: { $id: 7, value: 'const' } },
+      { enum: [{ $id: 'instance-data', value: 'enum' }] },
+      {
+        type: 'string',
+        default: { $id: 8, value: 'default-annotation' },
+        examples: [{ $id: 9, value: 'example-annotation' }],
+      },
+    ],
+  });
+  for (const structuredContent of [
+    { $id: 7, value: 'const' },
+    { $id: 'instance-data', value: 'enum' },
+    'ordinary-string',
+  ]) {
+    assert.deepEqual(
+      typedArtifact({ structuredContent }, schema).body.payload.structuredContent,
+      structuredContent,
+    );
+  }
+});
+
+test('MCP structuredContent accepts arrays and primitive JSON values in the closed envelope', () => {
+  const schema = closedStructuredContentSchema(
+    true,
+    MCP_STRUCTURED_CONTENT_FIXTURE.schema_dialect,
+  );
+  for (const structuredContent of MCP_STRUCTURED_CONTENT_FIXTURE.allowed_json_values) {
+    const artifact = typedArtifact({ structuredContent }, schema);
+    assert.deepEqual(artifact.body.payload.structuredContent, structuredContent);
+  }
+});
 
 test('exact generated amk_ material is rejected even when embedded', () => {
   const syntheticKey = `amk_${'a'.repeat(64)}`;

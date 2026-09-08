@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 58,
-    "sha256": "sha256:9fcb0a0215ee8957b5fde50af56e9a6c0eeb91202364621b1ba82ab64b3a2ace"
+    "sha256": "sha256:065decf9fa553e19f2f220f86100c17d463611a9026fb023aa7fd8fb24ca01a0"
   },
   "reviewed_sources": [
     {
@@ -234,8 +234,8 @@
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
-      "bytes": 39036,
-      "sha256": "sha256:af04743bf68db34227a12924e2c5347d03354be2d117024534e2a376ae3cd531"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -254,8 +254,8 @@
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
-      "bytes": 33013,
-      "sha256": "sha256:a0139961ea5d0fdcacc3109c3ee182d49d5e6dda917413246625a220a4c4a128"
+      "bytes": 35640,
+      "sha256": "sha256:7f12dce93571f701f3d955b96bf6f423d21985562d409c58efc4f3c59215fcf6"
     },
     {
       "path": "risk-fork/src/util.mjs",
@@ -603,6 +603,12 @@
       "sha256": "sha256:a05350a88e318e4f5f2c2a1ff1e2e88daa4dd38e6e78b71cccae422bdc762cc3"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/2020.js",
+      "source": "workspace_dependency",
+      "bytes": 2894,
+      "sha256": "sha256:908e9670b478b2ba126802a221b7e47006f50cf467e2c5dd7935d3dbef10a20a"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/ajv.js",
       "source": "workspace_dependency",
       "bytes": 2841,
@@ -723,6 +729,60 @@
       "sha256": "sha256:d24ab8a97c18b3f5afdde7d7024a0e0ac1df0614a16a41cb88f81379edcc2db3"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/index.js",
+      "source": "workspace_dependency",
+      "bytes": 1026,
+      "sha256": "sha256:2e39089b0aaa14efa7901ecf5384622ec3d5897b206e1d589d2420f17b9fa6e1"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/applicator.json",
+      "source": "workspace_dependency",
+      "bytes": 1441,
+      "sha256": "sha256:f1e465ff0c0cc86bee5c0cc4b51d2734c532e6ea12c75b60a2ac093a4577b2d4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/content.json",
+      "source": "workspace_dependency",
+      "bytes": 479,
+      "sha256": "sha256:7ede86f2c48d646202bf1332aefaf46db268c943d59752727db7247dc2920516"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/core.json",
+      "source": "workspace_dependency",
+      "bytes": 1344,
+      "sha256": "sha256:c3a5947992d4fe67c95cda7910911207376bbae41c0a124ec9e7e699172e7a49"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/format-annotation.json",
+      "source": "workspace_dependency",
+      "bytes": 420,
+      "sha256": "sha256:1e31131b1ed21f98c007f04deb501343b8c4dd77f1c5a8494a9c2085f68d769d"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/meta-data.json",
+      "source": "workspace_dependency",
+      "bytes": 758,
+      "sha256": "sha256:eb008c756b29bdaa237c1f06d32ea4a21f6ef22148b03c6372cea5e4c0782273"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/unevaluated.json",
+      "source": "workspace_dependency",
+      "bytes": 472,
+      "sha256": "sha256:8f7f75f4274745faa32e4abdba12de99f49b21df225f52f723b5c62043b0edca"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/meta/validation.json",
+      "source": "workspace_dependency",
+      "bytes": 2264,
+      "sha256": "sha256:3cae7069843679429e4ada7df261bb8961fa34cac15be89296026e69af312092"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-2020-12/schema.json",
+      "source": "workspace_dependency",
+      "bytes": 2166,
+      "sha256": "sha256:5333c7df76bceee098e865881d0808238dea836126c6c60b49299ec85c6c7a56"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/refs/json-schema-draft-07.json",
       "source": "workspace_dependency",
       "bytes": 3811,
@@ -787,6 +847,12 @@
       "source": "workspace_dependency",
       "bytes": 3198,
       "sha256": "sha256:c1a83bf484b6fde4d268935f079ddba5e74a2f589dfc6d15ca2e20ba4d06ee5b"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/dependentSchemas.js",
+      "source": "workspace_dependency",
+      "bytes": 354,
+      "sha256": "sha256:d17d23755b0cf8699c180dd98b8b7270b688d2e4fe5a4c4fcc53ffdcc18ee58e"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/applicator/if.js",
@@ -891,10 +957,46 @@
       "sha256": "sha256:2365341d1f30dc72cece7703e908e47aacb8f904b9f66ec4019fe889ae1e57fa"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft2020.js",
+      "source": "workspace_dependency",
+      "bytes": 762,
+      "sha256": "sha256:2d0dc3a14abd48a45ad1407a97f23a0f943fa5244923037f86e95a7de04a7445"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/draft7.js",
       "source": "workspace_dependency",
       "bytes": 557,
       "sha256": "sha256:8c62022c6c3aa302c3ea6f6709a697fc9eb6385d243fa7c2156dbe9f02228170"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicAnchor.js",
+      "source": "workspace_dependency",
+      "bytes": 1261,
+      "sha256": "sha256:78222a5b42bab186253d880f9af4b012394ae5988bfab78e79f2510caed0ccf7"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/dynamicRef.js",
+      "source": "workspace_dependency",
+      "bytes": 1985,
+      "sha256": "sha256:acc2913c91d11ff57150dde1751cdd5d9f486a0cb156037870ede203273af917"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/index.js",
+      "source": "workspace_dependency",
+      "bytes": 457,
+      "sha256": "sha256:8c05d09948653957427f351d9c6172965b932a5663f7dcb63014a491a533cc0b"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveAnchor.js",
+      "source": "workspace_dependency",
+      "bytes": 522,
+      "sha256": "sha256:9f6cb7e509f9deada1b884010f08c52876f8eace32dcf0e7da28f6d0d91f3f76"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/dynamic/recursiveRef.js",
+      "source": "workspace_dependency",
+      "bytes": 325,
+      "sha256": "sha256:7b0c651e2c5b5218639cd3ad7e5162f1e226fc9814107a85f4c3e47f5138670d"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/format/format.js",
@@ -915,10 +1017,40 @@
       "sha256": "sha256:45c178744a7ec57e20c85ceeaea8d9f36b5663636ab7e495ea2c3c1bf4a58609"
     },
     {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/next.js",
+      "source": "workspace_dependency",
+      "bytes": 433,
+      "sha256": "sha256:491c4d9738e50a6c22b3090cb1df49911b4bb7c3b7dcafc2f2dd4c074c4d82e7"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/index.js",
+      "source": "workspace_dependency",
+      "bytes": 350,
+      "sha256": "sha256:4e7936d1a55051e70e2ebbbfc8de94fbe7f1e7b055252df5a984481ea7c156a4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedItems.js",
+      "source": "workspace_dependency",
+      "bytes": 1588,
+      "sha256": "sha256:4d7010c39f1b7af4a2fe1a62e5b65c8f763d4e58ac3d710099d367659f5e4fda"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/unevaluated/unevaluatedProperties.js",
+      "source": "workspace_dependency",
+      "bytes": 2608,
+      "sha256": "sha256:665029a99612ec32e9bef99c9c4b09a4dc0be6c71d7b920594d414d404806ebe"
+    },
+    {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/const.js",
       "source": "workspace_dependency",
       "bytes": 852,
       "sha256": "sha256:ace994e9ab97a70899a9484794794f4be5ee03bfb3cf32242d3f091d77f0329a"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/dependentRequired.js",
+      "source": "workspace_dependency",
+      "bytes": 403,
+      "sha256": "sha256:cd69a90089328b24d2232c12edae57858c14f66aaa56923c12929eb3d673e8fa"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/enum.js",
@@ -931,6 +1063,12 @@
       "source": "workspace_dependency",
       "bytes": 1036,
       "sha256": "sha256:4a1839832de5f10ff423c1c0c6cb232b5b6e1b34980a28862cf56b2763136de4"
+    },
+    {
+      "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitContains.js",
+      "source": "workspace_dependency",
+      "bytes": 495,
+      "sha256": "sha256:0ea6f2e43359add298e1ed9306fe5020c62e086392f2915f10226b01394b200d"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/ajv/dist/vocabularies/validation/limitItems.js",
@@ -2165,8 +2303,8 @@
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
       "source": "reviewed_source",
-      "bytes": 39036,
-      "sha256": "sha256:af04743bf68db34227a12924e2c5347d03354be2d117024534e2a376ae3cd531"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "risk-fork/src/provider.mjs",
@@ -2183,8 +2321,8 @@
     {
       "path": "risk-fork/src/taint-gate.mjs",
       "source": "reviewed_source",
-      "bytes": 33013,
-      "sha256": "sha256:a0139961ea5d0fdcacc3109c3ee182d49d5e6dda917413246625a220a4c4a128"
+      "bytes": 35640,
+      "sha256": "sha256:7f12dce93571f701f3d955b96bf6f423d21985562d409c58efc4f3c59215fcf6"
     },
     {
       "path": "risk-fork/src/util.mjs",
@@ -2450,8 +2588,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2936761,
-    "sha256": "sha256:f2454a4f9c632426c757a28580a14e2d796fc241bb8c217383143cfa720637db"
+    "bytes": 2970388,
+    "sha256": "sha256:a9243c2dd0458cd592a2356c79b6ecdc460f3d127ae196d86b6afcf33d346fa7"
   },
   "packaged_assets": [
     {
@@ -2528,8 +2666,8 @@
     {
       "path": "e2b-context/risk-fork/src/mcp-transport-contract.mjs",
       "source_path": "risk-fork/src/mcp-transport-contract.mjs",
-      "bytes": 39036,
-      "sha256": "sha256:af04743bf68db34227a12924e2c5347d03354be2d117024534e2a376ae3cd531"
+      "bytes": 39983,
+      "sha256": "sha256:1b4ffac45e47ad2b281d109b82d73a9769ee6dd1fef49718957310124c8ea5b3"
     },
     {
       "path": "e2b-context/risk-fork/src/util.mjs",

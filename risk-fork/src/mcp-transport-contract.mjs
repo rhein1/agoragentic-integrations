@@ -53,6 +53,11 @@ export const RISK_FORK_MCP_MAX_TIMEOUT_MS = 10 * 60 * 1000;
 export const RISK_FORK_MCP_MAX_DNS_ANSWERS = 64;
 export const RISK_FORK_MCP_MAX_CNAME_DEPTH = 16;
 
+const JSON_SCHEMA_2020_12_URI = 'https://json-schema.org/draft/2020-12/schema';
+const JSON_SCHEMA_DRAFT_07_URI = 'http://json-schema.org/draft-07/schema#';
+const MCP_RESULT_SCHEMA_RESOURCE_URI =
+  'https://agoragentic.com/schema/risk-fork-embedded-mcp-result.json';
+
 const BLOCKED_DNS_SUFFIXES = Object.freeze([
   'localhost',
   'local',
@@ -465,9 +470,9 @@ function collectMcpParameterHeaderSpecs(inputSchema) {
         || !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(annotation)) {
         throw new TypeError('MCP x-mcp-header name is invalid');
       }
-      if (!['string', 'number', 'integer', 'boolean'].includes(node.type)) {
+      if (!['string', 'integer', 'boolean'].includes(node.type)) {
         throw new TypeError(
-          'MCP x-mcp-header must annotate a string, number, integer, or boolean',
+          'MCP x-mcp-header must annotate a string, integer, or boolean',
         );
       }
       const normalizedName = annotation.toLowerCase();
@@ -545,9 +550,7 @@ export function createMcpWireHeaders(operationValue) {
       if (!extracted.present || extracted.value === null) continue;
       const typeMatches = spec.type === 'integer'
         ? Number.isSafeInteger(extracted.value)
-        : spec.type === 'number'
-          ? typeof extracted.value === 'number' && Number.isFinite(extracted.value)
-          : typeof extracted.value === spec.type;
+        : typeof extracted.value === spec.type;
       if (!typeMatches) {
         throw new TypeError(`MCP ${spec.header} value does not match its annotated type`);
       }
@@ -685,9 +688,31 @@ function measurementSchema() {
   };
 }
 
+function mcpResultSchemaDialect(schema) {
+  if (!Object.hasOwn(schema, '$schema')) return JSON_SCHEMA_2020_12_URI;
+  if (typeof schema.$schema !== 'string') {
+    throw new TypeError('MCP result schema $schema must be a string');
+  }
+  const declared = schema.$schema.replace(/#$/, '');
+  if (declared === JSON_SCHEMA_2020_12_URI) return JSON_SCHEMA_2020_12_URI;
+  if (declared === JSON_SCHEMA_DRAFT_07_URI.slice(0, -1)) {
+    return JSON_SCHEMA_DRAFT_07_URI;
+  }
+  throw new TypeError('MCP result schema declares an unsupported JSON Schema dialect');
+}
+
+function isolateMcpResultSchemaResource(schema) {
+  if (Object.hasOwn(schema, '$id')) return schema;
+  return {
+    $id: MCP_RESULT_SCHEMA_RESOURCE_URI,
+    ...schema,
+  };
+}
+
 export function createMcpTransportResultSchema(mcpResultSchema) {
   assertPlainObject(mcpResultSchema, 'MCP result schema');
   return deepFreeze({
+    $schema: mcpResultSchemaDialect(mcpResultSchema),
     type: 'object',
     additionalProperties: false,
     required: ['schema', 'transport_evidence', 'mcp_result'],
@@ -758,7 +783,7 @@ export function createMcpTransportResultSchema(mcpResultSchema) {
           evidence_hash: { type: 'string', pattern: '^sha256:[a-f0-9]{64}$' },
         },
       },
-      mcp_result: mcpResultSchema,
+      mcp_result: isolateMcpResultSchemaResource(mcpResultSchema),
     },
   });
 }
