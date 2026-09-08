@@ -5,7 +5,8 @@
 Risk Fork targets the stateless MCP revision dated `2026-07-28`. This document
 defines what the public source supports, how it treats the new attack surface,
 and which production gates remain open. It is not a production qualification
-record.
+record. Official language SDKs may call their new package generation “v2,” but
+the protocol itself remains identified by the date-based revision.
 
 ## Security objective
 
@@ -41,10 +42,11 @@ boundary. Unbound values receive no handle-derived authority.
 
 | MCP 2026-07-28 surface | Public source status | Production posture |
 | --- | --- | --- |
-| Client-facing stdio | SDK v2 dual-era server implemented | Modern clients may begin with `server/discover`; every later modern request is self-describing. Legacy initialization remains a compatibility lane, not modern-session authority |
-| Per-request protocol version, client capabilities, and client info | Implemented for the child HTTP phase | Host-owned fixed metadata; caller `_meta` is not authority |
-| `server/discover` | Implemented for the child HTTP phase | Clean output requires the exact `{ tools, resources, prompts }` boolean subset and binds it to the host session |
-| `Mcp-Method`, `Mcp-Name`, and `x-mcp-header` | Implemented for the child HTTP phase | Derived from the same exact-bound operation and schema |
+| Client-facing stdio | Source implementation and regression tests present | Modern clients may begin with `server/discover`; every later modern request is self-describing. Legacy initialization remains a compatibility lane, not modern-session authority |
+| Per-request protocol version, client capabilities, and client info | Implemented and source-tested for the child HTTP phase | Host-owned fixed metadata; caller `_meta` is not authority |
+| `server/discover` | Implemented and source-tested for the child HTTP phase | Clean output requires the exact `{ tools, resources, prompts }` boolean subset and binds it to the host session |
+| `Mcp-Method`, `Mcp-Name`, and `x-mcp-header` | Implemented and source-tested for the child HTTP phase | Derived from the same exact-bound operation and schema; annotated parameters are restricted to `string`, `integer`, or `boolean`, runtime integers must be safe integers, and JSON Schema `number` is rejected |
+| Typed-result JSON Schema dialect and `structuredContent` | JSON Schema 2020-12 is the default; explicit draft-07 remains supported | Unsupported declared dialects fail closed. The authority-free typed-result envelope stays a closed top-level object while preserving local result-schema references; an MCP `structuredContent` member may use any JSON type, including an array or primitive, when the exact bound result schema permits it, subject to the normal taint scans and bounds |
 | Protocol sessions / `Mcp-Session-Id` | Rejected | No connection-scoped authority |
 | Complete results and cache metadata | Validated and recorded as transport evidence | Application projection remains closed and authority-free |
 | MRTR `input_required` / `requestState` / `inputResponses` | Not enabled | Exact-bound runner/adapter rejection carries only a typed code and hashes; no automatic retry or state echo |
@@ -58,6 +60,15 @@ MRTR, Tasks, subscriptions, Apps, and authenticated remote servers are useful
 features, but merely accepting their fields would widen authority. They remain
 disabled until their ownership and replay contracts are implemented and
 adversarially qualified.
+
+The final-spec regression fixtures are
+[`schema/fixtures/mcp-2026-07-28-x-mcp-header.json`](./schema/fixtures/mcp-2026-07-28-x-mcp-header.json)
+and
+[`schema/fixtures/mcp-2026-07-28-structured-content.json`](./schema/fixtures/mcp-2026-07-28-structured-content.json).
+They distinguish the three permitted `x-mcp-header` parameter types from the
+forbidden `number` type and exercise both 2020-12-only tuple validation and MCP
+tool results whose `structuredContent` is an array or primitive. These fixtures
+are targeted regression evidence, not a claim of full hosted MCP conformance.
 
 ## Stateless request checklist
 
@@ -114,6 +125,8 @@ database, deployed-edge, traffic-bound, or external-observer evidence.
 ```text
 MCP 2026-07-28 child HTTP contract:  source available
 client-facing stateless stdio:        source available with legacy compatibility
+typed-result JSON Schema dialect:     2020-12 default; explicit draft-07 compatibility
+x-mcp-header annotated types:         string, integer, boolean; number rejected
 stateless handle binding primitive:  source available; process-local only
 MCP Apps active-content posture:      source default deny at local relay import
 MRTR / Tasks / subscriptions:         disabled, fail closed; MRTR/task rejection is hash-only
@@ -135,5 +148,6 @@ and client review packets are described in
 Protocol references: the official
 [`2026-07-28` release announcement](https://blog.modelcontextprotocol.io/posts/2026-07-28/),
 the official [specification changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog),
+the normative [Tools specification](https://modelcontextprotocol.io/specification/2026-07-28/server/tools),
 and the threat report that motivated the planted-handle and Apps review,
 [“MCP's new spec turns a planted prompt into a stolen credential”](https://venturebeat.com/security/mcps-new-spec-turns-a-planted-prompt-into-a-stolen-credential).

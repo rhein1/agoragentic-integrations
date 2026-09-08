@@ -8,6 +8,8 @@ This checklist separates source completion from a real hosted protection service
 - fuzz hostile JSON descriptors, deep/sparse objects, duplicate headers, malformed routes, and PostgreSQL values;
 - add static analysis, dependency review, secret scanning, and exact-source provenance;
 - adversarially review MCP 2026-07-28 per-request metadata, header/body binding,
+  `x-mcp-header` type/range and invalid-tool exclusion, JSON Schema 2020-12
+  default and explicit-dialect handling, array/primitive `structuredContent`,
   portable-handle ownership, MRTR/task rejection, cache metadata, and MCP Apps
   active-content rejection;
 - resolve every material review finding on the exact candidate commit.
