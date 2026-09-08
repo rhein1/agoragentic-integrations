@@ -13,7 +13,7 @@ live merchant connector or a qualified complete Commerce runtime. The catalog re
 | Real CLI 2.1.263 + TypeScript SDK 0.3.263 | `cli-enforcement.test.mjs`, two cases | Real native CLI and Write tool; loopback Messages fixture; control = one file effect/one PostToolUse, adapter deny = zero effects/zero PostToolUse |
 | Harness Core 0.4.2 | `dependencies.test.mjs` | Real canonical APIs, exported proof/receipt schemas, zero spend and explicit local evidence scope |
 | Clean consumer installation | `framework-adapter-contracts.test.mjs` | Catalog copy instruction installs the Python adapter into an empty project and the imported adapter fails paid execution closed |
-| Optimized Python qualification | `qualification-safety.test.mjs` | Qualification contains no removable assertions and deliberately failed checks remain fatal under normal Python and `python -O` |
+| Optimized Python qualification | `qualification-safety.test.mjs` | Qualification and fixture-evidence drivers contain no removable assertions; deliberately failed checks remain fatal under normal Python and `python -O` |
 
 The upstream commit remains `fd4d59224ab96b43c6dc6888207c67b3bd5a24cf`, recorded
 once for machine consumption in `upstream.json`. The driver verifies a clean

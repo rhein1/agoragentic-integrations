@@ -12,12 +12,7 @@ import sys
 
 from verify_upstream import verify
 from verify_upstream import PINS
-
-
-def require(condition, message):
-    """Fail qualification explicitly, including when Python optimization is active."""
-    if not condition:
-        raise RuntimeError(message)
+from qualification_checks import require
 
 
 def main():

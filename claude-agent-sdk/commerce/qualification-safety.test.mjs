@@ -13,14 +13,25 @@ function runPython(args, code) {
   });
 }
 
-test('qualification driver contains no optimization-removable assertions', () => {
-  const code = [
-    'import ast, pathlib, sys',
-    "tree = ast.parse((pathlib.Path(sys.argv[1]) / 'upstream_conformance.py').read_text(encoding='utf-8'))",
-    "assertions = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Assert)]",
-    "print('optimization_removable_assertions:' + ','.join(map(str, assertions)), file=sys.stderr) if assertions else None",
-    'raise SystemExit(1 if assertions else 0)',
-  ].join('; ');
+test('Python qualification and evidence drivers contain no removable assertions', () => {
+  const code = `
+import ast
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+names = ['qualify.py', 'verify_upstream.py', 'upstream_conformance.py',
+         'sdk_conformance.py', 'demo.py']
+assertions = {}
+for name in names:
+    tree = ast.parse((root / name).read_text(encoding='utf-8'))
+    lines = [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Assert)]
+    if lines:
+        assertions[name] = lines
+if assertions:
+    print('optimization_removable_assertions:' + repr(assertions), file=sys.stderr)
+    raise SystemExit(1)
+`;
   const result = runPython([], code);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
@@ -30,7 +41,7 @@ for (const [name, args] of [['normal Python', []], ['optimized Python', ['-O']]]
     const code = [
       'import sys',
       'sys.path.insert(0, sys.argv[1])',
-      'from upstream_conformance import require',
+      'from qualification_checks import require',
       "require(False, 'deliberate_broken_qualification')",
     ].join('; ');
     const result = runPython(args, code);

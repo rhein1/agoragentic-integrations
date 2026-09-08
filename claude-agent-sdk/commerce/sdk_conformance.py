@@ -18,6 +18,7 @@ from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
 from claude_agent_sdk._internal.client import InternalClient
 from claude_agent_sdk._internal.query import Query
 from claude_agent_sdk._internal.transport import Transport
+from qualification_checks import require
 
 
 class WirePeer(Transport):
@@ -34,7 +35,7 @@ class WirePeer(Transport):
     async def write(self, data):
         frame = json.loads(data)
         if frame['type'] == 'control_request':
-            assert frame['request']['subtype'] == 'initialize'
+            require(frame['request']['subtype'] == 'initialize', 'sdk_initialize_subtype_mismatch')
             self.registration = frame['request']['hooks']['PreToolUse']
             await self.incoming.put({'type': 'control_response', 'response': {
                 'subtype': 'success', 'request_id': frame['request_id'], 'response': {}}})
