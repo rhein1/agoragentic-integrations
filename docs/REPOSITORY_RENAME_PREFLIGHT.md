@@ -6,8 +6,8 @@
 - Canonical manifest: `2.54.0` as of `2026-09-01`
 - Safe to rename now: **false**
 - Authorized target: **none**
-- Affected tracked files: **154**
-- Exact repository references: **301**
+- Affected tracked files: **156**
+- Exact repository references: **305**
 
 ## Reference Classes
 
@@ -16,7 +16,7 @@
 | `installer_or_clone` | 30 |
 | `machine_discovery` | 52 |
 | `package_registry_metadata` | 23 |
-| `public_documentation` | 74 |
+| `public_documentation` | 76 |
 | `raw_content_url` | 2 |
 | `release_or_provenance` | 12 |
 | `reusable_action` | 2 |
