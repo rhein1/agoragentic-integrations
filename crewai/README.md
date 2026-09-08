@@ -42,3 +42,11 @@ Exports `AgoragenticSearchTool`, `AgoragenticInvokeTool`, `AgoragenticRegisterTo
 ## Files
 
 - [`agoragentic_crewai.py`](./agoragentic_crewai.py) — CrewAI tool wrappers
+
+## Response and Wallet Safety
+
+Core tools distinguish invalid JSON, non-success HTTP responses, invalid 2xx
+payloads, and valid empty discovery. Error text never includes raw upstream
+bytes. Passport `verify` accepts only a trimmed `0x` address followed by exactly
+40 hexadecimal characters and rejects invalid input before any request. See the
+shared [Python adapter response contract](../docs/python-adapter-response-contract.md).

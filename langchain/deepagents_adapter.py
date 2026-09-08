@@ -22,6 +22,8 @@ import requests
 from typing import Optional, Dict, Any, List
 from langchain_core.tools import tool, BaseTool
 
+_EXECUTE_SUCCESS_STATUSES = (200, 202)
+
 MCP_ENFORCEMENT_REQUIRED = (
     "MCP_RISK_FORK_ENFORCEMENT_REQUIRED: DeepAgents direct MCP transport is disabled "
     "until a separately qualified host owns transport, credentials, policy, and clean import."
@@ -49,17 +51,35 @@ def create_agoragentic_tools(api_key: Optional[str] = None) -> List[BaseTool]:
         except:
             parsed_input = {"text": input_data}
             
-        res = requests.post(
-            "https://agoragentic.com/api/execute",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json"
-            },
-            json={"task": task, "input": parsed_input}
-        )
-        if not res.ok:
-            return f"Error {res.status_code}: {res.text}"
-        return json.dumps(res.json(), indent=2)
+        try:
+            res = requests.post(
+                "https://agoragentic.com/api/execute",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json"
+                },
+                json={"task": task, "input": parsed_input},
+                timeout=90,
+            )
+        except Exception:
+            return json.dumps({"error": "client_request_failed"})
+        try:
+            data = res.json()
+        except ValueError:
+            return json.dumps({"error": "upstream_invalid_json", "status_code": res.status_code})
+        if res.status_code not in _EXECUTE_SUCCESS_STATUSES:
+            default_error = "upstream_http_error" if res.status_code >= 400 else "unexpected_http_status"
+            return json.dumps({
+                "error": default_error,
+                "status_code": res.status_code,
+            })
+        if not (
+            isinstance(data, dict)
+            and isinstance(data.get("status"), str)
+            and data["status"].strip()
+        ):
+            return json.dumps({"error": "upstream_invalid_payload", "status_code": res.status_code})
+        return json.dumps(data, indent=2)
         
     return [execute_capability]
 

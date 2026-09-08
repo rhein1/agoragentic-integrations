@@ -11,12 +11,14 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const adapters = [
   ["AutoGen", "autogen/adapter.test.py"],
   ["ClawTeam", "clawteam/adapter.test.py"],
+  ["CrewAI", "crewai/adapter.test.py"],
   ["Griptape", "griptape/adapter.test.py"],
   ["LangChain", "langchain/adapter.test.py"],
   ["LiveKit Agents", "livekit-agents/adapter.test.py"],
   ["Pipecat", "pipecat/adapter.test.py"],
   ["smolagents", "smolagents/adapter.test.py"],
   ["Claude Agent SDK + commerce fixture", "claude-agent-sdk/adapter.test.py"],
+  ["Syrin", "syrin/adapter.test.py"],
 ];
 
 for (const [name, relativePath] of adapters) {
