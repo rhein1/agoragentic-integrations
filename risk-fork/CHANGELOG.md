@@ -9,6 +9,9 @@
   explicit draft-07 compatibility; add final-spec fixtures for 2020-12 tuple
   semantics and array or primitive MCP `structuredContent` values, and preserve
   local result-schema references after transport-envelope embedding.
+- Make the POSIX client-adoption backlog fixture publish its test-only counter
+  with an atomic same-directory rename so concurrent polling cannot observe a
+  truncate/write intermediate state. Product concurrency limits are unchanged.
 - Target the stateless MCP `2026-07-28` wire contract: validate complete-result
   metadata and cache hints, retain only bounded hash evidence for result
   `_meta`, require that evidence in versioned v2 transport results, and return

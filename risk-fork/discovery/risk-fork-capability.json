@@ -15,6 +15,18 @@
     "status": "source_only_default_off",
     "per_request_metadata": "implemented_child_http_phase",
     "session_state": "rejected",
+    "parameter_header_schema_types": [
+      "string",
+      "integer",
+      "boolean"
+    ],
+    "parameter_header_number_schema": "rejected_before_mcp_http_request",
+    "parameter_header_integer_runtime": "safe_integer_required",
+    "typed_result_schema_default": "json_schema_2020_12",
+    "typed_result_schema_compatibility": "explicit_draft_07_only",
+    "unsupported_typed_result_schema_dialect": "rejected",
+    "structured_content": "any_json_type_when_allowed_by_bound_schema_subject_to_taint_and_bounds",
+    "local_result_schema_references": "preserved_after_transport_embedding",
     "complete_and_cache_metadata": "validated_hash_evidence",
     "portable_handle_boundary": "explicit_process_local_reference_only",
     "mcp_apps_active_content": "default_deny_local_relay_import",

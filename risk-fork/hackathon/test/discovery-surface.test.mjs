@@ -16,6 +16,26 @@ test('capability discovery advertises exactly the four actually served demo tool
   assert.deepEqual(card.served_demo_tools, response.result.tools.map(tool => tool.name));
   assert.equal(card.served_demo_tool_status, 'local_stdio_closed_synthetic_fixtures_only');
   assert.equal(card.intercepts_live_traffic, false);
+  assert.deepEqual(
+    card.mcp_2026_07_28.parameter_header_schema_types,
+    ['string', 'integer', 'boolean'],
+  );
+  assert.equal(
+    card.mcp_2026_07_28.parameter_header_number_schema,
+    'rejected_before_mcp_http_request',
+  );
+  assert.equal(card.mcp_2026_07_28.parameter_header_integer_runtime, 'safe_integer_required');
+  assert.equal(card.mcp_2026_07_28.typed_result_schema_default, 'json_schema_2020_12');
+  assert.equal(card.mcp_2026_07_28.typed_result_schema_compatibility, 'explicit_draft_07_only');
+  assert.equal(card.mcp_2026_07_28.unsupported_typed_result_schema_dialect, 'rejected');
+  assert.equal(
+    card.mcp_2026_07_28.structured_content,
+    'any_json_type_when_allowed_by_bound_schema_subject_to_taint_and_bounds',
+  );
+  assert.equal(
+    card.mcp_2026_07_28.local_result_schema_references,
+    'preserved_after_transport_embedding',
+  );
   assert.equal(card.truth.npm_published, false);
   assert.equal(card.truth.hosted_enabled, false);
   assert.equal(card.truth.live_traffic_protected, false);

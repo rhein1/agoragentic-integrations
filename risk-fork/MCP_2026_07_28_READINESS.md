@@ -42,11 +42,11 @@ boundary. Unbound values receive no handle-derived authority.
 
 | MCP 2026-07-28 surface | Public source status | Production posture |
 | --- | --- | --- |
-| Client-facing stdio | SDK v2 dual-era server implemented | Modern clients may begin with `server/discover`; every later modern request is self-describing. Legacy initialization remains a compatibility lane, not modern-session authority |
-| Per-request protocol version, client capabilities, and client info | Implemented for the child HTTP phase | Host-owned fixed metadata; caller `_meta` is not authority |
-| `server/discover` | Implemented for the child HTTP phase | Clean output requires the exact `{ tools, resources, prompts }` boolean subset and binds it to the host session |
-| `Mcp-Method`, `Mcp-Name`, and `x-mcp-header` | Implemented for the child HTTP phase | Derived from the same exact-bound operation and schema; annotated parameters are restricted to `string`, `integer`, or `boolean`, and JSON Schema `number` is rejected |
-| JSON Schema dialect and `structuredContent` | JSON Schema 2020-12 is the default; explicit draft-07 remains supported | The authority-free typed-result envelope stays a closed top-level object while preserving local result-schema references; an MCP `structuredContent` member may use any JSON type, including an array or primitive, subject to the normal taint scans and bounds |
+| Client-facing stdio | Source implementation and regression tests present | Modern clients may begin with `server/discover`; every later modern request is self-describing. Legacy initialization remains a compatibility lane, not modern-session authority |
+| Per-request protocol version, client capabilities, and client info | Implemented and source-tested for the child HTTP phase | Host-owned fixed metadata; caller `_meta` is not authority |
+| `server/discover` | Implemented and source-tested for the child HTTP phase | Clean output requires the exact `{ tools, resources, prompts }` boolean subset and binds it to the host session |
+| `Mcp-Method`, `Mcp-Name`, and `x-mcp-header` | Implemented and source-tested for the child HTTP phase | Derived from the same exact-bound operation and schema; annotated parameters are restricted to `string`, `integer`, or `boolean`, runtime integers must be safe integers, and JSON Schema `number` is rejected |
+| Typed-result JSON Schema dialect and `structuredContent` | JSON Schema 2020-12 is the default; explicit draft-07 remains supported | Unsupported declared dialects fail closed. The authority-free typed-result envelope stays a closed top-level object while preserving local result-schema references; an MCP `structuredContent` member may use any JSON type, including an array or primitive, when the exact bound result schema permits it, subject to the normal taint scans and bounds |
 | Protocol sessions / `Mcp-Session-Id` | Rejected | No connection-scoped authority |
 | Complete results and cache metadata | Validated and recorded as transport evidence | Application projection remains closed and authority-free |
 | MRTR `input_required` / `requestState` / `inputResponses` | Not enabled | Exact-bound runner/adapter rejection carries only a typed code and hashes; no automatic retry or state echo |

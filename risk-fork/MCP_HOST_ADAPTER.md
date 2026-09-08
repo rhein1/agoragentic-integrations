@@ -183,8 +183,9 @@ before exposing the MCP result. Each request sends both required response media
 types, `MCP-Protocol-Version`, `Mcp-Method`, conditional safely encoded
 `Mcp-Name`, and any `Mcp-Param-*` values derived from valid `x-mcp-header`
 annotations in the exact hash-bound tool input schema. Only `string`, `integer`,
-and `boolean` annotations are valid; JSON Schema `number` is rejected by the
-normative 2026-07-28 Tools contract. Invalid annotated tools are
+and `boolean` annotations are valid, and an annotated integer value must be a
+safe integer; JSON Schema `number` is rejected by the normative 2026-07-28
+Tools contract. Invalid annotated tools are
 excluded from `tools/list` before the application result is exposed. The runtime
 accepts bounded duplicate-key-aware UTF-8 JSON or bounded request-scoped SSE with
 at most 256 events. SSE comments are discarded inside the child. Progress and
