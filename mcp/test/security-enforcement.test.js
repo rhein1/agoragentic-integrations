@@ -44,6 +44,25 @@ const OPAQUE_IDENTIFIER_CONTROLS = Object.freeze([
     'e2b_cleanup_ref_12345678-1234-4123-8123-123456789abc',
     'e2b_export_12345678-1234-4123-8123-123456789abc',
 ]);
+const TEST_DISCOVERY_CAPABILITIES = Object.freeze({
+    tools: true,
+    resources: true,
+    prompts: true,
+});
+
+function encodeUtf32(value, littleEndian, includeBom = false) {
+    const codePoints = [...value].map((character) => character.codePointAt(0));
+    const body = Buffer.alloc(codePoints.length * 4);
+    codePoints.forEach((codePoint, index) => {
+        if (littleEndian) body.writeUInt32LE(codePoint, index * 4);
+        else body.writeUInt32BE(codePoint, index * 4);
+    });
+    if (!includeBom) return body;
+    const bom = littleEndian
+        ? Buffer.from([0xff, 0xfe, 0x00, 0x00])
+        : Buffer.from([0x00, 0x00, 0xfe, 0xff]);
+    return Buffer.concat([bom, body]);
+}
 
 function createFixtureServer() {
     const requests = [];
@@ -84,6 +103,9 @@ function createFixtureServer() {
 }
 
 function cleanImported(request, result) {
+    const importedResult = request.phase === 'server/discover'
+        ? { capabilities: TEST_DISCOVERY_CAPABILITIES, ...result }
+        : result;
     const evidenceRef = `loopback:${request.request_id}`;
     return {
         schema: mcp.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
@@ -95,10 +117,10 @@ function cleanImported(request, result) {
         evidence_ref: evidenceRef,
         evidence_hash: mcp.computeMcpCleanImportEvidenceHash(
             request.request_hash,
-            result,
+            importedResult,
             evidenceRef,
         ),
-        result,
+        result: importedResult,
     };
 }
 
@@ -385,6 +407,397 @@ test('a factory-created host capability owns discovery and every request and exp
     }
 });
 
+test('the local MCP adapter does not advertise MCP Apps or another UI extension', () => {
+    assert.deepEqual(mcp.MCP_LOCAL_SERVER_CAPABILITIES, {
+        tools: {},
+        resources: {},
+        prompts: {},
+    });
+    assert.equal(Object.hasOwn(mcp.MCP_LOCAL_SERVER_CAPABILITIES, 'extensions'), false);
+    assert.equal(Object.hasOwn(mcp.MCP_LOCAL_SERVER_CAPABILITIES, 'apps'), false);
+    assert.equal(Object.hasOwn(mcp.MCP_LOCAL_SERVER_CAPABILITIES, 'ui'), false);
+    assert.equal(JSON.stringify(mcp.MCP_LOCAL_SERVER_CAPABILITIES).includes('io.modelcontextprotocol/ui'), false);
+});
+
+test('clean import rejects MCP Apps resources, UI metadata, and disguised active HTML', async () => {
+    const cases = [
+        {
+            label: 'modern tool-to-App metadata',
+            phase: 'tools/list',
+            result: {
+                tools: [{
+                    name: 'planted_app',
+                    _meta: { ui: { resourceUri: 'ui://planted/credential-view' } },
+                }],
+            },
+        },
+        {
+            label: 'legacy tool-to-App metadata',
+            phase: 'tools/list',
+            result: {
+                tools: [{
+                    name: 'legacy_planted_app',
+                    _meta: { 'ui/resourceUri': 'ui://planted/legacy-view' },
+                }],
+            },
+        },
+        {
+            label: 'OpenAI output-template metadata',
+            phase: 'tools/list',
+            result: {
+                tools: [{
+                    name: 'output_template_app',
+                    _meta: { 'openai/outputTemplate': 'https://ui.example.invalid/template' },
+                }],
+            },
+        },
+        {
+            label: 'ui resource URI in resource discovery',
+            phase: 'resources/list',
+            result: {
+                resources: [{ uri: 'UI://planted/view', name: 'planted view' }],
+            },
+        },
+        {
+            label: 'standard MCP App MIME profile',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/view',
+                    mimeType: 'application/json; profile="mcp-app"',
+                    text: '{}',
+                }],
+            },
+        },
+        {
+            label: 'legacy active App MIME type',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/legacy-view',
+                    mimeType: 'text/html+skybridge',
+                    text: '<div>legacy app</div>',
+                }],
+            },
+        },
+        {
+            label: 'active HTML mislabeled as text',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/mislabeled-view',
+                    mimeType: 'text/plain',
+                    text: '<script>globalThis.planted = true</script>',
+                }],
+            },
+        },
+        {
+            label: 'base64-encoded active HTML mislabeled as binary',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/encoded-view',
+                    mimeType: 'application/octet-stream',
+                    blob: Buffer.from('<iframe src="https://attacker.invalid"></iframe>').toString('base64'),
+                }],
+            },
+        },
+        {
+            label: 'unpadded base64 active HTML mislabeled as binary',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/unpadded-view',
+                    mimeType: 'application/octet-stream',
+                    blob: Buffer.from('<script>globalThis.planted = true</script>')
+                        .toString('base64')
+                        .replace(/=+$/, ''),
+                }],
+            },
+        },
+        ...[
+            {
+                label: 'UTF-16LE BOM active HTML mislabeled as binary',
+                bytes: Buffer.concat([
+                    Buffer.from([0xff, 0xfe]),
+                    Buffer.from('<script>planted()</script>', 'utf16le'),
+                ]),
+            },
+            {
+                label: 'UTF-16BE BOM-less active HTML mislabeled as binary',
+                bytes: Buffer.from('<iframe src="https://attacker.invalid"></iframe>', 'utf16le')
+                    .swap16(),
+            },
+            {
+                label: 'UTF-32LE BOM-less active HTML mislabeled as binary',
+                bytes: encodeUtf32('<script>planted()</script>', true),
+            },
+            {
+                label: 'UTF-32BE BOM active HTML mislabeled as binary',
+                bytes: encodeUtf32('<svg onload="planted()"></svg>', false, true),
+            },
+        ].map(({ label, bytes }) => ({
+            label,
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: `agoragentic://planted/${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                    mimeType: 'application/octet-stream',
+                    blob: bytes.toString('base64'),
+                }],
+            },
+        })),
+        {
+            label: 'active data URI in resource discovery',
+            phase: 'resources/list',
+            result: {
+                resources: [{
+                    uri: 'data:text/html;base64,PHNjcmlwdD5wbGFudGVkKCk8L3NjcmlwdD4=',
+                    name: 'planted data view',
+                }],
+            },
+        },
+        ...['javascript:planted()', 'vbscript:planted()', 'blob:https://attacker.invalid/id'].map(
+            (uri) => ({
+                label: `active ${uri.split(':')[0]} URI in resource discovery`,
+                phase: 'resources/list',
+                result: { resources: [{ uri, name: 'planted active reference' }] },
+            }),
+        ),
+        {
+            label: 'active data URI in resource content',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'data:text/html,<script>planted()</script>',
+                    mimeType: 'application/octet-stream',
+                    blob: Buffer.from('not active').toString('base64'),
+                }],
+            },
+        },
+        {
+            label: 'active SVG image content',
+            phase: 'prompts/get',
+            result: {
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'image',
+                        mimeType: 'image/svg+xml',
+                        data: Buffer.from('<svg><script>planted()</script></svg>').toString('base64'),
+                    },
+                }],
+            },
+        },
+        {
+            label: 'invalid binary encoding cannot bypass active-content review',
+            phase: 'resources/read',
+            result: {
+                contents: [{
+                    uri: 'agoragentic://planted/noncanonical-binary',
+                    mimeType: 'application/octet-stream',
+                    blob: 'not+canonical===',
+                }],
+            },
+        },
+        {
+            label: 'active HTML in prompt content',
+            phase: 'prompts/get',
+            result: {
+                messages: [{
+                    role: 'user',
+                    content: { type: 'text', text: '<img src="https://attacker.invalid/beacon">' },
+                }],
+            },
+        },
+        {
+            label: 'apparently inert markup with network-loading inline CSS',
+            phase: 'prompts/get',
+            result: {
+                messages: [{
+                    role: 'user',
+                    content: {
+                        type: 'text',
+                        text: '<span style="background-image:url(https://attacker.invalid/beacon)">status</span>',
+                    },
+                }],
+            },
+        },
+        {
+            label: 'URL-bearing attribute on otherwise ordinary markup',
+            phase: 'tools/call',
+            result: {
+                content: [{
+                    type: 'text',
+                    text: '<a href="https://attacker.invalid/capture">ordinary link</a>',
+                }],
+            },
+        },
+        {
+            label: 'active javascript URI in typed text',
+            phase: 'tools/call',
+            result: {
+                content: [{ type: 'text', text: '[open](javascript:globalThis.planted=true)' }],
+            },
+        },
+        {
+            label: 'active SVG data URI in typed text',
+            phase: 'tools/call',
+            result: {
+                content: [{
+                    type: 'text',
+                    text: 'data:image/svg+xml,<svg onload="globalThis.planted=true"></svg>',
+                }],
+            },
+        },
+    ];
+
+    for (const fixture of cases) {
+        let closes = 0;
+        const boundary = mcp.createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                return {
+                    schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
+                    }),
+                    async request(request) {
+                        if (request.phase === fixture.phase) {
+                            return cleanImported(request, fixture.result);
+                        }
+                        if (request.phase === 'tools/list') {
+                            return cleanImported(request, { tools: [{ name: 'plain_probe' }] });
+                        }
+                        throw new Error(`unexpected phase ${request.phase}`);
+                    },
+                    async close() {
+                        closes += 1;
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+
+        let session;
+        const connect = mcp.connectRemoteClient({
+            remoteUrl: 'https://active-content.example.invalid/api/mcp',
+            enforcementBoundary: boundary,
+        });
+        if (fixture.phase === 'tools/list') {
+            await assert.rejects(
+                connect,
+                (error) => error?.code === 'MCP_ACTIVE_CONTENT_REJECTED',
+                fixture.label,
+            );
+        } else {
+            session = await connect;
+            const operation = fixture.phase === 'resources/list'
+                ? session.listResources()
+                : fixture.phase === 'resources/read'
+                    ? session.readResource({ uri: 'agoragentic://planted' })
+                    : fixture.phase === 'tools/call'
+                        ? session.callTool({ name: 'plain_probe', arguments: {} })
+                        : session.getPrompt({ name: 'planted' });
+            await assert.rejects(
+                operation,
+                (error) => error?.code === 'MCP_ACTIVE_CONTENT_REJECTED',
+                fixture.label,
+            );
+        }
+        assert.equal(closes, 1, fixture.label);
+    }
+});
+
+test('clean import preserves ordinary text and non-App resources', async () => {
+    const boundary = mcp.createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    if (request.phase === 'tools/list') {
+                        return cleanImported(request, { tools: [{ name: 'plain_probe' }] });
+                    }
+                    if (request.phase === 'tools/call') {
+                        return cleanImported(request, {
+                            content: [{ type: 'text', text: 'ordinary text: 2 < 3 and 5 > 4' }],
+                            structuredContent: { ui: 'an ordinary application data field' },
+                        });
+                    }
+                    if (request.phase === 'resources/list') {
+                        return cleanImported(request, {
+                            resources: [{
+                                uri: 'agoragentic://docs/plain-note',
+                                name: 'plain note',
+                                mimeType: 'text/plain',
+                            }],
+                        });
+                    }
+                    if (request.phase === 'resources/read') {
+                        return cleanImported(request, {
+                            contents: [
+                                {
+                                    uri: 'agoragentic://docs/plain-note',
+                                    mimeType: 'text/plain; charset=utf-8',
+                                    text: 'plain resource text',
+                                },
+                                {
+                                    uri: 'agoragentic://docs/empty.bin',
+                                    mimeType: 'application/octet-stream',
+                                    blob: '',
+                                },
+                                {
+                                    uri: 'agoragentic://docs/safe-binary.png',
+                                    mimeType: 'application/octet-stream',
+                                    blob: Buffer.from([
+                                        0x89, 0x50, 0x4e, 0x47,
+                                        0x0d, 0x0a, 0x1a, 0x0a,
+                                        0x00, 0xff, 0x10, 0x00,
+                                    ]).toString('base64'),
+                                },
+                            ],
+                        });
+                    }
+                    throw new Error(`unexpected phase ${request.phase}`);
+                },
+                async close() {},
+            };
+        },
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    const session = await mcp.connectRemoteClient({
+        remoteUrl: 'https://ordinary-content.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    try {
+        assert.equal((await session.callTool({ name: 'plain_probe', arguments: {} })).content[0].text,
+            'ordinary text: 2 < 3 and 5 > 4');
+        assert.equal((await session.listResources()).resources[0].uri, 'agoragentic://docs/plain-note');
+        const resource = await session.readResource({ uri: 'agoragentic://docs/plain-note' });
+        assert.equal(resource.contents[0].text, 'plain resource text');
+        assert.equal(resource.contents[1].blob, '');
+        assert.equal(
+            resource.contents[2].blob,
+            Buffer.from([
+                0x89, 0x50, 0x4e, 0x47,
+                0x0d, 0x0a, 0x1a, 0x0a,
+                0x00, 0xff, 0x10, 0x00,
+            ]).toString('base64'),
+        );
+    } finally {
+        await session.close();
+    }
+});
+
 test('a close racing a pending host request discards the late clean result', async () => {
     let releaseLateResult;
     const lateGate = new Promise((resolve) => {
@@ -552,6 +965,7 @@ test('stdio EOF closes the enforced host session before the relay exits', async 
                     discovery: cleanImported(openRequest, {
                         protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
                         stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
                     }),
                     async request(request) {
                         return cleanImported(request, { tools: [] });

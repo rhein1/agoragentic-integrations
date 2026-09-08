@@ -16,6 +16,7 @@ import {
   RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA,
   canonicalMcpDnsName,
   createMcpTransportResult,
+  createMcpWireResultMetadataEvidence,
   createMcpWireHeaders,
   createMcpWireParams,
   publicMcpUnicastAddress,
@@ -386,13 +387,10 @@ function extractMcpResult(response, requestId, operation) {
   }
   if (!hasResult) throw new Error('MCP JSON-RPC response returned a remote error');
   const wireResult = assertPlainObject(envelope.result, 'MCP JSON-RPC result');
-  if (wireResult.resultType !== 'complete') {
-    throw new Error(
-      wireResult.resultType === 'input_required'
-        ? 'MCP input_required result is not accepted by the no-retry protection profile'
-        : 'MCP JSON-RPC result requires resultType complete',
-    );
-  }
+  const wireResultMetadata = createMcpWireResultMetadataEvidence(
+    wireResult,
+    operation.phase,
+  );
   if (operation.phase === 'server/discover') {
     if (!Array.isArray(wireResult.supportedVersions)
       || wireResult.supportedVersions.length < 1
@@ -403,13 +401,29 @@ function extractMcpResult(response, requestId, operation) {
       || !wireResult.supportedVersions.includes(operation.protocol_version)) {
       throw new Error('MCP discovery does not support the required protocol revision');
     }
-    assertPlainObject(wireResult.capabilities, 'MCP discovery capabilities');
+    const capabilities = assertPlainObject(
+      wireResult.capabilities,
+      'MCP discovery capabilities',
+    );
+    const advertisedCapabilities = {};
+    for (const capability of ['tools', 'resources', 'prompts']) {
+      const advertised = Object.hasOwn(capabilities, capability);
+      if (advertised) {
+        assertPlainObject(
+          capabilities[capability],
+          `MCP discovery capabilities.${capability}`,
+        );
+      }
+      advertisedCapabilities[capability] = advertised;
+    }
     return Object.freeze({
       mcpResult: Object.freeze({
         protocol_version: operation.protocol_version,
         stateless: true,
+        capabilities: Object.freeze(advertisedCapabilities),
       }),
       wireResult,
+      wireResultMetadata,
     });
   }
   let applicationResult = wireResult;
@@ -433,6 +447,7 @@ function extractMcpResult(response, requestId, operation) {
   return Object.freeze({
     mcpResult: JSON.parse(canonicalize(normalized)),
     wireResult,
+    wireResultMetadata,
   });
 }
 
@@ -715,6 +730,7 @@ async function directMcpJsonRequest(operation, resolution, body, dependencies, t
     body,
     mcpResult: extracted.mcpResult,
     wireResult: extracted.wireResult,
+    wireResultMetadata: extracted.wireResultMetadata,
     responseBody: response.responseBody,
     responseBytes: response.responseBytes,
     responseContentType: response.responseContentType,
@@ -802,6 +818,7 @@ export function createMcpHttpPhaseRuntime(dependencies = {}) {
       response_body_hash: sha256BytesRef(requested.responseBody),
       wire_result_hash: sha256Ref(requested.wireResult),
       wire_result_type: 'complete',
+      wire_result_metadata: requested.wireResultMetadata,
       measurements: {
         dns_query_count: resolution.dns_query_count,
         connection_attempt_count: requested.connectionAttempts,

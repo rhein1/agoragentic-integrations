@@ -27,6 +27,10 @@ import {
 const ENDPOINT = 'https://mcp.public-example.net/rpc';
 const PUBLIC_IPV4 = '104.18.6.229';
 const PUBLIC_IPV6 = '2606:4700::6812:7e5';
+const MCP_HEADER_FIXTURE = JSON.parse(await readFile(
+  new URL('../schema/fixtures/mcp-2026-07-28-x-mcp-header.json', import.meta.url),
+  'utf8',
+));
 
 function makeOperation(overrides = {}) {
   const phase = overrides.phase ?? 'tools/list';
@@ -146,7 +150,12 @@ function createHttpsHarness(config = {}) {
             const defaultBody = JSON.stringify({
               jsonrpc: '2.0',
               id: requestEnvelope.id,
-              result: config.result ?? { resultType: 'complete', tools: [] },
+              result: config.result ?? {
+                resultType: 'complete',
+                ttlMs: 0,
+                cacheScope: 'private',
+                tools: [],
+              },
             });
             const configuredBody = typeof config.body === 'function'
               ? config.body(requestEnvelope)
@@ -318,6 +327,19 @@ test('one phase performs one pinned direct Node HTTPS request and returns typed 
   assert.equal(payload.transport_evidence.selected_address, PUBLIC_IPV4);
   assert.equal(payload.transport_evidence.tls_server_name, 'mcp.public-example.net');
   assert.equal(payload.transport_evidence.http_host, 'mcp.public-example.net');
+  assert.deepEqual(payload.transport_evidence.wire_result_metadata, {
+    schema: 'agoragentic.risk-fork.mcp-wire-metadata-evidence.v1',
+    result_type: 'complete',
+    cacheable_result: true,
+    ttl_ms: 0,
+    cache_scope: 'private',
+    result_meta_hash: null,
+    metadata_hash: payload.transport_evidence.wire_result_metadata.metadata_hash,
+  });
+  assert.match(
+    payload.transport_evidence.wire_result_metadata.metadata_hash,
+    /^sha256:[a-f0-9]{64}$/,
+  );
   assert.deepEqual(payload.transport_evidence.measurements, {
     dns_query_count: 3,
     connection_attempt_count: 1,
@@ -362,16 +384,26 @@ test('one phase performs one pinned direct Node HTTPS request and returns typed 
 test('all bounded methods carry self-describing 2026 headers and host-owned metadata', async () => {
   const cases = [
     ['server/discover', { protocol_version: '2026-07-28', stateless_required: true }, null,
-      { resultType: 'complete', supportedVersions: ['2026-07-28'], capabilities: {} }],
-    ['tools/list', {}, null, { resultType: 'complete', tools: [] }],
+      {
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+        supportedVersions: ['2026-07-28'],
+        capabilities: {},
+      }],
+    ['tools/list', {}, null,
+      { resultType: 'complete', ttlMs: 0, cacheScope: 'private', tools: [] }],
     ['tools/call', {
       name: 'read_public_data',
       arguments: { greeting: 'Hello, 世界', options: { count: 42 } },
     }, 'read_public_data', { resultType: 'complete', content: [], isError: false }],
-    ['resources/list', {}, null, { resultType: 'complete', resources: [] }],
+    ['resources/list', {}, null,
+      { resultType: 'complete', ttlMs: 0, cacheScope: 'private', resources: [] }],
     ['resources/read', { uri: 'https://public-example.net/readme' },
-      'https://public-example.net/readme', { resultType: 'complete', contents: [] }],
-    ['prompts/list', {}, null, { resultType: 'complete', prompts: [] }],
+      'https://public-example.net/readme',
+      { resultType: 'complete', ttlMs: 0, cacheScope: 'private', contents: [] }],
+    ['prompts/list', {}, null,
+      { resultType: 'complete', ttlMs: 0, cacheScope: 'private', prompts: [] }],
     ['prompts/get', { name: 'bounded_prompt', arguments: {} }, 'bounded_prompt',
       { resultType: 'complete', messages: [] }],
   ];
@@ -419,6 +451,7 @@ test('all bounded methods carry self-describing 2026 headers and host-owned meta
       assert.deepEqual(payload.mcp_result, {
         protocol_version: '2026-07-28',
         stateless: true,
+        capabilities: { tools: false, resources: false, prompts: false },
       });
     }
     if (phase === 'tools/call') {
@@ -429,6 +462,97 @@ test('all bounded methods carry self-describing 2026 headers and host-owned meta
       assert.equal(options.headers['Mcp-Param-Count'], '42');
       assert.equal(payload.transport_evidence.measurements.parameter_header_count, 2);
     }
+  }
+});
+
+test('x-mcp-header accepts only final-spec string, integer, and boolean declarations', () => {
+  assert.equal(MCP_HEADER_FIXTURE.protocol_version, '2026-07-28');
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.accepted.map((item) => item.label),
+    ['string', 'integer', 'maximum_safe_integer', 'minimum_safe_integer', 'boolean', 'boolean_false'],
+  );
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.rejected.map((item) => item.label),
+    ['fractional_number', 'integer_valued_number'],
+  );
+  assert.deepEqual(
+    MCP_HEADER_FIXTURE.rejected_values.map((item) => item.label),
+    ['unsafe_integer'],
+  );
+  for (const item of MCP_HEADER_FIXTURE.accepted) {
+    const descriptor = {
+      name: 'read_public_data',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          value: { type: item.type, 'x-mcp-header': item.header_name },
+        },
+      },
+    };
+    assert.equal(validateMcpToolHeaderAnnotations(descriptor.inputSchema), true, item.label);
+    const operation = makeOperation({
+      phase: 'tools/call',
+      params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+      tool_descriptor: descriptor,
+    });
+    assert.equal(
+      createMcpWireHeaders(operation)[`Mcp-Param-${item.header_name}`],
+      item.expected_header_value,
+      item.label,
+    );
+    const wrongType = makeOperation({
+      phase: 'tools/call',
+      params: { name: 'read_public_data', arguments: { value: item.mismatched_value } },
+      tool_descriptor: descriptor,
+    });
+    assert.throws(
+      () => createMcpWireHeaders(wrongType),
+      /does not match its annotated type/i,
+      item.label,
+    );
+  }
+
+  for (const item of MCP_HEADER_FIXTURE.rejected) {
+    const inputSchema = {
+      type: 'object',
+      properties: {
+        value: { type: item.type, 'x-mcp-header': item.header_name },
+      },
+    };
+    assert.throws(
+      () => validateMcpToolHeaderAnnotations(inputSchema),
+      /string, integer, or boolean/i,
+      item.label,
+    );
+    assert.throws(
+      () => createMcpWireHeaders(makeOperation({
+        phase: 'tools/call',
+        params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+        tool_descriptor: { name: 'read_public_data', inputSchema },
+      })),
+      /string, integer, or boolean/i,
+      item.label,
+    );
+  }
+
+  for (const item of MCP_HEADER_FIXTURE.rejected_values) {
+    assert.throws(
+      () => makeOperation({
+        phase: 'tools/call',
+        params: { name: 'read_public_data', arguments: { value: item.argument_value } },
+        tool_descriptor: {
+          name: 'read_public_data',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              value: { type: item.type, 'x-mcp-header': item.header_name },
+            },
+          },
+        },
+      }),
+      /safe (?:integer|range)/i,
+      item.label,
+    );
   }
 });
 
@@ -520,15 +644,34 @@ test('tools/list excludes every invalid x-mcp-header tool and retains valid sibl
         },
       },
     },
+    {
+      name: 'number_annotation',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          threshold: { type: 'number', 'x-mcp-header': 'Threshold' },
+        },
+      },
+    },
   ];
   const harness = createHttpsHarness({
-    result: { resultType: 'complete', tools: [validTool, ...invalidTools] },
+    result: {
+      resultType: 'complete',
+      ttlMs: 0,
+      cacheScope: 'private',
+      tools: [validTool, ...invalidTools],
+    },
   });
   const payload = await makeRuntime(harness)(makeOperation());
   assert.deepEqual(payload.mcp_result, { tools: [validTool] });
   assert.notEqual(
     payload.transport_evidence.wire_result_hash,
-    sha256Ref({ resultType: 'complete', tools: [validTool] }),
+    sha256Ref({
+      resultType: 'complete',
+      ttlMs: 0,
+      cacheScope: 'private',
+      tools: [validTool],
+    }),
   );
 });
 
@@ -541,7 +684,12 @@ test('bounded fragmented SSE accepts comments and exactly one final response', a
         `data: ${JSON.stringify({
           jsonrpc: '2.0',
           id: request.id,
-          result: { resultType: 'complete', tools: [] },
+          result: {
+            resultType: 'complete',
+            ttlMs: 0,
+            cacheScope: 'private',
+            tools: [],
+          },
         })}\r\n\r\n`,
       ].join('');
       return [body.slice(0, 7), body.slice(7, 43), body.slice(43)];
@@ -561,9 +709,6 @@ test('bounded fragmented SSE accepts comments and exactly one final response', a
 test('modern resultType and SSE failures stop without retry', async (t) => {
   for (const [name, config, pattern] of [
     ['missing resultType', { result: { tools: [] } }, /resultType complete/i],
-    ['input required', { result: { resultType: 'input_required', inputRequests: {} } },
-      /no-retry protection profile/i],
-    ['task result', { result: { resultType: 'task', task: {} } }, /resultType complete/i],
     ['SSE without a response', {
       headers: { 'content-type': 'text/event-stream' },
       body: ': keepalive\n\n',
@@ -583,7 +728,12 @@ test('modern resultType and SSE failures stop without retry', async (t) => {
         `data: ${JSON.stringify({
           jsonrpc: '2.0',
           id: request.id,
-          result: { resultType: 'complete', tools: [] },
+          result: {
+            resultType: 'complete',
+            ttlMs: 0,
+            cacheScope: 'private',
+            tools: [],
+          },
         })}\n\n`,
       ].join(''),
     }, /unsolicited notification/i],
@@ -594,7 +744,12 @@ test('modern resultType and SSE failures stop without retry', async (t) => {
         `data: ${JSON.stringify({
           jsonrpc: '2.0',
           id: request.id,
-          result: { resultType: 'complete', tools: [] },
+          result: {
+            resultType: 'complete',
+            ttlMs: 0,
+            cacheScope: 'private',
+            tools: [],
+          },
         })}\n\n`,
       ].join(''),
     }, /unsolicited notification/i],
@@ -602,6 +757,214 @@ test('modern resultType and SSE failures stop without retry', async (t) => {
     await t.test(name, async () => {
       const harness = createHttpsHarness(config);
       await assert.rejects(makeRuntime(harness)(makeOperation()), pattern);
+      assert.equal(harness.state.calls.length, 1);
+    });
+  }
+});
+
+test('discovery preserves only the closed own advertised-capability subset', async () => {
+  const operation = makeOperation({ phase: 'server/discover' });
+  const harness = createHttpsHarness({
+    result: {
+      resultType: 'complete',
+      ttlMs: 0,
+      cacheScope: 'private',
+      supportedVersions: ['2026-07-28'],
+      capabilities: {
+        tools: { listChanged: true },
+        prompts: {},
+        tasks: { list: true },
+        subscriptions: { listen: true },
+      },
+    },
+  });
+  const payload = await makeRuntime(harness)(operation);
+  assert.deepEqual(payload.mcp_result, {
+    protocol_version: '2026-07-28',
+    stateless: true,
+    capabilities: { tools: true, resources: false, prompts: true },
+  });
+  assert.equal(Object.hasOwn(payload.mcp_result.capabilities, 'tasks'), false);
+  assert.equal(Object.hasOwn(payload.mcp_result.capabilities, 'subscriptions'), false);
+
+  for (const malformed of [null, true, [], 'tools']) {
+    const malformedHarness = createHttpsHarness({
+      result: {
+        resultType: 'complete',
+        ttlMs: 0,
+        cacheScope: 'private',
+        supportedVersions: ['2026-07-28'],
+        capabilities: { tools: malformed },
+      },
+    });
+    await assert.rejects(
+      makeRuntime(malformedHarness)(operation),
+      /capabilities\.tools must be an object/i,
+    );
+    assert.equal(malformedHarness.state.calls.length, 1);
+  }
+});
+
+test('unsupported MRTR and task results return hash-only typed no-retry evidence', async (t) => {
+  const cases = [
+    {
+      name: 'input_required',
+      reportedResultType: 'input_required',
+      result: {
+        resultType: 'input_required',
+        inputRequests: {
+          approval: {
+            method: 'elicitation/create',
+            params: { message: 'confirm' },
+          },
+        },
+        requestState: 'opaque-sensitive-continuation-state',
+      },
+      code: 'ERR_RISK_FORK_MCP_INPUT_REQUIRED_UNSUPPORTED',
+      kind: 'mrtr_input_required_unsupported',
+    },
+    {
+      name: 'input_required with requestState only',
+      reportedResultType: 'input_required',
+      result: {
+        resultType: 'input_required',
+        requestState: 'opaque-sensitive-continuation-state-only',
+      },
+      code: 'ERR_RISK_FORK_MCP_INPUT_REQUIRED_UNSUPPORTED',
+      kind: 'mrtr_input_required_unsupported',
+    },
+    {
+      name: 'task',
+      reportedResultType: 'task',
+      result: {
+        resultType: 'task',
+        taskId: 'task-sensitive-id',
+        status: 'working',
+        ttlMs: 60_000,
+        pollIntervalMs: 1_000,
+      },
+      code: 'ERR_RISK_FORK_MCP_TASK_UNSUPPORTED',
+      kind: 'task_extension_unsupported',
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      const harness = createHttpsHarness({ result: item.result });
+      await assert.rejects(
+        makeRuntime(harness)(makeOperation()),
+        (error) => {
+          assert.equal(error.name, 'UnsupportedMcpWireResultError');
+          assert.equal(error.code, item.code);
+          assert.equal(error.rejection_evidence.rejection_kind, item.kind);
+          assert.equal(
+            error.rejection_evidence.reported_result_type,
+            item.reportedResultType,
+          );
+          assert.equal(error.rejection_evidence.automatic_retry, false);
+          assert.equal(error.rejection_evidence.task_extension_enabled, false);
+          assert.equal(error.rejection_evidence.subscription_stream_enabled, false);
+          assert.match(error.rejection_evidence.wire_result_hash, /^sha256:[a-f0-9]{64}$/);
+          assert.equal(
+            JSON.stringify(error.rejection_evidence).includes('sensitive'),
+            false,
+          );
+          return true;
+        },
+      );
+      assert.equal(harness.state.calls.length, 1);
+    });
+  }
+});
+
+test('complete results validate and preserve 2026 metadata as bounded hash evidence', async () => {
+  const resultMeta = {
+    'io.modelcontextprotocol/serverInfo': {
+      name: 'public-example-mcp',
+      version: '2.0.0',
+    },
+    'com.public-example/trace': { region: 'iad' },
+  };
+  const wireResult = {
+    resultType: 'complete',
+    ttlMs: 60_000,
+    cacheScope: 'public',
+    _meta: resultMeta,
+    tools: [],
+  };
+  const harness = createHttpsHarness({ result: wireResult });
+  const operation = makeOperation();
+  const payload = await makeRuntime(harness)(operation);
+
+  assert.deepEqual(payload.mcp_result, { tools: [] });
+  assert.deepEqual(payload.transport_evidence.wire_result_metadata, {
+    schema: 'agoragentic.risk-fork.mcp-wire-metadata-evidence.v1',
+    result_type: 'complete',
+    cacheable_result: true,
+    ttl_ms: 60_000,
+    cache_scope: 'public',
+    result_meta_hash: sha256Ref(resultMeta),
+    metadata_hash: payload.transport_evidence.wire_result_metadata.metadata_hash,
+  });
+  assert.equal(payload.transport_evidence.wire_result_hash, sha256Ref(wireResult));
+  assert.deepEqual(verifyMcpTransportResult(payload, operation), { tools: [] });
+  assert.equal(
+    operation.response_schema.properties.transport_evidence.required
+      .includes('wire_result_metadata'),
+    true,
+  );
+
+  const missingMetadata = structuredClone(payload);
+  delete missingMetadata.transport_evidence.wire_result_metadata;
+  missingMetadata.transport_evidence.evidence_hash = sha256Ref({
+    ...missingMetadata.transport_evidence,
+    evidence_hash: null,
+  });
+  assert.throws(
+    () => verifyMcpTransportResult(missingMetadata, operation),
+    /missing required fields/i,
+  );
+
+  const tampered = structuredClone(payload);
+  tampered.transport_evidence.wire_result_metadata.ttl_ms = 30_000;
+  assert.throws(
+    () => verifyMcpTransportResult(tampered, operation),
+    /metadata evidence hash mismatch/i,
+  );
+});
+
+test('malformed or misplaced 2026 result metadata fails closed without retry', async (t) => {
+  const cases = [
+    ['missing cache fields', makeOperation(), { resultType: 'complete', tools: [] }],
+    ['missing cache scope', makeOperation(), { resultType: 'complete', ttlMs: 0, tools: [] }],
+    ['negative cache ttl', makeOperation(), {
+      resultType: 'complete', ttlMs: -1, cacheScope: 'private', tools: [],
+    }],
+    ['fractional cache ttl', makeOperation(), {
+      resultType: 'complete', ttlMs: 0.5, cacheScope: 'private', tools: [],
+    }],
+    ['invalid cache scope', makeOperation(), {
+      resultType: 'complete', ttlMs: 0, cacheScope: 'tenant', tools: [],
+    }],
+    ['non-object result meta', makeOperation(), {
+      resultType: 'complete', ttlMs: 0, cacheScope: 'private', _meta: 'invalid', tools: [],
+    }],
+    ['invalid server info', makeOperation(), {
+      resultType: 'complete',
+      ttlMs: 0,
+      cacheScope: 'private',
+      _meta: { 'io.modelcontextprotocol/serverInfo': { name: 'missing-version' } },
+      tools: [],
+    }],
+    ['cache metadata on non-cacheable call', makeOperation({ phase: 'tools/call' }), {
+      resultType: 'complete', ttlMs: 0, cacheScope: 'private', content: [],
+    }],
+  ];
+
+  for (const [name, operation, result] of cases) {
+    await t.test(name, async () => {
+      const harness = createHttpsHarness({ result });
+      await assert.rejects(makeRuntime(harness)(operation));
       assert.equal(harness.state.calls.length, 1);
     });
   }
@@ -743,18 +1106,59 @@ test('tools/call remains exact-bound read-only and runner emits its typed measur
   assert.equal(result.commit_candidate_hash, sha256Ref(result.commit_candidate));
   assert.deepEqual(JSON.parse(await readFile(resultPath, 'utf8')), result);
 
-  const rejectedPath = path.join(root, 'unbranded-result.json');
-  const rejectedJob = {
+  const typedRejectionPath = path.join(root, 'typed-rejection.json');
+  const typedRejectionJob = {
     ...job,
     job_id: 'rfj_fedcba0987654321',
-    result_path: rejectedPath,
+    result_path: typedRejectionPath,
     job_hash: null,
   };
-  rejectedJob.job_hash = sha256Ref({ ...rejectedJob, job_hash: null });
+  typedRejectionJob.job_hash = sha256Ref({ ...typedRejectionJob, job_hash: null });
+  const inputRequiredHarness = createHttpsHarness({
+    result: {
+      resultType: 'input_required',
+      inputRequests: { approval: { prompt: 'sensitive approval prompt' } },
+      requestState: 'sensitive continuation state',
+    },
+  });
+  const typedRejection = await runRunnerJob({
+    job: typedRejectionJob,
+    resultPath: typedRejectionPath,
+    runnerArtifactPath: new URL('../e2b-template/bin/run.mjs', import.meta.url),
+    mcpHttpPhase: makeRuntime(inputRequiredHarness),
+  });
+  assert.equal(typedRejection.status, 'rejected');
+  assert.equal(
+    typedRejection.schema,
+    'agoragentic.risk-fork.runner-mcp-rejection.v1',
+  );
+  assert.equal(
+    typedRejection.rejection_code,
+    'ERR_RISK_FORK_MCP_INPUT_REQUIRED_UNSUPPORTED',
+  );
+  assert.equal(typedRejection.rejection_evidence.automatic_retry, false);
+  assert.equal(
+    typedRejection.rejection_evidence_hash,
+    sha256Ref(typedRejection.rejection_evidence),
+  );
+  const rejectionBytes = await readFile(typedRejectionPath, 'utf8');
+  assert.deepEqual(JSON.parse(rejectionBytes), typedRejection);
+  assert.equal(rejectionBytes.includes('sensitive approval prompt'), false);
+  assert.equal(rejectionBytes.includes('sensitive continuation state'), false);
+  assert.equal(inputRequiredHarness.state.calls.length, 1);
+
+  const unbrandedPath = path.join(root, 'unbranded-result.json');
+  const unbrandedJob = {
+    ...job,
+    job_id: 'rfj_abcdef1234567890',
+    result_path: unbrandedPath,
+    job_hash: null,
+  };
+  unbrandedJob.job_hash = sha256Ref({ ...unbrandedJob, job_hash: null });
   await assert.rejects(
     runRunnerJob({
-      job: rejectedJob,
-      resultPath: rejectedPath,
+      job: unbrandedJob,
+      resultPath: unbrandedPath,
       runnerArtifactPath: new URL('../e2b-template/bin/run.mjs', import.meta.url),
       mcpHttpPhase: async () => ({}),
     }),

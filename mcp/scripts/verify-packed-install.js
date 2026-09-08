@@ -150,6 +150,98 @@ function verifyMcpFallback(entrypoint) {
     });
 }
 
+async function verifyPackedModernStdioGuards(entrypoint) {
+    const child = spawn(process.execPath, [entrypoint], {
+        env: {
+            ...process.env,
+            AGORAGENTIC_MCP_URL: 'http://127.0.0.1:9/mcp',
+            AGORAGENTIC_API_KEY: '',
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const output = readline.createInterface({ input: child.stdout });
+    const pending = new Map();
+    const messages = [];
+    let stderr = '';
+    let nextId = 1;
+    child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+    });
+    output.on('line', (line) => {
+        const message = JSON.parse(line);
+        messages.push(message);
+        const waiter = pending.get(message.id);
+        if (!waiter) return;
+        pending.delete(message.id);
+        waiter.resolve(message);
+    });
+    const exit = new Promise((resolve) => child.once(
+        'exit',
+        (code, signal) => resolve({ code, signal }),
+    ));
+    function request(method, params = {}) {
+        const id = nextId++;
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                pending.delete(id);
+                reject(new Error(`packed modern stdio timed out waiting for ${method}\n${stderr}`));
+            }, 5000);
+            pending.set(id, {
+                resolve(message) {
+                    clearTimeout(timeout);
+                    resolve(message);
+                },
+            });
+            child.stdin.write(`${JSON.stringify({
+                jsonrpc: '2.0',
+                id,
+                method,
+                params: {
+                    ...params,
+                    _meta: {
+                        'io.modelcontextprotocol/protocolVersion': MCP_V2_PROTOCOL_VERSION,
+                        'io.modelcontextprotocol/clientCapabilities': {},
+                    },
+                },
+            })}\n`);
+        });
+    }
+
+    try {
+        const discovery = await request('server/discover');
+        assert.strictEqual(discovery.error, undefined, JSON.stringify(discovery));
+        const tools = await request('tools/list');
+        assert.strictEqual(tools.error, undefined, JSON.stringify(tools));
+        const beforeListen = messages.length;
+        const listen = await request('subscriptions/listen', {
+            notifications: { tools: { listChanged: true } },
+        });
+        assert.strictEqual(listen.error.code, -32603);
+        assert.strictEqual(listen.error.message, 'Subscription limit reached');
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.strictEqual(
+            messages.slice(beforeListen).some(
+                (message) => message.method === 'notifications/subscriptions/acknowledged',
+            ),
+            false,
+        );
+        assert.strictEqual((await request('tools/list')).error, undefined);
+    } finally {
+        child.stdin.end();
+        const outcome = await Promise.race([
+            exit.then((value) => ({ exited: true, value })),
+            new Promise((resolve) => setTimeout(() => resolve({ exited: false }), 5000)),
+        ]);
+        if (!outcome.exited) {
+            child.kill();
+            await exit;
+            throw new Error(`packed modern stdio did not exit after EOF\n${stderr}`);
+        }
+        output.close();
+        assert.strictEqual(outcome.value.code, 0, stderr);
+    }
+}
+
 async function verifyPackedAcpInputGuards(entrypoint) {
     const child = spawn(process.execPath, [entrypoint, '--acp'], {
         env: {
@@ -351,6 +443,12 @@ function createMcpV2Fixture() {
 }
 
 function cleanImported(api, request, result) {
+    const importedResult = request.phase === 'server/discover'
+        ? {
+            capabilities: { tools: true, resources: true, prompts: true },
+            ...result,
+        }
+        : result;
     const evidenceRef = `packed-loopback:${request.request_id}`;
     return {
         schema: api.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
@@ -362,10 +460,10 @@ function cleanImported(api, request, result) {
         evidence_ref: evidenceRef,
         evidence_hash: api.computeMcpCleanImportEvidenceHash(
             request.request_hash,
-            result,
+            importedResult,
             evidenceRef,
         ),
-        result,
+        result: importedResult,
     };
 }
 
@@ -394,6 +492,12 @@ function createPackedLoopbackBoundary(api) {
                 discovery: cleanImported(api, openRequest, {
                     protocol_version: MCP_V2_PROTOCOL_VERSION,
                     stateless: true,
+                    capabilities: Object.fromEntries(
+                        ['tools', 'resources', 'prompts'].map((key) => [
+                            key,
+                            Object.hasOwn(client.getServerCapabilities() ?? {}, key),
+                        ]),
+                    ),
                 }),
                 async request(request) {
                     let result;
@@ -1012,6 +1116,7 @@ async function verifyPackedEofCleanup(entrypoint) {
                     discovery: cleanImported(openRequest, {
                         protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
                         stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
                     }),
                     async request(request) {
                         return cleanImported(request, { tools: [] });
@@ -1067,6 +1172,120 @@ async function verifyPackedEofCleanup(entrypoint) {
     assert.match(stderr, /PACKED_EOF_HOST_CLOSE_CALLED/);
 }
 
+async function verifyPackedLateFactoryCleanup(entrypoint) {
+    const probeSource = `
+        const mcp = require(${JSON.stringify('__PACKED_ENTRYPOINT__')});
+        let opens = 0;
+        function cleanImported(request, result) {
+            const evidenceRef = 'packed-late-factory:' + request.request_id;
+            return {
+                schema: mcp.MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult,
+                request_id: request.request_id,
+                request_hash: request.request_hash,
+                phase: request.phase,
+                clean_imported: true,
+                authority_granted: false,
+                evidence_ref: evidenceRef,
+                evidence_hash: mcp.computeMcpCleanImportEvidenceHash(
+                    request.request_hash,
+                    result,
+                    evidenceRef,
+                ),
+                result,
+            };
+        }
+        const boundary = mcp.createMcpEnforcementBoundary({
+            async openSession(openRequest) {
+                opens += 1;
+                const index = opens;
+                if (index === 2) {
+                    console.error('PACKED_SECOND_OPEN_STARTED');
+                    await new Promise((resolve) => setTimeout(resolve, 150));
+                }
+                return {
+                    schema: mcp.MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                    discovery: cleanImported(openRequest, {
+                        protocol_version: mcp.MCP_V2_PROTOCOL_VERSION,
+                        stateless: true,
+                        capabilities: { tools: true, resources: true, prompts: true },
+                    }),
+                    async request(request) {
+                        return cleanImported(request, { tools: [] });
+                    },
+                    async close() {
+                        await new Promise((resolve) => setTimeout(resolve, 40));
+                        if (index === 2) console.error('PACKED_SECOND_CLOSE_FINISHED');
+                    },
+                };
+            },
+            async executeFallback() {
+                throw new Error('fallback must not run');
+            },
+        });
+        mcp.runMcpRelay({ enforcementBoundary: boundary }).catch((error) => {
+            console.error(error);
+            process.exit(1);
+        });
+    `.replace('__PACKED_ENTRYPOINT__', entrypoint.replace(/\\/g, '\\\\'));
+    const child = spawn(process.execPath, ['-e', probeSource], {
+        cwd: path.dirname(entrypoint),
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const output = readline.createInterface({ input: child.stdout });
+    let stderr = '';
+    let discoverSent = false;
+    let ended = false;
+    child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+        if (!discoverSent && stderr.includes('stdio relay')) {
+            discoverSent = true;
+            child.stdin.write(`${JSON.stringify({
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'server/discover',
+                params: {
+                    _meta: {
+                        'io.modelcontextprotocol/protocolVersion': MCP_V2_PROTOCOL_VERSION,
+                        'io.modelcontextprotocol/clientCapabilities': {},
+                    },
+                },
+            })}\n`);
+        }
+        if (!ended && stderr.includes('PACKED_SECOND_OPEN_STARTED')) {
+            ended = true;
+            child.stdin.end();
+        }
+    });
+    output.on('line', (line) => {
+        const message = JSON.parse(line);
+        if (message.id !== 1 || !message.result) return;
+        child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'initialize',
+            params: {
+                protocolVersion: '2025-06-18',
+                capabilities: {},
+                clientInfo: { name: 'packed-late-factory', version: '1.0.0' },
+            },
+        })}\n`);
+    });
+    const exit = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })));
+    const outcome = await Promise.race([
+        exit.then((value) => ({ exited: true, value })),
+        new Promise((resolve) => setTimeout(() => resolve({ exited: false }), 5000)),
+    ]);
+    if (!outcome.exited) {
+        child.kill();
+        await exit;
+    }
+    output.close();
+    assert.strictEqual(outcome.exited, true, `packed late-factory relay did not exit\n${stderr}`);
+    assert.strictEqual(outcome.value.code, 0, stderr);
+    assert.match(stderr, /PACKED_SECOND_OPEN_STARTED/);
+    assert.match(stderr, /PACKED_SECOND_CLOSE_FINISHED/);
+}
+
 async function verifyPackedMcpV2Relay(entrypoint, remoteUrl, requests) {
     const api = require(entrypoint);
     assert.strictEqual(typeof api.createMcpEnforcementBoundary, 'function');
@@ -1081,6 +1300,7 @@ async function verifyPackedMcpV2Relay(entrypoint, remoteUrl, requests) {
     await verifyPackedSecurityGuards(api, remoteUrl);
     assert.strictEqual(requests.length, 0, 'packed security guards must produce zero remote I/O');
     await verifyPackedEofCleanup(entrypoint);
+    await verifyPackedLateFactoryCleanup(entrypoint);
 
     const session = await api.connectRemoteClient({
         remoteUrl,
@@ -1148,6 +1368,7 @@ async function main() {
         const entrypoint = path.join(installedRoot, 'dist', 'mcp-server.cjs');
         assert(fs.existsSync(entrypoint), 'packed MCP bundle is missing');
         await verifyMcpFallback(entrypoint);
+        await verifyPackedModernStdioGuards(entrypoint);
         await verifyPackedAcpInputGuards(entrypoint);
 
         const fixture = createMcpV2Fixture();

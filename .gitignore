@@ -5,6 +5,7 @@ mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
 opencode/node_modules/
+anchor-safe-pay/node_modules/
 risk-fork/node_modules/
 transaction-assurance/node_modules/
 gstack/node_modules/

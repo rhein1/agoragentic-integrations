@@ -16,7 +16,12 @@ import {
   validateChildOperation,
   validateLocalReferenceOperation,
 } from '../../src/child-operation.mjs';
-import { validateMcpHttpPhaseOperation } from '../../src/mcp-transport-contract.mjs';
+import {
+  RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA,
+  mcpWireResultRejectionCode,
+  validateMcpHttpPhaseOperation,
+  validateMcpWireResultRejectionEvidence,
+} from '../../src/mcp-transport-contract.mjs';
 import {
   dispatchMcpHttpPhase,
   executeMcpHttpPhase,
@@ -277,32 +282,8 @@ async function requireSafeResultParent(target) {
   if (resolved !== parent) throw new Error('runner result parent must be canonical');
 }
 
-export async function runRunnerJob(options = {}) {
-  const resultPath = path.resolve(String(options.resultPath));
-  const job = validateJob(options.job, resultPath);
-  await requireSafeResultParent(resultPath);
-  const runnerArtifactHash = await sha256FileRef(
-    options.runnerArtifactPath ?? RUNNER_ARTIFACT_PATH,
-  );
-  let commitCandidate = job.commitCandidate;
-  if (job.operation.kind === 'bounded_file_batch') {
-    const root = await requireWorkspaceRoot(options.workspaceRoot ?? WORKSPACE_ROOT);
-    for (const action of job.operation.actions) await executeAction(root, action);
-  } else {
-    const handler = options.mcpHttpPhase ?? executeMcpHttpPhase;
-    if (!isMcpHttpPhaseRuntime(handler)) {
-      throw new TypeError('runner MCP HTTP phase handler is not an opaque runtime capability');
-    }
-    const payload = await dispatchMcpHttpPhase(handler, job.operation);
-    commitCandidate = validateChildOperation({
-      type: 'TYPED_RESULT',
-      payload,
-      payload_schema: job.operation.response_schema,
-    }, 'runner MCP HTTP phase commit candidate');
-  }
-  const result = {
-    schema: 'agoragentic.risk-fork.runner-result.v1',
-    status: 'completed',
+function runnerBinding(job, runnerArtifactHash) {
+  return {
     job_id: job.job_id,
     job_hash: job.job_hash,
     parent_state_hash: job.parent_state_hash,
@@ -319,15 +300,74 @@ export async function runRunnerJob(options = {}) {
     execution_mode: job.execution_mode,
     trusted_runner_artifact_hash: runnerArtifactHash,
     expected_result_schema_hash: job.expected_result_schema_hash,
-    commit_candidate: commitCandidate,
-    commit_candidate_hash: sha256Ref(commitCandidate),
   };
+}
+
+async function writeRunnerResult(resultPath, jobId, result) {
   await writeAtomicExclusive(
     resultPath,
     Buffer.from(`${canonicalize(result)}\n`, 'utf8'),
-    job.job_id,
+    jobId,
   );
   return Object.freeze(result);
+}
+
+export async function runRunnerJob(options = {}) {
+  const resultPath = path.resolve(String(options.resultPath));
+  const job = validateJob(options.job, resultPath);
+  await requireSafeResultParent(resultPath);
+  const runnerArtifactHash = await sha256FileRef(
+    options.runnerArtifactPath ?? RUNNER_ARTIFACT_PATH,
+  );
+  let commitCandidate = job.commitCandidate;
+  if (job.operation.kind === 'bounded_file_batch') {
+    const root = await requireWorkspaceRoot(options.workspaceRoot ?? WORKSPACE_ROOT);
+    for (const action of job.operation.actions) await executeAction(root, action);
+  } else {
+    const handler = options.mcpHttpPhase ?? executeMcpHttpPhase;
+    if (!isMcpHttpPhaseRuntime(handler)) {
+      throw new TypeError('runner MCP HTTP phase handler is not an opaque runtime capability');
+    }
+    let payload;
+    try {
+      payload = await dispatchMcpHttpPhase(handler, job.operation);
+    } catch (error) {
+      if (!error?.rejection_evidence) throw error;
+      const rejectionEvidence = validateMcpWireResultRejectionEvidence(
+        error.rejection_evidence,
+        job.mcp_phase,
+      );
+      const rejectionCode = mcpWireResultRejectionCode(
+        rejectionEvidence,
+        job.mcp_phase,
+      );
+      if (error.code !== rejectionCode) {
+        throw new Error('runner MCP rejection code does not match its typed evidence');
+      }
+      const rejection = {
+        schema: RISK_FORK_MCP_RUNNER_REJECTION_SCHEMA,
+        status: 'rejected',
+        ...runnerBinding(job, runnerArtifactHash),
+        rejection_code: rejectionCode,
+        rejection_evidence: rejectionEvidence,
+        rejection_evidence_hash: sha256Ref(rejectionEvidence),
+      };
+      return writeRunnerResult(resultPath, job.job_id, rejection);
+    }
+    commitCandidate = validateChildOperation({
+      type: 'TYPED_RESULT',
+      payload,
+      payload_schema: job.operation.response_schema,
+    }, 'runner MCP HTTP phase commit candidate');
+  }
+  const result = {
+    schema: 'agoragentic.risk-fork.runner-result.v1',
+    status: 'completed',
+    ...runnerBinding(job, runnerArtifactHash),
+    commit_candidate: commitCandidate,
+    commit_candidate_hash: sha256Ref(commitCandidate),
+  };
+  return writeRunnerResult(resultPath, job.job_id, result);
 }
 
 async function readJob(target) {

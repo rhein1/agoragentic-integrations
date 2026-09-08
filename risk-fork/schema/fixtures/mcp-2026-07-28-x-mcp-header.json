@@ -1,0 +1,76 @@
+{
+  "protocol_version": "2026-07-28",
+  "specification_url": "https://modelcontextprotocol.io/specification/2026-07-28/server/tools",
+  "accepted": [
+    {
+      "label": "string",
+      "type": "string",
+      "header_name": "Region",
+      "argument_value": "us-east-1",
+      "mismatched_value": 7,
+      "expected_header_value": "us-east-1"
+    },
+    {
+      "label": "integer",
+      "type": "integer",
+      "header_name": "Count",
+      "argument_value": 42,
+      "mismatched_value": 1.25,
+      "expected_header_value": "42"
+    },
+    {
+      "label": "maximum_safe_integer",
+      "type": "integer",
+      "header_name": "Maximum",
+      "argument_value": 9007199254740991,
+      "mismatched_value": 1.25,
+      "expected_header_value": "9007199254740991"
+    },
+    {
+      "label": "minimum_safe_integer",
+      "type": "integer",
+      "header_name": "Minimum",
+      "argument_value": -9007199254740991,
+      "mismatched_value": 1.25,
+      "expected_header_value": "-9007199254740991"
+    },
+    {
+      "label": "boolean",
+      "type": "boolean",
+      "header_name": "Preview",
+      "argument_value": true,
+      "mismatched_value": "true",
+      "expected_header_value": "true"
+    },
+    {
+      "label": "boolean_false",
+      "type": "boolean",
+      "header_name": "Disabled",
+      "argument_value": false,
+      "mismatched_value": "false",
+      "expected_header_value": "false"
+    }
+  ],
+  "rejected": [
+    {
+      "label": "fractional_number",
+      "type": "number",
+      "header_name": "Threshold",
+      "argument_value": 1.25
+    },
+    {
+      "label": "integer_valued_number",
+      "type": "number",
+      "header_name": "NumberCount",
+      "argument_value": 1
+    }
+  ],
+  "rejected_values": [
+    {
+      "label": "unsafe_integer",
+      "type": "integer",
+      "header_name": "UnsafeCount",
+      "argument_value": 9007199254740992
+    }
+  ]
+}

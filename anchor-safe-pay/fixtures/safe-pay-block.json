@@ -1,0 +1,21 @@
+{
+  "wallet": "0x1111111111111111111111111111111111111111",
+  "recommendation": "block",
+  "risk_score": 100,
+  "sanctions_match": true,
+  "sanctioned_lists": [
+    "fixture-list"
+  ],
+  "address_type": "evm",
+  "signals": [
+    {
+      "code": "fixture_block",
+      "severity": "critical",
+      "source": "fixture"
+    }
+  ],
+  "corpus_version": "fixture-2030-01",
+  "partial": false,
+  "checked_at": 1893455940,
+  "notes": "Local fixture only; the simulated send must not run."
+}
