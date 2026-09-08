@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install bounded test tools
-        run: python -m pip install build==1.5.0 pytest==9.0.2 ruff==0.16.2
+        run: python -m pip install build==1.5.0 pytest==9.0.2 ruff==0.16.2 'jsonschema[format-nongpl]==4.26.0'
       - name: Static checks
         working-directory: matraix-cohort-assurance
         run: |
@@ -66,6 +66,14 @@ jobs:
           python -m agoragentic_matraix_assurance validate
           python -m agoragentic_matraix_assurance replay --verify-expected --out "${RUNNER_TEMP}/cohort-evidence.json"
           python -m pytest tests -q
+      - name: Replay proof fixtures and validate pinned platform contract
+        env:
+          AGORAGENTIC_MATRAIX_LIVE: '0'
+          AGORAGENTIC_NO_SPEND: '1'
+        run: |
+          python matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/replay.py
+          python -m unittest discover -s matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/tests -v
+          node matraix-cohort-assurance/proofs/resolution-desk-missing-delivery-v1/validate-platform-contract.cjs
       - name: Build and inspect distribution
         working-directory: matraix-cohort-assurance
         run: |

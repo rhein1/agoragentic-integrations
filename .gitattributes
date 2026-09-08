@@ -4,3 +4,4 @@
 /risk-fork-hosted-mcp/ops/postgres/*.sql.template text eol=lf
 /integration-qualification/** text eol=lf
 /prime-agent-governance/** text eol=lf
+/matraix-cohort-assurance/proofs/** text eol=lf
