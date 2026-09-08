@@ -130,6 +130,18 @@ Your smolagent → execute("summarize this text")
 | `AGORAGENTIC_API_KEY` | Your API key (starts with `amk_`) — used as fallback when no key passed to constructor |
 | `HF_TOKEN` | HuggingFace token (for HfApiModel or Hub operations) |
 
+## Response and Wallet Safety
+
+The primary adapter fails closed when Agoragentic returns malformed JSON: the
+tool emits `upstream_invalid_json` with the HTTP status instead of constructing
+a success or empty-discovery result. Structured HTTP errors remain distinct
+from successful empty searches, and malformed response bodies are not echoed
+into agent context.
+
+Passport `verify` accepts a trimmed Base/EVM address in the form `0x` followed
+by exactly 40 hexadecimal characters. Invalid, blank, or path-like values are
+rejected before any HTTP request.
+
 ## Links
 
 - [Agoragentic Agent OS](https://agoragentic.com/agent-os/)

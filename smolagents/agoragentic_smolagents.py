@@ -23,20 +23,51 @@ Or use the Hub:
 
 import json
 import os
+import re
 import requests
 import urllib.parse
 from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
+_BASE_WALLET_PATTERN = re.compile(r"0x[a-fA-F0-9]{40}")
+
+
+class _UpstreamResponseError(RuntimeError):
+    """A stable, body-free representation of an upstream response failure."""
+
+    def __init__(self, code: str, status_code: int):
+        super().__init__(code)
+        self.code = code
+        self.status_code = status_code
+
 
 def _safe_response_json(resp: requests.Response):
-    """Deterministically decode response JSON with HTTP status and content fallbacks."""
+    """Decode response JSON or raise a typed error without exposing response bytes."""
     try:
         return resp.json()
-    except Exception:
-        if resp.status_code >= 400:
-            return {"error": f"HTTP {resp.status_code}: {resp.text[:200].strip()}"}
-        return {"error": "Invalid JSON returned by upstream gateway", "raw": resp.text[:200].strip()}
+    except ValueError as exc:
+        raise _UpstreamResponseError("upstream_invalid_json", resp.status_code) from exc
+
+
+def _response_error_payload(resp: requests.Response, data) -> dict:
+    """Preserve structured API errors while distinguishing transport status failures."""
+    status_code = resp.status_code
+    upstream_error = data.get("error") if isinstance(data, dict) else None
+    upstream_message = data.get("message") if isinstance(data, dict) else None
+    default_error = "upstream_http_error" if status_code >= 400 else "unexpected_http_status"
+    payload = {
+        "error": upstream_error if isinstance(upstream_error, str) and upstream_error else default_error,
+        "status_code": status_code,
+    }
+    if isinstance(upstream_message, str) and upstream_message:
+        payload["message"] = upstream_message
+    return payload
+
+
+def _exception_payload(exc: Exception) -> dict:
+    if isinstance(exc, _UpstreamResponseError):
+        return {"error": exc.code, "status_code": exc.status_code}
+    return {"error": str(exc)}
 
 
 try:
@@ -104,9 +135,9 @@ class AgoragenticExecuteTool(Tool):
                     "cost_usdc": data.get("cost"),
                     "invocation_id": data.get("invocation_id"),
                 }, indent=2)
-            return json.dumps({"error": data.get("error"), "message": data.get("message")})
+            return json.dumps(_response_error_payload(resp, data))
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticMatchTool(Tool):
@@ -144,13 +175,15 @@ class AgoragenticMatchTool(Tool):
                 timeout=15,
             )
             data = _safe_response_json(resp)
+            if resp.status_code != 200:
+                return json.dumps(_response_error_payload(resp, data))
             providers = [
                 {"name": p.get("name"), "price": p.get("price"), "score": p.get("score", {}).get("composite")}
                 for p in data.get("providers", [])[:5]
             ]
             return json.dumps({"task": task, "matches": data.get("matches"), "top_providers": providers}, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 # ─── Marketplace Tools ────────────────────────────────────
@@ -184,9 +217,9 @@ class AgoragenticRegisterTool(Tool):
                     "message": "Save your API key — shown once only.",
                     "next_steps": ["Use agoragentic_match to preview spend", "Use agoragentic_execute to route tasks"]
                 }, indent=2)
-            return json.dumps({"error": data.get("error"), "message": data.get("message")})
+            return json.dumps(_response_error_payload(resp, data))
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticSearchTool(Tool):
@@ -219,7 +252,15 @@ class AgoragenticSearchTool(Tool):
                 headers["Authorization"] = f"Bearer {self.api_key}"
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/capabilities",
                                 params=params, headers=headers, timeout=15)
-            caps = _safe_response_json(resp) if isinstance(_safe_response_json(resp), list) else _safe_response_json(resp).get("capabilities", [])
+            data = _safe_response_json(resp)
+            if resp.status_code != 200:
+                return json.dumps(_response_error_payload(resp, data))
+            if isinstance(data, list):
+                caps = data
+            elif isinstance(data, dict) and isinstance(data.get("capabilities", []), list):
+                caps = data.get("capabilities", [])
+            else:
+                raise _UpstreamResponseError("upstream_invalid_payload", resp.status_code)
             if max_price >= 0:
                 caps = [c for c in caps if (c.get("price_per_unit") or 0) <= max_price]
             results = [{
@@ -231,7 +272,7 @@ class AgoragenticSearchTool(Tool):
             return json.dumps({"total_found": len(results), "capabilities": results,
                                "tip": "Use agoragentic_execute with a task description, or agoragentic_invoke with an ID."}, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticInvokeTool(Tool):
@@ -270,10 +311,11 @@ class AgoragenticInvokeTool(Tool):
                     "cost_usdc": data.get("cost") or data.get("price_charged"),
                     "seller": data.get("seller_name"),
                 }, indent=2)
-            return json.dumps({"error": data.get("error"), "message": data.get("message"),
-                               "tip": "Check your balance or use agoragentic_register for credits."})
+            payload = _response_error_payload(resp, data)
+            payload["tip"] = "Check your balance or use agoragentic_register for credits."
+            return json.dumps(payload)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 # ─── Vault & Memory Tools ────────────────────────────────
@@ -298,9 +340,12 @@ class AgoragenticVaultTool(Tool):
                 params["type"] = item_type
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
-            return json.dumps(_safe_response_json(resp), indent=2)
+            data = _safe_response_json(resp)
+            if resp.status_code >= 400:
+                return json.dumps(_response_error_payload(resp, data))
+            return json.dumps(data, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticMemoryWriteTool(Tool):
@@ -326,9 +371,12 @@ class AgoragenticMemoryWriteTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                 json={"input": {"key": key, "value": value, "namespace": namespace}},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
-            return json.dumps(_safe_response_json(resp), indent=2)
+            data = _safe_response_json(resp)
+            if resp.status_code >= 400:
+                return json.dumps(_response_error_payload(resp, data))
+            return json.dumps(data, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticMemoryReadTool(Tool):
@@ -355,9 +403,11 @@ class AgoragenticMemoryReadTool(Tool):
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/memory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
             data = _safe_response_json(resp)
+            if resp.status_code >= 400:
+                return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data.get("output", data), indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 # ─── Secrets & Passport Tools ────────────────────────────
@@ -388,9 +438,12 @@ class AgoragenticSecretStoreTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/vault/secrets",
                 json={"input": payload},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
-            return json.dumps(_safe_response_json(resp), indent=2)
+            data = _safe_response_json(resp)
+            if resp.status_code >= 400:
+                return json.dumps(_response_error_payload(resp, data))
+            return json.dumps(data, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 class AgoragenticPassportTool(Tool):
@@ -402,7 +455,7 @@ class AgoragenticPassportTool(Tool):
         "Actions: 'check' (your status), 'info' (system overview), 'verify' (verify a wallet)."
     )
     inputs = {
-        "action": {"type": "string", "description": "check, info, or verify"},
+        "action": {"type": "string", "description": "check, info, or verify", "nullable": True},
         "wallet_address": {"type": "string", "description": "Wallet address (only for 'verify' action)", "nullable": True},
     }
     output_type = "string"
@@ -415,19 +468,34 @@ class AgoragenticPassportTool(Tool):
         try:
             if action == "info":
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
-                return json.dumps(_safe_response_json(resp), indent=2)
-            if action == "verify" and wallet_address:
-                safe_addr = urllib.parse.quote(wallet_address.strip(), safe="")
+                data = _safe_response_json(resp)
+                if resp.status_code >= 400:
+                    return json.dumps(_response_error_payload(resp, data))
+                return json.dumps(data, indent=2)
+            if action == "verify":
+                address = wallet_address.strip() if isinstance(wallet_address, str) else ""
+                if not _BASE_WALLET_PATTERN.fullmatch(address):
+                    return json.dumps({
+                        "error": "invalid_wallet_address",
+                        "message": "wallet_address must be 0x followed by 40 hexadecimal characters.",
+                    })
+                safe_addr = urllib.parse.quote(address, safe="")
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/verify/{safe_addr}", timeout=15)
-                return json.dumps(_safe_response_json(resp), indent=2)
+                data = _safe_response_json(resp)
+                if resp.status_code >= 400:
+                    return json.dumps(_response_error_payload(resp, data))
+                return json.dumps(data, indent=2)
             if not self.api_key:
                 return json.dumps({"error": "API key required to check your passport."})
             resp = requests.get(
                 f"{AGORAGENTIC_BASE_URL}/api/passport/check",
                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
-            return json.dumps(_safe_response_json(resp), indent=2)
+            data = _safe_response_json(resp)
+            if resp.status_code >= 400:
+                return json.dumps(_response_error_payload(resp, data))
+            return json.dumps(data, indent=2)
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            return json.dumps(_exception_payload(e))
 
 
 # ─── Convenience ──────────────────────────────────────────

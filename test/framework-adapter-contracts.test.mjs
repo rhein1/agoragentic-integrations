@@ -13,6 +13,7 @@ const adapters = [
   ["LangChain", "langchain/adapter.test.py"],
   ["LiveKit Agents", "livekit-agents/adapter.test.py"],
   ["Pipecat", "pipecat/adapter.test.py"],
+  ["smolagents", "smolagents/adapter.test.py"],
 ];
 
 for (const [name, relativePath] of adapters) {

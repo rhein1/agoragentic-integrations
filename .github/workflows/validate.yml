@@ -24,6 +24,7 @@ on:
       - 'mcp/**'
       - 'deepagents/**'
       - 'langchain/**'
+      - 'smolagents/**'
       - 'glama.json'
       - 'micro-ecf/**'
       - 'harness-core/**'
@@ -407,11 +408,15 @@ jobs:
         uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.x'
+      - name: Install smolagents runtime contract dependency
+        run: python -m pip install "smolagents==1.24.0"
       - name: Test forked conformance agent
         run: |
           node --test test/adapter-conformance-agent.test.mjs
           node --test test/adapter-conformance-worker-order.test.mjs
       - name: Test framework adapter contracts
+        env:
+          AGORAGENTIC_REQUIRE_REAL_SMOLAGENTS: '1'
         run: |
           node --test test/framework-adapter-contracts.test.mjs
           node --test world-agentkit/adapter.test.mjs
