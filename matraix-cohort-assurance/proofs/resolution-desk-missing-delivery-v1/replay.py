@@ -34,7 +34,7 @@ BOUNDARY = {"proof_scope": SCOPE, "representation_boundary": REPRESENTATION,
             "authority": ALL_AUTHORITY_FALSE}
 INPUTS = ("run-config.example.json", "cohort-manifest.json", "task-manifest.json",
           "subject-manifest.json", "model-manifest.example.json", "sanitized-trials.jsonl")
-PLATFORM_CONTRACT_COMMIT = "96af5efcb8515e419b3ba8868cefbab2e5adbb26"
+PLATFORM_CONTRACT_COMMIT = "50839c38a80dea2ca73be0a78028ffb4e3a45e8c"
 PLATFORM_SCHEMA = "agoragentic.synthetic-cohort-evidence.v1"
 PLATFORM_LIMITATIONS = [
     "synthetic_model_mediated_evidence", "not_human_validation",
