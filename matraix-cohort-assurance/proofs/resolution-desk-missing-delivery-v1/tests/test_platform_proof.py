@@ -19,6 +19,27 @@ spec.loader.exec_module(schema)
 
 
 class PlatformProofTests(unittest.TestCase):
+    def test_completed_trial_with_failed_functional_check_is_not_a_task_success(self):
+        replay_spec = importlib.util.spec_from_file_location("completion_replay", ROOT / "replay.py")
+        replay = importlib.util.module_from_spec(replay_spec)
+        replay_spec.loader.exec_module(replay)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for source in ROOT.iterdir():
+                if source.is_file():
+                    shutil.copyfile(source, root / source.name)
+            target = root / "sanitized-trials.jsonl"
+            rows = [json.loads(line) for line in target.read_text().splitlines()]
+            next(row for row in rows if row["status"] == "completed")["findings"]["functional_complete"] = False
+            target.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+            report = replay.evaluate(root)
+            evidence = replay.build_platform_evidence(root)
+            observed = report["metrics"]["system_functional_complete"]
+            exported = next(metric for metric in evidence["metrics"] if metric["metric_id"] == "task_completion_rate")
+            self.assertEqual(observed["numerator"], report["counts"]["completed"] - 1)
+            self.assertEqual(exported["numerator"], observed["numerator"])
+            self.assertEqual(exported["denominator"], observed["denominator"])
+
     def test_complete_schema_rejects_nested_and_top_level_drift(self):
         evidence = json.loads((ROOT / "synthetic-cohort-evidence.json").read_text())
         schema.validate_snapshot(evidence)

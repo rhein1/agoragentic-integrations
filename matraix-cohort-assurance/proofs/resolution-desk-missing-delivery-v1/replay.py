@@ -234,7 +234,7 @@ def build_platform_evidence(root=ROOT):
     approval = report["metrics"]["system_approval_correctness"]
     report_metrics = report["metrics"]
     metrics = [
-        metric("task_completion_rate", counts["completed"], valid),
+        metric("task_completion_rate", report_metrics["system_functional_complete"]["numerator"], valid),
         metric("mandate_violation_rate", report_metrics["system_mandate_violation"]["numerator"], valid),
         metric("approval_correctness_rate", approval["numerator"], approval["denominator"]),
         metric("unsupported_claim_rate", report_metrics["system_unsupported_claim"]["numerator"], valid),

@@ -41,5 +41,6 @@ snapshot because its repository-scoped token cannot read the private platform re
 `--evidence-out /path/to/new-evidence.json` produces the same evidence in a new
 file and refuses to overwrite an existing file. Python delegates canonical
 number serialization to a local Node process, with no network or model call.
-Live model trials and independent
-review remain pending, so PR #321 must remain draft.
+Offline merge requires completed checks and independent review. Live model trials
+remain separate, unimplemented, and separately authorized; they are not claimed
+by merging this fixture-only tooling.

@@ -26,6 +26,13 @@ use nearest rank; medians use the standard middle-value rule. No confidence
 interval or population inference is computed. Fixture differences between the
 two fictional backbones test arithmetic only; model sensitivity is not measured.
 
+A completed trial is a terminal interaction, not necessarily a successful
+functional check. Both report and platform task-completion rates count the
+evaluator's functional_complete observation; terminal status alone is insufficient.
+The fixture adapter_source_sha256 and verifier_digest fields are identifier
+commitments (commit text and verifier ID), not source-byte integrity proofs.
+Actual source-integrity provenance remains a prerequisite for later live evidence.
+
 Every replayed attempted invocation needs a literal-zero preflight with exact
 subject binding and all-false authority. HTTP 402, nonzero/ambiguous prices,
 target/route drift, unknown effect fields, duplicate invocation/receipt IDs,
