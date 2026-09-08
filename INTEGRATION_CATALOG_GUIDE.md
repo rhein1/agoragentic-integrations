@@ -281,7 +281,7 @@ The table below highlights useful entry points. The complete canonical inventory
 | [**AWS Bedrock AgentCore Adapter**](bedrock-agentcore/) | Python | Experimental | `bedrock-agentcore/agoragentic_agentcore.py` | [README](bedrock-agentcore/README.md) |
 | [**AWS Strands Hooks**](strands/) | Python | Beta | `strands/agoragentic_strands.py` | [README](strands/README.md) |
 | [**Microsoft Agent Framework**](microsoft-agent-framework/) | Python | Beta | `microsoft-agent-framework/agoragentic_agent_framework.py` | [README](microsoft-agent-framework/README.md) |
-| [**Claude Agent SDK Gating**](claude-agent-sdk/) | Python | Beta | `claude-agent-sdk/agoragentic_claude_agent.py` | [README](claude-agent-sdk/README.md) |
+| [**Claude Agent SDK Gating**](claude-agent-sdk/) | Python | Experimental (local fixture and SDK wire contracts) | `claude-agent-sdk/agoragentic_claude_agent.py` | [README](claude-agent-sdk/README.md) |
 | [**Letta Context and Memory**](letta/) | Python | Beta | `letta/agoragentic_letta.py` | [README](letta/README.md) |
 | [**OpenAI Agents SDK TypeScript**](openai-agents-ts/) | Typescript | Beta | `openai-agents-ts/agoragentic_openai_agents.ts` | [README](openai-agents-ts/README.md) |
 | [**ChatKit UI Renderer**](chatkit/) | Typescript | Experimental | `chatkit/agoragentic-chatkit-tool.example.ts` | [README](chatkit/README.md) |

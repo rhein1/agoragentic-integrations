@@ -7,7 +7,7 @@
   "target_repository": null,
   "summary": {
     "file_count": 156,
-    "occurrence_count": 305,
+    "occurrence_count": 310,
     "category_file_counts": {
       "installer_or_clone": 30,
       "machine_discovery": 52,
@@ -111,11 +111,12 @@
     },
     {
       "path": ".agents/skills/agoragentic-integrate/SKILL.md",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        22,
-        23,
-        24
+        29,
+        30,
+        31,
+        32
       ],
       "categories": [
         "public_documentation"
@@ -214,11 +215,12 @@
     },
     {
       "path": ".cursor/rules/agoragentic-integrate.mdc",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        24,
-        25,
-        26
+        31,
+        32,
+        33,
+        34
       ],
       "categories": [
         "source_or_test"
@@ -328,11 +330,12 @@
     },
     {
       "path": ".opencode/skills/agoragentic-integrate/SKILL.md",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        22,
-        23,
-        24
+        29,
+        30,
+        31,
+        32
       ],
       "categories": [
         "public_documentation"
@@ -618,11 +621,12 @@
     },
     {
       "path": "claude-code/plugin/skills/agoragentic-integrate/SKILL.md",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        22,
-        23,
-        24
+        29,
+        30,
+        31,
+        32
       ],
       "categories": [
         "public_documentation"
@@ -1683,11 +1687,12 @@
     },
     {
       "path": "skills/agoragentic-integrate/SKILL.md",
-      "occurrences": 3,
+      "occurrences": 4,
       "line_numbers": [
-        22,
-        23,
-        24
+        29,
+        30,
+        31,
+        32
       ],
       "categories": [
         "public_documentation"
