@@ -1,0 +1,161 @@
+{
+  "schema": "agoragentic.income-preview-input.v1",
+  "evidence_class": "synthetic_fixture",
+  "now": "2026-09-07T21:00:00.000Z",
+  "mandate": {
+    "id": "demo_mandate",
+    "revision": 1,
+    "revoked": false,
+    "expires_at": "2026-09-08T00:00:00.000Z",
+    "allowed_sources": [
+      "owner_orders"
+    ],
+    "allowed_capabilities": [
+      "document_summary"
+    ],
+    "max_opportunity_age_seconds": 900,
+    "max_treasury_age_seconds": 300,
+    "max_task_cost_usdc": "4",
+    "max_cycle_cost_usdc": "5",
+    "min_expected_net_usdc": "1",
+    "operating_reserve_usdc": "15",
+    "refund_reserve_usdc": "5",
+    "principal_floor_usdc": "60",
+    "treasury_address": "0x1111111111111111111111111111111111111111"
+  },
+  "treasury": {
+    "as_of": "2026-09-07T20:59:00.000Z",
+    "asset": "USDC",
+    "network": "eip155:8453",
+    "history_complete": true,
+    "balance_usdc": "100",
+    "external_holds_usdc": "0",
+    "entries": [
+      {
+        "id": "capital",
+        "kind": "capital",
+        "state": "settled",
+        "amount_usdc": "70",
+        "settlement_ref": "component_capital",
+        "outcome_ref": null
+      },
+      {
+        "id": "sale",
+        "kind": "external_revenue",
+        "state": "settled",
+        "amount_usdc": "40",
+        "settlement_ref": "component_sale",
+        "outcome_ref": "outcome_sale"
+      },
+      {
+        "id": "cost",
+        "kind": "operating_cost",
+        "state": "settled",
+        "amount_usdc": "10",
+        "settlement_ref": "component_cost",
+        "outcome_ref": null
+      },
+      {
+        "id": "pending_sale",
+        "kind": "external_revenue",
+        "state": "pending",
+        "amount_usdc": "1000",
+        "settlement_ref": null,
+        "outcome_ref": null
+      }
+    ]
+  },
+  "opportunities": [
+    {
+      "id": "summary_a",
+      "source_id": "owner_orders",
+      "kind": "service_order",
+      "capability_id": "document_summary",
+      "buyer_order_ref": "order_summary_a",
+      "scope_ref": "scope_summary_a",
+      "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "2026-09-07T20:55:00.000Z",
+      "expires_at": "2026-09-07T22:00:00.000Z",
+      "gross_revenue_usdc": "12",
+      "success_probability_bps": 9000,
+      "costs": {
+        "inference_usdc": "2",
+        "tools_usdc": "0",
+        "gas_usdc": "0",
+        "platform_usdc": "0",
+        "delivery_usdc": "0",
+        "risk_allowance_usdc": "0"
+      }
+    },
+    {
+      "id": "summary_b",
+      "source_id": "owner_orders",
+      "kind": "service_order",
+      "capability_id": "document_summary",
+      "buyer_order_ref": "order_summary_b",
+      "scope_ref": "scope_summary_b",
+      "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "2026-09-07T20:55:00.000Z",
+      "expires_at": "2026-09-07T22:00:00.000Z",
+      "gross_revenue_usdc": "10",
+      "success_probability_bps": 9500,
+      "costs": {
+        "inference_usdc": "3",
+        "tools_usdc": "0",
+        "gas_usdc": "0",
+        "platform_usdc": "0",
+        "delivery_usdc": "0",
+        "risk_allowance_usdc": "0"
+      }
+    },
+    {
+      "id": "loss",
+      "source_id": "owner_orders",
+      "kind": "service_order",
+      "capability_id": "document_summary",
+      "buyer_order_ref": "order_loss",
+      "scope_ref": "scope_loss",
+      "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "2026-09-07T20:55:00.000Z",
+      "expires_at": "2026-09-07T22:00:00.000Z",
+      "gross_revenue_usdc": "1",
+      "success_probability_bps": 5000,
+      "costs": {
+        "inference_usdc": "2",
+        "tools_usdc": "0",
+        "gas_usdc": "0",
+        "platform_usdc": "0",
+        "delivery_usdc": "0",
+        "risk_allowance_usdc": "0"
+      }
+    },
+    {
+      "id": "trade",
+      "source_id": "owner_orders",
+      "kind": "trading",
+      "capability_id": "document_summary",
+      "buyer_order_ref": "order_trade",
+      "scope_ref": "scope_trade",
+      "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "observed_at": "2026-09-07T20:55:00.000Z",
+      "expires_at": "2026-09-07T22:00:00.000Z",
+      "gross_revenue_usdc": "100",
+      "success_probability_bps": 9000,
+      "costs": {
+        "inference_usdc": "1",
+        "tools_usdc": "0",
+        "gas_usdc": "0",
+        "platform_usdc": "0",
+        "delivery_usdc": "0",
+        "risk_allowance_usdc": "0"
+      }
+    }
+  ],
+  "seen_work_keys": [],
+  "withdrawal_request": {
+    "id": "owner_request_demo",
+    "amount_usdc": "10",
+    "destination": "0x1111111111111111111111111111111111111111",
+    "expires_at": "2026-09-07T22:00:00.000Z"
+  }
+}

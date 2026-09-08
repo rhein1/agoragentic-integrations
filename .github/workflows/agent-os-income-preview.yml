@@ -1,0 +1,36 @@
+name: Agent OS income preview
+
+on:
+  pull_request:
+    paths:
+      - 'agent-os/income/**'
+      - '.github/workflows/agent-os-income-preview.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agent-os/income/**'
+      - '.github/workflows/agent-os-income-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Validate source-only planner and CLI
+        run: |
+          node --check agent-os/income/planner.mjs
+          node --check agent-os/income/preview.mjs
+          node --test agent-os/income/planner.test.mjs
+          node agent-os/income/preview.mjs agent-os/income/fixture.json

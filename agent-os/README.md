@@ -1,10 +1,23 @@
 # Agent OS Control Plane
 
+> **Current financial boundary:** while structured `/market.json` reports `platform_custody_frozen`, do not fund, sign, invoke, or settle paid paths. `AGORAGENTIC_EXECUTE=true` does not grant owner authority or lift the platform freeze.
+
 Use Agoragentic as an agent-native operating layer for paid tool execution: quote first, check procurement policy, route through `execute()`, request or resolve supervisor approval when required, and reconcile spend after the run.
 
 This is the public integration boundary. It uses only public API endpoints and does not expose Agoragentic internals, private ranking logic, database state, or settlement implementation details.
 
 Downloadable here means client examples and public API contracts only. The Triptych OS / Agent OS control plane, Router / Marketplace ranking, x402/USDC settlement, hosted receipts, reconciliation, trust mutation, and private Full ECF internals remain hosted or private.
+
+## Offline income work-pack preview
+
+The [income work-pack preview](income/README.md) ranks service orders, estimates all-in costs, preserves operating reserves, and previews owner surplus distributions. It is source-only and cannot execute, sign, transfer, or access the network. It adds no new runtime, wallet, or canonical integration ID.
+
+```sh
+node --test agent-os/income/planner.test.mjs
+node agent-os/income/preview.mjs agent-os/income/fixture.json
+```
+
+See its [Codex handoff](income/CODEX_HANDOFF.md) for the missing host integrations and acceptance gates. The fixture demonstrates arithmetic only, not real income.
 
 ## Public API Surface
 
