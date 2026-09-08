@@ -78,7 +78,7 @@ test('stdio MCP parses normal fragmented UTF-8 and CRLF messages without changin
   );
 });
 
-test('stdio MCP scans the full envelope and only echoes bounded secret-free request ids', { timeout: 5_000 }, async (t) => {
+test('stdio MCP scans the effect-bearing envelope and only echoes bounded secret-free request ids', { timeout: 5_000 }, async (t) => {
   const streams = streamHarness();
   t.after(() => {
     streams.input.destroy();
@@ -117,6 +117,131 @@ test('stdio MCP scans the full envelope and only echoes bounded secret-free requ
   assert.doesNotMatch(streams.text(), new RegExp(syntheticSecret));
   assert.equal(streams.text().includes(privateId), false);
   assert.equal(streams.text().includes(oversizedId), false);
+});
+
+test('stdio MCP erases opaque request metadata before dispatch without weakening effect-bearing scans', { timeout: 5_000 }, async (t) => {
+  const streams = streamHarness();
+  t.after(() => {
+    streams.input.destroy();
+    streams.output.destroy();
+  });
+  const received = [];
+  const callbackResults = [];
+  const engine = inertEngine({
+    run(scenario) {
+      received.push({ scenario, argument_count: arguments.length });
+      return createDemoTruth({
+        schema: 'agoragentic.risk-fork.demo-test-run.v1',
+        scenario_id: scenario,
+        exit_code: 0,
+      });
+    },
+  });
+  const serving = serveStdioMcp({
+    engine,
+    input: streams.input,
+    output: streams.output,
+    onResult(result) { callbackResults.push(result); },
+  });
+  const syntheticSecret = `github_pat_${'P'.repeat(32)}`;
+  const windowsPrivatePath = 'C:\\private\\agent-workspace';
+  const posixPrivatePath = '/home/private/agent-workspace';
+  const remoteUrl = 'https://github.com/example/private-agent.git';
+  const callId = 'call_synthetic_demo';
+  const threadId = '00000000-0000-4000-8000-000000000001';
+  const itemId = 'item_synthetic_demo';
+  const codexMetadata = {
+    callId,
+    threadId,
+    itemId,
+    progressToken: 0,
+    'x-codex-turn-metadata': {
+      workspaces: {
+        [windowsPrivatePath]: { associated_remote_urls: { origin: remoteUrl } },
+        [posixPrivatePath]: { has_changes: true },
+      },
+    },
+    arbitrary_vendor_extension: {
+      access_token: syntheticSecret,
+      constructor: { prototype: { polluted: true } },
+      __proto_marker__: 'must-not-propagate',
+    },
+  };
+  const requests = [
+    { jsonrpc: '2.0', id: 31, method: 'tools/list', params: { _meta: codexMetadata } },
+    {
+      jsonrpc: '2.0',
+      id: 32,
+      method: 'tools/call',
+      params: {
+        _meta: codexMetadata,
+        name: 'risk_fork_demo_run',
+        arguments: { scenario: 'low-read-only' },
+      },
+    },
+  ];
+  streams.input.end(`${requests.map((request) => JSON.stringify(request)).join('\n')}\n`);
+  await serving;
+
+  const messages = streams.messages();
+  assert.deepEqual(
+    messages[0].result.tools.map((tool) => tool.name),
+    RISK_FORK_DEMO_MCP_TOOLS.map((tool) => tool.name),
+  );
+  assert.equal(messages[1].result.structuredContent.scenario_id, 'low-read-only');
+  assert.deepEqual(received, [{ scenario: 'low-read-only', argument_count: 1 }]);
+  assert.equal(callbackResults.length, 1);
+  assert.equal(callbackResults[0].scenario_id, 'low-read-only');
+  assert.doesNotMatch(streams.text(), new RegExp(syntheticSecret));
+  for (const marker of [
+    windowsPrivatePath, posixPrivatePath, remoteUrl, callId, threadId, itemId, '__proto_marker__',
+  ]) {
+    assert.equal(streams.text().includes(marker), false);
+    assert.equal(JSON.stringify(received).includes(marker), false);
+    assert.equal(JSON.stringify(callbackResults).includes(marker), false);
+  }
+  assert.equal(Object.prototype.polluted, undefined);
+});
+
+test('stdio MCP rejects malformed metadata and metadata aliases without echo', { timeout: 5_000 }, async (t) => {
+  const streams = streamHarness();
+  t.after(() => {
+    streams.input.destroy();
+    streams.output.destroy();
+  });
+  const serving = serveStdioMcp({ engine: inertEngine(), input: streams.input, output: streams.output });
+  const syntheticSecret = `github_pat_${'Q'.repeat(32)}`;
+  const requests = [
+    { jsonrpc: '2.0', id: 41, method: 'tools/list', params: { _meta: null } },
+    { jsonrpc: '2.0', id: 42, method: 'tools/list', params: { _meta: 'metadata' } },
+    { jsonrpc: '2.0', id: 43, method: 'tools/list', params: { _meta: [] } },
+    { jsonrpc: '2.0', id: 44, method: 'tools/list', params: { progressToken: 1 } },
+    { jsonrpc: '2.0', id: 45, method: 'tools/list', _meta: { access_token: syntheticSecret } },
+    { jsonrpc: '2.0', id: 46, method: 'tools/list', params: { metadata: { access_token: syntheticSecret } } },
+    {
+      jsonrpc: '2.0',
+      id: 47,
+      method: 'tools/call',
+      params: {
+        _meta: { benign_vendor_data: true },
+        name: 'risk_fork_demo_plan',
+        arguments: { scenario: 'low-read-only', access_token: syntheticSecret },
+      },
+    },
+  ];
+  streams.input.end(`${requests.map((request) => JSON.stringify(request)).join('\n')}\n`);
+  await serving;
+
+  const messages = streams.messages();
+  assert.equal(messages.length, requests.length);
+  for (let index = 0; index < messages.length; index += 1) {
+    assert.deepEqual(messages[index], {
+      jsonrpc: '2.0',
+      id: 41 + index,
+      error: { code: -32600, message: 'Risk Fork demo request rejected' },
+    });
+  }
+  assert.doesNotMatch(streams.text(), new RegExp(syntheticSecret));
 });
 
 test('stdio MCP rejects and closes exactly when a no-newline message reaches 64 KiB plus one', { timeout: 5_000 }, async (t) => {

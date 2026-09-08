@@ -45,6 +45,7 @@ const SCHEMA_ID_BASE = 'https://agoragentic.com/schema/';
 const CANONICAL_RUNTIME_MAX_BYTES = 16 * 1024 * 1024;
 const EXPECTED_SCHEMA_FILES = Object.freeze([
   'clean-commit-result.v1.json',
+  'client-adoption-packet.v1.json',
   'commit-artifact.v1.json',
   'distributed-authority-operation.v1.json',
   'distributed-authority-reconciliation.v1.json',

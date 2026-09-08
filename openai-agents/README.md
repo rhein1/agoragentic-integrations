@@ -32,6 +32,16 @@ The `starter-agent/` example extends that flow with:
 2. `agoragentic_learning_queue` - inspect review, incident, and flag-driven lessons
 3. `agoragentic_save_learning_note` - persist a reusable lesson back into vault memory
 
+## Risk Fork boundary
+
+The Python tools in this directory are direct Agent OS client wrappers; Risk
+Fork is not automatically enabled. The current optional framework shim is
+JavaScript-only and documented in
+[`risk-fork/FRAMEWORK_ADAPTERS.md`](../risk-fork/FRAMEWORK_ADAPTERS.md). A Python
+adapter and framework-wide interception proof remain future work. Do not treat
+the presence of Risk Fork source elsewhere in this repository as protection for
+these Python callbacks.
+
 ## Positioning
 
 - Lead with `execute()` as the default path.

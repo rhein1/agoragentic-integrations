@@ -16,6 +16,12 @@ import {
   validateChildOperation,
   validateLocalReferenceOperation,
 } from '../../src/child-operation.mjs';
+import { validateMcpHttpPhaseOperation } from '../../src/mcp-transport-contract.mjs';
+import {
+  dispatchMcpHttpPhase,
+  executeMcpHttpPhase,
+  isMcpHttpPhaseRuntime,
+} from '../lib/mcp-http-phase.mjs';
 import {
   canonicalize,
   requireSha256Ref,
@@ -104,20 +110,36 @@ function validateJob(value, resultPath) {
     || path.resolve(value.result_path) !== path.resolve(resultPath)) {
     throw new Error('runner result path binding mismatch');
   }
-  const operation = validateLocalReferenceOperation(value.operation);
+  const childOperation = validateChildOperation(value.operation, 'runner operation');
+  let operation;
+  let commitCandidate = null;
+  if (childOperation.kind === 'bounded_file_batch') {
+    operation = validateLocalReferenceOperation(childOperation);
+    if (!Object.hasOwn(operation, 'commit_candidate')) {
+      throw new Error('runner bounded operation requires a tainted commit candidate');
+    }
+    commitCandidate = validateChildOperation(
+      operation.commit_candidate,
+      'runner commit candidate',
+    );
+  } else if (childOperation.kind === 'mcp_http_phase') {
+    operation = validateMcpHttpPhaseOperation(childOperation);
+    if (value.execution_mode !== 'isolated_execution'
+      || value.mcp_phase !== operation.phase
+      || value.mcp_server_ref !== operation.mcp_server_ref
+      || value.tool_name !== operation.tool_name
+      || value.expected_result_schema_hash !== operation.response_schema_hash) {
+      throw new Error('runner MCP HTTP phase job binding mismatch');
+    }
+  } else {
+    throw new TypeError('runner operation kind is unsupported');
+  }
   if (sha256Ref(operation) !== value.operation_hash) {
     throw new Error('runner operation hash mismatch');
   }
   if (sha256Ref({ ...value, job_hash: null }) !== value.job_hash) {
     throw new Error('runner job hash mismatch');
   }
-  if (!Object.hasOwn(operation, 'commit_candidate')) {
-    throw new Error('runner operation requires a tainted commit candidate');
-  }
-  const commitCandidate = validateChildOperation(
-    operation.commit_candidate,
-    'runner commit candidate',
-  );
   return { ...value, operation, commitCandidate };
 }
 
@@ -262,8 +284,22 @@ export async function runRunnerJob(options = {}) {
   const runnerArtifactHash = await sha256FileRef(
     options.runnerArtifactPath ?? RUNNER_ARTIFACT_PATH,
   );
-  const root = await requireWorkspaceRoot(options.workspaceRoot ?? WORKSPACE_ROOT);
-  for (const action of job.operation.actions) await executeAction(root, action);
+  let commitCandidate = job.commitCandidate;
+  if (job.operation.kind === 'bounded_file_batch') {
+    const root = await requireWorkspaceRoot(options.workspaceRoot ?? WORKSPACE_ROOT);
+    for (const action of job.operation.actions) await executeAction(root, action);
+  } else {
+    const handler = options.mcpHttpPhase ?? executeMcpHttpPhase;
+    if (!isMcpHttpPhaseRuntime(handler)) {
+      throw new TypeError('runner MCP HTTP phase handler is not an opaque runtime capability');
+    }
+    const payload = await dispatchMcpHttpPhase(handler, job.operation);
+    commitCandidate = validateChildOperation({
+      type: 'TYPED_RESULT',
+      payload,
+      payload_schema: job.operation.response_schema,
+    }, 'runner MCP HTTP phase commit candidate');
+  }
   const result = {
     schema: 'agoragentic.risk-fork.runner-result.v1',
     status: 'completed',
@@ -283,8 +319,8 @@ export async function runRunnerJob(options = {}) {
     execution_mode: job.execution_mode,
     trusted_runner_artifact_hash: runnerArtifactHash,
     expected_result_schema_hash: job.expected_result_schema_hash,
-    commit_candidate: job.commitCandidate,
-    commit_candidate_hash: sha256Ref(job.commitCandidate),
+    commit_candidate: commitCandidate,
+    commit_candidate_hash: sha256Ref(commitCandidate),
   };
   await writeAtomicExclusive(
     resultPath,

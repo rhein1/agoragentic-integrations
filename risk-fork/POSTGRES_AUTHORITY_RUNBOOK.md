@@ -107,10 +107,11 @@ Do not enable routing merely because initialization returned. Activation require
 
 ## Read-only status and alerts
 
-`getAuthorityStatus()` accepts no input and returns the closed `agoragentic.risk-fork.postgres-authority-status.v1` record. It runs in a bounded read-only transaction, re-verifies the reviewed schema and production privileges, uses database time, and exposes only:
+`getAuthorityStatus()` accepts no input and returns the closed `agoragentic.risk-fork.postgres-authority-status.v2` record. It runs in a bounded read-only transaction, re-verifies the reviewed schema and production privileges, uses database time, and exposes only:
 
 - schema version plus reviewed migration versions and hashes;
 - database-clock reachability and observation time;
+- the durable audit sequence and head hash recorded by `authority_meta`;
 - counts of `prepared`, `effect_started`, and `ambiguous` operations plus the oldest unresolved timestamp/age;
 - pool total, idle, and waiting counts.
 
@@ -125,9 +126,12 @@ Send only this closed status record to the approved monitor. Alert policy is dep
 | Any `prepared` count | Open an operator review; recover only an exact still-`prepared` version after confirming the durable audit history |
 | Oldest unresolved age exceeds the owner-approved response objective | Escalate; age never turns uncertainty into failure or permission to retry |
 | Sustained nonzero `waiting_requests` or exhausted idle capacity | Investigate bounded pool/database saturation; do not raise limits without load and failover review |
+| Audit sequence decreases, or one sequence is later observed with a different head hash | Keep routing disabled; preserve both sanitized checkpoints and investigate restore, stale-read, or audit-corruption risk |
 | Migration/schema verification stops succeeding | Keep startup and routing failed closed; compare against the reviewed migration and provisioning evidence |
 
 `listUnresolved()`, `getOperation()`, and `getAuditTrail()` are read-only operator surfaces but contain identifiers, hashes, results, or detailed evidence. Keep them out of broad telemetry. Restrict their output to the incident record, apply access controls and retention, and never attach raw downstream payloads or secrets.
+
+`getAuditTrail()` captures `authority_meta`, the requested predecessor, and the event page in one repeatable-read, read-only snapshot. Every response reports the captured `authority_head` and `verified_through_sequence`. `segment_verified: true` proves only that the returned rows form the exact contiguous segment after the supplied cursor and, when `segment_reaches_authority_head: true`, that the segment terminates at the captured head. Only a request beginning at genesis (`after_sequence: 0`) that reaches the head can return both `verified: true` and `authority_head_verified: true`. A nonzero-cursor page keeps both fields false even when it reaches the head, because the omitted prefix was not verified by that call; `next_sequence: null` then means only that the segment has no later rows in the captured snapshot. Establish a full-chain claim by verifying the genesis-to-head history in one trusted operation (for example, `after_sequence: 0` with a sufficient limit up to 10,000) or by retaining and independently verifying every ordered page from genesis. Missing rows below the captured head, a changed predecessor, an invalid event hash, or a head mismatch fails with `DISTRIBUTED_AUDIT_CHAIN_INVALID`.
 
 ## Recovery decision table
 
@@ -143,7 +147,7 @@ Send only this closed status record to the approved monitor. Alert policy is dep
 
 1. Disable routing for the affected parent/authority scope.
 2. Read the operation with `getOperation(operation_ref)` and verify its exact current `status === 'prepared'` and `version`.
-3. Verify the audit chain with `getAuditTrail()` and confirm there is no `effect_started` event for that operation.
+3. Verify the complete audit chain from genesis, not a tail page, and confirm there is no `effect_started` event for that operation.
 4. Store an owner-reviewed recovery artifact outside the database. It must reference the exact operation/version and the reason the pre-effect reservation is being abandoned. Record only its opaque reference and `sha256:` hash in the call.
 5. Call `recoverPreparedOperation({ operation_ref, expected_version, recovery_evidence_ref, recovery_evidence_hash })`.
 6. Re-read the operation and audit chain. Expect `aborted` and `prepared_operation_recovered`.

@@ -83,6 +83,30 @@ function validatedRequestId(message) {
   throw invalidRequest();
 }
 
+function stripMcpRequestMetadata(message) {
+  const params = message?.params;
+  if (!params || typeof params !== 'object' || Array.isArray(params) || !Object.hasOwn(params, '_meta')) {
+    assertDemoSecretFree(message, 'MCP request envelope');
+    return message;
+  }
+  const meta = params._meta;
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) throw invalidRequest();
+
+  // MCP reserves `params._meta` for opaque protocol/client metadata. Codex and
+  // other clients can place local workspace details there. This demo neither
+  // emits progress notifications nor consumes any client metadata, so erase the
+  // complete object before security scanning and dispatch. The raw 64 KiB wire
+  // cap still bounds it; effect-bearing params continue through the strict scan.
+  const screenedParams = Object.fromEntries(
+    Object.entries(params).filter(([key]) => key !== '_meta'),
+  );
+  const screenedMessage = Object.fromEntries(
+    Object.entries(message).map(([key, value]) => [key, key === 'params' ? screenedParams : value]),
+  );
+  assertDemoSecretFree(screenedMessage, 'MCP request envelope');
+  return screenedMessage;
+}
+
 function assertExactArguments(value, allowedKeys) {
   if (value === undefined) value = {};
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -187,7 +211,7 @@ export function createMcpMessageHandler({ engine, onResult } = {}) {
       return failure(null, Number(error?.rpcCode ?? -32600), 'Risk Fork demo request rejected');
     }
     try {
-      assertDemoSecretFree(message, 'MCP request envelope');
+      message = stripMcpRequestMetadata(message);
     } catch {
       return failure(requestId, -32600, 'Risk Fork demo request rejected');
     }

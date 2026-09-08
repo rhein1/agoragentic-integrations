@@ -3,8 +3,9 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { types as utilTypes } from 'node:util';
 
-import { canonicalize, sha256Ref } from '../canonical.mjs';
+import { assertCanonicalJson, canonicalize, sha256Ref } from '../canonical.mjs';
 import { validateChildOperation } from '../child-operation.mjs';
 import {
   E2B_BIRTH_MAX_VALIDITY_MS,
@@ -75,6 +76,7 @@ const MAX_JSON_DEPTH = 50;
 const MAX_LIST_PAGES = 100;
 const EXECUTION_CLEANUP_MARGIN_MS = 5_000;
 const PROFILE_METADATA_SCHEMA = 'agoragentic.risk-fork.e2b-clean-template.v1';
+const LIVE_QUALIFICATION_METADATA_SCHEMA = 'agoragentic.risk-fork.e2b-live-qualification.v1';
 const EMPTY_WORKSPACE_DIGEST = sha256Ref([]);
 // E2B SDK 2.39.0 defines this IPv4-shaped CIDR as its `allTraffic`
 // sentinel and equates allowInternetAccess=false with denying it. Whether the
@@ -82,11 +84,193 @@ const EMPTY_WORKSPACE_DIGEST = sha256Ref([]);
 // SDK contract. Qualified mode additionally requires closed, exact-bound live
 // evidence for both IP families and every mandatory lifecycle control.
 const E2B_SDK_ALL_TRAFFIC_SENTINEL = '0.0.0.0/0';
+const MAX_SANDBOX_METADATA_BYTES = 8 * 1024;
+const E2B_RUNTIME_METADATA_KEYS = Object.freeze([
+  'agoragentic.risk_fork.schema',
+  'agoragentic.risk_fork.profile',
+  'agoragentic.risk_fork.cleanup_ref',
+  'agoragentic.risk_fork.capsule_hash',
+  'agoragentic.risk_fork.workspace_manifest_hash',
+  'agoragentic.risk_fork.identity_hash',
+  'agoragentic.risk_fork.network_policy_hash',
+  'agoragentic.risk_fork.template_hash',
+  'agoragentic.risk_fork.bootstrap_artifact_hash',
+  'agoragentic.risk_fork.runner_artifact_hash',
+]);
+const E2B_LIVE_QUALIFICATION_METADATA_KEYS = Object.freeze([
+  'agoragentic.risk_fork.profile',
+  'agoragentic.risk_fork.run_hash',
+]);
+const E2B_RUNTIME_HASH_METADATA_KEYS = Object.freeze([
+  'agoragentic.risk_fork.capsule_hash',
+  'agoragentic.risk_fork.workspace_manifest_hash',
+  'agoragentic.risk_fork.identity_hash',
+  'agoragentic.risk_fork.network_policy_hash',
+  'agoragentic.risk_fork.template_hash',
+  'agoragentic.risk_fork.bootstrap_artifact_hash',
+  'agoragentic.risk_fork.runner_artifact_hash',
+]);
+const E2B_CLEAN_METADATA_KEYS = new Set([
+  ...E2B_RUNTIME_METADATA_KEYS,
+  ...E2B_LIVE_QUALIFICATION_METADATA_KEYS,
+]);
 
 export const E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE =
   'E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE';
 export const E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER =
   'E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER';
+
+function createDetachedArray(...values) {
+  const output = Object.setPrototypeOf([], null);
+  for (let index = 0; index < values.length; index += 1) {
+    Object.defineProperty(output, index, {
+      configurable: true,
+      enumerable: true,
+      value: values[index],
+      writable: true,
+    });
+  }
+  return output;
+}
+
+/**
+ * Build the one fail-closed E2B sandbox-creation profile shared by the runtime
+ * adapter and the live qualification harness. This only constructs local SDK
+ * input; it performs no provider call and grants no production qualification.
+ */
+export function buildE2BCleanSandboxCreateOptions(input = {}) {
+  if (input && typeof input === 'object' && utilTypes.isProxy(input)) {
+    throw new TypeError('E2B clean sandbox creation input must not be a Proxy');
+  }
+  assertPlainObject(input, 'E2B clean sandbox creation input');
+  if (Object.getOwnPropertySymbols(input).length > 0) {
+    throw new TypeError('E2B clean sandbox creation input contains a symbol key');
+  }
+  const inputDescriptors = Object.getOwnPropertyDescriptors(input);
+  for (const descriptor of Object.values(inputDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(
+        'E2B clean sandbox creation input contains a hidden or accessor-backed field',
+      );
+    }
+  }
+  const inputKeys = Object.keys(inputDescriptors);
+  const unexpectedInputKeys = inputKeys.filter((key) => !['timeoutMs', 'metadata'].includes(key));
+  if (unexpectedInputKeys.length > 0) {
+    throw new TypeError('E2B clean sandbox creation input contains unsupported fields');
+  }
+  if (inputKeys.length !== 2
+    || !Object.hasOwn(inputDescriptors, 'timeoutMs')
+    || !Object.hasOwn(inputDescriptors, 'metadata')) {
+    throw new TypeError('E2B clean sandbox creation input must contain exact required fields');
+  }
+  const timeoutMs = boundedInteger(
+    inputDescriptors.timeoutMs.value,
+    'E2B clean sandbox timeoutMs',
+    {
+      min: 1_000,
+      max: 24 * 60 * 60 * 1_000,
+    },
+  );
+  const rawMetadata = inputDescriptors.metadata.value;
+  if (rawMetadata && typeof rawMetadata === 'object' && utilTypes.isProxy(rawMetadata)) {
+    throw new TypeError('E2B clean sandbox metadata must not be a Proxy');
+  }
+  assertPlainObject(rawMetadata, 'E2B clean sandbox metadata');
+  if (Object.getOwnPropertySymbols(rawMetadata).length > 0) {
+    throw new TypeError('E2B clean sandbox metadata contains a symbol key');
+  }
+  const metadataDescriptors = Object.getOwnPropertyDescriptors(rawMetadata);
+  for (const descriptor of Object.values(metadataDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError('E2B clean sandbox metadata contains a hidden or accessor field');
+    }
+  }
+  const metadata = Object.create(null);
+  const metadataEntries = Object.entries(metadataDescriptors).map(([key, descriptor]) => (
+    [key, descriptor.value]
+  ));
+  if (metadataEntries.length > 32) {
+    throw new TypeError('E2B clean sandbox metadata exceeds 32 entries');
+  }
+  for (const [key, value] of metadataEntries) {
+    const normalizedKey = requireString(key, 'E2B clean sandbox metadata key', {
+      maxLength: 200,
+      pattern: /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/,
+    });
+    if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey)) {
+      throw new TypeError('E2B clean sandbox metadata contains an unsupported key');
+    }
+    if (value && typeof value === 'object' && utilTypes.isProxy(value)) {
+      throw new TypeError(`E2B clean sandbox metadata ${normalizedKey} must not be a Proxy`);
+    }
+    const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey}`, {
+      maxLength: 1_024,
+    });
+    if (normalizedKey !== key || normalizedValue !== value
+      || /[^\x20-\x7e]/.test(normalizedValue)) {
+      throw new TypeError('E2B clean sandbox metadata must use exact printable ASCII strings');
+    }
+    metadata[normalizedKey] = normalizedValue;
+  }
+  const profile = metadata['agoragentic.risk_fork.profile'];
+  const expectedMetadataKeys = profile === PROFILE_METADATA_SCHEMA
+    ? E2B_RUNTIME_METADATA_KEYS
+    : profile === LIVE_QUALIFICATION_METADATA_SCHEMA
+      ? E2B_LIVE_QUALIFICATION_METADATA_KEYS
+      : null;
+  if (!expectedMetadataKeys
+    || metadataEntries.length !== expectedMetadataKeys.length
+    || expectedMetadataKeys.some((key) => !(key in metadata))) {
+    throw new TypeError('E2B clean sandbox metadata does not match a supported exact profile');
+  }
+  if (profile === PROFILE_METADATA_SCHEMA) {
+    if (metadata['agoragentic.risk_fork.schema'] !== 'v1'
+      || !/^e2b_cleanup_ref_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        metadata['agoragentic.risk_fork.cleanup_ref'],
+      )) {
+      throw new TypeError('E2B clean sandbox runtime metadata binding is invalid');
+    }
+    for (const key of E2B_RUNTIME_HASH_METADATA_KEYS) {
+      requireSha256Ref(metadata[key], `E2B clean sandbox metadata ${key}`);
+    }
+  } else {
+    requireSha256Ref(
+      metadata['agoragentic.risk_fork.run_hash'],
+      'E2B clean sandbox metadata run hash',
+    );
+  }
+  if (Buffer.byteLength(JSON.stringify(metadata), 'utf8') > MAX_SANDBOX_METADATA_BYTES) {
+    throw new TypeError('E2B clean sandbox metadata exceeds the byte limit');
+  }
+  assertCanonicalJson({ timeoutMs, metadata });
+  const outputMetadata = Object.create(null);
+  for (const key of expectedMetadataKeys) outputMetadata[key] = metadata[key];
+  const network = Object.assign(Object.create(null), {
+    // Keep the SDK-required Array brand while severing mutable inherited
+    // Array.prototype hooks before the pinned SDK retains these values for
+    // JSON serialization.
+    allowOut: createDetachedArray(),
+    denyOut: createDetachedArray(E2B_SDK_ALL_TRAFFIC_SENTINEL),
+    allowPublicTraffic: false,
+  });
+  const lifecycle = Object.assign(Object.create(null), {
+    onTimeout: 'kill',
+    autoResume: false,
+  });
+  const iam = Object.assign(Object.create(null), { tokens: Object.create(null) });
+  return deepFreeze(Object.assign(Object.create(null), {
+    timeoutMs,
+    secure: true,
+    allowInternetAccess: false,
+    network,
+    lifecycle,
+    metadata: outputMetadata,
+    envs: Object.create(null),
+    iam,
+    volumeMounts: Object.create(null),
+  }));
+}
 
 // The captured template watcher and its outbox run under the same sandbox UID
 // as child code. Until the provider supplies a separately privileged producer
@@ -1887,21 +2071,10 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
       runnerArtifactHash: this.trustedRunnerArtifactHash,
     }, this.cleanTemplateHash);
     const createTimeoutMs = this.qualified ? Math.min(idleTtlMs, ttlMs) : ttlMs;
-    const createOptions = {
+    const createOptions = buildE2BCleanSandboxCreateOptions({
       timeoutMs: createTimeoutMs,
-      secure: true,
-      allowInternetAccess: false,
-      network: {
-        allowOut: [],
-        denyOut: [E2B_SDK_ALL_TRAFFIC_SENTINEL],
-        allowPublicTraffic: false,
-      },
-      lifecycle: { onTimeout: 'kill', autoResume: false },
       metadata,
-      envs: {},
-      iam: { tokens: {} },
-      volumeMounts: {},
-    };
+    });
     // This synchronous flip is the in-process one-use CAS. It precedes the
     // first await that could let a concurrent caller pass the admission check.
     // Any later failure is conservatively terminal for this Savepoint.

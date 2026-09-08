@@ -24,6 +24,7 @@ import test from 'node:test';
 import { GENERATED_NOT_CLIENT_VERIFIED_STATUS } from '../src/config-generator.mjs';
 import {
   OFFLINE_KIT_BANNER,
+  OFFLINE_KIT_PACKAGE_MODE,
   OFFLINE_KIT_TRUTH,
   assertSafeArchivePath,
   buildOfflineKit,
@@ -55,6 +56,7 @@ const SOURCE_FILES = Object.freeze([
   'risk-fork/package.json',
   'risk-fork/package-lock.json',
   'risk-fork/LICENSE',
+  'risk-fork/NOTICE',
   'risk-fork/hackathon/package.json',
   'risk-fork/hackathon/package-lock.json',
   'risk-fork/hackathon/README.md',
@@ -196,12 +198,21 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   assert.equal(manifest.source_commit, sourceCommit);
   assert.equal(manifest.source_materialization, 'exact_git_blobs');
   assert.equal(manifest.ignored_worktree_files_included, false);
+  assert.equal(manifest.package_mode, OFFLINE_KIT_PACKAGE_MODE);
+  assert.equal(manifest.package_mode, 'public_release_candidate_unpublished_offline_directory');
+  assert.equal(manifest.npm_published, false);
   assert.equal(manifest.file_count, manifest.files.length);
   assert.deepEqual(
     manifest.files.map((entry) => entry.path),
     [...manifest.files.map((entry) => entry.path)].sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right))),
   );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/fixtures/catalog.json'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/NOTICE'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'NOTICE'));
+  assert.equal(
+    await readFile(path.join(first.kit_directory, 'NOTICE'), 'utf8'),
+    await readFile(path.join(first.kit_directory, 'risk-fork/NOTICE'), 'utf8'),
+  );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/node_modules/ajv/package.json'));
   assert.ok(manifest.files.some((entry) => entry.path === 'DEPENDENCY_PROVENANCE.json'));
   assert.ok(!manifest.files.some((entry) => entry.path.endsWith(`/${tamperedMarker}`)));
@@ -284,6 +295,14 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
   assert.equal(
     await readFile(path.join(extracted, 'risk-fork/hackathon/fixtures/catalog.json'), 'utf8'),
     await readFile(path.join(first.kit_directory, 'risk-fork/hackathon/fixtures/catalog.json'), 'utf8'),
+  );
+  const extractedManifestPath = path.join(extracted, 'MANIFEST.json');
+  const extractedManifest = JSON.parse(await readFile(extractedManifestPath, 'utf8'));
+  extractedManifest.package_mode = 'private_unpublished_offline_directory';
+  await writeFile(extractedManifestPath, `${JSON.stringify(extractedManifest, null, 2)}\n`);
+  await assert.rejects(
+    verifyOfflineKit({ kitDirectory: extracted }),
+    /package publication boundary is invalid/,
   );
 
   await assert.rejects(

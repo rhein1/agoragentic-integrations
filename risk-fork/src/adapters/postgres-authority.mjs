@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { types as utilTypes } from 'node:util';
 
 import { sha256Ref } from '../canonical.mjs';
 import { verifyExecutionBinding } from '../contracts.mjs';
@@ -45,8 +46,107 @@ import {
 const POSTGRES_AUTHORITIES = new WeakMap();
 const SERIALIZATION_FAILURES = new Set(['40001', '40P01']);
 
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+
+function createDetachedArray(length) {
+  return detachArray(new Array(length));
+}
+
+function createPublicArray(length) {
+  return new Array(length);
+}
+
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function freezeDetachedArray(value) {
+  return Object.freeze(detachArray(value));
+}
+
+function ownStringKeys(value) {
+  return detachArray(Object.keys(value));
+}
+
+function freezeDataGraph(value, seen = new WeakSet()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, 'value')) freezeDataGraph(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+
+function cloneAuditJson(value) {
+  if (!value || typeof value !== 'object') return value;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Array.isArray(value)) {
+    const clone = createPublicArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex(clone, index, cloneAuditJson(descriptors[String(index)].value));
+    }
+    return clone;
+  }
+  const clone = {};
+  const keys = ownStringKeys(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(clone, key, {
+      value: cloneAuditJson(descriptors[key].value),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return clone;
+}
+
+const POSTGRES_AUDIT_PAGE_KEYS = freezeDetachedArray([
+  'authority_id',
+  'after_sequence',
+  'limit',
+  'audit_sequence',
+  'audit_head_hash',
+  'predecessor_hash',
+  'rows',
+]);
+const POSTGRES_AUDIT_ROW_KEYS = freezeDetachedArray([
+  'authority_id',
+  'sequence',
+  'event_type',
+  'operation_ref',
+  'parent_ref',
+  'authorization_id',
+  'observed_at',
+  'previous_event_hash',
+  'payload',
+  'payload_hash',
+  'event_hash',
+]);
+const MAX_AUDIT_PAYLOAD_GRAPH_NODES = 100_000;
+
 function asIso(value, label) {
-  return requireIsoDate(value instanceof Date ? value : String(value), label);
+  if (typeof value === 'string') return requireIsoDate(value, label);
+  if (value && typeof value === 'object') {
+    try {
+      const timestamp = Date.prototype.getTime.call(value);
+      if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+    } catch {
+      // Fall through to the type error without invoking caller-defined coercion.
+    }
+  }
+  throw new TypeError(`${label} must be an ISO 8601 date-time`);
 }
 
 function asVersion(value, label = 'operation version') {
@@ -58,7 +158,22 @@ function asVersion(value, label = 'operation version') {
 }
 
 function asStatusCount(value, label) {
-  const text = typeof value === 'bigint' ? value.toString() : String(value);
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return value;
+  }
+  if (typeof value === 'bigint') {
+    if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return Number(value);
+  }
+  if (typeof value !== 'string') {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+  const text = value;
   if (!/^(?:0|[1-9][0-9]*)$/.test(text)) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
@@ -67,6 +182,291 @@ function asStatusCount(value, label) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
   return normalized;
+}
+
+function readEnumerableDataObject(value, requiredKeys, label, { allowExtra = false } = {}) {
+  if (value && typeof value === 'object' && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  assertPlainObject(value, label);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const observedKeys = ownStringKeys(descriptors);
+  for (let index = 0; index < observedKeys.length; index += 1) {
+    const descriptor = descriptors[observedKeys[index]];
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} contains a hidden or accessor-backed field`);
+    }
+  }
+  let missingRequiredKey = false;
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    if (!Object.hasOwn(descriptors, requiredKeys[index])) {
+      missingRequiredKey = true;
+      break;
+    }
+  }
+  if ((!allowExtra && observedKeys.length !== requiredKeys.length) || missingRequiredKey) {
+    throw new TypeError(`${label} must contain the required data fields`);
+  }
+  const record = Object.create(null);
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    const key = requiredKeys[index];
+    Object.defineProperty(record, key, {
+      value: descriptors[key].value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return record;
+}
+
+function readDenseDataArray(value, label) {
+  if (value && typeof value === 'object' && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  const prototype = value && typeof value === 'object' ? Object.getPrototypeOf(value) : null;
+  if (!Array.isArray(value) || (prototype !== Array.prototype && prototype !== null)) {
+    throw new TypeError(`${label} must be an ordinary array`);
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const lengthDescriptor = descriptors.length;
+  const length = lengthDescriptor?.value;
+  if (!lengthDescriptor
+    || lengthDescriptor.get
+    || lengthDescriptor.set
+    || !Number.isSafeInteger(length)
+    || length < 0
+    || ownStringKeys(descriptors).length !== length + 1) {
+    throw new TypeError(`${label} must be a dense data array`);
+  }
+  const rows = createDetachedArray(length);
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} must be a dense data array`);
+    }
+    defineArrayIndex(rows, index, descriptor.value);
+  }
+  return rows;
+}
+
+function mapDenseDataArray(value, label, mapper) {
+  const source = readDenseDataArray(value, label);
+  const mapped = createPublicArray(source.length);
+  for (let index = 0; index < source.length; index += 1) {
+    defineArrayIndex(mapped, index, mapper(source[index]));
+  }
+  return mapped;
+}
+
+function assertProxyFreeAuditPayload(value) {
+  const pending = createDetachedArray(1);
+  defineArrayIndex(pending, 0, value);
+  let pendingCount = 1;
+  const seen = new WeakSet();
+  let nodes = 0;
+  while (pendingCount > 0) {
+    pendingCount -= 1;
+    const current = pending[pendingCount];
+    delete pending[pendingCount];
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    if (utilTypes.isProxy(current)) {
+      throw new TypeError('PostgreSQL authority audit payload must not contain a Proxy');
+    }
+    seen.add(current);
+    nodes += 1;
+    if (nodes > MAX_AUDIT_PAYLOAD_GRAPH_NODES) {
+      throw new TypeError('PostgreSQL authority audit payload graph is too large');
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    const keys = detachArray(Reflect.ownKeys(descriptors));
+    for (let index = 0; index < keys.length; index += 1) {
+      const descriptor = descriptors[keys[index]];
+      if (Object.hasOwn(descriptor, 'value')) {
+        defineArrayIndex(pending, pendingCount, descriptor.value);
+        pendingCount += 1;
+      }
+    }
+  }
+  return value;
+}
+
+function auditChainInvalid(sequence = null) {
+  return distributedAuthorityError(
+    'Distributed authority audit chain verification failed',
+    'DISTRIBUTED_AUDIT_CHAIN_INVALID',
+    { sequence },
+  );
+}
+
+function normalizeAuditCheckpoint(sequenceValue, hashValue) {
+  let sequence;
+  let eventHash;
+  try {
+    sequence = asStatusCount(sequenceValue, 'PostgreSQL authority audit sequence');
+    eventHash = hashValue == null
+      ? null
+      : requireSha256Ref(hashValue, 'PostgreSQL authority audit head hash');
+  } catch {
+    throw auditChainInvalid();
+  }
+  if ((sequence === 0) !== (eventHash === null)) throw auditChainInvalid(sequence);
+  return { sequence, event_hash: eventHash };
+}
+
+/**
+ * Verify one PostgreSQL audit page against the durable authority_meta
+ * checkpoint captured in the same database snapshot. This pure verifier is
+ * exported so deployments can test the exact persisted-row contract without
+ * granting database or provider authority.
+ *
+ * A nonzero cursor proves only the returned segment. Because the omitted
+ * prefix is not present, even a segment ending at authority_meta's head cannot
+ * claim a verified genesis-to-head chain or an independently verified
+ * authority head.
+ */
+export function verifyPostgresAuthorityAuditPage(input = {}) {
+  const page = readEnumerableDataObject(
+    input,
+    POSTGRES_AUDIT_PAGE_KEYS,
+    'PostgreSQL authority audit page',
+  );
+  const authorityId = requireOpaqueRef(page.authority_id, 'audit authority_id');
+  const after = page.after_sequence;
+  const limit = page.limit;
+  const rows = readDenseDataArray(page.rows, 'PostgreSQL authority audit rows');
+  if (!Number.isSafeInteger(after) || after < 0 || Object.is(after, -0)
+    || !Number.isSafeInteger(limit) || limit < 1 || limit > 10_000
+    || rows.length > limit) {
+    throw new TypeError('PostgreSQL authority audit page bounds are invalid');
+  }
+  const checkpoint = normalizeAuditCheckpoint(page.audit_sequence, page.audit_head_hash);
+  if (after > checkpoint.sequence) throw auditChainInvalid(after);
+
+  let previous = null;
+  try {
+    previous = page.predecessor_hash == null
+      ? null
+      : requireSha256Ref(page.predecessor_hash, 'audit predecessor hash');
+  } catch {
+    throw auditChainInvalid(after);
+  }
+  if ((after === 0 && previous !== null) || (after > 0 && previous === null)) {
+    throw auditChainInvalid(after);
+  }
+  if (after === checkpoint.sequence
+    && !((previous === null && checkpoint.event_hash === null)
+      || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(after);
+  }
+
+  const events = createPublicArray(rows.length);
+  let expectedSequence = after + 1;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const rawRow = rows[rowIndex];
+    let observedSequence = null;
+    try {
+      const row = readEnumerableDataObject(
+        rawRow,
+        POSTGRES_AUDIT_ROW_KEYS,
+        'PostgreSQL authority audit row',
+        { allowExtra: true },
+      );
+      const sequence = asStatusCount(row.sequence, 'audit sequence');
+      observedSequence = sequence;
+      const rowAuthorityId = requireOpaqueRef(row.authority_id, 'audit authority_id');
+      const observedAt = asIso(row.observed_at, 'audit observed_at');
+      const eventType = requireOpaqueRef(row.event_type, 'audit event_type');
+      const operationRef = row.operation_ref == null
+        ? null
+        : requireOpaqueRef(row.operation_ref, 'audit operation_ref');
+      const parentRef = row.parent_ref == null
+        ? null
+        : requireOpaqueRef(row.parent_ref, 'audit parent_ref');
+      const authorizationId = row.authorization_id == null
+        ? null
+        : requireOpaqueRef(row.authorization_id, 'audit authorization_id');
+      const rowPreviousHash = row.previous_event_hash == null
+        ? null
+        : requireSha256Ref(row.previous_event_hash, 'audit previous_event_hash');
+      const storedPayloadHash = requireSha256Ref(row.payload_hash, 'audit payload_hash');
+      const storedEventHash = requireSha256Ref(row.event_hash, 'audit event_hash');
+      const rawPayload = assertProxyFreeAuditPayload(row.payload);
+      const payloadHash = sha256Ref(rawPayload);
+      const payload = cloneAuditJson(rawPayload);
+      const body = {
+        schema: 'agoragentic.risk-fork.distributed-authority-audit-event.v1',
+        authority_id: authorityId,
+        sequence,
+        event_type: eventType,
+        operation_ref: operationRef,
+        parent_ref: parentRef,
+        authorization_id: authorizationId,
+        observed_at: observedAt,
+        previous_event_hash: rowPreviousHash,
+        payload_hash: payloadHash,
+      };
+      const previousMatches = previous === null
+        ? rowPreviousHash === null
+        : safeEqual(rowPreviousHash, previous);
+      if (sequence !== expectedSequence
+        || sequence > checkpoint.sequence
+        || rowAuthorityId !== authorityId
+        || !safeEqual(storedPayloadHash, payloadHash)
+        || !previousMatches
+        || !safeEqual(storedEventHash, sha256Ref(body))) {
+        throw auditChainInvalid(sequence);
+      }
+      defineArrayIndex(
+        events,
+        rowIndex,
+        freezeDataGraph({ ...body, payload, event_hash: storedEventHash }),
+      );
+      previous = storedEventHash;
+      expectedSequence += 1;
+    } catch (error) {
+      if (error?.code === 'DISTRIBUTED_AUDIT_CHAIN_INVALID') throw error;
+      throw auditChainInvalid(observedSequence);
+    }
+  }
+
+  const verifiedThroughSequence = events.length === 0
+    ? after
+    : events[events.length - 1].sequence;
+  if (after < checkpoint.sequence && events.length === 0) {
+    throw auditChainInvalid(after + 1);
+  }
+  if (events.length < limit && verifiedThroughSequence < checkpoint.sequence) {
+    throw auditChainInvalid(verifiedThroughSequence + 1);
+  }
+  const segmentReachesAuthorityHead = verifiedThroughSequence === checkpoint.sequence;
+  if (segmentReachesAuthorityHead
+    && !((previous === null && checkpoint.event_hash === null)
+      || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(checkpoint.sequence);
+  }
+  const startsAtGenesis = after === 0;
+  const fullChainVerified = startsAtGenesis && segmentReachesAuthorityHead;
+
+  return freezeDataGraph({
+    schema: 'agoragentic.risk-fork.postgres-authority-audit-page.v1',
+    version: 1,
+    events,
+    next_sequence: segmentReachesAuthorityHead ? null : verifiedThroughSequence,
+    segment_verified: true,
+    segment_starts_at_genesis: startsAtGenesis,
+    segment_reaches_authority_head: segmentReachesAuthorityHead,
+    verified: fullChainVerified,
+    verified_through_sequence: verifiedThroughSequence,
+    authority_head: checkpoint,
+    authority_head_verified: fullChainVerified,
+  });
 }
 
 function optionalIso(value, label) {
@@ -223,13 +623,16 @@ async function appendAudit(client, state, event) {
     [state.authorityId],
   );
   if (meta.rowCount !== 1) throw new Error('PostgreSQL authority metadata is absent');
-  const previousSequence = Number.parseInt(meta.rows[0].audit_sequence, 10);
-  const sequence = previousSequence + 1;
+  const checkpoint = normalizeAuditCheckpoint(
+    meta.rows[0].audit_sequence,
+    meta.rows[0].audit_head_hash,
+  );
+  const sequence = checkpoint.sequence + 1;
   if (!Number.isSafeInteger(sequence)) throw new Error('Authority audit sequence overflow');
   const observedAt = event.observed_at ?? await databaseNow(client);
   const payload = cloneJson(event.payload ?? {});
   const payloadHash = sha256Ref(payload);
-  const previousEventHash = meta.rows[0].audit_head_hash ?? null;
+  const previousEventHash = checkpoint.event_hash;
   const eventBody = {
     schema: 'agoragentic.risk-fork.distributed-authority-audit-event.v1',
     authority_id: state.authorityId,
@@ -1574,7 +1977,7 @@ async function getAuthorityStatus(state) {
       requireTls: state.requireTls,
       verifiedClients: state.verifiedClients,
     });
-    await client.query('BEGIN READ ONLY');
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     transactionOpen = true;
     const statusTimeoutMs = Math.min(state.statementTimeoutMs, 5_000);
     await client.query(`SET LOCAL statement_timeout = ${statusTimeoutMs}`);
@@ -1586,7 +1989,7 @@ async function getAuthorityStatus(state) {
       `WITH status_clock AS (
          SELECT clock_timestamp() AS observed_at
        ), authority AS (
-         SELECT schema_version
+         SELECT schema_version, audit_sequence, audit_head_hash
            FROM ${table(state, 'authority_meta')}
           WHERE authority_id = $1
        ), unresolved AS (
@@ -1599,6 +2002,8 @@ async function getAuthorityStatus(state) {
             AND status IN ('prepared', 'effect_started', 'ambiguous')
        )
        SELECT authority.schema_version,
+              authority.audit_sequence,
+              authority.audit_head_hash,
               status_clock.observed_at,
               unresolved.prepared_count,
               unresolved.effect_started_count,
@@ -1631,12 +2036,17 @@ async function getAuthorityStatus(state) {
     if ((oldestUpdatedAt === null) !== (oldestAgeMs === null)) {
       throw new Error('Authority unresolved age and timestamp disagree');
     }
-    const migrationVersions = schemaReport.migration_versions.map((version) => (
-      asVersion(version, 'PostgreSQL authority migration version')
-    ));
-    const migrationHashes = schemaReport.migration_hashes.map((hash) => (
-      requireSha256Ref(hash, 'PostgreSQL authority migration hash')
-    ));
+    const migrationVersions = mapDenseDataArray(
+      schemaReport.migration_versions,
+      'PostgreSQL authority migration versions',
+      (version) => asVersion(version, 'PostgreSQL authority migration version'),
+    );
+    const migrationHashes = mapDenseDataArray(
+      schemaReport.migration_hashes,
+      'PostgreSQL authority migration hashes',
+      (hash) => requireSha256Ref(hash, 'PostgreSQL authority migration hash'),
+    );
+    const auditCheckpoint = normalizeAuditCheckpoint(row.audit_sequence, row.audit_head_hash);
     const pool = {
       total_connections: asStatusCount(state.pool.totalCount, 'PostgreSQL pool total'),
       idle_connections: asStatusCount(state.pool.idleCount, 'PostgreSQL pool idle total'),
@@ -1644,9 +2054,9 @@ async function getAuthorityStatus(state) {
     };
     await client.query('ROLLBACK');
     transactionOpen = false;
-    return deepFreeze({
-      schema: 'agoragentic.risk-fork.postgres-authority-status.v1',
-      version: 1,
+    return freezeDataGraph({
+      schema: 'agoragentic.risk-fork.postgres-authority-status.v2',
+      version: 2,
       schema_verification: {
         verified: true,
         schema_version: asVersion(row.schema_version, 'PostgreSQL authority schema version'),
@@ -1657,6 +2067,7 @@ async function getAuthorityStatus(state) {
         reachable: true,
         observed_at: observedAt,
       },
+      audit_checkpoint: auditCheckpoint,
       unresolved: {
         counts: {
           prepared: asStatusCount(row.prepared_count, 'prepared operation count'),
@@ -1720,62 +2131,61 @@ async function getAuditTrail(state, input = {}) {
     || !Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
     throw new TypeError('distributed audit pagination is invalid');
   }
-  const result = await queryWithVerifiedClient(
-    state,
-    `SELECT * FROM ${table(state, 'audit_events')}
-      WHERE authority_id = $1 AND sequence > $2
-      ORDER BY sequence ASC LIMIT $3`,
-    [state.authorityId, after, limit],
-  );
-  let previous = after === 0 ? null : null;
-  if (after > 0) {
-    const head = await queryWithVerifiedClient(
-      state,
-      `SELECT event_hash FROM ${table(state, 'audit_events')}
-        WHERE authority_id = $1 AND sequence = $2`,
-      [state.authorityId, after],
-    );
-    if (head.rowCount !== 1) throw new Error('Audit pagination predecessor is absent');
-    previous = head.rows[0].event_hash;
-  }
-  const events = [];
-  let expectedSequence = after + 1;
-  for (const row of result.rows) {
-    const sequence = Number.parseInt(row.sequence, 10);
-    const observedAt = asIso(row.observed_at, 'audit observed_at');
-    const payload = cloneJson(row.payload);
-    const payloadHash = sha256Ref(payload);
-    const body = {
-      schema: 'agoragentic.risk-fork.distributed-authority-audit-event.v1',
-      authority_id: state.authorityId,
-      sequence,
-      event_type: row.event_type,
-      operation_ref: row.operation_ref ?? null,
-      parent_ref: row.parent_ref ?? null,
-      authorization_id: row.authorization_id ?? null,
-      observed_at: observedAt,
-      previous_event_hash: row.previous_event_hash ?? null,
-      payload_hash: payloadHash,
-    };
-    if (sequence !== expectedSequence
-      || !safeEqual(row.payload_hash, payloadHash)
-      || row.previous_event_hash !== previous
-      || !safeEqual(row.event_hash, sha256Ref(body))) {
-      throw distributedAuthorityError(
-        'Distributed authority audit chain verification failed',
-        'DISTRIBUTED_AUDIT_CHAIN_INVALID',
-        { sequence },
-      );
-    }
-    events.push(deepFreeze({ ...body, payload, event_hash: row.event_hash }));
-    previous = row.event_hash;
-    expectedSequence += 1;
-  }
-  return deepFreeze({
-    events,
-    next_sequence: events.length === limit ? events.at(-1).sequence : null,
-    verified: true,
+  const client = await acquirePostgresAuthorityClient(state.pool, {
+    requireTls: state.requireTls,
+    verifiedClients: state.verifiedClients,
   });
+  let transactionOpen = false;
+  try {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    transactionOpen = true;
+    await client.query(`SET LOCAL statement_timeout = ${state.statementTimeoutMs}`);
+    await client.query(
+      `SET LOCAL idle_in_transaction_session_timeout = ${state.statementTimeoutMs}`,
+    );
+    const checkpointResult = await client.query(
+      `SELECT audit_sequence, audit_head_hash
+         FROM ${table(state, 'authority_meta')}
+        WHERE authority_id = $1`,
+      [state.authorityId],
+    );
+    if (checkpointResult.rowCount !== 1) {
+      throw new Error('PostgreSQL authority metadata is absent');
+    }
+    let predecessorHash = null;
+    if (after > 0) {
+      const predecessorResult = await client.query(
+        `SELECT event_hash FROM ${table(state, 'audit_events')}
+          WHERE authority_id = $1 AND sequence = $2`,
+        [state.authorityId, after],
+      );
+      if (predecessorResult.rowCount !== 1) throw auditChainInvalid(after);
+      predecessorHash = predecessorResult.rows[0].event_hash;
+    }
+    const result = await client.query(
+      `SELECT * FROM ${table(state, 'audit_events')}
+        WHERE authority_id = $1 AND sequence > $2
+        ORDER BY sequence ASC LIMIT $3`,
+      [state.authorityId, after, limit],
+    );
+    const verified = verifyPostgresAuthorityAuditPage({
+      authority_id: state.authorityId,
+      after_sequence: after,
+      limit,
+      audit_sequence: checkpointResult.rows[0].audit_sequence,
+      audit_head_hash: checkpointResult.rows[0].audit_head_hash,
+      predecessor_hash: predecessorHash,
+      rows: result.rows,
+    });
+    await client.query('ROLLBACK');
+    transactionOpen = false;
+    return verified;
+  } catch (error) {
+    if (transactionOpen) await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function runCommit(state, input, callbacks) {

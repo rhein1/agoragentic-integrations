@@ -101,7 +101,7 @@ const enforcementBoundary = createMcpEnforcementBoundary({
 await runMcpRelay({ enforcementBoundary });
 ```
 
-The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. Host-adapter and returned session methods are receiver-bound immediately. The factory calls each host method with its documented request followed by a controller-owned context containing `signal`, `timeout_ms`, `deadline_at`, and `operation`; implementations should stop owned work when the signal aborts. Open, request, and close waits have bounded configurable deadlines, a late-resolving open session is closed, and repeated `close()` calls share one close attempt. AbortSignal alone is not an effect fence: every fallback callback, including `agoragentic_preview_x402`, is hard-disabled and never invoked until a trusted host supplies durable idempotency and terminal reconciliation. The preview endpoint mints a `quote_id`, so its name does not prove a no-effect contract. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
+The object returned by the factory is intentionally opaque and accepted by identity, not structural typing. Host-adapter and returned session methods are receiver-bound immediately. The factory calls each host method with its documented request followed by a controller-owned context containing `signal`, `timeout_ms`, `deadline_at`, and `operation`; implementations should stop owned work when the signal aborts. Open, request, and close waits have bounded configurable deadlines, a late-resolving open session is closed, and repeated `close()` calls share one close attempt. Closing a session synchronously prevents any queued host request from starting, aborts every tracked in-flight request signal, waits for those request wrappers to settle, and invokes the host's bounded close operation. AbortSignal alone is not an effect fence: every fallback callback, including `agoragentic_preview_x402`, is hard-disabled and never invoked until a trusted host supplies durable idempotency and terminal reconciliation. The preview endpoint mints a `quote_id`, so its name does not prove a no-effect contract. The returned remote session exposes only protocol methods and `close()`; it never exposes the host's client or transport.
 
 Do not use the example as production qualification. The host implementation must additionally demonstrate fresh child identity, no inherited authority or parent-writable state, target and argument revalidation, atomic one-use authorization/CAS, taint handling, clean commit, crash/retry safety, provider failure cleanup, and verified lifecycle enforcement.
 
@@ -124,6 +124,38 @@ node mcp/dist/mcp-server.cjs --acp
 ```
 
 ACP mode supports `initialize`, `session/new`, `session/prompt`, `session/cancel`, `tools/list`, and `shutdown` locally. `tools/call` is restricted to the advertised ACP tool names and remains fail-closed without an embedding host capability.
+
+## `risk-forkd` source shell
+
+This source candidate also contains a small `risk-forkd` front door. Its programmatic factory accepts exactly one value: an enforcement boundary created by the matching bundled `createMcpEnforcementBoundary()` instance. Structural copies, boundaries created by another module instance, accessors, extra options, and runtime overrides are rejected before relay startup. The returned service exposes only `schema`, `mode`, immutable `status`, and a single-use `start()` method; the boundary remains private and `start()` delegates only to `runMcpRelay({ enforcementBoundary })`.
+
+```js
+const mcp = require('./dist/mcp-server.cjs');
+const { createRiskForkdService } = require('./risk-forkd.js');
+
+// Construct this separately with createRiskForkMcpHostAdapter() only after an
+// owner has supplied and qualified its exact host boundary and phase-plan path.
+const riskForkHostAdapter = ownerSuppliedRiskForkHostAdapter;
+const enforcementBoundary = mcp.createMcpEnforcementBoundary(riskForkHostAdapter);
+const service = createRiskForkdService({ enforcementBoundary });
+
+console.error(service.status);
+await service.start();
+```
+
+The factory brand proves only that the boundary came from this MCP module instance. It does not prove that the hidden adapter is a Risk Fork adapter, that an `mcp_http_phase` executor is bound, or that any provider or hosted runtime is qualified. Accordingly, the status keeps the executor, Risk Fork provider, hosted runtime, E2B live, production authority, live-traffic protection, bundled-network, and `commitPrepared` flags false. This shell never calls `commitPrepared`.
+
+The checked-in CLI is intentionally diagnostic-only:
+
+```bash
+node mcp/risk-forkd.js
+```
+
+It emits a machine-readable source-only/default-off status and exits with code 78. It does not load an arbitrary config module or accept a serialized boundary because the identity brand is process-local. A future owner-supplied provider binding needs a separately reviewed closed API that connects a branded `mcp_http_phase` runtime to the Risk Fork controller/host-adapter path, plus provider and live qualification evidence. Until then, only an embedding process that already owns the exact in-process boundary can start the service. Relay cleanup remains the existing bounded MCP cleanup on signal or stdio EOF.
+
+The private package metadata includes the `risk-forkd` bin and `agoragentic-mcp/risk-forkd` subpath so a locally packed source checkout can verify their exact shared-module identity. This is not a registry installation claim: the package remains `private`, publication is hard-blocked, and the public npm name still resolves the unsafe legacy relay.
+
+Client-specific Claude Code, Codex, and Cursor integration preparation lives in [`risk-fork/CLIENT_ADOPTION.md`](../risk-fork/CLIENT_ADOPTION.md). It generates inactive review files and adds a local one-tool stdio gate for the future `risk_fork_protect` surface. It does not make this diagnostic CLI runnable, grant provider authority, or enable a client.
 
 ## Target configuration
 

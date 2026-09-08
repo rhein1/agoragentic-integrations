@@ -649,6 +649,77 @@ test('keeps an in-flight pagination epoch isolated and rejects a drifting refres
     }
 });
 
+test('does not start a queued host request after close wins the session race', async () => {
+    let hostRequests = 0;
+    let closes = 0;
+    let releaseDirectoryRefresh;
+    let markDirectoryRefreshStarted;
+    const directoryRefreshGate = new Promise((resolve) => {
+        releaseDirectoryRefresh = resolve;
+    });
+    const directoryRefreshStarted = new Promise((resolve) => {
+        markDirectoryRefreshStarted = resolve;
+    });
+    let listCalls = 0;
+    const boundary = createMcpEnforcementBoundary({
+        async openSession(openRequest) {
+            return {
+                schema: MCP_ENFORCEMENT_SCHEMAS.hostSession,
+                discovery: cleanImported(openRequest, {
+                    protocol_version: MCP_V2_PROTOCOL_VERSION,
+                    stateless: true,
+                }),
+                async request(request) {
+                    hostRequests += 1;
+                    assert.equal(request.phase, 'tools/list');
+                    listCalls += 1;
+                    if (listCalls === 2) {
+                        markDirectoryRefreshStarted();
+                        await directoryRefreshGate;
+                    }
+                    return cleanImported(request, {
+                        tools: [{ name: 'close_race_probe' }],
+                    });
+                },
+                async close() {
+                    closes += 1;
+                },
+            };
+        },
+        async executeFallback() {
+            throw new Error('fallback must not run');
+        },
+    });
+    const session = await connectRemoteClient({
+        remoteUrl: 'https://close-race.example.invalid/api/mcp',
+        enforcementBoundary: boundary,
+    });
+    const directory = createRemoteToolDirectory(session);
+    const refresh = directory.list();
+    await directoryRefreshStarted;
+    const call = session.callTool({ name: 'close_race_probe', arguments: {} });
+    const closing = closeRemoteSession(session);
+    releaseDirectoryRefresh();
+
+    try {
+        await assert.rejects(
+            call,
+            (error) => error?.code === 'MCP_ENFORCED_SESSION_CLOSED',
+        );
+        await assert.rejects(
+            refresh,
+            (error) => error?.code === 'MCP_ENFORCED_SESSION_CLOSED',
+        );
+        await closing;
+        assert.equal(hostRequests, 2, 'no tools/call host request may start after close wins');
+        assert.equal(closes, 1);
+    } finally {
+        releaseDirectoryRefresh();
+        await Promise.allSettled([call, refresh, closing]);
+        await closeRemoteSession(session);
+    }
+});
+
 test('rejects credential assignments in imported text without blocking prose, short values, or references', async () => {
     const cases = [
         { text: 'api_key="syntheticvalue123456"', rejected: true },

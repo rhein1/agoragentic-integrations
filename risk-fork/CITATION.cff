@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use Agoragentic Risk Fork, please cite this software and the exact release or commit."
+title: "Agoragentic Risk Fork"
+type: software
+abstract: >-
+  Provider-neutral fork-before-risk contracts for consequential agents:
+  host-owned risk classification, bounded state without inherited authority,
+  typed tainted imports, verified cleanup, and clean-side one-use commit.
+  The local reference adapter and hackathon demo are protocol simulations.
+license: Apache-2.0
+version: 0.1.0-alpha.1
+repository-code: "https://github.com/rhein1/agoragentic-integrations"
+url: "https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork"
+authors:
+  - family-names: Borden
+    given-names: Jeremy
+    affiliation: Agoragentic
+  - name: Agoragentic
+    website: "https://agoragentic.com"
+keywords:
+  - ai-agents
+  - mcp
+  - fork-before-risk
+  - transactional-execution
+  - taint-tracking

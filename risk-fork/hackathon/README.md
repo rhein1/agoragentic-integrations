@@ -186,13 +186,14 @@ may still be created, and its removal is independently reported by
 
 ## Storage and deletion
 
-The Git repository stores source, not runtime forks. This draft source branch is
-public on GitHub; its generated kit remains local until a separate publication
-action is authorized. GitHub contains only explicitly committed source;
-synthetic savepoint, fork, recorder, and receipt data stays on the participant's
-machine beneath the marker-bound demo root identified by the redacted reference
-from `doctor`. It is not saved to AWS, E2B, Agoragentic, a VM, or a hosted
-database.
+The Git repository stores committed source, not runtime forks. This source branch
+is public on GitHub. Release-candidate CI temporarily retains the generated ZIP,
+three sidecars, and platform client-verification records as GitHub Actions
+artifacts for 14 days; those build artifacts are not runtime fork data and are
+not a GitHub Release. Synthetic savepoint, fork, recorder, and receipt data stays
+on the participant's machine beneath the marker-bound demo root identified by
+the redacted reference from `doctor`. It is not uploaded by the workflow or
+saved to AWS, E2B, Agoragentic, a VM, or a hosted database.
 
 Automatic cleanup is bounded to owned fixture paths. It never recursively
 deletes a home directory, repository root, broad temporary directory,
@@ -201,13 +202,16 @@ marker. Local absence evidence is not a production deletion SLA.
 
 ## Open-source and abuse boundary
 
-The public tranche is MIT-licensed. That permits copying and modification; no
-source license or manifest can prevent someone from creating a harmful fork.
-The signed commit, deterministic manifest, and SHA-256 checks distinguish the
-official reviewed kit from modified bytes. The closed fixture catalog, one-run
-concurrency gate, ten-run cleanup-reset quota, byte/action limits, no-credential
-contract, and network guard constrain the official demo only. They are not DRM,
-malware prevention, or control over third-party forks.
+The public Risk Fork core and this demo are licensed under Apache-2.0. Future
+distributions must carry the license and applicable [NOTICE](../NOTICE)
+attribution, and modified files must be marked as changed. Earlier Git revisions
+made available under MIT remain under their original license terms. No source
+license or manifest can prevent someone from creating a harmful fork. The signed
+commit, deterministic manifest, and SHA-256 checks distinguish the official
+reviewed kit from modified bytes. The closed fixture catalog, one-run concurrency
+gate, ten-run cleanup-reset quota, byte/action limits, no-credential contract,
+and network guard constrain the official demo only. They are not DRM, malware
+prevention, or control over third-party forks.
 
 ## Flight Recorder
 

@@ -113,6 +113,29 @@ export {
   verifyRiskForkImportEnvelope,
 } from './host-boundary.mjs';
 export {
+  RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
+  RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
+  RISK_FORK_MCP_HOST_ADAPTER_SCHEMA,
+  RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
+  RISK_FORK_MCP_PHASE_PLAN_SCHEMA,
+  RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA,
+  RiskForkMcpHostAdapterError,
+  createRiskForkMcpChildOperation,
+  createRiskForkMcpHostAdapter,
+  createRiskForkMcpPhasePlan,
+  createTrustedRiskForkMcpPhasePlanSource,
+  isRiskForkMcpHostAdapter,
+} from './mcp-host-adapter.mjs';
+export {
+  RISK_FORK_CLIENTS,
+  RISK_FORK_CLIENT_ADOPTION_SCHEMA,
+  RISK_FORK_GATEWAY_TOOL,
+  createRiskForkClientAdoptionPacket,
+  isRiskForkClientAdoptionPacket,
+  verifyRiskForkClientAdoptionPacket,
+} from './client-adoption.mjs';
+export {
   createRiskForkReceipt,
   verifyRiskForkReceipt,
   verifyRiskForkReceiptStructure,
@@ -124,6 +147,7 @@ export {
 export {
   E2BRiskForkAdapter,
   E2B_RISK_FORK_PATHS,
+  buildE2BCleanSandboxCreateOptions,
 } from './adapters/e2b.mjs';
 export {
   createE2BAuthorityFreeSourceVerifier,
@@ -133,6 +157,7 @@ export {
   PostgresDistributedCommitAuthority,
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
+  verifyPostgresAuthorityAuditPage,
 } from './adapters/postgres-authority.mjs';
 export {
   acquirePostgresAuthorityClient,

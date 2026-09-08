@@ -57,16 +57,21 @@ var require_package = __commonJS({
       mcpName: "io.github.rhein1/agoragentic",
       description: "Unpublished, non-installable 2.0.0 source candidate for the fail-closed Agoragentic MCP protocol adapter. Remote and fallback network execution require a separately qualified host enforcement implementation.",
       main: "dist/mcp-server.cjs",
+      exports: {
+        ".": "./dist/mcp-server.cjs",
+        "./risk-forkd": "./risk-forkd.js"
+      },
       bin: {
-        "agoragentic-mcp": "dist/mcp-server.cjs"
+        "agoragentic-mcp": "dist/mcp-server.cjs",
+        "risk-forkd": "risk-forkd.js"
       },
       scripts: {
         start: "node dist/mcp-server.cjs",
         dev: "node mcp-server.js",
         build: "node scripts/build.js",
-        check: "node --check mcp-server.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js",
-        test: "node --test test/*.test.js",
-        "verify:packed-install": "node scripts/verify-packed-install.js",
+        check: "node --check mcp-server.js && node --check risk-forkd.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check scripts/verify-risk-forkd-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/metadata-boundary.test.js && node --check test/risk-forkd.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js && node --check test/fixtures/risk-forkd-entry.js",
+        test: "npm run build && node --test test/*.test.js",
+        "verify:packed-install": "node scripts/verify-packed-install.js && node scripts/verify-risk-forkd-packed-install.js",
         prepack: "npm run build",
         prepublishOnly: `node -e "throw new Error('MCP_PUBLISH_DISABLED_UNQUALIFIED_SOURCE_CANDIDATE')"`,
         postinstall: "node scripts/postinstall.js || true"
@@ -119,6 +124,7 @@ var require_package = __commonJS({
       },
       files: [
         "dist/mcp-server.cjs",
+        "risk-forkd.js",
         "scripts/postinstall.js",
         "README.md",
         "LICENSE"
@@ -30345,9 +30351,28 @@ var require_utils = __commonJS({
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
+    var isPort = RegExp.prototype.test.bind(/^\d*$/u);
     var isHexPair = RegExp.prototype.test.bind(/^[\da-f]{2}$/iu);
     var isUnreserved = RegExp.prototype.test.bind(/^[\da-z\-._~]$/iu);
-    var isPathCharacter = RegExp.prototype.test.bind(/^[\da-z\-._~!$&'()*+,;=:@/]$/iu);
+    var isPathCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:@/]$/u);
+    var isQueryFragmentCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:@/?]$/u);
+    var isUserinfoCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:]$/u);
+    var BYTE_HEX = new Array(256);
+    {
+      const HEX_DIGITS = "0123456789ABCDEF";
+      for (let i = 0; i < 256; i++) {
+        BYTE_HEX[i] = "%" + HEX_DIGITS[i >> 4] + HEX_DIGITS[i & 15];
+      }
+    }
+    function percentEncodeNonAscii(cp) {
+      if (cp < 2048) {
+        return BYTE_HEX[192 | cp >> 6] + BYTE_HEX[128 | cp & 63];
+      }
+      if (cp < 65536) {
+        return BYTE_HEX[224 | cp >> 12] + BYTE_HEX[128 | cp >> 6 & 63] + BYTE_HEX[128 | cp & 63];
+      }
+      return BYTE_HEX[240 | cp >> 18] + BYTE_HEX[128 | cp >> 12 & 63] + BYTE_HEX[128 | cp >> 6 & 63] + BYTE_HEX[128 | cp & 63];
+    }
     function stringArrayToHexStripped(input) {
       let acc = "";
       let code = 0;
@@ -30372,91 +30397,105 @@ var require_utils = __commonJS({
       }
       return acc;
     }
+    var isHextet = RegExp.prototype.test.bind(/^[\dA-Fa-f]{1,4}$/);
+    var isIPvFuture = RegExp.prototype.test.bind(/^[vV][\dA-Fa-f]+\.[A-Za-z\d\-._~!$&'()*+,;=:]+$/);
+    var isZoneCharacter = RegExp.prototype.test.bind(/^[A-Za-z\d\-._~]$/);
     var nonSimpleDomain = RegExp.prototype.test.bind(/[^!"$&'()*+,\-.;=_`a-z{}~]/u);
-    function consumeIsZone(buffer) {
-      buffer.length = 0;
-      return true;
-    }
-    function consumeHextets(buffer, address, output) {
-      if (buffer.length) {
-        const hex = stringArrayToHexStripped(buffer);
-        if (hex !== "") {
-          address.push(hex);
-        } else {
-          output.error = true;
-          return false;
+    function isZoneIdentifier(zone) {
+      if (zone.length === 0) return false;
+      for (let i = 0; i < zone.length; i++) {
+        if (isZoneCharacter(zone[i])) continue;
+        if (zone[i] === "%" && i + 2 < zone.length && isHexPair(zone.slice(i + 1, i + 3))) {
+          i += 2;
+          continue;
         }
-        buffer.length = 0;
+        return false;
       }
       return true;
     }
-    function getIPV6(input) {
-      let tokenCount = 0;
-      const output = { error: false, address: "", zone: "" };
-      const address = [];
-      const buffer = [];
-      let endipv6Encountered = false;
-      let endIpv6 = false;
-      let consume = consumeHextets;
-      for (let i = 0; i < input.length; i++) {
-        const cursor = input[i];
-        if (cursor === "[" || cursor === "]") {
-          continue;
-        }
-        if (cursor === ":") {
-          if (endipv6Encountered === true) {
-            endIpv6 = true;
+    function compressIPv6ZeroRun(hextets) {
+      let bestStart = -1;
+      let bestLength = 0;
+      let runStart = -1;
+      let runLength = 0;
+      for (let i = 0; i < hextets.length; i++) {
+        if (hextets[i] === "0") {
+          if (runStart === -1) runStart = i;
+          runLength++;
+          if (runLength > bestLength) {
+            bestLength = runLength;
+            bestStart = runStart;
           }
-          if (!consume(buffer, address, output)) {
-            break;
-          }
-          if (++tokenCount > 7) {
-            output.error = true;
-            break;
-          }
-          if (i > 0 && input[i - 1] === ":") {
-            endipv6Encountered = true;
-          }
-          address.push(":");
-          continue;
-        } else if (cursor === "%") {
-          if (!consume(buffer, address, output)) {
-            break;
-          }
-          consume = consumeIsZone;
         } else {
-          buffer.push(cursor);
-          continue;
+          runStart = -1;
+          runLength = 0;
         }
       }
-      if (buffer.length) {
-        if (consume === consumeIsZone) {
-          output.zone = buffer.join("");
-        } else if (endIpv6) {
-          address.push(buffer.join(""));
-        } else {
-          address.push(stringArrayToHexStripped(buffer));
-        }
+      if (bestLength < 2) return hextets.join(":");
+      const head = hextets.slice(0, bestStart).join(":");
+      const tail = hextets.slice(bestStart + bestLength).join(":");
+      return head + "::" + tail;
+    }
+    function normalizeIPv6Address(input) {
+      const compression = input.indexOf("::");
+      if (compression !== -1 && input.indexOf("::", compression + 1) !== -1) return void 0;
+      const left = compression === -1 ? input.split(":") : input.slice(0, compression).split(":");
+      const right = compression === -1 ? [] : input.slice(compression + 2).split(":");
+      if (compression !== -1) {
+        if (left.length === 1 && left[0] === "") left.length = 0;
+        if (right.length === 1 && right[0] === "") right.length = 0;
       }
-      output.address = address.join("");
-      return output;
+      const parts = left.concat(right);
+      let hextetCount = 0;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (part === "") return void 0;
+        if (part.indexOf(".") !== -1) {
+          if (i !== parts.length - 1 || compression !== -1 && right.length === 0 || !isIPv4(part)) return void 0;
+          hextetCount += 2;
+          continue;
+        }
+        if (!isHextet(part)) return void 0;
+        parts[i] = parseInt(part, 16).toString(16);
+        hextetCount++;
+      }
+      if (compression === -1) {
+        if (hextetCount !== 8) return void 0;
+        return compressIPv6ZeroRun(parts);
+      }
+      if (hextetCount >= 8) return void 0;
+      const expanded = parts.slice(0, left.length);
+      for (let i = hextetCount; i < 8; i++) expanded.push("0");
+      for (let i = left.length; i < parts.length; i++) expanded.push(parts[i]);
+      return compressIPv6ZeroRun(expanded);
     }
     function normalizeIPv6(host) {
-      if (findToken(host, ":") < 2) {
-        return { host, isIPV6: false };
+      const bracketed = host[0] === "[" && host[host.length - 1] === "]";
+      const hasBracket = host[0] === "[" || host[host.length - 1] === "]";
+      if (hasBracket && !bracketed) return { host, isIPV6: false, error: true };
+      let input = bracketed ? host.slice(1, -1) : host;
+      if (bracketed && isIPvFuture(input)) {
+        input = input.toLowerCase();
+        return { host: `[${input}]`, escapedHost: input, isIPV6: false, isIPVFuture: true };
       }
-      const ipv6 = getIPV6(host);
-      if (!ipv6.error) {
-        let newHost = ipv6.address;
-        let escapedHost = ipv6.address;
-        if (ipv6.zone) {
-          newHost += "%" + ipv6.zone;
-          escapedHost += "%25" + ipv6.zone;
-        }
-        return { host: newHost, isIPV6: true, escapedHost };
-      } else {
-        return { host, isIPV6: false };
+      if (findToken(input, ":") < 2) {
+        return { host, isIPV6: false, error: bracketed };
       }
+      let zoneIdentifier = "";
+      const zoneSeparator = input.indexOf("%");
+      if (zoneSeparator !== -1) {
+        const separatorLength = input.slice(zoneSeparator, zoneSeparator + 3).toLowerCase() === "%25" ? 3 : 1;
+        zoneIdentifier = input.slice(zoneSeparator + separatorLength);
+        if (!isZoneIdentifier(zoneIdentifier)) return { host, isIPV6: false, error: true };
+        input = input.slice(0, zoneSeparator);
+      }
+      const address = normalizeIPv6Address(input);
+      if (address === void 0) return { host, isIPV6: false, error: true };
+      return {
+        host: address + (zoneIdentifier ? "%" + zoneIdentifier : ""),
+        escapedHost: address + (zoneIdentifier ? "%25" + zoneIdentifier : ""),
+        isIPV6: true
+      };
     }
     function findToken(str, token) {
       let ind = 0;
@@ -30543,8 +30582,8 @@ var require_utils = __commonJS({
     var HOST_DELIMS = { "@": "%40", "/": "%2F", "?": "%3F", "#": "%23", ":": "%3A" };
     var HOST_DELIM_RE = /[@/?#:]/g;
     var HOST_DELIM_NO_COLON_RE = /[@/?#]/g;
-    function reescapeHostDelimiters(host, isIP) {
-      const re = isIP ? HOST_DELIM_NO_COLON_RE : HOST_DELIM_RE;
+    function reescapeHostDelimiters(host, isIP2) {
+      const re = isIP2 ? HOST_DELIM_NO_COLON_RE : HOST_DELIM_RE;
       re.lastIndex = 0;
       return host.replace(re, (ch) => HOST_DELIMS[ch]);
     }
@@ -30575,7 +30614,8 @@ var require_utils = __commonJS({
     function normalizePathEncoding(input) {
       let output = "";
       for (let i = 0; i < input.length; i++) {
-        if (input[i] === "%" && i + 2 < input.length) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
           const hex = input.slice(i + 1, i + 3);
           if (isHexPair(hex)) {
             const normalizedHex = hex.toUpperCase();
@@ -30589,10 +30629,152 @@ var require_utils = __commonJS({
             continue;
           }
         }
-        if (isPathCharacter(input[i])) {
-          output += input[i];
+        if (isPathCharacter(ch)) {
+          output += ch;
         } else {
-          output += escape(input[i]);
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += isEscapeSafe(code) ? ch : BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function serializePathEncoding(input, pathNoScheme = false) {
+      let output = "";
+      let firstSegment = pathNoScheme && input[0] !== "/";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            output += "%" + hex.toUpperCase();
+            i += 2;
+            continue;
+          }
+        }
+        if (ch === "/") {
+          firstSegment = false;
+        }
+        if (isPathCharacter(ch) && (ch !== ":" || !firstSegment)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function encodeComponent(input, isAllowed) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            output += "%" + hex.toUpperCase();
+            i += 2;
+            continue;
+          }
+        }
+        if (isAllowed(ch)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function encodeUserinfo(input) {
+      return encodeComponent(input, isUserinfoCharacter);
+    }
+    function encodeQuery(input) {
+      return encodeComponent(input, isQueryFragmentCharacter);
+    }
+    function encodeFragment(input) {
+      return encodeComponent(input, isQueryFragmentCharacter);
+    }
+    function isEscapeSafe(cp) {
+      return cp >= 48 && cp <= 57 || cp >= 65 && cp <= 90 || cp >= 97 && cp <= 122 || cp === 42 || cp === 43 || cp === 45 || cp === 46 || cp === 47 || cp === 64 || cp === 95;
+    }
+    function normalizeQueryFragmentEncoding(input) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            const normalizedHex = hex.toUpperCase();
+            const decoded = String.fromCharCode(parseInt(normalizedHex, 16));
+            if (isUnreserved(decoded)) {
+              output += decoded;
+            } else {
+              output += "%" + normalizedHex;
+            }
+            i += 2;
+            continue;
+          }
+        }
+        if (isQueryFragmentCharacter(ch)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += isEscapeSafe(code) ? ch : BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
         }
       }
       return output;
@@ -30615,14 +30797,18 @@ var require_utils = __commonJS({
     function recomposeAuthority(component) {
       const uriTokens = [];
       if (component.userinfo !== void 0) {
-        uriTokens.push(component.userinfo);
+        uriTokens.push(encodeUserinfo(component.userinfo));
         uriTokens.push("@");
       }
       if (component.host !== void 0) {
-        let host = unescape(component.host);
+        let host = component.host;
         if (!isIPv4(host)) {
-          const ipV6res = normalizeIPv6(host);
-          if (ipV6res.isIPV6 === true) {
+          let ipV6res = normalizeIPv6(host);
+          if (ipV6res.isIPV6 !== true && ipV6res.isIPVFuture !== true) {
+            host = normalizePercentEncoding(host, true);
+            ipV6res = normalizeIPv6(host);
+          }
+          if (ipV6res.isIPV6 === true || ipV6res.isIPVFuture === true) {
             host = `[${ipV6res.escapedHost}]`;
           } else {
             host = reescapeHostDelimiters(host, false);
@@ -30631,8 +30817,12 @@ var require_utils = __commonJS({
         uriTokens.push(host);
       }
       if (typeof component.port === "number" || typeof component.port === "string") {
+        const port = String(component.port);
+        if (!isPort(port)) {
+          throw new TypeError("URI port is malformed.");
+        }
         uriTokens.push(":");
-        uriTokens.push(String(component.port));
+        uriTokens.push(port);
       }
       return uriTokens.length ? uriTokens.join("") : void 0;
     }
@@ -30642,6 +30832,11 @@ var require_utils = __commonJS({
       reescapeHostDelimiters,
       normalizePercentEncoding,
       normalizePathEncoding,
+      serializePathEncoding,
+      normalizeQueryFragmentEncoding,
+      encodeUserinfo,
+      encodeQuery,
+      encodeFragment,
       escapePreservingEscapes,
       removeDotSegments,
       isIPv4,
@@ -30657,7 +30852,7 @@ var require_schemes = __commonJS({
   "risk-fork-hosted-mcp/node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
-    var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
+    var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
     var supportedSchemeNames = (
       /** @type {const} */
       [
@@ -30718,9 +30913,10 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path8, query] = wsComponent.resourceName.split("?");
+        const queryIndex = wsComponent.resourceName.indexOf("?");
+        const path8 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
         wsComponent.path = path8 && path8 !== "/" ? path8 : void 0;
-        wsComponent.query = query;
+        wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
       wsComponent.fragment = void 0;
@@ -30732,7 +30928,7 @@ var require_schemes = __commonJS({
         return urnComponent;
       }
       const matches = urnComponent.path.match(URN_REG);
-      if (matches) {
+      if (matches && matches[0] === urnComponent.path) {
         const scheme = options.scheme || urnComponent.scheme || "urn";
         urnComponent.nid = matches[1].toLowerCase();
         urnComponent.nss = matches[2];
@@ -30866,8 +31062,17 @@ var require_schemes = __commonJS({
 var require_fast_uri = __commonJS({
   "risk-fork-hosted-mcp/node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
-    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
+    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
+    var VALID_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*$/u;
+    var MALFORMED_SCHEME_ERROR = "URI scheme is malformed.";
+    function decodeValidScheme(scheme) {
+      const decodedScheme = unescape(String(scheme));
+      if (!VALID_SCHEME.test(decodedScheme)) {
+        throw new TypeError(MALFORMED_SCHEME_ERROR);
+      }
+      return decodedScheme;
+    }
     function normalize(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
@@ -30880,12 +31085,34 @@ var require_fast_uri = __commonJS({
     }
     function resolve(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
-      const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
-      if (baseMalformed || relativeMalformed) {
+      const {
+        parsed: baseParsed,
+        malformedAuthorityOrPort: baseMalformed,
+        malformedPercentEncoding: baseMalformedPercentEncoding,
+        malformedSchemeSpecific: baseMalformedSchemeSpecific,
+        malformedHost: baseMalformedHost,
+        malformedScheme: baseMalformedScheme
+      } = parseWithStatus(baseURI, schemelessOptions);
+      const {
+        parsed: relativeParsed,
+        malformedAuthorityOrPort: relativeMalformed,
+        malformedPercentEncoding: relativeMalformedPercentEncoding,
+        malformedSchemeSpecific: relativeMalformedSchemeSpecific,
+        malformedHost: relativeMalformedHost,
+        malformedScheme: relativeMalformedScheme
+      } = parseWithStatus(relativeURI, schemelessOptions);
+      if (baseMalformed || relativeMalformed || baseMalformedPercentEncoding || relativeMalformedPercentEncoding || baseMalformedSchemeSpecific || relativeMalformedSchemeSpecific || baseMalformedHost || relativeMalformedHost || baseMalformedScheme || relativeMalformedScheme) {
         throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
       }
       const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
+      const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
+      const resolvedHost = resolved.host;
+      const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
+      canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
+      const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !new RegExp("\\P{ASCII}", "u").test(resolvedHost);
+      if (resolved.error && !encodedASCIIHost) {
+        throw new Error(resolved.error);
+      }
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
@@ -30945,7 +31172,7 @@ var require_fast_uri = __commonJS({
     function equal(uriA, uriB, options) {
       const normalizedA = normalizeComparableURI(uriA, options);
       const normalizedB = normalizeComparableURI(uriB, options);
-      return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA.toLowerCase() === normalizedB.toLowerCase();
+      return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA === normalizedB;
     }
     function serialize(cmpts, opts) {
       const component = {
@@ -30966,19 +31193,22 @@ var require_fast_uri = __commonJS({
       };
       const options = Object.assign({}, opts);
       const uriTokens = [];
+      if (component.scheme) {
+        component.scheme = decodeValidScheme(component.scheme);
+      }
       const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
       if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
+      const hasAuthority = component.userinfo !== void 0 || component.host !== void 0 || component.port !== void 0;
+      const pathNoScheme = !options.skipEscape && component.scheme === void 0 && !hasAuthority;
       if (component.path !== void 0) {
         if (!options.skipEscape) {
-          component.path = escapePreservingEscapes(component.path);
-          if (component.scheme !== void 0) {
-            component.path = component.path.split("%3A").join(":");
-          }
+          component.path = serializePathEncoding(component.path, pathNoScheme);
         } else {
           component.path = normalizePercentEncoding(component.path);
         }
       }
       if (options.reference !== "suffix" && component.scheme) {
+        component.scheme = decodeValidScheme(component.scheme);
         uriTokens.push(component.scheme, ":");
       }
       const authority = recomposeAuthority(component);
@@ -30996,16 +31226,19 @@ var require_fast_uri = __commonJS({
         if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
           s = removeDotSegments(s);
         }
+        if (pathNoScheme) {
+          s = serializePathEncoding(s, true);
+        }
         if (authority === void 0 && s[0] === "/" && s[1] === "/") {
           s = "/%2F" + s.slice(2);
         }
         uriTokens.push(s);
       }
       if (component.query !== void 0) {
-        uriTokens.push("?", component.query);
+        uriTokens.push("?", encodeQuery(component.query));
       }
       if (component.fragment !== void 0) {
-        uriTokens.push("#", component.fragment);
+        uriTokens.push("#", encodeFragment(component.fragment));
       }
       return uriTokens.join("");
     }
@@ -31021,6 +31254,35 @@ var require_fast_uri = __commonJS({
       }
       return void 0;
     }
+    function hasMalformedPercentEncoding(component) {
+      if (component === void 0) return false;
+      let percent = component.indexOf("%");
+      while (percent !== -1) {
+        if (percent + 2 >= component.length || !/^[\da-f]{2}$/iu.test(component.slice(percent + 1, percent + 3))) {
+          return true;
+        }
+        percent = component.indexOf("%", percent + 3);
+      }
+      return false;
+    }
+    function isIPLiteral(host) {
+      return host[0] === "[" && host[host.length - 1] === "]";
+    }
+    function hasMalformedComponentPercentEncoding(matches) {
+      const host = matches[4];
+      return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
+    }
+    function canonicalizeHost(parsed, options, schemeHandler, isIP2) {
+      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP2 === false && nonSimpleDomain(parsed.host)) {
+        try {
+          parsed.host = new URL("http://" + parsed.host).hostname;
+        } catch (e) {
+          parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
+          return true;
+        }
+      }
+      return false;
+    }
     function parseWithStatus(uri, opts) {
       const options = Object.assign({}, opts);
       const parsed = {
@@ -31033,7 +31295,12 @@ var require_fast_uri = __commonJS({
         fragment: void 0
       };
       let malformedAuthorityOrPort = false;
-      let isIP = false;
+      let malformedPercentEncoding = false;
+      let malformedSchemeSpecific = false;
+      let malformedHost = false;
+      let malformedIPLiteral = false;
+      let malformedScheme = false;
+      let isIP2 = false;
       if (options.reference === "suffix") {
         if (options.scheme) {
           uri = options.scheme + ":" + uri;
@@ -31069,6 +31336,19 @@ var require_fast_uri = __commonJS({
         parsed.path = matches[6] || "";
         parsed.query = matches[7];
         parsed.fragment = matches[8];
+        if (parsed.scheme !== void 0) {
+          const decodedScheme = unescape(parsed.scheme);
+          if (VALID_SCHEME.test(decodedScheme)) {
+            parsed.scheme = decodedScheme.toLowerCase();
+          } else {
+            parsed.error = parsed.error || MALFORMED_SCHEME_ERROR;
+            malformedScheme = true;
+          }
+        }
+        malformedPercentEncoding = hasMalformedComponentPercentEncoding(matches);
+        if (malformedPercentEncoding) {
+          parsed.error = parsed.error || "URI contains malformed percent-encoding.";
+        }
         if (isNaN(parsed.port)) {
           parsed.port = matches[5];
         }
@@ -31080,11 +31360,18 @@ var require_fast_uri = __commonJS({
         if (parsed.host) {
           const ipv4result = isIPv4(parsed.host);
           if (ipv4result === false) {
+            const bracketedIPLiteral = isIPLiteral(parsed.host);
+            const hasIPLiteralBracket = parsed.host.indexOf("[") !== -1 || parsed.host.indexOf("]") !== -1;
             const ipv6result = normalizeIPv6(parsed.host);
-            parsed.host = ipv6result.host.toLowerCase();
-            isIP = ipv6result.isIPV6;
+            isIP2 = ipv6result.isIPV6 || ipv6result.isIPVFuture === true;
+            malformedIPLiteral = hasIPLiteralBracket && (!bracketedIPLiteral || ipv6result.error === true);
+            parsed.host = isIP2 ? ipv6result.host : ipv6result.host.toLowerCase();
+            if (malformedIPLiteral) {
+              parsed.error = parsed.error || "URI host is malformed.";
+              malformedAuthorityOrPort = true;
+            }
           } else {
-            isIP = true;
+            isIP2 = true;
           }
         }
         if (parsed.scheme === void 0 && parsed.userinfo === void 0 && parsed.host === void 0 && parsed.port === void 0 && parsed.query === void 0 && !parsed.path) {
@@ -31100,42 +31387,36 @@ var require_fast_uri = __commonJS({
           parsed.error = parsed.error || "URI is not a " + options.reference + " reference.";
         }
         const schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
-        if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport)) {
-          if (parsed.host && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
-            try {
-              parsed.host = new URL("http://" + parsed.host).hostname;
-            } catch (e) {
-              parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
-            }
-          }
+        if (!malformedIPLiteral) {
+          malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP2);
         }
         if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (uri.indexOf("%") !== -1) {
-            if (parsed.scheme !== void 0) {
-              parsed.scheme = unescape(parsed.scheme);
-            }
-            if (parsed.host !== void 0) {
-              parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP);
+            if (parsed.host !== void 0 && !malformedIPLiteral) {
+              const host = isIP2 ? parsed.host : normalizePercentEncoding(parsed.host, true);
+              parsed.host = reescapeHostDelimiters(host, isIP2);
             }
           }
           if (parsed.path) {
             parsed.path = normalizePathEncoding(parsed.path);
           }
+          if (parsed.query) {
+            parsed.query = normalizeQueryFragmentEncoding(parsed.query);
+          }
           if (parsed.fragment) {
-            try {
-              parsed.fragment = encodeURI(decodeURIComponent(parsed.fragment));
-            } catch {
-              parsed.error = parsed.error || "URI malformed";
-            }
+            parsed.fragment = normalizeQueryFragmentEncoding(parsed.fragment);
           }
         }
         if (schemeHandler && schemeHandler.parse) {
           schemeHandler.parse(parsed, options);
+          if (schemeHandler === SCHEMES.urn && parsed.nid === void 0) {
+            malformedSchemeSpecific = true;
+          }
         }
       } else {
         parsed.error = parsed.error || "URI can not be parsed.";
       }
-      return { parsed, malformedAuthorityOrPort };
+      return { parsed, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme };
     }
     function parse(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
@@ -31144,20 +31425,28 @@ var require_fast_uri = __commonJS({
       return normalizeStringWithStatus(uri, opts).normalized;
     }
     function normalizeStringWithStatus(uri, opts) {
-      const { parsed, malformedAuthorityOrPort } = parseWithStatus(uri, opts);
+      const { parsed, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme } = parseWithStatus(uri, opts);
       return {
-        normalized: malformedAuthorityOrPort ? uri : serialize(parsed, opts),
-        malformedAuthorityOrPort
+        normalized: malformedAuthorityOrPort || malformedPercentEncoding || malformedSchemeSpecific || malformedHost || malformedScheme ? uri : serialize(parsed, opts),
+        malformedAuthorityOrPort,
+        malformedPercentEncoding,
+        malformedSchemeSpecific,
+        malformedHost,
+        malformedScheme
       };
     }
     function normalizeComparableURI(uri, opts) {
-      if (typeof uri === "string") {
-        const { normalized, malformedAuthorityOrPort } = normalizeStringWithStatus(uri, opts);
-        return malformedAuthorityOrPort ? void 0 : normalized;
+      if (typeof uri !== "string" && typeof uri !== "object") {
+        return void 0;
       }
-      if (typeof uri === "object") {
-        return serialize(uri, opts);
+      let value;
+      try {
+        value = typeof uri === "string" ? uri : serialize(uri, opts);
+      } catch {
+        return void 0;
       }
+      const { normalized, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme } = normalizeStringWithStatus(value, opts);
+      return malformedAuthorityOrPort || malformedPercentEncoding || malformedSchemeSpecific || malformedHost || malformedScheme ? void 0 : normalized;
     }
     var fastUri = {
       SCHEMES,
@@ -35078,7 +35367,7 @@ var require_mcp_server = __commonJS({
       "agoragentic_quote_service",
       "agoragentic_preview_x402"
     ]);
-    var TOOL_CAPABILITY_KEYS = Object.freeze([
+    var TOOL_CAPABILITY_KEYS2 = Object.freeze([
       "network_access",
       "filesystem_read",
       "filesystem_write",
@@ -35092,7 +35381,7 @@ var require_mcp_server = __commonJS({
       "external_side_effect",
       "unknown_or_unclassified"
     ]);
-    var IRREVERSIBLE_TOOL_CAPABILITIES = /* @__PURE__ */ new Set([
+    var IRREVERSIBLE_TOOL_CAPABILITIES2 = /* @__PURE__ */ new Set([
       "network_access",
       "filesystem_write",
       "credential_access",
@@ -35104,7 +35393,7 @@ var require_mcp_server = __commonJS({
       "trust_or_reputation_mutation",
       "external_side_effect"
     ]);
-    var TOOL_ANNOTATION_KEYS = Object.freeze([
+    var TOOL_ANNOTATION_KEYS2 = Object.freeze([
       "readOnlyHint",
       "destructiveHint",
       "idempotentHint",
@@ -35684,7 +35973,7 @@ var require_mcp_server = __commonJS({
         }
         for (const [key, child] of Object.entries(current)) {
           const parentKey = pathTokens.at(-1);
-          const booleanRiskCapabilityDeclaration = TOOL_CAPABILITY_KEYS.includes(key) && typeof child === "boolean" && ["capabilities", "agoragentic/risk-capabilities"].includes(parentKey);
+          const booleanRiskCapabilityDeclaration = TOOL_CAPABILITY_KEYS2.includes(key) && typeof child === "boolean" && ["capabilities", "agoragentic/risk-capabilities"].includes(parentKey);
           if (containsCredentialMaterial(key) && !booleanRiskCapabilityDeclaration) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
@@ -35814,10 +36103,12 @@ var require_mcp_server = __commonJS({
         }
       )));
     }
-    async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+    function startHostInvocation(callback, timeoutMs, operation, ...args) {
       const controller = new AbortController();
       const deadlineAt = new Date(Date.now() + timeoutMs).toISOString();
       let timer;
+      let removeAbortListener = () => {
+      };
       const timeout = new Promise((_resolve, reject) => {
         timer = setTimeout(() => {
           const error = new McpEnforcementError(
@@ -35828,20 +36119,39 @@ var require_mcp_server = __commonJS({
           reject(error);
         }, timeoutMs);
       });
+      const aborted = new Promise((_resolve, reject) => {
+        const onAbort = () => {
+          reject(controller.signal.reason ?? new McpEnforcementError(
+            "MCP_ENFORCEMENT_HOST_ABORTED",
+            `MCP enforcement host ${operation} was aborted`
+          ));
+        };
+        controller.signal.addEventListener("abort", onAbort, { once: true });
+        removeAbortListener = () => controller.signal.removeEventListener("abort", onAbort);
+      });
       const context = Object.freeze({
         signal: controller.signal,
         timeout_ms: timeoutMs,
         deadline_at: deadlineAt,
         operation
       });
-      try {
-        return await Promise.race([
-          Promise.resolve().then(() => callback(...args, context)),
-          timeout
-        ]);
-      } finally {
+      const pending = Promise.race([
+        Promise.resolve().then(() => callback(...args, context)),
+        timeout,
+        aborted
+      ]).finally(() => {
         clearTimeout(timer);
-      }
+        removeAbortListener();
+      });
+      return Object.freeze({
+        promise: pending,
+        abort(reason2) {
+          if (!controller.signal.aborted) controller.abort(reason2);
+        }
+      });
+    }
+    async function invokeHostWithDeadline(callback, timeoutMs, operation, ...args) {
+      return startHostInvocation(callback, timeoutMs, operation, ...args).promise;
     }
     async function openHostSessionWithDeadline(adapter, openRequest) {
       let late = false;
@@ -35896,9 +36206,9 @@ var require_mcp_server = __commonJS({
       }
       const raw = deepFreezeJson(cloneBoundedJson(value, "remote tool annotations"));
       const keys = Object.keys(raw);
-      const complete = TOOL_ANNOTATION_KEYS.every(
+      const complete = TOOL_ANNOTATION_KEYS2.every(
         (key) => Object.hasOwn(raw, key) && typeof raw[key] === "boolean"
-      ) && keys.every((key) => TOOL_ANNOTATION_KEYS.includes(key));
+      ) && keys.every((key) => TOOL_ANNOTATION_KEYS2.includes(key));
       return Object.freeze({
         raw,
         complete,
@@ -35920,10 +36230,10 @@ var require_mcp_server = __commonJS({
       const raw = direct ?? metadata;
       const plain = raw && typeof raw === "object" && !Array.isArray(raw);
       const rawKeys = plain ? Object.keys(raw) : [];
-      const complete = plain && TOOL_CAPABILITY_KEYS.every(
+      const complete = plain && TOOL_CAPABILITY_KEYS2.every(
         (key) => Object.hasOwn(raw, key) && typeof raw[key] === "boolean"
-      ) && rawKeys.every((key) => TOOL_CAPABILITY_KEYS.includes(key));
-      const capabilities = Object.fromEntries(TOOL_CAPABILITY_KEYS.map((key) => [
+      ) && rawKeys.every((key) => TOOL_CAPABILITY_KEYS2.includes(key));
+      const capabilities = Object.fromEntries(TOOL_CAPABILITY_KEYS2.map((key) => [
         key,
         key === "unknown_or_unclassified" ? !complete || raw?.[key] === true : complete && raw[key] === true
       ]));
@@ -35937,8 +36247,8 @@ var require_mcp_server = __commonJS({
       }
       const annotations = normalizeToolAnnotations(descriptor.annotations);
       const capabilityRecord = normalizeToolCapabilities(descriptor);
-      const irreversibleCapability = TOOL_CAPABILITY_KEYS.some(
-        (key) => IRREVERSIBLE_TOOL_CAPABILITIES.has(key) && capabilityRecord.capabilities[key] === true
+      const irreversibleCapability = TOOL_CAPABILITY_KEYS2.some(
+        (key) => IRREVERSIBLE_TOOL_CAPABILITIES2.has(key) && capabilityRecord.capabilities[key] === true
       );
       const unknownEffect = !annotations.complete || !capabilityRecord.complete || capabilityRecord.capabilities.unknown_or_unclassified === true;
       const effectStatus = annotations.destructiveHint || irreversibleCapability ? "irreversible" : unknownEffect || annotations.readOnlyHint !== true ? "unknown_effectfulness" : "explicit_read_only";
@@ -35961,11 +36271,26 @@ var require_mcp_server = __commonJS({
     function transportConstraints() {
       return Object.freeze({
         direct_network_permitted: false,
+        https_required: true,
+        address_scope: "public_unicast_only",
+        dns_resolution: "child_before_each_connection_attempt",
+        address_pinning_required: true,
+        proxy_environment_allowed: false,
         redirects: "error",
+        max_redirects: 0,
+        transport_evidence_required: true,
         response_acceptance: "clean_import_only",
         fallback_on_protocol_error: false,
         credential_material_in_child: false
       });
+    }
+    function stripOpaqueMcpMetadata(params, field) {
+      const cloned = cloneBoundedJson(params, field);
+      assertPlainRecord(cloned, field);
+      if (!Object.hasOwn(cloned, "_meta")) return deepFreezeJson(cloned);
+      assertPlainRecord(cloned._meta, `${field}._meta`);
+      const { _meta: ignoredOpaqueMetadata, ...withoutMetadata } = cloned;
+      return deepFreezeJson(withoutMetadata);
     }
     function buildEnforcementRequest({
       schema,
@@ -36080,6 +36405,9 @@ var require_mcp_server = __commonJS({
         timeouts
       }));
       return boundary;
+    }
+    function isMcpEnforcementBoundary(value) {
+      return enforcementBoundaryAdapters.has(value);
     }
     var ACP_ENFORCEMENT_NOTE = " Network execution is fail-closed unless an embedding host supplies a separately qualified enforcement implementation.";
     var ACP_TOOLS = [
@@ -36651,6 +36979,7 @@ var require_mcp_server = __commonJS({
         hostClose: hostSession.close,
         closed: false,
         closePromise: null,
+        activeRequests: /* @__PURE__ */ new Set(),
         remoteToolFirstPage: null,
         remoteToolDescriptors: null,
         remoteToolDirectoryHash: null,
@@ -36662,11 +36991,21 @@ var require_mcp_server = __commonJS({
         if (!current) return Promise.resolve();
         if (current.closePromise) return current.closePromise;
         current.closed = true;
-        current.closePromise = invokeHostWithDeadline(
+        const closedError = new McpEnforcementError(
+          "MCP_ENFORCED_SESSION_CLOSED",
+          "The enforced MCP session closed while a host request was pending"
+        );
+        const activeRequests = [...current.activeRequests];
+        for (const activeRequest of activeRequests) activeRequest.abort(closedError);
+        const hostClose = invokeHostWithDeadline(
           current.hostClose,
           current.timeouts.close_ms,
           "close"
         );
+        current.closePromise = Promise.all([
+          Promise.allSettled(activeRequests.map((activeRequest) => activeRequest.promise)),
+          hostClose
+        ]).then(([, result]) => result);
         return current.closePromise;
       }
       async function request(phase, params = {}) {
@@ -36674,11 +37013,17 @@ var require_mcp_server = __commonJS({
         if (!current || current.closed) {
           throw new McpEnforcementError("MCP_ENFORCED_SESSION_CLOSED", "The enforced MCP session is closed");
         }
-        const safeParams = cloneBoundedJson(params, `${phase} params`);
+        const safeParams = stripOpaqueMcpMetadata(params, `${phase} params`);
         let toolDescriptor = null;
         if (phase === "tools/call") {
           const directory = current.remoteToolDirectory ?? createRemoteToolDirectory2(session);
           await directory.initialize();
+          if (enforcedSessionRecords.get(session) !== current || current.closed) {
+            throw new McpEnforcementError(
+              "MCP_ENFORCED_SESSION_CLOSED",
+              "The enforced MCP session closed before the host request could start"
+            );
+          }
           const toolName = safeParams.name;
           if (typeof toolName !== "string" || toolName.length < 1) {
             throw new TypeError("tools/call params.name is required");
@@ -36701,13 +37046,23 @@ var require_mcp_server = __commonJS({
           toolDescriptor,
           sessionBindingHash: current.session_binding_hash
         });
+        const invocation = startHostInvocation(
+          (requestDescriptor, context) => {
+            if (enforcedSessionRecords.get(session) !== current || current.closed) {
+              throw new McpEnforcementError(
+                "MCP_ENFORCED_SESSION_CLOSED",
+                "The enforced MCP session closed before the host request could start"
+              );
+            }
+            return current.hostRequest(requestDescriptor, context);
+          },
+          current.timeouts.request_ms,
+          phase,
+          phaseRequest
+        );
+        current.activeRequests.add(invocation);
         try {
-          const envelope = await invokeHostWithDeadline(
-            current.hostRequest,
-            current.timeouts.request_ms,
-            phase,
-            phaseRequest
-          );
+          const envelope = await invocation.promise;
           const afterRequest = enforcedSessionRecords.get(session);
           if (afterRequest !== current || current.closed) {
             throw new McpEnforcementError(
@@ -36728,6 +37083,8 @@ var require_mcp_server = __commonJS({
           } catch {
           }
           throw error;
+        } finally {
+          current.activeRequests.delete(invocation);
         }
       }
       session = Object.freeze({
@@ -37164,7 +37521,7 @@ var require_mcp_server = __commonJS({
         process.exit(1);
       });
     }
-    module.exports = {
+    module.exports = Object.freeze({
       MCP_ENFORCEMENT_SCHEMAS: MCP_ENFORCEMENT_SCHEMAS2,
       MCP_V2_PROTOCOL_VERSION: MCP_V2_PROTOCOL_VERSION2,
       buildFallbackToolList: buildFallbackToolList2,
@@ -37174,9 +37531,11 @@ var require_mcp_server = __commonJS({
       createMcpEnforcementBoundary: createMcpEnforcementBoundary2,
       createRemoteToolDirectory: createRemoteToolDirectory2,
       executeFallbackTool: executeFallbackTool2,
+      isMcpEnforcementBoundary,
       runAcpAdapter: runAcpAdapter2,
-      runMcpRelay: runMcpRelay2
-    };
+      runMcpRelay: runMcpRelay2,
+      stripOpaqueMcpMetadata
+    });
   }
 });
 
@@ -42252,12 +42611,57 @@ import { createHash } from "node:crypto";
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray(length) {
+  return detachArray(new Array(length));
+}
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function ownStringKeys(value) {
+  return detachArray(Object.keys(value));
+}
+function sortStrings(keys) {
+  for (let index = 1; index < keys.length; index += 1) {
+    const candidate = keys[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && keys[cursor] > candidate) {
+      keys[cursor + 1] = keys[cursor];
+      cursor -= 1;
+    }
+    keys[cursor + 1] = candidate;
+  }
+  return keys;
+}
 function sortForCanonicalization(value) {
-  if (Array.isArray(value)) return value.map(sortForCanonicalization);
+  if (Array.isArray(value)) {
+    const sorted2 = createDetachedArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex(sorted2, index, sortForCanonicalization(value[index]));
+    }
+    return sorted2;
+  }
   if (!isPlainObject(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value).sort().map((key) => [key, sortForCanonicalization(value[key])])
-  );
+  const sorted = /* @__PURE__ */ Object.create(null);
+  const keys = sortStrings(ownStringKeys(value));
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(sorted, key, {
+      value: sortForCanonicalization(value[key]),
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return sorted;
 }
 function rawCanonicalize(value) {
   return JSON.stringify(sortForCanonicalization(value));
@@ -42299,21 +42703,25 @@ function assertJsonValue(value, state, path8, depth) {
     if (Object.getOwnPropertySymbols(value).length > 0) {
       throw new TypeError(`Canonical JSON contains a symbol key at ${path8}`);
     }
-    for (const [key, descriptor] of Object.entries(descriptors)) {
+    const descriptorKeys = ownStringKeys(descriptors);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      const descriptor = descriptors[key];
       if (Array.isArray(value) && key === "length") continue;
       if (!descriptor.enumerable || descriptor.get || descriptor.set) {
         throw new TypeError(`Canonical JSON contains a hidden or accessor field at ${path8}.${key}`);
       }
     }
     if (Array.isArray(value)) {
-      if (Object.keys(value).length !== value.length) {
+      if (ownStringKeys(value).length !== value.length) {
         throw new TypeError(`Canonical JSON array is sparse or has extra fields at ${path8}`);
       }
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.hasOwn(value, index)) {
+        const descriptor = descriptors[String(index)];
+        if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
           throw new TypeError(`Canonical JSON array is sparse at ${path8}[${index}]`);
         }
-        assertJsonValue(value[index], state, `${path8}[${index}]`, depth + 1);
+        assertJsonValue(descriptor.value, state, `${path8}[${index}]`, depth + 1);
       }
       return;
     }
@@ -42321,8 +42729,9 @@ function assertJsonValue(value, state, path8, depth) {
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError(`Canonical JSON contains a non-plain object at ${path8}`);
     }
-    for (const [key, child] of Object.entries(value)) {
-      assertJsonValue(child, state, `${path8}.${key}`, depth + 1);
+    for (let index = 0; index < descriptorKeys.length; index += 1) {
+      const key = descriptorKeys[index];
+      assertJsonValue(descriptors[key].value, state, `${path8}.${key}`, depth + 1);
     }
   } finally {
     state.ancestors.delete(value);
@@ -42343,6 +42752,47 @@ function sha256Ref(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
 import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
+function detachArray2(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray2(length = 0) {
+  return detachArray2(new Array(length));
+}
+function defineArrayIndex2(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function arrayContains(value, expected) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === expected) return true;
+  }
+  return false;
+}
+function sortStrings2(value) {
+  for (let index = 1; index < value.length; index += 1) {
+    const candidate = value[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && value[cursor] > candidate) {
+      value[cursor + 1] = value[cursor];
+      cursor -= 1;
+    }
+    value[cursor + 1] = candidate;
+  }
+  return value;
+}
+function joinStrings(value, separator) {
+  let joined = "";
+  for (let index = 0; index < value.length; index += 1) {
+    if (index > 0) joined += separator;
+    joined += value[index];
+  }
+  return joined;
+}
 function isPlainObject2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -42354,12 +42804,25 @@ function assertPlainObject(value, field) {
 }
 function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
-  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unexpected.length > 0) {
-    if (unexpected.some((key) => containsSecretShapedText(key))) {
-      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+  const keys = detachArray2(Object.keys(value));
+  const unexpected = createDetachedArray2();
+  let unexpectedCount = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (!arrayContains(allowed, key)) {
+      defineArrayIndex2(unexpected, unexpectedCount, key);
+      unexpectedCount += 1;
     }
-    throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(", ")}`);
+  }
+  if (unexpected.length > 0) {
+    for (let index = 0; index < unexpected.length; index += 1) {
+      if (containsSecretShapedText(unexpected[index])) {
+        throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+      }
+    }
+    throw new TypeError(
+      `${field} contains unsupported fields: ${joinStrings(sortStrings2(unexpected), ", ")}`
+    );
   }
 }
 function requireString(value, field, { maxLength = 4096, pattern = null } = {}) {
@@ -42388,7 +42851,7 @@ var AGORAGENTIC_API_KEY_PATTERN = AGORAGENTIC_GENERATED_API_KEY_PATTERN;
 var EMBEDDED_CREDENTIAL_TOKEN_PATTERN = /(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))/;
 var BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
 var GENERIC_CREDENTIAL_TOKEN_PATTERN = /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
-var SECRET_SHAPED_TEXT = Object.freeze([
+var SECRET_SHAPED_TEXT = Object.freeze(detachArray2([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   BEARER_CREDENTIAL_PATTERN,
   AGORAGENTIC_API_KEY_PATTERN,
@@ -42396,9 +42859,13 @@ var SECRET_SHAPED_TEXT = Object.freeze([
   GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i
-]);
+]));
 function containsSecretShapedText(value) {
-  return typeof value === "string" && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+  if (typeof value !== "string") return false;
+  for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
+    if (SECRET_SHAPED_TEXT[index].test(value)) return true;
+  }
+  return false;
 }
 function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
@@ -44197,17 +44664,51 @@ function verifyLifecycle(lifecycle) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority.mjs
 import { randomBytes as randomBytes2, randomUUID as randomUUID2 } from "node:crypto";
+import { types as utilTypes } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority-migrator.mjs
 import { readFile } from "node:fs/promises";
-var MIGRATIONS = Object.freeze([
+function detachArray3(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function defineArrayIndex3(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function freezeDetachedArray(value) {
+  return Object.freeze(detachArray3(value));
+}
+function freezeDataGraph(value, seen = /* @__PURE__ */ new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray3(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, "value")) freezeDataGraph(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+function mapPublicArray(value, mapper) {
+  const mapped = new Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    defineArrayIndex3(mapped, index, mapper(value[index]));
+  }
+  return mapped;
+}
+var MIGRATIONS = freezeDetachedArray([
   Object.freeze({
     version: 1,
     url: new URL("../../migrations/001_distributed_authority.pg.sql", import.meta.url)
   })
 ]);
 var SAFE_STARTUP_OPTIONS = "-c synchronous_commit=on -c search_path=pg_catalog";
-var REQUIRED_RELATIONS = Object.freeze([
+var REQUIRED_RELATIONS = freezeDetachedArray([
   "authority_schema_migrations",
   "authority_meta",
   "parent_heads",
@@ -44238,32 +44739,32 @@ var EXPECTED_AUDIT_FUNCTION_BODY = [
 ].join("\n");
 var RUNTIME_TABLE_PRIVILEGES = Object.freeze({
   authority_schema_migrations: Object.freeze({
-    required: Object.freeze(["SELECT"]),
-    forbidden: Object.freeze(["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT"]),
+    forbidden: freezeDetachedArray(["INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   authority_meta: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   parent_heads: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   commit_approvals: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   execution_authorizations: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   operations: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT", "UPDATE"]),
-    forbidden: Object.freeze(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT", "UPDATE"]),
+    forbidden: freezeDetachedArray(["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   }),
   audit_events: Object.freeze({
-    required: Object.freeze(["SELECT", "INSERT"]),
-    forbidden: Object.freeze(["UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
+    required: freezeDetachedArray(["SELECT", "INSERT"]),
+    forbidden: freezeDetachedArray(["UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"])
   })
 });
 function configurationError(message, code) {
@@ -44420,7 +44921,7 @@ async function verifyPostgresAuthorityClientTransport(client, options = {}) {
     "PostgreSQL authority transport verification options"
   );
   const requireTls = requireBoolean(options.requireTls ?? false, "requireTls");
-  if (!requireTls) return deepFreeze({ tls_verified: false });
+  if (!requireTls) return freezeDataGraph({ tls_verified: false });
   let result;
   try {
     result = await client.query(
@@ -44457,7 +44958,7 @@ async function verifyPostgresAuthorityClientTransport(client, options = {}) {
       }
     );
   }
-  return deepFreeze({
+  return freezeDataGraph({
     tls_verified: true,
     protocol: typeof result.rows[0].version === "string" ? result.rows[0].version : null,
     cipher: typeof result.rows[0].cipher === "string" ? result.rows[0].cipher : null,
@@ -44494,14 +44995,19 @@ async function acquirePostgresAuthorityClient(pool, options = {}) {
 }
 async function loadMigrationPlan(schemaName) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
-  const plan = [];
-  for (const migration of MIGRATIONS) {
+  const plan = new Array(MIGRATIONS.length);
+  for (let index = 0; index < MIGRATIONS.length; index += 1) {
+    const migration = MIGRATIONS[index];
     const template = (await readFile(migration.url, "utf8")).replace(/\r\n?/g, "\n");
-    plan.push(Object.freeze({
-      version: migration.version,
-      migration_hash: sha256Ref(template),
-      sql: template.replaceAll("__RISK_FORK_SCHEMA__", quotedSchema)
-    }));
+    defineArrayIndex3(
+      plan,
+      index,
+      Object.freeze({
+        version: migration.version,
+        migration_hash: sha256Ref(template),
+        sql: template.replaceAll("__RISK_FORK_SCHEMA__", quotedSchema)
+      })
+    );
   }
   return Object.freeze(plan);
 }
@@ -44904,16 +45410,15 @@ async function verifyRequiredRelations(client, schemaName) {
       ORDER BY relation.relname, trigger_record.tgname`,
     [schemaName, REQUIRED_RELATIONS]
   );
-  const expectedTriggers = /* @__PURE__ */ new Map([
-    ["audit_events_no_delete", {
-      type: 11,
-      definition: "CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
-    }],
-    ["audit_events_no_update", {
-      type: 19,
-      definition: "CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
-    }]
-  ]);
+  const expectedTriggers = /* @__PURE__ */ new Map();
+  expectedTriggers.set("audit_events_no_delete", {
+    type: 11,
+    definition: "CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
+  });
+  expectedTriggers.set("audit_events_no_update", {
+    type: 19,
+    definition: "CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()"
+  });
   if (triggers.rowCount !== expectedTriggers.size) {
     throw migrationMismatch(
       "PostgreSQL authority audit triggers differ from the reviewed migration",
@@ -44922,7 +45427,8 @@ async function verifyRequiredRelations(client, schemaName) {
       { scope: "audit_triggers", observed_count: triggers.rowCount }
     );
   }
-  for (const row of triggers.rows) {
+  for (let index = 0; index < triggers.rows.length; index += 1) {
+    const row = triggers.rows[index];
     const expected = expectedTriggers.get(row.tgname);
     const enabled = row.tgenabled === "O" || row.tgenabled === "A";
     if (!expected || row.relation_name !== "audit_events" || !enabled || Number.parseInt(row.tgtype, 10) !== expected.type || row.function_schema !== schemaName || row.function_name !== "reject_audit_mutation" || row.security_definer !== false || row.volatility !== "v" || row.function_kind !== "f" || Number.parseInt(row.argument_count, 10) !== 0 || row.return_type !== "trigger" || row.language_name !== "plpgsql" || String(row.function_body).replace(/\r\n?/g, "\n").trim() !== EXPECTED_AUDIT_FUNCTION_BODY || row.trigger_definition !== expected.definition) {
@@ -45025,9 +45531,13 @@ async function verifyRuntimePrivileges(client, schemaName) {
       { scope: "schema" }
     );
   }
-  for (const [relationName, policy] of Object.entries(RUNTIME_TABLE_PRIVILEGES)) {
+  const relationNames = detachArray3(Object.keys(RUNTIME_TABLE_PRIVILEGES));
+  for (let relationIndex = 0; relationIndex < relationNames.length; relationIndex += 1) {
+    const relationName = relationNames[relationIndex];
+    const policy = RUNTIME_TABLE_PRIVILEGES[relationName];
     const relation = tableName(schemaName, relationName);
-    for (const privilege of policy.required) {
+    for (let index = 0; index < policy.required.length; index += 1) {
+      const privilege = policy.required[index];
       if (!await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role is missing a required table privilege",
@@ -45037,7 +45547,8 @@ async function verifyRuntimePrivileges(client, schemaName) {
         );
       }
     }
-    for (const privilege of policy.forbidden) {
+    for (let index = 0; index < policy.forbidden.length; index += 1) {
+      const privilege = policy.forbidden[index];
       if (await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role has a forbidden table privilege",
@@ -45046,7 +45557,7 @@ async function verifyRuntimePrivileges(client, schemaName) {
           { relation: relationName, privilege, expected: false }
         );
       }
-      if (["INSERT", "UPDATE", "REFERENCES"].includes(privilege) && await hasAnyColumnPrivilege(client, relation, privilege)) {
+      if ((privilege === "INSERT" || privilege === "UPDATE" || privilege === "REFERENCES") && await hasAnyColumnPrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           "PostgreSQL runtime role has a forbidden column privilege",
           "DISTRIBUTED_AUTHORITY_RUNTIME_PRIVILEGES_INVALID",
@@ -45094,10 +45605,10 @@ async function verifyPostgresDistributedAuthoritySchema(client, options = {}) {
   await verifyMigrationSet(client, schemaName, quotedSchema, plan);
   await verifyRequiredRelations(client, schemaName);
   if (verifyPrivileges) await verifyRuntimePrivileges(client, schemaName);
-  return deepFreeze({
+  return freezeDataGraph({
     schema_name: schemaName,
-    migration_versions: plan.map((migration) => migration.version),
-    migration_hashes: plan.map((migration) => migration.migration_hash),
+    migration_versions: mapPublicArray(plan, (migration) => migration.version),
+    migration_hashes: mapPublicArray(plan, (migration) => migration.migration_hash),
     runtime_privileges_verified: verifyPrivileges
   });
 }
@@ -45247,8 +45758,97 @@ async function migratePostgresDistributedAuthority(options = {}) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/postgres-authority.mjs
 var POSTGRES_AUTHORITIES = /* @__PURE__ */ new WeakMap();
 var SERIALIZATION_FAILURES = /* @__PURE__ */ new Set(["40001", "40P01"]);
+function detachArray4(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+function createDetachedArray3(length) {
+  return detachArray4(new Array(length));
+}
+function createPublicArray(length) {
+  return new Array(length);
+}
+function defineArrayIndex4(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  });
+}
+function freezeDetachedArray2(value) {
+  return Object.freeze(detachArray4(value));
+}
+function ownStringKeys2(value) {
+  return detachArray4(Object.keys(value));
+}
+function freezeDataGraph2(value, seen = /* @__PURE__ */ new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray4(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, "value")) freezeDataGraph2(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+function cloneAuditJson(value) {
+  if (!value || typeof value !== "object") return value;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Array.isArray(value)) {
+    const clone2 = createPublicArray(value.length);
+    for (let index = 0; index < value.length; index += 1) {
+      defineArrayIndex4(clone2, index, cloneAuditJson(descriptors[String(index)].value));
+    }
+    return clone2;
+  }
+  const clone = {};
+  const keys = ownStringKeys2(descriptors);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    Object.defineProperty(clone, key, {
+      value: cloneAuditJson(descriptors[key].value),
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return clone;
+}
+var POSTGRES_AUDIT_PAGE_KEYS = freezeDetachedArray2([
+  "authority_id",
+  "after_sequence",
+  "limit",
+  "audit_sequence",
+  "audit_head_hash",
+  "predecessor_hash",
+  "rows"
+]);
+var POSTGRES_AUDIT_ROW_KEYS = freezeDetachedArray2([
+  "authority_id",
+  "sequence",
+  "event_type",
+  "operation_ref",
+  "parent_ref",
+  "authorization_id",
+  "observed_at",
+  "previous_event_hash",
+  "payload",
+  "payload_hash",
+  "event_hash"
+]);
+var MAX_AUDIT_PAYLOAD_GRAPH_NODES = 1e5;
 function asIso(value, label) {
-  return requireIsoDate(value instanceof Date ? value : String(value), label);
+  if (typeof value === "string") return requireIsoDate(value, label);
+  if (value && typeof value === "object") {
+    try {
+      const timestamp = Date.prototype.getTime.call(value);
+      if (Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+    } catch {
+    }
+  }
+  throw new TypeError(`${label} must be an ISO 8601 date-time`);
 }
 function asVersion(value, label = "operation version") {
   const normalized = typeof value === "number" ? value : Number.parseInt(value, 10);
@@ -45258,7 +45858,22 @@ function asVersion(value, label = "operation version") {
   return normalized;
 }
 function asStatusCount(value, label) {
-  const text = typeof value === "bigint" ? value.toString() : String(value);
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return value;
+  }
+  if (typeof value === "bigint") {
+    if (value < 0n || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new TypeError(`${label} must be a non-negative safe integer`);
+    }
+    return Number(value);
+  }
+  if (typeof value !== "string") {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+  const text = value;
   if (!/^(?:0|[1-9][0-9]*)$/.test(text)) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
@@ -45267,6 +45882,237 @@ function asStatusCount(value, label) {
     throw new TypeError(`${label} must be a non-negative safe integer`);
   }
   return normalized;
+}
+function readEnumerableDataObject(value, requiredKeys, label, { allowExtra = false } = {}) {
+  if (value && typeof value === "object" && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  assertPlainObject(value, label);
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const observedKeys = ownStringKeys2(descriptors);
+  for (let index = 0; index < observedKeys.length; index += 1) {
+    const descriptor = descriptors[observedKeys[index]];
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} contains a hidden or accessor-backed field`);
+    }
+  }
+  let missingRequiredKey = false;
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    if (!Object.hasOwn(descriptors, requiredKeys[index])) {
+      missingRequiredKey = true;
+      break;
+    }
+  }
+  if (!allowExtra && observedKeys.length !== requiredKeys.length || missingRequiredKey) {
+    throw new TypeError(`${label} must contain the required data fields`);
+  }
+  const record = /* @__PURE__ */ Object.create(null);
+  for (let index = 0; index < requiredKeys.length; index += 1) {
+    const key = requiredKeys[index];
+    Object.defineProperty(record, key, {
+      value: descriptors[key].value,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
+  return record;
+}
+function readDenseDataArray(value, label) {
+  if (value && typeof value === "object" && utilTypes.isProxy(value)) {
+    throw new TypeError(`${label} must not be a Proxy`);
+  }
+  const prototype = value && typeof value === "object" ? Object.getPrototypeOf(value) : null;
+  if (!Array.isArray(value) || prototype !== Array.prototype && prototype !== null) {
+    throw new TypeError(`${label} must be an ordinary array`);
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError(`${label} contains a symbol key`);
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const lengthDescriptor = descriptors.length;
+  const length = lengthDescriptor?.value;
+  if (!lengthDescriptor || lengthDescriptor.get || lengthDescriptor.set || !Number.isSafeInteger(length) || length < 0 || ownStringKeys2(descriptors).length !== length + 1) {
+    throw new TypeError(`${label} must be a dense data array`);
+  }
+  const rows = createDetachedArray3(length);
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(`${label} must be a dense data array`);
+    }
+    defineArrayIndex4(rows, index, descriptor.value);
+  }
+  return rows;
+}
+function mapDenseDataArray(value, label, mapper) {
+  const source = readDenseDataArray(value, label);
+  const mapped = createPublicArray(source.length);
+  for (let index = 0; index < source.length; index += 1) {
+    defineArrayIndex4(mapped, index, mapper(source[index]));
+  }
+  return mapped;
+}
+function assertProxyFreeAuditPayload(value) {
+  const pending = createDetachedArray3(1);
+  defineArrayIndex4(pending, 0, value);
+  let pendingCount = 1;
+  const seen = /* @__PURE__ */ new WeakSet();
+  let nodes = 0;
+  while (pendingCount > 0) {
+    pendingCount -= 1;
+    const current = pending[pendingCount];
+    delete pending[pendingCount];
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    if (utilTypes.isProxy(current)) {
+      throw new TypeError("PostgreSQL authority audit payload must not contain a Proxy");
+    }
+    seen.add(current);
+    nodes += 1;
+    if (nodes > MAX_AUDIT_PAYLOAD_GRAPH_NODES) {
+      throw new TypeError("PostgreSQL authority audit payload graph is too large");
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(current);
+    const keys = detachArray4(Reflect.ownKeys(descriptors));
+    for (let index = 0; index < keys.length; index += 1) {
+      const descriptor = descriptors[keys[index]];
+      if (Object.hasOwn(descriptor, "value")) {
+        defineArrayIndex4(pending, pendingCount, descriptor.value);
+        pendingCount += 1;
+      }
+    }
+  }
+  return value;
+}
+function auditChainInvalid(sequence = null) {
+  return distributedAuthorityError(
+    "Distributed authority audit chain verification failed",
+    "DISTRIBUTED_AUDIT_CHAIN_INVALID",
+    { sequence }
+  );
+}
+function normalizeAuditCheckpoint(sequenceValue, hashValue) {
+  let sequence;
+  let eventHash;
+  try {
+    sequence = asStatusCount(sequenceValue, "PostgreSQL authority audit sequence");
+    eventHash = hashValue == null ? null : requireSha256Ref(hashValue, "PostgreSQL authority audit head hash");
+  } catch {
+    throw auditChainInvalid();
+  }
+  if (sequence === 0 !== (eventHash === null)) throw auditChainInvalid(sequence);
+  return { sequence, event_hash: eventHash };
+}
+function verifyPostgresAuthorityAuditPage(input = {}) {
+  const page = readEnumerableDataObject(
+    input,
+    POSTGRES_AUDIT_PAGE_KEYS,
+    "PostgreSQL authority audit page"
+  );
+  const authorityId = requireOpaqueRef(page.authority_id, "audit authority_id");
+  const after = page.after_sequence;
+  const limit = page.limit;
+  const rows = readDenseDataArray(page.rows, "PostgreSQL authority audit rows");
+  if (!Number.isSafeInteger(after) || after < 0 || Object.is(after, -0) || !Number.isSafeInteger(limit) || limit < 1 || limit > 1e4 || rows.length > limit) {
+    throw new TypeError("PostgreSQL authority audit page bounds are invalid");
+  }
+  const checkpoint = normalizeAuditCheckpoint(page.audit_sequence, page.audit_head_hash);
+  if (after > checkpoint.sequence) throw auditChainInvalid(after);
+  let previous = null;
+  try {
+    previous = page.predecessor_hash == null ? null : requireSha256Ref(page.predecessor_hash, "audit predecessor hash");
+  } catch {
+    throw auditChainInvalid(after);
+  }
+  if (after === 0 && previous !== null || after > 0 && previous === null) {
+    throw auditChainInvalid(after);
+  }
+  if (after === checkpoint.sequence && !(previous === null && checkpoint.event_hash === null || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(after);
+  }
+  const events = createPublicArray(rows.length);
+  let expectedSequence = after + 1;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const rawRow = rows[rowIndex];
+    let observedSequence = null;
+    try {
+      const row = readEnumerableDataObject(
+        rawRow,
+        POSTGRES_AUDIT_ROW_KEYS,
+        "PostgreSQL authority audit row",
+        { allowExtra: true }
+      );
+      const sequence = asStatusCount(row.sequence, "audit sequence");
+      observedSequence = sequence;
+      const rowAuthorityId = requireOpaqueRef(row.authority_id, "audit authority_id");
+      const observedAt = asIso(row.observed_at, "audit observed_at");
+      const eventType = requireOpaqueRef(row.event_type, "audit event_type");
+      const operationRef = row.operation_ref == null ? null : requireOpaqueRef(row.operation_ref, "audit operation_ref");
+      const parentRef = row.parent_ref == null ? null : requireOpaqueRef(row.parent_ref, "audit parent_ref");
+      const authorizationId = row.authorization_id == null ? null : requireOpaqueRef(row.authorization_id, "audit authorization_id");
+      const rowPreviousHash = row.previous_event_hash == null ? null : requireSha256Ref(row.previous_event_hash, "audit previous_event_hash");
+      const storedPayloadHash = requireSha256Ref(row.payload_hash, "audit payload_hash");
+      const storedEventHash = requireSha256Ref(row.event_hash, "audit event_hash");
+      const rawPayload = assertProxyFreeAuditPayload(row.payload);
+      const payloadHash = sha256Ref(rawPayload);
+      const payload = cloneAuditJson(rawPayload);
+      const body = {
+        schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
+        authority_id: authorityId,
+        sequence,
+        event_type: eventType,
+        operation_ref: operationRef,
+        parent_ref: parentRef,
+        authorization_id: authorizationId,
+        observed_at: observedAt,
+        previous_event_hash: rowPreviousHash,
+        payload_hash: payloadHash
+      };
+      const previousMatches = previous === null ? rowPreviousHash === null : safeEqual(rowPreviousHash, previous);
+      if (sequence !== expectedSequence || sequence > checkpoint.sequence || rowAuthorityId !== authorityId || !safeEqual(storedPayloadHash, payloadHash) || !previousMatches || !safeEqual(storedEventHash, sha256Ref(body))) {
+        throw auditChainInvalid(sequence);
+      }
+      defineArrayIndex4(
+        events,
+        rowIndex,
+        freezeDataGraph2({ ...body, payload, event_hash: storedEventHash })
+      );
+      previous = storedEventHash;
+      expectedSequence += 1;
+    } catch (error) {
+      if (error?.code === "DISTRIBUTED_AUDIT_CHAIN_INVALID") throw error;
+      throw auditChainInvalid(observedSequence);
+    }
+  }
+  const verifiedThroughSequence = events.length === 0 ? after : events[events.length - 1].sequence;
+  if (after < checkpoint.sequence && events.length === 0) {
+    throw auditChainInvalid(after + 1);
+  }
+  if (events.length < limit && verifiedThroughSequence < checkpoint.sequence) {
+    throw auditChainInvalid(verifiedThroughSequence + 1);
+  }
+  const segmentReachesAuthorityHead = verifiedThroughSequence === checkpoint.sequence;
+  if (segmentReachesAuthorityHead && !(previous === null && checkpoint.event_hash === null || safeEqual(previous, checkpoint.event_hash))) {
+    throw auditChainInvalid(checkpoint.sequence);
+  }
+  const startsAtGenesis = after === 0;
+  const fullChainVerified = startsAtGenesis && segmentReachesAuthorityHead;
+  return freezeDataGraph2({
+    schema: "agoragentic.risk-fork.postgres-authority-audit-page.v1",
+    version: 1,
+    events,
+    next_sequence: segmentReachesAuthorityHead ? null : verifiedThroughSequence,
+    segment_verified: true,
+    segment_starts_at_genesis: startsAtGenesis,
+    segment_reaches_authority_head: segmentReachesAuthorityHead,
+    verified: fullChainVerified,
+    verified_through_sequence: verifiedThroughSequence,
+    authority_head: checkpoint,
+    authority_head_verified: fullChainVerified
+  });
 }
 function optionalIso(value, label) {
   return value == null ? null : asIso(value, label);
@@ -45412,13 +46258,16 @@ async function appendAudit(client, state, event) {
     [state.authorityId]
   );
   if (meta.rowCount !== 1) throw new Error("PostgreSQL authority metadata is absent");
-  const previousSequence = Number.parseInt(meta.rows[0].audit_sequence, 10);
-  const sequence = previousSequence + 1;
+  const checkpoint = normalizeAuditCheckpoint(
+    meta.rows[0].audit_sequence,
+    meta.rows[0].audit_head_hash
+  );
+  const sequence = checkpoint.sequence + 1;
   if (!Number.isSafeInteger(sequence)) throw new Error("Authority audit sequence overflow");
   const observedAt = event.observed_at ?? await databaseNow(client);
   const payload = cloneJson(event.payload ?? {});
   const payloadHash = sha256Ref(payload);
-  const previousEventHash = meta.rows[0].audit_head_hash ?? null;
+  const previousEventHash = checkpoint.event_hash;
   const eventBody = {
     schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
     authority_id: state.authorityId,
@@ -46676,7 +47525,7 @@ async function getAuthorityStatus(state) {
       requireTls: state.requireTls,
       verifiedClients: state.verifiedClients
     });
-    await client.query("BEGIN READ ONLY");
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     transactionOpen = true;
     const statusTimeoutMs = Math.min(state.statementTimeoutMs, 5e3);
     await client.query(`SET LOCAL statement_timeout = ${statusTimeoutMs}`);
@@ -46688,7 +47537,7 @@ async function getAuthorityStatus(state) {
       `WITH status_clock AS (
          SELECT clock_timestamp() AS observed_at
        ), authority AS (
-         SELECT schema_version
+         SELECT schema_version, audit_sequence, audit_head_hash
            FROM ${table(state, "authority_meta")}
           WHERE authority_id = $1
        ), unresolved AS (
@@ -46701,6 +47550,8 @@ async function getAuthorityStatus(state) {
             AND status IN ('prepared', 'effect_started', 'ambiguous')
        )
        SELECT authority.schema_version,
+              authority.audit_sequence,
+              authority.audit_head_hash,
               status_clock.observed_at,
               unresolved.prepared_count,
               unresolved.effect_started_count,
@@ -46731,8 +47582,17 @@ async function getAuthorityStatus(state) {
     if (oldestUpdatedAt === null !== (oldestAgeMs === null)) {
       throw new Error("Authority unresolved age and timestamp disagree");
     }
-    const migrationVersions = schemaReport.migration_versions.map((version) => asVersion(version, "PostgreSQL authority migration version"));
-    const migrationHashes = schemaReport.migration_hashes.map((hash) => requireSha256Ref(hash, "PostgreSQL authority migration hash"));
+    const migrationVersions = mapDenseDataArray(
+      schemaReport.migration_versions,
+      "PostgreSQL authority migration versions",
+      (version) => asVersion(version, "PostgreSQL authority migration version")
+    );
+    const migrationHashes = mapDenseDataArray(
+      schemaReport.migration_hashes,
+      "PostgreSQL authority migration hashes",
+      (hash) => requireSha256Ref(hash, "PostgreSQL authority migration hash")
+    );
+    const auditCheckpoint = normalizeAuditCheckpoint(row.audit_sequence, row.audit_head_hash);
     const pool = {
       total_connections: asStatusCount(state.pool.totalCount, "PostgreSQL pool total"),
       idle_connections: asStatusCount(state.pool.idleCount, "PostgreSQL pool idle total"),
@@ -46740,9 +47600,9 @@ async function getAuthorityStatus(state) {
     };
     await client.query("ROLLBACK");
     transactionOpen = false;
-    return deepFreeze({
-      schema: "agoragentic.risk-fork.postgres-authority-status.v1",
-      version: 1,
+    return freezeDataGraph2({
+      schema: "agoragentic.risk-fork.postgres-authority-status.v2",
+      version: 2,
       schema_verification: {
         verified: true,
         schema_version: asVersion(row.schema_version, "PostgreSQL authority schema version"),
@@ -46753,6 +47613,7 @@ async function getAuthorityStatus(state) {
         reachable: true,
         observed_at: observedAt
       },
+      audit_checkpoint: auditCheckpoint,
       unresolved: {
         counts: {
           prepared: asStatusCount(row.prepared_count, "prepared operation count"),
@@ -46813,59 +47674,62 @@ async function getAuditTrail(state, input = {}) {
   if (!Number.isSafeInteger(after) || after < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 1e4) {
     throw new TypeError("distributed audit pagination is invalid");
   }
-  const result = await queryWithVerifiedClient(
-    state,
-    `SELECT * FROM ${table(state, "audit_events")}
-      WHERE authority_id = $1 AND sequence > $2
-      ORDER BY sequence ASC LIMIT $3`,
-    [state.authorityId, after, limit]
-  );
-  let previous = after === 0 ? null : null;
-  if (after > 0) {
-    const head = await queryWithVerifiedClient(
-      state,
-      `SELECT event_hash FROM ${table(state, "audit_events")}
-        WHERE authority_id = $1 AND sequence = $2`,
-      [state.authorityId, after]
-    );
-    if (head.rowCount !== 1) throw new Error("Audit pagination predecessor is absent");
-    previous = head.rows[0].event_hash;
-  }
-  const events = [];
-  let expectedSequence = after + 1;
-  for (const row of result.rows) {
-    const sequence = Number.parseInt(row.sequence, 10);
-    const observedAt = asIso(row.observed_at, "audit observed_at");
-    const payload = cloneJson(row.payload);
-    const payloadHash = sha256Ref(payload);
-    const body = {
-      schema: "agoragentic.risk-fork.distributed-authority-audit-event.v1",
-      authority_id: state.authorityId,
-      sequence,
-      event_type: row.event_type,
-      operation_ref: row.operation_ref ?? null,
-      parent_ref: row.parent_ref ?? null,
-      authorization_id: row.authorization_id ?? null,
-      observed_at: observedAt,
-      previous_event_hash: row.previous_event_hash ?? null,
-      payload_hash: payloadHash
-    };
-    if (sequence !== expectedSequence || !safeEqual(row.payload_hash, payloadHash) || row.previous_event_hash !== previous || !safeEqual(row.event_hash, sha256Ref(body))) {
-      throw distributedAuthorityError(
-        "Distributed authority audit chain verification failed",
-        "DISTRIBUTED_AUDIT_CHAIN_INVALID",
-        { sequence }
-      );
-    }
-    events.push(deepFreeze({ ...body, payload, event_hash: row.event_hash }));
-    previous = row.event_hash;
-    expectedSequence += 1;
-  }
-  return deepFreeze({
-    events,
-    next_sequence: events.length === limit ? events.at(-1).sequence : null,
-    verified: true
+  const client = await acquirePostgresAuthorityClient(state.pool, {
+    requireTls: state.requireTls,
+    verifiedClients: state.verifiedClients
   });
+  let transactionOpen = false;
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    transactionOpen = true;
+    await client.query(`SET LOCAL statement_timeout = ${state.statementTimeoutMs}`);
+    await client.query(
+      `SET LOCAL idle_in_transaction_session_timeout = ${state.statementTimeoutMs}`
+    );
+    const checkpointResult = await client.query(
+      `SELECT audit_sequence, audit_head_hash
+         FROM ${table(state, "authority_meta")}
+        WHERE authority_id = $1`,
+      [state.authorityId]
+    );
+    if (checkpointResult.rowCount !== 1) {
+      throw new Error("PostgreSQL authority metadata is absent");
+    }
+    let predecessorHash = null;
+    if (after > 0) {
+      const predecessorResult = await client.query(
+        `SELECT event_hash FROM ${table(state, "audit_events")}
+          WHERE authority_id = $1 AND sequence = $2`,
+        [state.authorityId, after]
+      );
+      if (predecessorResult.rowCount !== 1) throw auditChainInvalid(after);
+      predecessorHash = predecessorResult.rows[0].event_hash;
+    }
+    const result = await client.query(
+      `SELECT * FROM ${table(state, "audit_events")}
+        WHERE authority_id = $1 AND sequence > $2
+        ORDER BY sequence ASC LIMIT $3`,
+      [state.authorityId, after, limit]
+    );
+    const verified = verifyPostgresAuthorityAuditPage({
+      authority_id: state.authorityId,
+      after_sequence: after,
+      limit,
+      audit_sequence: checkpointResult.rows[0].audit_sequence,
+      audit_head_hash: checkpointResult.rows[0].audit_head_hash,
+      predecessor_hash: predecessorHash,
+      rows: result.rows
+    });
+    await client.query("ROLLBACK");
+    transactionOpen = false;
+    return verified;
+  } catch (error) {
+    if (transactionOpen) await client.query("ROLLBACK").catch(() => {
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 async function runCommit(state, input, callbacks) {
   const request = normalizeDistributedPrepareRequest(input);
@@ -50787,7 +51651,7 @@ function requireProviderCapability(provider, capability) {
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
 import { randomUUID as randomUUID4 } from "node:crypto";
-import { types as utilTypes } from "node:util";
+import { types as utilTypes2 } from "node:util";
 var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boundary.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
@@ -50954,7 +51818,7 @@ function keyFingerprint(value) {
 function assertNoCallerRiskLabels(value, field = "operation") {
   function walk(current) {
     if (!current || typeof current !== "object") return;
-    if (utilTypes.isProxy(current)) {
+    if (utilTypes2.isProxy(current)) {
       throw boundaryError(
         RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must be ordinary JSON`
@@ -51018,7 +51882,7 @@ function assertBoundedCanonicalJson(value, {
       }
       return;
     }
-    if (typeof current !== "object" || utilTypes.isProxy(current)) {
+    if (typeof current !== "object" || utilTypes2.isProxy(current)) {
       throw boundaryError(
         dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
         `${field} must contain only ordinary JSON values`
@@ -53380,6 +54244,1660 @@ var RiskForkMcpBoundary = class {
   }
 };
 
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-host-adapter.mjs
+import { randomUUID as randomUUID6 } from "node:crypto";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-transport-contract.mjs
+import { BlockList, isIP } from "node:net";
+var RISK_FORK_MCP_CHILD_OPERATION_SCHEMA = "agoragentic.risk-fork.mcp-child-operation.v1";
+var RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA = "agoragentic.risk-fork.mcp-destination-policy.v1";
+var RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA = "agoragentic.risk-fork.mcp-transport-result.v1";
+var RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.mcp-transport-evidence.v1";
+var RISK_FORK_MCP_PROTOCOL_VERSION = "2026-07-28";
+var RISK_FORK_MCP_CLIENT_INFO = Object.freeze({
+  name: "@agoragentic/risk-fork",
+  version: "0.1.0-alpha.1"
+});
+var RISK_FORK_MCP_PHASES = Object.freeze([
+  "server/discover",
+  "tools/list",
+  "tools/call",
+  "resources/list",
+  "resources/read",
+  "prompts/list",
+  "prompts/get"
+]);
+var RISK_FORK_MCP_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+var RISK_FORK_MCP_MAX_TIMEOUT_MS = 10 * 60 * 1e3;
+var RISK_FORK_MCP_MAX_DNS_ANSWERS = 64;
+var RISK_FORK_MCP_MAX_CNAME_DEPTH = 16;
+var BLOCKED_DNS_SUFFIXES = Object.freeze([
+  "localhost",
+  "local",
+  "internal",
+  "home.arpa",
+  "invalid",
+  "test",
+  "example",
+  "onion"
+]);
+var BLOCKED_IPV4_DESTINATIONS = new BlockList();
+var BLOCKED_IPV6_DESTINATIONS = new BlockList();
+var GLOBAL_IPV6_DESTINATIONS = new BlockList();
+GLOBAL_IPV6_DESTINATIONS.addSubnet("2000::", 3, "ipv6");
+for (const [network, prefix, family] of [
+  ["0.0.0.0", 8, "ipv4"],
+  ["10.0.0.0", 8, "ipv4"],
+  ["100.64.0.0", 10, "ipv4"],
+  ["127.0.0.0", 8, "ipv4"],
+  ["169.254.0.0", 16, "ipv4"],
+  ["172.16.0.0", 12, "ipv4"],
+  ["192.0.0.0", 24, "ipv4"],
+  ["192.0.2.0", 24, "ipv4"],
+  ["192.31.196.0", 24, "ipv4"],
+  ["192.52.193.0", 24, "ipv4"],
+  ["192.88.99.0", 24, "ipv4"],
+  ["192.168.0.0", 16, "ipv4"],
+  ["192.175.48.0", 24, "ipv4"],
+  ["198.18.0.0", 15, "ipv4"],
+  ["198.51.100.0", 24, "ipv4"],
+  ["203.0.113.0", 24, "ipv4"],
+  ["224.0.0.0", 4, "ipv4"],
+  ["240.0.0.0", 4, "ipv4"],
+  ["::", 128, "ipv6"],
+  ["::1", 128, "ipv6"],
+  ["::ffff:0:0", 96, "ipv6"],
+  ["64:ff9b::", 96, "ipv6"],
+  ["64:ff9b:1::", 48, "ipv6"],
+  ["100::", 64, "ipv6"],
+  ["2001::", 23, "ipv6"],
+  ["2001:db8::", 32, "ipv6"],
+  ["2002::", 16, "ipv6"],
+  ["3fff::", 20, "ipv6"],
+  ["5f00::", 16, "ipv6"],
+  ["fc00::", 7, "ipv6"],
+  ["fe80::", 10, "ipv6"],
+  ["ff00::", 8, "ipv6"]
+]) {
+  (family === "ipv4" ? BLOCKED_IPV4_DESTINATIONS : BLOCKED_IPV6_DESTINATIONS).addSubnet(network, prefix, family);
+}
+var DESTINATION_POLICY_KEYS = Object.freeze([
+  "schema",
+  "requested_url",
+  "requested_origin",
+  "dns_name",
+  "dns_resolution",
+  "accepted_dns_record_types",
+  "address_scope",
+  "pin_selected_address",
+  "preserve_tls_server_name",
+  "preserve_http_host",
+  "proxy_environment_allowed",
+  "redirects",
+  "max_redirects",
+  "transport_evidence_required",
+  "policy_hash"
+]);
+var OPERATION_KEYS = Object.freeze([
+  "schema",
+  "kind",
+  "mcp_request_hash",
+  "phase",
+  "mcp_server_ref",
+  "mcp_server_origin",
+  "tool_name",
+  "tool_descriptor_hash",
+  "tool_input_schema",
+  "tool_input_schema_hash",
+  "tool_effect_status",
+  "tool_safety_binding_hash",
+  "params",
+  "protocol_version",
+  "destination_policy",
+  "redirects",
+  "response_mode",
+  "mcp_result_schema",
+  "mcp_result_schema_hash",
+  "response_schema",
+  "response_schema_hash",
+  "max_response_bytes",
+  "timeout_ms",
+  "operation_hash"
+]);
+var TRANSPORT_EVIDENCE_KEYS = Object.freeze([
+  "schema",
+  "destination_policy_hash",
+  "requested_url",
+  "final_url",
+  "redirect_count",
+  "dns_name",
+  "cname_chain",
+  "resolved_addresses",
+  "selected_address",
+  "tls_authorized",
+  "tls_server_name",
+  "http_host",
+  "proxy_used",
+  "request_body_hash",
+  "response_body_hash",
+  "wire_result_hash",
+  "wire_result_type",
+  "measurements",
+  "evidence_hash"
+]);
+var TRANSPORT_MEASUREMENT_KEYS = Object.freeze([
+  "dns_query_count",
+  "connection_attempt_count",
+  "http_request_count",
+  "retry_count",
+  "request_body_bytes",
+  "response_body_bytes",
+  "elapsed_ms",
+  "http_status_code",
+  "tls_protocol",
+  "response_content_type",
+  "response_content_encoding",
+  "decompression_used",
+  "sse_used",
+  "sse_event_count",
+  "sse_notification_count",
+  "protocol_metadata_sent",
+  "method_header_sent",
+  "name_header_sent",
+  "parameter_header_count",
+  "access_header_sent",
+  "cookie_header_sent",
+  "state_header_sent",
+  "response_cookie_received",
+  "response_state_created",
+  "access_challenge_received"
+]);
+function exactKeys(value, keys, field) {
+  assertAllowedKeys(value, keys, field);
+  const missing = keys.filter((key) => !Object.hasOwn(value, key));
+  if (missing.length > 0) throw new TypeError(`${field} is missing required fields`);
+}
+function exactJson(left, right) {
+  return safeEqual(sha256Ref(left), sha256Ref(right));
+}
+function encodeMcpHeaderValue(value) {
+  const text = String(value);
+  const sentinel = text.startsWith("=?base64?") && text.endsWith("?=");
+  const plainAscii = /^[\x20-\x7e]*$/.test(text);
+  if (plainAscii && text.trim() === text && !sentinel) return text;
+  return `=?base64?${Buffer.from(text, "utf8").toString("base64")}?=`;
+}
+function collectMcpParameterHeaderSpecs(inputSchema) {
+  const root = assertPlainObject(inputSchema, "MCP tool inputSchema");
+  const found = [];
+  const names = /* @__PURE__ */ new Set();
+  function visitUnknown(value, pathIsReachable, propertyPath) {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const child of value) visitUnknown(child, false, propertyPath);
+      return;
+    }
+    const node = assertPlainObject(value, "MCP tool schema node");
+    if (Object.hasOwn(node, "x-mcp-header")) {
+      if (!pathIsReachable || propertyPath.length === 0) {
+        throw new TypeError("MCP x-mcp-header must be statically reachable through properties");
+      }
+      const annotation = node["x-mcp-header"];
+      if (typeof annotation !== "string" || annotation.length < 1 || annotation.length > 128 || !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(annotation)) {
+        throw new TypeError("MCP x-mcp-header name is invalid");
+      }
+      if (!["string", "integer", "boolean"].includes(node.type)) {
+        throw new TypeError("MCP x-mcp-header must annotate a string, integer, or boolean");
+      }
+      const normalizedName = annotation.toLowerCase();
+      if (names.has(normalizedName)) {
+        throw new TypeError("MCP x-mcp-header names must be case-insensitively unique");
+      }
+      names.add(normalizedName);
+      found.push(Object.freeze({
+        header: `Mcp-Param-${annotation}`,
+        path: Object.freeze([...propertyPath]),
+        type: node.type
+      }));
+      if (found.length > 64) throw new TypeError("MCP x-mcp-header count exceeds its bound");
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key === "x-mcp-header") continue;
+      if (key === "properties") {
+        const properties = assertPlainObject(child, "MCP tool inputSchema properties");
+        for (const [propertyName, propertySchema] of Object.entries(properties)) {
+          visitUnknown(propertySchema, pathIsReachable, [...propertyPath, propertyName]);
+        }
+      } else {
+        visitUnknown(child, false, propertyPath);
+      }
+    }
+  }
+  visitUnknown(root, true, []);
+  return Object.freeze(found);
+}
+function valueAtOwnPath(value, path8) {
+  let current = value;
+  for (const key of path8) {
+    if (!current || typeof current !== "object" || !Object.hasOwn(current, key)) {
+      return Object.freeze({ present: false, value: void 0 });
+    }
+    current = current[key];
+  }
+  return Object.freeze({ present: true, value: current });
+}
+function createMcpWireHeaders(operationValue) {
+  const operation = validateMcpHttpPhaseOperation(operationValue);
+  const headers = {
+    Accept: "application/json, text/event-stream",
+    "Content-Type": "application/json",
+    "MCP-Protocol-Version": operation.protocol_version,
+    "Mcp-Method": operation.phase
+  };
+  let principalName = null;
+  if (["tools/call", "prompts/get"].includes(operation.phase)) {
+    principalName = operation.params.name;
+  } else if (operation.phase === "resources/read") {
+    principalName = operation.params.uri;
+  }
+  if (principalName !== null) {
+    requireOpaqueRef(principalName, `MCP ${operation.phase} principal name`, { maxLength: 4096 });
+    headers["Mcp-Name"] = encodeMcpHeaderValue(principalName);
+  }
+  if (operation.phase === "tools/call") {
+    const argumentsValue = operation.params.arguments ?? {};
+    assertPlainObject(argumentsValue, "MCP tools/call arguments");
+    const inputSchema = assertPlainObject(
+      operation.tool_input_schema,
+      "MCP tools/call descriptor inputSchema"
+    );
+    for (const spec of collectMcpParameterHeaderSpecs(inputSchema)) {
+      const extracted = valueAtOwnPath(argumentsValue, spec.path);
+      if (!extracted.present || extracted.value === null) continue;
+      if (spec.type === "integer" && !Number.isSafeInteger(extracted.value) || spec.type !== "integer" && typeof extracted.value !== spec.type) {
+        throw new TypeError(`MCP ${spec.header} value does not match its annotated type`);
+      }
+      headers[spec.header] = encodeMcpHeaderValue(extracted.value);
+    }
+  }
+  return deepFreeze(JSON.parse(canonicalize(headers)));
+}
+function canonicalMcpDnsName(value, field = "MCP DNS name") {
+  if (typeof value !== "string" || value !== value.toLowerCase() || value.endsWith(".")) {
+    throw new TypeError(`${field} must be a canonical lowercase DNS name`);
+  }
+  if (isIP(value) !== 0 || !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value) || BLOCKED_DNS_SUFFIXES.some((suffix) => value === suffix || value.endsWith(`.${suffix}`))) {
+    throw new TypeError(`${field} must be a public DNS name`);
+  }
+  return value;
+}
+function publicMcpUnicastAddress(value, field = "MCP destination address") {
+  if (typeof value !== "string") throw new TypeError(`${field} must be an IP address`);
+  const familyNumber = isIP(value);
+  if (familyNumber === 0) throw new TypeError(`${field} must be an IP address`);
+  const family = familyNumber === 4 ? "ipv4" : "ipv6";
+  const blockList = familyNumber === 4 ? BLOCKED_IPV4_DESTINATIONS : BLOCKED_IPV6_DESTINATIONS;
+  if (familyNumber === 6 && !GLOBAL_IPV6_DESTINATIONS.check(value, family) || blockList.check(value, family)) {
+    throw new TypeError(`${field} must be a public unicast address`);
+  }
+  return value;
+}
+function publicMcpEndpoint(value, field = "MCP endpoint") {
+  const href = requireExternalEndpoint(value, field);
+  const parsed = new URL(href);
+  if (parsed.protocol !== "https:") throw new TypeError(`${field} must use HTTPS`);
+  canonicalMcpDnsName(parsed.hostname.toLowerCase(), `${field} hostname`);
+  return href;
+}
+function createMcpDestinationPolicy(target) {
+  assertAllowedKeys(target, ["href", "origin"], "MCP destination");
+  const href = publicMcpEndpoint(target.href, "MCP destination URL");
+  const parsed = new URL(href);
+  if (href !== target.href || target.origin !== parsed.origin) {
+    throw new TypeError("MCP destination URL and origin must be exact and canonical");
+  }
+  const policy = {
+    schema: RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
+    requested_url: href,
+    requested_origin: parsed.origin,
+    dns_name: canonicalMcpDnsName(parsed.hostname.toLowerCase(), "MCP destination DNS name"),
+    dns_resolution: "child_before_each_connection_attempt",
+    accepted_dns_record_types: ["A", "AAAA", "CNAME"],
+    address_scope: "public_unicast_only",
+    pin_selected_address: true,
+    preserve_tls_server_name: true,
+    preserve_http_host: true,
+    proxy_environment_allowed: false,
+    redirects: "error",
+    max_redirects: 0,
+    transport_evidence_required: true,
+    policy_hash: null
+  };
+  policy.policy_hash = sha256Ref(policy);
+  return deepFreeze(policy);
+}
+function validateMcpDestinationPolicy(value) {
+  const policy = assertPlainObject(value, "MCP destination policy");
+  exactKeys(policy, DESTINATION_POLICY_KEYS, "MCP destination policy");
+  const expected = createMcpDestinationPolicy({
+    href: policy.requested_url,
+    origin: policy.requested_origin
+  });
+  if (!exactJson(policy, expected)) {
+    throw new TypeError("MCP destination policy is not canonical and fail closed");
+  }
+  return expected;
+}
+function measurementSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [...TRANSPORT_MEASUREMENT_KEYS],
+    properties: {
+      dns_query_count: { type: "integer", minimum: 3, maximum: 48 },
+      connection_attempt_count: { const: 1 },
+      http_request_count: { const: 1 },
+      retry_count: { const: 0 },
+      request_body_bytes: { type: "integer", minimum: 1, maximum: 1048576 },
+      response_body_bytes: {
+        type: "integer",
+        minimum: 1,
+        maximum: RISK_FORK_MCP_MAX_RESPONSE_BYTES
+      },
+      elapsed_ms: { type: "integer", minimum: 0, maximum: RISK_FORK_MCP_MAX_TIMEOUT_MS },
+      http_status_code: { const: 200 },
+      tls_protocol: { enum: ["TLSv1.2", "TLSv1.3"] },
+      response_content_type: { enum: ["application/json", "text/event-stream"] },
+      response_content_encoding: { type: "null" },
+      decompression_used: { const: false },
+      sse_used: { type: "boolean" },
+      sse_event_count: { type: "integer", minimum: 0, maximum: 256 },
+      sse_notification_count: { type: "integer", minimum: 0, maximum: 255 },
+      protocol_metadata_sent: { const: true },
+      method_header_sent: { const: true },
+      name_header_sent: { type: "boolean" },
+      parameter_header_count: { type: "integer", minimum: 0, maximum: 64 },
+      access_header_sent: { const: false },
+      cookie_header_sent: { const: false },
+      state_header_sent: { const: false },
+      response_cookie_received: { const: false },
+      response_state_created: { const: false },
+      access_challenge_received: { const: false }
+    }
+  };
+}
+function createMcpTransportResultSchema(mcpResultSchema) {
+  assertPlainObject(mcpResultSchema, "MCP result schema");
+  return deepFreeze({
+    type: "object",
+    additionalProperties: false,
+    required: ["schema", "transport_evidence", "mcp_result"],
+    properties: {
+      schema: { const: RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA },
+      transport_evidence: {
+        type: "object",
+        additionalProperties: false,
+        required: [...TRANSPORT_EVIDENCE_KEYS],
+        properties: {
+          schema: { const: RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA },
+          destination_policy_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+          requested_url: { type: "string", maxLength: 4096 },
+          final_url: { type: "string", maxLength: 4096 },
+          redirect_count: { type: "integer", minimum: 0, maximum: 0 },
+          dns_name: { type: "string", maxLength: 253 },
+          cname_chain: {
+            type: "array",
+            minItems: 1,
+            maxItems: RISK_FORK_MCP_MAX_CNAME_DEPTH,
+            items: { type: "string", maxLength: 253 }
+          },
+          resolved_addresses: {
+            type: "array",
+            minItems: 1,
+            maxItems: RISK_FORK_MCP_MAX_DNS_ANSWERS,
+            items: { type: "string", maxLength: 64 }
+          },
+          selected_address: { type: "string", maxLength: 64 },
+          tls_authorized: { const: true },
+          tls_server_name: { type: "string", maxLength: 253 },
+          http_host: { type: "string", maxLength: 512 },
+          proxy_used: { const: false },
+          request_body_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+          response_body_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+          wire_result_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" },
+          wire_result_type: { const: "complete" },
+          measurements: measurementSchema(),
+          evidence_hash: { type: "string", pattern: "^sha256:[a-f0-9]{64}$" }
+        }
+      },
+      mcp_result: mcpResultSchema
+    }
+  });
+}
+function validateMeasurements(value, operation, cnameCount) {
+  const measurements = assertPlainObject(value, "Risk Fork MCP transport measurements");
+  exactKeys(
+    measurements,
+    TRANSPORT_MEASUREMENT_KEYS,
+    "Risk Fork MCP transport measurements"
+  );
+  for (const [field, expected] of Object.entries({
+    dns_query_count: cnameCount * 3,
+    connection_attempt_count: 1,
+    http_request_count: 1,
+    retry_count: 0,
+    http_status_code: 200
+  })) {
+    if (measurements[field] !== expected) {
+      throw new TypeError(`Risk Fork MCP transport measurement ${field} is invalid`);
+    }
+  }
+  boundedInteger(measurements.request_body_bytes, "MCP request body bytes", {
+    min: 1,
+    max: 1024 * 1024
+  });
+  boundedInteger(measurements.response_body_bytes, "MCP response body bytes", {
+    min: 1,
+    max: operation.max_response_bytes
+  });
+  boundedInteger(measurements.elapsed_ms, "MCP elapsed milliseconds", {
+    min: 0,
+    max: operation.timeout_ms
+  });
+  const expectedNameHeader = ["tools/call", "resources/read", "prompts/get"].includes(operation.phase);
+  const expectedParameterHeaderCount = Object.keys(createMcpWireHeaders(operation)).filter((name) => name.toLowerCase().startsWith("mcp-param-")).length;
+  if (!["TLSv1.2", "TLSv1.3"].includes(measurements.tls_protocol) || !["application/json", "text/event-stream"].includes(
+    measurements.response_content_type
+  ) || measurements.response_content_encoding !== null || measurements.decompression_used !== false || measurements.sse_used !== (measurements.response_content_type === "text/event-stream") || !Number.isSafeInteger(measurements.sse_event_count) || measurements.sse_event_count < 0 || measurements.sse_event_count > 256 || !Number.isSafeInteger(measurements.sse_notification_count) || measurements.sse_notification_count < 0 || measurements.sse_notification_count >= Math.max(1, measurements.sse_event_count) || measurements.sse_used === false && (measurements.sse_event_count !== 0 || measurements.sse_notification_count !== 0) || measurements.protocol_metadata_sent !== true || measurements.method_header_sent !== true || measurements.name_header_sent !== expectedNameHeader || measurements.parameter_header_count !== expectedParameterHeaderCount || measurements.access_header_sent !== false || measurements.cookie_header_sent !== false || measurements.state_header_sent !== false || measurements.response_cookie_received !== false || measurements.response_state_created !== false || measurements.access_challenge_received !== false) {
+    throw new TypeError("Risk Fork MCP transport measurements violate the closed transport");
+  }
+  return measurements;
+}
+function verifyMcpTransportResult(value, operationValue) {
+  const operation = validateMcpHttpPhaseOperation(operationValue);
+  exactKeys(
+    value,
+    ["schema", "transport_evidence", "mcp_result"],
+    "Risk Fork MCP transport result"
+  );
+  if (value.schema !== RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA) {
+    throw new TypeError("Risk Fork MCP transport result schema is invalid");
+  }
+  const evidence = assertPlainObject(
+    value.transport_evidence,
+    "Risk Fork MCP transport evidence"
+  );
+  exactKeys(
+    evidence,
+    TRANSPORT_EVIDENCE_KEYS,
+    "Risk Fork MCP transport evidence"
+  );
+  const destination = operation.destination_policy;
+  const parsed = new URL(destination.requested_url);
+  if (evidence.schema !== RISK_FORK_MCP_TRANSPORT_EVIDENCE_SCHEMA || !safeEqual(evidence.destination_policy_hash, destination.policy_hash) || evidence.requested_url !== destination.requested_url || evidence.final_url !== destination.requested_url || evidence.redirect_count !== 0 || evidence.dns_name !== destination.dns_name || evidence.tls_authorized !== true || evidence.tls_server_name !== destination.dns_name || evidence.http_host !== parsed.host || evidence.proxy_used !== false || evidence.wire_result_type !== "complete") {
+    throw new TypeError("Risk Fork MCP transport evidence does not match its destination policy");
+  }
+  requireSha256Ref(evidence.request_body_hash, "Risk Fork MCP request body hash");
+  requireSha256Ref(evidence.response_body_hash, "Risk Fork MCP response body hash");
+  requireSha256Ref(evidence.wire_result_hash, "Risk Fork MCP wire result hash");
+  if (!Array.isArray(evidence.cname_chain) || evidence.cname_chain.length < 1 || evidence.cname_chain.length > RISK_FORK_MCP_MAX_CNAME_DEPTH || evidence.cname_chain[0] !== destination.dns_name) {
+    throw new TypeError("Risk Fork MCP transport CNAME evidence is invalid");
+  }
+  const cnameNames = evidence.cname_chain.map((entry, index) => canonicalMcpDnsName(entry, `Risk Fork MCP transport CNAME[${index}]`));
+  if (new Set(cnameNames).size !== cnameNames.length) {
+    throw new TypeError("Risk Fork MCP transport CNAME evidence contains a cycle");
+  }
+  if (!Array.isArray(evidence.resolved_addresses) || evidence.resolved_addresses.length < 1 || evidence.resolved_addresses.length > RISK_FORK_MCP_MAX_DNS_ANSWERS) {
+    throw new TypeError("Risk Fork MCP transport address evidence is invalid");
+  }
+  const addresses = evidence.resolved_addresses.map((entry, index) => publicMcpUnicastAddress(entry, `Risk Fork MCP transport address[${index}]`));
+  if (new Set(addresses).size !== addresses.length || !addresses.includes(publicMcpUnicastAddress(
+    evidence.selected_address,
+    "Risk Fork MCP selected transport address"
+  ))) {
+    throw new TypeError("Risk Fork MCP selected address is not pinned to the resolved set");
+  }
+  validateMeasurements(evidence.measurements, operation, cnameNames.length);
+  requireSha256Ref(evidence.evidence_hash, "Risk Fork MCP transport evidence hash");
+  if (!safeEqual(
+    evidence.evidence_hash,
+    sha256Ref({ ...evidence, evidence_hash: null })
+  )) {
+    throw new TypeError("Risk Fork MCP transport evidence hash mismatch");
+  }
+  return value.mcp_result;
+}
+function validateMcpHttpPhaseOperation(value) {
+  const operation = validateChildOperation(value, "MCP HTTP phase operation");
+  exactKeys(operation, OPERATION_KEYS, "MCP HTTP phase operation");
+  if (operation.schema !== RISK_FORK_MCP_CHILD_OPERATION_SCHEMA || operation.kind !== "mcp_http_phase" || !RISK_FORK_MCP_PHASES.includes(operation.phase) || operation.protocol_version !== RISK_FORK_MCP_PROTOCOL_VERSION || operation.redirects !== "error" || operation.response_mode !== "json_or_sse") {
+    throw new TypeError("MCP HTTP phase operation contract is invalid");
+  }
+  requireSha256Ref(operation.mcp_request_hash, "MCP HTTP phase request hash");
+  const href = publicMcpEndpoint(operation.mcp_server_ref, "MCP HTTP phase server ref");
+  const parsed = new URL(href);
+  if (href !== operation.mcp_server_ref || operation.mcp_server_origin !== parsed.origin) {
+    throw new TypeError("MCP HTTP phase endpoint binding is invalid");
+  }
+  assertPlainObject(operation.params, "MCP HTTP phase params");
+  if (["_meta", "inputResponses", "requestState"].some(
+    (key) => Object.hasOwn(operation.params, key)
+  )) {
+    throw new TypeError("MCP HTTP phase params contain host-owned protocol fields");
+  }
+  if (operation.phase === "server/discover") {
+    exactKeys(
+      operation.params,
+      ["protocol_version", "stateless_required"],
+      "MCP server/discover host intent"
+    );
+    if (operation.params.protocol_version !== RISK_FORK_MCP_PROTOCOL_VERSION || operation.params.stateless_required !== true) {
+      throw new TypeError("MCP server/discover host intent is not the required stateless revision");
+    }
+  }
+  if (["prompts/get", "tools/call"].includes(operation.phase)) {
+    requireOpaqueRef(operation.params.name, `MCP ${operation.phase} params.name`, {
+      maxLength: 4096
+    });
+  }
+  if (operation.phase === "resources/read") {
+    requireOpaqueRef(operation.params.uri, "MCP resources/read params.uri", { maxLength: 4096 });
+  }
+  const destination = validateMcpDestinationPolicy(operation.destination_policy);
+  const expectedDestination = createMcpDestinationPolicy({
+    href: operation.mcp_server_ref,
+    origin: operation.mcp_server_origin
+  });
+  if (!exactJson(destination, expectedDestination)) {
+    throw new TypeError("MCP HTTP phase destination policy binding is invalid");
+  }
+  if (operation.phase === "tools/call") {
+    requireOpaqueRef(operation.tool_name, "MCP HTTP phase tool name", { maxLength: 500 });
+    requireSha256Ref(operation.tool_descriptor_hash, "MCP HTTP phase tool descriptor hash");
+    assertPlainObject(operation.tool_input_schema, "MCP HTTP phase tool input schema");
+    requireSha256Ref(operation.tool_input_schema_hash, "MCP HTTP phase tool input schema hash");
+    requireSha256Ref(operation.tool_safety_binding_hash, "MCP HTTP phase tool safety binding hash");
+    if (!safeEqual(operation.tool_input_schema_hash, sha256Ref(operation.tool_input_schema)) || operation.tool_effect_status !== "explicit_read_only" || operation.params.name !== operation.tool_name) {
+      throw new TypeError("MCP HTTP phase tools/call is not exact-bound read-only work");
+    }
+  } else if ([
+    operation.tool_name,
+    operation.tool_descriptor_hash,
+    operation.tool_input_schema,
+    operation.tool_input_schema_hash,
+    operation.tool_effect_status,
+    operation.tool_safety_binding_hash
+  ].some((entry) => entry !== null)) {
+    throw new TypeError("Non-call MCP HTTP phases contain tool effect metadata");
+  }
+  assertPlainObject(operation.mcp_result_schema, "MCP HTTP phase result schema");
+  assertPlainObject(operation.response_schema, "MCP HTTP phase response schema");
+  requireSha256Ref(operation.mcp_result_schema_hash, "MCP HTTP phase result schema hash");
+  requireSha256Ref(operation.response_schema_hash, "MCP HTTP phase response schema hash");
+  requireSha256Ref(operation.operation_hash, "MCP HTTP phase operation hash");
+  if (!safeEqual(operation.mcp_result_schema_hash, sha256Ref(operation.mcp_result_schema)) || !exactJson(
+    operation.response_schema,
+    createMcpTransportResultSchema(operation.mcp_result_schema)
+  ) || !safeEqual(operation.response_schema_hash, sha256Ref(operation.response_schema)) || !safeEqual(
+    operation.operation_hash,
+    sha256Ref({ ...operation, operation_hash: null })
+  )) {
+    throw new TypeError("MCP HTTP phase schema or operation hash binding is invalid");
+  }
+  boundedInteger(operation.max_response_bytes, "MCP HTTP phase max_response_bytes", {
+    min: 1024,
+    max: RISK_FORK_MCP_MAX_RESPONSE_BYTES
+  });
+  boundedInteger(operation.timeout_ms, "MCP HTTP phase timeout_ms", {
+    min: 100,
+    max: RISK_FORK_MCP_MAX_TIMEOUT_MS
+  });
+  return deepFreeze(JSON.parse(canonicalize(operation)));
+}
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-host-adapter.mjs
+var RISK_FORK_MCP_HOST_ADAPTER_SCHEMA = "agoragentic.risk-fork.mcp-host-adapter.v1";
+var RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA = "agoragentic.risk-fork.mcp-phase-plan-request.v1";
+var RISK_FORK_MCP_PHASE_PLAN_SCHEMA = "agoragentic.risk-fork.mcp-phase-plan.v1";
+var MCP_SCHEMAS = Object.freeze({
+  sessionOpenRequest: "agoragentic.mcp.enforced-session-open-request.v1",
+  phaseRequest: "agoragentic.mcp.enforced-phase-request.v1",
+  hostSession: "agoragentic.mcp.enforced-host-session.v1",
+  cleanImportedResult: "agoragentic.mcp.clean-imported-result.v1"
+});
+var OPEN_PHASE = "server/discover";
+var REQUEST_PHASES = Object.freeze([
+  "tools/list",
+  "tools/call",
+  "resources/list",
+  "resources/read",
+  "prompts/list",
+  "prompts/get"
+]);
+var ALL_PHASES = Object.freeze([OPEN_PHASE, ...REQUEST_PHASES]);
+var TOOL_CAPABILITY_KEYS = Object.freeze([
+  "network_access",
+  "filesystem_read",
+  "filesystem_write",
+  "credential_access",
+  "wallet_or_payment",
+  "deployment",
+  "publication",
+  "communication",
+  "database_mutation",
+  "trust_or_reputation_mutation",
+  "external_side_effect",
+  "unknown_or_unclassified"
+]);
+var IRREVERSIBLE_TOOL_CAPABILITIES = Object.freeze([
+  "network_access",
+  "filesystem_write",
+  "credential_access",
+  "wallet_or_payment",
+  "deployment",
+  "publication",
+  "communication",
+  "database_mutation",
+  "trust_or_reputation_mutation",
+  "external_side_effect"
+]);
+var TOOL_ANNOTATION_KEYS = Object.freeze([
+  "readOnlyHint",
+  "destructiveHint",
+  "idempotentHint",
+  "openWorldHint"
+]);
+var REQUEST_KEYS = Object.freeze([
+  "schema",
+  "request_id",
+  "phase",
+  "raw_method",
+  "mcp_server_ref",
+  "mcp_server_origin",
+  "session_binding_hash",
+  "tool_name",
+  "tool_descriptor",
+  "tool_descriptor_hash",
+  "tool_annotations",
+  "tool_capabilities",
+  "tool_effect_status",
+  "params",
+  "risk_profile",
+  "transport_constraints",
+  "fallback_http",
+  "request_hash"
+]);
+var OPERATION_INPUT_KEYS = Object.freeze([
+  "capsule",
+  "savepoint_input",
+  "operation",
+  "effective_arguments",
+  "expected_commit_type",
+  "commit_policy",
+  "expected_binding",
+  "network_policy"
+]);
+var DEFAULT_TIMEOUTS = Object.freeze({
+  open_session_ms: 15e3,
+  request_ms: 3e4,
+  close_ms: 5e3,
+  fallback_ms: 3e4
+});
+var MIN_TIMEOUT_MS = 10;
+var MAX_PLAN_BYTES = 1024 * 1024;
+var RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES = Object.freeze({
+  INVALID_CONFIGURATION: "RISK_FORK_MCP_INVALID_CONFIGURATION",
+  INVALID_REQUEST: "RISK_FORK_MCP_INVALID_REQUEST",
+  REQUEST_HASH_MISMATCH: "RISK_FORK_MCP_REQUEST_HASH_MISMATCH",
+  REQUEST_TOO_LARGE: "RISK_FORK_MCP_REQUEST_TOO_LARGE",
+  SESSION_LIMIT: "RISK_FORK_MCP_SESSION_LIMIT",
+  SESSION_CLOSED: "RISK_FORK_MCP_SESSION_CLOSED",
+  SESSION_BINDING_MISMATCH: "RISK_FORK_MCP_SESSION_BINDING_MISMATCH",
+  REQUEST_REPLAY: "RISK_FORK_MCP_REQUEST_REPLAY",
+  REQUEST_CONCURRENT: "RISK_FORK_MCP_REQUEST_CONCURRENT",
+  REQUEST_LIMIT: "RISK_FORK_MCP_REQUEST_LIMIT",
+  PLAN_SOURCE_UNTRUSTED: "RISK_FORK_MCP_PLAN_SOURCE_UNTRUSTED",
+  PLAN_RESOLUTION_FAILED: "RISK_FORK_MCP_PLAN_RESOLUTION_FAILED",
+  PLAN_INVALID: "RISK_FORK_MCP_PLAN_INVALID",
+  PLAN_BINDING_MISMATCH: "RISK_FORK_MCP_PLAN_BINDING_MISMATCH",
+  ACTION_PROPOSAL_REQUIRED: "RISK_FORK_MCP_ACTION_PROPOSAL_REQUIRED",
+  PRE_EFFECT_REJECTED: "RISK_FORK_MCP_PRE_EFFECT_REJECTED",
+  PREPARED_RESULT_INVALID: "RISK_FORK_MCP_PREPARED_RESULT_INVALID",
+  FALLBACK_BLOCKED: "RISK_FORK_MCP_FALLBACK_BLOCKED",
+  DEADLINE_EXCEEDED: "RISK_FORK_MCP_DEADLINE_EXCEEDED",
+  ABORTED: "RISK_FORK_MCP_ABORTED"
+});
+var RiskForkMcpHostAdapterError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "RiskForkMcpHostAdapterError";
+    this.code = code;
+  }
+};
+var adapterRecords = /* @__PURE__ */ new WeakMap();
+var planSourceResolvers = /* @__PURE__ */ new WeakMap();
+function adapterError(code, message) {
+  return new RiskForkMcpHostAdapterError(code, message);
+}
+function exactKeys2(value, keys, field) {
+  assertAllowedKeys(value, keys, field);
+  const missing = keys.filter((key) => !Object.hasOwn(value, key));
+  if (missing.length > 0) throw new TypeError(`${field} is missing required fields`);
+}
+function boundedCanonicalClone(value, field, maxBytes = MAX_PLAN_BYTES) {
+  let serialized;
+  try {
+    serialized = canonicalize(value);
+  } catch {
+    throw new TypeError(`${field} must be canonical JSON`);
+  }
+  if (Buffer.byteLength(serialized, "utf8") > maxBytes) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.REQUEST_TOO_LARGE,
+      `${field} exceeds the configured byte limit`
+    );
+  }
+  return deepFreeze(JSON.parse(serialized));
+}
+function scanSecretValues(value, field) {
+  function walk(current) {
+    if (typeof current === "string") {
+      if (containsSecretShapedText(current)) {
+        throw new TypeError(`${field} contains secret-shaped material`);
+      }
+      return;
+    }
+    if (!current || typeof current !== "object") return;
+    for (const [key, child] of Object.entries(current)) {
+      if (containsSecretShapedText(key)) {
+        throw new TypeError(`${field} contains a secret-shaped field`);
+      }
+      walk(child);
+    }
+  }
+  walk(value);
+}
+function normalizeTarget(refValue, originValue) {
+  const href = publicMcpEndpoint(refValue, "MCP request.mcp_server_ref");
+  const origin = publicMcpEndpoint(originValue, "MCP request.mcp_server_origin");
+  const parsed = new URL(href);
+  const expectedOrigin = parsed.origin;
+  if (originValue !== expectedOrigin || new URL(origin).origin !== expectedOrigin) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_REQUEST,
+      "MCP request server origin does not match the server reference"
+    );
+  }
+  return Object.freeze({ href, origin: expectedOrigin });
+}
+function assertTransportConstraints(value) {
+  exactKeys2(value, [
+    "direct_network_permitted",
+    "https_required",
+    "address_scope",
+    "dns_resolution",
+    "address_pinning_required",
+    "proxy_environment_allowed",
+    "redirects",
+    "max_redirects",
+    "transport_evidence_required",
+    "response_acceptance",
+    "fallback_on_protocol_error",
+    "credential_material_in_child"
+  ], "MCP request.transport_constraints");
+  if (value.direct_network_permitted !== false || value.https_required !== true || value.address_scope !== "public_unicast_only" || value.dns_resolution !== "child_before_each_connection_attempt" || value.address_pinning_required !== true || value.proxy_environment_allowed !== false || value.redirects !== "error" || value.max_redirects !== 0 || value.transport_evidence_required !== true || value.response_acceptance !== "clean_import_only" || value.fallback_on_protocol_error !== false || value.credential_material_in_child !== false) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_REQUEST,
+      "MCP request transport constraints are not fail closed"
+    );
+  }
+}
+function assertRiskProfile(value) {
+  exactKeys2(
+    value,
+    ["minimum_level", "untrusted_content", "prepare_only"],
+    "MCP request.risk_profile"
+  );
+  if (!["HIGH", "IRREVERSIBLE"].includes(value.minimum_level) || value.untrusted_content !== true || value.prepare_only !== (value.minimum_level === "IRREVERSIBLE")) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_REQUEST,
+      "MCP request risk profile is below the mandatory host threshold"
+    );
+  }
+}
+function normalizeEnforcementRequest(value, {
+  expectedSchema,
+  allowedPhases,
+  maxBytes
+} = {}) {
+  try {
+    const request = boundedCanonicalClone(value, "MCP enforcement request", maxBytes);
+    exactKeys2(request, REQUEST_KEYS, "MCP enforcement request");
+    if (request.schema !== expectedSchema || !allowedPhases.includes(request.phase)) {
+      throw new TypeError("MCP enforcement request schema or phase is invalid");
+    }
+    requireOpaqueRef(request.request_id, "MCP enforcement request.request_id");
+    requireSha256Ref(request.request_hash, "MCP enforcement request.request_hash");
+    const expectedHash = sha256Ref({ ...request, request_hash: null });
+    if (!safeEqual(request.request_hash, expectedHash)) {
+      throw adapterError(
+        RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.REQUEST_HASH_MISMATCH,
+        "MCP enforcement request hash mismatch"
+      );
+    }
+    if (request.raw_method !== null || request.fallback_http !== null) {
+      throw new TypeError("Only known MCP phases without fallback metadata are accepted");
+    }
+    const target = normalizeTarget(request.mcp_server_ref, request.mcp_server_origin);
+    assertPlainObject(request.params, "MCP enforcement request.params");
+    assertPlainObject(request.risk_profile, "MCP enforcement request.risk_profile");
+    assertPlainObject(request.transport_constraints, "MCP enforcement request.transport_constraints");
+    assertRiskProfile(request.risk_profile);
+    assertTransportConstraints(request.transport_constraints);
+    scanSecretValues(request, "MCP enforcement request");
+    if (request.phase === OPEN_PHASE) {
+      if (request.session_binding_hash !== null) {
+        throw new TypeError("Session-open request must not contain a session binding");
+      }
+    } else {
+      requireSha256Ref(request.session_binding_hash, "MCP enforcement request.session_binding_hash");
+    }
+    if (request.phase === "tools/call") {
+      if (!request.tool_descriptor || request.tool_name == null) {
+        throw new TypeError("tools/call requires a bound tool descriptor");
+      }
+      assertPlainObject(request.tool_descriptor, "MCP enforcement request.tool_descriptor");
+      assertPlainObject(
+        request.tool_descriptor.inputSchema,
+        "MCP enforcement request.tool_descriptor.inputSchema"
+      );
+      requireOpaqueRef(request.tool_name, "MCP enforcement request.tool_name", { maxLength: 500 });
+      if (request.tool_descriptor.name !== request.tool_name) {
+        throw new TypeError("tools/call tool name does not match its bound descriptor");
+      }
+      requireSha256Ref(request.tool_descriptor_hash, "MCP enforcement request.tool_descriptor_hash");
+      if (!safeEqual(request.tool_descriptor_hash, sha256Ref(request.tool_descriptor))) {
+        throw new TypeError("tools/call tool descriptor hash mismatch");
+      }
+      assertPlainObject(request.tool_capabilities, "MCP enforcement request.tool_capabilities");
+      exactKeys2(
+        request.tool_capabilities,
+        TOOL_CAPABILITY_KEYS,
+        "MCP enforcement request.tool_capabilities"
+      );
+      if (TOOL_CAPABILITY_KEYS.some(
+        (key) => typeof request.tool_capabilities[key] !== "boolean" && request.tool_capabilities[key] !== null
+      )) {
+        throw new TypeError("tools/call capabilities must be a complete boolean-or-null record");
+      }
+      const capabilitiesContainNull = TOOL_CAPABILITY_KEYS.some(
+        (key) => request.tool_capabilities[key] === null
+      );
+      if (capabilitiesContainNull && request.tool_capabilities.unknown_or_unclassified !== true) {
+        throw new TypeError("Incomplete tools/call capabilities must remain unknown");
+      }
+      let annotationsComplete = false;
+      if (request.tool_annotations !== null) {
+        assertPlainObject(request.tool_annotations, "MCP enforcement request.tool_annotations");
+        assertAllowedKeys(
+          request.tool_annotations,
+          TOOL_ANNOTATION_KEYS,
+          "MCP enforcement request.tool_annotations"
+        );
+        if (Object.values(request.tool_annotations).some(
+          (item) => typeof item !== "boolean"
+        )) {
+          throw new TypeError("tools/call annotations must be a boolean record");
+        }
+        annotationsComplete = TOOL_ANNOTATION_KEYS.every(
+          (key) => Object.hasOwn(request.tool_annotations, key)
+        );
+      }
+      if (!["explicit_read_only", "unknown_effectfulness", "irreversible"].includes(request.tool_effect_status)) {
+        throw new TypeError("tools/call tool effect status is invalid");
+      }
+      const hasIrreversibleCapability = IRREVERSIBLE_TOOL_CAPABILITIES.some(
+        (key) => request.tool_capabilities[key] === true
+      );
+      const unknownEffect = !annotationsComplete || request.tool_capabilities.unknown_or_unclassified === true;
+      const computedEffectStatus = request.tool_annotations?.destructiveHint === true || hasIrreversibleCapability ? "irreversible" : unknownEffect || request.tool_annotations.readOnlyHint !== true ? "unknown_effectfulness" : "explicit_read_only";
+      if (request.tool_effect_status !== computedEffectStatus) {
+        throw new TypeError("tools/call effect status does not match bound metadata");
+      }
+      if (computedEffectStatus !== "explicit_read_only" && (request.risk_profile.minimum_level !== "IRREVERSIBLE" || request.risk_profile.prepare_only !== true)) {
+        throw new TypeError("tools/call risk profile does not match bound effect metadata");
+      }
+    } else if ([
+      request.tool_name,
+      request.tool_descriptor,
+      request.tool_descriptor_hash,
+      request.tool_annotations,
+      request.tool_capabilities,
+      request.tool_effect_status
+    ].some((item) => item !== null)) {
+      throw new TypeError("Non-call MCP phases must not contain tool binding metadata");
+    }
+    return Object.freeze({ request, target });
+  } catch (error) {
+    if (error instanceof RiskForkMcpHostAdapterError) throw error;
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_REQUEST,
+      "MCP enforcement request is invalid"
+    );
+  }
+}
+function createPlanRequest(request, clock) {
+  const value = {
+    schema: RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
+    plan_request_id: `risk-fork-mcp-plan:${randomUUID6()}`,
+    mcp_request_hash: request.request_hash,
+    phase: request.phase,
+    mcp_server_ref: request.mcp_server_ref,
+    mcp_server_origin: request.mcp_server_origin,
+    session_binding_hash: request.session_binding_hash,
+    tool_name: request.tool_name,
+    tool_descriptor_hash: request.tool_descriptor_hash,
+    tool_input_schema: request.tool_descriptor?.inputSchema ?? null,
+    tool_input_schema_hash: request.tool_descriptor ? sha256Ref(request.tool_descriptor.inputSchema) : null,
+    tool_annotations: request.tool_annotations,
+    tool_capabilities: request.tool_capabilities,
+    tool_effect_status: request.tool_effect_status,
+    params: request.params,
+    requested_at: requireIsoDate(clock(), "Risk Fork MCP adapter clock result"),
+    plan_request_hash: null
+  };
+  value.plan_request_hash = sha256Ref(value);
+  return deepFreeze(value);
+}
+function normalizePhasePlanRequest(planRequestValue) {
+  const planRequest = boundedCanonicalClone(
+    planRequestValue,
+    "Risk Fork MCP phase plan request"
+  );
+  exactKeys2(planRequest, [
+    "schema",
+    "plan_request_id",
+    "mcp_request_hash",
+    "phase",
+    "mcp_server_ref",
+    "mcp_server_origin",
+    "session_binding_hash",
+    "tool_name",
+    "tool_descriptor_hash",
+    "tool_input_schema",
+    "tool_input_schema_hash",
+    "tool_annotations",
+    "tool_capabilities",
+    "tool_effect_status",
+    "params",
+    "requested_at",
+    "plan_request_hash"
+  ], "Risk Fork MCP phase plan request");
+  if (planRequest.schema !== RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA || !ALL_PHASES.includes(planRequest.phase) || !safeEqual(
+    planRequest.plan_request_hash,
+    sha256Ref({ ...planRequest, plan_request_hash: null })
+  )) {
+    throw new TypeError("Risk Fork MCP phase plan request is invalid");
+  }
+  return planRequest;
+}
+function createRiskForkMcpChildOperation(planRequestValue, input = {}) {
+  const planRequest = normalizePhasePlanRequest(planRequestValue);
+  assertAllowedKeys(
+    input,
+    ["response_schema", "max_response_bytes", "timeout_ms"],
+    "Risk Fork MCP child operation input"
+  );
+  const mcpResultSchema = boundedCanonicalClone(
+    input.response_schema,
+    "Risk Fork MCP result schema"
+  );
+  assertPlainObject(mcpResultSchema, "Risk Fork MCP result schema");
+  const responseSchema = createMcpTransportResultSchema(mcpResultSchema);
+  const destinationPolicy = createMcpDestinationPolicy({
+    href: planRequest.mcp_server_ref,
+    origin: planRequest.mcp_server_origin
+  });
+  const toolSafetyBindingHash = planRequest.phase === "tools/call" ? sha256Ref({
+    tool_name: planRequest.tool_name,
+    tool_descriptor_hash: planRequest.tool_descriptor_hash,
+    tool_input_schema_hash: planRequest.tool_input_schema_hash,
+    tool_annotations: planRequest.tool_annotations,
+    tool_capabilities: planRequest.tool_capabilities,
+    tool_effect_status: planRequest.tool_effect_status
+  }) : null;
+  const operation = {
+    schema: RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
+    kind: "mcp_http_phase",
+    mcp_request_hash: planRequest.mcp_request_hash,
+    phase: planRequest.phase,
+    mcp_server_ref: planRequest.mcp_server_ref,
+    mcp_server_origin: planRequest.mcp_server_origin,
+    tool_name: planRequest.tool_name,
+    tool_descriptor_hash: planRequest.tool_descriptor_hash,
+    tool_input_schema: planRequest.tool_input_schema,
+    tool_input_schema_hash: planRequest.tool_input_schema_hash,
+    tool_effect_status: planRequest.tool_effect_status,
+    tool_safety_binding_hash: toolSafetyBindingHash,
+    params: planRequest.params,
+    protocol_version: RISK_FORK_MCP_PROTOCOL_VERSION,
+    destination_policy: destinationPolicy,
+    redirects: "error",
+    response_mode: "json_or_sse",
+    mcp_result_schema: mcpResultSchema,
+    mcp_result_schema_hash: sha256Ref(mcpResultSchema),
+    response_schema: responseSchema,
+    response_schema_hash: sha256Ref(responseSchema),
+    max_response_bytes: boundedInteger(
+      input.max_response_bytes ?? 256 * 1024,
+      "Risk Fork MCP child max_response_bytes",
+      { min: 1024, max: RISK_FORK_MCP_MAX_RESPONSE_BYTES }
+    ),
+    timeout_ms: boundedInteger(
+      input.timeout_ms ?? 3e4,
+      "Risk Fork MCP child timeout_ms",
+      { min: 100, max: RISK_FORK_MCP_MAX_TIMEOUT_MS }
+    ),
+    operation_hash: null
+  };
+  operation.operation_hash = sha256Ref(operation);
+  return validateMcpHttpPhaseOperation(operation);
+}
+function createRiskForkMcpPhasePlan(planRequestValue, input = {}) {
+  const planRequest = normalizePhasePlanRequest(planRequestValue);
+  assertAllowedKeys(input, ["descriptor_ref", "operation_input"], "Risk Fork MCP phase plan input");
+  const plan = {
+    schema: RISK_FORK_MCP_PHASE_PLAN_SCHEMA,
+    plan_request_hash: planRequest.plan_request_hash,
+    mcp_request_hash: planRequest.mcp_request_hash,
+    descriptor_ref: requireOpaqueRef(input.descriptor_ref, "Risk Fork MCP phase plan descriptor_ref"),
+    operation_input: boundedCanonicalClone(
+      input.operation_input,
+      "Risk Fork MCP phase plan operation_input"
+    ),
+    plan_hash: null
+  };
+  plan.plan_hash = sha256Ref(plan);
+  return deepFreeze(plan);
+}
+function createTrustedRiskForkMcpPhasePlanSource(resolvePlan) {
+  if (typeof resolvePlan !== "function") {
+    throw new TypeError("Trusted Risk Fork MCP phase plan source requires a host callback");
+  }
+  const source = Object.freeze({
+    schema: "agoragentic.risk-fork.trusted-mcp-phase-plan-source.v1",
+    trust_mode: "host_callback_identity"
+  });
+  planSourceResolvers.set(source, resolvePlan);
+  return source;
+}
+function assertMcpChildOperationMatchesRequest(operation, planRequest, request) {
+  exactKeys2(operation, [
+    "schema",
+    "kind",
+    "mcp_request_hash",
+    "phase",
+    "mcp_server_ref",
+    "mcp_server_origin",
+    "tool_name",
+    "tool_descriptor_hash",
+    "tool_input_schema",
+    "tool_input_schema_hash",
+    "tool_effect_status",
+    "tool_safety_binding_hash",
+    "params",
+    "protocol_version",
+    "destination_policy",
+    "redirects",
+    "response_mode",
+    "mcp_result_schema",
+    "mcp_result_schema_hash",
+    "response_schema",
+    "response_schema_hash",
+    "max_response_bytes",
+    "timeout_ms",
+    "operation_hash"
+  ], "Risk Fork MCP child operation");
+  if (operation.schema !== RISK_FORK_MCP_CHILD_OPERATION_SCHEMA || operation.kind !== "mcp_http_phase" || !safeEqual(operation.mcp_request_hash, request.request_hash) || !safeEqual(operation.mcp_request_hash, planRequest.mcp_request_hash) || operation.phase !== request.phase || operation.mcp_server_ref !== request.mcp_server_ref || operation.mcp_server_origin !== request.mcp_server_origin || operation.tool_name !== request.tool_name || operation.tool_descriptor_hash !== request.tool_descriptor_hash || !safeEqual(
+    sha256Ref(operation.tool_input_schema),
+    sha256Ref(request.tool_descriptor?.inputSchema ?? null)
+  ) || operation.tool_input_schema_hash !== (request.tool_descriptor ? sha256Ref(request.tool_descriptor.inputSchema) : null) || operation.tool_effect_status !== request.tool_effect_status || operation.tool_safety_binding_hash !== (request.phase === "tools/call" ? sha256Ref({
+    tool_name: request.tool_name,
+    tool_descriptor_hash: request.tool_descriptor_hash,
+    tool_input_schema_hash: request.tool_descriptor ? sha256Ref(request.tool_descriptor.inputSchema) : null,
+    tool_annotations: request.tool_annotations,
+    tool_capabilities: request.tool_capabilities,
+    tool_effect_status: request.tool_effect_status
+  }) : null) || !safeEqual(sha256Ref(operation.params), sha256Ref(request.params)) || operation.protocol_version !== RISK_FORK_MCP_PROTOCOL_VERSION || !safeEqual(
+    sha256Ref(operation.destination_policy),
+    sha256Ref(createMcpDestinationPolicy({
+      href: request.mcp_server_ref,
+      origin: request.mcp_server_origin
+    }))
+  ) || operation.redirects !== "error" || operation.response_mode !== "json_or_sse" || !safeEqual(operation.mcp_result_schema_hash, sha256Ref(operation.mcp_result_schema)) || !safeEqual(
+    sha256Ref(operation.response_schema),
+    sha256Ref(createMcpTransportResultSchema(operation.mcp_result_schema))
+  ) || !safeEqual(operation.response_schema_hash, sha256Ref(operation.response_schema)) || !safeEqual(operation.operation_hash, sha256Ref({ ...operation, operation_hash: null }))) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_BINDING_MISMATCH,
+      "Risk Fork MCP child operation does not bind the exact request"
+    );
+  }
+  assertPlainObject(operation.params, "Risk Fork MCP child operation.params");
+  assertPlainObject(
+    operation.destination_policy,
+    "Risk Fork MCP child operation.destination_policy"
+  );
+  assertPlainObject(operation.mcp_result_schema, "Risk Fork MCP child operation.mcp_result_schema");
+  assertPlainObject(operation.response_schema, "Risk Fork MCP child operation.response_schema");
+  boundedInteger(
+    operation.max_response_bytes,
+    "Risk Fork MCP child operation.max_response_bytes",
+    { min: 1024, max: RISK_FORK_MCP_MAX_RESPONSE_BYTES }
+  );
+  boundedInteger(
+    operation.timeout_ms,
+    "Risk Fork MCP child operation.timeout_ms",
+    { min: 100, max: RISK_FORK_MCP_MAX_TIMEOUT_MS }
+  );
+}
+function assertPlanMatchesRequest(planValue, planRequest, request, maxBytes, syntheticDemoMode) {
+  try {
+    const plan = boundedCanonicalClone(planValue, "Risk Fork MCP phase plan", maxBytes);
+    exactKeys2(plan, [
+      "schema",
+      "plan_request_hash",
+      "mcp_request_hash",
+      "descriptor_ref",
+      "operation_input",
+      "plan_hash"
+    ], "Risk Fork MCP phase plan");
+    if (plan.schema !== RISK_FORK_MCP_PHASE_PLAN_SCHEMA || !safeEqual(plan.plan_request_hash, planRequest.plan_request_hash) || !safeEqual(plan.mcp_request_hash, request.request_hash) || !safeEqual(plan.plan_hash, sha256Ref({ ...plan, plan_hash: null }))) {
+      throw adapterError(
+        RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_BINDING_MISMATCH,
+        "Risk Fork MCP phase plan does not bind the exact request"
+      );
+    }
+    requireOpaqueRef(plan.descriptor_ref, "Risk Fork MCP phase plan.descriptor_ref");
+    exactKeys2(plan.operation_input, OPERATION_INPUT_KEYS, "Risk Fork MCP phase operation input");
+    const operationInput = plan.operation_input;
+    if (operationInput.expected_commit_type !== "TYPED_RESULT") {
+      throw new TypeError("MCP phase plans must authorize a typed result only");
+    }
+    const operation = assertPlainObject(
+      operationInput.operation,
+      "Risk Fork MCP phase child operation"
+    );
+    let operationMode;
+    let expectedResultSchemaHash;
+    if (operation.kind === "mcp_http_phase") {
+      assertMcpChildOperationMatchesRequest(operation, planRequest, request);
+      const policy = networkPolicy(operationInput.network_policy);
+      if (policy.mode !== "allowlist" || policy.allowlist.length !== 1 || policy.allowlist[0] !== request.mcp_server_ref) {
+        throw new TypeError(
+          "MCP child transport requires an exact one-endpoint network allowlist"
+        );
+      }
+      operationMode = "child_transport";
+      expectedResultSchemaHash = operation.response_schema_hash;
+    } else if (operation.kind === "bounded_file_batch" && syntheticDemoMode === true) {
+      if (operationInput.network_policy?.mode !== "blocked") {
+        throw new TypeError("Synthetic MCP demo plans require blocked child network");
+      }
+      const candidate = assertPlainObject(
+        operation.commit_candidate,
+        "Synthetic MCP demo commit candidate"
+      );
+      if (candidate.type !== "TYPED_RESULT") {
+        throw new TypeError("Synthetic MCP demo plans require a typed result candidate");
+      }
+      expectedResultSchemaHash = sha256Ref(candidate.payload_schema);
+      operationMode = "synthetic_demo";
+    } else {
+      throw new TypeError(
+        "Live-default MCP plans require an exact child transport operation; predeclared results are demo-only"
+      );
+    }
+    requireSha256Ref(
+      operationInput.commit_policy?.typed_result_schema_hash,
+      "Risk Fork MCP phase plan typed-result schema hash"
+    );
+    const capsule = assertPlainObject(operationInput.capsule, "Risk Fork MCP phase plan capsule");
+    const interaction = assertPlainObject(
+      capsule.proposed_interaction,
+      "Risk Fork MCP phase plan capsule interaction"
+    );
+    const normalizedOrigin = new URL(request.mcp_server_origin).toString();
+    const expectedTargetRef = `mcp-request:${request.request_hash.slice(7)}`;
+    if (interaction.mcp_server_ref !== request.mcp_server_ref || interaction.mcp_server_origin !== normalizedOrigin || interaction.mcp_method !== request.phase || interaction.raw_method !== null || interaction.tool_name !== request.tool_name || interaction.target_ref !== expectedTargetRef || !safeEqual(interaction.effective_arguments_hash, sha256Ref(request.params)) || !safeEqual(sha256Ref(operationInput.effective_arguments), sha256Ref(request.params)) || !Array.isArray(capsule.allowed_commit_types) || !capsule.allowed_commit_types.includes("TYPED_RESULT") || !safeEqual(
+      capsule.authorized_result_schema_hash,
+      operationInput.commit_policy.typed_result_schema_hash
+    ) || !safeEqual(
+      expectedResultSchemaHash,
+      operationInput.commit_policy.typed_result_schema_hash
+    )) {
+      throw adapterError(
+        RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_BINDING_MISMATCH,
+        "Risk Fork MCP phase plan interaction does not match the exact request"
+      );
+    }
+    return Object.freeze({ operationMode, plan });
+  } catch (error) {
+    if (error instanceof RiskForkMcpHostAdapterError) throw error;
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_INVALID,
+      "Trusted Risk Fork MCP phase plan is invalid"
+    );
+  }
+}
+function cleanImportedEnvelope(request, validatedPlan, preparedResult) {
+  try {
+    const { operationMode, plan } = validatedPlan;
+    if (preparedResult.authority_granted !== false || preparedResult.provider_handle_exposed !== false) {
+      throw new TypeError("Host boundary exposed authority or a provider handle");
+    }
+    assertPreparedForCleanCommit(preparedResult.prepared);
+    const prepared = preparedResult.prepared;
+    const plannedInput = plan.operation_input;
+    const plannedOperation = plannedInput.operation;
+    const plannedCandidate = plannedOperation?.commit_candidate;
+    const expectedPayloadSchemaHash = operationMode === "child_transport" ? plannedOperation.response_schema_hash : sha256Ref(plannedCandidate?.payload_schema);
+    const normalizedRisk = prepared.risk_decision?.normalized_input;
+    const requiredLevel = request.risk_profile.minimum_level;
+    const levelRank = { LOW: 0, ELEVATED: 1, HIGH: 2, IRREVERSIBLE: 3 };
+    const expectedActions = {
+      LOW: "NORMAL_EXECUTION",
+      ELEVATED: "RISK_FORK_OPTIONAL",
+      HIGH: "RISK_FORK_REQUIRED",
+      IRREVERSIBLE: "RISK_FORK_PREPARE_CLEAN_COMMIT_REQUIRED"
+    };
+    const expectedTargetRef = `mcp-request:${request.request_hash.slice(7)}`;
+    const expectedAnnotations = request.phase === "tools/call" ? {
+      read_only_hint: request.tool_annotations?.readOnlyHint === true,
+      destructive_hint: request.tool_annotations?.destructiveHint === true,
+      idempotent_hint: request.tool_annotations?.idempotentHint === true,
+      open_world_hint: request.tool_annotations?.openWorldHint !== false
+    } : null;
+    if (prepared.authority_granted !== false || prepared.artifact.commit_type !== "TYPED_RESULT" || preparedResult.descriptor_ref !== plan.descriptor_ref || !safeEqual(preparedResult.operation_hash, sha256Ref(plannedInput)) || !safeEqual(prepared.capsule.capsule_hash, plannedInput.capsule.capsule_hash) || prepared.capsule.proposed_interaction.target_ref !== expectedTargetRef || prepared.capsule.proposed_interaction.mcp_server_ref !== request.mcp_server_ref || prepared.capsule.proposed_interaction.mcp_server_origin !== new URL(request.mcp_server_origin).toString() || prepared.capsule.proposed_interaction.mcp_method !== request.phase || prepared.capsule.proposed_interaction.tool_name !== request.tool_name || !safeEqual(
+      prepared.capsule.proposed_interaction.effective_arguments_hash,
+      sha256Ref(request.params)
+    ) || operationMode === "synthetic_demo" && (plannedCandidate?.type !== "TYPED_RESULT" || !safeEqual(
+      prepared.artifact.body.payload_hash,
+      sha256Ref(plannedCandidate.payload)
+    )) || !safeEqual(prepared.artifact.body.payload_schema_hash, expectedPayloadSchemaHash) || !safeEqual(
+      prepared.artifact.body.payload_schema_hash,
+      plannedInput.commit_policy.typed_result_schema_hash
+    ) || !normalizedRisk || normalizedRisk.mcp_phase !== request.phase || normalizedRisk.mcp_server_ref !== request.mcp_server_ref || normalizedRisk.mcp_server_origin !== new URL(request.mcp_server_origin).toString() || normalizedRisk.tool_name !== request.tool_name || !Number.isInteger(levelRank[prepared.risk_decision.level]) || levelRank[prepared.risk_decision.level] < levelRank[requiredLevel] || prepared.risk_decision.action !== expectedActions[prepared.risk_decision.level] || !safeEqual(
+      prepared.risk_decision.decision_hash,
+      sha256Ref({ ...prepared.risk_decision, decision_hash: null })
+    ) || prepared.risk_decision.blocked !== false) {
+      throw new TypeError("Risk Fork prepared result is not an authority-free typed result");
+    }
+    if (request.phase === "tools/call" && (!safeEqual(
+      sha256Ref(normalizedRisk.capabilities),
+      sha256Ref(Object.fromEntries(TOOL_CAPABILITY_KEYS.map((key) => [
+        key,
+        request.tool_capabilities[key] === true
+      ])))
+    ) || !safeEqual(sha256Ref(normalizedRisk.tool_annotations), sha256Ref(expectedAnnotations)))) {
+      throw new TypeError("Risk Fork prepared risk evidence does not match the bound remote tool");
+    }
+    const importedPayload = boundedCanonicalClone(
+      prepared.artifact.body.payload,
+      "Risk Fork MCP clean imported payload"
+    );
+    const result = operationMode === "child_transport" ? verifyMcpTransportResult(importedPayload, plannedOperation) : importedPayload;
+    scanSecretValues(result, "Risk Fork MCP clean imported payload");
+    const evidenceRef = `risk-fork-mcp:${prepared.artifact.artifact_hash}`;
+    const envelope = {
+      schema: MCP_SCHEMAS.cleanImportedResult,
+      request_id: request.request_id,
+      request_hash: request.request_hash,
+      phase: request.phase,
+      clean_imported: true,
+      authority_granted: false,
+      evidence_ref: evidenceRef,
+      evidence_hash: sha256Ref({
+        evidence_ref: evidenceRef,
+        request_hash: request.request_hash,
+        result
+      }),
+      result
+    };
+    return deepFreeze(envelope);
+  } catch {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PREPARED_RESULT_INVALID,
+      "Risk Fork did not return a verified authority-free typed result"
+    );
+  }
+}
+function throwIfAborted(context) {
+  if (context?.signal?.aborted) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.ABORTED,
+      "Risk Fork MCP host operation was aborted before clean import"
+    );
+  }
+}
+async function executePhase(record, request, context) {
+  throwIfAborted(context);
+  if (request.risk_profile.minimum_level === "IRREVERSIBLE" || request.risk_profile.prepare_only === true) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.ACTION_PROPOSAL_REQUIRED,
+      "Irreversible or unknown-effect MCP calls require a separately reviewed consequential action proposal"
+    );
+  }
+  const planRequest = createPlanRequest(request, record.clock);
+  let unresolvedPlan;
+  try {
+    unresolvedPlan = await record.resolvePlan(planRequest, context);
+  } catch {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_RESOLUTION_FAILED,
+      "Trusted Risk Fork MCP phase plan source did not resolve the request"
+    );
+  }
+  throwIfAborted(context);
+  const validatedPlan = assertPlanMatchesRequest(
+    unresolvedPlan,
+    planRequest,
+    request,
+    record.maxRequestBytes,
+    record.syntheticDemoMode
+  );
+  let preparedResult;
+  try {
+    preparedResult = await record.preEffect({
+      descriptor_ref: validatedPlan.plan.descriptor_ref,
+      operation_input: validatedPlan.plan.operation_input
+    });
+  } catch {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PRE_EFFECT_REJECTED,
+      "Risk Fork host boundary rejected the MCP phase before import"
+    );
+  }
+  throwIfAborted(context);
+  return cleanImportedEnvelope(request, validatedPlan, preparedResult);
+}
+function startBoundedPhase(record, request, context, configuredTimeoutMs) {
+  const controller = new AbortController();
+  const externalSignal = context?.signal;
+  let timeoutMs = configuredTimeoutMs;
+  const externalDeadline = Date.parse(context?.deadline_at ?? "");
+  if (Number.isFinite(externalDeadline)) {
+    timeoutMs = Math.max(1, Math.min(timeoutMs, externalDeadline - Date.now()));
+  }
+  if (Number.isSafeInteger(context?.timeout_ms) && context.timeout_ms > 0) {
+    timeoutMs = Math.min(timeoutMs, context.timeout_ms);
+  }
+  let rejectGate;
+  let settled = false;
+  const gate = new Promise((_resolve, reject) => {
+    rejectGate = reject;
+  });
+  const abortWith = (code, message, reason2) => {
+    if (settled) return;
+    const error = adapterError(code, message);
+    controller.abort(reason2 ?? error);
+    rejectGate(error);
+  };
+  const onExternalAbort = () => abortWith(
+    RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.ABORTED,
+    "Risk Fork MCP host operation was aborted before clean import",
+    externalSignal.reason
+  );
+  if (externalSignal?.aborted) onExternalAbort();
+  else externalSignal?.addEventListener?.("abort", onExternalAbort, { once: true });
+  const timer = setTimeout(() => abortWith(
+    RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.DEADLINE_EXCEEDED,
+    "Risk Fork MCP host operation exceeded its bounded deadline"
+  ), timeoutMs);
+  const phaseContext = Object.freeze({
+    signal: controller.signal,
+    timeout_ms: timeoutMs,
+    deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
+    operation: context?.operation ?? request.phase
+  });
+  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
+  const cleanup = () => {
+    settled = true;
+    clearTimeout(timer);
+    externalSignal?.removeEventListener?.("abort", onExternalAbort);
+  };
+  terminal.then(cleanup, cleanup);
+  return Object.freeze({
+    result: Promise.race([terminal, gate]),
+    terminal
+  });
+}
+function normalizeTimeouts(value = {}) {
+  assertAllowedKeys(value, Object.keys(DEFAULT_TIMEOUTS), "Risk Fork MCP host timeouts");
+  return Object.freeze(Object.fromEntries(Object.entries(DEFAULT_TIMEOUTS).map(([key, fallback]) => {
+    const candidate = value[key] ?? fallback;
+    if (!Number.isSafeInteger(candidate) || candidate < MIN_TIMEOUT_MS || candidate > RISK_FORK_MCP_MAX_TIMEOUT_MS) {
+      throw new TypeError(`Risk Fork MCP host timeout ${key} is invalid`);
+    }
+    return [key, candidate];
+  })));
+}
+function createRiskForkMcpHostAdapter(input = {}) {
+  assertAllowedKeys(input, [
+    "host_boundary",
+    "trusted_phase_plan_source",
+    "clock",
+    "timeouts",
+    "max_sessions",
+    "max_requests_per_session",
+    "max_request_bytes",
+    "synthetic_demo_mode"
+  ], "Risk Fork MCP host adapter input");
+  if (!isRiskForkHostBoundary(input.host_boundary)) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Risk Fork MCP host adapter requires an exact factory-created host boundary"
+    );
+  }
+  const resolvePlan = planSourceResolvers.get(input.trusted_phase_plan_source);
+  if (!resolvePlan) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_SOURCE_UNTRUSTED,
+      "Risk Fork MCP host adapter requires an exact host-owned phase plan source capability"
+    );
+  }
+  const clock = input.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") throw new TypeError("Risk Fork MCP adapter clock is invalid");
+  const timeouts = normalizeTimeouts(input.timeouts ?? {});
+  const maxSessions = boundedInteger(input.max_sessions ?? 16, "max_sessions", { min: 1, max: 1e3 });
+  const maxRequestsPerSession = boundedInteger(
+    input.max_requests_per_session ?? 100,
+    "max_requests_per_session",
+    { min: 1, max: 1e4 }
+  );
+  const maxRequestBytes = boundedInteger(
+    input.max_request_bytes ?? MAX_PLAN_BYTES,
+    "max_request_bytes",
+    { min: 1024, max: MAX_PLAN_BYTES }
+  );
+  if (input.synthetic_demo_mode !== void 0 && typeof input.synthetic_demo_mode !== "boolean") {
+    throw new TypeError("synthetic_demo_mode must be a boolean");
+  }
+  const syntheticDemoMode = input.synthetic_demo_mode === true;
+  const sessions = /* @__PURE__ */ new Set();
+  const runtime = { pendingOpens: 0 };
+  const preEffect = input.host_boundary.preEffect.bind(input.host_boundary);
+  async function openSession(openRequestValue, context = {}) {
+    if (sessions.size + runtime.pendingOpens >= maxSessions) {
+      throw adapterError(
+        RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.SESSION_LIMIT,
+        "Risk Fork MCP host session limit reached"
+      );
+    }
+    runtime.pendingOpens += 1;
+    let pendingReleased = false;
+    const releasePendingOpen = () => {
+      if (pendingReleased) return;
+      pendingReleased = true;
+      runtime.pendingOpens -= 1;
+    };
+    let openRequest;
+    let discovery;
+    let phaseOperation = null;
+    try {
+      ({ request: openRequest } = normalizeEnforcementRequest(openRequestValue, {
+        expectedSchema: MCP_SCHEMAS.sessionOpenRequest,
+        allowedPhases: [OPEN_PHASE],
+        maxBytes: maxRequestBytes
+      }));
+      phaseOperation = startBoundedPhase(
+        adapterRecords.get(adapter),
+        openRequest,
+        context,
+        timeouts.open_session_ms
+      );
+      discovery = await phaseOperation.result;
+    } catch (error) {
+      if (!phaseOperation) releasePendingOpen();
+      else phaseOperation.terminal.then(releasePendingOpen, releasePendingOpen);
+      throw error;
+    }
+    try {
+      exactKeys2(discovery.result, ["protocol_version", "stateless"], "Risk Fork MCP discovery result");
+      if (discovery.result.protocol_version !== RISK_FORK_MCP_PROTOCOL_VERSION || discovery.result.stateless !== true) {
+        throw adapterError(
+          RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PREPARED_RESULT_INVALID,
+          "Risk Fork MCP discovery did not establish the required stateless protocol"
+        );
+      }
+      throwIfAborted(context);
+      const sessionBindingHash = sha256Ref({
+        open_request_hash: openRequest.request_hash,
+        discovery_evidence_hash: discovery.evidence_hash,
+        discovery_result_hash: sha256Ref(discovery.result),
+        protocol_version: discovery.result.protocol_version,
+        stateless: discovery.result.stateless
+      });
+      const state = {
+        closed: false,
+        closePromise: null,
+        currentRequest: null,
+        requestCount: 0,
+        seenRequestHashes: /* @__PURE__ */ new Set(),
+        serverRef: openRequest.mcp_server_ref,
+        serverOrigin: openRequest.mcp_server_origin,
+        sessionBindingHash
+      };
+      let session;
+      async function close() {
+        if (state.closePromise) return state.closePromise;
+        state.closed = true;
+        const pendingAtClose = state.currentRequest;
+        state.closePromise = (async () => {
+          if (pendingAtClose) await pendingAtClose.terminal.catch(() => {
+          });
+          if (state.currentRequest === pendingAtClose) state.currentRequest = null;
+          sessions.delete(session);
+        })();
+        return state.closePromise;
+      }
+      async function request(phaseRequestValue, phaseContext = {}) {
+        if (state.closed) {
+          throw adapterError(
+            RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.SESSION_CLOSED,
+            "Risk Fork MCP host session is closed"
+          );
+        }
+        let normalized;
+        try {
+          normalized = normalizeEnforcementRequest(phaseRequestValue, {
+            expectedSchema: MCP_SCHEMAS.phaseRequest,
+            allowedPhases: REQUEST_PHASES,
+            maxBytes: maxRequestBytes
+          }).request;
+          if (normalized.mcp_server_ref !== state.serverRef || normalized.mcp_server_origin !== state.serverOrigin || !safeEqual(normalized.session_binding_hash, state.sessionBindingHash)) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.SESSION_BINDING_MISMATCH,
+              "MCP phase request does not match the enforced host session"
+            );
+          }
+          if (state.seenRequestHashes.has(normalized.request_hash)) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.REQUEST_REPLAY,
+              "MCP phase request hash was already consumed"
+            );
+          }
+          if (state.currentRequest) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.REQUEST_CONCURRENT,
+              "Concurrent MCP phase requests are not accepted by this source adapter"
+            );
+          }
+          if (state.requestCount >= maxRequestsPerSession) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.REQUEST_LIMIT,
+              "Risk Fork MCP host request limit reached"
+            );
+          }
+          state.requestCount += 1;
+          state.seenRequestHashes.add(normalized.request_hash);
+          const pending = startBoundedPhase(
+            adapterRecords.get(adapter),
+            normalized,
+            phaseContext,
+            timeouts.request_ms
+          );
+          state.currentRequest = pending;
+          const envelope = await pending.result;
+          if (state.closed) {
+            throw adapterError(
+              RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.SESSION_CLOSED,
+              "Risk Fork MCP host session closed before clean import"
+            );
+          }
+          if (state.currentRequest === pending) state.currentRequest = null;
+          return envelope;
+        } catch (error) {
+          void close().catch(() => {
+          });
+          throw error;
+        }
+      }
+      session = Object.freeze({
+        schema: MCP_SCHEMAS.hostSession,
+        discovery,
+        request,
+        close
+      });
+      sessions.add(session);
+      releasePendingOpen();
+      return session;
+    } catch (error) {
+      releasePendingOpen();
+      throw error;
+    }
+  }
+  async function executeFallback() {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.FALLBACK_BLOCKED,
+      "Risk Fork MCP source adapter does not expose an HTTP fallback or direct transport"
+    );
+  }
+  const adapter = Object.freeze({ openSession, executeFallback, timeouts });
+  adapterRecords.set(adapter, Object.freeze({
+    schema: RISK_FORK_MCP_HOST_ADAPTER_SCHEMA,
+    clock,
+    maxRequestBytes,
+    preEffect,
+    resolvePlan,
+    syntheticDemoMode
+  }));
+  return adapter;
+}
+function isRiskForkMcpHostAdapter(value) {
+  return adapterRecords.has(value);
+}
+
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/e2b-qualification.mjs
 import {
   KeyObject,
@@ -55313,11 +57831,12 @@ async function sha256FileRef(file) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { types as utilTypes3 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/e2b-template/lib/runtime-contract.mjs
 var BOOT_EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-boot-evidence.v1";
@@ -55822,7 +58341,7 @@ function validateE2BBirthAttestation(value, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
 import {
   mkdir as mkdir2,
   open as open3,
@@ -55985,7 +58504,7 @@ var E2BCleanupJournal = class {
     await this.initialize();
     const normalized = normalizeRecord(record);
     const target = this.#path(normalized.record_id);
-    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID6()}.tmp`);
+    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID7()}.tmp`);
     let handle;
     try {
       handle = await open3(temp, "wx", 384);
@@ -56941,10 +59460,174 @@ var MAX_JSON_DEPTH = 50;
 var MAX_LIST_PAGES = 100;
 var EXECUTION_CLEANUP_MARGIN_MS = 5e3;
 var PROFILE_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-clean-template.v1";
+var LIVE_QUALIFICATION_METADATA_SCHEMA = "agoragentic.risk-fork.e2b-live-qualification.v1";
 var EMPTY_WORKSPACE_DIGEST = sha256Ref([]);
 var E2B_SDK_ALL_TRAFFIC_SENTINEL = "0.0.0.0/0";
+var MAX_SANDBOX_METADATA_BYTES = 8 * 1024;
+var E2B_RUNTIME_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.schema",
+  "agoragentic.risk_fork.profile",
+  "agoragentic.risk_fork.cleanup_ref",
+  "agoragentic.risk_fork.capsule_hash",
+  "agoragentic.risk_fork.workspace_manifest_hash",
+  "agoragentic.risk_fork.identity_hash",
+  "agoragentic.risk_fork.network_policy_hash",
+  "agoragentic.risk_fork.template_hash",
+  "agoragentic.risk_fork.bootstrap_artifact_hash",
+  "agoragentic.risk_fork.runner_artifact_hash"
+]);
+var E2B_LIVE_QUALIFICATION_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.profile",
+  "agoragentic.risk_fork.run_hash"
+]);
+var E2B_RUNTIME_HASH_METADATA_KEYS = Object.freeze([
+  "agoragentic.risk_fork.capsule_hash",
+  "agoragentic.risk_fork.workspace_manifest_hash",
+  "agoragentic.risk_fork.identity_hash",
+  "agoragentic.risk_fork.network_policy_hash",
+  "agoragentic.risk_fork.template_hash",
+  "agoragentic.risk_fork.bootstrap_artifact_hash",
+  "agoragentic.risk_fork.runner_artifact_hash"
+]);
+var E2B_CLEAN_METADATA_KEYS = /* @__PURE__ */ new Set([
+  ...E2B_RUNTIME_METADATA_KEYS,
+  ...E2B_LIVE_QUALIFICATION_METADATA_KEYS
+]);
 var E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE = "E2B_SECURE_SNAPSHOT_PROFILE_UNAVAILABLE";
 var E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER = "E2B_LIVE_FORK_DISABLED_UNTRUSTED_WATCHER";
+function createDetachedArray4(...values) {
+  const output = Object.setPrototypeOf([], null);
+  for (let index = 0; index < values.length; index += 1) {
+    Object.defineProperty(output, index, {
+      configurable: true,
+      enumerable: true,
+      value: values[index],
+      writable: true
+    });
+  }
+  return output;
+}
+function buildE2BCleanSandboxCreateOptions(input = {}) {
+  if (input && typeof input === "object" && utilTypes3.isProxy(input)) {
+    throw new TypeError("E2B clean sandbox creation input must not be a Proxy");
+  }
+  assertPlainObject(input, "E2B clean sandbox creation input");
+  if (Object.getOwnPropertySymbols(input).length > 0) {
+    throw new TypeError("E2B clean sandbox creation input contains a symbol key");
+  }
+  const inputDescriptors = Object.getOwnPropertyDescriptors(input);
+  for (const descriptor of Object.values(inputDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError(
+        "E2B clean sandbox creation input contains a hidden or accessor-backed field"
+      );
+    }
+  }
+  const inputKeys = Object.keys(inputDescriptors);
+  const unexpectedInputKeys = inputKeys.filter((key) => !["timeoutMs", "metadata"].includes(key));
+  if (unexpectedInputKeys.length > 0) {
+    throw new TypeError("E2B clean sandbox creation input contains unsupported fields");
+  }
+  if (inputKeys.length !== 2 || !Object.hasOwn(inputDescriptors, "timeoutMs") || !Object.hasOwn(inputDescriptors, "metadata")) {
+    throw new TypeError("E2B clean sandbox creation input must contain exact required fields");
+  }
+  const timeoutMs = boundedInteger(
+    inputDescriptors.timeoutMs.value,
+    "E2B clean sandbox timeoutMs",
+    {
+      min: 1e3,
+      max: 24 * 60 * 60 * 1e3
+    }
+  );
+  const rawMetadata = inputDescriptors.metadata.value;
+  if (rawMetadata && typeof rawMetadata === "object" && utilTypes3.isProxy(rawMetadata)) {
+    throw new TypeError("E2B clean sandbox metadata must not be a Proxy");
+  }
+  assertPlainObject(rawMetadata, "E2B clean sandbox metadata");
+  if (Object.getOwnPropertySymbols(rawMetadata).length > 0) {
+    throw new TypeError("E2B clean sandbox metadata contains a symbol key");
+  }
+  const metadataDescriptors = Object.getOwnPropertyDescriptors(rawMetadata);
+  for (const descriptor of Object.values(metadataDescriptors)) {
+    if (!descriptor.enumerable || descriptor.get || descriptor.set) {
+      throw new TypeError("E2B clean sandbox metadata contains a hidden or accessor field");
+    }
+  }
+  const metadata = /* @__PURE__ */ Object.create(null);
+  const metadataEntries = Object.entries(metadataDescriptors).map(([key, descriptor]) => [key, descriptor.value]);
+  if (metadataEntries.length > 32) {
+    throw new TypeError("E2B clean sandbox metadata exceeds 32 entries");
+  }
+  for (const [key, value] of metadataEntries) {
+    const normalizedKey3 = requireString(key, "E2B clean sandbox metadata key", {
+      maxLength: 200,
+      pattern: /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
+    });
+    if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey3)) {
+      throw new TypeError("E2B clean sandbox metadata contains an unsupported key");
+    }
+    if (value && typeof value === "object" && utilTypes3.isProxy(value)) {
+      throw new TypeError(`E2B clean sandbox metadata ${normalizedKey3} must not be a Proxy`);
+    }
+    const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey3}`, {
+      maxLength: 1024
+    });
+    if (normalizedKey3 !== key || normalizedValue !== value || /[^\x20-\x7e]/.test(normalizedValue)) {
+      throw new TypeError("E2B clean sandbox metadata must use exact printable ASCII strings");
+    }
+    metadata[normalizedKey3] = normalizedValue;
+  }
+  const profile = metadata["agoragentic.risk_fork.profile"];
+  const expectedMetadataKeys = profile === PROFILE_METADATA_SCHEMA ? E2B_RUNTIME_METADATA_KEYS : profile === LIVE_QUALIFICATION_METADATA_SCHEMA ? E2B_LIVE_QUALIFICATION_METADATA_KEYS : null;
+  if (!expectedMetadataKeys || metadataEntries.length !== expectedMetadataKeys.length || expectedMetadataKeys.some((key) => !(key in metadata))) {
+    throw new TypeError("E2B clean sandbox metadata does not match a supported exact profile");
+  }
+  if (profile === PROFILE_METADATA_SCHEMA) {
+    if (metadata["agoragentic.risk_fork.schema"] !== "v1" || !/^e2b_cleanup_ref_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      metadata["agoragentic.risk_fork.cleanup_ref"]
+    )) {
+      throw new TypeError("E2B clean sandbox runtime metadata binding is invalid");
+    }
+    for (const key of E2B_RUNTIME_HASH_METADATA_KEYS) {
+      requireSha256Ref(metadata[key], `E2B clean sandbox metadata ${key}`);
+    }
+  } else {
+    requireSha256Ref(
+      metadata["agoragentic.risk_fork.run_hash"],
+      "E2B clean sandbox metadata run hash"
+    );
+  }
+  if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > MAX_SANDBOX_METADATA_BYTES) {
+    throw new TypeError("E2B clean sandbox metadata exceeds the byte limit");
+  }
+  assertCanonicalJson({ timeoutMs, metadata });
+  const outputMetadata = /* @__PURE__ */ Object.create(null);
+  for (const key of expectedMetadataKeys) outputMetadata[key] = metadata[key];
+  const network = Object.assign(/* @__PURE__ */ Object.create(null), {
+    // Keep the SDK-required Array brand while severing mutable inherited
+    // Array.prototype hooks before the pinned SDK retains these values for
+    // JSON serialization.
+    allowOut: createDetachedArray4(),
+    denyOut: createDetachedArray4(E2B_SDK_ALL_TRAFFIC_SENTINEL),
+    allowPublicTraffic: false
+  });
+  const lifecycle = Object.assign(/* @__PURE__ */ Object.create(null), {
+    onTimeout: "kill",
+    autoResume: false
+  });
+  const iam = Object.assign(/* @__PURE__ */ Object.create(null), { tokens: /* @__PURE__ */ Object.create(null) });
+  return deepFreeze(Object.assign(/* @__PURE__ */ Object.create(null), {
+    timeoutMs,
+    secure: true,
+    allowInternetAccess: false,
+    network,
+    lifecycle,
+    metadata: outputMetadata,
+    envs: /* @__PURE__ */ Object.create(null),
+    iam,
+    volumeMounts: /* @__PURE__ */ Object.create(null)
+  }));
+}
 var E2B_LIVE_FORK_SOURCE_ENABLED = false;
 function secureSnapshotProfileUnavailable(operation) {
   const error = new Error(
@@ -57474,7 +60157,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     expires_at: new Date(
       allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
     ).toISOString(),
-    birth_nonce: randomUUID7()
+    birth_nonce: randomUUID8()
   });
   const paths = e2bBirthRequestPaths(request.request_hash);
   for (const target of [
@@ -58442,9 +61125,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
-    const recordId = `e2b_cleanup_${randomUUID7()}`;
-    const cleanupRef = `e2b_cleanup_ref_${randomUUID7()}`;
-    const exportId = `e2b_export_${randomUUID7()}`;
+    const recordId = `e2b_cleanup_${randomUUID8()}`;
+    const cleanupRef = `e2b_cleanup_ref_${randomUUID8()}`;
+    const exportId = `e2b_export_${randomUUID8()}`;
     const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
@@ -58598,21 +61281,10 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       runnerArtifactHash: this.trustedRunnerArtifactHash
     }, this.cleanTemplateHash);
     const createTimeoutMs = this.qualified ? Math.min(idleTtlMs, ttlMs) : ttlMs;
-    const createOptions = {
+    const createOptions = buildE2BCleanSandboxCreateOptions({
       timeoutMs: createTimeoutMs,
-      secure: true,
-      allowInternetAccess: false,
-      network: {
-        allowOut: [],
-        denyOut: [E2B_SDK_ALL_TRAFFIC_SENTINEL],
-        allowPublicTraffic: false
-      },
-      lifecycle: { onTimeout: "kill", autoResume: false },
-      metadata,
-      envs: {},
-      iam: { tokens: {} },
-      volumeMounts: {}
-    };
+      metadata
+    });
     savepoint.allocation_attempted = true;
     const Sandbox = await this.#sandboxClass();
     const createStartedAt = this.clock();
@@ -58711,7 +61383,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           ...commonBootstrap,
           phase,
           expected_workspace_digest: workspaceDigest,
-          bootstrap_nonce: randomUUID7(),
+          bootstrap_nonce: randomUUID8(),
           request_hash: null
         };
         payload.request_hash = sha256Ref({ ...payload, request_hash: null });
@@ -58965,7 +61637,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     });
     const remainingMs = Date.parse(record.expires_at) - this.clock().getTime();
     if (timeoutMs > remainingMs) throw new Error("Execution timeout exceeds the child hard deadline");
-    const jobId = `rfj_${randomUUID7().replaceAll("-", "")}`;
+    const jobId = `rfj_${randomUUID8().replaceAll("-", "")}`;
     const jobPath = `${JOB_PATH}.${jobId}.json`;
     const resultPath = `${RESULT_PATH}.${jobId}.json`;
     const job = {
@@ -59243,7 +61915,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "fork",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID7()
+      request_nonce: randomUUID8()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
@@ -59341,7 +62013,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "savepoint",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID7()
+      request_nonce: randomUUID8()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
@@ -59425,7 +62097,7 @@ var REQUEST_SCHEMA = "agoragentic.risk-fork.authority-free-source-request.v1";
 var ATTESTATION_SCHEMA = "agoragentic.risk-fork.authority-free-source-attestation.v1";
 var EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-source-verification-evidence.v1";
 var E2B_INDEPENDENT_SOURCE_ATTESTATION_SCHEMA = "agoragentic.risk-fork.e2b-independent-source-attestation.v1";
-var REQUEST_KEYS = Object.freeze([
+var REQUEST_KEYS2 = Object.freeze([
   "schema",
   "provider",
   "cleanup_ref",
@@ -59554,7 +62226,7 @@ function independentAttestationPayload(request, verifierKeyHash, verifierArtifac
 }
 function validateRequest(value) {
   assertPlainObject(value, "E2B authority-free source request");
-  assertAllowedKeys(value, REQUEST_KEYS, "E2B authority-free source request");
+  assertAllowedKeys(value, REQUEST_KEYS2, "E2B authority-free source request");
   if (value.schema !== REQUEST_SCHEMA || value.provider !== "e2b-clean-template-v1") {
     throw new TypeError("E2B authority-free source request schema or provider is invalid");
   }
@@ -59811,12 +62483,12 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:79b1ba2928a5d8f11764b6830fe14a66dd40b49c4f9dbae3b0d4fe232a6cff17" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:474f5e379506c726cd1d32f8f25d6c288f4401dbb2989145107873f8fbb8aa66" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
   mcp_source_version: "2.0.0",
-  risk_fork_source_version: "0.1.0-alpha.0",
+  risk_fork_source_version: "0.1.0-alpha.1",
   reviewed_source_integrity: REVIEWED_SOURCE_INTEGRITY,
   optional_e2b_peer_version: "2.39.0",
   publication_status: "private_unpublished",
@@ -59861,12 +62533,20 @@ export {
   RISK_FORK_HOST_BOUNDARY_SCHEMA,
   RISK_FORK_HOST_DIAGNOSTIC_CODES,
   RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+  RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
+  RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
+  RISK_FORK_MCP_HOST_ADAPTER_SCHEMA,
+  RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES,
+  RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
+  RISK_FORK_MCP_PHASE_PLAN_SCHEMA,
+  RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
   RiskForkCommitError,
   RiskForkController,
   RiskForkHostBoundaryError,
   RiskForkMcpBoundary,
+  RiskForkMcpHostAdapterError,
   RiskForkPreparationError,
   RiskForkProvider,
   acquirePostgresAuthorityClient,
@@ -59895,10 +62575,14 @@ export {
   createRemoteToolDirectory,
   createRiskForkHostBoundary,
   createRiskForkImportEnvelope,
+  createRiskForkMcpChildOperation,
+  createRiskForkMcpHostAdapter,
+  createRiskForkMcpPhasePlan,
   createSavepointCapsule,
   createTrustedMcpServerVerifier,
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
+  createTrustedRiskForkMcpPhasePlanSource,
   deriveParentAuthorityRef,
   executeFallbackTool,
   importRiskForkProviderResult,
@@ -59907,6 +62591,7 @@ export {
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
   isRiskForkHostBoundary,
+  isRiskForkMcpHostAdapter,
   loadVerifiedE2BRuntimeSdk,
   migratePostgresDistributedAuthority,
   networkPolicy,

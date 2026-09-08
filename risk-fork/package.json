@@ -1,10 +1,20 @@
 {
   "name": "@agoragentic/risk-fork",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Provider-neutral fork-before-risk contracts, deterministic controls, and local reference tooling for agent execution.",
   "type": "module",
-  "license": "MIT",
-  "private": true,
+  "license": "Apache-2.0",
+  "private": false,
+  "author": {
+    "name": "Jeremy Borden",
+    "url": "https://agoragentic.com"
+  },
+  "homepage": "https://github.com/rhein1/agoragentic-integrations/tree/main/risk-fork",
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha",
+    "provenance": true
+  },
   "engines": {
     "node": ">=20"
   },
@@ -22,6 +32,14 @@
     "./controller": "./src/controller.mjs",
     "./interception": "./src/interception.mjs",
     "./host-boundary": "./src/host-boundary.mjs",
+    "./mcp-host-adapter": "./src/mcp-host-adapter.mjs",
+    "./mcp-transport-contract": "./src/mcp-transport-contract.mjs",
+    "./e2b-template/mcp-http-phase": "./e2b-template/lib/mcp-http-phase.mjs",
+    "./framework-tool-adapter": "./src/framework-tool-adapter.mjs",
+    "./frameworks/openai-agents": "./src/frameworks/openai-agents.mjs",
+    "./frameworks/langchain": "./src/frameworks/langchain.mjs",
+    "./frameworks/langgraph": "./src/frameworks/langgraph.mjs",
+    "./client-adoption": "./src/client-adoption.mjs",
     "./receipt": "./src/receipt.mjs",
     "./e2b-qualification": "./src/e2b-qualification.mjs",
     "./adapters/local-reference": "./src/adapters/local-reference.mjs",
@@ -39,23 +57,37 @@
     "e2b-template/",
     "ops/",
     "scripts/",
+    "clients/",
     "examples/",
+    "assets/",
     "README.md",
+    "GETTING_STARTED.md",
+    "CLIENT_ADOPTION.md",
+    "MCP_HOST_ADAPTER.md",
+    "FRAMEWORK_ADAPTERS.md",
+    "CITATION.cff",
+    "AUTHORS.md",
+    "CHANGELOG.md",
     "SECURITY_MODEL.md",
     "POSTGRES_AUTHORITY_RUNBOOK.md",
     "PROVIDER_COMPARISON.md",
     "ADVERSARIAL_REMEDIATION.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "test:postgres": "node --test test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
+    "test:package": "node scripts/verify-package-consumer.mjs",
+    "test:postgres": "node --test test/postgres-audit-checkpoint.test.mjs test/postgres-clean-commit-contract.test.mjs test/postgres-clean-commit-integration.test.mjs test/postgres-distributed-authority-contract.test.mjs test/postgres-distributed-authority.test.mjs test/postgres-authority-hardening-contract.test.mjs test/postgres-authority-hardening.test.mjs",
     "check": "node scripts/check.mjs",
     "self-test": "node examples/local-reference.mjs",
+    "demo:frameworks": "node examples/framework-adapters.mjs",
     "benchmark:local": "node scripts/benchmark-local.mjs",
     "e2b:build-template": "node scripts/e2b-build-template.mjs",
     "e2b:live-qualification": "node scripts/e2b-live-qualification.mjs",
     "postgres:migrate": "node scripts/migrate-postgres-authority.mjs",
+    "client:status": "node scripts/client-adoption.mjs status",
+    "client:plan": "node scripts/client-adoption.mjs plan --client all",
     "pack:dry": "npm pack --dry-run"
   },
   "dependencies": {
@@ -77,6 +109,9 @@
   "keywords": [
     "ai-agents",
     "mcp",
+    "openai-agents",
+    "langchain",
+    "langgraph",
     "sandbox",
     "fork",
     "security",

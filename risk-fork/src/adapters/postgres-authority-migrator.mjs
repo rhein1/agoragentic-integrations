@@ -10,14 +10,56 @@ import {
   safeEqual,
 } from '../util.mjs';
 
-const MIGRATIONS = Object.freeze([
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+
+function createDetachedArray(length) {
+  return detachArray(new Array(length));
+}
+
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function freezeDetachedArray(value) {
+  return Object.freeze(detachArray(value));
+}
+
+function freezeDataGraph(value, seen = new WeakSet()) {
+  if (!value || typeof value !== 'object' || seen.has(value)) return value;
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = detachArray(Reflect.ownKeys(descriptors));
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = descriptors[keys[index]];
+    if (Object.hasOwn(descriptor, 'value')) freezeDataGraph(descriptor.value, seen);
+  }
+  return Object.freeze(value);
+}
+
+function mapPublicArray(value, mapper) {
+  const mapped = new Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    defineArrayIndex(mapped, index, mapper(value[index]));
+  }
+  return mapped;
+}
+
+const MIGRATIONS = freezeDetachedArray([
   Object.freeze({
     version: 1,
     url: new URL('../../migrations/001_distributed_authority.pg.sql', import.meta.url),
   }),
 ]);
 const SAFE_STARTUP_OPTIONS = '-c synchronous_commit=on -c search_path=pg_catalog';
-const REQUIRED_RELATIONS = Object.freeze([
+const REQUIRED_RELATIONS = freezeDetachedArray([
   'authority_schema_migrations',
   'authority_meta',
   'parent_heads',
@@ -48,32 +90,32 @@ const EXPECTED_AUDIT_FUNCTION_BODY = [
 ].join('\n');
 const RUNTIME_TABLE_PRIVILEGES = Object.freeze({
   authority_schema_migrations: Object.freeze({
-    required: Object.freeze(['SELECT']),
-    forbidden: Object.freeze(['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT']),
+    forbidden: freezeDetachedArray(['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   authority_meta: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT', 'UPDATE']),
-    forbidden: Object.freeze(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT', 'UPDATE']),
+    forbidden: freezeDetachedArray(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   parent_heads: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT', 'UPDATE']),
-    forbidden: Object.freeze(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT', 'UPDATE']),
+    forbidden: freezeDetachedArray(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   commit_approvals: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT', 'UPDATE']),
-    forbidden: Object.freeze(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT', 'UPDATE']),
+    forbidden: freezeDetachedArray(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   execution_authorizations: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT', 'UPDATE']),
-    forbidden: Object.freeze(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT', 'UPDATE']),
+    forbidden: freezeDetachedArray(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   operations: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT', 'UPDATE']),
-    forbidden: Object.freeze(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT', 'UPDATE']),
+    forbidden: freezeDetachedArray(['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
   audit_events: Object.freeze({
-    required: Object.freeze(['SELECT', 'INSERT']),
-    forbidden: Object.freeze(['UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
+    required: freezeDetachedArray(['SELECT', 'INSERT']),
+    forbidden: freezeDetachedArray(['UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']),
   }),
 });
 
@@ -243,7 +285,7 @@ export async function verifyPostgresAuthorityClientTransport(
     'PostgreSQL authority transport verification options',
   );
   const requireTls = requireBoolean(options.requireTls ?? false, 'requireTls');
-  if (!requireTls) return deepFreeze({ tls_verified: false });
+  if (!requireTls) return freezeDataGraph({ tls_verified: false });
   let result;
   try {
     result = await client.query(
@@ -282,7 +324,7 @@ export async function verifyPostgresAuthorityClientTransport(
       },
     );
   }
-  return deepFreeze({
+  return freezeDataGraph({
     tls_verified: true,
     protocol: typeof result.rows[0].version === 'string' ? result.rows[0].version : null,
     cipher: typeof result.rows[0].cipher === 'string' ? result.rows[0].cipher : null,
@@ -324,14 +366,22 @@ export async function acquirePostgresAuthorityClient(
 
 async function loadMigrationPlan(schemaName) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
-  const plan = [];
-  for (const migration of MIGRATIONS) {
+  // The apply path historically iterates this internal plan. Keep it ordinary
+  // while defining every index as own data; exported verification reports are
+  // copied into ordinary public arrays below.
+  const plan = new Array(MIGRATIONS.length);
+  for (let index = 0; index < MIGRATIONS.length; index += 1) {
+    const migration = MIGRATIONS[index];
     const template = (await readFile(migration.url, 'utf8')).replace(/\r\n?/g, '\n');
-    plan.push(Object.freeze({
-      version: migration.version,
-      migration_hash: sha256Ref(template),
-      sql: template.replaceAll('__RISK_FORK_SCHEMA__', quotedSchema),
-    }));
+    defineArrayIndex(
+      plan,
+      index,
+      Object.freeze({
+        version: migration.version,
+        migration_hash: sha256Ref(template),
+        sql: template.replaceAll('__RISK_FORK_SCHEMA__', quotedSchema),
+      }),
+    );
   }
   return Object.freeze(plan);
 }
@@ -750,16 +800,15 @@ async function verifyRequiredRelations(client, schemaName) {
       ORDER BY relation.relname, trigger_record.tgname`,
     [schemaName, REQUIRED_RELATIONS],
   );
-  const expectedTriggers = new Map([
-    ['audit_events_no_delete', {
+  const expectedTriggers = new Map();
+  expectedTriggers.set('audit_events_no_delete', {
       type: 11,
       definition: 'CREATE TRIGGER audit_events_no_delete BEFORE DELETE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()',
-    }],
-    ['audit_events_no_update', {
+    });
+  expectedTriggers.set('audit_events_no_update', {
       type: 19,
       definition: 'CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON __schema__.audit_events FOR EACH ROW EXECUTE FUNCTION __schema__.reject_audit_mutation()',
-    }],
-  ]);
+    });
   if (triggers.rowCount !== expectedTriggers.size) {
     throw migrationMismatch(
       'PostgreSQL authority audit triggers differ from the reviewed migration',
@@ -768,7 +817,8 @@ async function verifyRequiredRelations(client, schemaName) {
       { scope: 'audit_triggers', observed_count: triggers.rowCount },
     );
   }
-  for (const row of triggers.rows) {
+  for (let index = 0; index < triggers.rows.length; index += 1) {
+    const row = triggers.rows[index];
     const expected = expectedTriggers.get(row.tgname);
     const enabled = row.tgenabled === 'O' || row.tgenabled === 'A';
     if (!expected
@@ -902,9 +952,13 @@ async function verifyRuntimePrivileges(client, schemaName) {
       { scope: 'schema' },
     );
   }
-  for (const [relationName, policy] of Object.entries(RUNTIME_TABLE_PRIVILEGES)) {
+  const relationNames = detachArray(Object.keys(RUNTIME_TABLE_PRIVILEGES));
+  for (let relationIndex = 0; relationIndex < relationNames.length; relationIndex += 1) {
+    const relationName = relationNames[relationIndex];
+    const policy = RUNTIME_TABLE_PRIVILEGES[relationName];
     const relation = tableName(schemaName, relationName);
-    for (const privilege of policy.required) {
+    for (let index = 0; index < policy.required.length; index += 1) {
+      const privilege = policy.required[index];
       if (!await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           'PostgreSQL runtime role is missing a required table privilege',
@@ -914,7 +968,8 @@ async function verifyRuntimePrivileges(client, schemaName) {
         );
       }
     }
-    for (const privilege of policy.forbidden) {
+    for (let index = 0; index < policy.forbidden.length; index += 1) {
+      const privilege = policy.forbidden[index];
       if (await hasTablePrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           'PostgreSQL runtime role has a forbidden table privilege',
@@ -923,7 +978,7 @@ async function verifyRuntimePrivileges(client, schemaName) {
           { relation: relationName, privilege, expected: false },
         );
       }
-      if (['INSERT', 'UPDATE', 'REFERENCES'].includes(privilege)
+      if ((privilege === 'INSERT' || privilege === 'UPDATE' || privilege === 'REFERENCES')
         && await hasAnyColumnPrivilege(client, relation, privilege)) {
         throw migrationMismatch(
           'PostgreSQL runtime role has a forbidden column privilege',
@@ -974,10 +1029,10 @@ export async function verifyPostgresDistributedAuthoritySchema(client, options =
   await verifyMigrationSet(client, schemaName, quotedSchema, plan);
   await verifyRequiredRelations(client, schemaName);
   if (verifyPrivileges) await verifyRuntimePrivileges(client, schemaName);
-  return deepFreeze({
+  return freezeDataGraph({
     schema_name: schemaName,
-    migration_versions: plan.map((migration) => migration.version),
-    migration_hashes: plan.map((migration) => migration.migration_hash),
+    migration_versions: mapPublicArray(plan, (migration) => migration.version),
+    migration_hashes: mapPublicArray(plan, (migration) => migration.migration_hash),
     runtime_privileges_verified: verifyPrivileges,
   });
 }

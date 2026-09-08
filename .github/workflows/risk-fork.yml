@@ -163,6 +163,53 @@ jobs:
         working-directory: risk-fork
         run: npm run test:postgres
 
+  managed-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: risk_fork_managed
+          POSTGRES_PASSWORD: risk_fork_managed_ci
+          POSTGRES_DB: risk_fork_managed_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U risk_fork_managed -d risk_fork_managed_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      AGORAGENTIC_NO_SPEND: '1'
+      AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+      AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+      RISK_FORK_MANAGED_TEST_POSTGRES_URL: postgresql://risk_fork_managed:risk_fork_managed_ci@127.0.0.1:5432/risk_fork_managed_test
+      RISK_FORK_MANAGED_TEST_CONFIRM_DISPOSABLE: YES_DELETE_DATA
+      RISK_FORK_MANAGED_REQUIRE_POSTGRES_TESTS: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: |
+            risk-fork/package-lock.json
+            risk-fork/managed-service/package-lock.json
+      - name: Install locked Risk Fork and managed-service dependencies
+        run: |
+          npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
+          npm --prefix risk-fork/managed-service ci --ignore-scripts --no-audit --no-fund
+      - name: Check and test managed-service source against disposable PostgreSQL
+        working-directory: risk-fork/managed-service
+        run: |
+          npm run check
+          npm test
+
   hosted-mcp-bundle:
     runs-on: ubuntu-latest
     timeout-minutes: 15

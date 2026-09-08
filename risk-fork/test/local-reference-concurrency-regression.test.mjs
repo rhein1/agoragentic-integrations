@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -173,6 +172,161 @@ function assertEvidenceHash(evidence) {
     network_policy_hash: evidence.network_policy_hash,
     last_execution: evidence.last_execution,
   }));
+}
+
+const WINDOWS_LOCK_READY = 'RISK_FORK_TEST_LOCK_READY';
+
+function waitForExactStdoutLine(child, expectedLine, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let stdout = '';
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer !== null) clearTimeout(timer);
+      child.stdout.off('data', onData);
+      child.off('error', onError);
+      child.off('close', onClose);
+    };
+    const finish = (error = null) => {
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+    const onData = (chunk) => {
+      stdout += chunk.toString('utf8');
+      if (stdout.length > 1_024) {
+        finish(new Error('Windows lock helper emitted excessive readiness output'));
+        return;
+      }
+      const newlineIndex = stdout.indexOf('\n');
+      if (newlineIndex === -1) return;
+      const line = stdout.slice(0, newlineIndex).replace(/\r$/u, '');
+      if (line !== expectedLine) {
+        finish(new Error(`Windows lock helper emitted unexpected readiness line: ${JSON.stringify(line)}`));
+        return;
+      }
+      finish();
+    };
+    const onError = (error) => finish(error);
+    const onClose = (code, signal) => {
+      finish(new Error(`Windows lock helper closed before ready (code=${code}, signal=${signal})`));
+    };
+
+    child.stdout.on('data', onData);
+    child.once('error', onError);
+    child.once('close', onClose);
+    timer = setTimeout(() => {
+      finish(new Error(`Windows lock helper was not ready within ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+}
+
+async function waitForClose(closePromise, timeoutMs) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      closePromise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Windows lock helper did not close within ${timeoutMs}ms`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
+async function startWindowsExclusiveLock(lockPath) {
+  const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
+  if (typeof systemRoot !== 'string' || !path.isAbsolute(systemRoot)) {
+    throw new Error('Windows lock helper requires an absolute SystemRoot or WINDIR');
+  }
+  const powershell = path.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe',
+  );
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$lockPath = [Environment]::GetEnvironmentVariable('RISK_FORK_TEST_LOCK_PATH')",
+    "if ([String]::IsNullOrWhiteSpace($lockPath)) { throw 'Missing lock path' }",
+    '$stream = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)',
+    'try {',
+    `  [Console]::Out.WriteLine('${WINDOWS_LOCK_READY}')`,
+    '  [Console]::Out.Flush()',
+    '  [Console]::In.ReadLine() | Out-Null',
+    '} finally {',
+    '  $stream.Dispose()',
+    '}',
+  ].join('\n');
+  const childEnv = { RISK_FORK_TEST_LOCK_PATH: lockPath };
+  for (const key of ['SystemRoot', 'WINDIR']) {
+    if (typeof process.env[key] === 'string') childEnv[key] = process.env[key];
+  }
+  const child = spawn(powershell, [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    script,
+  ], {
+    env: childEnv,
+    windowsHide: true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  let processError = null;
+  child.stderr.on('data', (chunk) => {
+    if (stderr.length < 4_096) stderr += chunk.toString('utf8');
+  });
+  child.on('error', (error) => {
+    processError ??= error;
+  });
+  const closePromise = new Promise((resolve) => {
+    child.once('close', (code, signal) => resolve({ code, signal }));
+  });
+
+  try {
+    await waitForExactStdoutLine(child, WINDOWS_LOCK_READY, 15_000);
+  } catch (error) {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await waitForClose(closePromise, 3_000).catch(() => {});
+    const detail = stderr.trim();
+    if (detail) error.message = `${error.message}: ${detail}`;
+    throw error;
+  }
+
+  let stopped = false;
+  return {
+    async release() {
+      if (stopped) return;
+      child.stdin.end();
+      let close;
+      try {
+        close = await waitForClose(closePromise, 3_000);
+      } catch (error) {
+        if (child.exitCode === null && child.signalCode === null) child.kill();
+        await waitForClose(closePromise, 3_000).catch(() => {});
+        stopped = true;
+        throw error;
+      }
+      stopped = true;
+      assert.equal(processError, null, 'Windows lock helper must not emit a process error');
+      assert.equal(close.signal, null, 'Windows lock helper must exit without a signal');
+      assert.equal(close.code, 0, `Windows lock helper failed: ${stderr.trim()}`);
+      assert.equal(stderr.trim(), '', 'Windows lock helper must not emit stderr');
+    },
+    async dispose() {
+      if (stopped) return;
+      child.stdin.destroy();
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      await waitForClose(closePromise, 3_000);
+      stopped = true;
+    },
+  };
 }
 
 test('local reference admission starts exactly one runner and suspend never changes state', async () => {
@@ -651,24 +805,14 @@ test('destroy failure blocks replay but an explicit retry can finish cleanup', a
 
 test('Windows retries destruction after a transient workspace lock is released', {
   skip: process.platform !== 'win32',
-  timeout: 5_000,
+  timeout: 30_000,
 }, async () => {
   const fixture = await makeFixture('risk-fork-local-windows-destroy-retry-');
   const { adapter, fork } = fixture;
-  let blocker = null;
+  let lock = null;
   try {
     const workspace = adapter.forks.get(fork.fork_ref).directory;
-    const minimalEnv = {};
-    for (const key of ['SystemRoot', 'WINDIR']) {
-      if (typeof process.env[key] === 'string') minimalEnv[key] = process.env[key];
-    }
-    blocker = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      cwd: workspace,
-      env: minimalEnv,
-      windowsHide: true,
-      stdio: 'ignore',
-    });
-    await once(blocker, 'spawn');
+    lock = await startWindowsExclusiveLock(path.join(workspace, '.exclusive-delete-lock'));
 
     await assert.rejects(
       adapter.destroyFork({ fork_ref: fork.fork_ref }),
@@ -677,9 +821,8 @@ test('Windows retries destruction after a transient workspace lock is released',
     assert.equal((await adapter.collectEvidence({ fork_ref: fork.fork_ref })).status, 'destroy_failed');
     await access(workspace);
 
-    blocker.kill();
-    await once(blocker, 'close');
-    blocker = null;
+    await lock.release();
+    lock = null;
 
     const retry = await adapter.destroyFork({ fork_ref: fork.fork_ref });
     assert.equal(retry.status, 'destroy_requested_observed');
@@ -687,11 +830,11 @@ test('Windows retries destruction after a transient workspace lock is released',
     assert.equal((await adapter.verifyDestroyed({ fork_ref: fork.fork_ref })).status, 'verified');
     await assert.rejects(access(workspace), (error) => error?.code === 'ENOENT');
   } finally {
-    if (blocker) {
-      blocker.kill();
-      await once(blocker, 'close').catch(() => {});
+    try {
+      if (lock) await lock.dispose();
+    } finally {
+      await disposeFixture(fixture);
     }
-    await disposeFixture(fixture);
   }
 });
 

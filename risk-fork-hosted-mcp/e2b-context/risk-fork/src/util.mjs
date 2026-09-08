@@ -1,6 +1,53 @@
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 
+function detachArray(value) {
+  Object.setPrototypeOf(value, null);
+  return value;
+}
+
+function createDetachedArray(length = 0) {
+  return detachArray(new Array(length));
+}
+
+function defineArrayIndex(value, index, child) {
+  Object.defineProperty(value, String(index), {
+    value: child,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function arrayContains(value, expected) {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === expected) return true;
+  }
+  return false;
+}
+
+function sortStrings(value) {
+  for (let index = 1; index < value.length; index += 1) {
+    const candidate = value[index];
+    let cursor = index - 1;
+    while (cursor >= 0 && value[cursor] > candidate) {
+      value[cursor + 1] = value[cursor];
+      cursor -= 1;
+    }
+    value[cursor + 1] = candidate;
+  }
+  return value;
+}
+
+function joinStrings(value, separator) {
+  let joined = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (index > 0) joined += separator;
+    joined += value[index];
+  }
+  return joined;
+}
+
 export function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -14,12 +61,25 @@ export function assertPlainObject(value, field) {
 
 export function assertAllowedKeys(value, allowed, field) {
   assertPlainObject(value, field);
-  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
-  if (unexpected.length > 0) {
-    if (unexpected.some((key) => containsSecretShapedText(key))) {
-      throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+  const keys = detachArray(Object.keys(value));
+  const unexpected = createDetachedArray();
+  let unexpectedCount = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (!arrayContains(allowed, key)) {
+      defineArrayIndex(unexpected, unexpectedCount, key);
+      unexpectedCount += 1;
     }
-    throw new TypeError(`${field} contains unsupported fields: ${unexpected.sort().join(', ')}`);
+  }
+  if (unexpected.length > 0) {
+    for (let index = 0; index < unexpected.length; index += 1) {
+      if (containsSecretShapedText(unexpected[index])) {
+        throw new TypeError(`${field} contains an unsupported secret-shaped field`);
+      }
+    }
+    throw new TypeError(
+      `${field} contains unsupported fields: ${joinStrings(sortStrings(unexpected), ', ')}`,
+    );
   }
 }
 
@@ -70,7 +130,7 @@ export const BEARER_CREDENTIAL_PATTERN = /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/i;
 export const GENERIC_CREDENTIAL_TOKEN_PATTERN =
   /\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b/;
 
-const SECRET_SHAPED_TEXT = Object.freeze([
+const SECRET_SHAPED_TEXT = Object.freeze(detachArray([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/i,
   BEARER_CREDENTIAL_PATTERN,
   AGORAGENTIC_API_KEY_PATTERN,
@@ -78,11 +138,138 @@ const SECRET_SHAPED_TEXT = Object.freeze([
   GENERIC_CREDENTIAL_TOKEN_PATTERN,
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i,
-]);
+]));
+
+const AUTHORIZATION_VALUE_PATTERN =
+  /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+const URL_USERINFO_PATTERN =
+  /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+const PATH_USERINFO_PATTERN =
+  /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
 
 export function containsSecretShapedText(value) {
-  return typeof value === 'string'
-    && SECRET_SHAPED_TEXT.some((pattern) => pattern.test(value));
+  if (typeof value !== 'string') return false;
+  for (let index = 0; index < SECRET_SHAPED_TEXT.length; index += 1) {
+    if (SECRET_SHAPED_TEXT[index].test(value)) return true;
+  }
+  return false;
+}
+
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+
+function isAsciiAlphanumericCharacterCode(code) {
+  return (code >= 0x30 && code <= 0x39)
+    || (code >= 0x41 && code <= 0x5a)
+    || (code >= 0x61 && code <= 0x7a);
+}
+
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 0x2d || code === 0x2e || code === 0x5f;
+}
+
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
+}
+
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 0x20) === 0x62
+    && (value.charCodeAt(index + 1) | 0x20) === 0x61
+    && (value.charCodeAt(index + 2) | 0x20) === 0x73
+    && (value.charCodeAt(index + 3) | 0x20) === 0x69
+    && (value.charCodeAt(index + 4) | 0x20) === 0x63;
+}
+
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length ? cursor : -1;
+}
+
+function basicBase64Value(code) {
+  if (code >= 0x41 && code <= 0x5a) return code - 0x41;
+  if (code >= 0x61 && code <= 0x7a) return code - 0x61 + 26;
+  if (code >= 0x30 && code <= 0x39) return code - 0x30 + 52;
+  if (code === 0x2b || code === 0x2d) return 62;
+  if (code === 0x2f || code === 0x5f) return 63;
+  return -1;
+}
+
+function advanceBasicDecoder(state, code) {
+  const activeOffsets = state & 0x0f;
+  if (activeOffsets === 0 || code === 0x3d) return code === 0x3d ? 0 : state;
+  const decoded = basicBase64Value(code);
+  if (decoded === -1) return state;
+  const previous = state >> 4;
+
+  if ((activeOffsets & 0x02) !== 0
+    && ((previous << 2) | (decoded >> 4)) === 0x3a) {
+    return -1;
+  }
+  if ((activeOffsets & 0x04) !== 0
+    && (((previous & 0x0f) << 4) | (decoded >> 2)) === 0x3a) {
+    return -1;
+  }
+  if ((activeOffsets & 0x08) !== 0
+    && (((previous & 0x03) << 6) | decoded) === 0x3a) {
+    return -1;
+  }
+
+  const nextOffsets = ((activeOffsets << 1) & 0x0e) | (activeOffsets >> 3);
+  return (decoded << 4) | nextOffsets;
+}
+
+function containsBasicAuthorization(value) {
+  let pendingStart = -1;
+  let nodeDecoderState = 0;
+  let whitespaceFoldDecoderState = 0;
+
+  // Each low nibble is the set of live Base64 quartet offsets for every Basic
+  // candidate seen so far. There are only four possible offsets, so nested
+  // candidates merge into constant-size state instead of causing rescans.
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    if (cursor === pendingStart) {
+      nodeDecoderState |= 0x01;
+      whitespaceFoldDecoderState |= 0x01;
+      pendingStart = -1;
+    }
+
+    const tokenStart = basicTokenStartAt(value, cursor);
+    if (tokenStart !== -1) pendingStart = tokenStart;
+
+    // Buffer consumes the low byte of each UTF-16 code unit before classifying
+    // it. Preserve that behavior while also retaining the scanner's historical
+    // complete-ECMAScript-whitespace fold as a second conservative decoder.
+    const code = value.charCodeAt(cursor) & 0xff;
+    nodeDecoderState = advanceBasicDecoder(nodeDecoderState, code);
+    if (nodeDecoderState === -1) return true;
+
+    if (!isWhitespaceCharacter(value[cursor])) {
+      whitespaceFoldDecoderState = advanceBasicDecoder(whitespaceFoldDecoderState, code);
+      if (whitespaceFoldDecoderState === -1) return true;
+    }
+  }
+  return false;
+}
+
+export function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== 'string') return false;
+  return containsSecretShapedText(value)
+    || containsBasicAuthorization(value)
+    || AUTHORIZATION_VALUE_PATTERN.test(value)
+    || URL_USERINFO_PATTERN.test(value)
+    || PATH_USERINFO_PATTERN.test(value);
 }
 
 export function assertNoSecretShapedText(value, field) {

@@ -32,6 +32,8 @@ const REVIEWED_SOURCE_NORMALIZATION = 'utf8_crlf_to_lf_lone_cr_preserved';
 const HOSTED_FIXTURE_COPIES = Object.freeze([
   ['mcp/mcp-server.js', 'mcp/mcp-server.js'],
   ['mcp/package.json', 'mcp/package.json'],
+  ['risk-fork/LICENSE', 'risk-fork/LICENSE'],
+  ['risk-fork/NOTICE', 'risk-fork/NOTICE'],
   ['risk-fork/e2b-template', 'risk-fork/e2b-template'],
   ['risk-fork/migrations/001_distributed_authority.pg.sql', 'risk-fork/migrations/001_distributed_authority.pg.sql'],
   ['risk-fork/ops/postgres', 'risk-fork/ops/postgres'],
@@ -53,15 +55,19 @@ const GENERATED_HOSTED_ROOTS = Object.freeze([
   'schema',
 ]);
 const GENERATED_HOSTED_OUTPUT_PATHS = Object.freeze([
+  'LICENSE',
+  'NOTICE',
   'THIRD_PARTY_NOTICES.txt',
   'dist/runtime/index.mjs',
   'e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs',
   'e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs',
   'e2b-context/risk-fork/e2b-template/bin/run.mjs',
+  'e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs',
   'e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs',
   'e2b-context/risk-fork/e2b-template/template.mjs',
   'e2b-context/risk-fork/src/canonical.mjs',
   'e2b-context/risk-fork/src/child-operation.mjs',
+  'e2b-context/risk-fork/src/mcp-transport-contract.mjs',
   'e2b-context/risk-fork/src/util.mjs',
   'e2b-context/transaction-assurance/src/canonical.mjs',
   'integrity-manifest.json',
@@ -206,6 +212,8 @@ async function listFiles(directory, prefix = '') {
 
 async function snapshotGeneratedHostedOutputs(root) {
   const actualPaths = [
+    'LICENSE',
+    'NOTICE',
     'THIRD_PARTY_NOTICES.txt',
     'integrity-manifest.json',
   ];
@@ -247,6 +255,7 @@ test('package contract is private, exact-version, and has no mandatory runtime d
   assert.equal(pkg.version, '0.1.0-alpha.0');
   assert.equal(pkg.private, true);
   assert.equal(pkg.type, 'module');
+  assert.equal(pkg.license, 'Apache-2.0');
   assert.deepEqual(pkg.exports, {
     '.': './dist/runtime/index.mjs',
     './e2b-context/*': './e2b-context/*',
@@ -270,6 +279,7 @@ test('package contract is private, exact-version, and has no mandatory runtime d
     'THIRD_PARTY_NOTICES.txt',
     'README.md',
     'LICENSE',
+    'NOTICE',
   ]);
 });
 
@@ -307,7 +317,7 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.package.name, '@agoragentic/risk-fork-hosted-mcp');
   assert.equal(manifest.package.version, '0.1.0-alpha.0');
   assert.equal(manifest.sources.mcp.version, '2.0.0');
-  assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.0');
+  assert.equal(manifest.sources.risk_fork.version, '0.1.0-alpha.1');
   assert.equal(manifest.source_commit, undefined);
   assert.ok(manifest.reviewed_sources.length > 20);
   assert.deepEqual(
@@ -342,6 +352,43 @@ test('build is deterministic and records exact source and artifact integrity', a
   assert.equal(manifest.artifact.path, 'dist/runtime/index.mjs');
   assert.equal(manifest.artifact.sha256, sha256(secondBundle));
   assert.equal(manifest.artifact.bytes, secondBundle.byteLength);
+  const apacheLicenseBytes = await readFile(path.join(packageRoot, 'LICENSE'));
+  const riskForkLicenseBytes = canonicalReviewedSourceBytes(
+    await readFile(path.join(repositoryRoot, 'risk-fork', 'LICENSE')),
+  );
+  assert.deepEqual(apacheLicenseBytes, riskForkLicenseBytes);
+  assert.match(apacheLicenseBytes.toString('utf8'), /^Apache License\r?\n/);
+  assert.match(apacheLicenseBytes.toString('utf8'), /Version 2\.0, January 2004/);
+  const riskForkNoticeBytes = canonicalReviewedSourceBytes(
+    await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
+  );
+  const packagedNoticeBytes = await readFile(path.join(packageRoot, 'NOTICE'));
+  assert.deepEqual(packagedNoticeBytes, riskForkNoticeBytes);
+  assert.match(packagedNoticeBytes.toString('utf8'), /^Risk Fork\r?\nCopyright 2026 Agoragentic\r?\n/);
+  for (const expected of [
+    {
+      path: 'LICENSE',
+      source_path: 'risk-fork/LICENSE',
+      bytes: riskForkLicenseBytes,
+    },
+    {
+      path: 'NOTICE',
+      source_path: 'risk-fork/NOTICE',
+      bytes: riskForkNoticeBytes,
+    },
+  ]) {
+    const asset = manifest.packaged_assets.find((entry) => entry.path === expected.path);
+    assert.deepEqual(asset, {
+      path: expected.path,
+      source_path: expected.source_path,
+      bytes: expected.bytes.byteLength,
+      sha256: sha256(expected.bytes),
+    });
+    const input = manifest.inputs.find((entry) => entry.path === expected.source_path);
+    assert.equal(input.source, 'reviewed_source');
+    assert.equal(input.bytes, expected.bytes.byteLength);
+    assert.equal(input.sha256, sha256(expected.bytes));
+  }
   assert.equal(manifest.third_party_notices.path, 'THIRD_PARTY_NOTICES.txt');
   const noticesBytes = await readFile(path.join(packageRoot, 'THIRD_PARTY_NOTICES.txt'));
   const noticesText = noticesBytes.toString('utf8');
@@ -352,6 +399,12 @@ test('build is deterministic and records exact source and artifact integrity', a
     [...manifest.third_party_notices.sources]
       .sort((left, right) => compareOrdinal(left.package, right.package)),
   );
+  const mitNoticeSources = manifest.third_party_notices.sources.filter(
+    (source) => source.declared_license === 'MIT',
+  );
+  assert.ok(mitNoticeSources.length > 0);
+  assert.match(noticesText, /@modelcontextprotocol\/sdk@1\.30\.0\nDeclared license: MIT/);
+  assert.match(noticesText, /Permission is hereby granted, free of charge/);
   const readmeFallbacks = [
     {
       package: 'pg-types',
@@ -1158,6 +1211,8 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
   for (const name of [
     'MCP_ENFORCEMENT_SCHEMAS',
     'MCP_V2_PROTOCOL_VERSION',
+    'RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA',
+    'RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA',
     'computeMcpCleanImportEvidenceHash',
     'connectRemoteClient',
     'createMcpEnforcementBoundary',
@@ -1221,6 +1276,7 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     manifest.source_attestation.sha256,
   );
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.optional_e2b_peer_version, '2.39.0');
+  assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.risk_fork_source_version, '0.1.0-alpha.1');
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.outbound_mcp_transport_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.managed_postgres_qualified, false);
   assert.equal(api.HOSTED_MCP_BUNDLE_METADATA.e2b_live_qualified, false);
@@ -1320,13 +1376,17 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     await writeFile(path.join(temporary, 'package.json'), '{"private":true}\n', 'utf8');
     await writeFile(path.join(temporary, 'consumer-check.mjs'), [
       "import assert from 'node:assert/strict';",
-      "import { applyE2BExternalQualificationObservation, createCleanupVerificationRequest, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, createRiskForkHostBoundary, createRiskForkImportEnvelope, createTrustedRiskDescriptor, createTrustedRiskDescriptorSource, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, verifyCleanupVerificationEvidence, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
+      "import { applyE2BExternalQualificationObservation, createCleanupVerificationRequest, createE2BExternalQualificationObservationVerifier, createMcpEnforcementBoundary, createMcpInterceptionPlan, createRiskForkHostBoundary, createRiskForkImportEnvelope, createTrustedRiskDescriptor, createTrustedRiskDescriptorSource, E2BRiskForkAdapter, E2B_EXTERNAL_BIRTH_CONTROLS, E2B_EXTERNAL_QUALIFICATION_EVIDENCE_REFS, E2B_EXTERNAL_QUALIFICATION_OBSERVATION_SCHEMA, E2B_EXTERNAL_PROVIDER_CONTROLS, RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA, RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, verifyCleanupVerificationEvidence, verifyE2BExternalQualificationObservation, verifyPostgresDistributedAuthoritySchema } from '@agoragentic/risk-fork-hosted-mcp';",
       "import { createRiskForkE2BTemplate } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/e2b-template/template.mjs';",
+      "import { createMcpHttpPhaseRuntime } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs';",
+      "import { validateMcpHttpPhaseOperation } from '@agoragentic/risk-fork-hosted-mcp/e2b-context/risk-fork/src/mcp-transport-contract.mjs';",
       "assert.equal(typeof createMcpEnforcementBoundary, 'function');",
       "assert.equal(typeof createMcpInterceptionPlan, 'function');",
       "assert.equal(typeof createRiskForkHostBoundary, 'function');",
       "assert.equal(typeof createRiskForkImportEnvelope, 'function');",
       "assert.equal(typeof verifyCleanupVerificationEvidence, 'function');",
+      "assert.equal(RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA, 'agoragentic.risk-fork.mcp-destination-policy.v1');",
+      "assert.equal(RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA, 'agoragentic.risk-fork.mcp-transport-result.v1');",
       "const descriptorSource = createTrustedRiskDescriptorSource((request) => createTrustedRiskDescriptor(request, { mcp_phase: 'tools/call', raw_method: null, mcp_server_ref: 'server:packed', mcp_server_origin: 'https://mcp.example.test', mcp_server_trust: 'reachable', mcp_server_attestation: null, tool_name: 'workspace_apply_patch', tool_annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }, capabilities: { network_access: false, filesystem_read: false, filesystem_write: true, credential_access: false, wallet_or_payment: false, deployment: false, publication: false, communication: false, database_mutation: false, trust_or_reputation_mutation: false, external_side_effect: false, unknown_or_unclassified: false }, prompt_injection_indicators: [], owner_policy: { minimum_level: 'LOW', force_risk_fork: false, deny_irreversible: false, trusted_server_refs: [], trusted_attestor_refs: [], trusted_attestation_hashes: [], trust_registry_version: null, allowed_egress: [] } }));",
       "const hostBoundary = createRiskForkHostBoundary({ controller: { async prepare() { return { mode: 'denied', authority_granted: false }; } }, trusted_descriptor_source: descriptorSource, clock: () => '2026-08-29T00:00:00.000Z' });",
       "const hostResult = await hostBoundary.preEffect({ descriptor_ref: 'descriptor:packed', operation_input: { operation: { kind: 'bounded_file_batch', actions: [] }, expected_commit_type: 'TYPED_RESULT' } });",
@@ -1347,6 +1407,8 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       "assert.equal(Array.isArray(E2B_EXTERNAL_PROVIDER_CONTROLS), true);",
       "assert.equal(typeof verifyPostgresDistributedAuthoritySchema, 'function');",
       "assert.equal(typeof createRiskForkE2BTemplate, 'function');",
+      "assert.equal(typeof createMcpHttpPhaseRuntime, 'function');",
+      "assert.equal(typeof validateMcpHttpPhaseOperation, 'function');",
       "let providerLoads = 0;",
       "const hash = 'sha256:' + 'a'.repeat(64);",
       "const adapter = new E2BRiskForkAdapter({ cleanTemplateId: 'template-risk-fork-clean-immutable-v1', cleanTemplateHash: hash, cleanTemplateProvenanceHash: hash, workspaceExportDirectory: process.cwd() + '/unused-exports', cleanupJournalDirectory: process.cwd() + '/unused-journal', verifyAuthorityFreeSource: async () => { throw new Error('not called'); }, trustedBootstrapArtifactHash: hash, trustedRunnerArtifactHash: hash });",
@@ -1376,16 +1438,19 @@ test('npm-packed artifact installs and runs with no repository or registry depen
     const installedFiles = await listFiles(installed);
     assert.deepEqual(installedFiles, [
       'LICENSE',
+      'NOTICE',
       'README.md',
       'THIRD_PARTY_NOTICES.txt',
       'dist/runtime/index.mjs',
       'e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs',
       'e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs',
       'e2b-context/risk-fork/e2b-template/bin/run.mjs',
+      'e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs',
       'e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs',
       'e2b-context/risk-fork/e2b-template/template.mjs',
       'e2b-context/risk-fork/src/canonical.mjs',
       'e2b-context/risk-fork/src/child-operation.mjs',
+      'e2b-context/risk-fork/src/mcp-transport-contract.mjs',
       'e2b-context/risk-fork/src/util.mjs',
       'e2b-context/transaction-assurance/src/canonical.mjs',
       'integrity-manifest.json',
@@ -1396,6 +1461,18 @@ test('npm-packed artifact installs and runs with no repository or registry depen
       'schema/e2b-qualification-evidence.v1.json',
       'scripts/verify-integrity.mjs',
     ]);
+    assert.deepEqual(
+      await readFile(path.join(installed, 'LICENSE')),
+      canonicalReviewedSourceBytes(
+        await readFile(path.join(repositoryRoot, 'risk-fork', 'LICENSE')),
+      ),
+    );
+    assert.deepEqual(
+      await readFile(path.join(installed, 'NOTICE')),
+      canonicalReviewedSourceBytes(
+        await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
+      ),
+    );
     const installedVerifyOutput = run(
       process.execPath,
       [path.join(installed, 'scripts', 'verify-integrity.mjs')],

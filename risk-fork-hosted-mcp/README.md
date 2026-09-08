@@ -1,8 +1,12 @@
 # Risk Fork Hosted MCP Runtime Bundle
 
-This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.0` into one integrity-bound ESM file. Upstream source inputs are pinned by a sorted exact-digest inventory in `integrity-manifest.json`; packaged operational assets are independently exact-hashed. Reviewed UTF-8 source bytes canonicalize CRLF pairs to LF while preserving lone CR bytes. Ordinary builds require no Git history or object database, reject mismatched source, and accept a changed digest only through the explicit `--refresh-reviewed-sources` review action.
+This directory builds the private, unpublished `@agoragentic/risk-fork-hosted-mcp@0.1.0-alpha.0` artifact. It bundles the reviewed `agoragentic-mcp` 2.0.0 enforcement/relay source and the fail-closed library surfaces of `@agoragentic/risk-fork@0.1.0-alpha.1` into one integrity-bound ESM file. Upstream source inputs are pinned by a sorted exact-digest inventory in `integrity-manifest.json`; packaged operational assets are independently exact-hashed. Reviewed UTF-8 source bytes canonicalize CRLF pairs to LF while preserving lone CR bytes. Ordinary builds require no Git history or object database, reject mismatched source, and accept a changed digest only through the explicit `--refresh-reviewed-sources` review action.
 
-The artifact supplies library code only. It does not supply a production host adapter, credentials, trust decisions, deployment authority, approval, or permission to route live traffic. Publication is deliberately disabled.
+The artifact supplies library code only. It exports the source-only Risk Fork MCP
+host adapter contract, but no provider in the bundle implements its child-side
+MCP transport. It does not supply a production host, credentials, trust decisions,
+deployment authority, approval, or permission to route live traffic. Publication
+is deliberately disabled.
 
 ## Private host contract
 
@@ -10,23 +14,16 @@ The embedding host creates the only accepted enforcement capability:
 
 ```js
 import {
-  MCP_ENFORCEMENT_SCHEMAS,
-  computeMcpCleanImportEvidenceHash,
   connectRemoteClient,
   createMcpEnforcementBoundary,
+  createRiskForkMcpHostAdapter,
 } from '@agoragentic/risk-fork-hosted-mcp';
 
-const enforcementBoundary = createMcpEnforcementBoundary({
-  async openSession(openRequest) {
-    // Risk Fork preparation and host-owned connection happen here.
-    // Return exactly { schema, discovery, request, close }.
-  },
-  async executeFallback(fallbackRequest) {
-    // Required adapter shape only. Current source hard-blocks every fallback
-    // before this callback and must never invoke it.
-    throw new Error('fallback execution is not qualified');
-  },
+const riskForkMcpHostAdapter = createRiskForkMcpHostAdapter({
+  host_boundary: riskForkHostBoundary,
+  trusted_phase_plan_source: trustedPhasePlans,
 });
+const enforcementBoundary = createMcpEnforcementBoundary(riskForkMcpHostAdapter);
 
 const session = await connectRemoteClient({
   remoteUrl: 'https://qualified.example/mcp',
@@ -34,9 +31,27 @@ const session = await connectRemoteClient({
 });
 ```
 
-`openSession` receives `MCP_ENFORCEMENT_SCHEMAS.sessionOpenRequest` for `server/discover` before any host connection. Its result must use `MCP_ENFORCEMENT_SCHEMAS.hostSession`, provide a clean-imported discovery envelope, and expose `request(phaseRequest)` plus idempotent `close()` functions. Each remote-session phase result must use `MCP_ENFORCEMENT_SCHEMAS.cleanImportedResult`, preserve `authority_granted: false`, and bind the exact request and result using `computeMcpCleanImportEvidenceHash`. There is currently no fallback result contract in use: every fallback is rejected before request construction or callback invocation until a durable host effect fence with exact idempotency and terminal reconciliation is qualified.
+`createRiskForkMcpHostAdapter` accepts only a factory-created Risk Fork host
+boundary and a factory-created trusted phase-plan source. In live-default mode,
+each plan must carry an `mcp_http_phase` operation whose closed schema and bindings
+match those emitted by `createRiskForkMcpChildOperation()`, plus an exact
+one-endpoint allowlist. The child operation has no response embedded in it; the
+provider must produce the tainted response inside the disposable fork before clean
+typed import. Every fallback remains rejected before request construction or
+callback invocation until a durable host effect fence with exact idempotency and
+terminal reconciliation is qualified.
 
-The host owns all network transport, redirect policy, credentials, isolation, cleanup, evidence, and kill-switch behavior. There is no direct network fallback in this package.
+The lower-level `MCP_ENFORCEMENT_SCHEMAS` and clean-import helpers remain exported
+for contract verification. A custom host adapter using them is responsible for
+the same opaque-session, exact-binding, cleanup, and no-bypass invariants.
+
+The embedding host owns trusted planning, owner policy, and the outer kill switch.
+The provider executor must own and enforce the actual child network allowlist,
+redirect policy, isolation, cleanup, and evidence. There is no clean-host or direct
+network fallback in this package, and credentials remain unqualified. The
+transport-evidence wrapper is only a validation contract: live qualification also
+requires socket-bound observations from a reviewed executor and clean-side
+corroboration. This bundle includes neither.
 
 ## E2B and PostgreSQL host surfaces
 
@@ -81,4 +96,4 @@ npm run verify
 # equivalent: node scripts/verify-integrity.mjs
 ```
 
-`integrity-manifest.json` records the source-attestation normalization contract, sorted reviewed-source digest inventory, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. `THIRD_PARTY_NOTICES.txt` is generated from exact dependency source bytes: a standalone license file is preferred, discovered from the package's actual directory entries, and recorded with its exact on-disk casing. Ambiguous or non-file license entries fail closed. Only the reviewed `pg-types@2.2.0` and `pgpass@1.0.5` fallbacks may use their complete single README license sections. The source path, byte count, source hash, extraction method, extracted byte count, and extracted hash are recorded and verified; a missing, ambiguous, unsupported, or incomplete fallback fails the build. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.
+`integrity-manifest.json` records the source-attestation normalization contract, sorted reviewed-source digest inventory, upstream versions, every bundled source input, build version, runtime exports, packaged assets, optional exact E2B peer, and final bundle digest. The bundle is licensed under Apache-2.0. Its top-level `LICENSE` and `NOTICE` are exact, integrity-bound copies of the canonicalized reviewed Risk Fork core files, so Risk Fork attribution survives both the build and npm packing. `THIRD_PARTY_NOTICES.txt` remains separate and is generated from exact dependency source bytes under each dependency's original license: a standalone license file is preferred, discovered from the package's actual directory entries, and recorded with its exact on-disk casing. Ambiguous or non-file license entries fail closed. Only the reviewed `pg-types@2.2.0` and `pgpass@1.0.5` fallbacks may use their complete single README license sections. The source path, byte count, source hash, extraction method, extracted byte count, and extracted hash are recorded and verified; a missing, ambiguous, unsupported, or incomplete fallback fails the build. The packed artifact has no mandatory runtime package dependencies or cross-worktree imports. Publication remains blocked by `prepublishOnly`.

@@ -5,6 +5,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   writeFile,
 } from 'node:fs/promises';
@@ -50,6 +51,13 @@ const EXTERNALLY_OBSERVED_CONTROLS = new Set([
   ...E2B_EXTERNAL_BIRTH_CONTROLS,
   ...E2B_EXTERNAL_PROVIDER_CONTROLS,
 ]);
+
+async function canonicalFixtureRoot(prefix) {
+  const canonicalTemp = await realpath(os.tmpdir());
+  const root = await mkdtemp(path.join(canonicalTemp, prefix));
+  const canonicalRoot = await realpath(root);
+  return canonicalRoot;
+}
 
 function input(overrides = {}) {
   return {
@@ -330,7 +338,7 @@ test('qualification evidence is closed, hash-bound, schema-valid, and exact-prof
 });
 
 test('runtime SDK integrity verifier loads only the exact signed e2b package tree', async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-sdk-integrity-'));
+  const root = await canonicalFixtureRoot('risk-fork-e2b-sdk-integrity-');
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, 'dist'), { recursive: true });
   await writeFile(path.join(root, 'package.json'), JSON.stringify({
@@ -369,7 +377,7 @@ async function writeRuntimePackage(root, manifest, source = 'module.exports = {}
 }
 
 test('runtime SDK closure binds recursive dependencies plus present and absent optional peers', async (t) => {
-  const fixture = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-sdk-closure-'));
+  const fixture = await canonicalFixtureRoot('risk-fork-e2b-sdk-closure-');
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const modules = path.join(fixture, 'node_modules');
   const sdkRoot = path.join(modules, 'e2b');
@@ -472,7 +480,7 @@ test('copied installed e2b closure rejects transitive drift, missing packages, a
   }
   assert.equal(foundInstalledRoot, true, 'the real installed e2b package root must be discoverable');
   const installedModules = path.dirname(installedRoot);
-  const fixture = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-real-e2b-closure-'));
+  const fixture = await canonicalFixtureRoot('risk-fork-real-e2b-closure-');
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const copiedModules = path.join(fixture, 'node_modules');
   await cp(installedModules, copiedModules, { recursive: true, errorOnExist: true });
