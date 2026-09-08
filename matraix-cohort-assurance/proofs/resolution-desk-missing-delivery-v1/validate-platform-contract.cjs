@@ -1,27 +1,24 @@
 'use strict';
-
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-
-const expected = require('./platform-contract.json');
-const schemaPath = path.join(__dirname, 'synthetic-cohort-evidence.v1.snapshot.json');
-const schemaBytes = fs.readFileSync(schemaPath);
-const schemaDigest = `sha256:${crypto.createHash('sha256').update(schemaBytes).digest('hex')}`;
-if (schemaDigest !== expected.schema_sha256) throw new Error(`platform schema snapshot digest mismatch: ${schemaDigest}`);
-const schema = JSON.parse(schemaBytes);
+const { execFileSync } = require('node:child_process');
+const { canonicalize, stable } = require('./canonical-evidence.cjs');
+const pin = require('./platform-contract.json');
 const evidence = JSON.parse(fs.readFileSync(path.join(__dirname, 'synthetic-cohort-evidence.json'), 'utf8'));
-if (schema.$id !== expected.schema_uri || evidence.schema !== expected.schema) throw new Error('platform schema identity mismatch');
-if (evidence.evidence_class !== 'synthetic_behavioral' || evidence.status !== 'experimental_advisory') throw new Error('synthetic evidence classification drift');
-if (evidence.models.persona_models.length !== 2) throw new Error('both fixture persona backbones must be bound');
-if (!evidence.limitations.includes('no_live_model_trials')) throw new Error('fixture-only limitation is required');
-const terminalTrials = ['trials_completed', 'trials_failed', 'trials_timed_out', 'trials_abandoned', 'trials_invalid', 'trials_unverifiable'].reduce((total, key) => total + evidence.run[key], 0);
-if (evidence.run.trials_requested !== 32 || evidence.run.trials_started !== 32 || terminalTrials !== 32) throw new Error('fixture run accounting drift');
-if (evidence.claim_scope.unsupported.length !== 12 || !evidence.claim_scope.unsupported.includes('human_preference')) throw new Error('prohibited claim scope drift');
-for (const [key, value] of Object.entries(evidence.authority_boundary)) {
-    if (key === 'evidence_is_advisory' ? value !== true : value !== false) throw new Error(`authority boundary drift: ${key}`);
+
+execFileSync('python', [path.join(__dirname, 'validate_platform_schema.py')], { stdio: 'inherit', timeout: 30000 });
+if (stable(evidence) !== stable(canonicalize(evidence))) throw new Error('canonical evidence identity mismatch');
+process.stdout.write('Canonical evidence identity valid; fixture authenticity is not established\n');
+
+const args = process.argv.slice(2);
+if (args.length) {
+    if (args.length !== 2 || args[0] !== '--platform-root') throw new Error('usage: --platform-root <exact clean checkout>');
+    const root = path.resolve(args[1]);
+    const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    if (head !== pin.source_commit) throw new Error('platform checkout commit mismatch');
+    if (execFileSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' }).trim()) throw new Error('platform checkout must be clean');
+    const validator = require(path.join(root, 'server/modules/synthetic-cohort-evidence.js'));
+    const result = validator.validateSyntheticCohortEvidence(evidence);
+    if (!result.valid || result.findings.length) throw new Error('platform semantic validation failed');
+    process.stdout.write(`Platform semantic validator passed at ${head}; offline fixtures only\n`);
 }
-for (const key of ['synthetic_personas_speak_for_real_people', 'human_participant_substitution', 'affected_community_authorization_claimed', 'representational_legitimacy_claimed', 'human_preference_inference_claimed', 'population_inference_claimed', 'market_demand_inference_claimed']) {
-    if (evidence.representation_boundary[key] !== false) throw new Error(`representation boundary drift: ${key}`);
-}
-process.stdout.write(`pinned platform contract ${expected.source_commit} accepts offline fixture evidence only\n`);

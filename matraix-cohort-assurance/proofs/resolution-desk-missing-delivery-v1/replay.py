@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import statistics
+import subprocess
 import sys
 from pathlib import Path
 
@@ -330,34 +331,29 @@ def build_platform_evidence(root=ROOT):
         "representation_boundary": representation,
         "claim_scope": {"supported": ["system_behavior_observation"], "unsupported": unsupported},
     }
-    identity_payload = json.loads(canonical_json(evidence))
-    identity_payload.pop("evidence_id")
-    identity_payload["artifacts"].pop("canonical_evidence_sha256")
-    evidence["evidence_id"] = "sce_" + hashlib.sha256(canonical_json(identity_payload).encode()).hexdigest()[:24]
-    evidence["artifacts"]["canonical_evidence_sha256"] = digest(identity_payload)
-    return evidence
+    serialized = subprocess.run(
+        ["node", str(ROOT / "canonical-evidence.cjs")], input=canonical_json(evidence),
+        capture_output=True, text=True, encoding="utf-8", check=True, timeout=30,
+    ).stdout
+    return parse_json(serialized)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--out", type=Path)
-    parser.add_argument("--write-platform-evidence", action="store_true")
+    parser.add_argument("--evidence-out", type=Path)
     args = parser.parse_args()
     verify_manifest(args.root)
     result = (canonical_json(evaluate(args.root)) + "\n").encode()
     generated_evidence = build_platform_evidence(args.root)
     evidence_bytes = (canonical_json(generated_evidence) + "\n").encode()
     evidence_path = args.root / "synthetic-cohort-evidence.json"
-    if args.write_platform_evidence:
-        evidence_path.write_bytes(evidence_bytes)
-    else:
-        require(evidence_path.is_file(), "platform_evidence_missing")
-        checked_evidence = read_json(evidence_path)
-        for value in (generated_evidence, checked_evidence):
-            value.pop("evidence_id", None)
-            value.get("artifacts", {}).pop("canonical_evidence_sha256", None)
-        require(checked_evidence == generated_evidence, "platform_evidence_payload_mismatch")
+    require(evidence_path.is_file(), "platform_evidence_missing")
+    require(read_json(evidence_path) == generated_evidence, "platform_evidence_payload_mismatch")
+    if args.evidence_out:
+        with args.evidence_out.open("xb") as stream:
+            stream.write(evidence_bytes)
     if args.out:
         with args.out.open("xb") as stream:
             stream.write(result)
@@ -373,7 +369,8 @@ def verify_manifest(root):
     require(manifest["authenticity"] == "unsigned_local_integrity_only", "manifest_authority")
     expected = set(INPUTS) | {"report.json", "synthetic-cohort-evidence.json", "platform-contract.json",
                               "validate-platform-contract.cjs", "replay.py", "README.md", "METHOD.md",
-                              "LIMITATIONS.md", "synthetic-cohort-evidence.v1.snapshot.json"}
+                              "LIMITATIONS.md", "synthetic-cohort-evidence.v1.snapshot.json",
+                              "canonical-evidence.cjs", "validate_platform_schema.py"}
     closed(manifest["files"], expected)
     for name, expected_hash in manifest["files"].items():
         path = root / name

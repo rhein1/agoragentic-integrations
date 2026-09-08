@@ -35,14 +35,17 @@ not a signature, platform observation, payment, or external authenticity.
 
 Use the README commands from the exact PR commit being reviewed. Verify the
 unsigned SHA-256 manifest, rerun into a fresh output filename, and compare bytes.
-Python 3.11+ standard library and the checked-in source adapter are sufficient.
+Replay requires Python 3.11+, Node.js 20+, and the checked-in source adapter.
+Schema validation additionally requires the pinned jsonschema test dependency.
 No credentials, network, model, dataset download, or spend is needed for replay.
 
 The offline evidence packet is pinned to the schema and semantic-validator contract
 from Marketplace commit `71799e0099ce30cd4e76e19e209e87122afce7b1`.
 Because a repository-scoped Actions token cannot read the private platform repository,
-CI verifies a byte-hash-pinned schema snapshot plus independent fail-closed boundary
-checks. Local validation also invokes the platform validator directly at that commit.
+CI validates the complete byte-hash-pinned schema snapshot, fixture accounting,
+and canonical identity. These checks do not establish full platform semantic
+eligibility. Use the documented `--platform-root` option to invoke the actual
+platform validator from a clean checkout at that exact commit.
 
 Independent live reproduction is not yet runnable. Before implementing or running
 it, choose exact model revisions
