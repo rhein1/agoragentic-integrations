@@ -1,13 +1,15 @@
 'use strict';
 
 const readline = require('node:readline');
-const { writeFileSync } = require('node:fs');
+const { renameSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 
 const input = readline.createInterface({ input: process.stdin });
 const pending = new Map();
 let oldestCancelledRequestId = null;
 let gatewayOperationCount = 0;
+const gatewayOperationCountPath = path.join(__dirname, 'gateway-operation-count.txt');
+const gatewayOperationCountTemporaryPath = `${gatewayOperationCountPath}.${process.pid}.tmp`;
 
 function writeResult(id, operation) {
   process.stdout.write(`${JSON.stringify({
@@ -62,10 +64,8 @@ input.on('line', (line) => {
     return;
   }
   gatewayOperationCount += 1;
-  writeFileSync(
-    path.join(__dirname, 'gateway-operation-count.txt'),
-    String(gatewayOperationCount),
-  );
+  writeFileSync(gatewayOperationCountTemporaryPath, String(gatewayOperationCount));
+  renameSync(gatewayOperationCountTemporaryPath, gatewayOperationCountPath);
   const operation = message.params?.arguments?.operation;
   if (operation === 'aba-old') {
     if (oldestCancelledRequestId === null) oldestCancelledRequestId = message.id;
