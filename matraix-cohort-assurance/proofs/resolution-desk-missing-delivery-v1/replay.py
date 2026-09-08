@@ -33,7 +33,7 @@ BOUNDARY = {"proof_scope": SCOPE, "representation_boundary": REPRESENTATION,
             "authority": ALL_AUTHORITY_FALSE}
 INPUTS = ("run-config.example.json", "cohort-manifest.json", "task-manifest.json",
           "subject-manifest.json", "model-manifest.example.json", "sanitized-trials.jsonl")
-PLATFORM_CONTRACT_COMMIT = "e518da94ede8c30d2f33475ef5307576b3d4491d"
+PLATFORM_CONTRACT_COMMIT = "71799e0099ce30cd4e76e19e209e87122afce7b1"
 PLATFORM_SCHEMA = "agoragentic.synthetic-cohort-evidence.v1"
 PLATFORM_LIMITATIONS = [
     "synthetic_model_mediated_evidence", "not_human_validation",
@@ -302,9 +302,9 @@ def build_platform_evidence(root=ROOT):
             "replacement_policy": "without_replacement", "selection_mode": "fixture_replay",
             "license_review_state": "not_required_fixture_only", "sensitive_attributes_used": False,
             "raw_persona_records_included": False},
-        "models": {"persona": {"provider": "fixture", "model_id": models["personas"][0],
-            "revision": "fixture", "inference_config_digest": report["bindings"]["models"],
-            "role": "persona", "sampling_mode": "deterministic"},
+        "models": {"persona_models": [{"provider": "fixture", "model_id": model_id,
+            "revision": "fixture", "inference_config_digest": digest({"model_id": model_id}),
+            "role": "persona", "sampling_mode": "deterministic"} for model_id in models["personas"]],
             "system_under_test": {"provider": "fixture", "model_id": subject["subject_id"],
                 "revision": subject["version"], "inference_config_digest": report["bindings"]["subject"],
                 "role": "system_under_test", "sampling_mode": "deterministic"},
@@ -373,7 +373,7 @@ def verify_manifest(root):
     require(manifest["authenticity"] == "unsigned_local_integrity_only", "manifest_authority")
     expected = set(INPUTS) | {"report.json", "synthetic-cohort-evidence.json", "platform-contract.json",
                               "validate-platform-contract.cjs", "replay.py", "README.md", "METHOD.md",
-                              "LIMITATIONS.md"}
+                              "LIMITATIONS.md", "synthetic-cohort-evidence.v1.snapshot.json"}
     closed(manifest["files"], expected)
     for name, expected_hash in manifest["files"].items():
         path = root / name

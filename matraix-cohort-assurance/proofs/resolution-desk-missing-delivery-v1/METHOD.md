@@ -38,10 +38,11 @@ unsigned SHA-256 manifest, rerun into a fresh output filename, and compare bytes
 Python 3.11+ standard library and the checked-in source adapter are sufficient.
 No credentials, network, model, dataset download, or spend is needed for replay.
 
-The offline evidence packet is validated against the actual schema and semantic
-validator from Marketplace commit `e518da94ede8c30d2f33475ef5307576b3d4491d`.
-The CI checkout is immutable and the validator is invoked directly; no platform
-business logic is copied into this repository.
+The offline evidence packet is pinned to the schema and semantic-validator contract
+from Marketplace commit `71799e0099ce30cd4e76e19e209e87122afce7b1`.
+Because a repository-scoped Actions token cannot read the private platform repository,
+CI verifies a byte-hash-pinned schema snapshot plus independent fail-closed boundary
+checks. Local validation also invokes the platform validator directly at that commit.
 
 Independent live reproduction is not yet runnable. Before implementing or running
 it, choose exact model revisions

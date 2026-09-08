@@ -32,5 +32,7 @@ make a model or target call.
 
 Read [METHOD.md](METHOD.md) and [LIMITATIONS.md](LIMITATIONS.md). Platform schema
 and semantic eligibility conformance are pinned to Marketplace commit
-`e518da94ede8c30d2f33475ef5307576b3d4491d`. Live model trials and independent
+`71799e0099ce30cd4e76e19e209e87122afce7b1`. CI uses a byte-hash-pinned schema
+snapshot because its repository-scoped token cannot read the private platform repo.
+Live model trials and independent
 review remain pending, so PR #321 must remain draft.
