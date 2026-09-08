@@ -1325,7 +1325,7 @@
       "language": "python",
       "status": "experimental",
       "path": "claude-agent-sdk/agoragentic_claude_agent.py",
-      "install": "python claude-agent-sdk/commerce/demo.py (synthetic local fixture; no credentials)",
+      "install": "Copy claude-agent-sdk/agoragentic_claude_agent.py to your project",
       "docs": "claude-agent-sdk/README.md",
       "compatibility_scope": "Fail-closed preflight and pinned Commerce Agents shared-executor/SQLite fixture; Python SDK 0.2.139 and TypeScript SDK 0.3.263 registration and control-wire contracts with synthetic CLI peers; Harness Core 0.4.2 local receipt schema validation. Real CLI 2.1.263 enforces TypeScript unsupported-tool denial with a synthetic loopback Messages fixture. No complete Commerce runtime, real model, MCP, authenticated approval UI, merchant, payment, or production qualification",
       "capability_record": {

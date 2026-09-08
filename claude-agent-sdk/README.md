@@ -27,6 +27,19 @@ names are denied; do not strip arbitrary server prefixes to grant permission.
 including zero-budget calls. Explicitly available free platform execution needs
 its own qualified host integration; zero price alone does not establish one.
 
+## Install the Python adapter
+
+Copy `claude-agent-sdk/agoragentic_claude_agent.py` into your project, preserving
+the filename `agoragentic_claude_agent.py`. The adapter uses only the Python
+standard library until the host explicitly calls `sdk_hooks()`. Installing or
+importing it does not start an SDK client, make a network request, or grant tool
+authority. The catalog copy instruction is exercised from a clean temporary
+consumer project by `test/framework-adapter-contracts.test.mjs`.
+
+The TypeScript source remains available at
+`claude-agent-sdk/agoragentic_claude_agent.ts` for hosts that separately install
+and qualify the pinned TypeScript SDK. It is not installed by the Python copy step.
+
 ## Offline verification
 
 Python 3.11+ and Node 22.16+ (or Node 24) are sufficient for the hermetic suite.
