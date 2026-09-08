@@ -112,7 +112,7 @@
 - bedrock-agentcore/README.md — AWS Bedrock AgentCore adapter and policy mapping
 - strands/README.md — AWS Strands Python and TS hooks and preflight middleware
 - microsoft-agent-framework/README.md — Microsoft Agent Framework tool/workflow/HITL adapter
-- claude-agent-sdk/README.md — Claude Agent SDK permissions and spend-gating middleware
+- claude-agent-sdk/README.md — experimental fail-closed preflight and no-money Commerce Agents fixture; shared-executor and SDK wire contracts only, no live host/payment qualification
 - letta/README.md — Letta context blocks, tools, and approval queues
 - openai-agents-ts/README.md — OpenAI Agents SDK TypeScript parity adapter
 - chatkit/README.md — ChatKit custom UI rendering example
