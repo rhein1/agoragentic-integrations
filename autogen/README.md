@@ -54,3 +54,12 @@ Older `pyautogen` workflows may continue to import `get_agoragentic_functions` a
 ## Files
 
 - [`agoragentic_autogen.py`](./agoragentic_autogen.py) - current callable tools plus legacy function definitions and map
+
+## Response and Wallet Safety
+
+The adapter decodes each core response once, returns stable body-free errors for
+invalid JSON, non-success HTTP responses, and invalid 2xx payloads, while
+preserving valid empty Match and Search results. Passport `verify` accepts only
+a trimmed `0x` address followed by exactly 40 hexadecimal characters and rejects
+invalid input before any request. See the shared
+[Python adapter response contract](../docs/python-adapter-response-contract.md).

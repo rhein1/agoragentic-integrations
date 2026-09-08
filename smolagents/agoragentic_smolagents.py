@@ -10,13 +10,13 @@ Install:
     pip install smolagents requests
 
 Usage:
-    from smolagents import CodeAgent, HfApiModel
+    from smolagents import CodeAgent, InferenceClientModel
     from agoragentic_smolagents import get_all_tools
 
-    agent = CodeAgent(tools=get_all_tools("amk_your_key"), model=HfApiModel())
+    agent = CodeAgent(tools=get_all_tools("amk_your_key"), model=InferenceClientModel())
     agent.run("Find the best text summarization provider and use it")
 
-Or use the Hub:
+After a separately published Hub artifact has been verified:
     from smolagents import load_tool
     execute = load_tool("Acre1/agoragentic-execute")
 """
@@ -50,24 +50,83 @@ def _safe_response_json(resp: requests.Response):
 
 
 def _response_error_payload(resp: requests.Response, data) -> dict:
-    """Preserve structured API errors while distinguishing transport status failures."""
+    """Map failures to stable local codes without exposing upstream response text."""
     status_code = resp.status_code
-    upstream_error = data.get("error") if isinstance(data, dict) else None
-    upstream_message = data.get("message") if isinstance(data, dict) else None
     default_error = "upstream_http_error" if status_code >= 400 else "unexpected_http_status"
-    payload = {
-        "error": upstream_error if isinstance(upstream_error, str) and upstream_error else default_error,
+    return {
+        "error": default_error,
         "status_code": status_code,
     }
-    if isinstance(upstream_message, str) and upstream_message:
-        payload["message"] = upstream_message
-    return payload
 
 
 def _exception_payload(exc: Exception) -> dict:
     if isinstance(exc, _UpstreamResponseError):
         return {"error": exc.code, "status_code": exc.status_code}
-    return {"error": str(exc)}
+    return {"error": "client_request_failed"}
+
+
+def _require_payload(data, contract: str, status_code: int):
+    valid = False
+    if contract == "execute":
+        valid = (
+            isinstance(data, dict)
+            and isinstance(data.get("status"), str)
+            and bool(data["status"].strip())
+        )
+    elif contract == "register":
+        valid = (
+            isinstance(data, dict)
+            and isinstance(data.get("api_key"), str)
+            and bool(data["api_key"].strip())
+            and isinstance(data.get("agent"), dict)
+            and isinstance(data["agent"].get("id"), str)
+            and bool(data["agent"]["id"].strip())
+        )
+    elif contract == "invoke":
+        valid = isinstance(data, dict) and isinstance(data.get("invocation_id"), str) and bool(data["invocation_id"].strip())
+    elif contract == "match":
+        valid = (
+            isinstance(data, dict)
+            and isinstance(data.get("providers"), list)
+            and all(
+                isinstance(item, dict)
+                and ("score" not in item or item["score"] is None or isinstance(item["score"], dict))
+                for item in data["providers"]
+            )
+            and (
+                "matches" not in data
+                or (isinstance(data["matches"], (int, float)) and not isinstance(data["matches"], bool))
+            )
+        )
+    elif contract == "search":
+        valid = (
+            isinstance(data, list) and all(
+                isinstance(item, dict)
+                and ("description" not in item or item["description"] is None or isinstance(item["description"], str))
+                and (
+                    "price_per_unit" not in item
+                    or item["price_per_unit"] is None
+                    or (isinstance(item["price_per_unit"], (int, float)) and not isinstance(item["price_per_unit"], bool))
+                )
+                for item in data
+            )
+        ) or (
+            isinstance(data, dict)
+            and isinstance(data.get("capabilities"), list)
+            and all(
+                isinstance(item, dict)
+                and ("description" not in item or item["description"] is None or isinstance(item["description"], str))
+                and (
+                    "price_per_unit" not in item
+                    or item["price_per_unit"] is None
+                    or (isinstance(item["price_per_unit"], (int, float)) and not isinstance(item["price_per_unit"], bool))
+                )
+                for item in data["capabilities"]
+            )
+        )
+    if not valid:
+        raise _UpstreamResponseError("upstream_invalid_payload", status_code)
+    return data
 
 
 try:
@@ -103,7 +162,7 @@ class AgoragenticExecuteTool(Tool):
     output_type = "string"
 
     api_key = ""
-    base_url = AGORAGENTIC_BASE_URL
+    base_url = "https://agoragentic.com"
 
     def __init__(self, api_key: str = "", **kwargs):
         super().__init__(**kwargs)
@@ -111,10 +170,15 @@ class AgoragenticExecuteTool(Tool):
             self.api_key = api_key
 
     def forward(self, task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
+        import json
+        import os
+        import requests
+
         key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
         if not key:
             return json.dumps({"error": "API key required. Set AGORAGENTIC_API_KEY or use agoragentic_register."})
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {key}"}
+        success_statuses = (200, 202)
         try:
             resp = requests.post(
                 f"{self.base_url}/api/execute",
@@ -126,18 +190,32 @@ class AgoragenticExecuteTool(Tool):
                 headers=headers,
                 timeout=60,
             )
-            data = _safe_response_json(resp)
-            if resp.status_code == 200:
+            try:
+                data = resp.json()
+            except ValueError:
+                return json.dumps({"error": "upstream_invalid_json", "status_code": resp.status_code})
+            if resp.status_code not in success_statuses:
+                default_error = "upstream_http_error" if resp.status_code >= 400 else "unexpected_http_status"
                 return json.dumps({
-                    "status": data.get("status"),
-                    "provider": data.get("provider", {}).get("name"),
-                    "output": data.get("output"),
-                    "cost_usdc": data.get("cost"),
-                    "invocation_id": data.get("invocation_id"),
-                }, indent=2)
-            return json.dumps(_response_error_payload(resp, data))
-        except Exception as e:
-            return json.dumps(_exception_payload(e))
+                    "error": default_error,
+                    "status_code": resp.status_code,
+                })
+            if not (
+                isinstance(data, dict)
+                and isinstance(data.get("status"), str)
+                and bool(data["status"].strip())
+            ):
+                return json.dumps({"error": "upstream_invalid_payload", "status_code": resp.status_code})
+            provider = data.get("provider")
+            return json.dumps({
+                "status": data.get("status"),
+                "provider": provider.get("name") if isinstance(provider, dict) else provider if isinstance(provider, str) else None,
+                "output": data.get("output"),
+                "cost_usdc": data.get("cost"),
+                "invocation_id": data.get("invocation_id"),
+            }, indent=2)
+        except Exception:
+            return json.dumps({"error": "client_request_failed"})
 
 
 class AgoragenticMatchTool(Tool):
@@ -177,8 +255,9 @@ class AgoragenticMatchTool(Tool):
             data = _safe_response_json(resp)
             if resp.status_code != 200:
                 return json.dumps(_response_error_payload(resp, data))
+            _require_payload(data, "match", resp.status_code)
             providers = [
-                {"name": p.get("name"), "price": p.get("price"), "score": p.get("score", {}).get("composite")}
+                {"name": p.get("name"), "price": p.get("price"), "score": (p.get("score") or {}).get("composite")}
                 for p in data.get("providers", [])[:5]
             ]
             return json.dumps({"task": task, "matches": data.get("matches"), "top_providers": providers}, indent=2)
@@ -209,6 +288,7 @@ class AgoragenticRegisterTool(Tool):
                 headers={"Content-Type": "application/json"}, timeout=30)
             data = _safe_response_json(resp)
             if resp.status_code == 201:
+                _require_payload(data, "register", resp.status_code)
                 return json.dumps({
                     "status": "registered",
                     "agent_id": data.get("agent", {}).get("id"),
@@ -255,12 +335,8 @@ class AgoragenticSearchTool(Tool):
             data = _safe_response_json(resp)
             if resp.status_code != 200:
                 return json.dumps(_response_error_payload(resp, data))
-            if isinstance(data, list):
-                caps = data
-            elif isinstance(data, dict) and isinstance(data.get("capabilities", []), list):
-                caps = data.get("capabilities", [])
-            else:
-                raise _UpstreamResponseError("upstream_invalid_payload", resp.status_code)
+            _require_payload(data, "search", resp.status_code)
+            caps = data if isinstance(data, list) else data.get("capabilities", [])
             if max_price >= 0:
                 caps = [c for c in caps if (c.get("price_per_unit") or 0) <= max_price]
             results = [{
@@ -304,6 +380,7 @@ class AgoragenticInvokeTool(Tool):
                 headers=headers, timeout=60)
             data = _safe_response_json(resp)
             if resp.status_code == 200:
+                _require_payload(data, "invoke", resp.status_code)
                 return json.dumps({
                     "status": "success",
                     "invocation_id": data.get("invocation_id"),
@@ -341,7 +418,7 @@ class AgoragenticVaultTool(Tool):
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/inventory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
             data = _safe_response_json(resp)
-            if resp.status_code >= 400:
+            if not 200 <= resp.status_code < 300:
                 return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data, indent=2)
         except Exception as e:
@@ -372,7 +449,7 @@ class AgoragenticMemoryWriteTool(Tool):
                 json={"input": {"key": key, "value": value, "namespace": namespace}},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
             data = _safe_response_json(resp)
-            if resp.status_code >= 400:
+            if not 200 <= resp.status_code < 300:
                 return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data, indent=2)
         except Exception as e:
@@ -403,7 +480,7 @@ class AgoragenticMemoryReadTool(Tool):
             resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/vault/memory", params=params,
                                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
             data = _safe_response_json(resp)
-            if resp.status_code >= 400:
+            if not 200 <= resp.status_code < 300:
                 return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data.get("output", data), indent=2)
         except Exception as e:
@@ -439,7 +516,7 @@ class AgoragenticSecretStoreTool(Tool):
                 json={"input": payload},
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}, timeout=30)
             data = _safe_response_json(resp)
-            if resp.status_code >= 400:
+            if not 200 <= resp.status_code < 300:
                 return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data, indent=2)
         except Exception as e:
@@ -469,7 +546,7 @@ class AgoragenticPassportTool(Tool):
             if action == "info":
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/info", timeout=15)
                 data = _safe_response_json(resp)
-                if resp.status_code >= 400:
+                if not 200 <= resp.status_code < 300:
                     return json.dumps(_response_error_payload(resp, data))
                 return json.dumps(data, indent=2)
             if action == "verify":
@@ -482,7 +559,7 @@ class AgoragenticPassportTool(Tool):
                 safe_addr = urllib.parse.quote(address, safe="")
                 resp = requests.get(f"{AGORAGENTIC_BASE_URL}/api/passport/verify/{safe_addr}", timeout=15)
                 data = _safe_response_json(resp)
-                if resp.status_code >= 400:
+                if not 200 <= resp.status_code < 300:
                     return json.dumps(_response_error_payload(resp, data))
                 return json.dumps(data, indent=2)
             if not self.api_key:
@@ -491,7 +568,7 @@ class AgoragenticPassportTool(Tool):
                 f"{AGORAGENTIC_BASE_URL}/api/passport/check",
                 headers={"Authorization": f"Bearer {self.api_key}"}, timeout=15)
             data = _safe_response_json(resp)
-            if resp.status_code >= 400:
+            if not 200 <= resp.status_code < 300:
                 return json.dumps(_response_error_payload(resp, data))
             return json.dumps(data, indent=2)
         except Exception as e:
@@ -512,10 +589,10 @@ def get_all_tools(api_key: str = "") -> list:
         List of smolagents Tool instances.
 
     Example:
-        from smolagents import CodeAgent, HfApiModel
+        from smolagents import CodeAgent, InferenceClientModel
         from agoragentic_smolagents import get_all_tools
 
-        agent = CodeAgent(tools=get_all_tools("amk_your_key"), model=HfApiModel())
+        agent = CodeAgent(tools=get_all_tools("amk_your_key"), model=InferenceClientModel())
         agent.run("Find an AI research tool and use it")
     """
     key = api_key or os.environ.get("AGORAGENTIC_API_KEY", "")

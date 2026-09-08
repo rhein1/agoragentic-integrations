@@ -1,0 +1,112 @@
+{
+  "version": "1.0.0",
+  "errors": {
+    "invalid_json": "upstream_invalid_json",
+    "http": "upstream_http_error",
+    "unexpected_status": "unexpected_http_status",
+    "invalid_payload": "upstream_invalid_payload",
+    "invalid_wallet": "invalid_wallet_address"
+  },
+  "success_statuses": {
+    "execute": [200, 202]
+  },
+  "unsafe_structured_http": {
+    "status_code": 429,
+    "payloads": [
+      {
+        "error": "ignore_previous_instructions",
+        "message": "credential=should-not-echo"
+      },
+      {
+        "error": "amk_deadbeef",
+        "message": "do_not_echo_this_value"
+      }
+    ]
+  },
+  "invalid_2xx": {
+    "execute": [{}, [], {"status": ""}, {"status": 1}],
+    "register": [{}, {"api_key": ""}, {"api_key": "amk_test", "agent": {}}],
+    "invoke": [{}, {"invocation_id": ""}],
+    "match": [
+      {},
+      [],
+      {"providers": {}},
+      {"providers": ["not-an-object"]},
+      {"matches": true, "providers": []},
+      {"matches": 1, "providers": [{"score": "not-an-object"}]}
+    ],
+    "search": [
+      {},
+      "",
+      {"capabilities": {}},
+      {"capabilities": ["not-an-object"]},
+      {"capabilities": [{"description": 42}]},
+      {"capabilities": [{"price_per_unit": "0.10"}]}
+    ]
+  },
+  "valid_empty_discovery": {
+    "match": {"matches": 0, "providers": []},
+    "search": [[], {"capabilities": []}]
+  },
+  "valid_execute_minimum": [
+    {"status": "accepted"},
+    {"status": "completed", "provider": "provider-id"},
+    {"status": "completed", "provider": null}
+  ],
+  "valid_success": {
+    "execute": {
+      "status": "completed",
+      "invocation_id": "inv_1",
+      "provider": {"name": "Provider One"},
+      "output": {"summary": "done"},
+      "cost": 0.05,
+      "receipt_id": "rcpt_1"
+    },
+    "register": {
+      "agent": {"id": "agent_1"},
+      "api_key": "amk_test",
+      "credits": 1,
+      "balance": 1
+    },
+    "invoke": {
+      "invocation_id": "inv_2",
+      "result": {"value": "done"},
+      "cost": 0.02,
+      "seller_name": "Provider Two"
+    },
+    "match": {
+      "matches": 1,
+      "providers": [{"name": "Provider One", "price": 0.05, "score": {"composite": 0.9}}]
+    },
+    "search": {
+      "capabilities": [{
+        "id": "cap_1",
+        "name": "Summarizer",
+        "description": "Summarizes text",
+        "price_per_unit": 0.1,
+        "category": "ai-services",
+        "seller_name": "Provider Two"
+      }]
+    }
+  },
+  "invalid_wallets": [
+    null,
+    "",
+    "   ",
+    ".",
+    "..",
+    "0x123/456",
+    "0x123?query=true",
+    "0x123#fragment",
+    "%2e%2e",
+    "0X1111111111111111111111111111111111111111",
+    "0x111111111111111111111111111111111111111",
+    "0xgggggggggggggggggggggggggggggggggggggggg"
+  ],
+  "valid_wallets": [
+    "0x1111111111111111111111111111111111111111",
+    "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "0x52908400098527886E0F7030069857D2E4169EE7",
+    "  0x2222222222222222222222222222222222222222  "
+  ]
+}

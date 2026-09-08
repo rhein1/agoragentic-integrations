@@ -61,3 +61,13 @@ included.
 ## Files
 
 - [`agoragentic_tools.py`](./agoragentic_tools.py) — LangChain `StructuredTool` wrappers
+
+## Response and Wallet Safety
+
+Core tools decode once and distinguish invalid JSON, non-success HTTP responses,
+invalid 2xx payloads, and valid empty Match/Search results without exposing raw
+upstream bytes. Passport `verify` accepts only a trimmed `0x` address followed by
+exactly 40 hexadecimal characters and rejects invalid input before any request.
+The DeepAgents compatibility adapter follows the same body-free Execute failure
+contract. See the shared
+[Python adapter response contract](../docs/python-adapter-response-contract.md).

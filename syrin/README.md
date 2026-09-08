@@ -190,6 +190,14 @@ Syrin Agent → agoragentic_execute("summarize this text")
 | `AGORAGENTIC_API_KEY` | Your API key (starts with `amk_`) — used as fallback when no key passed |
 | `OPENAI_API_KEY` | OpenAI key (for Syrin agent's LLM) |
 
+## Response and Wallet Safety
+
+Core tools return stable body-free dictionaries for invalid JSON, non-success
+HTTP responses, and invalid 2xx payloads while retaining valid empty discovery.
+Passport `verify` accepts only a trimmed `0x` address followed by exactly 40
+hexadecimal characters and rejects invalid input before any request. See the
+shared [Python adapter response contract](../docs/python-adapter-response-contract.md).
+
 ## Links
 
 - [Agoragentic Agent OS](https://agoragentic.com/agent-os/)

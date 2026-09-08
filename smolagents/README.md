@@ -13,12 +13,12 @@ pip install smolagents requests
 ## Quick Start
 
 ```python
-from smolagents import CodeAgent, HfApiModel
+from smolagents import CodeAgent, InferenceClientModel
 from agoragentic_smolagents import get_all_tools
 
 agent = CodeAgent(
     tools=get_all_tools("amk_your_key"),
-    model=HfApiModel(),
+    model=InferenceClientModel(),
 )
 
 agent.run("Preview data-analysis providers, execute through Agent OS if policy allows, and return the receipt")
@@ -70,7 +70,7 @@ curl -X POST https://agoragentic.com/api/quickstart \
 |------|-------------|
 | `agoragentic_smolagents.py` | All 10 tool classes — import into your smolagents project |
 | `example_smolagents.py` | Execute-first example with `CodeAgent` |
-| `_publish_hub.py` | Push tools to HuggingFace Hub |
+| `_publish_hub.py` | Explicit release helper; importing or merging source does not publish |
 
 ## Execute-First Pattern
 
@@ -78,7 +78,7 @@ The recommended pattern uses `execute()` — describe what you need, and the rou
 
 ```python
 import os
-from smolagents import CodeAgent, HfApiModel
+from smolagents import CodeAgent, InferenceClientModel
 from agoragentic_smolagents import AgoragenticExecuteTool, AgoragenticMatchTool
 
 agent = CodeAgent(
@@ -86,7 +86,7 @@ agent = CodeAgent(
         AgoragenticExecuteTool(api_key=os.environ["AGORAGENTIC_API_KEY"]),
         AgoragenticMatchTool(api_key=os.environ["AGORAGENTIC_API_KEY"]),
     ],
-    model=HfApiModel(),
+    model=InferenceClientModel(),
 )
 
 # Preview providers first
@@ -96,15 +96,20 @@ result = agent.run("Which providers can summarize text under $0.10?")
 result = agent.run("Summarize this article about quantum computing")
 ```
 
-## Load from HuggingFace Hub
+## Optional Hugging Face Hub Release
+
+The repository file above is the canonical source. A merge does not update the
+live Hub artifact. Use the Hub path below only after a separately authorized
+publication has verified the exact generated tool and remote runtime; otherwise
+download and import `agoragentic_smolagents.py` directly.
 
 ```python
-from smolagents import load_tool, CodeAgent, HfApiModel
+from smolagents import load_tool, CodeAgent, InferenceClientModel
 
 execute = load_tool("Acre1/agoragentic-execute")
 execute.api_key = "amk_your_key"
 
-agent = CodeAgent(tools=[execute], model=HfApiModel())
+agent = CodeAgent(tools=[execute], model=InferenceClientModel())
 agent.run("Find and use a code review tool")
 ```
 
@@ -128,7 +133,7 @@ Your smolagent → execute("summarize this text")
 | Variable | Description |
 |----------|-------------|
 | `AGORAGENTIC_API_KEY` | Your API key (starts with `amk_`) — used as fallback when no key passed to constructor |
-| `HF_TOKEN` | HuggingFace token (for HfApiModel or Hub operations) |
+| `HF_TOKEN` | Hugging Face token (for InferenceClientModel or Hub operations) |
 
 ## Response and Wallet Safety
 
@@ -141,6 +146,11 @@ into agent context.
 Passport `verify` accepts a trimmed Base/EVM address in the form `0x` followed
 by exactly 40 hexadecimal characters. Invalid, blank, or path-like values are
 rejected before any HTTP request.
+
+The primary file is the source of truth for the example and Hub publisher.
+Endpoint-specific 2xx payload checks distinguish invalid objects from valid
+empty Match and Search results. See the shared
+[Python adapter response contract](../docs/python-adapter-response-contract.md).
 
 ## Links
 
