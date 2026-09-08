@@ -40,7 +40,7 @@ Schema validation additionally requires the pinned jsonschema test dependency.
 No credentials, network, model, dataset download, or spend is needed for replay.
 
 The offline evidence packet is pinned to the schema and semantic-validator contract
-from Marketplace commit `71799e0099ce30cd4e76e19e209e87122afce7b1`.
+from Marketplace commit `96af5efcb8515e419b3ba8868cefbab2e5adbb26`.
 Because a repository-scoped Actions token cannot read the private platform repository,
 CI validates the complete byte-hash-pinned schema snapshot, fixture accounting,
 and canonical identity. These checks do not establish full platform semantic

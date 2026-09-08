@@ -36,7 +36,7 @@ that validator separately. No platform business logic is copied into this repo.
 
 Read [METHOD.md](METHOD.md) and [LIMITATIONS.md](LIMITATIONS.md). Platform schema
 and semantic eligibility conformance are pinned to Marketplace commit
-`71799e0099ce30cd4e76e19e209e87122afce7b1`. CI uses a byte-hash-pinned schema
+`96af5efcb8515e419b3ba8868cefbab2e5adbb26`. CI uses a byte-hash-pinned schema
 snapshot because its repository-scoped token cannot read the private platform repo.
 `--evidence-out /path/to/new-evidence.json` produces the same evidence in a new
 file and refuses to overwrite an existing file. Python delegates canonical
