@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
   "source_manifest_version": "2.54.0",
-  "as_of": "2026-09-01",
+  "as_of": "2026-09-08",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
