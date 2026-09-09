@@ -1,0 +1,558 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/nevermined-evidence.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "core",
+    "observation_context",
+    "assessment"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.nevermined-evidence.v1"
+    },
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "identity",
+        "identifiers",
+        "authority_refs",
+        "merchant_payment",
+        "fee_legs",
+        "original"
+      ],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "namespace",
+            "record_kind",
+            "schema_revision",
+            "provenance",
+            "redacted_source_hash",
+            "hash_scope",
+            "canonicalization",
+            "redaction_profile",
+            "extraction_profile",
+            "source_artifact_embedded"
+          ],
+          "properties": {
+            "provider": {
+              "const": "nevermined"
+            },
+            "namespace": {
+              "$ref": "#/$defs/source_identifier"
+            },
+            "record_kind": {
+              "const": "merchant_payment_ledger"
+            },
+            "schema_revision": {
+              "$ref": "#/$defs/source_identifier"
+            },
+            "provenance": {
+              "const": "caller_supplied"
+            },
+            "redacted_source_hash": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "hash_scope": {
+              "const": "redacted_bounded_source"
+            },
+            "canonicalization": {
+              "const": "rfc8785-jcs"
+            },
+            "redaction_profile": {
+              "const": "agoragentic.nevermined-allowlist-redaction.v1"
+            },
+            "extraction_profile": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "version",
+                "digest"
+              ],
+              "properties": {
+                "id": {
+                  "$ref": "#/$defs/source_identifier"
+                },
+                "version": {
+                  "$ref": "#/$defs/nullable_text"
+                },
+                "digest": {
+                  "$ref": "#/$defs/nullable_digest"
+                }
+              }
+            },
+            "source_artifact_embedded": {
+              "const": false
+            }
+          }
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "payment_identity_key",
+            "observation_key"
+          ],
+          "properties": {
+            "payment_identity_key": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "observation_key": {
+              "$ref": "#/$defs/nullable_digest"
+            }
+          }
+        },
+        "identifiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "payment_id",
+            "request_id"
+          ],
+          "properties": {
+            "payment_id": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "request_id": {
+              "$ref": "#/$defs/nullable_text"
+            }
+          }
+        },
+        "authority_refs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "delegation_ref",
+            "principal_ref",
+            "agent_ref"
+          ],
+          "properties": {
+            "delegation_ref": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "principal_ref": {
+              "const": null
+            },
+            "agent_ref": {
+              "const": null
+            }
+          }
+        },
+        "merchant_payment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider_status",
+            "status_family",
+            "protocol",
+            "network",
+            "asset",
+            "amount_atomic",
+            "decimals",
+            "amount_display",
+            "buyer_wallet",
+            "merchant_wallet",
+            "settlement_ref",
+            "settlement_ref_kind",
+            "resource_url",
+            "created_at"
+          ],
+          "properties": {
+            "provider_status": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "status_family": {
+              "enum": [
+                "issued",
+                "settled",
+                "failed",
+                "unknown"
+              ]
+            },
+            "protocol": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "network": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "asset": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "amount_atomic": {
+              "$ref": "#/$defs/atomic_units"
+            },
+            "decimals": {
+              "$ref": "#/$defs/decimal_scale"
+            },
+            "amount_display": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "buyer_wallet": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "merchant_wallet": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "settlement_ref": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "settlement_ref_kind": {
+              "$ref": "#/$defs/reference_kind"
+            },
+            "resource_url": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "created_at": {
+              "$ref": "#/$defs/nullable_text"
+            }
+          }
+        },
+        "fee_legs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "leg",
+              "provider_status",
+              "amount_atomic",
+              "decimals",
+              "network",
+              "asset",
+              "rate_bps",
+              "budget_cents",
+              "settlement_ref",
+              "settlement_ref_kind",
+              "authorization_nonce",
+              "reconciliation"
+            ],
+            "properties": {
+              "leg": {
+                "const": "router_fee"
+              },
+              "provider_status": {
+                "$ref": "#/$defs/nullable_text"
+              },
+              "amount_atomic": {
+                "$ref": "#/$defs/atomic_units"
+              },
+              "decimals": {
+                "$ref": "#/$defs/decimal_scale"
+              },
+              "network": {
+                "$ref": "#/$defs/nullable_text"
+              },
+              "asset": {
+                "$ref": "#/$defs/nullable_text"
+              },
+              "rate_bps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "budget_cents": {
+                "$ref": "#/$defs/atomic_units"
+              },
+              "settlement_ref": {
+                "$ref": "#/$defs/nullable_text"
+              },
+              "settlement_ref_kind": {
+                "$ref": "#/$defs/reference_kind"
+              },
+              "authorization_nonce": {
+                "$ref": "#/$defs/nullable_text"
+              },
+              "reconciliation": {
+                "const": "not_checked"
+              }
+            }
+          }
+        },
+        "original": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "createdAt": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "status": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "protocol": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "network": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "asset": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "amount": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "merchantAddress": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "txHash": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "delegationId": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "requestId": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "resourceUrl": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "buyer": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeAtomic": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeBps": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeCents": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeStatus": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeTxHash": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "feeNonce": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "assetSymbol": {
+              "$ref": "#/$defs/source_scalar"
+            },
+            "assetDecimals": {
+              "$ref": "#/$defs/source_scalar"
+            }
+          }
+        }
+      }
+    },
+    "observation_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_at",
+        "record_ref_hash"
+      ],
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/nullable_text"
+        },
+        "record_ref_hash": {
+          "$ref": "#/$defs/nullable_digest"
+        }
+      }
+    },
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parse_status",
+        "import_disposition",
+        "prior_observation_keys",
+        "conflicts",
+        "support",
+        "independent_settlement",
+        "amount_reconciliation",
+        "authority",
+        "outcome",
+        "overall_evidence_status",
+        "warnings"
+      ],
+      "properties": {
+        "parse_status": {
+          "enum": [
+            "accepted",
+            "incomplete"
+          ]
+        },
+        "import_disposition": {
+          "enum": [
+            "new",
+            "duplicate",
+            "update",
+            "conflict"
+          ]
+        },
+        "prior_observation_keys": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nullable_digest"
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "support": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pinned_profile",
+            "base_usdc_candidate"
+          ],
+          "properties": {
+            "pinned_profile": {
+              "type": "boolean"
+            },
+            "base_usdc_candidate": {
+              "type": "boolean"
+            }
+          }
+        },
+        "independent_settlement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provenance",
+            "chain_status",
+            "matching_status",
+            "evidence_ref"
+          ],
+          "properties": {
+            "provenance": {
+              "const": "reported_observation"
+            },
+            "chain_status": {
+              "const": "not_checked"
+            },
+            "matching_status": {
+              "const": "not_checked"
+            },
+            "evidence_ref": {
+              "const": null
+            }
+          }
+        },
+        "amount_reconciliation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ledger_amount",
+            "commercial_price"
+          ],
+          "properties": {
+            "ledger_amount": {
+              "const": "not_checked"
+            },
+            "commercial_price": {
+              "const": "not_checked"
+            }
+          }
+        },
+        "authority": {
+          "const": "not_checked"
+        },
+        "outcome": {
+          "const": "not_checked"
+        },
+        "overall_evidence_status": {
+          "enum": [
+            "unresolved",
+            "contradicted",
+            "unsupported"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nullable_text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_scalar": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ]
+    },
+    "nullable_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "atomic_units": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,77})$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decimal_scale": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reference_kind": {
+      "enum": [
+        "absent",
+        "abbreviated",
+        "opaque",
+        "evm_tx_hash"
+      ]
+    },
+    "source_identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}

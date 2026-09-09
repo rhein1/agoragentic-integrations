@@ -1,0 +1,121 @@
+{
+  "schema": "agoragentic.nevermined-evidence.v1",
+  "core": {
+    "source": {
+      "provider": "nevermined",
+      "namespace": "synthetic:sandbox:example",
+      "record_kind": "merchant_payment_ledger",
+      "schema_revision": "7c3e0c1dd00119f8e72983572c1807e78a9c1ee2",
+      "provenance": "caller_supplied",
+      "redacted_source_hash": "sha256:b2af6e1fc6b8dd667b07df9e502dea74aae118b07d917503baefc6bacb68eb0d",
+      "hash_scope": "redacted_bounded_source",
+      "canonicalization": "rfc8785-jcs",
+      "redaction_profile": "agoragentic.nevermined-allowlist-redaction.v1",
+      "extraction_profile": {
+        "id": "nevermined.merchant-payment.7c3e0c1dd00119f8e72983572c1807e78a9c1ee2",
+        "version": "1.0.0",
+        "digest": "sha256:420d609f4e69849ecc6c0203cf4c1c67bf3cad108128f13a70b639fe1850c1b7"
+      },
+      "source_artifact_embedded": false
+    },
+    "identity": {
+      "payment_identity_key": "sha256:e9cd7b0ca303612d53443bb10d55e1a886e976f4ac06abefa8e4ae1accfa03d0",
+      "observation_key": "sha256:10e4e230a0bdc5460b7cc9c0794eec0b03e2929249ace730cdec9fcb2eb94787"
+    },
+    "identifiers": {
+      "payment_id": "synthetic-payment-001",
+      "request_id": "synthetic-request-001"
+    },
+    "authority_refs": {
+      "delegation_ref": "synthetic-delegation-001",
+      "principal_ref": null,
+      "agent_ref": null
+    },
+    "merchant_payment": {
+      "provider_status": "Settled",
+      "status_family": "settled",
+      "protocol": "x402",
+      "network": "eip155:8453",
+      "asset": "USDC",
+      "amount_atomic": "10000",
+      "decimals": 6,
+      "amount_display": "0.01",
+      "buyer_wallet": "0x2222222222222222222222222222222222222222",
+      "merchant_wallet": "0x1111111111111111111111111111111111111111",
+      "settlement_ref": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "settlement_ref_kind": "evm_tx_hash",
+      "resource_url": "https://service.example/api/resource",
+      "created_at": "2026-07-01T09:00:55.605Z"
+    },
+    "fee_legs": [
+      {
+        "leg": "router_fee",
+        "provider_status": "Submitted",
+        "amount_atomic": "200",
+        "decimals": 6,
+        "network": "eip155:8453",
+        "asset": "USDC",
+        "rate_bps": 200,
+        "budget_cents": "0",
+        "settlement_ref": null,
+        "settlement_ref_kind": "absent",
+        "authorization_nonce": "0x4444444444444444444444444444444444444444444444444444444444444444",
+        "reconciliation": "not_checked"
+      }
+    ],
+    "original": {
+      "id": "synthetic-payment-001",
+      "createdAt": "2026-07-01T09:00:55.605Z",
+      "status": "Settled",
+      "protocol": "x402",
+      "network": "base",
+      "asset": "USDC",
+      "amount": "10000",
+      "merchantAddress": "0x1111111111111111111111111111111111111111",
+      "txHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "delegationId": "synthetic-delegation-001",
+      "requestId": "synthetic-request-001",
+      "resourceUrl": "https://service.example/api/resource",
+      "buyer": "0x2222222222222222222222222222222222222222",
+      "feeAtomic": "200",
+      "feeBps": 200,
+      "feeCents": "0",
+      "feeStatus": "Submitted",
+      "feeTxHash": null,
+      "feeNonce": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "assetSymbol": "USDC",
+      "assetDecimals": 6
+    }
+  },
+  "observation_context": {
+    "captured_at": "2026-09-09T00:00:00Z",
+    "record_ref_hash": "sha256:3e578f1961b827c749edbbadcefba2297157ef843fc2eb1c4a08299ef26d0536"
+  },
+  "assessment": {
+    "parse_status": "accepted",
+    "import_disposition": "new",
+    "prior_observation_keys": [],
+    "conflicts": [],
+    "support": {
+      "pinned_profile": true,
+      "base_usdc_candidate": true
+    },
+    "independent_settlement": {
+      "provenance": "reported_observation",
+      "chain_status": "not_checked",
+      "matching_status": "not_checked",
+      "evidence_ref": null
+    },
+    "amount_reconciliation": {
+      "ledger_amount": "not_checked",
+      "commercial_price": "not_checked"
+    },
+    "authority": "not_checked",
+    "outcome": "not_checked",
+    "overall_evidence_status": "unresolved",
+    "warnings": [
+      "atomic_fee_with_zero_budget_cents",
+      "source_fields_omitted"
+    ]
+  }
+}
