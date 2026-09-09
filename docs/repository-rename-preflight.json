@@ -1803,8 +1803,8 @@
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        66,
-        71
+        68,
+        73
       ],
       "categories": [
         "installer_or_clone",
