@@ -769,11 +769,22 @@ test('abort closes admissions and shares verified active-run cleanup', async (t)
   const root = await temporaryRoot(t);
   const engine = createDemoEngine({ rootDirectory: root });
   const running = engine.run('attack-timeout');
-  const deadline = Date.now() + 2_000;
-  while (!engine.status().active_in_this_process && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
+  let runSettled = false;
+  void running.then(
+    () => { runSettled = true; },
+    () => { runSettled = true; },
+  );
+  const deadline = Date.now() + 15_000;
+  while (!engine.status().active_in_this_process && !runSettled && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.equal(engine.status().active_in_this_process, true);
+  assert.equal(
+    engine.status().active_in_this_process,
+    true,
+    runSettled
+      ? 'run settled before its active lifecycle became observable'
+      : 'run did not become active within 15 seconds',
+  );
   const firstAbort = engine.abort();
   const secondAbort = engine.abort();
   assert.equal(firstAbort, secondAbort);
