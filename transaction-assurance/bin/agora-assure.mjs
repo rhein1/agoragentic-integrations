@@ -2,15 +2,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import {
-  buildAuthorityRequest,
+let buildAuthorityRequest,
   buildTransactionAssuranceEnvelope,
   canonicalize,
   detectAuthorityProtocol,
   evaluateTransactionAssuranceEnvelope,
   normalizeAuthorityArtifact,
-  sha256Ref,
-} from '../src/index.mjs';
+  sha256Ref;
 
 function usage() {
   return `Agoragentic Transaction Assurance (local/no-network)
@@ -24,6 +22,8 @@ Usage:
   agora-assure canonicalize <input.json>
   agora-assure hash <input.json>
   agora-assure self-test
+  agora-assure nevermined import --input <file> --profile <id> [--namespace <namespace>]
+  agora-assure nevermined --help
 
 The CLI never calls a network, signs a payment, moves money, creates a wallet,
 approves authority, deploys, publishes, or mutates marketplace trust.
@@ -148,7 +148,21 @@ function selfTest() {
   };
 }
 
-function main() {
+async function main() {
+  if (process.argv[2] === 'nevermined') {
+    const { runNeverminedCLI } = await import('../src/adapters/nevermined-cli.mjs');
+    process.exitCode = runNeverminedCLI(process.argv.slice(3));
+    return;
+  }
+  ({
+  buildAuthorityRequest,
+  buildTransactionAssuranceEnvelope,
+  canonicalize,
+  detectAuthorityProtocol,
+  evaluateTransactionAssuranceEnvelope,
+  normalizeAuthorityArtifact,
+  sha256Ref,
+} = await import('../src/index.mjs'));
   const [command, file] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h' || command === 'help') {
     process.stdout.write(usage());
@@ -195,9 +209,7 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   process.stderr.write(`agora-assure: ${error.message}\n`);
   process.exitCode = 1;
-}
+});

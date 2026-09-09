@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/nevermined-import.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "profile_id",
+    "record"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.nevermined-import.v1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "namespace",
+        "record_kind",
+        "schema_revision"
+      ],
+      "properties": {
+        "provider": {
+          "const": "nevermined"
+        },
+        "namespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "record_kind": {
+          "const": "merchant_payment_ledger"
+        },
+        "schema_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "captured_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "record_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2048
+        }
+      }
+    },
+    "profile_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "profile_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw"
+      ],
+      "properties": {
+        "raw": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": true
+            },
+            {
+              "type": "array",
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/history"
+      }
+    }
+  },
+  "$defs": {
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "source",
+        "profile_id",
+        "record"
+      ],
+      "properties": {
+        "schema": {
+          "const": "agoragentic.nevermined-import.v1"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "namespace",
+            "record_kind",
+            "schema_revision"
+          ],
+          "properties": {
+            "provider": {
+              "const": "nevermined"
+            },
+            "namespace": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "record_kind": {
+              "const": "merchant_payment_ledger"
+            },
+            "schema_revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "captured_at": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "record_ref": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 2048
+            }
+          }
+        },
+        "profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "profile_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "record": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "raw"
+          ],
+          "properties": {
+            "raw": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "history": {
+          "type": "array",
+          "maxItems": 0
+        }
+      }
+    }
+  }
+}

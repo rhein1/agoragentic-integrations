@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 58,
-    "sha256": "sha256:dbbf606bdedee4a7363bd953232384a8d7734feb83a50e409dae43ed19b32216"
+    "files": 62,
+    "sha256": "sha256:5086870d0e8475ae874751e939f6149e51bcc7e4904cad339be935ffa91cb07a"
   },
   "reviewed_sources": [
     {
@@ -261,6 +261,26 @@
       "path": "risk-fork/src/util.mjs",
       "bytes": 14559,
       "sha256": "sha256:285f3be0caf02b64fc523b1a410a1da5f3baba18b835836494a248bbf31fa064"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/nevermined-cli.mjs",
+      "bytes": 5173,
+      "sha256": "sha256:e03ed124ebd4463172fd06d86fc8d6e12dc98f8fa28209e38c5a8852ab40d81a"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/nevermined-json.mjs",
+      "bytes": 6851,
+      "sha256": "sha256:09a697b02b7b55d72b5d6deadea88c2ae93aaa44ee0d1577c0dea12bfe8218bc"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/nevermined-ledger.mjs",
+      "bytes": 16797,
+      "sha256": "sha256:40c2f68a322ebe1a41601c21c1b15ab11b3547a90db5aaa25400793a301d1164"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/nevermined-profile.mjs",
+      "bytes": 1894,
+      "sha256": "sha256:b166d7e1eb162fe86fc547587cf988c31ab51bd9ee3a48a1176d2c1e4b703d1b"
     },
     {
       "path": "transaction-assurance/src/canonical.mjs",
@@ -2589,7 +2609,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 2970455,
-    "sha256": "sha256:8af5d618ce77d7c6d534fb72e54fc8241a29fd86479d4c3f1f4098b93f4e5053"
+    "sha256": "sha256:6f87b881d518f4dca2ff8fa584853ba9b9df5a40b2b3a64bd4d73e70a70adee1"
   },
   "packaged_assets": [
     {
