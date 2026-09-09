@@ -20,6 +20,7 @@ import {
   isPlainObject,
   normalizeRelativePath,
   safeEqual,
+  securityTextVariants,
 } from '../../src/util.mjs';
 
 export const RISK_FORK_DEMO_BANNER =
@@ -197,12 +198,18 @@ function credentialComponentBeforeAuthorityMetadata(normalized) {
 
 function secretBearingKey(value) {
   if (typeof value !== 'string') return false;
-  const normalized = normalizeFieldName(value);
-  if (credentialComponentBeforeAuthorityMetadata(normalized)) return true;
-  if (safeAuthorityMetadataKey(normalized)) return false;
-  return containsSecretShapedText(value)
-    || SECRET_FIELD_NAMES.has(normalized)
-    || SECRET_FIELD_PATTERNS.some((pattern) => pattern.test(normalized));
+  const variants = securityTextVariants(value);
+  for (let index = 0; index < variants.length; index += 1) {
+    const normalized = normalizeFieldName(variants[index]);
+    if (credentialComponentBeforeAuthorityMetadata(normalized)) return true;
+    if (safeAuthorityMetadataKey(normalized)) continue;
+    if (containsSecretShapedText(variants[index])
+      || SECRET_FIELD_NAMES.has(normalized)
+      || SECRET_FIELD_PATTERNS.some((pattern) => pattern.test(normalized))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function failAllowedAbsolutePath() {

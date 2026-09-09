@@ -14,6 +14,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { securityPatternMatches } from '../../src/util.mjs';
+
 import {
   canonicalize,
   createBootEvidenceEnvelope,
@@ -82,6 +84,16 @@ const CREDENTIAL_PATHS = Object.freeze([
   '/root/.ssh',
 ]);
 
+function observedByteStringMatchesSecurityPattern(pattern, value) {
+  if (securityPatternMatches(pattern, value)) return true;
+  const utf8View = Buffer.from(value, 'latin1').toString('utf8');
+  return utf8View !== value && securityPatternMatches(pattern, utf8View);
+}
+
+export function containsForbiddenProcessText(value) {
+  return securityPatternMatches(FORBIDDEN_PROCESS_PATTERN, value);
+}
+
 export function classifyLiteralProbeOutcome(outcome) {
   if (outcome === 'connected') {
     return { status: 'connected', local_denial_observed: false };
@@ -113,7 +125,9 @@ export function inspectProcessEnvironmentBytes(value) {
     const key = record.slice(0, separator);
     const keyHash = sha256Ref(key);
     keyHashes.push(keyHash);
-    if (FORBIDDEN_ENVIRONMENT_KEY_PATTERN.test(key)) forbiddenKeyHashes.push(keyHash);
+    if (observedByteStringMatchesSecurityPattern(FORBIDDEN_ENVIRONMENT_KEY_PATTERN, key)) {
+      forbiddenKeyHashes.push(keyHash);
+    }
   }
   keyHashes.sort();
   forbiddenKeyHashes.sort();
@@ -182,7 +196,7 @@ async function observeProcesses() {
     const normalized = cmdline.toString('utf8').replaceAll('\0', ' ').trim().slice(0, 8_192);
     const digest = sha256Ref(normalized || `pid:${entry.name}:empty`);
     hashes.push(digest);
-    if (FORBIDDEN_PROCESS_PATTERN.test(normalized)) forbidden.push(digest);
+    if (containsForbiddenProcessText(normalized)) forbidden.push(digest);
   }
   hashes.sort();
   forbidden.sort();

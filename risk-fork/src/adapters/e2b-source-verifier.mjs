@@ -28,6 +28,9 @@ import {
   requireSha256Ref,
   requireString,
   safeEqual,
+  securityPatternMatches,
+  securityPatternsMatch,
+  securityTextVariants,
 } from '../util.mjs';
 import { readImmutableWorkspaceExport } from './e2b-workspace-export.mjs';
 
@@ -79,13 +82,20 @@ const BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 const MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
 
 function containsSecretAssignment(exactBytesText) {
-  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-  for (let match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText);
-    match;
-    match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText)) {
-    const value = match[1] ?? match[2] ?? match[3] ?? '';
-    if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) return true;
+  const variants = securityTextVariants(exactBytesText);
+  for (let index = 0; index < variants.length; index += 1) {
+    SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+    for (let match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index]);
+      match;
+      match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index])) {
+      const value = match[1] ?? match[2] ?? match[3] ?? '';
+      if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) {
+        SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+        return true;
+      }
+    }
   }
+  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
   return false;
 }
 
@@ -117,7 +127,7 @@ function decodeCanonicalBase64(candidate) {
 }
 
 function containsRecognizedSecretText(text) {
-  return SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(text))
+  return securityPatternsMatch(SECRET_CONTENT_PATTERNS, text)
     || containsSecretAssignment(text);
 }
 
@@ -246,7 +256,8 @@ function validateRequest(value) {
 
 export function scanE2BStagedBytesAuthorityFree(files) {
   for (const file of files) {
-    if (SECRET_PATH_PATTERN.test(file.path) || containsRecognizedSecretText(file.path)) {
+    if (securityPatternMatches(SECRET_PATH_PATTERN, file.path)
+      || containsRecognizedSecretText(file.path)) {
       throw new Error('E2B staged export contains a secret-shaped path');
     }
     const content = Buffer.from(file.data_base64, 'base64');

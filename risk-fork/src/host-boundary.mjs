@@ -10,6 +10,7 @@ import {
   assertPlainObject,
   containsSecretShapedText,
   deepFreeze,
+  foldSecurityConfusables,
   normalizeRelativePath,
   requireEnum,
   requireExternalEndpoint,
@@ -18,6 +19,7 @@ import {
   requireOpaqueRef,
   requireSha256Ref,
   safeEqual,
+  securityPatternsMatch,
   uniqueStrings,
 } from './util.mjs';
 
@@ -190,8 +192,7 @@ function boundaryError(code, message) {
 }
 
 function normalizedKey(value) {
-  return value
-    .normalize('NFKC')
+  return foldSecurityConfusables(value)
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/[^A-Za-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -263,7 +264,7 @@ function assertBoundedCanonicalJson(value, {
       }
       if (dlp && (containsSecretShapedText(current)
         || containsObviousCapabilityLikeText(current)
-        || SENSITIVE_IMPORT_VALUE_PATTERNS.some((pattern) => pattern.test(current)))) {
+        || securityPatternsMatch(SENSITIVE_IMPORT_VALUE_PATTERNS, current))) {
         rejectDlp();
       }
       return;

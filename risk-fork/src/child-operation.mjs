@@ -9,6 +9,8 @@ import {
   deepFreeze,
   normalizeRelativePath,
   requireEnum,
+  foldSecurityConfusables,
+  securityPatternsMatch,
 } from './util.mjs';
 
 const MAX_OPERATION_BYTES = 1024 * 1024;
@@ -18,7 +20,7 @@ const MAX_LOCAL_ACTIONS = 500;
 const MAX_LOCAL_FILE_BYTES = 512 * 1024;
 
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
+const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|privilege|privileges|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
 
 const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
@@ -33,8 +35,7 @@ const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
 ]);
 
 function normalizedKey(value) {
-  return value
-    .normalize('NFKC')
+  return foldSecurityConfusables(value)
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/[^A-Za-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
@@ -49,7 +50,7 @@ function scanAuthorityFreeJson(value, field) {
     if (nodes > MAX_OPERATION_NODES) throw new TypeError(`${field} is too complex`);
     if (depth > MAX_OPERATION_DEPTH) throw new TypeError(`${field} is too deeply nested`);
     if (typeof current === 'string') {
-      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(current))) {
+      if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, current)) {
         throw new TypeError(`${path} contains authority or secret-shaped material`);
       }
       return;
@@ -63,7 +64,7 @@ function scanAuthorityFreeJson(value, field) {
     }
     for (const [key, child] of Object.entries(current)) {
       const normalized = normalizedKey(key);
-      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+      if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, key)) {
         throw new TypeError(`${path}.<key> contains authority or secret-shaped material`);
       }
       if (DANGEROUS_KEYS.has(key)) {
