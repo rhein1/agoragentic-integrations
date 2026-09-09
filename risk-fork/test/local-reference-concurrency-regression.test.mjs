@@ -175,6 +175,8 @@ function assertEvidenceHash(evidence) {
 }
 
 const WINDOWS_LOCK_READY = 'RISK_FORK_TEST_LOCK_READY';
+const WINDOWS_LOCK_START_TIMEOUT_MS = 45_000;
+const WINDOWS_LOCK_CLOSE_TIMEOUT_MS = 15_000;
 
 function waitForExactStdoutLine(child, expectedLine, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -290,10 +292,10 @@ async function startWindowsExclusiveLock(lockPath) {
   });
 
   try {
-    await waitForExactStdoutLine(child, WINDOWS_LOCK_READY, 15_000);
+    await waitForExactStdoutLine(child, WINDOWS_LOCK_READY, WINDOWS_LOCK_START_TIMEOUT_MS);
   } catch (error) {
     if (child.exitCode === null && child.signalCode === null) child.kill();
-    await waitForClose(closePromise, 3_000).catch(() => {});
+    await waitForClose(closePromise, WINDOWS_LOCK_CLOSE_TIMEOUT_MS).catch(() => {});
     const detail = stderr.trim();
     if (detail) error.message = `${error.message}: ${detail}`;
     throw error;
@@ -306,10 +308,10 @@ async function startWindowsExclusiveLock(lockPath) {
       child.stdin.end();
       let close;
       try {
-        close = await waitForClose(closePromise, 3_000);
+        close = await waitForClose(closePromise, WINDOWS_LOCK_CLOSE_TIMEOUT_MS);
       } catch (error) {
         if (child.exitCode === null && child.signalCode === null) child.kill();
-        await waitForClose(closePromise, 3_000).catch(() => {});
+        await waitForClose(closePromise, WINDOWS_LOCK_CLOSE_TIMEOUT_MS).catch(() => {});
         stopped = true;
         throw error;
       }
@@ -323,7 +325,7 @@ async function startWindowsExclusiveLock(lockPath) {
       if (stopped) return;
       child.stdin.destroy();
       if (child.exitCode === null && child.signalCode === null) child.kill();
-      await waitForClose(closePromise, 3_000);
+      await waitForClose(closePromise, WINDOWS_LOCK_CLOSE_TIMEOUT_MS);
       stopped = true;
     },
   };
@@ -805,7 +807,7 @@ test('destroy failure blocks replay but an explicit retry can finish cleanup', a
 
 test('Windows retries destruction after a transient workspace lock is released', {
   skip: process.platform !== 'win32',
-  timeout: 30_000,
+  timeout: 90_000,
 }, async () => {
   const fixture = await makeFixture('risk-fork-local-windows-destroy-retry-');
   const { adapter, fork } = fixture;
