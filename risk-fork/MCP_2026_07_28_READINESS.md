@@ -120,6 +120,22 @@ Source or CI completion in one gate does not complete a later gate. In
 particular, no repository change can substitute for live provider, managed
 database, deployed-edge, traffic-bound, or external-observer evidence.
 
+## Static analysis and deterministic adversarial coverage
+
+The repository CodeQL workflow analyzes JavaScript/TypeScript and Python with
+the extended security and quality query suites on pull requests, `main`, and a
+weekly schedule. Actions are pinned to verified commits.
+
+The offline adversarial suite uses the fixed seed `0x5eed2026` and covers 64
+cases per risk boundary: cache and per-request metadata evidence, unsupported
+MRTR/task no-retry evidence, host capability downgrades, portable-handle
+context mismatch and replay, and cleanup outcome races. The local MCP relay
+also rejects Unicode format-character variants of every recognized MCP App
+metadata key.
+
+These checks establish repeatable source and static-analysis evidence. They do
+not qualify a production host, provider, credential, or deployment.
+
 ## Current truth
 
 ```text

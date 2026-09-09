@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add pinned repository CodeQL analysis and deterministic MCP 2026-07-28
+  adversarial coverage for metadata evidence, capability downgrades, portable
+  handles, cleanup races, and Unicode-disguised active content.
+
 - Align `x-mcp-header` with the final MCP 2026-07-28 Tools specification by
   permitting only `string`, `integer`, and `boolean` annotations and rejecting
   JSON Schema `number` declarations before the outbound MCP request.
