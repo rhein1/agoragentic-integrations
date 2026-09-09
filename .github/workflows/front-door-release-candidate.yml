@@ -1,0 +1,55 @@
+name: Front-door release candidate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/front-door-release-candidate.yml'
+      - 'scripts/build-front-door-release-candidates.mjs'
+      - 'scripts/verify-front-door-release-candidates.mjs'
+      - 'sdk/node/**'
+      - 'sdk/python/**'
+      - 'test/front-door-release-candidate.test.mjs'
+      - 'docs/FRONT_DOOR_RELEASE_CANDIDATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.13'
+
+      - name: Install pinned Python build frontend
+        run: python -m pip install build==1.6.0 setuptools==84.0.0 wheel==0.48.0
+
+      - name: Verify non-publishing release contract
+        run: node --test test/front-door-release-candidate.test.mjs
+
+      - name: Build release candidates
+        run: node scripts/build-front-door-release-candidates.mjs --output "${RUNNER_TEMP}/front-door-rc"
+
+      - name: Verify clean-room installs and local results
+        run: node scripts/verify-front-door-release-candidates.mjs --artifacts "${RUNNER_TEMP}/front-door-rc"
+
+      - name: Retain verified candidate artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agoragentic-front-door-1.8.0-rc.0
+          path: ${{ runner.temp }}/front-door-rc/
+          if-no-files-found: error
+          retention-days: 7
