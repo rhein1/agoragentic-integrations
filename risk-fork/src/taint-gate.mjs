@@ -15,6 +15,7 @@ import {
   assertPlainObject,
   boundedInteger,
   cloneJson,
+  countSecurityPatternMatches,
   deepFreeze,
   isPathAllowed,
   normalizeRelativePath,
@@ -24,6 +25,7 @@ import {
   requireSha256Ref,
   requireString,
   safeEqual,
+  securityKeyFingerprint,
   uniqueStrings,
 } from './util.mjs';
 
@@ -96,10 +98,7 @@ const SCHEMA_VALUE_KEYWORDS = Object.freeze([
 ]);
 
 function normalizeChildKey(value) {
-  return value
-    .normalize('NFKC')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .toLowerCase();
+  return securityKeyFingerprint(value);
 }
 
 function declaredJsonSchemaDialect(schema) {
@@ -204,13 +203,15 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', d
 function scanText(value, policy) {
   const findings = [];
   walkStrings(value, (text, path) => {
-    for (const pattern of SECRET_PATTERNS) {
-      if (pattern.test(text)) findings.push({ code: 'secret_pattern', path });
+    const secretMatches = countSecurityPatternMatches(SECRET_PATTERNS, text);
+    for (let index = 0; index < secretMatches; index += 1) {
+      findings.push({ code: 'secret_pattern', path });
     }
     if (containsObviousCapabilityLikeText(text)) findings.push({ code: 'authority_shape', path });
     if (!policy.allow_prompt_injection_text) {
-      for (const pattern of PROMPT_INJECTION_PATTERNS) {
-        if (pattern.test(text)) findings.push({ code: 'prompt_injection_pattern', path });
+      const promptMatches = countSecurityPatternMatches(PROMPT_INJECTION_PATTERNS, text);
+      for (let index = 0; index < promptMatches; index += 1) {
+        findings.push({ code: 'prompt_injection_pattern', path });
       }
     }
   }, policy);

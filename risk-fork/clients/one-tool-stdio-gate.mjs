@@ -14,7 +14,11 @@ import { spawn } from 'node:child_process';
 import { TextDecoder } from 'node:util';
 
 import { RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES } from '../src/client-adoption.mjs';
-import { containsSerializedCredentialMaterial } from '../src/util.mjs';
+import {
+  containsSerializedCredentialMaterial,
+  foldSecurityConfusables,
+  securityPatternMatches,
+} from '../src/util.mjs';
 
 const TOOL_NAME = 'risk_fork_protect';
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -182,8 +186,7 @@ function isJsonRpcMessage(value) {
 }
 
 function normalizedKey(value) {
-  return value
-    .normalize('NFKC')
+  return foldSecurityConfusables(value)
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/[^A-Za-z0-9]+/g, '_')
@@ -193,7 +196,7 @@ function normalizedKey(value) {
 
 function isAuthorityOrSecretKey(value) {
   const normalized = normalizedKey(value);
-  return AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)
+  return securityPatternMatches(AUTHORITY_OR_SECRET_KEY_PATTERN, normalized)
     || /(?:^|_)token(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
     || /(?:^|_)(?:api|ai(?:api)?)_?key(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
     || /(?:^|_)key_(?:raw|value|secret|payload|credential)$/.test(normalized)
@@ -201,7 +204,7 @@ function isAuthorityOrSecretKey(value) {
 }
 
 function isCredentialTupleKey(value) {
-  return CREDENTIAL_TUPLE_KEY_PATTERN.test(normalizedKey(value));
+  return securityPatternMatches(CREDENTIAL_TUPLE_KEY_PATTERN, normalizedKey(value));
 }
 
 function containsCredentialMaterial(value) {

@@ -1,0 +1,7 @@
+name: "Agoragentic CodeQL configuration"
+
+# This bundle is generated from canonical, reviewed source and contains vendored
+# dependency code. Scan the canonical Risk Fork and hosted MCP source instead of
+# reclassifying unchanged dependency findings whenever the bundle is regenerated.
+paths-ignore:
+  - "risk-fork-hosted-mcp/dist/**"

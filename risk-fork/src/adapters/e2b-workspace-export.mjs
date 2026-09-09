@@ -25,6 +25,9 @@ import {
   requireSha256Ref,
   requireString,
   safeEqual,
+  securityPatternMatches,
+  securityPatternsMatch,
+  securityTextVariants,
 } from '../util.mjs';
 
 const EXPORT_SCHEMA = 'agoragentic.risk-fork.immutable-workspace-export.v1';
@@ -55,13 +58,20 @@ const MAX_CLEANUP_DEPTH = MAX_WORKSPACE_DEPTH + 1;
 const MAX_CLEANUP_MANIFEST_BYTES = 64 * 1024 * 1024;
 
 function containsSecretAssignment(exactBytesText) {
-  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-  for (let match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText);
-    match;
-    match = SECRET_ASSIGNMENT_PATTERN.exec(exactBytesText)) {
-    const value = match[1] ?? match[2] ?? match[3] ?? '';
-    if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) return true;
+  const variants = securityTextVariants(exactBytesText);
+  for (let index = 0; index < variants.length; index += 1) {
+    SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+    for (let match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index]);
+      match;
+      match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index])) {
+      const value = match[1] ?? match[2] ?? match[3] ?? '';
+      if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) {
+        SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+        return true;
+      }
+    }
   }
+  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
   return false;
 }
 
@@ -93,7 +103,7 @@ function decodeCanonicalBase64(candidate) {
 }
 
 function containsRecognizedSecretText(text) {
-  return SECRET_CONTENT_PATTERNS.some((pattern) => pattern.test(text))
+  return securityPatternsMatch(SECRET_CONTENT_PATTERNS, text)
     || containsSecretAssignment(text);
 }
 
@@ -156,7 +166,8 @@ async function lstatIfPresent(target, options) {
 }
 
 function assertNoSecretPath(relative) {
-  if (SECRET_PATH_PATTERN.test(relative) || containsRecognizedSecretText(relative)) {
+  if (securityPatternMatches(SECRET_PATH_PATTERN, relative)
+    || containsRecognizedSecretText(relative)) {
     throw new Error('Workspace export rejects a credential or secret-shaped path');
   }
 }
