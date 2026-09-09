@@ -69,7 +69,7 @@ var require_package = __commonJS({
         start: "node dist/mcp-server.cjs",
         dev: "node mcp-server.js",
         build: "node scripts/build.js",
-        check: "node --check mcp-server.js && node --check risk-forkd.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check scripts/verify-risk-forkd-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/metadata-boundary.test.js && node --check test/risk-forkd.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js && node --check test/fixtures/risk-forkd-entry.js",
+        check: "node --check mcp-server.js && node --check risk-forkd.js && node --check scripts/build.js && node --check scripts/postinstall.js && node --check scripts/verify-packed-install.js && node --check scripts/verify-risk-forkd-packed-install.js && node --check test/activation-blockers.test.js && node --check test/fallback-preview.test.js && node --check test/mcp-active-content-deterministic-fuzz.test.js && node --check test/metadata-boundary.test.js && node --check test/risk-forkd.test.js && node --check test/security-enforcement.test.js && node --check test/v2-remote-relay.test.js && node --check test/fixtures/enforced-relay-entry.js && node --check test/fixtures/risk-forkd-entry.js",
         test: "npm run build && node --test test/*.test.js",
         "verify:packed-install": "node scripts/verify-packed-install.js && node scripts/verify-risk-forkd-packed-install.js",
         prepack: "npm run build",
@@ -72174,7 +72174,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:065decf9fa553e19f2f220f86100c17d463611a9026fb023aa7fd8fb24ca01a0" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:dbbf606bdedee4a7363bd953232384a8d7734feb83a50e409dae43ed19b32216" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
