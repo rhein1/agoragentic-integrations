@@ -23,7 +23,7 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
 
 RECEIPT_HEADER = "X-Payment-Receipt"

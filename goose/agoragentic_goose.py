@@ -21,7 +21,6 @@ Usage:
 import os
 import json
 import requests
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 

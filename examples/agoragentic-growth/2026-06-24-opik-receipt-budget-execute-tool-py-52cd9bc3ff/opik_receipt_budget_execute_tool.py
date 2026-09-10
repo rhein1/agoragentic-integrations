@@ -128,7 +128,7 @@ def resolve_maybe_async(value: Any) -> Any:
     if not inspect.isawaitable(value):
         return value
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(_await_if_needed(value))
 
@@ -138,7 +138,8 @@ def resolve_maybe_async(value: Any) -> Any:
     def runner() -> None:
         try:
             holder["value"] = asyncio.run(_await_if_needed(value))
-        except BaseException as exc:  # pragma: no cover
+        except (Exception, asyncio.CancelledError, KeyboardInterrupt, SystemExit,
+                GeneratorExit) as exc:  # pragma: no cover - shuttled, re-raised after join
             error["error"] = exc
 
     thread = threading.Thread(target=runner, daemon=True)
@@ -360,7 +361,7 @@ class OpikReceiptSink:
         receipt_dict = receipt.as_dict()
         delivered = self._emit_via_client(receipt_dict)
         if not delivered:
-            delivered = self._emit_via_module(receipt_dict)
+            self._emit_via_module(receipt_dict)
         self._emit_jsonl(receipt_dict)
 
 
@@ -563,7 +564,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     first = tool.execute(task="ship receipt tracking", repeat=1)
     _print_demo_result("first_call", first)
 
-    second = tool._run(payload={"task": "wrap execute", "repeat": 2})
+    second = tool._run("", {"task": "wrap execute", "repeat": 2})
     _print_demo_result("second_call", second)
 
     try:

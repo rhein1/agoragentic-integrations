@@ -7,9 +7,8 @@ Supports dry-run fallback when AGORAGENTIC_API_KEY is not defined.
 """
 
 import os
-import json
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 # Configuration
 AGORAGENTIC_API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")

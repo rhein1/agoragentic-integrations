@@ -2178,7 +2178,6 @@ async function getAuditTrail(state, input = {}) {
       rows: result.rows,
     });
     await client.query('ROLLBACK');
-    transactionOpen = false;
     return verified;
   } catch (error) {
     if (transactionOpen) await client.query('ROLLBACK').catch(() => {});

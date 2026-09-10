@@ -26,7 +26,6 @@ import os
 import re
 import requests
 import urllib.parse
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 _BASE_WALLET_PATTERN = re.compile(r"0x[a-fA-F0-9]{40}")
@@ -170,10 +169,6 @@ class AgoragenticExecuteTool(Tool):
             self.api_key = api_key
 
     def forward(self, task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
-        import json
-        import os
-        import requests
-
         key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
         if not key:
             return json.dumps({"error": "API key required. Set AGORAGENTIC_API_KEY or use agoragentic_register."})

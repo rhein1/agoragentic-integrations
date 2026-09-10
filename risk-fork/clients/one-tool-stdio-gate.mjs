@@ -338,10 +338,6 @@ function encodeBoundedSecretFreeJson(value, boundary, { allowRequestProgressToke
   return encoded;
 }
 
-function response(id, result) {
-  return JSON.stringify({ jsonrpc: '2.0', id, result });
-}
-
 function errorResponse(id, code, message, data = undefined) {
   const error = { code, message };
   if (data !== undefined) error.data = data;

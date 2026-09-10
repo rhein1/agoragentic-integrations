@@ -129,15 +129,13 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
   const server = http.createServer(async (req, res) => {
     try {
       if (req.method !== 'POST' || req.url !== '/v1/paid-tools/shipyard-inference') {
-        sendJson(res, 404, { error: 'not_found' });
-        return;
+        return sendJson(res, 404, { error: 'not_found' });
       }
 
       const startedAt = Date.now();
       const idempotencyKey = req.headers['x-idempotency-key'];
       if (!idempotencyKey || typeof idempotencyKey !== 'string') {
-        sendJson(res, 400, { error: 'missing_x_idempotency_key' });
-        return;
+        return sendJson(res, 400, { error: 'missing_x_idempotency_key' });
       }
 
       const input = await readJsonBody(req);
@@ -160,7 +158,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
 
       const presentedAuthorization = req.headers['x-payment-authorization'];
       if (!presentedAuthorization || typeof presentedAuthorization !== 'string') {
-        sendJson(
+        return sendJson(
           res,
           402,
           {
@@ -171,7 +169,6 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
             'payment-required': encodePaymentRequiredHeader(challenge),
           },
         );
-        return;
       }
 
       const authorizationEnvelope = JSON.parse(
@@ -283,9 +280,10 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
       executionCache.set(idempotencyKey, responsePayload);
       sendJson(res, 200, responsePayload);
     } catch (error) {
+      console.error('shipyard-inference demo server error');
       sendJson(res, 500, {
         error: 'server_error',
-        message: error instanceof Error ? error.message : String(error),
+        message: 'internal error',
       });
     }
   });
@@ -435,22 +433,19 @@ class X402PaidToolClient {
 
         const challengeFingerprint = paymentChallengeFingerprint(challenge);
 
-        if (
-          !cachedAuthorizationHeader ||
-          cachedChallengeFingerprint !== challengeFingerprint
-        ) {
-          const authorizationEnvelope = await this.pay({
-            challenge,
-            idempotencyKey,
-            attempt,
-          });
-          payInvocations += 1;
-          cachedAuthorizationHeader = Buffer.from(
-            JSON.stringify(authorizationEnvelope),
-            'utf8',
-          ).toString('base64url');
-          cachedChallengeFingerprint = challengeFingerprint;
-        }
+        // cachedAuthorizationHeader is always null here: a second 402 with a
+        // cached header throws above, so the pay() call below always runs.
+        const authorizationEnvelope = await this.pay({
+          challenge,
+          idempotencyKey,
+          attempt,
+        });
+        payInvocations += 1;
+        cachedAuthorizationHeader = Buffer.from(
+          JSON.stringify(authorizationEnvelope),
+          'utf8',
+        ).toString('base64url');
+        cachedChallengeFingerprint = challengeFingerprint;
 
         continue;
       }
@@ -576,8 +571,8 @@ export {
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  selfTestAndDemo().catch((error) => {
-    console.error(error.stack || String(error));
+  selfTestAndDemo().catch(() => {
+    console.error('shipyard-inference demo failed');
     process.exitCode = 1;
   });
 }

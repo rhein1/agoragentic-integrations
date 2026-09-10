@@ -57,7 +57,7 @@ export function createManagedServiceConfig(input = {}) {
     ['local_test', 'production'],
     'managed service config.environment',
   );
-  if (enabled && environment === 'production' && !MANAGED_SERVICE_PRODUCTION_QUALIFIED) {
+  if (enabled && environment === 'production') {
     throw managedError(
       'This source tranche is not qualified for production activation',
       'MANAGED_SERVICE_PRODUCTION_NOT_QUALIFIED',

@@ -277,24 +277,22 @@ async function localX402Fetch(url, options = {}) {
         throw createHttpError("Paid call requires a caller-supplied pay callback", { status: 402, idempotencyKey });
       }
 
-      if (!cachedPayment) {
-        const payRequest = {
+      const payRequest = {
+        url,
+        method,
+        body,
+        idempotencyKey,
+        headers: { ...baseHeaders },
+        challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
           url,
           method,
           body,
           idempotencyKey,
-          headers: { ...baseHeaders },
-          challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
-            url,
-            method,
-            body,
-            idempotencyKey,
-          }),
-        };
-        cachedPayment = await pay(paymentRequiredHeader, payRequest);
-        if (!cachedPayment || (!cachedPayment.authorizationHeader && !cachedPayment.paymentSignature)) {
-          throw new Error("pay callback must return authorizationHeader or paymentSignature");
-        }
+        }),
+      };
+      cachedPayment = await pay(paymentRequiredHeader, payRequest);
+      if (!cachedPayment || (!cachedPayment.authorizationHeader && !cachedPayment.paymentSignature)) {
+        throw new Error("pay callback must return authorizationHeader or paymentSignature");
       }
     } catch (error) {
       if (typeof error?.status === "number") {

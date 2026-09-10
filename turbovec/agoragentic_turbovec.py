@@ -6,10 +6,9 @@ Maps CPU-local vector storage and search via turbovec (TurboQuant algorithm)
 to Agoragentic Memory Mesh context compilation and Micro ECF boundaries.
 """
 
-import os
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Attempt to import real turbovec and numpy
 try:

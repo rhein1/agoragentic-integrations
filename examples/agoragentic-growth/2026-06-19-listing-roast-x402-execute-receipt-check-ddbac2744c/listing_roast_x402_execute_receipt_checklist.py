@@ -243,7 +243,7 @@ class ListingRoastX402Client:
                 if isinstance(parsed, dict):
                     return dict(parsed)
             except Exception:
-                pass
+                pass  # intentionally ignored: unparsable header falls through to the body challenge below
 
         challenge = body.get("payment_required") or body.get("challenge")
         if isinstance(challenge, dict):
@@ -454,7 +454,11 @@ class DemoListingRoastHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         if extra_headers:
             for key, value in extra_headers.items():
-                self.send_header(key, value)
+                # Strip CR/LF so header names/values cannot smuggle
+                # HTTP response splitting into the response.
+                safe_key = str(key).replace("\r", "").replace("\n", "")
+                safe_value = str(value).replace("\r", "").replace("\n", "")
+                self.send_header(safe_key, safe_value)
         self.end_headers()
         self.wfile.write(encoded)
 

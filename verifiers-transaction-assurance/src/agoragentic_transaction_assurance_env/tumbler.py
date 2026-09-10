@@ -210,7 +210,8 @@ class TumblerReward:
 
 class TumblerTransport(Protocol):
     @property
-    def mode(self) -> str: ...
+    def mode(self) -> str:
+        """Transport mode identifier."""
 
     def request(
         self,
@@ -220,7 +221,8 @@ class TumblerTransport(Protocol):
         path: str,
         query: Mapping[str, Any] | None = None,
         body: Mapping[str, Any] | None = None,
-    ) -> TumblerApiResponse: ...
+    ) -> TumblerApiResponse:
+        """Perform a tumbler API request."""
 
 
 def _canonical_bytes(value: Any) -> bytes:

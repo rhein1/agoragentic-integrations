@@ -226,7 +226,6 @@ async function localX402Fetch(url, options) {
   let paymentRequiredHeader = null;
   let sawPaymentChallenge = false;
   let networkFailuresAfterAuthorization = 0;
-  let lastError = null;
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
@@ -287,29 +286,26 @@ async function localX402Fetch(url, options) {
         });
       }
 
-      if (!cachedPayment) {
-        const payRequest = {
+      const payRequest = {
+        url,
+        method,
+        body,
+        idempotencyKey,
+        headers: { ...baseHeaders },
+        challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
           url,
           method,
           body,
           idempotencyKey,
-          headers: { ...baseHeaders },
-          challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
-            url,
-            method,
-            body,
-            idempotencyKey,
-          }),
-        };
-        cachedPayment = await pay(paymentRequiredHeader, payRequest);
-        if (!cachedPayment || (!cachedPayment.authorizationHeader && !cachedPayment.paymentSignature)) {
-          throw new Error("pay callback did not return authorizationHeader or paymentSignature");
-        }
+        }),
+      };
+      cachedPayment = await pay(paymentRequiredHeader, payRequest);
+      if (!cachedPayment || (!cachedPayment.authorizationHeader && !cachedPayment.paymentSignature)) {
+        throw new Error("pay callback did not return authorizationHeader or paymentSignature");
       }
 
       continue;
     } catch (error) {
-      lastError = error;
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -339,7 +335,6 @@ async function localX402Fetch(url, options) {
     }
   }
 
-  throw lastError ?? new Error("x402Fetch failed without a response");
 }
 
 async function x402Fetch(url, options) {

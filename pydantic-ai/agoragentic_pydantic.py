@@ -20,14 +20,13 @@ Usage:
 import json
 import requests
 from dataclasses import dataclass
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 
 try:
-    from pydantic_ai import RunContext, Tool
+    from pydantic_ai import RunContext
 except ImportError:
-    pass
+    pass  # intentionally ignored: pydantic_ai is optional
 
 
 @dataclass

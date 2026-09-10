@@ -1284,7 +1284,7 @@ export function normalizeSkyfireKyaPayEvidence(artifact, options = {}) {
     new Set(['kya+jwt', 'pay+jwt', 'kya-pay+jwt']),
   );
   text(header.kid, 'artifact.decoded_header.kid');
-  const issuer = text(claims.iss, 'artifact.decoded_claims.iss');
+  text(claims.iss, 'artifact.decoded_claims.iss');
   const subject = text(claims.sub, 'artifact.decoded_claims.sub');
   const audience = text(claims.aud, 'artifact.decoded_claims.aud');
   const environment = text(claims.env, 'artifact.decoded_claims.env');

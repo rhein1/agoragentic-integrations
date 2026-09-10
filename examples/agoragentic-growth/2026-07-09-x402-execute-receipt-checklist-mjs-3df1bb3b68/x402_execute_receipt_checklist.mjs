@@ -94,7 +94,6 @@ async function localX402Fetch(url, options = {}) {
   let cachedPayment = null;
   let sawPaymentChallenge = false;
   let networkRetriesUsed = 0;
-  let lastError = null;
   const callerAuthorization = baseHeaders.authorization ?? null;
 
   while (true) {
@@ -162,17 +161,14 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(paymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
-          idempotencyKey,
-        }));
-      }
+      cachedPayment = normalizePayResult(await pay(paymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
-      lastError = error;
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;
       if (networkRetriesUsed >= maxNetworkRetries) {
