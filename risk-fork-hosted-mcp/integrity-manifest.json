@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 58,
-    "sha256": "sha256:dbbf606bdedee4a7363bd953232384a8d7734feb83a50e409dae43ed19b32216"
+    "sha256": "sha256:9020bb396e66d625e917743f453a9846a24a7af9b3e3e90045f0ed2a1700ed7b"
   },
   "reviewed_sources": [
     {
@@ -19,8 +19,8 @@
     },
     {
       "path": "mcp/mcp-server.js",
-      "bytes": 118705,
-      "sha256": "sha256:b316ef039fe43e83033f5785f773a2c060929093f4fb429e433756907744aca1"
+      "bytes": 118138,
+      "sha256": "sha256:9129eddad56f80e29b86f59c5968be007271f57b121ac754218c8820360bdd5e"
     },
     {
       "path": "mcp/package.json",
@@ -39,8 +39,8 @@
     },
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
-      "bytes": 26720,
-      "sha256": "sha256:9488f2a00e22762444269d9d899f66bd53d8807a33519540fd11aa5123c46cbf"
+      "bytes": 26442,
+      "sha256": "sha256:4e9069448f268d94d4bb09c26fd198df02b082c3e5956842de38dcf737701a39"
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
@@ -59,8 +59,8 @@
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
-      "bytes": 29458,
-      "sha256": "sha256:8123d5d73f632ec404b244693054892866bcfb7051a9b6ec33ce6033e4c3450f"
+      "bytes": 29574,
+      "sha256": "sha256:483fe08d35e87d79c922d19854e17e50851132df6dc3742880adf1640e7cfe1a"
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
@@ -104,18 +104,18 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
-      "bytes": 35622,
-      "sha256": "sha256:38c7cb97713398b535dd4b1ce27f11e3dd25d5ded47f94c96ddf8e89a7410ff1"
+      "bytes": 35443,
+      "sha256": "sha256:576213f5d002984df74a6342d93902a645e8ddcea660920afd1a1670a4fb46c0"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
-      "bytes": 117203,
-      "sha256": "sha256:d77681f76cd65e9956cf0650c4b6c97a36dc812f40e2cae0d18265cb29a433ae"
+      "bytes": 117187,
+      "sha256": "sha256:f536a2d94739b2158cb5e0fb819f094fd949a93c62ee2aed1172ec3da1807c1b"
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
-      "bytes": 36089,
-      "sha256": "sha256:c55196f61e3330d2d55fc8e97d4be74267e4b1cf0dc6858864e1405ea982cebb"
+      "bytes": 36613,
+      "sha256": "sha256:6c84fa8067a361d00a257b6b53beee623ac5bff5bca89417f6d073e3ae88a2de"
     },
     {
       "path": "risk-fork/src/adapters/local-runner.mjs",
@@ -124,18 +124,18 @@
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
-      "bytes": 44994,
-      "sha256": "sha256:4918e41c7ec03da4a28d6f45ecd4f2ade9cfd8c48b49ca35bebeaea35986c070"
+      "bytes": 44911,
+      "sha256": "sha256:d7c0907bd41ad3ce25a5f367dd4b5ecfd55d2c198e0bae369c1533bcc63820e8"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority.mjs",
-      "bytes": 95694,
-      "sha256": "sha256:277fab563f44323941897134650f21d49e5be2140da47de7072744846c7230f5"
+      "bytes": 95665,
+      "sha256": "sha256:357aac98781b6dc8deacb350648ca206a2d5025d8260c10f672d25dcddcc8388"
     },
     {
       "path": "risk-fork/src/authority-shape.mjs",
-      "bytes": 1334,
-      "sha256": "sha256:44909ab096f034e164d0e95d3641306e8b9073b7ad26bbeee920dbed3854987f"
+      "bytes": 1737,
+      "sha256": "sha256:553ca64414192906b7fb686c0db51f0500f87aadaa2795d5312f18d74a2dc2ea"
     },
     {
       "path": "risk-fork/src/canonical.mjs",
@@ -149,8 +149,8 @@
     },
     {
       "path": "risk-fork/src/clean-commit.mjs",
-      "bytes": 108770,
-      "sha256": "sha256:6b1407537a61cd74d7bb33514db8c7649a1ddf5802a6602153ae823dba787cf3"
+      "bytes": 108752,
+      "sha256": "sha256:b87357f5c03fe1088745647d986c2fe2f96fb7edcc3779b63d0b5d49b1344896"
     },
     {
       "path": "risk-fork/src/client-adoption.mjs",
@@ -164,8 +164,8 @@
     },
     {
       "path": "risk-fork/src/contracts.mjs",
-      "bytes": 32084,
-      "sha256": "sha256:478bb92251766421673d2a931d3ab75dcb4e9e3a0c7d4a57ad7d0f30710b19e3"
+      "bytes": 32067,
+      "sha256": "sha256:be6f85823caa8615672865a80370e0116da34d23d9093f42142d90aae873c7c7"
     },
     {
       "path": "risk-fork/src/controller.mjs",
@@ -179,8 +179,8 @@
     },
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
-      "bytes": 77804,
-      "sha256": "sha256:be31c080e15204f3c2f57aa6e2a7700436b8bb751b186401abc28255b8cc655a"
+      "bytes": 78167,
+      "sha256": "sha256:4a75dbb6f954bde72e3a2a39e0a7973c438d22981294258364950c142dca219d"
     },
     {
       "path": "risk-fork/src/framework-tool-adapter.mjs",
@@ -289,8 +289,8 @@
     },
     {
       "path": "transaction-assurance/src/protocol-adapters.mjs",
-      "bytes": 55159,
-      "sha256": "sha256:dc717e27ff471d59ce15b3c049b0c91e69dd7bc0a5e2748b677cd76f02cdc335"
+      "bytes": 55144,
+      "sha256": "sha256:f70495b8e577bd39e6d550f4998994dcbb74ff326f761439b39378f9caa2e1c3"
     },
     {
       "path": "transaction-assurance/src/toploc-evidence.mjs",
@@ -473,8 +473,8 @@
     {
       "path": "mcp/mcp-server.js",
       "source": "reviewed_source",
-      "bytes": 118705,
-      "sha256": "sha256:b316ef039fe43e83033f5785f773a2c060929093f4fb429e433756907744aca1"
+      "bytes": 118138,
+      "sha256": "sha256:9129eddad56f80e29b86f59c5968be007271f57b121ac754218c8820360bdd5e"
     },
     {
       "path": "mcp/package.json",
@@ -2129,8 +2129,8 @@
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
       "source": "reviewed_source",
-      "bytes": 26720,
-      "sha256": "sha256:9488f2a00e22762444269d9d899f66bd53d8807a33519540fd11aa5123c46cbf"
+      "bytes": 26442,
+      "sha256": "sha256:4e9069448f268d94d4bb09c26fd198df02b082c3e5956842de38dcf737701a39"
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
@@ -2153,8 +2153,8 @@
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source": "reviewed_source",
-      "bytes": 29458,
-      "sha256": "sha256:8123d5d73f632ec404b244693054892866bcfb7051a9b6ec33ce6033e4c3450f"
+      "bytes": 29574,
+      "sha256": "sha256:483fe08d35e87d79c922d19854e17e50851132df6dc3742880adf1640e7cfe1a"
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
@@ -2201,32 +2201,32 @@
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
       "source": "reviewed_source",
-      "bytes": 35622,
-      "sha256": "sha256:38c7cb97713398b535dd4b1ce27f11e3dd25d5ded47f94c96ddf8e89a7410ff1"
+      "bytes": 35443,
+      "sha256": "sha256:576213f5d002984df74a6342d93902a645e8ddcea660920afd1a1670a4fb46c0"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
       "source": "reviewed_source",
-      "bytes": 117203,
-      "sha256": "sha256:d77681f76cd65e9956cf0650c4b6c97a36dc812f40e2cae0d18265cb29a433ae"
+      "bytes": 117187,
+      "sha256": "sha256:f536a2d94739b2158cb5e0fb819f094fd949a93c62ee2aed1172ec3da1807c1b"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority-migrator.mjs",
       "source": "reviewed_source",
-      "bytes": 44994,
-      "sha256": "sha256:4918e41c7ec03da4a28d6f45ecd4f2ade9cfd8c48b49ca35bebeaea35986c070"
+      "bytes": 44911,
+      "sha256": "sha256:d7c0907bd41ad3ce25a5f367dd4b5ecfd55d2c198e0bae369c1533bcc63820e8"
     },
     {
       "path": "risk-fork/src/adapters/postgres-authority.mjs",
       "source": "reviewed_source",
-      "bytes": 95694,
-      "sha256": "sha256:277fab563f44323941897134650f21d49e5be2140da47de7072744846c7230f5"
+      "bytes": 95665,
+      "sha256": "sha256:357aac98781b6dc8deacb350648ca206a2d5025d8260c10f672d25dcddcc8388"
     },
     {
       "path": "risk-fork/src/authority-shape.mjs",
       "source": "reviewed_source",
-      "bytes": 1334,
-      "sha256": "sha256:44909ab096f034e164d0e95d3641306e8b9073b7ad26bbeee920dbed3854987f"
+      "bytes": 1737,
+      "sha256": "sha256:553ca64414192906b7fb686c0db51f0500f87aadaa2795d5312f18d74a2dc2ea"
     },
     {
       "path": "risk-fork/src/canonical.mjs",
@@ -2243,8 +2243,8 @@
     {
       "path": "risk-fork/src/clean-commit.mjs",
       "source": "reviewed_source",
-      "bytes": 108770,
-      "sha256": "sha256:6b1407537a61cd74d7bb33514db8c7649a1ddf5802a6602153ae823dba787cf3"
+      "bytes": 108752,
+      "sha256": "sha256:b87357f5c03fe1088745647d986c2fe2f96fb7edcc3779b63d0b5d49b1344896"
     },
     {
       "path": "risk-fork/src/constants.mjs",
@@ -2255,8 +2255,8 @@
     {
       "path": "risk-fork/src/contracts.mjs",
       "source": "reviewed_source",
-      "bytes": 32084,
-      "sha256": "sha256:478bb92251766421673d2a931d3ab75dcb4e9e3a0c7d4a57ad7d0f30710b19e3"
+      "bytes": 32067,
+      "sha256": "sha256:be6f85823caa8615672865a80370e0116da34d23d9093f42142d90aae873c7c7"
     },
     {
       "path": "risk-fork/src/controller.mjs",
@@ -2273,8 +2273,8 @@
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
       "source": "reviewed_source",
-      "bytes": 77804,
-      "sha256": "sha256:be31c080e15204f3c2f57aa6e2a7700436b8bb751b186401abc28255b8cc655a"
+      "bytes": 78167,
+      "sha256": "sha256:4a75dbb6f954bde72e3a2a39e0a7973c438d22981294258364950c142dca219d"
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
@@ -2588,8 +2588,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 2970455,
-    "sha256": "sha256:8af5d618ce77d7c6d534fb72e54fc8241a29fd86479d4c3f1f4098b93f4e5053"
+    "bytes": 2969703,
+    "sha256": "sha256:70ce5be5f6a401c705bf1ea89af779269651088966e6bfdf81ff8b740e7b279f"
   },
   "packaged_assets": [
     {
@@ -2618,8 +2618,8 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
       "source_path": "risk-fork/e2b-template/bin/boot-guard.mjs",
-      "bytes": 26720,
-      "sha256": "sha256:9488f2a00e22762444269d9d899f66bd53d8807a33519540fd11aa5123c46cbf"
+      "bytes": 26442,
+      "sha256": "sha256:4e9069448f268d94d4bb09c26fd198df02b082c3e5956842de38dcf737701a39"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs",
@@ -2642,8 +2642,8 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source_path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
-      "bytes": 29458,
-      "sha256": "sha256:8123d5d73f632ec404b244693054892866bcfb7051a9b6ec33ce6033e4c3450f"
+      "bytes": 29574,
+      "sha256": "sha256:483fe08d35e87d79c922d19854e17e50851132df6dc3742880adf1640e7cfe1a"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/template.mjs",
