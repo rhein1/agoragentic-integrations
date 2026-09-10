@@ -1,0 +1,271 @@
+{
+  "schema": "agoragentic.runpay-evidence-batch.v1",
+  "records": [
+    {
+      "schema": "agoragentic.runpay-evidence.v1",
+      "core": {
+        "source": {
+          "provider": "runpay",
+          "namespace": "sandbox:runpay-issue-376",
+          "record_kind": "catalog_service",
+          "schema_revision": "2026-09-09",
+          "provenance": "vendor_supplied_fixture",
+          "attribution": "run.pay",
+          "fetched_live": false,
+          "redacted_source_hash": "sha256:e7f49d416a716f51dddc2a7e8fe0e1c3c21bac6e581ca1c4fc13d88b453bd1b8",
+          "hash_scope": "redacted_bounded_source",
+          "canonicalization": "rfc8785-jcs",
+          "redaction_profile": "agoragentic.runpay-allowlist-redaction.v1",
+          "extraction_profile": {
+            "id": "runpay.catalog.2026-09-09",
+            "version": "1.0.0",
+            "digest": "sha256:61c7a787188c455d58bc3d1a52540cac94f1682eaf81fffb756939260ed33a68"
+          },
+          "source_artifact_embedded": false,
+          "source_core_digest": "sha256:0bcd663b8ba2c227d3ae9752ccb35f9cb76e7df655825150617d7dcbf574efda"
+        },
+        "identity": {
+          "service_key": "sha256:e0595aa45d5a71e4ad0bec876a4a23cf09e0fc653cd6ec4114e530016c068f39",
+          "observation_key": null
+        },
+        "authority_refs": {
+          "mandate_ref": null,
+          "principal_ref": null,
+          "agent_ref": null
+        },
+        "service": {
+          "service_id": "da3ddf15-34fa-4d1e-a5cb-a7d50a08f0fc",
+          "name": "Consensus Aggregator",
+          "description": "Aggregates multiple inputs into a single consensus result (majority or average mode).",
+          "category": "DATA",
+          "vendor_name": "[redacted]",
+          "price_exact": "0.02",
+          "price_currency": "USD",
+          "price_precision": "arbitrary_numeric_no_rounding_rule",
+          "schema_declaration": {
+            "input": "declared",
+            "output": "undeclared"
+          },
+          "input_schema_digest": "sha256:18d1d5a49ca255cab8c3bc19cdd56b7ff37b254bbbbc7eae6e0418418dd1ccb5",
+          "output_schema_digest": null,
+          "vendor_reported": {
+            "trust_score": 68,
+            "total_calls": 1847,
+            "avg_ms": 210,
+            "error_rate": 0
+          }
+        },
+        "observability": null,
+        "original": {
+          "avg_ms": 210,
+          "category": "DATA",
+          "currency": "USD",
+          "description": "Aggregates multiple inputs into a single consensus result (majority or average mode).",
+          "error_rate": 0,
+          "id": "da3ddf15-34fa-4d1e-a5cb-a7d50a08f0fc",
+          "name": "Consensus Aggregator",
+          "price_per_call": 0.02,
+          "schema_input": {
+            "properties": {
+              "mode": {
+                "description": "Only majority is confirmed; other modes may exist on the vendor side but aren't verified here.",
+                "enum": [
+                  "majority"
+                ],
+                "type": "string"
+              },
+              "votes": {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "mode",
+              "votes"
+            ],
+            "type": "object"
+          },
+          "total_calls": 1847,
+          "trust_score": 68,
+          "vendor_name": "[redacted]"
+        }
+      },
+      "observation_context": {
+        "captured_at": null,
+        "record_ref_hash": null
+      },
+      "assessment": {
+        "parse_status": "accepted",
+        "import_disposition": "new",
+        "prior_observation_keys": [],
+        "conflicts": [],
+        "support": {
+          "pinned_profile": true
+        },
+        "independent_settlement": {
+          "provenance": "reported_observation",
+          "chain_status": "not_checked",
+          "matching_status": "not_checked",
+          "evidence_ref": null
+        },
+        "commercial_price": "not_checked",
+        "authority": "not_checked",
+        "outcome": "not_checked",
+        "overall_evidence_status": "unresolved",
+        "warnings": [
+          "output_schema_undeclared"
+        ],
+        "dropped_fields": []
+      }
+    },
+    {
+      "schema": "agoragentic.runpay-evidence.v1",
+      "core": {
+        "source": {
+          "provider": "runpay",
+          "namespace": "sandbox:runpay-issue-376",
+          "record_kind": "catalog_service",
+          "schema_revision": "2026-09-09",
+          "provenance": "vendor_supplied_fixture",
+          "attribution": "run.pay",
+          "fetched_live": false,
+          "redacted_source_hash": "sha256:59c300c3e0a7dac67191b7f912ce7bc9a9a5e717cacda519cf2cbe2bd0582d3c",
+          "hash_scope": "redacted_bounded_source",
+          "canonicalization": "rfc8785-jcs",
+          "redaction_profile": "agoragentic.runpay-allowlist-redaction.v1",
+          "extraction_profile": {
+            "id": "runpay.catalog.2026-09-09",
+            "version": "1.0.0",
+            "digest": "sha256:61c7a787188c455d58bc3d1a52540cac94f1682eaf81fffb756939260ed33a68"
+          },
+          "source_artifact_embedded": false,
+          "source_core_digest": "sha256:1953542d73af921b1c56b86cad241e81efba1e7e33325b1a090101e999db90d5"
+        },
+        "identity": {
+          "service_key": "sha256:c21ef400f11be285b88ac28e37b088545e9f4d99afeb1998f3b5436abcd07607",
+          "observation_key": null
+        },
+        "authority_refs": {
+          "mandate_ref": null,
+          "principal_ref": null,
+          "agent_ref": null
+        },
+        "service": {
+          "service_id": "d5ff985c-e50a-431a-84f1-b339ae0700b8",
+          "name": "Phone Validator",
+          "description": "Validates and formats phone numbers, returns line type and country.",
+          "category": "DATA",
+          "vendor_name": "[redacted]",
+          "price_exact": "0.015",
+          "price_currency": "USD",
+          "price_precision": "arbitrary_numeric_no_rounding_rule",
+          "schema_declaration": {
+            "input": "declared",
+            "output": "declared"
+          },
+          "input_schema_digest": "sha256:d8175ba798ba165595c88d49c1ffdcfe05aae1a22e5f35bfa510f279c8e63f69",
+          "output_schema_digest": "sha256:771e28b6ec4b9210161f05408d74cdda61eb380e821391da4a20c9f58eb9932e",
+          "vendor_reported": {
+            "trust_score": 74,
+            "total_calls": 612,
+            "avg_ms": 180,
+            "error_rate": 0
+          }
+        },
+        "observability": null,
+        "original": {
+          "avg_ms": 180,
+          "category": "DATA",
+          "currency": "USD",
+          "description": "Validates and formats phone numbers, returns line type and country.",
+          "error_rate": 0,
+          "id": "d5ff985c-e50a-431a-84f1-b339ae0700b8",
+          "name": "Phone Validator",
+          "price_per_call": 0.015,
+          "schema_input": {
+            "properties": {
+              "phone": {
+                "description": "Phone number, ideally E.164 format (e.g. +33612345678).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "phone"
+            ],
+            "type": "object"
+          },
+          "schema_output": {
+            "properties": {
+              "country": {
+                "type": "string"
+              },
+              "country_code": {
+                "type": "string"
+              },
+              "country_prefix": {
+                "type": "string"
+              },
+              "digits": {
+                "type": "integer"
+              },
+              "e164": {
+                "type": "string"
+              },
+              "input": {
+                "type": "string"
+              },
+              "is_valid": {
+                "type": "boolean"
+              },
+              "line_type": {
+                "type": "string"
+              },
+              "local_format": {
+                "type": "string"
+              },
+              "risk_level": {
+                "type": "string"
+              },
+              "validated_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "total_calls": 612,
+          "trust_score": 74,
+          "vendor_name": "[redacted]"
+        }
+      },
+      "observation_context": {
+        "captured_at": null,
+        "record_ref_hash": null
+      },
+      "assessment": {
+        "parse_status": "accepted",
+        "import_disposition": "new",
+        "prior_observation_keys": [],
+        "conflicts": [],
+        "support": {
+          "pinned_profile": true
+        },
+        "independent_settlement": {
+          "provenance": "reported_observation",
+          "chain_status": "not_checked",
+          "matching_status": "not_checked",
+          "evidence_ref": null
+        },
+        "commercial_price": "not_checked",
+        "authority": "not_checked",
+        "outcome": "not_checked",
+        "overall_evidence_status": "unresolved",
+        "warnings": [],
+        "dropped_fields": []
+      }
+    }
+  ]
+}

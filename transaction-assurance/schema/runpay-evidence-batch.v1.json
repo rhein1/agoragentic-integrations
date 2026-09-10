@@ -1,0 +1,24 @@
+{
+  "$id": "https://agoragentic.com/schema/runpay-evidence-batch.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Bounded batch of vendor-supplied run.pay evidence records. Every record is compared to the entire batch; no last-write-wins selection.",
+  "properties": {
+    "records": {
+      "items": {
+        "$ref": "https://agoragentic.com/schema/runpay-evidence.v1.json"
+      },
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "schema": {
+      "const": "agoragentic.runpay-evidence-batch.v1"
+    }
+  },
+  "required": [
+    "schema",
+    "records"
+  ],
+  "title": "run.pay offline evidence batch",
+  "type": "object"
+}

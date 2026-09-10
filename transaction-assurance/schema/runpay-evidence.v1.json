@@ -1,0 +1,561 @@
+{
+  "$defs": {
+    "exact_decimal": {
+      "anyOf": [
+        {
+          "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_observability": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "declared_intent": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "$ref": "#/$defs/nullable_text"
+                    },
+                    "expected_category": {
+                      "$ref": "#/$defs/nullable_text"
+                    },
+                    "intent_id": {
+                      "$ref": "#/$defs/nullable_text"
+                    },
+                    "max_expected_amount_exact": {
+                      "$ref": "#/$defs/exact_decimal"
+                    }
+                  },
+                  "required": [
+                    "intent_id",
+                    "description",
+                    "expected_category",
+                    "max_expected_amount_exact"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "execution_status": {
+              "const": null
+            },
+            "payment_status": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "price_currency": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "price_exact": {
+              "$ref": "#/$defs/exact_decimal"
+            },
+            "price_precision": {
+              "const": "arbitrary_numeric_no_rounding_rule"
+            },
+            "service_selected": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "settlement_ref": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "settlement_ref_kind": {
+              "enum": [
+                "absent",
+                "redacted",
+                "abbreviated",
+                "opaque",
+                "evm_tx_hash"
+              ]
+            },
+            "settlement_usable_as_evidence": {
+              "const": false
+            },
+            "timestamp": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "vendor_selected": {
+              "$ref": "#/$defs/nullable_text"
+            }
+          },
+          "required": [
+            "service_selected",
+            "category",
+            "vendor_selected",
+            "price_exact",
+            "price_currency",
+            "price_precision",
+            "declared_intent",
+            "payment_status",
+            "execution_status",
+            "settlement_ref",
+            "settlement_ref_kind",
+            "settlement_usable_as_evidence",
+            "timestamp"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_service": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "category": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "description": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "input_schema_digest": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "name": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "output_schema_digest": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "price_currency": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "price_exact": {
+              "$ref": "#/$defs/exact_decimal"
+            },
+            "price_precision": {
+              "const": "arbitrary_numeric_no_rounding_rule"
+            },
+            "schema_declaration": {
+              "additionalProperties": false,
+              "properties": {
+                "input": {
+                  "$ref": "#/$defs/schema_declaration_status"
+                },
+                "output": {
+                  "$ref": "#/$defs/schema_declaration_status"
+                }
+              },
+              "required": [
+                "input",
+                "output"
+              ],
+              "type": "object"
+            },
+            "service_id": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "vendor_name": {
+              "$ref": "#/$defs/nullable_text"
+            },
+            "vendor_reported": {
+              "additionalProperties": false,
+              "description": "Vendor-reported catalog stats. Not verified and not a trust signal.",
+              "properties": {
+                "avg_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "error_rate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "total_calls": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "trust_score": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "trust_score",
+                "total_calls",
+                "avg_ms",
+                "error_rate"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "service_id",
+            "name",
+            "description",
+            "category",
+            "vendor_name",
+            "price_exact",
+            "price_currency",
+            "price_precision",
+            "schema_declaration",
+            "input_schema_digest",
+            "output_schema_digest",
+            "vendor_reported"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullable_text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_declaration_status": {
+      "enum": [
+        "declared",
+        "undeclared"
+      ]
+    },
+    "source_identifier": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://agoragentic.com/schema/runpay-evidence.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Canonical vendor-supplied run.pay evidence. Everything is caller-supplied and unverified: settlement, authority, commercial price, and outcome remain not_checked. Redacted or abbreviated settlement references are never usable as settlement evidence.",
+  "properties": {
+    "assessment": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "const": "not_checked"
+        },
+        "commercial_price": {
+          "const": "not_checked"
+        },
+        "conflicts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "dropped_fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "import_disposition": {
+          "enum": [
+            "new",
+            "duplicate",
+            "update",
+            "conflict"
+          ]
+        },
+        "independent_settlement": {
+          "additionalProperties": false,
+          "properties": {
+            "chain_status": {
+              "const": "not_checked"
+            },
+            "evidence_ref": {
+              "const": null
+            },
+            "matching_status": {
+              "const": "not_checked"
+            },
+            "provenance": {
+              "const": "reported_observation"
+            }
+          },
+          "required": [
+            "provenance",
+            "chain_status",
+            "matching_status",
+            "evidence_ref"
+          ],
+          "type": "object"
+        },
+        "outcome": {
+          "const": "not_checked"
+        },
+        "overall_evidence_status": {
+          "enum": [
+            "unresolved",
+            "contradicted",
+            "unsupported"
+          ]
+        },
+        "parse_status": {
+          "enum": [
+            "accepted",
+            "incomplete"
+          ]
+        },
+        "prior_observation_keys": {
+          "items": {
+            "$ref": "#/$defs/nullable_digest"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "support": {
+          "additionalProperties": false,
+          "properties": {
+            "pinned_profile": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pinned_profile"
+          ],
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "parse_status",
+        "import_disposition",
+        "prior_observation_keys",
+        "conflicts",
+        "support",
+        "independent_settlement",
+        "commercial_price",
+        "authority",
+        "outcome",
+        "overall_evidence_status",
+        "warnings",
+        "dropped_fields"
+      ],
+      "type": "object"
+    },
+    "core": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_refs": {
+          "additionalProperties": false,
+          "properties": {
+            "agent_ref": {
+              "const": null
+            },
+            "mandate_ref": {
+              "const": null
+            },
+            "principal_ref": {
+              "const": null
+            }
+          },
+          "required": [
+            "mandate_ref",
+            "principal_ref",
+            "agent_ref"
+          ],
+          "type": "object"
+        },
+        "identity": {
+          "additionalProperties": false,
+          "properties": {
+            "observation_key": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "service_key": {
+              "$ref": "#/$defs/nullable_digest"
+            }
+          },
+          "required": [
+            "service_key",
+            "observation_key"
+          ],
+          "type": "object"
+        },
+        "observability": {
+          "$ref": "#/$defs/nullable_observability"
+        },
+        "original": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/$defs/nullable_text" },
+            "name": { "$ref": "#/$defs/nullable_text" },
+            "description": { "$ref": "#/$defs/nullable_text" },
+            "category": { "$ref": "#/$defs/nullable_text" },
+            "price_per_call": { "type": ["number", "null"] },
+            "currency": { "$ref": "#/$defs/nullable_text" },
+            "vendor_name": { "$ref": "#/$defs/nullable_text" },
+            "trust_score": { "type": ["number", "null"] },
+            "total_calls": { "type": ["number", "null"] },
+            "avg_ms": { "type": ["number", "null"] },
+            "error_rate": { "type": ["number", "null"] },
+            "schema_input": { "type": ["object", "null"] },
+            "schema_output": { "type": ["object", "null"] },
+            "chain": { "type": "object" }
+          }
+        },
+        "service": {
+          "$ref": "#/$defs/nullable_service"
+        },
+        "source": {
+          "additionalProperties": false,
+          "properties": {
+            "attribution": {
+              "const": "run.pay"
+            },
+            "canonicalization": {
+              "const": "rfc8785-jcs"
+            },
+            "extraction_profile": {
+              "additionalProperties": false,
+              "properties": {
+                "digest": {
+                  "$ref": "#/$defs/nullable_digest"
+                },
+                "id": {
+                  "$ref": "#/$defs/source_identifier"
+                },
+                "version": {
+                  "$ref": "#/$defs/nullable_text"
+                }
+              },
+              "required": [
+                "id",
+                "version",
+                "digest"
+              ],
+              "type": "object"
+            },
+            "fetched_live": {
+              "const": false
+            },
+            "hash_scope": {
+              "const": "redacted_bounded_source"
+            },
+            "namespace": {
+              "$ref": "#/$defs/source_identifier"
+            },
+            "provenance": {
+              "const": "vendor_supplied_fixture"
+            },
+            "provider": {
+              "const": "runpay"
+            },
+            "record_kind": {
+              "enum": [
+                "catalog_service",
+                "observability_record"
+              ]
+            },
+            "redacted_source_hash": {
+              "$ref": "#/$defs/nullable_digest"
+            },
+            "redaction_profile": {
+              "const": "agoragentic.runpay-allowlist-redaction.v1"
+            },
+            "schema_revision": {
+              "$ref": "#/$defs/source_identifier"
+            },
+            "source_artifact_embedded": {
+              "const": false
+            },
+            "source_core_digest": {
+              "$ref": "#/$defs/nullable_digest"
+            }
+          },
+          "required": [
+            "provider",
+            "namespace",
+            "record_kind",
+            "schema_revision",
+            "provenance",
+            "attribution",
+            "fetched_live",
+            "redacted_source_hash",
+            "source_core_digest",
+            "hash_scope",
+            "canonicalization",
+            "redaction_profile",
+            "extraction_profile",
+            "source_artifact_embedded"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "source",
+        "identity",
+        "authority_refs",
+        "service",
+        "observability",
+        "original"
+      ],
+      "type": "object"
+    },
+    "observation_context": {
+      "additionalProperties": false,
+      "properties": {
+        "captured_at": {
+          "$ref": "#/$defs/nullable_text"
+        },
+        "record_ref_hash": {
+          "$ref": "#/$defs/nullable_digest"
+        }
+      },
+      "required": [
+        "captured_at",
+        "record_ref_hash"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "agoragentic.runpay-evidence.v1"
+    }
+  },
+  "required": [
+    "schema",
+    "core",
+    "observation_context",
+    "assessment"
+  ],
+  "title": "run.pay offline evidence record",
+  "type": "object"
+}

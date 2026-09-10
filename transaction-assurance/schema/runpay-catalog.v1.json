@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "nullable_digest": {
+      "anyOf": [
+        {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_identifier": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "https://agoragentic.com/schema/runpay-catalog.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Caller-supplied import envelope for vendor-supplied run.pay fixtures. The catalog endpoint is provenance only and is never fetched.",
+  "properties": {
+    "history": {
+      "maxItems": 1000,
+      "type": "array"
+    },
+    "profile_digest": {
+      "$ref": "#/$defs/nullable_digest"
+    },
+    "profile_id": {
+      "$ref": "#/$defs/source_identifier"
+    },
+    "record": {
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "maxItems": 1000,
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "required": [
+        "raw"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "const": "agoragentic.runpay-catalog.v1"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "captured_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "$ref": "#/$defs/source_identifier"
+        },
+        "provider": {
+          "const": "runpay"
+        },
+        "record_kind": {
+          "enum": [
+            "catalog_service",
+            "observability_record"
+          ]
+        },
+        "record_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schema_revision": {
+          "$ref": "#/$defs/source_identifier"
+        }
+      },
+      "required": [
+        "provider",
+        "namespace",
+        "record_kind",
+        "schema_revision"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "source",
+    "profile_id",
+    "record"
+  ],
+  "title": "run.pay offline import envelope",
+  "type": "object"
+}
