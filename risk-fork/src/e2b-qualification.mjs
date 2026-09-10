@@ -11,6 +11,7 @@ import {
   readdir,
   realpath,
 } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -1189,22 +1190,30 @@ async function resolveE2BPackageDirectory() {
 }
 
 async function readStableRegularFile(file, root) {
-  const before = await lstat(file);
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error('E2B runtime SDK package tree contains a symlink or special file');
+  // Open first with O_NOFOLLOW and validate the opened handle itself: there
+  // is no lstat-then-open check-then-act window, and every property below
+  // describes the file that is actually read.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error('E2B runtime SDK package tree contains a symlink or special file');
+    }
+    throw error;
   }
-  if (before.nlink !== 1) {
-    throw new Error('E2B runtime SDK package tree contains a hard-linked file');
-  }
-  const resolved = await realpath(file);
-  if (!isContainedPath(root, resolved)) {
-    throw new Error('E2B runtime SDK package file escapes its canonical package directory');
-  }
-  const handle = await open(file, 'r');
   try {
     const opened = await handle.stat();
-    if (!sameFileIdentity(before, opened)) {
-      throw new Error('E2B runtime SDK package file changed before inspection');
+    if (!opened.isFile()) {
+      throw new Error('E2B runtime SDK package tree contains a symlink or special file');
+    }
+    if (opened.nlink !== 1) {
+      throw new Error('E2B runtime SDK package tree contains a hard-linked file');
+    }
+    const resolved = await realpath(file);
+    if (!isContainedPath(root, resolved)) {
+      throw new Error('E2B runtime SDK package file escapes its canonical package directory');
     }
     const bytes = await handle.readFile();
     const after = await handle.stat();

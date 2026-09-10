@@ -427,10 +427,14 @@ function writeIfAllowed(filePath, value, force) {
 }
 
 function writeTextIfAllowed(filePath, value, force) {
-  if (fs.existsSync(filePath) && !force) {
-    return;
+  // Create exclusively when not forcing: no existsSync-then-write
+  // check-then-act window. EEXIST without force means "leave it alone".
+  try {
+    fs.writeFileSync(filePath, value, { flag: force ? 'w' : 'wx' });
+  } catch (error) {
+    if (!force && error.code === 'EEXIST') return;
+    throw error;
   }
-  fs.writeFileSync(filePath, value);
 }
 
 export function buildEcfMd(policy = createDefaultPolicy('local-agent')) {
@@ -625,13 +629,23 @@ export function indexSources(inputPath, options = {}) {
       return;
     }
 
-    const stat = fs.statSync(filePath);
-    if (stat.size > maxFileBytes && !SQLITE_EXTENSIONS.has(ext)) {
-      blocked.push({ path: rel, reason: 'max_file_bytes_exceeded' });
-      return;
+    // Open once and stat the open file itself: no stat-then-read
+    // check-then-act window. The size bound is enforced on the file that is
+    // actually read.
+    const fd = fs.openSync(filePath, 'r');
+    let stat;
+    let buffer;
+    try {
+      stat = fs.fstatSync(fd);
+      if (stat.size > maxFileBytes && !SQLITE_EXTENSIONS.has(ext)) {
+        blocked.push({ path: rel, reason: 'max_file_bytes_exceeded' });
+        return;
+      }
+      buffer = fs.readFileSync(fd);
+    } finally {
+      fs.closeSync(fd);
     }
 
-    const buffer = fs.readFileSync(filePath);
     const sha = sha256(buffer);
     sources.push({
       id: `src_${sha.slice(0, 12)}`,

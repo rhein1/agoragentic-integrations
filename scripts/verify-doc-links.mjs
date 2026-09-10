@@ -141,14 +141,22 @@ function inlineDestinations(text) {
 }
 
 function slugBase(heading) {
-  return heading
-    .replace(/<[^>]*>/g, '')
-    .replace(/!?(?:\[([^\]]*)\])\([^)]*\)/g, '$1')
-    .replace(/[`*_~]/g, '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
-    .replace(/\s+/g, '-');
+  // Loop to a fixpoint: stripping one layer (tags, link syntax, punctuation)
+  // can expose another, so a single pass may leave nested markup behind.
+  let slug = heading;
+  let previous;
+  do {
+    previous = slug;
+    slug = slug
+      .replace(/<[^>]*>/g, '')
+      .replace(/!?(?:\[([^\]]*)\])\([^)]*\)/g, '$1')
+      .replace(/[`*_~]/g, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+      .replace(/\s+/g, '-');
+  } while (slug !== previous);
+  return slug;
 }
 
 function anchorsFor(markdown) {
@@ -205,16 +213,33 @@ for (const sourceFile of markdownFiles) {
       continue;
     }
 
-    if (!fs.existsSync(targetFile)) {
-      failures.push(`${path.relative(root, sourceFile)} -> missing ${rawTarget}`);
-      continue;
+    // Stat once and read directly: no existsSync-then-read check-then-act
+    // window. A missing target is a link failure; other errors propagate.
+    let targetStat;
+    try {
+      targetStat = fs.statSync(targetFile);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        failures.push(`${path.relative(root, sourceFile)} -> missing ${rawTarget}`);
+        continue;
+      }
+      throw error;
     }
     if (!fragment) continue;
 
     let anchorFile = targetFile;
-    if (fs.statSync(anchorFile).isDirectory()) anchorFile = path.join(anchorFile, 'README.md');
-    if (!fs.existsSync(anchorFile) || path.extname(anchorFile).toLowerCase() !== '.md') continue;
-    if (!anchorCache.has(anchorFile)) anchorCache.set(anchorFile, anchorsFor(fs.readFileSync(anchorFile, 'utf8')));
+    if (targetStat.isDirectory()) anchorFile = path.join(anchorFile, 'README.md');
+    if (path.extname(anchorFile).toLowerCase() !== '.md') continue;
+    if (!anchorCache.has(anchorFile)) {
+      let anchorText;
+      try {
+        anchorText = fs.readFileSync(anchorFile, 'utf8');
+      } catch (error) {
+        if (error.code === 'ENOENT') continue;
+        throw error;
+      }
+      anchorCache.set(anchorFile, anchorsFor(anchorText));
+    }
     if (!anchorCache.get(anchorFile).has(fragment)) {
       failures.push(`${path.relative(root, sourceFile)} -> missing anchor ${rawTarget}`);
     }

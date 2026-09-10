@@ -163,7 +163,14 @@ function replaceMarkedBlock(existing, blockName, block) {
 function installCodexMcpConfig({ configPath, serverName, toml }) {
   const blockName = `Micro ECF resident ${serverName}`;
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '';
+  // Read directly and treat a missing file as empty: no existsSync-then-read
+  // check-then-act window.
+  let existing = '';
+  try {
+    existing = fs.readFileSync(configPath, 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   const updated = replaceMarkedBlock(existing, blockName, toml);
   fs.writeFileSync(configPath, updated);
   return configPath;
