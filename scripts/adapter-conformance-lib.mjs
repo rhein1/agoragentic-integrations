@@ -5,7 +5,7 @@ import path from "node:path";
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const PARSER_TIMEOUT_MS = 10_000;
-const TEST_FILE_PATTERN = /(?:^|\/)(?:test|tests)\/|(?:\.test|\.spec)\.[^.]+$/i;
+const TEST_FILE_PATTERN = /^(?:test|tests)\/[\s\S]*$|^[\s\S]*\/(?:test|tests)\/[\s\S]*$|^[\s\S]*\.(?:test|spec)\.[^.]+$/i;
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules"]);
 
 const FLOW_EXPECTATIONS_BY_INTEGRATION = Object.freeze({
@@ -72,10 +72,25 @@ function resolveRepoPath(root, relativePath) {
 }
 
 function readBoundedText(filePath) {
-  const stat = fs.statSync(filePath);
-  if (!stat.isFile()) return { ok: false, reason: "path_is_not_a_file" };
-  if (stat.size > MAX_TEXT_BYTES) return { ok: false, reason: "file_exceeds_2_mib", size_bytes: stat.size };
-  return { ok: true, text: fs.readFileSync(filePath, "utf8"), size_bytes: stat.size };
+  // Open the file first and stat the descriptor (instead of stat-then-read by
+  // path) so the file cannot be swapped between the type/size check and the
+  // read itself.
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+  } catch {
+    return { ok: false, reason: "path_open_failed" };
+  }
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) return { ok: false, reason: "path_is_not_a_file" };
+    if (stat.size > MAX_TEXT_BYTES) return { ok: false, reason: "file_exceeds_2_mib", size_bytes: stat.size };
+    const buffer = Buffer.alloc(stat.size);
+    fs.readSync(fd, buffer, 0, stat.size, 0);
+    return { ok: true, text: buffer.toString("utf8"), size_bytes: stat.size };
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function commandFailure(result) {

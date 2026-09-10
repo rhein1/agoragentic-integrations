@@ -122,7 +122,7 @@ assert.match(contextHubDoc, /explicit.*approval.*cost ceiling/is);
 assert.doesNotMatch(contextHubDoc, /amk_[a-z0-9]{8,}/i);
 assert.doesNotMatch(contextHubDoc, /\b\d{2,}\+? (verified )?listings\b/i);
 assert.doesNotMatch(contextHubDoc, /Full ECF/i);
-assert.doesNotMatch(contextHubDoc, /https:\/\/agoragentic\.com\/api\/mcp/i);
+assert.doesNotMatch(contextHubDoc, /\bhttps:\/\/agoragentic\.com\/api\/mcp\b/i);
 assert.match(contextHubDoc, /fail-closed protocol\/reference surface/i);
 assert.match(contextHubDoc, /qualified host.*network access.*credentials.*clean-import/is);
 

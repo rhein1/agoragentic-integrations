@@ -225,9 +225,24 @@ function exitFor(parsed, blockers, warnings, goldenLoopFailures) {
   if (shouldFail) process.exitCode = 1;
 }
 
+function resolveComSpec() {
+  const comSpec = process.env.ComSpec || 'cmd.exe';
+  // Allowlist: the interpreter must be the Windows command processor itself,
+  // never an attacker-influenced executable from the environment.
+  if (!/(?:^|\\)cmd\.exe$/i.test(comSpec)) {
+    throw new Error(`Refusing to open report with unexpected ComSpec: ${comSpec}`);
+  }
+  return comSpec;
+}
+
 function openReport(filePath) {
+  if (process.platform === 'win32' && /[&|<>^()%!\r\n]/.test(filePath)) {
+    // The win32 branch re-parses its command line through cmd.exe, so reject
+    // shell metacharacters in the report path before spawning.
+    throw new Error('Refusing to open report path containing shell metacharacters.');
+  }
   const child = process.platform === 'win32'
-    ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'start', '', filePath], { detached: true, stdio: 'ignore' })
+    ? spawn(resolveComSpec(), ['/d', '/s', '/c', 'start', '', filePath], { detached: true, stdio: 'ignore' })
     : process.platform === 'darwin'
       ? spawn('open', [filePath], { detached: true, stdio: 'ignore' })
       : spawn('xdg-open', [filePath], { detached: true, stdio: 'ignore' });

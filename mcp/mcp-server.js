@@ -320,7 +320,7 @@ function deepFreezeJson(value) {
 
 function normalizeCredentialKeyTokens(key) {
     return String(key)
-        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+        .replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, '_')
         .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
         .toLowerCase()
         .split(/[^a-z0-9]+/)
@@ -1867,24 +1867,6 @@ function buildBlockedToolResult(code, message, details = {}) {
     };
 }
 
-function fallbackTargetUrl(path) {
-    if (!AGORAGENTIC_BASE) {
-        throw new McpEnforcementError(
-            'MCP_FALLBACK_BASE_INVALID',
-            'Set a valid AGORAGENTIC_MCP_URL or explicit AGORAGENTIC_BASE_URL before using fallback tools',
-        );
-    }
-    const base = normalizeRemoteTarget(AGORAGENTIC_BASE);
-    const baseUrl = new URL(base.href);
-    if (baseUrl.pathname !== '/' || baseUrl.search) {
-        throw new McpEnforcementError(
-            'MCP_FALLBACK_BASE_INVALID',
-            'AGORAGENTIC_BASE_URL must be an HTTP(S) origin without a path or query',
-        );
-    }
-    return normalizeRemoteTarget(new URL(path, base.origin).href, { allowQuery: true }).href;
-}
-
 async function executeEnforcedFallback(enforcementBoundary, {
     name,
     args,
@@ -1892,7 +1874,9 @@ async function executeEnforcedFallback(enforcementBoundary, {
     path,
     body,
 }) {
-    const adapter = requireEnforcementBoundary(enforcementBoundary);
+    // The boundary is required for its enforcement side effects; the adapter
+    // itself is unused because every fallback below stays fail-closed.
+    requireEnforcementBoundary(enforcementBoundary);
     // Every fallback remains unavailable until the host supplies a durable
     // effect fence with exact idempotency and terminal reconciliation.
     // AbortSignal/Promise.race cannot prove that a late callback performed no

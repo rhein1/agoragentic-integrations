@@ -42,6 +42,21 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+// Extracts parseable absolute URLs from free text so callers can compare
+// origin/hostname/path structurally instead of relying on substring checks,
+// which admit lookalike hosts and unrelated query strings.
+function docUrls(text) {
+  const urls = [];
+  for (const token of String(text || '').match(/https?:\/\/[^\s"'`<>()[\]{}]+/gi) || []) {
+    try {
+      urls.push(new URL(token.replace(/[.,;:!?]+$/, '')));
+    } catch {
+      // Ignore tokens that are not parseable URLs.
+    }
+  }
+  return urls;
+}
+
 function listFiles(root) {
   const files = [];
   for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
@@ -98,8 +113,12 @@ export function verifyHarnessCoreCutover({ root = defaultRoot } = {}) {
       errors,
     );
     const exampleReadme = fs.readFileSync(path.join(examplePointerRoot, 'README.md'), 'utf8');
+    const exampleReadmeUrls = docUrls(exampleReadme);
     check(
-      exampleReadme.includes('https://github.com/rhein1/agoragentic-harness-core/tree/main/examples/frameworks'),
+      exampleReadmeUrls.some(
+        (url) => url.origin === 'https://github.com'
+          && url.pathname.replace(/\/+$/, '') === '/rhein1/agoragentic-harness-core/tree/main/examples/frameworks',
+      ),
       'framework-example pointer does not target the standalone examples',
       errors,
     );

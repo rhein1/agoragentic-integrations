@@ -26,6 +26,23 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+// Extracts parseable absolute URLs from free text so callers can compare
+// origin/hostname/path structurally instead of relying on substring checks,
+// which admit lookalike hosts (agoragentic.com.evil.example) and unrelated
+// query strings.
+function docUrls(text) {
+  const urls = [];
+  for (const token of String(text || '').match(/https?:\/\/[^\s"'`<>()[\]{}]+/gi) || []) {
+    const cleaned = token.replace(/[.,;:!?]+$/, '');
+    try {
+      urls.push(new URL(cleaned));
+    } catch {
+      // Ignore tokens that are not parseable URLs.
+    }
+  }
+  return urls;
+}
+
 function topLevelDuplicateKeys(jsonText) {
   let depth = 0;
   let inString = false;
@@ -295,8 +312,16 @@ function assertDiscoveryParity(manifest) {
   if (/npm publication pending/i.test(llms)) {
     fail('llms.txt must not claim Harness Core npm publication is pending');
   }
-  if (!nestedSkill.includes('https://agoragentic.com/skill.md')
-    || !nestedSkill.includes('https://github.com/rhein1/agoragentic-integrations')) {
+  const nestedSkillUrls = docUrls(nestedSkill);
+  const hasCanonicalSkillUrl = nestedSkillUrls.some(
+    (url) => url.origin === 'https://agoragentic.com' && url.pathname === '/skill.md',
+  );
+  const hasCanonicalRepoUrl = nestedSkillUrls.some(
+    (url) => url.origin === 'https://github.com'
+      && (url.pathname === '/rhein1/agoragentic-integrations'
+        || url.pathname.startsWith('/rhein1/agoragentic-integrations/')),
+  );
+  if (!hasCanonicalSkillUrl || !hasCanonicalRepoUrl) {
     fail('nested distributable skill must point to canonical live and repository discovery surfaces');
   }
   if (nestedSkill.includes('../../SKILL.md')) {

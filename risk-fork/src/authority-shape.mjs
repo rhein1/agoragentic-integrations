@@ -16,7 +16,13 @@ export function isForbiddenAuthorityShapeKey(value) {
 export function containsObviousCapabilityLikeText(value) {
   const text = String(value);
   if (/bearer\s+[a-z0-9._~+\/-]{8,}/i.test(text)) return true;
-  for (const assignment of text.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})\s*[:=]/g)) {
+  // Finds `key:` / `key =` style assignments without nesting quantified
+  // character classes (which risks polynomial backtracking). The key pattern
+  // uses a single bounded quantifier; the separator check is a separate
+  // anchored test so neither regex has adjacent overlapping quantifiers.
+  for (const assignment of text.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})/g)) {
+    const rest = text.slice(assignment.index + assignment[0].length);
+    if (!/^\s*[:=]/.test(rest)) continue;
     if (isForbiddenAuthorityShapeKey(assignment[1])) return true;
   }
   const fingerprint = normalizeAuthorityShapeKey(text);

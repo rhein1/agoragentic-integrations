@@ -1889,7 +1889,10 @@ export function renderSummaryMarkdown(run) {
 }
 
 function escapeMd(value) {
-  return String(value || '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+  // Covers the full markdown-table-cell sink: the backslash escape character
+  // itself (so `\|` cannot smuggle a column break), the pipe column
+  // delimiter, and line breaks that would split rows.
+  return String(value || '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r\n?|\n/g, ' ');
 }
 
 function escapeHtml(value) {
