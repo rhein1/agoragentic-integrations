@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schemas/interchange/runpay-receipt-observation.v1.json",
+  "title": "Agoragentic run.pay receipt observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "source_kind", "lifecycle_status", "observation_hash", "source", "service_binding", "declared_intent", "execution", "payment", "settlement", "authority_flags", "safety"],
+  "properties": {
+    "schema": { "const": "agoragentic.interchange.runpay-receipt-observation.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "source_kind": { "const": "runpay_observability_record" },
+    "lifecycle_status": { "const": "normalized" },
+    "observation_hash": { "$ref": "#/$defs/hash" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "attribution", "catalog_endpoint", "issue_evidence_ref", "source_record_redacted"],
+      "properties": {
+        "provider": { "const": "run.pay" },
+        "attribution": { "const": "run.pay" },
+        "catalog_endpoint": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog" },
+        "issue_evidence_ref": { "type": "string", "pattern": "^https://github\\.com/rhein1/agoragentic-integrations/issues/376#issuecomment-[0-9]+$" },
+        "source_record_redacted": { "const": true }
+      }
+    },
+    "service_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_id", "source_service_name", "vendor_selected", "binding_method", "source_record_included_service_id", "provider_identity_verified"],
+      "properties": {
+        "service_id": { "type": "string", "format": "uuid" },
+        "source_service_name": { "type": "string", "minLength": 1 },
+        "vendor_selected": { "type": "string", "minLength": 1 },
+        "binding_method": { "const": "offline_fixture_name_match" },
+        "source_record_included_service_id": { "const": false },
+        "provider_identity_verified": { "const": false }
+      }
+    },
+    "declared_intent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "authorization_verified", "price_within_declared_max", "intent_ref", "description", "expected_category", "max_expected_amount"],
+          "properties": {
+            "status": { "const": "absent" },
+            "authorization_verified": { "const": false },
+            "price_within_declared_max": { "type": "null" },
+            "intent_ref": { "type": "null" },
+            "description": { "type": "null" },
+            "expected_category": { "type": "null" },
+            "max_expected_amount": { "type": "null" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "authorization_verified", "price_within_declared_max", "intent_ref", "description", "expected_category", "max_expected_amount"],
+          "properties": {
+            "status": { "const": "source_reported_present" },
+            "authorization_verified": { "const": false },
+            "price_within_declared_max": { "const": true },
+            "intent_ref": { "$ref": "#/$defs/hash" },
+            "description": { "type": "string", "minLength": 1 },
+            "expected_category": { "type": "string", "minLength": 1 },
+            "max_expected_amount": { "$ref": "#/$defs/exactDecimal" }
+          }
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "outcome_present", "outcome_verified"],
+      "properties": {
+        "status": { "const": "unknown" },
+        "outcome_present": { "const": false },
+        "outcome_verified": { "const": false }
+      }
+    },
+    "payment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_reported_status", "amount", "currency", "transaction_ref", "raw_transaction_id_retained"],
+      "properties": {
+        "source_reported_status": { "type": "string", "minLength": 1 },
+        "amount": { "$ref": "#/$defs/exactDecimal" },
+        "currency": { "const": "USD" },
+        "transaction_ref": { "$ref": "#/$defs/hash" },
+        "raw_transaction_id_retained": { "const": false }
+      }
+    },
+    "settlement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "confirmed", "verification_performed", "chain_receipt_observed"],
+      "properties": {
+        "status": { "const": "unverified_source_report" },
+        "confirmed": { "const": false },
+        "verification_performed": { "const": false },
+        "chain_receipt_observed": { "const": false }
+      }
+    },
+    "authority_flags": { "$ref": "#/$defs/authorityFlags" },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offline_fixture_only", "external_calls_made", "provider_invoked", "funds_moved_by_adapter", "credentials_read", "raw_transaction_id_public", "source_payment_status_not_promoted"],
+      "properties": {
+        "offline_fixture_only": { "const": true },
+        "external_calls_made": { "const": false },
+        "provider_invoked": { "const": false },
+        "funds_moved_by_adapter": { "const": false },
+        "credentials_read": { "const": false },
+        "raw_transaction_id_public": { "const": false },
+        "source_payment_status_not_promoted": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "exactDecimal": { "type": "string", "maxLength": 128, "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$" },
+    "authorityFlags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eligible_for_execution", "provider_identity_bound", "live_catalog_polling_enabled", "remote_invocation_enabled", "payment_enabled", "wallet_spend_enabled", "trust_mutation_enabled", "marketplace_publication_enabled", "public_execute_enabled"],
+      "properties": {
+        "eligible_for_execution": { "const": false },
+        "provider_identity_bound": { "const": false },
+        "live_catalog_polling_enabled": { "const": false },
+        "remote_invocation_enabled": { "const": false },
+        "payment_enabled": { "const": false },
+        "wallet_spend_enabled": { "const": false },
+        "trust_mutation_enabled": { "const": false },
+        "marketplace_publication_enabled": { "const": false },
+        "public_execute_enabled": { "const": false }
+      }
+    }
+  }
+}

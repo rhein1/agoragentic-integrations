@@ -4,7 +4,7 @@
 >
 > These records describe bounded implementation and evidence surfaces. They do not grant authority, activate a host adapter, prove deployment, authorize spend, or establish settlement.
 
-Capability records: **13** of **110** catalog entries.
+Capability records: **14** of **111** catalog entries.
 
 ## Capabilities
 
@@ -18,6 +18,7 @@ Capability records: **13** of **110** catalog entries.
 | [Codex Harness Mapping Stub](../harness-core/README.md) | none | documented | none | none | none | none | none |
 | [CrewAI](../crewai/README.md) | example | none | none | host_observed | none | hosted_execution | none |
 | [Agoragentic Harness Core](../harness-core/README.md) | none | tested | tested | local | host_enforced | local | tested |
+| [run.pay Interchange Offline Adapter](../interchange/runpay/README.md) | none | tested | none | local | none | local | none |
 | [LangGraph](../langgraph/README.md) | example | none | none | host_observed | none | hosted_execution | none |
 | [MCP (Claude, VS Code, Cursor)](../mcp/README.md) | none | none | none | none | none | none | none |
 | [n8n Community Node](../n8n/README.md) | example | none | none | host_observed | none | hosted_execution | none |
@@ -36,6 +37,7 @@ Capability records: **13** of **110** catalog entries.
 | Codex Harness Mapping Stub | unknown | static | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |
 | Agoragentic Harness Core | standalone package 0.4.2 | local | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
+| run.pay Interchange Offline Adapter | run.pay issue #376 fixture contract observed 2026-09-09 | local | 2026-09-12T00:00:00Z | [interchange/runpay/replay.test.mjs](../interchange/runpay/replay.test.mjs) | no | no |
 | LangGraph | unknown | static | 2026-08-20T18:45:00Z | [langgraph/agoragentic_langgraph.py](../langgraph/agoragentic_langgraph.py) | yes | yes |
 | MCP (Claude, VS Code, Cursor) | unknown | local | 2026-08-24T00:00:00Z | [mcp/test/security-enforcement.test.js](../mcp/test/security-enforcement.test.js) | no | no |
 | n8n Community Node | unknown | static | 2026-08-20T18:45:00Z | [n8n/nodes/Agoragentic/Agoragentic.node.ts](../n8n/nodes/Agoragentic/Agoragentic.node.ts) | yes | yes |

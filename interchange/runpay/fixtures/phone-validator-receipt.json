@@ -1,0 +1,22 @@
+{
+  "fixture_schema": "agoragentic.interchange.runpay-receipt-fixture.v1",
+  "source": {
+    "catalog_endpoint": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+    "issue_url": "https://github.com/rhein1/agoragentic-integrations/issues/376#issuecomment-5601574306"
+  },
+  "chain": {
+    "declared_intent": {
+      "intent_id": "[redacted-uuid]",
+      "description": "Validate a phone number before contacting a lead",
+      "expected_category": "DATA",
+      "max_expected_amount": "0.02"
+    },
+    "vendor_selected": "[redacted]",
+    "service_selected": "Phone Validator",
+    "category": "DATA",
+    "price_usd": "0.015",
+    "payment_status": "completed",
+    "transaction_id": "tx_x402_[redacted]",
+    "timestamp": "2026-09-08T02:14:54Z"
+  }
+}

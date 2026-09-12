@@ -1,6 +1,6 @@
 {
-  "version": "2.54.0",
-  "updated_at": "2026-09-08",
+  "version": "2.55.0",
+  "updated_at": "2026-09-12",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -121,6 +121,15 @@
       "source": "interchange/sam",
       "min_node": "20",
       "compatibility_scope": "Pinned Google SAM metadata discovery and normalization only; no remote tool invocation, provider authority, publication, payment, settlement, or production activation"
+    },
+    "interchange_runpay": {
+      "name": "@agoragentic/interchange-runpay-adapter",
+      "install": "cd interchange/runpay && npm ci",
+      "registry": "https://github.com/rhein1/agoragentic-integrations/tree/main/interchange/runpay",
+      "distribution_status": "source_only",
+      "source": "interchange/runpay",
+      "min_node": "20",
+      "compatibility_scope": "Pinned offline run.pay issue #376 service and redacted observability fixtures, exact-decimal normalization, and deterministic replay only; no catalog polling, credentials, provider identity, invocation, trust promotion, listing publication, payment, settlement verification, spend, deployment, or production activation"
     },
     "risk_fork": {
       "name": "@agoragentic/risk-fork",
@@ -711,6 +720,37 @@
       "install": "cd interchange/sam && npm ci",
       "docs": "interchange/sam/README.md",
       "compatibility_scope": "Source-only, fail-closed metadata capture against pinned Google SAM; call_remote_tool and every provider, trust, publication, payment, settlement, and spend authority remain absent"
+    },
+    {
+      "id": "interchange-runpay",
+      "name": "run.pay Interchange Offline Adapter",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "interchange/runpay/normalize.mjs",
+      "install": "cd interchange/runpay && npm ci",
+      "docs": "interchange/runpay/README.md",
+      "compatibility_scope": "Pinned offline run.pay issue #376 service and redacted observability fixtures, exact-decimal normalization, and deterministic replay only; no catalog polling, credentials, provider identity, invocation, trust promotion, listing publication, payment, settlement verification, spend, deployment, or production activation",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "none",
+          "manifest_mapping": "tested",
+          "pre_action_enforcement": "none",
+          "post_action_evidence": "local",
+          "approval_support": "none",
+          "receipt_support": "local",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "run.pay issue #376 fixture contract observed 2026-09-09",
+          "proof_class": "local",
+          "last_verified_at": "2026-09-12T00:00:00Z",
+          "evidence_ref": "interchange/runpay/replay.test.mjs"
+        },
+        "requirements": {
+          "network_required": false,
+          "spend_capable": false
+        }
+      }
     },
     {
       "id": "micro-ecf",
@@ -1905,6 +1945,11 @@
     "interchange_sam": "interchange/sam/README.md",
     "interchange_sam_schema": "interchange/sam/sam-tool-import.schema.json",
     "interchange_sam_provenance": "interchange/sam/provenance.json",
+    "interchange_runpay": "interchange/runpay/README.md",
+    "interchange_runpay_service_schema": "interchange/runpay/runpay-service-import.schema.json",
+    "interchange_runpay_receipt_schema": "interchange/runpay/runpay-receipt-observation.schema.json",
+    "interchange_runpay_provenance": "interchange/runpay/provenance.json",
+    "interchange_runpay_replay": "interchange/runpay/replay.mjs",
     "interchange_spec": "interchange/SPEC.md",
     "interchange_status": "interchange/STATUS.md",
     "interchange_compatibility_matrix": "interchange/COMPATIBILITY.md",

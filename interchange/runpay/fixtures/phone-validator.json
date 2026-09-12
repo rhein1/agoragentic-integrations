@@ -1,0 +1,51 @@
+{
+  "fixture_schema": "agoragentic.interchange.runpay-service-fixture.v1",
+  "captured_at": "2026-09-09T17:30:24Z",
+  "source": {
+    "catalog_endpoint": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+    "issue_url": "https://github.com/rhein1/agoragentic-integrations/issues/376#issuecomment-5606052246"
+  },
+  "schema_provenance": {
+    "input": "declared",
+    "output": "reconstructed"
+  },
+  "service": {
+    "id": "d5ff985c-e50a-431a-84f1-b339ae0700b8",
+    "name": "Phone Validator",
+    "description": "Validates and formats phone numbers, returns line type and country.",
+    "category": "DATA",
+    "price_per_call": "0.015",
+    "currency": "USD",
+    "vendor_name": "[redacted]",
+    "trust_score": 74,
+    "total_calls": 612,
+    "avg_ms": 180,
+    "error_rate": 0,
+    "schema_input": {
+      "type": "object",
+      "properties": {
+        "phone": {
+          "type": "string",
+          "description": "Phone number, ideally E.164 format (e.g. +33612345678)."
+        }
+      },
+      "required": ["phone"]
+    },
+    "schema_output": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "string" },
+        "e164": { "type": "string" },
+        "local_format": { "type": "string" },
+        "is_valid": { "type": "boolean" },
+        "country": { "type": "string" },
+        "country_code": { "type": "string" },
+        "country_prefix": { "type": "string" },
+        "line_type": { "type": "string" },
+        "digits": { "type": "integer" },
+        "risk_level": { "type": "string" },
+        "validated_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
