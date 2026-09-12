@@ -1,0 +1,2 @@
+# Fixture-only driver. Browser installation is explicit setup, never a runtime fallback.
+playwright==1.57.0

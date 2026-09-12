@@ -1,0 +1,43 @@
+name: Browser Proof fixture
+on:
+  pull_request:
+    paths:
+      - 'browser-use/**'
+      - '.github/workflows/browser-proof-fixture.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Provider-free boundary tests
+        run: python -m unittest discover -s browser-use -p test_fixture_proof.py
+      - name: Explicit fixture driver setup
+        run: |
+          python -m pip install --disable-pip-version-check -r browser-use/requirements-proof.txt
+          python -m playwright install --with-deps chromium
+      - name: Real synthetic browser assertions
+        run: python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof"
+      - name: Pre-work cancellation and close
+        shell: bash
+        run: |
+          set +e
+          python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof-cancel" --cancel-before-work
+          result=$?
+          set -e
+          test "$result" -eq 2
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'browser-proof-cancel/report.json').read_text())
+          assert report['status'] == 'cancelled'
+          assert report['browser_connection_closed'] is True
+          assert report['cases'] == []
+          PY
+      - name: Check source whitespace
+        run: git diff --check
