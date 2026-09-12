@@ -1,0 +1,38 @@
+{
+  "basis": "vendor_supplied_fixture",
+  "catalog_endpoint": "GET https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+  "catalog_endpoint_fetched_live": false,
+  "catalog_endpoint_never_fetch": true,
+  "catalog_query_params": [
+    "category",
+    "sort",
+    "limit",
+    "offset",
+    "max_price",
+    "min_price"
+  ],
+  "claim_boundary": "Experimental compatibility work only. No invocation, payment, settlement verification, live catalog connection, production interoperability, or partnership is established. All imported records are vendor-supplied and unverified.",
+  "currency_unit": "USD decimal per call, no hidden units or credits",
+  "fixture_hashes": {
+    "observability-record.json": "sha256:5b560643e295878b3b4f744f538a47c8b2a9d7c925f8fd78571504f5dc0dbd85",
+    "service-fixtures.json": "sha256:31c5536bc674554e803b38032dabc8beeee5bf580c312359a64f5f5ca4ad093c",
+    "synthetic-expected.json": "sha256:264e35aedaa06dd094ec41a8671181ea2365f09f176461f46b78e8911a170829"
+  },
+  "fixtures": {
+    "observability-record.json": "Redacted observability record for a real completed Phone Validator call, supplied verbatim. transaction_id is vendor-redacted (tx_x402_[redacted]) and is never usable as settlement evidence.",
+    "service-fixtures.json": "Two vendor-supplied service records verbatim: Consensus Aggregator (schema_input declared, no schema_output declared) and Phone Validator (schema_input and schema_output declared).",
+    "synthetic-expected.json": "Golden batch import of service-fixtures.json under namespace sandbox:runpay-issue-376; every independent check remains not_checked."
+  },
+  "issue": "https://github.com/rhein1/agoragentic-integrations/issues/376",
+  "issue_thread_dates": [
+    "2026-09-08T15:43:08Z",
+    "2026-09-09T17:30:24Z"
+  ],
+  "observed_transaction": false,
+  "price_precision": "arbitrary_numeric_no_rounding_rule",
+  "price_precision_note": "Vendor confirmed price_per_call is unqualified numeric at the storage layer; no rounding or rejection rule exists. The importer preserves the exact decimal as a string; 0.015 USD is never converted to integer cents.",
+  "provider": "run.pay",
+  "sanitized_real_export": false,
+  "schema_declaration_coverage": "2 of 206 catalog services declared as of 2026-09-09; the rest remain undeclared until vendors self-declare.",
+  "vendor_contact": "PalabreX"
+}
