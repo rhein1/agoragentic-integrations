@@ -112,7 +112,7 @@ def decode_x402_payment_required(header_value: str) -> Dict[str, Any]:
             decoded = base64.b64decode(_pad_base64(normalized)).decode("utf-8")
             candidates.append(decoded)
         except Exception:
-            pass
+            pass  # intentionally ignored: try next candidate encoding
 
     for candidate in candidates:
         try:
@@ -328,7 +328,6 @@ def _select_x402_requirement(
             scheme in policy["allowed_schemes"]
             and network in policy["allowed_networks"]
             and _x402_asset_allowed(requirement, policy)
-            and amount == amount
             and amount <= float(policy["max_usdc_per_call"])
         ):
             selected = requirement

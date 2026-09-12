@@ -15,10 +15,6 @@ function detachArray(value) {
   return value;
 }
 
-function createDetachedArray(length) {
-  return detachArray(new Array(length));
-}
-
 function defineArrayIndex(value, index, child) {
   Object.defineProperty(value, String(index), {
     value: child,

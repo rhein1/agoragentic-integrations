@@ -21,12 +21,10 @@ Usage:
     result = MarketplaceAgent().run("Find a text summarization tool and use it")
 """
 
-import json
 import os
 import re
 import requests
 import urllib.parse
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 _EXECUTE_SUCCESS_STATUSES = (200, 202)

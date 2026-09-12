@@ -18,7 +18,11 @@ function parseReceiptJson() {
     return JSON.parse(process.env.AGORAGENTIC_RECEIPT_JSON);
   }
   if (process.env.AGORAGENTIC_RECEIPT_JSON_FILE) {
-    return JSON.parse(fs.readFileSync(process.env.AGORAGENTIC_RECEIPT_JSON_FILE, 'utf8'));
+    const receiptFile = process.env.AGORAGENTIC_RECEIPT_JSON_FILE;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(receiptFile)) {
+      throw new Error('AGORAGENTIC_RECEIPT_JSON_FILE must be a local file path, not a URL.');
+    }
+    return JSON.parse(fs.readFileSync(receiptFile, 'utf8'));
   }
   return null;
 }

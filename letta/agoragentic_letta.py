@@ -10,7 +10,7 @@ human-in-the-loop approval queues.
 import os
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Configuration
 AGORAGENTIC_API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")

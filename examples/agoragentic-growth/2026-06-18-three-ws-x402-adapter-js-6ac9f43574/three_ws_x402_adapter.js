@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 'use strict';
 
+const { randomUUID } = require('node:crypto');
+
 /**
  * three.ws x402 buyer adapter:
  * - fetches an executable quote preview
@@ -542,7 +544,7 @@ function generateSessionId() {
   if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return `x402_${globalThis.crypto.randomUUID()}`;
   }
-  return `x402_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return `x402_${randomUUID()}`;
 }
 
 function positiveInt(value, fallback) {

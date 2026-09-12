@@ -14,7 +14,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, Mapping, MutableMapping, Optional, TypedDict
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, TypedDict
 
 import requests
 

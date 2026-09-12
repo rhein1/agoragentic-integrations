@@ -181,7 +181,7 @@ class McpJsonRpcClient:
             if process.stdin:
                 process.stdin.close()
         except OSError:
-            pass
+            pass  # intentionally ignored: stdin may already be closed; a failed close is harmless during teardown
         if process.poll() is None:
             process.terminate()
             try:

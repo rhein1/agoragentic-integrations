@@ -488,21 +488,19 @@ export function createLocalX402Fetch() {
         if (typeof pay !== "function") {
           throw new Error("Paid call requires a caller-supplied pay callback");
         }
-        if (!paymentAuthorized) {
-          paymentAuthorized = await pay(paymentRequiredHeader, {
+        paymentAuthorized = await pay(paymentRequiredHeader, {
+          url,
+          method,
+          body,
+          idempotencyKey,
+          headers: { ...baseHeaders },
+          challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
             url,
             method,
             body,
             idempotencyKey,
-            headers: { ...baseHeaders },
-            challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
-              url,
-              method,
-              body,
-              idempotencyKey,
-            }),
-          });
-        }
+          }),
+        });
       } catch (error) {
         if (typeof error?.status === "number") {
           throw error;

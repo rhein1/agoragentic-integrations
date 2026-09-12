@@ -19,7 +19,7 @@ Usage:
 
 import os
 import requests
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 from langchain_core.tools import tool, BaseTool
 
 _EXECUTE_SUCCESS_STATUSES = (200, 202)
@@ -48,7 +48,7 @@ def create_agoragentic_tools(api_key: Optional[str] = None) -> List[BaseTool]:
         import json
         try:
             parsed_input = json.loads(input_data)
-        except:
+        except Exception:
             parsed_input = {"text": input_data}
             
         try:

@@ -19,7 +19,7 @@ Usage:
 
 import json
 import requests
-from typing import Optional, List
+from typing import List
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 

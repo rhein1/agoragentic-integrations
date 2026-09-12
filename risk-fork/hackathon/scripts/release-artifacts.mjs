@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { lstat, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, open, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -251,11 +252,27 @@ export async function writeReleaseSidecars({ build } = {}) {
 }
 
 async function readBounded(file, maxBytes = 8 * 1024 * 1024) {
-  const info = await lstat(file);
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > maxBytes) {
-    throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
+  // Open first with O_NOFOLLOW and validate the opened handle itself: no
+  // lstat-then-read check-then-act window.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
+    }
+    throw error;
   }
-  return readFile(file);
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.nlink !== 1 || info.size > maxBytes) {
+      throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
+    }
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
 }
 
 async function assertRecord(directory, record, label) {

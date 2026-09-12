@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { constants as fsConstants, promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
   buildAgentOsExport,
@@ -191,16 +191,32 @@ export async function compileGstackArtifacts({
 
 async function readArtifact({ stage, suppliedPath, projectRoot }) {
   const absolutePath = path.resolve(String(suppliedPath));
-  const stat = await fs.lstat(absolutePath).catch(() => null);
-  if (!stat) throw new GstackHarnessError('artifact_not_found', `The ${stage} artifact does not exist.`);
-  if (stat.isSymbolicLink()) throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
-  if (!stat.isFile()) throw new GstackHarnessError('artifact_not_regular_file', `The ${stage} artifact must be a regular file.`);
-  if (stat.size === 0) throw new GstackHarnessError('artifact_empty', `The ${stage} artifact is empty.`);
-  if (stat.size > MAX_ARTIFACT_BYTES) {
-    throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
+  // Open first with O_NOFOLLOW and validate the opened file itself: no
+  // lstat-then-read check-then-act window.
+  const noFollow = Number.isInteger(fsConstants.O_NOFOLLOW) ? fsConstants.O_NOFOLLOW : 0;
+  let handle;
+  try {
+    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
+    }
+    throw new GstackHarnessError('artifact_not_found', `The ${stage} artifact does not exist.`);
   }
+  let bytes;
+  try {
+    const stat = await handle.stat();
+    if (stat.isSymbolicLink()) throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
+    if (!stat.isFile()) throw new GstackHarnessError('artifact_not_regular_file', `The ${stage} artifact must be a regular file.`);
+    if (stat.size === 0) throw new GstackHarnessError('artifact_empty', `The ${stage} artifact is empty.`);
+    if (stat.size > MAX_ARTIFACT_BYTES) {
+      throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
+    }
 
-  const bytes = await fs.readFile(absolutePath);
+    bytes = await handle.readFile();
+  } finally {
+    await handle.close();
+  }
   let text;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);

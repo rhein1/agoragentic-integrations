@@ -12,7 +12,7 @@ import traceback
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, MutableMapping, Optional, Protocol, Sequence, Tuple, Union
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple
 
 USAGE_RECEIPT_SCHEMA = "agoragentic:usage-receipt:v1"
 EXECUTION_RESULT_SCHEMA = "agoragentic:langgraph-execute-result:v1"
@@ -126,12 +126,12 @@ def normalize_output_payload(result: Any, *, execution_input: Any) -> Tuple[Any,
 
 class SupportsInvoke(Protocol):
     def invoke(self, input: Any, config: Optional[Mapping[str, Any]] = None) -> Any:
-        ...
+        """Invoke the underlying runnable."""
 
 
 class SupportsAInvoke(Protocol):
     async def ainvoke(self, input: Any, config: Optional[Mapping[str, Any]] = None) -> Any:
-        ...
+        """Asynchronously invoke the underlying runnable."""
 
 
 @dataclass
@@ -554,7 +554,7 @@ class LangGraphLangfuseLocalExecuteAdapter:
                 if hasattr(self.langfuse, "flush"):
                     self.langfuse.flush()
             except Exception:
-                pass
+                pass  # intentionally ignored: telemetry is best-effort and must not break error reporting
             response = ExecuteResponse(
                 schema=EXECUTION_RESULT_SCHEMA,
                 ok=False,

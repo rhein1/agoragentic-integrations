@@ -317,6 +317,9 @@ export function createOpenFangAgoragenticBridge({
 
 function loadHandManifest(path) {
   if (!path) return {};
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(path)) {
+    throw new Error("Hand manifest must be a local file path, not a URL.");
+  }
   return JSON.parse(fs.readFileSync(path, "utf8"));
 }
 

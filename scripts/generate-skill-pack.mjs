@@ -126,16 +126,30 @@ function managedExistingFiles(manifest) {
   for (const target of Object.values(manifest.targets)) {
     if (target.kind === 'agent_skills') {
       const absolute = path.join(root, target.root);
-      if (!fs.existsSync(absolute)) continue;
-      for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+      // Read the directory directly and treat a missing/unreadable target as
+      // empty: no existsSync-then-readdir check-then-act window.
+      let entries;
+      try {
+        entries = fs.readdirSync(absolute, { withFileTypes: true });
+      } catch (error) {
+        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
+        throw error;
+      }
+      for (const entry of entries) {
         if (entry.isDirectory() && entry.name.startsWith('agoragentic')) {
           files.push(`${target.root}/${entry.name}/SKILL.md`);
         }
       }
     } else if (target.kind === 'cursor_rules') {
       const absolute = path.join(root, target.root);
-      if (!fs.existsSync(absolute)) continue;
-      for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+      let entries;
+      try {
+        entries = fs.readdirSync(absolute, { withFileTypes: true });
+      } catch (error) {
+        if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
+        throw error;
+      }
+      for (const entry of entries) {
         if (entry.isFile() && /^agoragentic.*\.mdc$/.test(entry.name)) {
           files.push(`${target.root}/${entry.name}`);
         }
@@ -150,7 +164,18 @@ export function synchronize({ check = false } = {}) {
   const failures = [];
   for (const [relativePath, content] of outputs) {
     const absolutePath = path.join(root, relativePath);
-    const current = fs.existsSync(absolutePath) ? readText(relativePath) : null;
+    // Read directly and treat ENOENT as missing: no existsSync-then-read
+    // check-then-act window.
+    let current;
+    try {
+      current = readText(relativePath);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        current = null;
+      } else {
+        throw error;
+      }
+    }
     if (current === content) continue;
     if (check) {
       failures.push(`stale or missing generated file: ${relativePath}`);

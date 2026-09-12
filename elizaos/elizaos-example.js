@@ -18,6 +18,13 @@
 
 const BASE = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
 
+// Never log a credential in full: show only the last 4 characters so the
+// value stays identifiable without leaking the secret to log sinks.
+function redactApiKey(value) {
+  const text = String(value ?? "");
+  return text.length > 4 ? `***${text.slice(-4)}` : "***";
+}
+
 async function api(method, path, body, apiKey) {
   const headers = { "Content-Type": "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -50,7 +57,7 @@ async function register() {
   });
 
   console.log(`  Registered: ${result.agent?.name || "agent"}`);
-  console.log(`  API Key: ${result.api_key}`);
+  console.log(`  API Key: ${redactApiKey(result.api_key)}`);
   return result.api_key;
 }
 

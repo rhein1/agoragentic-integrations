@@ -17,7 +17,6 @@ import { evaluateTransactionAssuranceVector } from '../examples/external-adopter
 
 const execFileAsync = promisify(execFile);
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
-const repositoryRoot = path.resolve(packageRoot, '..');
 const packRoot = path.join(packageRoot, 'examples', 'external-adopters', 'anchor-x402');
 const manifest = await readJson(path.join(packageRoot, 'conformance', 'manifest.v1.json'));
 const vectorSet = await readJson(path.join(packageRoot, 'conformance', 'vectors.v1.json'));

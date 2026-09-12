@@ -78,21 +78,26 @@ async function exactRegularFile(
   if (requireCanonical && await realpath(filename) !== filename) {
     throw new TypeError(`${field} must use its exact canonical path`);
   }
-  const pathDetails = await lstat(filename, { bigint: true });
-  if (!pathDetails.isFile() || pathDetails.isSymbolicLink()) {
-    throw new TypeError(`${field} must be a regular non-symbolic file of at most ${RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES} bytes`);
-  }
   const noFollow = Number.isInteger(fsConstants.O_NOFOLLOW) ? fsConstants.O_NOFOLLOW : 0;
   const nonBlock = Number.isInteger(fsConstants.O_NONBLOCK) ? fsConstants.O_NONBLOCK : 0;
-  const handle = await open(filename, fsConstants.O_RDONLY | noFollow | nonBlock);
+  // Open first with O_NOFOLLOW and validate the opened handle itself: there
+  // is no lstat-then-open check-then-act window, and every bound below
+  // describes the file that is actually read.
+  let handle;
+  try {
+    handle = await open(filename, fsConstants.O_RDONLY | noFollow | nonBlock);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new TypeError(`${field} must be a regular non-symbolic file of at most ${RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES} bytes`);
+    }
+    throw error;
+  }
   try {
     const details = await handle.stat({ bigint: true });
     if (!details.isFile()
       || details.size < 1n
-      || details.size > BigInt(RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES)
-      || details.dev !== pathDetails.dev
-      || details.ino !== pathDetails.ino) {
-      throw new TypeError(`${field} must be the same regular non-symbolic file of at most ${RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES} bytes`);
+      || details.size > BigInt(RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES)) {
+      throw new TypeError(`${field} must be a regular non-symbolic file of at most ${RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES} bytes`);
     }
     const expectedSize = Number(details.size);
     async function readSnapshot() {

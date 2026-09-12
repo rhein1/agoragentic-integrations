@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 
 export const MAX_JSON_BYTES = 1024 * 1024;
 
@@ -134,10 +134,18 @@ export async function readJson(filePath, options = {}) {
   let fileStat;
   let source;
   try {
-    fileStat = await stat(filePath);
-    if (!fileStat.isFile()) throw new TypeError('not_file');
-    if (fileStat.size > maxBytes) throw new RangeError('too_large');
-    source = await readFile(filePath, 'utf8');
+    // Open first and stat the opened file itself: no stat-then-read
+    // check-then-act window. (Plain open preserves stat's symlink-following
+    // semantics; no O_NOFOLLOW is added.)
+    const handle = await open(filePath, 'r');
+    try {
+      fileStat = await handle.stat();
+      if (!fileStat.isFile()) throw new TypeError('not_file');
+      if (fileStat.size > maxBytes) throw new RangeError('too_large');
+      source = await handle.readFile('utf8');
+    } finally {
+      await handle.close();
+    }
   } catch (error) {
     if (error instanceof RangeError || error?.message === 'too_large') {
       throw new RangeError(`JSON input exceeds the ${maxBytes}-byte limit`);

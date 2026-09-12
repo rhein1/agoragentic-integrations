@@ -288,7 +288,7 @@ class X402ReceiptChecklistClient:
             if isinstance(parsed, dict):
                 return dict(parsed)
         except Exception:
-            pass
+            pass  # intentionally ignored: unparsable header falls back to identifier parsing below
         return cls._receipt_from_identifier(header_value)
 
     @classmethod
@@ -522,7 +522,11 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         if extra_headers:
             for key, value in extra_headers.items():
-                self.send_header(key, value)
+                # Strip CR/LF so header names/values cannot smuggle
+                # HTTP response splitting into the response.
+                safe_key = str(key).replace("\r", "").replace("\n", "")
+                safe_value = str(value).replace("\r", "").replace("\n", "")
+                self.send_header(safe_key, safe_value)
         self.end_headers()
         self.wfile.write(encoded)
 

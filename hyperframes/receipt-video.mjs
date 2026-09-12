@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { constants as fsConstants, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -351,14 +351,30 @@ async function assertExecutable(command, args, code) {
 
 async function readSource(sourcePath) {
   const absolutePath = path.resolve(requiredString(sourcePath, 'sourcePath'));
-  const stat = await fs.lstat(absolutePath).catch(() => null);
-  if (!stat) throw new ReceiptVideoError('source_not_found', 'The source receipt does not exist.');
-  if (stat.isSymbolicLink()) throw new ReceiptVideoError('source_symlink_rejected', 'The source receipt must not be a symbolic link.');
-  if (!stat.isFile()) throw new ReceiptVideoError('source_not_regular_file', 'The source receipt must be a regular file.');
-  if (stat.size === 0 || stat.size > MAX_SOURCE_BYTES) {
-    throw new ReceiptVideoError('source_size_invalid', `The source receipt must be between 1 and ${MAX_SOURCE_BYTES} bytes.`);
+  // Open with O_NOFOLLOW and stat the open descriptor (instead of
+  // lstat-then-read by path) so the file cannot be swapped — or a symlink
+  // planted — between the checks and the read.
+  let handle;
+  try {
+    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  } catch (err) {
+    if (err && err.code === 'ELOOP') {
+      throw new ReceiptVideoError('source_symlink_rejected', 'The source receipt must not be a symbolic link.');
+    }
+    throw new ReceiptVideoError('source_not_found', 'The source receipt does not exist.');
   }
-  const bytes = await fs.readFile(absolutePath);
+  let bytes;
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new ReceiptVideoError('source_not_regular_file', 'The source receipt must be a regular file.');
+    if (stat.size === 0 || stat.size > MAX_SOURCE_BYTES) {
+      throw new ReceiptVideoError('source_size_invalid', `The source receipt must be between 1 and ${MAX_SOURCE_BYTES} bytes.`);
+    }
+    bytes = Buffer.alloc(stat.size);
+    await handle.read(bytes, 0, stat.size, 0);
+  } finally {
+    await handle.close();
+  }
   let text;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);

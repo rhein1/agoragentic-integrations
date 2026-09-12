@@ -246,19 +246,26 @@ function assertWithin(root, candidate, field) {
 }
 
 async function readStableRuntimeFile(absolute, relative, rootReal, remainingBytes) {
-  const before = await lstat(absolute, { bigint: true });
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error(`Runtime workspace rejects a non-regular file: ${relative}`);
-  }
-  if (before.nlink > 1n) throw new Error(`Runtime workspace rejects a hard link: ${relative}`);
-  if (before.size > BigInt(remainingBytes)) throw new Error('Runtime workspace exceeds byte limit');
+  // Open first with O_NOFOLLOW and validate the opened handle itself: there
+  // is no lstat-then-open check-then-act window, and every property below
+  // describes the file that is actually read.
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
-  const handle = await open(absolute, constants.O_RDONLY | noFollow);
+  let handle;
+  try {
+    handle = await open(absolute, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error(`Runtime workspace rejects a non-regular file: ${relative}`);
+    }
+    throw error;
+  }
   try {
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isFile() || opened.nlink > 1n || stableIdentity(opened) !== stableIdentity(before)) {
-      throw new Error(`Runtime workspace file changed while opening: ${relative}`);
+    if (!opened.isFile()) {
+      throw new Error(`Runtime workspace rejects a non-regular file: ${relative}`);
     }
+    if (opened.nlink > 1n) throw new Error(`Runtime workspace rejects a hard link: ${relative}`);
+    if (opened.size > BigInt(remainingBytes)) throw new Error('Runtime workspace exceeds byte limit');
     const resolved = await realpath(absolute);
     assertWithin(rootReal, resolved, `Runtime workspace file ${relative}`);
     const content = await handle.readFile();

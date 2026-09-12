@@ -206,7 +206,7 @@ class LocalExecuteWrapper:
                     if isinstance(parsed, dict):
                         return parsed
                 except Exception:
-                    pass
+                    pass  # intentionally ignored: unparsable value falls through to the RuntimeError below
         raise RuntimeError("success response missing receipt")
 
 
@@ -307,7 +307,11 @@ class DemoExecuteHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         if extra_headers:
             for key, value in extra_headers.items():
-                self.send_header(key, value)
+                # Strip CR/LF so header names/values cannot smuggle
+                # HTTP response splitting into the response.
+                safe_key = str(key).replace("\r", "").replace("\n", "")
+                safe_value = str(value).replace("\r", "").replace("\n", "")
+                self.send_header(safe_key, safe_value)
         self.end_headers()
         self.wfile.write(encoded)
 

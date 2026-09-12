@@ -43,20 +43,6 @@ const BIRTH_REQUEST_TRIGGER = /^birth-request\.([0-9a-f]{64})\.ready$/;
 const PROBE_TIMEOUT_MS = 1_500;
 const MAX_PROCESS_ENVIRONMENT_BYTES = 1024 * 1024;
 const MAX_PROCESS_ENVIRONMENTS = 4_096;
-const ALLOWED_ENV_KEYS = new Set([
-  'HOME',
-  'LANG',
-  'LC_ALL',
-  'LC_CTYPE',
-  'LOGNAME',
-  'PATH',
-  'PWD',
-  'SHELL',
-  'SHLVL',
-  'TERM',
-  'USER',
-  '_',
-]);
 const FORBIDDEN_PROCESS_PATTERN = /(?:ssh-agent|gpg-agent|credential|wallet|codex|claude|openai|aws-vault|keychain)/i;
 const FORBIDDEN_ENVIRONMENT_KEY_PATTERN = /(?:^|_)(?:E2B_API_KEY|AWS_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY|SESSION_TOKEN|WEB_IDENTITY_TOKEN_FILE)|AZURE_(?:CLIENT_ID|CLIENT_SECRET|TENANT_ID|FEDERATED_TOKEN_FILE)|GOOGLE_APPLICATION_CREDENTIALS|GCP_(?:API_KEY|ACCESS_TOKEN|CREDENTIALS)|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|GH_TOKEN|API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|AUTHORIZATION|CREDENTIALS?|PASSWORD|PASSPHRASE|PRIVATE_KEY|CLIENT_SECRET|SEED_PHRASE|MNEMONIC|WALLET_(?:KEY|SECRET))(?:$|_)/i;
 const CREDENTIAL_PATHS = Object.freeze([
@@ -324,9 +310,6 @@ export async function collectBootEvidence(options = {}) {
     sha256FileRef(runnerPath),
   ]);
   const environmentKeys = Object.keys(process.env).sort();
-  const unexpectedEnvironmentKeys = environmentKeys
-    .filter((key) => !ALLOWED_ENV_KEYS.has(key) && !key.startsWith('LC_'))
-    .map((key) => sha256Ref(key));
   const [processes, processEnvironments, sockets, mounts, credentials, ipv4, ipv6] = await Promise.all([
     observeProcesses(),
     observeProcessEnvironments(),
@@ -515,31 +498,34 @@ function localBirthPaths(runtimeDirectory, requestHash) {
 }
 
 async function readBoundedRegularFile(target, maxBytes) {
-  const before = await lstat(target, { bigint: true });
-  if (!before.isFile()
-    || before.isSymbolicLink()
-    || before.nlink !== 1n
-    || before.size > BigInt(maxBytes)) {
-    throw new Error('E2B birth request artifact is not a bounded regular file');
-  }
-  if (process.platform !== 'win32') {
-    if (typeof process.getuid !== 'function'
-      || before.uid !== BigInt(process.getuid())
-      || (before.mode & 0o022n) !== 0n) {
-      throw new Error('E2B birth request artifact ownership or mode is invalid');
+  // Open first with O_NOFOLLOW and validate the opened handle itself: there
+  // is no lstat-then-open check-then-act window, and every bound below
+  // describes the file that is actually read.
+  let handle;
+  try {
+    handle = await open(
+      target,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+    );
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error('E2B birth request artifact is not a bounded regular file');
     }
+    throw error;
   }
-  const handle = await open(
-    target,
-    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
-  );
   try {
     const during = await handle.stat({ bigint: true });
     if (!during.isFile()
       || during.nlink !== 1n
-      || during.size > BigInt(maxBytes)
-      || stableRuntimeFileIdentity(during) !== stableRuntimeFileIdentity(before)) {
-      throw new Error('E2B birth request artifact changed or exceeded its byte bound');
+      || during.size > BigInt(maxBytes)) {
+      throw new Error('E2B birth request artifact is not a bounded regular file');
+    }
+    if (process.platform !== 'win32') {
+      if (typeof process.getuid !== 'function'
+        || during.uid !== BigInt(process.getuid())
+        || (during.mode & 0o022n) !== 0n) {
+        throw new Error('E2B birth request artifact ownership or mode is invalid');
+      }
     }
     const bytes = await handle.readFile();
     const after = await handle.stat({ bigint: true });

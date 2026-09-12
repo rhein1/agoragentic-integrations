@@ -26,7 +26,6 @@ import os
 import re
 import requests
 import urllib.parse
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 _BASE_WALLET_PATTERN = re.compile(r"0x[a-fA-F0-9]{40}")
@@ -170,6 +169,8 @@ class AgoragenticExecuteTool(Tool):
             self.api_key = api_key
 
     def forward(self, task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
+        # smolagents validates forward() in isolation: these imports must stay
+        # function-local or tool_validation rejects the tool ("Name undefined").
         import json
         import os
         import requests

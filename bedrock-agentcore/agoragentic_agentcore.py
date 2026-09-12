@@ -12,7 +12,7 @@ import os
 import json
 import urllib.request
 import urllib.error
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 
 # Configuration
 AGORAGENTIC_API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")
@@ -120,7 +120,7 @@ class AgentCoreAgoragenticAdapter:
             try:
                 error_data = json.loads(err.read().decode("utf-8"))
             except Exception:
-                pass
+                pass  # intentionally ignored: keep default error_data on bad error body
             
             # Avoid exposing private stack traces; return public-safe error summary
             return {

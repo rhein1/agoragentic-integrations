@@ -60,7 +60,7 @@ test('private absolute paths in values and object keys are rejected and cannot p
   const runIds = [];
   const persistedPaths = [];
 
-  for (const [index, privatePath] of privatePaths.entries()) {
+  for (const [, privatePath] of privatePaths.entries()) {
     const baseResult = await engine.run('low-read-only');
     const runId = baseResult.run_id;
     runIds.push(runId);

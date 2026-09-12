@@ -11,9 +11,9 @@ import {
   realpath,
   rename,
   rm,
-  stat,
   writeFile,
 } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify, TextDecoder } from 'node:util';
@@ -180,10 +180,6 @@ function stableJson(value) {
   return `${JSON.stringify(stableValue(value), null, 2)}\n`;
 }
 
-function toArchivePath(input) {
-  return input.split(path.sep).join('/');
-}
-
 export function assertSafeArchivePath(input) {
   if (typeof input !== 'string' || input.length === 0) {
     throw new Error('Archive entry path must be a non-empty string');
@@ -281,22 +277,33 @@ async function enumerateTree(root, { includeBytes = false } = {}) {
         : entry.name;
       assertSafeArchivePath(relative);
       const absolute = path.join(absoluteDirectory, entry.name);
-      const entryStat = await lstat(absolute);
-      if (entryStat.isSymbolicLink()) throw new Error(`Links are forbidden in offline kits: ${relative}`);
-      if (entryStat.isDirectory()) {
-        directories.push(relative);
-        await visit(absolute, relative);
-      } else if (entryStat.isFile()) {
+      // Open first with O_NOFOLLOW and classify the opened handle itself: no
+      // lstat-then-read check-then-act window.
+      const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+      let handle;
+      try {
+        handle = await open(absolute, constants.O_RDONLY | noFollow);
+      } catch (error) {
+        if (error?.code === 'ELOOP') throw new Error(`Links are forbidden in offline kits: ${relative}`);
+        throw error;
+      }
+      try {
+        const entryStat = await handle.stat();
+        if (entryStat.isDirectory()) {
+          directories.push(relative);
+          await visit(absolute, relative);
+          continue;
+        }
         assertRegularFile(entryStat, relative);
         const record = {
           path: relative,
           absolute_path: absolute,
           bytes: entryStat.size,
         };
-        if (includeBytes) record.content = await readFile(absolute);
+        if (includeBytes) record.content = await handle.readFile();
         files.push(record);
-      } else {
-        throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+      } finally {
+        await handle.close();
       }
       if (files.length > OFFLINE_KIT_LIMITS.max_files) {
         throw new Error('Offline kit exceeds the file-count limit');
@@ -1168,13 +1175,27 @@ function parseCanonicalZip(archive) {
 
 async function readCanonicalZip(zipPath) {
   const absolute = normalizeAbsolute(zipPath, 'zipPath');
-  const zipStat = await lstat(absolute);
-  assertRegularFile(zipStat, 'Offline-kit ZIP');
-  if (zipStat.size > OFFLINE_KIT_LIMITS.max_archive_bytes) {
-    throw new Error('ZIP exceeds the offline-kit byte limit');
+  // Open first with O_NOFOLLOW and validate the opened handle itself: no
+  // lstat-then-read check-then-act window.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  let handle;
+  try {
+    handle = await open(absolute, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw new Error('Offline-kit ZIP must be a regular file');
+    throw error;
   }
-  const bytes = await readFile(absolute);
-  return { absolute, bytes, ...parseCanonicalZip(bytes) };
+  try {
+    const zipStat = await handle.stat();
+    assertRegularFile(zipStat, 'Offline-kit ZIP');
+    if (zipStat.size > OFFLINE_KIT_LIMITS.max_archive_bytes) {
+      throw new Error('ZIP exceeds the offline-kit byte limit');
+    }
+    const bytes = await handle.readFile();
+    return { absolute, bytes, ...parseCanonicalZip(bytes) };
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function verifyZipArchive({ zipPath }) {
@@ -1340,10 +1361,25 @@ export async function verifyOfflineKit({ kitDirectory }) {
     throw new Error('Offline kit must be a real directory');
   }
   const manifestPath = path.join(root, MANIFEST_NAME);
-  const manifestStat = await lstat(manifestPath);
-  assertRegularFile(manifestStat, MANIFEST_NAME);
-  if (manifestStat.size > 4 * 1024 * 1024) throw new Error('Offline-kit manifest is too large');
-  const manifestBytes = await readFile(manifestPath);
+  // Open first with O_NOFOLLOW and validate the opened handle itself: no
+  // lstat-then-read check-then-act window.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  let manifestHandle;
+  try {
+    manifestHandle = await open(manifestPath, constants.O_RDONLY | noFollow);
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw new Error(`${MANIFEST_NAME} must be a regular file`);
+    throw error;
+  }
+  let manifestBytes;
+  try {
+    const manifestStat = await manifestHandle.stat();
+    assertRegularFile(manifestStat, MANIFEST_NAME);
+    if (manifestStat.size > 4 * 1024 * 1024) throw new Error('Offline-kit manifest is too large');
+    manifestBytes = await manifestHandle.readFile();
+  } finally {
+    await manifestHandle.close();
+  }
   let manifest;
   try {
     manifest = JSON.parse(UTF8_FATAL.decode(manifestBytes));

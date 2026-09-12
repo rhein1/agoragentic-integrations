@@ -2771,7 +2771,7 @@ export class E2BRiskForkAdapter extends RiskForkProvider {
     }
     record.destruction_status = 'destroy_requested';
     this.#poisonAllocationUntilReconciled(record.record_id);
-    const Sandbox = await this.#sandboxClass();
+    await this.#sandboxClass();
     try {
       await this.cleanupJournal.markSandboxCleanupRequested(record.record_id, record.sandbox_id);
       await record.sandbox.kill();

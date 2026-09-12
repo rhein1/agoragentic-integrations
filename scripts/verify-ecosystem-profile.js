@@ -23,6 +23,20 @@ function readJson(file, errors, root) {
   }
 }
 
+// Compares a candidate URL against the /marketplace/ homepage fallback
+// structurally (origin + pathname) instead of by string equality, so
+// lookalike hosts and query-string variants cannot slip past the check.
+function isMarketplaceHomepageFallback(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'https:'
+      && url.hostname === 'agoragentic.com'
+      && url.pathname.replace(/\/+$/, '') === '/marketplace';
+  } catch {
+    return false;
+  }
+}
+
 function stringLeaves(value, currentPath = '$') {
   if (typeof value === 'string') return [{ path: currentPath, value }];
   if (Array.isArray(value)) {
@@ -153,7 +167,7 @@ function verifyEcosystemProfile({ root = defaultRoot, quiet = false } = {}) {
       ...(ecosystem.funnels || []).flatMap((entry) => [entry.entrypoint, entry.next]),
       ...(ecosystem.products || []).flatMap((entry) => [entry.repository, entry.url, entry.machine_catalog]),
     ].filter(Boolean);
-    if (publicUrls.includes('https://agoragentic.com/marketplace/')) {
+    if (publicUrls.some(isMarketplaceHomepageFallback)) {
       errors.push('ecosystem.json must not point to the /marketplace/ homepage fallback');
     }
 

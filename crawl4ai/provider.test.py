@@ -10,9 +10,8 @@ import sys
 import tempfile
 import threading
 import time
-import unittest
 from pathlib import Path
-from unittest import mock
+from unittest import TestCase, main, mock, skipUnless
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -120,7 +119,7 @@ def raw_http_destination(response_bytes: bytes):
     )
 
 
-class DestinationPolicyTests(unittest.TestCase):
+class DestinationPolicyTests(TestCase):
     def test_public_destination_is_canonicalized_and_pinned(self):
         destination = provider.validate_destination(
             "HTTPS://Public.Example/path?q=one two#fragment",
@@ -174,7 +173,7 @@ class DestinationPolicyTests(unittest.TestCase):
             provider.validate_destination("https://public.example/", resolver=failing_resolver)
 
 
-class FetchPolicyTests(unittest.TestCase):
+class FetchPolicyTests(TestCase):
     def setUp(self):
         self.limits = provider.Limits(max_bytes_per_page=32, max_total_bytes=64)
         self.resolver = resolver_for("93.184.216.34")
@@ -343,7 +342,7 @@ class FetchPolicyTests(unittest.TestCase):
                 self.sock = mock.Mock()
 
             def request(self, method, target, headers):
-                del method, target, headers
+                pass
 
             def getresponse(self):
                 return response
@@ -473,7 +472,7 @@ class FetchPolicyTests(unittest.TestCase):
                 self.assertTrue(provider.scan_content(text)["blocked"])
 
 
-class FixtureAndArtifactTests(unittest.TestCase):
+class FixtureAndArtifactTests(TestCase):
     def test_fixture_path_cannot_escape_root(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -856,7 +855,7 @@ class FixtureAndArtifactTests(unittest.TestCase):
                 )
 
 
-class ManifestTests(unittest.TestCase):
+class ManifestTests(TestCase):
     def test_manifest_keeps_all_operational_surfaces_disabled(self):
         manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
         self.assertEqual(set(manifest["capabilities"]), set(provider.CAPABILITIES))
@@ -875,7 +874,7 @@ class ManifestTests(unittest.TestCase):
         self.assertFalse(manifest["security"]["duplicate_content_encoding_allowed"])
         self.assertFalse(manifest["security"]["duplicate_content_type_allowed"])
 
-    @unittest.skipUnless(
+    @skipUnless(
         crawl4ai_dependency_available(),
         "Crawl4AI is not installed",
     )
@@ -890,4 +889,4 @@ class ManifestTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

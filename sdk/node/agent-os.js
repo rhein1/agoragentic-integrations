@@ -22,6 +22,24 @@ const PAID_EXECUTION_HELP = 'Paid execution is disabled by default. Add --yes (o
 const GATEWAY_AGENT_HEADER = 'X-Agoragentic-Gateway-Agent';
 const MCP_ENFORCEMENT_REQUIRED = 'MCP_RISK_FORK_ENFORCEMENT_REQUIRED: direct MCP launch is disabled until a qualified host enforcement boundary owns transport, resolves credentials out of band, and returns clean-imported results.';
 
+// Strips trailing slashes without a regular expression, so long runs of
+// slashes cannot trigger polynomial regex backtracking.
+function stripTrailingSlashes(value) {
+    const text = String(value);
+    let end = text.length;
+    while (end > 0 && text.charCodeAt(end - 1) === 47) {
+        end -= 1;
+    }
+    return text.slice(0, end);
+}
+
+// Only treat a CLI-provided value as a file path when it cannot be a URL.
+// A URL-shaped value would never resolve to a local file anyway, so this
+// rejects remote-looking input before any filesystem access.
+function isLocalFilePath(value) {
+    return typeof value === 'string' && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value);
+}
+
 // ── Auto-Signing Helpers ─────────────────────────────────
 
 /**
@@ -70,7 +88,6 @@ function signPaymentChallenge(signingKeyHex, challengePayload) {
         : JSON.stringify(challengePayload);
     const digest = eip191Hash(message);
     const keyBuffer = Buffer.from(signingKeyHex.replace(/^0x/, ''), 'hex');
-    const { sign } = crypto;
     // Use ECDSA with secp256k1
     const key = crypto.createPrivateKey({
         key: Buffer.concat([
@@ -502,7 +519,7 @@ function runtimeCwd(runtime) {
 async function commandDoctor(client, { baseUrl, apiKey }) {
     const checks = [];
     checks.push(await check('discovery', async () => {
-        const res = await fetchJson(`${baseUrl.replace(/\/+$/, '')}/api/discovery/check`);
+        const res = await fetchJson(`${stripTrailingSlashes(baseUrl)}/api/discovery/check`);
         return {
             status: res.status || res.summary?.status || null,
             passed: res.passed ?? res.summary?.passed ?? null,
@@ -626,7 +643,7 @@ async function commandQuickstart(flags, { baseUrl }) {
         description: stringFlag(flags, 'description'),
         agent_uri: stringFlag(flags, 'agent-uri') || stringFlag(flags, 'agent_uri'),
     });
-    return fetchJsonRequest(`${baseUrl.replace(/\/+$/, '')}/api/quickstart`, {
+    return fetchJsonRequest(`${stripTrailingSlashes(baseUrl)}/api/quickstart`, {
         method: 'POST',
         body,
     });
@@ -985,7 +1002,7 @@ async function commandInvoke(client, positionals, flags) {
 
 async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId }) {
     const subcommand = positionals[0] || 'info';
-    const base = baseUrl.replace(/\/+$/, '');
+    const base = stripTrailingSlashes(baseUrl);
     const edgeBase = 'https://x402.agoragentic.com';
     const gatewayHeaders = gatewayAgentId ? { [GATEWAY_AGENT_HEADER]: gatewayAgentId } : undefined;
     const signingKey = resolveSigningKey(flags, env || {});
@@ -1170,7 +1187,7 @@ async function commandArbiter(positionals, flags, env, { baseUrl }) {
     }
 
     const payload = readJsonValue(requiredArg(stringFlag(flags, 'payload') || positionals[1], 'payload'), 'payload');
-    return fetchJsonRequest(`${baseUrl.replace(/\/+$/, '')}/api/arbiter/review`, {
+    return fetchJsonRequest(`${stripTrailingSlashes(baseUrl)}/api/arbiter/review`, {
         method: 'POST',
         body: {
             ...payload,
@@ -1273,7 +1290,7 @@ function readInput(flags) {
         return {};
     }
 
-    const filePath = fs.existsSync(raw) && fs.statSync(raw).isFile() ? raw : null;
+    const filePath = isLocalFilePath(raw) && fs.existsSync(raw) && fs.statSync(raw).isFile() ? raw : null;
     const content = filePath ? fs.readFileSync(filePath, 'utf8') : raw;
     try {
         return JSON.parse(content);
@@ -1283,7 +1300,7 @@ function readInput(flags) {
 }
 
 function readJsonValue(value, label) {
-    const filePath = fs.existsSync(value) && fs.statSync(value).isFile() ? value : null;
+    const filePath = isLocalFilePath(value) && fs.existsSync(value) && fs.statSync(value).isFile() ? value : null;
     const content = filePath ? fs.readFileSync(filePath, 'utf8') : value;
     try {
         return JSON.parse(content);

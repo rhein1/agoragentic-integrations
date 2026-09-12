@@ -10,7 +10,6 @@ import {
 import { createManagedAuthenticator, hashManagedApiKey } from '../src/auth.mjs';
 import { createManagedServiceConfig } from '../src/config.mjs';
 import { createManagedRiskForkControlPlane } from '../src/control-plane.mjs';
-import { MANAGED_API_KEY_SCHEMA } from '../src/constants.mjs';
 import { migrateManagedServicePostgres } from '../src/postgres-migrator.mjs';
 import { PostgresManagedServiceStore } from '../src/postgres-store.mjs';
 import { createManagedProviderRegistry } from '../src/provider-registry.mjs';

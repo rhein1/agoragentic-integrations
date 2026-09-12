@@ -427,7 +427,7 @@ def _write_receipt(
     try:
         receipt_path.chmod(0o600)
     except OSError:
-        pass
+        pass  # intentionally ignored: best-effort receipt permission hardening
     returned = dict(receipt)
     returned["path"] = _relative_path(context["root"], receipt_path)
     return returned

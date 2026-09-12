@@ -14,7 +14,6 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
