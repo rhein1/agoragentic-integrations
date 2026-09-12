@@ -8,19 +8,45 @@ permissions:
   contents: read
 jobs:
   synthetic-proof:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up qualification Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.10'
       - name: Provider-free boundary tests
         run: python -m unittest discover -s browser-use -p test_fixture_proof.py
       - name: Explicit fixture driver setup
         run: |
           python -m pip install --disable-pip-version-check -r browser-use/requirements-proof.txt
           python -m playwright install --with-deps chromium
+      - name: Collect public runtime provenance for committed lock review
+        run: |
+          python - <<'PY'
+          import hashlib, importlib.metadata as m, json, os, pathlib, subprocess, sys, tempfile
+          from playwright.sync_api import sync_playwright
+          versions = {name: m.version(name) for name in ['playwright', 'pyee', 'greenlet', 'typing_extensions']}
+          with tempfile.TemporaryDirectory() as wheels:
+              subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:', '--dest', wheels, *[f'{n}=={v}' for n,v in versions.items()]], check=True)
+              print('DEPENDENCY_LOCK_CANDIDATE=' + json.dumps({'python': sys.version.split()[0], 'versions': versions, 'wheels': {p.name: hashlib.file_digest(p.open('rb'), 'sha256').hexdigest() for p in pathlib.Path(wheels).iterdir()}}))
+          with sync_playwright() as p:
+              exe = pathlib.Path(p.chromium.executable_path)
+              root = exe.parent
+              records = []
+              for f in sorted(root.rglob('*')):
+                  if f.is_symlink(): raise RuntimeError('unexpected browser symlink')
+                  if f.is_file():
+                      with f.open('rb') as s: digest = hashlib.file_digest(s, 'sha256').hexdigest()
+                      records.append([f.relative_to(root).as_posix(), f.stat().st_size, digest])
+              manifest = json.dumps(records, ensure_ascii=True, separators=(',', ':')).encode()
+              with exe.open('rb') as s: executable_digest = hashlib.file_digest(s, 'sha256').hexdigest()
+              print('BROWSER_LOCK_CANDIDATE=' + json.dumps({'platform': 'linux-x86_64', 'playwright': versions['playwright'], 'executable': exe.name, 'executable_sha256': executable_digest, 'tree_sha256': hashlib.sha256(manifest).hexdigest(), 'files': len(records), 'total_bytes': sum(r[1] for r in records)}))
+          PY
       - name: Real synthetic browser assertions
         run: python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof"
       - name: Pre-work cancellation and close
