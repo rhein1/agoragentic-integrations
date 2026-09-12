@@ -163,6 +163,19 @@ npm run pack:dry
 
 The adversarial suite exercises hard splitting, exact coverage accounting, aliases, custom provenance, structure failures/truncation, denied network/listen/write/process attempts, environment sanitization, confirmed timeout termination, and output-path aliasing. The smoke test exercises the real `@firecrawl/anydoc@0.1.7` package and deliberately reports OS network isolation as unverified. The semantic workflow runs the same package inside Docker `--network none` with finite cgroup limits and verifies that sandbox before making a no-network claim. CI also installs the generated tarball and reruns its packaged checks and smoke test. See [`conformance/README.md`](conformance/README.md).
 
+## Inspect a private local review
+
+The new review step reuses the adapter, checks packet/output/unit/receipt bindings, and presents literal Markdown, evidence coverage, and unresolved checks in static HTML:
+
+```bash
+node review.mjs document ./report.docx ./report.review.html
+# Or inspect the existing evidence JSON without rerunning the parser:
+node review.mjs packet ./report.evidence.json ./report.review.html
+npm run test:review
+```
+
+The output must not already exist. Open the resulting private HTML in a local browser. It has no JavaScript or remote assets and does not turn review into trap-scan approval, context attachment, or a completed receipt. It does not repair or activate the hosted preview. Read [`LOCAL_REVIEW.md`](LOCAL_REVIEW.md) for verification limits and the remaining handoff gates.
+
 ## License
 
 Adapter code: Apache-2.0.

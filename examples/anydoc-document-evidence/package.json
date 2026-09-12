@@ -5,42 +5,23 @@
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
-  "engines": {
-    "node": ">=20"
-  },
-  "bin": {
-    "agoragentic-anydoc": "./cli.mjs"
-  },
-  "exports": {
-    ".": "./agoragentic-anydoc.mjs"
-  },
+  "engines": { "node": ">=20" },
+  "bin": { "agoragentic-anydoc": "./cli.mjs" },
+  "exports": { ".": "./agoragentic-anydoc.mjs" },
   "files": [
-    "LICENSE",
-    "agoragentic-anydoc.mjs",
-    "cli.mjs",
-    "network-deny.mjs",
-    "parser-worker.mjs",
-    "verify-packed.mjs",
-    "test.mjs",
-    "test-fixtures/fake-anydoc.mjs",
-    "smoke-anydoc.mjs",
-    "conformance/README.md",
-    "conformance/cases.json",
-    "conformance/generate-fixtures.py",
-    "conformance/requirements.in",
-    "conformance/requirements.txt",
-    "conformance/run-conformance.mjs",
-    "SKILL.md",
-    "README.md",
-    "listing-candidates.json"
+    "LICENSE", "agoragentic-anydoc.mjs", "cli.mjs", "network-deny.mjs", "parser-worker.mjs",
+    "verify-packed.mjs", "test.mjs", "test-fixtures/fake-anydoc.mjs", "smoke-anydoc.mjs",
+    "review.mjs", "review.test.mjs", "review-adapter.test.mjs", "LOCAL_REVIEW.md",
+    "conformance/README.md", "conformance/cases.json", "conformance/generate-fixtures.py",
+    "conformance/requirements.in", "conformance/requirements.txt", "conformance/run-conformance.mjs",
+    "SKILL.md", "README.md", "listing-candidates.json"
   ],
-  "dependencies": {
-    "@firecrawl/anydoc": "0.1.7"
-  },
+  "dependencies": { "@firecrawl/anydoc": "0.1.7" },
   "scripts": {
-    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs && node --check verify-packed.mjs && node --check conformance/run-conformance.mjs",
-    "test": "node --test test.mjs",
-    "test:adversarial": "node --test test.mjs",
+    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs && node --check verify-packed.mjs && node --check conformance/run-conformance.mjs && node --check review.mjs && node --check review.test.mjs && node --check review-adapter.test.mjs",
+    "test": "node --test test.mjs review.test.mjs review-adapter.test.mjs",
+    "test:adversarial": "node --test test.mjs review.test.mjs review-adapter.test.mjs",
+    "test:review": "node --test review.test.mjs review-adapter.test.mjs",
     "smoke:anydoc": "node smoke-anydoc.mjs",
     "conformance:install": "python -m pip install --disable-pip-version-check --require-hashes -r conformance/requirements.txt",
     "conformance:generate": "python conformance/generate-fixtures.py",
@@ -54,14 +35,5 @@
     "url": "git+https://github.com/rhein1/agoragentic-integrations.git",
     "directory": "examples/anydoc-document-evidence"
   },
-  "keywords": [
-    "anydoc",
-    "firecrawl",
-    "document-parsing",
-    "ai-agents",
-    "evidence",
-    "receipts",
-    "ecf",
-    "markdown"
-  ]
+  "keywords": ["anydoc", "firecrawl", "document-parsing", "ai-agents", "evidence", "receipts", "ecf", "markdown"]
 }
