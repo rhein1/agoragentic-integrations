@@ -12,14 +12,14 @@
           "provenance": "vendor_supplied_fixture",
           "attribution": "run.pay",
           "fetched_live": false,
-          "redacted_source_hash": "sha256:e7f49d416a716f51dddc2a7e8fe0e1c3c21bac6e581ca1c4fc13d88b453bd1b8",
+          "redacted_source_hash": "sha256:2d7b674ff9b3d54c57145bb71db6489abdd596a67cfbcb36d634ef015f15a16e",
           "hash_scope": "redacted_bounded_source",
           "canonicalization": "rfc8785-jcs",
           "redaction_profile": "agoragentic.runpay-allowlist-redaction.v1",
           "extraction_profile": {
             "id": "runpay.catalog.2026-09-09",
             "version": "1.0.0",
-            "digest": "sha256:61c7a787188c455d58bc3d1a52540cac94f1682eaf81fffb756939260ed33a68"
+            "digest": "sha256:341b2c9ee02ba91ab8c3abe571e5838d2d9a88e99caab751e0c725e0e0fda377"
           },
           "source_artifact_embedded": false,
           "source_core_digest": "sha256:0bcd663b8ba2c227d3ae9752ccb35f9cb76e7df655825150617d7dcbf574efda"
@@ -64,7 +64,7 @@
           "error_rate": 0,
           "id": "da3ddf15-34fa-4d1e-a5cb-a7d50a08f0fc",
           "name": "Consensus Aggregator",
-          "price_per_call": 0.02,
+          "price_per_call": "0.02",
           "schema_input": {
             "properties": {
               "mode": {
@@ -132,14 +132,14 @@
           "provenance": "vendor_supplied_fixture",
           "attribution": "run.pay",
           "fetched_live": false,
-          "redacted_source_hash": "sha256:59c300c3e0a7dac67191b7f912ce7bc9a9a5e717cacda519cf2cbe2bd0582d3c",
+          "redacted_source_hash": "sha256:82ebd305a81883bab25bd51f9bee1fec782d5c1585a646b1ee13932fbcb38bca",
           "hash_scope": "redacted_bounded_source",
           "canonicalization": "rfc8785-jcs",
           "redaction_profile": "agoragentic.runpay-allowlist-redaction.v1",
           "extraction_profile": {
             "id": "runpay.catalog.2026-09-09",
             "version": "1.0.0",
-            "digest": "sha256:61c7a787188c455d58bc3d1a52540cac94f1682eaf81fffb756939260ed33a68"
+            "digest": "sha256:341b2c9ee02ba91ab8c3abe571e5838d2d9a88e99caab751e0c725e0e0fda377"
           },
           "source_artifact_embedded": false,
           "source_core_digest": "sha256:1953542d73af921b1c56b86cad241e81efba1e7e33325b1a090101e999db90d5"
@@ -184,7 +184,7 @@
           "error_rate": 0,
           "id": "d5ff985c-e50a-431a-84f1-b339ae0700b8",
           "name": "Phone Validator",
-          "price_per_call": 0.015,
+          "price_per_call": "0.015",
           "schema_input": {
             "properties": {
               "phone": {

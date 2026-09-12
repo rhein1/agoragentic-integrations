@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
-import { normalizeRunpayRecord, normalizeRunpayBatch } from '../src/adapters/runpay-catalog.mjs';
+import { normalizeRunpayRecord, normalizeRunpayBatch, parseRunpayJson } from '../src/adapters/runpay-catalog.mjs';
 import { RUNPAY_PROFILE_ID, RUNPAY_PROFILE_DIGEST } from '../src/adapters/runpay-profile.mjs';
 
 const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -15,8 +15,8 @@ const validInput = ajv.getSchema(inputSchema.$id);
 const validOutput = ajv.getSchema(outputSchema.$id);
 const validBatch = ajv.getSchema(batchSchema.$id);
 
-const services = () => JSON.parse(fs.readFileSync(new URL('../examples/runpay/2026-09-09/service-fixtures.json', import.meta.url), 'utf8')).services;
-const observability = () => JSON.parse(fs.readFileSync(new URL('../examples/runpay/2026-09-09/observability-record.json', import.meta.url), 'utf8'));
+const services = () => parseRunpayJson(fs.readFileSync(new URL('../examples/runpay/2026-09-09/service-fixtures.json', import.meta.url))).services;
+const observability = () => parseRunpayJson(fs.readFileSync(new URL('../examples/runpay/2026-09-09/observability-record.json', import.meta.url)));
 const envelope = (raw, kind) => ({
   schema: 'agoragentic.runpay-catalog.v1',
   source: { provider: 'runpay', namespace: 'sandbox:runpay-issue-376', record_kind: kind, schema_revision: '2026-09-09' },

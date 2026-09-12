@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 
 export const LIMITS = Object.freeze({ bytes: 1048576, depth: 32, records: 1000, stringBytes: 65536 });
+const EXACT_DECIMAL_KEYS = new Set(['price_per_call', 'price_usd', 'max_expected_amount']);
 
 /** Stable errors never include input values, filenames, keys, or parser excerpts. */
 export class RunpayImportError extends Error {
@@ -50,7 +51,7 @@ export function parseRunpayJson(input) {
     }
     fail('invalid_json');
   }
-  function value(depth) {
+  function value(depth, propertyName = null) {
     ws();
     const c = text[pos];
     if (c === '"') return string();
@@ -70,7 +71,7 @@ export function parseRunpayJson(input) {
           if (forbiddenKey(key)) fail('unsafe_key');
           seen.add(key); ws();
           if (text[pos++] !== ':') fail('invalid_json');
-          result[key] = value(depth + 1);
+          result[key] = value(depth + 1, key);
         } else {
           if (result.length >= LIMITS.records) fail('limit_exceeded');
           result.push(value(depth + 1));
@@ -88,6 +89,10 @@ export function parseRunpayJson(input) {
     const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(text.slice(pos));
     if (!match) fail('invalid_json');
     pos += match[0].length;
+    if (EXACT_DECIMAL_KEYS.has(propertyName)) {
+      checkString(match[0]);
+      return match[0];
+    }
     const number = Number(match[0]);
     if (!Number.isFinite(number)) fail('unsafe_number');
     if (Number.isInteger(number) && !Number.isSafeInteger(number)) fail('unsafe_number');

@@ -6,14 +6,14 @@ import { fileURLToPath } from 'node:url';
 import {
   normalizeRunpayRecord as normalize, normalizeRunpayBatch as normalizeBatch,
   RUNPAY_PROFILE_ID, RUNPAY_PROFILE_DIGEST,
-  RunpayImportError, parseRunpayJson as parse,
-  validateRunpaySettlementRef, assertRunpaySettlementEvidence,
+  RunpayImportError, parseRunpayJson as parse, canonicalPrice,
+  validateRunpaySettlementRef, requireFullRunpaySettlementReference,
 } from '../src/adapters/runpay-catalog.mjs';
 
 const base = path.dirname(fileURLToPath(import.meta.url));
 const example = path.join(base, '../examples/runpay/2026-09-09');
-const services = () => JSON.parse(fs.readFileSync(path.join(example, 'service-fixtures.json'), 'utf8')).services;
-const observability = () => JSON.parse(fs.readFileSync(path.join(example, 'observability-record.json'), 'utf8'));
+const services = () => parse(fs.readFileSync(path.join(example, 'service-fixtures.json'))).services;
+const observability = () => parse(fs.readFileSync(path.join(example, 'observability-record.json')));
 const envelope = (raw, kind, source = {}) => ({
   schema: 'agoragentic.runpay-catalog.v1',
   source: { provider: 'runpay', namespace: 'sandbox:runpay-issue-376', record_kind: kind, schema_revision: '2026-09-09', ...source },
@@ -50,7 +50,7 @@ test('envelope shape is enforced without echoing input', () => {
   assert.throws(() => normalize(good, { profileId: 'other' }), code('profile_id_mismatch'));
 });
 
-test('service prices are preserved as exact decimals, never integer cents', () => {
+test('service prices are preserved as exact source decimals, never integer cents', () => {
   const batch = normalizeBatch(envelope(services(), 'catalog_service'));
   const [consensus, phone] = batch.records;
   assert.equal(consensus.core.service.price_exact, '0.02');
@@ -61,6 +61,15 @@ test('service prices are preserved as exact decimals, never integer cents', () =
     assert.equal(typeof record.core.service.price_exact, 'string');
     assert.match(record.core.service.price_exact, /^(0|[1-9][0-9]*)(\.[0-9]+)?$/);
   }
+});
+
+test('strict parser preserves arbitrary-precision money tokens before numeric conversion', () => {
+  const parsed = parse('{"price_per_call":12345678901234567890.12345678901234567890,"other":0.12345678901234567890}');
+  assert.equal(parsed.price_per_call, '12345678901234567890.12345678901234567890');
+  assert.equal(typeof parsed.other, 'number');
+  assert.equal(canonicalPrice(parsed.price_per_call), parsed.price_per_call);
+  assert.throws(() => canonicalPrice(0.015), code('invalid_price'));
+  assert.throws(() => canonicalPrice('1e-7'), code('invalid_price'));
 });
 
 test('vendor attribution is retained and stats stay vendor-reported', () => {
@@ -87,13 +96,17 @@ test('schema declaration status tracks the profile; missing output schema does n
 
 test('negative service fixtures are rejected without echoing values', () => {
   const [svc] = services();
-  assert.throws(() => normalize(envelope({ ...svc, price_per_call: '0.015' }, 'catalog_service')), code('invalid_price'));
-  assert.throws(() => normalize(envelope({ ...svc, price_per_call: -1 }, 'catalog_service')), code('invalid_price'));
-  assert.throws(() => normalize(envelope({ ...svc, price_per_call: 1e-7 }, 'catalog_service')), code('invalid_price'));
+  assert.throws(() => normalize(envelope({ ...svc, price_per_call: 0.015 }, 'catalog_service')), code('invalid_price'));
+  assert.throws(() => normalize(envelope({ ...svc, price_per_call: '-1' }, 'catalog_service')), code('invalid_price'));
+  assert.throws(() => normalize(envelope({ ...svc, price_per_call: '1e-7' }, 'catalog_service')), code('invalid_price'));
   const noId = { ...svc }; delete noId.id;
   assert.throws(() => normalize(envelope(noId, 'catalog_service')), code('invalid_record'));
   assert.throws(() => normalize(envelope({ ...svc, id: ' ' }, 'catalog_service')), code('invalid_record'));
   assert.throws(() => normalize(envelope({ ...svc, vendor_name: 'sk_live_CANARY' }, 'catalog_service')), code('secret_in_evidence_field'));
+  assert.throws(() => normalize(envelope({
+    ...svc,
+    schema_input: { type: 'object', description: 'Bearer RUNPAY_SECRET_CANARY' },
+  }, 'catalog_service')), code('secret_in_evidence_field'));
 });
 
 test('unknown fields are dropped before hashing and listed in output', () => {
@@ -135,13 +148,13 @@ test('redacted and abbreviated settlement references are never settlement eviden
   assert.equal(o.settlement_ref_kind, 'redacted');
   assert.equal(o.settlement_usable_as_evidence, false);
   assert(record.assessment.warnings.includes('settlement_reference_unavailable'));
-  assert.throws(() => assertRunpaySettlementEvidence(record), code('invalid_settlement_evidence'));
+  assert.throws(() => requireFullRunpaySettlementReference(record), code('invalid_settlement_reference'));
 
   const raw = observability();
   raw.chain.transaction_id = '0xabc…';
   const abbreviated = normalize(envelope(raw, 'observability_record'));
   assert.equal(abbreviated.core.observability.settlement_ref_kind, 'abbreviated');
-  assert.throws(() => assertRunpaySettlementEvidence(abbreviated), code('invalid_settlement_evidence'));
+  assert.throws(() => requireFullRunpaySettlementReference(abbreviated), code('invalid_settlement_reference'));
 
   assert.deepEqual(validateRunpaySettlementRef(null), { value: null, kind: 'absent' });
   assert.deepEqual(validateRunpaySettlementRef('tx_x402_[redacted]'), { value: 'tx_x402_[redacted]', kind: 'redacted' });
@@ -151,12 +164,14 @@ test('redacted and abbreviated settlement references are never settlement eviden
   );
 });
 
-test('a full settlement reference passes the settlement evidence gate', () => {
+test('a full transaction hash can be extracted only as an unverified reference', () => {
   const raw = observability();
   raw.chain.transaction_id = '0x' + 'ab'.repeat(32);
   const record = normalize(envelope(raw, 'observability_record'));
   assert.equal(record.core.observability.settlement_ref_kind, 'evm_tx_hash');
-  assert.equal(assertRunpaySettlementEvidence(record), '0x' + 'ab'.repeat(32));
+  assert.equal(record.core.observability.settlement_usable_as_evidence, false);
+  assert.equal(record.assessment.independent_settlement.chain_status, 'not_checked');
+  assert.equal(requireFullRunpaySettlementReference(record), '0x' + 'ab'.repeat(32));
 });
 
 test('independent checks are never promoted by the importer', () => {
@@ -174,7 +189,7 @@ test('independent checks are never promoted by the importer', () => {
 
 test('conflicting re-imports of the same service are flagged, never silently merged', () => {
   const [svc] = services();
-  const changed = { ...svc, price_per_call: 0.03 };
+  const changed = { ...svc, price_per_call: '0.03' };
   const record = normalize(envelope(changed, 'catalog_service'), { history: [envelope(svc, 'catalog_service')] });
   assert.equal(record.assessment.import_disposition, 'conflict');
   assert.equal(record.assessment.overall_evidence_status, 'contradicted');

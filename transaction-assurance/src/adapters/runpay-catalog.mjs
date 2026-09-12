@@ -35,25 +35,20 @@ function validateEnvelope(input, allowArray = false) {
 }
 
 /**
- * Exact decimal price. JSON numbers only: a string price is non-numeric and
- * rejected. The canonical form is the shortest round-trip decimal of the
- * parsed double; exponent forms are rejected so the stored value is always a
- * plain decimal string. 0.015 USD is never converted to integer cents.
+ * Exact decimal price. The strict JSON parser preserves the source token for
+ * run.pay money fields as a string before JavaScript can round it. Programmatic
+ * callers must likewise provide a decimal string. Exponents, signs, and
+ * leading zeroes are rejected. 0.015 USD is never converted to integer cents.
  */
 export function canonicalPrice(value) {
-  if (typeof value !== 'number') fail('invalid_price');
-  if (!Number.isFinite(value)) fail('unsafe_number');
-  if (Number.isInteger(value) && !Number.isSafeInteger(value)) fail('unsafe_number');
-  if (value < 0) fail('invalid_price');
-  const canonical = String(value);
-  if (/[eE]/.test(canonical)) fail('invalid_price');
-  return canonical;
+  if (typeof value !== 'string' || value.length > 128) fail('invalid_price');
+  if (!/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value)) fail('invalid_price');
+  return value;
 }
 
 /**
  * Settlement reference classification. A redacted or abbreviated reference
- * is recorded as-is with its kind; it is never usable as settlement proof
- * (see assertRunpaySettlementEvidence).
+ * is recorded as-is with its kind; it is never usable as settlement proof.
  */
 export function validateRunpaySettlementRef(value) {
   const ref = text(value);
@@ -64,10 +59,10 @@ export function validateRunpaySettlementRef(value) {
   return { value: ref, kind: 'opaque' };
 }
 
-/** Throw unless the record carries a full, unredacted settlement reference. */
-export function assertRunpaySettlementEvidence(record) {
+/** Return a full reference for later verification; this does not verify settlement. */
+export function requireFullRunpaySettlementReference(record) {
   const kind = record?.core?.observability?.settlement_ref_kind;
-  if (kind !== 'evm_tx_hash') fail('invalid_settlement_evidence');
+  if (kind !== 'evm_tx_hash') fail('invalid_settlement_reference');
   return record.core.observability.settlement_ref;
 }
 
@@ -84,6 +79,17 @@ function checkNumber(value, field, { integer = false } = {}) {
   if (integer && (!Number.isInteger(value) || !Number.isSafeInteger(value))) fail('invalid_record_field');
   return value;
 }
+function assertNoSecretLike(value) {
+  if (typeof value === 'string') {
+    if (secretLike(value)) fail('secret_in_evidence_field');
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach(assertNoSecretLike);
+    return;
+  }
+  if (object(value)) Object.values(value).forEach(assertNoSecretLike);
+}
 
 /** Retain only profile-allowlisted fields; unknown fields are dropped before hashing. */
 function redactedRecord(raw, kind, dropped) {
@@ -95,13 +101,13 @@ function redactedRecord(raw, kind, dropped) {
     const value = raw[key];
     if (key === 'schema_input' || key === 'schema_output') {
       if (value !== null && !object(value)) fail('invalid_record_field');
+      if (value !== null) assertNoSecretLike(value);
       retained[key] = value === null ? null : value;
     } else if (key === 'chain') {
       if (!object(value)) fail('invalid_record_field');
       retained[key] = redactChain(value, dropped);
     } else if (key === 'price_per_call') {
-      // Exactness is validated by canonicalPrice; strings are non-numeric prices.
-      if (value !== null && typeof value !== 'number') fail('invalid_price');
+      if (value !== null && typeof value !== 'string') fail('invalid_price');
       retained[key] = value;
     } else if (['trust_score', 'total_calls', 'avg_ms', 'error_rate'].includes(key)) {
       if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) fail('invalid_record_field');
@@ -128,8 +134,7 @@ function redactChain(chain, dropped) {
       }
       retained[key] = intent;
     } else if (key === 'price_usd') {
-      // Exactness is validated by canonicalPrice; strings are non-numeric prices.
-      if (value !== null && typeof value !== 'number') fail('invalid_price');
+      if (value !== null && typeof value !== 'string') fail('invalid_price');
       retained[key] = value;
     } else {
       retained[key] = checkFieldString(value, key);

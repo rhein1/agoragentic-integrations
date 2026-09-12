@@ -420,7 +420,7 @@
             "name": { "$ref": "#/$defs/nullable_text" },
             "description": { "$ref": "#/$defs/nullable_text" },
             "category": { "$ref": "#/$defs/nullable_text" },
-            "price_per_call": { "type": ["number", "null"] },
+            "price_per_call": { "$ref": "#/$defs/exact_decimal" },
             "currency": { "$ref": "#/$defs/nullable_text" },
             "vendor_name": { "$ref": "#/$defs/nullable_text" },
             "trust_score": { "type": ["number", "null"] },

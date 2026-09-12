@@ -16,7 +16,7 @@
   "fixture_hashes": {
     "observability-record.json": "sha256:5b560643e295878b3b4f744f538a47c8b2a9d7c925f8fd78571504f5dc0dbd85",
     "service-fixtures.json": "sha256:31c5536bc674554e803b38032dabc8beeee5bf580c312359a64f5f5ca4ad093c",
-    "synthetic-expected.json": "sha256:264e35aedaa06dd094ec41a8671181ea2365f09f176461f46b78e8911a170829"
+    "synthetic-expected.json": "sha256:1ab698bd81d7d9b1209c304f35171e007ccf29c3a8ea005245dcf3d453405f55"
   },
   "fixtures": {
     "observability-record.json": "Redacted observability record for a real completed Phone Validator call, supplied verbatim. transaction_id is vendor-redacted (tx_x402_[redacted]) and is never usable as settlement evidence.",
@@ -30,7 +30,7 @@
   ],
   "observed_transaction": false,
   "price_precision": "arbitrary_numeric_no_rounding_rule",
-  "price_precision_note": "Vendor confirmed price_per_call is unqualified numeric at the storage layer; no rounding or rejection rule exists. The importer preserves the exact decimal as a string; 0.015 USD is never converted to integer cents.",
+  "price_precision_note": "Vendor confirmed price_per_call is unqualified numeric at the storage layer; no rounding or rejection rule exists. The strict JSON parser captures run.pay money tokens as strings before JavaScript numeric conversion; programmatic callers must supply decimal strings. 0.015 USD is never converted to integer cents.",
   "provider": "run.pay",
   "sanitized_real_export": false,
   "schema_declaration_coverage": "2 of 206 catalog services declared as of 2026-09-09; the rest remain undeclared until vendors self-declare.",

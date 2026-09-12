@@ -27,8 +27,11 @@ code path at all.
 - **Attribution retained.** Every record carries `attribution: 'run.pay'` and
   `provenance: 'vendor_supplied_fixture'`. Imported records never become
   verified Agoragentic listings.
-- **Exact-decimal prices.** `price_per_call` / `price_usd` must be JSON numbers;
-  strings are rejected (`invalid_price`). The canonical form is the exact
+- **Exact-decimal prices.** For JSON files, the strict parser captures the
+  source tokens for `price_per_call`, `price_usd`, and `max_expected_amount`
+  before JavaScript numeric conversion. Programmatic callers must supply these
+  fields as plain decimal strings. Exponents, signs, and numbers are rejected
+  by the programmatic API (`invalid_price`). The canonical form stays the exact
   decimal string (`0.015`, never integer cents). The vendor confirmed
   `price_per_call` is unqualified `numeric` at the storage layer with no
   rounding or rejection rule.
@@ -40,12 +43,13 @@ code path at all.
   `declared_intent_absent` warning. `payment_status` is provider-reported;
   execution evidence is absent (`execution_evidence_absent`). The three are
   never merged.
-- **Redacted references are never settlement evidence.** A `transaction_id`
+- **Transaction references are never settlement evidence.** A `transaction_id`
   containing `[redacted]` or an abbreviation imports with
   `settlement_ref_kind: 'redacted'` / `'abbreviated'` and
-  `settlement_usable_as_evidence: false`. `assertRunpaySettlementEvidence`
-  throws `invalid_settlement_evidence` for anything that is not a full
-  `evm_tx_hash`.
+  `settlement_usable_as_evidence: false`. A full `evm_tx_hash` can be extracted
+  with `requireFullRunpaySettlementReference` for a later independent verifier,
+  but this importer still marks it unusable as evidence and performs no chain
+  or payment match.
 - **Unknown fields are dropped before hashing.** Dropped field names are listed
   in `assessment.dropped_fields`; the source-core digest covers only immutable
   fields.

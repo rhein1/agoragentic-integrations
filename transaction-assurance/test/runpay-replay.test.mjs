@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   normalizeRunpayRecord, normalizeRunpayBatch,
   RUNPAY_PROFILE_ID, RUNPAY_PROFILE_DIGEST,
+  parseRunpayJson,
 } from '../src/adapters/runpay-catalog.mjs';
 import { digestJson } from '../src/adapters/runpay-json.mjs';
 import { runpayExitCode } from '../src/adapters/runpay-cli.mjs';
@@ -17,8 +18,8 @@ const base = path.dirname(fileURLToPath(import.meta.url));
 const example = path.join(base, '../examples/runpay/2026-09-09');
 const servicesRaw = () => fs.readFileSync(path.join(example, 'service-fixtures.json'), 'utf8');
 const observabilityRaw = () => fs.readFileSync(path.join(example, 'observability-record.json'), 'utf8');
-const servicesArray = () => JSON.parse(servicesRaw()).services;
-const observabilityObj = () => JSON.parse(observabilityRaw());
+const servicesArray = () => parseRunpayJson(servicesRaw()).services;
+const observabilityObj = () => parseRunpayJson(observabilityRaw());
 const envelope = (raw, kind) => ({
   schema: 'agoragentic.runpay-catalog.v1',
   source: { provider: 'runpay', namespace: 'sandbox:runpay-issue-376', record_kind: kind, schema_revision: '2026-09-09' },
@@ -61,7 +62,7 @@ test('actual CLI import is deterministic with network and DNS disabled before im
     const loader = path.join(base, 'fixtures/runpay-no-network-preload.mjs');
     const fixture = path.join(example, 'service-fixtures.json');
     const importOnce = (out) => {
-      const args = ['--import', loader, cli, 'runpay', 'import', fixture, '--out', out, '--namespace', 'sandbox:runpay-issue-376'];
+      const args = ['--import', pathToFileURL(loader).href, cli, 'runpay', 'import', fixture, '--out', out, '--namespace', 'sandbox:runpay-issue-376'];
       return spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, RUNPAY_API_KEY: 'RUNPAY_ENV_SECRET_CANARY' }, timeout: 15000 });
     };
     const first = importOnce(path.join(temp, 'a'));
@@ -88,7 +89,7 @@ test('actual CLI import is deterministic with network and DNS disabled before im
     assert.equal(importOnce(path.join(temp, 'a')).status, 64);
     // --fail-on unresolved exits 2 for vendor-supplied evidence.
     const failOn = spawnSync(process.execPath,
-      ['--import', loader, cli, 'runpay', 'import', fixture, '--out', path.join(temp, 'c'), '--namespace', 'sandbox:runpay-issue-376', '--fail-on', 'unresolved'],
+      ['--import', pathToFileURL(loader).href, cli, 'runpay', 'import', fixture, '--out', path.join(temp, 'c'), '--namespace', 'sandbox:runpay-issue-376', '--fail-on', 'unresolved'],
       { encoding: 'utf8', timeout: 15000 });
     assert.equal(failOn.status, 2);
     // The catalog endpoint is provenance only: nothing in the CLI output may claim a fetch.

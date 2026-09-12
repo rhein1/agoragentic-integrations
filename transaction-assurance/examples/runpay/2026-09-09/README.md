@@ -18,6 +18,11 @@ not production records or proof of payment.
   under namespace `sandbox:runpay-issue-376`; every independent check remains
   `not_checked` and the overall evidence stays `unresolved`.
 
+The source fixture bytes retain the vendor-supplied JSON numbers. The strict
+import parser captures the three run.pay money-field tokens as strings before
+JavaScript numeric conversion, so the normalized evidence preserves the exact
+decimal text.
+
 The catalog endpoint
 `GET https://runpay-backend-visibility-production.up.railway.app/api/services/catalog`
 is recorded as provenance only and is **never fetched** by the importer or the

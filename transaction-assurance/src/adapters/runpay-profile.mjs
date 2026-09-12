@@ -47,7 +47,7 @@ export const RUNPAY_PROFILE = freezeDeep({
     'vendor_name', 'declared_intent', 'payment_status', 'schema_declaration',
   ],
   price_precision: 'arbitrary_numeric_no_rounding_rule',
-  price_precision_note: 'Vendor confirmed price_per_call is unqualified numeric at the storage layer; no rounding or rejection rule exists. The importer preserves the exact decimal as a string; 0.015 USD is never converted to integer cents.',
+  price_precision_note: 'Vendor confirmed price_per_call is unqualified numeric at the storage layer; no rounding or rejection rule exists. The strict parser captures each run.pay money token as a decimal string before JavaScript numeric conversion; programmatic callers must provide strings. 0.015 USD is never converted to integer cents.',
   schema_declarations: {
     // Per-service declaration status as of the 2026-09-09 issue exchange.
     // Only 2 of 206 catalog services had declared schemas; the rest remain
