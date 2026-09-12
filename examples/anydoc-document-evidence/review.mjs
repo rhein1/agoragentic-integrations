@@ -13,6 +13,41 @@ const count = x => Number.isSafeInteger(x) && x >= 0;
 const codes = x => Array.isArray(x) && x.length <= 128 && x.every(s => typeof s === 'string' && s.length <= 1024);
 const escape = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+// Consumer profile for parser-worker's structure and parseCompleteness contract.
+// These fields remain packet claims, never parser authentication or approval.
+function checkStructure(packet) {
+  const o = packet.output, p = packet.parser, s = o.structure;
+  const fields = ['block_count', 'table_count', 'note_count', 'asset_count', 'asset_bytes'];
+  assert(s && typeof s === 'object' && !Array.isArray(s) &&
+    Object.keys(s).length === 7 && ['available', 'unavailable', 'failed'].includes(s.status) &&
+    fields.every(k => count(s[k])) && typeof s.traversal_truncated === 'boolean' &&
+    s.table_count <= s.block_count, 'invalid_structure');
+  assert(p && ['available', 'unavailable', 'failed', 'disabled_by_caller', 'unsupported_for_pdf'].includes(p.document_model_status) &&
+    typeof p.provenance?.attested === 'boolean', 'invalid_structure_provenance');
+  const model = p.document_model_status;
+  const expectedStatus = ['disabled_by_caller', 'unsupported_for_pdf'].includes(model) ? 'unavailable' : model;
+  assert(s.status === expectedStatus && (s.status === 'available' ||
+    (fields.every(k => s[k] === 0) && s.traversal_truncated === false)), 'contradictory_structure');
+  assert(model !== 'unsupported_for_pdf' || p.format === 'pdf', 'contradictory_structure');
+  const blockers = [
+    [o.original_markdown_chars > o.markdown.length, 'markdown_output_limit_reached'],
+    [!o.evidence_coverage.complete, 'evidence_unit_coverage_incomplete'],
+    [model === 'failed', 'document_structure_extraction_failed'],
+    [model === 'disabled_by_caller', 'document_structure_not_inspected'],
+    [model === 'unsupported_for_pdf', 'document_structure_unavailable_for_pdf'],
+    [s.status === 'unavailable' && model === 'unavailable', 'document_structure_unavailable'],
+    [s.traversal_truncated, 'document_structure_traversal_incomplete'],
+    [s.asset_count > 0, 'embedded_assets_not_in_evidence_packet'],
+    [s.note_count > 0, 'document_notes_require_review'],
+    [!p.provenance.attested, 'custom_parser_provenance_unverified'],
+  ].filter(([required]) => required).map(([, name]) => name).sort();
+  assert(JSON.stringify([...o.completeness.blockers].sort()) === JSON.stringify(blockers), 'structure_completeness_mismatch');
+  assert(blockers.every(name => packet.ecf_handoff.blockers.includes(name)), 'structure_handoff_mismatch');
+  const r = packet.ecf_handoff.receipt;
+  assert(r.table_count === s.table_count && r.image_count === s.asset_count && r.formula_count === 0,
+    'structure_receipt_mismatch');
+}
+
 /** Check the existing adapter envelope. Integrity is not parser authentication or semantic truth. */
 export function inspectPacket(packet, sourceBytes) {
   assert(packet?.schema === 'agoragentic.anydoc-document-evidence.v1', 'unsupported_packet');
@@ -57,6 +92,7 @@ export function inspectPacket(packet, sourceBytes) {
   const boundary = r.public_boundary;
   assert(boundary?.parse_receipt_only === true && ['parser_executed_by_schema', 'memory_written', 'marketplace_publication_triggered', 'x402_route_created', 'settlement_triggered', 'trust_mutated', 'private_context_exposed'].every(k => boundary[k] === false), 'receipt_authority_mismatch');
   assert(risk?.source_exact === false && ['high', 'medium', 'unknown'].includes(risk.semantic_risk) && codes(risk.limitations) && codes(h.blockers), 'invalid_risk');
+  checkStructure(packet);
   if (sourceBytes !== undefined) assert(Buffer.isBuffer(sourceBytes) && sourceBytes.length === s.size_bytes && hash(sourceBytes) === s.source_hash, 'source_bytes_mismatch');
   return { scope: 'local_packet_consistency', output_hash_matches: true, source_bytes_hash_matches: sourceBytes === undefined ? null : true,
     semantic_correctness_verified: false, parser_authenticated: false, context_approved: false,

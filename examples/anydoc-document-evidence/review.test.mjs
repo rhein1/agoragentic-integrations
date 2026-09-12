@@ -11,13 +11,16 @@ export function fixture(markdown = '# Example\nLocal evidence.\n') {
   const coverage = { total_chars: markdown.length, covered_chars: markdown.length, omitted_chars: 0, complete: true, coverage_kind: 'ordered_prefix', covered_output_hash: outputHash, first_omitted_char: null, max_unit_chars: 4000, max_units: 256 };
   const completeness = { status: 'complete', complete: true, blockers: [] };
   return { schema: 'agoragentic.anydoc-document-evidence.v1',
+    parser: { document_model_status: 'available', format: 'docx', provenance: { attested: true } },
     source: { source_id: sourceId, source_hash: sourceHash, size_bytes: Buffer.byteLength('synthetic document'), filename: 'example.docx', raw_bytes_embedded: false },
     output: { markdown, markdown_chars: markdown.length, original_markdown_chars: markdown.length, output_hash: outputHash, parser_output_hash: outputHash, evidence_coverage: coverage, completeness, truncated: false, truncation_reasons: [],
+      structure: { status: 'available', block_count: 0, table_count: 0, note_count: 0, asset_count: 0, asset_bytes: 0, traversal_truncated: false },
       evidence_units: [{ schema: 'agoragentic.evidence-unit.v1', source_id: sourceId, reading_order: 0, markdown, source_char_range: [0, markdown.length], evidence_unit_id: `evu_${outputHash.slice(7,19)}_0`, trap_scan_status: 'not_scanned', provenance: { source_hash: sourceHash, output_hash: outputHash, aggregate_output_hash: outputHash } }] },
     risk: { source_exact: false, semantic_risk: 'medium', limitations: ['layout_may_be_lossy'] },
     authority: { grants_spend: false, grants_wallet_access: false, grants_deployment: false, grants_publication: false, grants_memory_write: false, grants_trust: false },
     ecf_handoff: { context_packet_ready: false, memory_write_allowed: false, marketplace_publication_allowed: false, x402_activation_allowed: false, trap_scan_required: true, trap_scan_status: 'not_scanned', blockers: ['platform_trap_scan_required'],
       receipt: { schema: 'agoragentic.parse-receipt.v1', receipt_id: `rcpt_parse_${hash(`${sourceHash}:${outputHash}`).slice(7,19)}`, status: 'pending', trap_scan_status: 'not_scanned', output_hash: outputHash, parser_output_hash: outputHash, source_hashes: [sourceHash], evidence_unit_count: 1, evidence_coverage: coverage, completeness_status: 'complete', completeness_blockers: [],
+        table_count: 0, image_count: 0, formula_count: 0,
         public_boundary: { parse_receipt_only: true, parser_executed_by_schema: false, memory_written: false, marketplace_publication_triggered: false, x402_route_created: false, settlement_triggered: false, trust_mutated: false, private_context_exposed: false } } }
   };
 }
@@ -56,6 +59,7 @@ test('incomplete prefix is retained as incomplete, not a failed or complete pars
   p.output.completeness = { complete: false, status: 'incomplete', blockers: ['evidence_unit_coverage_incomplete'] };
   p.output.truncated = true; p.output.truncation_reasons = ['evidence_unit_limit'];
   Object.assign(p.ecf_handoff.receipt, { status: 'incomplete', completeness_status: 'incomplete', completeness_blockers: p.output.completeness.blockers });
+  p.ecf_handoff.blockers.push(...p.output.completeness.blockers);
   assert.equal(inspectPacket(p).receipt_status, 'incomplete');
   assert(renderReview(p).includes('3 of 6'));
 });
@@ -71,12 +75,14 @@ test('receipt identity substitution does not survive output consistency checks',
 
 function parserTruncated() {
   const p = fixture('abcdef');
+  p.parser.provenance.attested = false;
   p.output.original_markdown_chars = 6000;
   p.output.parser_output_hash = hash('abcdef'.repeat(1000));
   p.output.truncated = true;
   p.output.truncation_reasons = ['markdown_output_limit'];
   p.output.completeness = { status: 'incomplete', complete: false, blockers: ['custom_parser_provenance_unverified', 'markdown_output_limit_reached'] };
   Object.assign(p.ecf_handoff.receipt, { parser_output_hash: p.output.parser_output_hash, status: 'incomplete', completeness_status: 'incomplete', completeness_blockers: p.output.completeness.blockers });
+  p.ecf_handoff.blockers.push(...p.output.completeness.blockers);
   return p;
 }
 test('unrelated completeness blockers cannot hide parser truncation', () => {
@@ -97,10 +103,11 @@ test('truncation reason and blocker inconsistencies fail independently', () => {
   }
 });
 test('structure traversal loss cannot hide behind another incomplete field', () => {
-  const p = parserTruncated(); p.output.structure = { traversal_truncated: true };
+  const p = parserTruncated(); p.output.structure.traversal_truncated = true;
   assert.throws(() => inspectPacket(p), { code: 'contradictory_truncation' });
   p.output.truncation_reasons.push('document_structure_traversal_limit');
   p.output.completeness.blockers.push('document_structure_traversal_incomplete');
+  p.ecf_handoff.blockers.push('document_structure_traversal_incomplete');
   assert.equal(inspectPacket(p).complete, false);
 });
 function localFiles(t) {
@@ -133,4 +140,77 @@ test('regular-file read preserves bytes and refuses hard-linked identities', t =
   assert.equal(readLocal(original).toString(), 'original');
   fs.linkSync(original, path.join(root, 'hardlink.json'));
   assert.throws(() => readLocal(original), { code: 'invalid_local_file' });
+});
+
+function bindCompleteness(p, blockers) {
+  const complete = blockers.length === 0;
+  p.output.completeness = { status: complete ? 'complete' : 'incomplete', complete, blockers };
+  Object.assign(p.ecf_handoff.receipt, { status: complete ? 'pending' : 'incomplete',
+    completeness_status: p.output.completeness.status, completeness_blockers: [...blockers],
+    table_count: p.output.structure.table_count, image_count: p.output.structure.asset_count });
+  p.ecf_handoff.blockers = ['platform_trap_scan_required', ...blockers];
+}
+test('structure object, strict booleans and counters cannot be missing or malformed', () => {
+  for (const value of [undefined, null, {}, [], { status: 'failed', traversal_truncated: false }]) {
+    const p = fixture(); p.output.structure = value; assert.throws(() => inspectPacket(p), { code: 'invalid_structure' });
+  }
+  for (const field of ['block_count', 'table_count', 'note_count', 'asset_count', 'asset_bytes', 'traversal_truncated']) {
+    for (const value of [undefined, '0', 'false', -1, 0.5]) {
+      const p = fixture(); p.output.structure[field] = value; assert.throws(() => inspectPacket(p));
+    }
+  }
+});
+test('every unavailable or failed model disposition has its exact completeness blocker', () => {
+  for (const [model, status, blocker] of [
+    ['failed', 'failed', 'document_structure_extraction_failed'],
+    ['disabled_by_caller', 'unavailable', 'document_structure_not_inspected'],
+    ['unsupported_for_pdf', 'unavailable', 'document_structure_unavailable_for_pdf'],
+    ['unavailable', 'unavailable', 'document_structure_unavailable'],
+  ]) {
+    const p = fixture(); p.parser.document_model_status = model; p.parser.format = 'pdf'; p.output.structure.status = status;
+    assert.throws(() => inspectPacket(p), { code: 'structure_completeness_mismatch' });
+    bindCompleteness(p, [blocker]); assert.equal(inspectPacket(p).complete, false);
+    bindCompleteness(p, ['custom_parser_provenance_unverified']); p.parser.provenance.attested = false;
+    assert.throws(() => inspectPacket(p), { code: 'structure_completeness_mismatch' });
+  }
+});
+test('assets, notes and unattested parser each require independent blockers', () => {
+  for (const [mutate, blocker] of [
+    [p => { p.output.structure.asset_count = 1; }, 'embedded_assets_not_in_evidence_packet'],
+    [p => { p.output.structure.note_count = 1; }, 'document_notes_require_review'],
+    [p => { p.parser.provenance.attested = false; }, 'custom_parser_provenance_unverified'],
+  ]) {
+    const p = fixture(); mutate(p);
+    assert.throws(() => inspectPacket(p), { code: 'structure_completeness_mismatch' });
+    bindCompleteness(p, [blocker]); assert.equal(inspectPacket(p).complete, false);
+    p.ecf_handoff.receipt.completeness_blockers = [];
+    assert.throws(() => inspectPacket(p), { code: 'receipt_binding_mismatch' });
+  }
+});
+test('contradictory model and structure status or unavailable counts fail closed', () => {
+  for (const mutate of [p => p.parser.document_model_status = 'failed',
+    p => { p.output.structure.status = 'failed'; },
+    p => { p.output.structure.status = 'unavailable'; p.parser.document_model_status = 'unavailable'; p.output.structure.asset_count = 1; },
+    p => { p.output.structure.status = 'unavailable'; p.parser.document_model_status = 'unsupported_for_pdf'; }]) {
+    const p = fixture(); mutate(p); assert.throws(() => inspectPacket(p), { code: 'contradictory_structure' });
+  }
+});
+test('missing model provenance and string-valued attestation are rejected', () => {
+  for (const mutate of [p => delete p.parser, p => delete p.parser.document_model_status,
+    p => delete p.parser.provenance, p => p.parser.provenance.attested = 'true']) {
+    const p = fixture(); mutate(p); assert.throws(() => inspectPacket(p), { code: 'invalid_structure_provenance' });
+  }
+});
+test('receipt structure tallies and handoff blockers stay bound', () => {
+  const p = fixture(); p.output.structure.block_count = 1; p.output.structure.table_count = 1;
+  assert.throws(() => inspectPacket(p), { code: 'structure_receipt_mismatch' });
+  p.ecf_handoff.receipt.table_count = 1; assert.equal(inspectPacket(p).complete, true);
+  p.output.structure.note_count = 1; bindCompleteness(p, ['document_notes_require_review']);
+  p.ecf_handoff.blockers = []; assert.throws(() => inspectPacket(p), { code: 'structure_handoff_mismatch' });
+});
+test('duplicate and unsupported completeness blockers are not producer-compatible', () => {
+  const p = fixture(); p.parser.provenance.attested = false;
+  for (const blockers of [['custom_parser_provenance_unverified', 'custom_parser_provenance_unverified'], ['invented_blocker']]) {
+    bindCompleteness(p, blockers); assert.throws(() => inspectPacket(p), { code: 'structure_completeness_mismatch' });
+  }
 });
