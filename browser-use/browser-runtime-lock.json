@@ -1,0 +1,30 @@
+{
+  "schema": "agoragentic.browser-fixture.runtime-lock.v1",
+  "python": "3.12.10",
+  "platform": "linux-x86_64",
+  "dependencies": {
+    "playwright": "1.57.0",
+    "pyee": "13.0.1",
+    "greenlet": "3.5.5",
+    "typing_extensions": "4.16.0"
+  },
+  "browser": {
+    "version": "143.0.7499.4",
+    "playwright_revision": "1200",
+    "executable": "chrome",
+    "executable_sha256": "2e61bc3fd990bd4d7b419ef6b6303c67aaed683e5b83b3b25e416f015f343209",
+    "tree_sha256": "a92ba06d4b8761e3c93cc4cfc971fb9ca439a09a1bbf7f4c5e4ca5c7fd980901",
+    "files": 305,
+    "total_bytes": 373244611,
+    "origin": "https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1200/chromium-linux.zip",
+    "digest_scope": "sorted compact-JSON [relative POSIX path, byte length, SHA-256] records for all files below the executable parent directory"
+  },
+  "provenance": {
+    "qualification_commit": "90994eef83da20c1574bf5ce001923e757040323",
+    "qualification_run": "https://github.com/rhein1/agoragentic-integrations/actions/runs/34706175723",
+    "qualification_job": "103586514727",
+    "observed_at": "2026-09-12T16:45:44Z",
+    "publisher_signature_verified": false,
+    "scope": "observed upstream downloads locked to reviewed digests; not a signature or an OS image lock"
+  }
+}

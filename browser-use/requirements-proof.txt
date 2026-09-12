@@ -1,2 +1,7 @@
-# Fixture-only driver. Browser installation is explicit setup, never a runtime fallback.
-playwright==1.57.0
+# Qualification lock: CPython 3.12.10 / Linux x86_64 wheels only.
+# Hash provenance: run 34706175723, job 103586514727, commit 90994eef.
+# No sdists or unpinned transitive resolution. Install with --require-hashes.
+playwright==1.57.0 --hash=sha256:284ed5a706b7c389a06caa431b2f0ba9ac4130113c3a779767dda758c2497bb1
+pyee==13.0.1 --hash=sha256:af2f8fede4171ef667dfded53f96e2ed0d6e6bd7ee3bb46437f77e3b57689228
+greenlet==3.5.5 --hash=sha256:147b25a42e5ca5be3d42356e8f608b37af715a1c196e9bf9d1627f3341adfe1d
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

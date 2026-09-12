@@ -10,6 +10,8 @@ jobs:
   synthetic-proof:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -19,35 +21,18 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.12.10'
+      - name: Create isolated driver environment
+        run: |
+          python -m venv "$RUNNER_TEMP/browser-proof-venv"
+          echo "$RUNNER_TEMP/browser-proof-venv/bin" >> "$GITHUB_PATH"
       - name: Provider-free boundary tests
         run: python -m unittest discover -s browser-use -p test_fixture_proof.py
-      - name: Explicit fixture driver setup
+      - name: Install hash-locked fixture dependencies
         run: |
-          python -m pip install --disable-pip-version-check -r browser-use/requirements-proof.txt
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r browser-use/requirements-proof.txt
+          python -m pip check
           python -m playwright install --with-deps chromium
-      - name: Collect public runtime provenance for committed lock review
-        run: |
-          python - <<'PY'
-          import hashlib, importlib.metadata as m, json, os, pathlib, subprocess, sys, tempfile
-          from playwright.sync_api import sync_playwright
-          versions = {name: m.version(name) for name in ['playwright', 'pyee', 'greenlet', 'typing_extensions']}
-          with tempfile.TemporaryDirectory() as wheels:
-              subprocess.run([sys.executable, '-m', 'pip', 'download', '--no-deps', '--only-binary=:all:', '--dest', wheels, *[f'{n}=={v}' for n,v in versions.items()]], check=True)
-              print('DEPENDENCY_LOCK_CANDIDATE=' + json.dumps({'python': sys.version.split()[0], 'versions': versions, 'wheels': {p.name: hashlib.file_digest(p.open('rb'), 'sha256').hexdigest() for p in pathlib.Path(wheels).iterdir()}}))
-          with sync_playwright() as p:
-              exe = pathlib.Path(p.chromium.executable_path)
-              root = exe.parent
-              records = []
-              for f in sorted(root.rglob('*')):
-                  if f.is_symlink(): raise RuntimeError('unexpected browser symlink')
-                  if f.is_file():
-                      with f.open('rb') as s: digest = hashlib.file_digest(s, 'sha256').hexdigest()
-                      records.append([f.relative_to(root).as_posix(), f.stat().st_size, digest])
-              manifest = json.dumps(records, ensure_ascii=True, separators=(',', ':')).encode()
-              with exe.open('rb') as s: executable_digest = hashlib.file_digest(s, 'sha256').hexdigest()
-              print('BROWSER_LOCK_CANDIDATE=' + json.dumps({'platform': 'linux-x86_64', 'playwright': versions['playwright'], 'executable': exe.name, 'executable_sha256': executable_digest, 'tree_sha256': hashlib.sha256(manifest).hexdigest(), 'files': len(records), 'total_bytes': sum(r[1] for r in records)}))
-          PY
-      - name: Real synthetic browser assertions
+      - name: Real synthetic browser with committed bundle verification
         run: python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof"
       - name: Pre-work cancellation and close
         shell: bash
@@ -63,7 +48,32 @@ jobs:
           report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'browser-proof-cancel/report.json').read_text())
           assert report['status'] == 'cancelled'
           assert report['browser_connection_closed'] is True
+          assert report['runtime_copy_removed'] is True
+          assert report['runtime']['bundle_integrity_locked'] is True
           assert report['cases'] == []
           PY
-      - name: Check source whitespace
-        run: git diff --check
+      - name: Active cancellation after first screenshot and close
+        shell: bash
+        run: |
+          set +e
+          python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof-active-cancel" --cancel-after-first-case
+          result=$?
+          set -e
+          test "$result" -eq 2
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'browser-proof-active-cancel/report.json').read_text())
+          assert report['status'] == 'cancelled'
+          assert report['cancellation_stage'] == 'after_first_screenshot'
+          assert len(report['cases']) == 1
+          assert report['browser_connection_closed'] is True
+          assert report['runtime_copy_removed'] is True
+          assert report['runtime']['bundle_integrity_locked'] is True
+          assert report['runtime']['launch_copy_verified_before'] is True
+          assert report['runtime']['launch_copy_verified_after'] is True
+          PY
+      - name: Check source unchanged
+        run: |
+          git diff --check
+          git diff --exit-code

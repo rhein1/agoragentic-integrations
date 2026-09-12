@@ -4,33 +4,40 @@ This is a test harness in the existing browser integration, not a general execut
 
 ## Required observations
 
-At each width 375, 768 and 1280, the fixed synthetic page must show the expected heading, navigate to its evidence anchor, and avoid horizontal overflow. Screenshots are capped at 1 MiB each. Their exact bytes, the HTML fixture and the selected browser executable are SHA-256 identified; the Playwright and browser versions are recorded.
+At widths 375, 768 and 1280, the fixed synthetic page must show the expected heading, navigate to its evidence anchor, and avoid horizontal overflow. Screenshots are capped at 1 MiB each. Their bytes, the HTML fixture, the launched executable copy and its adjacent resource bundle are SHA-256 identified.
 
-All actual context requests are routed to `abort_external`. The content is inserted from the bundled Python constant, not loaded from disk URLs or remote sources. One fixed `.invalid` navigation tests whether that interceptor actually ran. A failed navigation alone is insufficient: missing observed interception produces `blocked` with `route_boundary_not_exercised` even when all three UI cases passed.
+Every actual context request is routed to `abort_external`. Page content comes from the bundled constant, never a caller URL or HTML file. The fixed `.invalid` navigation must reach and be aborted by the interceptor. Failure before interception remains blocked, not passed. Do not change administrator policy to make the fixture green.
 
-Playwright contexts, offline mode, disabled page JavaScript and request interception are not OS network isolation. The browser driver may use its normal process defaults; this fixture does not claim a Linux sandbox or an independently verified absence of native/background network activity. It must not be expanded to hostile arbitrary documents, authenticated sessions or consequential actions without the existing Agent OS runtime security gates.
+## Runtime integrity and launch binding
+
+The default qualification target is **CPython 3.12.10, Ubuntu 24.04 / Linux x86_64, Playwright 1.57.0, Chromium 143.0.7499.4 / build 1200**. `requirements-proof.txt` pins Playwright and all three transitive Python distributions to exact versions and wheel hashes. CI installs them in a fresh virtual environment with `--require-hashes --only-binary=:all:`. Other interpreter/platform wheel sets require a separately reviewed lock; there is no unpinned fallback.
+
+`browser-runtime-lock.json` pins the executable and the complete 305-file browser resource tree. Its provenance links to the SHA-bound qualification run that obtained the upstream wheels/browser bytes. Those observed downloads establish the reviewed content baseline, not publisher-signature verification. The lock is committed before the enforcement run; it is never generated from each incoming download and then accepted as its own proof.
+
+Before launch, `prepare_browser` copies bounded, descriptor-verified regular files into a newly allocated private directory. It hashes the same bytes it copies, compares the committed bundle pin, removes write permissions, and checks file identities and digests before and after launch and after the fixture. The original installation path is not launched. Replacing that original path after staging cannot substitute the selected executable. Changed resources, copied-file identities, writable copies and digest mismatches fail closed. Temporary copies are removed after browser cleanup, with an explicit `runtime_copy_removed` result.
+
+The copy is read-only and runner-owned, not kernel-sealed against privileged or same-user malicious code. Parent/process ownership remains a host assumption. This is not a system-image lock: OS libraries, fonts, kernel, Python distributor provenance and installation-tool internals are outside the committed browser/Python-package hash scope. No OS isolation, native network absence, process-memory attestation or production security claim is made.
+
+Custom executable selection still requires its explicit SHA-256 and now stages the executable's containing distribution directory under the same bounds. Select a dedicated browser distribution, not a shared bin/project/home directory. A custom executable digest does not grant the default complete-bundle qualification; reports keep `bundle_integrity_locked:false` for that mode. Browser downloads happen only in explicit setup, never as a runtime repair.
 
 ## Cancellation and cleanup
 
-The Python API accepts an owner-controlled `asyncio.Event`; it races the active fixture work against cancellation and cancels/awaits outstanding work before closing the browser connection. The CLI's `--cancel-before-work` exercises only pre-work cancellation and returns exit 2, never a successful fixture result.
+The owner-controlled cancellation event races the active fixture task. Outstanding work is cancelled and awaited before the browser connection closes. `--cancel-before-work` exercises pre-work cancellation and returns exit 2 with zero cases. `--cancel-after-first-case` signals after the first screenshot while the worker remains active; it returns exit 2 with exactly one case and `cancellation_stage:after_first_screenshot`. Both paths are exercised by current workflow code, not merely described as manual probes.
 
-`browser_connection_closed` reports the Playwright connection state after close. It does not prove every operating-system child process exited; `process_exit_independently_verified` stays false. Missing cleanup evidence prevents a passing result. No process signaling, profile deletion or directory deletion outside the test-owned paths is performed by the runner. A failed run can retain its new partial artifacts for review; existing directories/files are not overwritten.
+`browser_connection_closed` measures Playwright connection state, not independent OS-child termination. `process_exit_independently_verified` remains false. A passing fixture also requires successful test-owned runtime-copy cleanup. Existing output files and normal browser profiles are never overwritten or removed. Failed runs can retain their new partial report/screenshot artifacts for review.
 
-## Measured local evidence, September 12
+## Validation
 
-Using Playwright 1.57.0 and an explicitly selected installed Chromium 144.0.7559.96 binary (SHA-256 `2874aa85f9114065526e9d0912dcf668de44e90a2d2f04bb4e38108131a073bf`):
+```sh
+python -m unittest discover -s browser-use -p test_fixture_proof.py
+python browser-use/fixture_proof.py /path/to/new-output-directory
+python browser-use/fixture_proof.py /path/to/another-new-directory --cancel-after-first-case
+```
 
-- six provider/browser-free unit tests passed;
-- all three real browser viewport/heading/anchor/overflow cases passed;
-- the browser connection closed;
-- browser administrator policy rejected the fixed external navigation before the route interceptor received it, so the overall run correctly remained blocked;
-- a pre-work cancellation run returned cancelled with no cases and a closed connection;
-- a separate active-cancellation test signalled after the first screenshot and returned cancelled with one completed case and a closed connection.
+The original boundary suite contained seven tests, not six. The review corrections add eight: private-copy replacement/tamper checks, resource-tree pinning, descriptor identity, an end-to-end launch-boundary test double, active cancellation, lock completeness and dependency drift. All **15 provider/browser-free tests** passed locally. Those fake-driver tests do not prove real browser behavior; the real Chromium, hash-enforced setup, three viewport checks and both cancellation modes require current-head CI evidence.
 
-The final environment-minimization follow-up reran the unit suite and three-viewport browser run with the same blocked boundary outcome. The active-cancellation observation preceded that follow-up and is not a latest-head rerun claim. The companion CI fixture checks current source with the installed pinned Playwright bundle and separately checks pre-work cancellation. It must pass without disabling administrator restrictions or weakening assertions.
+Historical local Chromium 144 observations, including an administrator-blocked route probe, remain historical only. No Browser Use process, provider, model, public website, customer session, wallet or settlement path is exercised by this fixture.
 
-No Browser Use process, provider, model, real website, customer session, wallet or settlement path was exercised. The output deliberately keeps those claims false. This is not evidence that private runner #1301 is ready to merge or activate.
+## Next implementation gate
 
-## Next implementation handoff
-
-Reconcile the current private Browser Use runner and its actual review findings. Use this fixture as a reproducible acceptance target, then separately bind the exact Browser Use artifact and OS-level runtime, current action authority, cancellation/revocation and independent process cleanup. Do not replace that work with another broad browser API or infer production readiness from synthetic layout checks.
+Reconcile the private Browser Use runner's actual review findings. Separately qualify Browser Use process admission, the OS runtime, current action authority, revocation, independent process cleanup and consequential actions. Synthetic layout checks do not close `rhein1/agent-marketplace#1297` or `#1301`, and this change activates neither.

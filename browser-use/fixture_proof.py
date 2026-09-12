@@ -11,9 +11,11 @@ import importlib.metadata
 import json
 import os
 from pathlib import Path
+import platform
 import re
-import stat
+import sys
 from typing import Any
+from browser_runtime import file_digest, prepare_browser
 
 PLAYWRIGHT_VERSION = "1.57.0"
 VIEWPORTS = (375, 768, 1280)
@@ -35,33 +37,32 @@ def sha256(data: bytes) -> str:
 
 
 def runtime_digest(executable: Path, expected: str | None = None) -> str:
-    info = executable.lstat()
-    if not stat.S_ISREG(info.st_mode) or executable.is_symlink() or info.st_size > 512 * 1024 * 1024:
-        raise ValueError("invalid_browser_executable")
     if expected is not None and not re.fullmatch(r"[a-f0-9]{64}", expected):
         raise ValueError("invalid_browser_digest")
-    h = hashlib.sha256()
-    total = 0
-    with executable.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            total += len(chunk)
-            if total > 512 * 1024 * 1024:
-                raise ValueError("browser_size_limit")
-            h.update(chunk)
-    after = executable.stat()
-    if (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
-        raise ValueError("browser_changed_during_hash")
-    result = h.hexdigest()
+    result, _ = file_digest(executable)
     if expected is not None and result != expected:
         raise ValueError("browser_digest_mismatch")
     return result
+
+
+def qualification_lock() -> dict[str, Any]:
+    lock = json.loads(Path(__file__).with_name('browser-runtime-lock.json').read_text(encoding='utf-8'))
+    if (lock['schema'] != 'agoragentic.browser-fixture.runtime-lock.v1'
+            or platform.system() != 'Linux' or platform.machine() != 'x86_64'
+            or '.'.join(map(str, sys.version_info[:3])) != lock['python']):
+        raise ValueError('unqualified_runtime_platform')
+    for name, version in lock['dependencies'].items():
+        if importlib.metadata.version(name) != version:
+            raise ValueError('runtime_dependency_mismatch')
+    return lock
 
 
 def initial_report() -> dict[str, Any]:
     return {"artifact_kind": "browser_fixture_test_report", "scope": "bundled_synthetic_html_only",
             "fixture_sha256": sha256(FIXTURE.encode()), "status": "not_run", "cases": [],
             "network_probe": "not_run", "route_abort_observed": False,
-            "browser_connection_closed": False, "process_exit_independently_verified": False,
+            "browser_connection_closed": False, "runtime_copy_removed": False,
+            "process_exit_independently_verified": False,
             "os_isolation_verified": False, "os_network_absence_verified": False,
             "browser_use_runtime_exercised": False, "production_qualified": False,
             "settlement_performed": False, "public_target_tested": False}
@@ -77,14 +78,14 @@ def write_new(filename: Path, data: bytes) -> None:
 
 async def abort_external(route: Any, observed: list[str]) -> None:
     # Every actual request is denied. The only page content comes from FIXTURE.
-    # Never call continue_(), fetch(), or fulfill() with remote/user content.
     label = "fixed_probe" if route.request.url == PROBE_URL else "other_request"
     await route.abort("blockedbyclient")
-    # Record successful interceptor acknowledgement, not merely entry to the callback.
     observed.append(label)
 
 
-async def exercise(browser: Any, output: Path, report: dict[str, Any]) -> None:
+async def exercise(browser: Any, output: Path, report: dict[str, Any], *,
+                   cancel_after_first_case: bool = False,
+                   cancel_event: asyncio.Event | None = None) -> None:
     for width in VIEWPORTS:
         context = await browser.new_context(java_script_enabled=False, service_workers="block",
                                             accept_downloads=False, offline=True,
@@ -104,7 +105,6 @@ async def exercise(browser: Any, output: Path, report: dict[str, Any]) -> None:
                 raise AssertionError("anchor_navigation_mismatch")
             if await page.evaluate("document.documentElement.scrollWidth > window.innerWidth"):
                 raise AssertionError("horizontal_overflow")
-            # This fixed evaluation reads layout only; no caller-authored JS exists.
             png = await page.screenshot(type="png", animations="disabled")
             if len(png) > 1024 * 1024:
                 raise ValueError("screenshot_limit")
@@ -113,11 +113,17 @@ async def exercise(browser: Any, output: Path, report: dict[str, Any]) -> None:
             report["cases"].append({"viewport_width": width, "heading": "passed", "anchor_navigation": "passed",
                                     "horizontal_overflow": False, "screenshot": name,
                                     "screenshot_sha256": sha256(png), "screenshot_bytes": len(png)})
+            if cancel_after_first_case and width == VIEWPORTS[0]:
+                if cancel_event is None:
+                    raise ValueError('cancellation_event_required')
+                report['cancellation_stage'] = 'after_first_screenshot'
+                cancel_event.set()
+                # Remain active until the supervisor actually cancels this task.
+                await asyncio.Event().wait()
             if width == VIEWPORTS[-1]:
                 try:
                     await page.goto(PROBE_URL, timeout=3000, wait_until="domcontentloaded")
                 except Exception:
-                    # Error text can contain paths/URLs. Keep only measured gate evidence.
                     report["route_abort_observed"] = "fixed_probe" in observed
                     report["network_probe"] = "route_aborted" if report["route_abort_observed"] else "blocked_before_route_or_unknown"
                 else:
@@ -133,12 +139,14 @@ async def exercise(browser: Any, output: Path, report: dict[str, Any]) -> None:
 
 async def run_proof(output: Path, *, chromium_path: Path | None = None,
                     expected_sha256: str | None = None,
-                    cancel_event: asyncio.Event | None = None) -> dict[str, Any]:
-    # Output is a fresh, owner-chosen directory; no previous run is overwritten.
+                    cancel_event: asyncio.Event | None = None,
+                    cancel_after_first_case: bool = False) -> dict[str, Any]:
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     report = initial_report()
-    browser = None
+    prepared = None
     tasks: list[asyncio.Task[Any]] = []
+    if cancel_after_first_case and cancel_event is None:
+        cancel_event = asyncio.Event()
     try:
         from playwright.async_api import async_playwright
         installed = importlib.metadata.version("playwright")
@@ -146,50 +154,71 @@ async def run_proof(output: Path, *, chromium_path: Path | None = None,
             raise ValueError("playwright_version_mismatch")
         if (chromium_path is None) != (expected_sha256 is None):
             raise ValueError("custom_browser_requires_path_and_digest")
+        lock = qualification_lock() if chromium_path is None else None
         async with async_playwright() as runtime:
             executable = chromium_path or Path(runtime.chromium.executable_path)
-            digest = runtime_digest(executable, expected_sha256)
-            report["runtime"] = {"playwright_version": installed, "browser_executable_sha256": digest,
-                                 "selection": "explicit_digest_pinned" if chromium_path else "installed_playwright_bundle"}
-            # Only immutable synthetic fixtures run here. No sandbox/production claim.
-            # No command-line security override or authenticated profile is accepted.
-            browser_env = {key: os.environ[key] for key in ("SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR") if key in os.environ}
-            browser_env.update({"PATH": os.defpath, "LANG": "C.UTF-8"})
-            browser = await runtime.chromium.launch(executable_path=str(executable), headless=True, timeout=10000, env=browser_env)
-            report["runtime"]["browser_version"] = browser.version
-            try:
-                if cancel_event is not None and cancel_event.is_set():
-                    report["status"] = "cancelled"
-                else:
-                    work = asyncio.create_task(exercise(browser, output, report)); tasks.append(work)
-                    if cancel_event is None:
-                        await asyncio.wait_for(work, timeout=20)
-                    else:
-                        cancellation = asyncio.create_task(cancel_event.wait()); tasks.append(cancellation)
-                        done, _ = await asyncio.wait(tasks, timeout=20, return_when=asyncio.FIRST_COMPLETED)
-                        if cancellation in done:
-                            report["status"] = "cancelled"
-                            work.cancel()
-                        elif work in done:
-                            await work
-                        else:
-                            raise TimeoutError("fixture_deadline")
-            finally:
-                for task in tasks:
-                    if not task.done(): task.cancel()
-                if tasks: await asyncio.gather(*tasks, return_exceptions=True)
+            expected = expected_sha256 if lock is None else lock['browser']['executable_sha256']
+            tree = None if lock is None else lock['browser']['tree_sha256']
+            # Copy descriptor-verified bytes and all adjacent runtime resources.
+            # The original installation path is never passed to launch.
+            with prepare_browser(executable, expected, tree) as prepared:
+                if lock is not None and (len(prepared.identities) != lock['browser']['files']
+                                         or prepared.total_bytes != lock['browser']['total_bytes']):
+                    raise ValueError('browser_inventory_mismatch')
+                report["runtime"] = {"playwright_version": installed,
+                    "browser_executable_sha256": prepared.executable_sha256,
+                    "browser_tree_sha256": prepared.tree_sha256,
+                    "browser_files": len(prepared.identities),
+                    "selection": "explicit_digest_pinned" if chromium_path else "committed_runtime_lock",
+                    "bundle_integrity_locked": lock is not None,
+                    "launch_source": "verified_private_readonly_copy",
+                    "launch_copy_verified_before": False, "launch_copy_verified_after": False}
+                browser_env = {key: os.environ[key] for key in ("SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR") if key in os.environ}
+                browser_env.update({"PATH": os.defpath, "LANG": "C.UTF-8"})
+                prepared.verify()
+                report['runtime']['launch_copy_verified_before'] = True
+                browser = await runtime.chromium.launch(executable_path=str(prepared.executable), headless=True, timeout=10000, env=browser_env)
                 try:
-                    await asyncio.wait_for(browser.close(), timeout=5)
-                    report["browser_connection_closed"] = not browser.is_connected()
-                except Exception:
-                    report["status"] = "blocked"; report["reason"] = "browser_cleanup_unknown"
+                    prepared.verify()
+                    report['runtime']['launch_copy_verified_after'] = True
+                    report['runtime']['browser_version'] = browser.version
+                    if cancel_event is not None and cancel_event.is_set():
+                        report["status"] = "cancelled"
+                    else:
+                        work = asyncio.create_task(exercise(browser, output, report,
+                            cancel_after_first_case=cancel_after_first_case, cancel_event=cancel_event))
+                        tasks.append(work)
+                        if cancel_event is None:
+                            await asyncio.wait_for(work, timeout=20)
+                        else:
+                            cancellation = asyncio.create_task(cancel_event.wait()); tasks.append(cancellation)
+                            done, _ = await asyncio.wait(tasks, timeout=20, return_when=asyncio.FIRST_COMPLETED)
+                            if cancellation in done:
+                                report["status"] = "cancelled"
+                                work.cancel()
+                            elif work in done:
+                                await work
+                            else:
+                                raise TimeoutError("fixture_deadline")
+                finally:
+                    for task in tasks:
+                        if not task.done(): task.cancel()
+                    if tasks: await asyncio.gather(*tasks, return_exceptions=True)
+                    try:
+                        await asyncio.wait_for(browser.close(), timeout=5)
+                        report["browser_connection_closed"] = not browser.is_connected()
+                    except Exception:
+                        report["status"] = "blocked"; report["reason"] = "browser_cleanup_unknown"
+                prepared.verify()
     except asyncio.CancelledError:
         report["status"] = "cancelled"
     except Exception as error:
         report["status"] = "blocked"
-        # Typed labels, no exception messages, command lines or private browser paths.
         report["reason"] = type(error).__name__
-    if report["status"] == "fixture_passed" and not report["browser_connection_closed"]:
+    finally:
+        if prepared is not None:
+            report['runtime_copy_removed'] = not prepared.root.parent.exists()
+    if report["status"] == "fixture_passed" and not (report["browser_connection_closed"] and report['runtime_copy_removed']):
         report["status"] = "blocked"; report["reason"] = "browser_cleanup_unknown"
     write_new(output / "report.json", (json.dumps(report, indent=2) + "\n").encode())
     return report
@@ -200,12 +229,15 @@ async def cli() -> int:
     parser.add_argument("output", type=Path)
     parser.add_argument("--chromium-path", type=Path)
     parser.add_argument("--expected-sha256")
-    parser.add_argument("--cancel-before-work", action="store_true", help="Exercise the cancellation fixture, not a successful run")
+    cancellation = parser.add_mutually_exclusive_group()
+    cancellation.add_argument("--cancel-before-work", action="store_true")
+    cancellation.add_argument("--cancel-after-first-case", action="store_true")
     args = parser.parse_args()
     event = asyncio.Event() if args.cancel_before_work else None
     if event is not None: event.set()
     result = await run_proof(args.output, chromium_path=args.chromium_path,
-                             expected_sha256=args.expected_sha256, cancel_event=event)
+        expected_sha256=args.expected_sha256, cancel_event=event,
+        cancel_after_first_case=args.cancel_after_first_case)
     print(json.dumps(result, indent=2))
     return 0 if result["status"] == "fixture_passed" else 2
 
