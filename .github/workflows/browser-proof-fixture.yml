@@ -26,7 +26,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/browser-proof-venv"
           echo "$RUNNER_TEMP/browser-proof-venv/bin" >> "$GITHUB_PATH"
       - name: Provider-free boundary tests
-        run: python -m unittest discover -s browser-use -p test_fixture_proof.py
+        run: python -m unittest discover -s browser-use -p 'test_*proof.py'
       - name: Install hash-locked fixture dependencies
         run: |
           python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r browser-use/requirements-proof.txt

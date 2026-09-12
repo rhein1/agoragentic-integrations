@@ -25,7 +25,11 @@ def identity(info: os.stat_result) -> tuple[int, ...]:
             info.st_ctime_ns, info.st_nlink)
 
 
-def file_digest(filename: Path, sink: BinaryIO | None = None) -> tuple[str, os.stat_result]:
+def file_digest(filename: Path, sink: BinaryIO | None = None, *,
+                remaining_bytes: int | None = None) -> tuple[str, os.stat_result]:
+    if remaining_bytes is not None and (type(remaining_bytes) is not int or remaining_bytes < 0):
+        raise ValueError('invalid_browser_budget')
+    limit = MAX_FILE if remaining_bytes is None else min(MAX_FILE, remaining_bytes)
     flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
     fd = os.open(filename, flags)
     try:
@@ -35,17 +39,22 @@ def file_digest(filename: Path, sink: BinaryIO | None = None) -> tuple[str, os.s
             raise ValueError('invalid_browser_executable')
         if identity(before) != identity(named):
             raise ValueError('browser_changed_during_hash')
+        if before.st_size > limit:
+            raise ValueError('browser_bundle_size_limit')
         total, digest = 0, hashlib.sha256()
         while True:
-            chunk = os.read(fd, 1024 * 1024)
+            # Probe at most one byte beyond the allowance, never write that byte.
+            # This also catches a source growing after the descriptor size check.
+            chunk = os.read(fd, min(1024 * 1024, limit - total + 1))
             if not chunk:
                 break
+            if len(chunk) > limit - total:
+                code = 'browser_bundle_size_limit' if remaining_bytes is not None and remaining_bytes <= MAX_FILE else 'browser_size_limit'
+                raise ValueError(code)
             total += len(chunk)
-            if total > MAX_FILE:
-                raise ValueError('browser_size_limit')
             digest.update(chunk)
-            if sink is not None:
-                sink.write(chunk)
+            if sink is not None and sink.write(chunk) != len(chunk):
+                raise OSError('browser_copy_short_write')
         if (total != before.st_size or identity(before) != identity(os.fstat(fd))
                 or identity(before) != identity(filename.lstat()) or filename.is_symlink()):
             raise ValueError('browser_changed_during_hash')
@@ -94,15 +103,17 @@ class PreparedBrowser:
 
     def verify(self) -> None:
         records: list[list[object]] = []
+        total = 0
         for file in inventory(self.root):
             relative = file.relative_to(self.root).as_posix()
-            digest, info = file_digest(file)
+            digest, info = file_digest(file, remaining_bytes=MAX_TOTAL - total)
+            total += info.st_size
             if self.identities.get(relative) != identity(info):
                 raise ValueError('launch_copy_changed')
             if stat.S_IMODE(info.st_mode) & 0o222:
                 raise ValueError('launch_copy_writable')
             records.append([relative, info.st_size, digest])
-        if len(records) != len(self.identities) or tree_digest(records) != self.tree_sha256:
+        if total != self.total_bytes or len(records) != len(self.identities) or tree_digest(records) != self.tree_sha256:
             raise ValueError('launch_copy_changed')
 
 
@@ -138,9 +149,10 @@ def prepare_browser(executable: Path, expected: str, expected_tree: str | None =
             relative = file.relative_to(source)
             destination = target / relative
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            # The digest is calculated over the same descriptor bytes copied.
+            # Hash and copy the same verified descriptor within the remaining
+            # aggregate allowance. A rejected file cannot overshoot disk usage.
             with destination.open('xb') as sink:
-                digest, info = file_digest(file, sink)
+                digest, info = file_digest(file, sink, remaining_bytes=MAX_TOTAL - total)
                 sink.flush()
                 os.fsync(sink.fileno())
             total += info.st_size
