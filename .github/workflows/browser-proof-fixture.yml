@@ -1,0 +1,79 @@
+name: Browser Proof fixture
+on:
+  pull_request:
+    paths:
+      - 'browser-use/**'
+      - '.github/workflows/browser-proof-fixture.yml'
+permissions:
+  contents: read
+jobs:
+  synthetic-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up qualification Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.10'
+      - name: Create isolated driver environment
+        run: |
+          python -m venv "$RUNNER_TEMP/browser-proof-venv"
+          echo "$RUNNER_TEMP/browser-proof-venv/bin" >> "$GITHUB_PATH"
+      - name: Provider-free boundary tests
+        run: python -m unittest discover -s browser-use -p test_fixture_proof.py
+      - name: Install hash-locked fixture dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r browser-use/requirements-proof.txt
+          python -m pip check
+          python -m playwright install --with-deps chromium
+      - name: Real synthetic browser with committed bundle verification
+        run: python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof"
+      - name: Pre-work cancellation and close
+        shell: bash
+        run: |
+          set +e
+          python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof-cancel" --cancel-before-work
+          result=$?
+          set -e
+          test "$result" -eq 2
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'browser-proof-cancel/report.json').read_text())
+          assert report['status'] == 'cancelled'
+          assert report['browser_connection_closed'] is True
+          assert report['runtime_copy_removed'] is True
+          assert report['runtime']['bundle_integrity_locked'] is True
+          assert report['cases'] == []
+          PY
+      - name: Active cancellation after first screenshot and close
+        shell: bash
+        run: |
+          set +e
+          python browser-use/fixture_proof.py "$RUNNER_TEMP/browser-proof-active-cancel" --cancel-after-first-case
+          result=$?
+          set -e
+          test "$result" -eq 2
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'browser-proof-active-cancel/report.json').read_text())
+          assert report['status'] == 'cancelled'
+          assert report['cancellation_stage'] == 'after_first_screenshot'
+          assert len(report['cases']) == 1
+          assert report['browser_connection_closed'] is True
+          assert report['runtime_copy_removed'] is True
+          assert report['runtime']['bundle_integrity_locked'] is True
+          assert report['runtime']['launch_copy_verified_before'] is True
+          assert report['runtime']['launch_copy_verified_after'] is True
+          PY
+      - name: Check source unchanged
+        run: |
+          git diff --check
+          git diff --exit-code
