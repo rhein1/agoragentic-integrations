@@ -68,3 +68,69 @@ test('write refuses an existing path and bounded read rejects oversized input', 
 });
 
 test('receipt identity substitution does not survive output consistency checks', () => { const p = fixture(); p.ecf_handoff.receipt.receipt_id = 'other'; assert.throws(() => inspectPacket(p), { code: 'receipt_mismatch' }); });
+
+function parserTruncated() {
+  const p = fixture('abcdef');
+  p.output.original_markdown_chars = 6000;
+  p.output.parser_output_hash = hash('abcdef'.repeat(1000));
+  p.output.truncated = true;
+  p.output.truncation_reasons = ['markdown_output_limit'];
+  p.output.completeness = { status: 'incomplete', complete: false, blockers: ['custom_parser_provenance_unverified', 'markdown_output_limit_reached'] };
+  Object.assign(p.ecf_handoff.receipt, { parser_output_hash: p.output.parser_output_hash, status: 'incomplete', completeness_status: 'incomplete', completeness_blockers: p.output.completeness.blockers });
+  return p;
+}
+test('unrelated completeness blockers cannot hide parser truncation', () => {
+  const p = parserTruncated(); p.output.truncated = false; p.output.truncation_reasons = [];
+  p.output.completeness.blockers.splice(1, 1);
+  assert.throws(() => inspectPacket(p), { code: 'contradictory_truncation' });
+});
+test('parser retention and evidence-unit omissions have separate report totals', () => {
+  const p = parserTruncated(), check = inspectPacket(p), html = renderReview(p);
+  assert.deepEqual(check.parser_markdown, { original_chars: 6000, retained_chars: 6, omitted_chars: 5994 });
+  assert.deepEqual(check.evidence_units, { available_chars: 6, covered_chars: 6, omitted_chars: 0 });
+  assert(html.includes('6 of 6000')); assert(html.includes('5994 omitted before evidence-unit construction'));
+  assert(html.includes('6 of 6 retained Markdown characters; 0 omitted from evidence units'));
+});
+test('truncation reason and blocker inconsistencies fail independently', () => {
+  for (const mutate of [p => p.output.truncation_reasons.push('markdown_output_limit'), p => p.output.truncation_reasons.push('evidence_unit_limit'), p => p.output.completeness.blockers.splice(1, 1)]) {
+    const p = parserTruncated(); mutate(p); assert.throws(() => inspectPacket(p), { code: 'contradictory_truncation' });
+  }
+});
+test('structure traversal loss cannot hide behind another incomplete field', () => {
+  const p = parserTruncated(); p.output.structure = { traversal_truncated: true };
+  assert.throws(() => inspectPacket(p), { code: 'contradictory_truncation' });
+  p.output.truncation_reasons.push('document_structure_traversal_limit');
+  p.output.completeness.blockers.push('document_structure_traversal_incomplete');
+  assert.equal(inspectPacket(p).complete, false);
+});
+function localFiles(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'review-identity-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const original = path.join(root, 'input.json'), replacement = path.join(root, 'other.json');
+  fs.writeFileSync(original, 'original'); fs.writeFileSync(replacement, 'replaced');
+  return { root, original, replacement };
+}
+test('descriptor identity is checked before any bytes are consumed', t => {
+  const { original, replacement } = localFiles(t), open = fs.openSync, read = fs.readSync;
+  let reads = 0;
+  t.mock.method(fs, 'openSync', function (file, ...args) { return open.call(fs, file === original ? replacement : file, ...args); });
+  t.mock.method(fs, 'readSync', function (...args) { reads++; return read.apply(fs, args); });
+  assert.throws(() => readLocal(original), { code: 'input_changed' });
+  assert.equal(reads, 0);
+});
+test('replacement during a descriptor read is rejected after reading', t => {
+  const { original, replacement } = localFiles(t), read = fs.readSync;
+  let replaced = false;
+  t.mock.method(fs, 'readSync', function (...args) {
+    const n = read.apply(fs, args);
+    if (!replaced) { replaced = true; fs.renameSync(original, `${original}.old`); fs.renameSync(replacement, original); }
+    return n;
+  });
+  assert.throws(() => readLocal(original), { code: 'input_changed' });
+});
+test('regular-file read preserves bytes and refuses hard-linked identities', t => {
+  const { original, root } = localFiles(t);
+  assert.equal(readLocal(original).toString(), 'original');
+  fs.linkSync(original, path.join(root, 'hardlink.json'));
+  assert.throws(() => readLocal(original), { code: 'invalid_local_file' });
+});

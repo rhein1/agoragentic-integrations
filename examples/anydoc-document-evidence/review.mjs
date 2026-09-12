@@ -39,7 +39,19 @@ export function inspectPacket(packet, sourceBytes) {
   }
   assert(cursor === c.covered_chars && c.covered_output_hash === hash(o.markdown.slice(0, cursor)), 'coverage_hash_mismatch');
   assert(complete && ['complete', 'incomplete'].includes(complete.status) && complete.complete === (complete.status === 'complete') && codes(complete.blockers) && complete.complete === (complete.blockers.length === 0), 'invalid_completeness');
-  assert(typeof o.truncated === 'boolean' && codes(o.truncation_reasons) && (!complete.complete || (!o.truncated && c.complete && o.original_markdown_chars === o.markdown.length)), 'contradictory_completeness');
+  // Truncation consistency is independent of unrelated completeness blockers.
+  const parserOmitted = o.original_markdown_chars - o.markdown.length;
+  const truncations = [
+    [parserOmitted > 0, 'markdown_output_limit', 'markdown_output_limit_reached'],
+    [!c.complete, 'evidence_unit_limit', 'evidence_unit_coverage_incomplete'],
+    [o.structure?.traversal_truncated === true, 'document_structure_traversal_limit', 'document_structure_traversal_incomplete']
+  ];
+  const expectedReasons = truncations.filter(([lost]) => lost).map(([, reason]) => reason).sort();
+  assert(typeof o.truncated === 'boolean' && codes(o.truncation_reasons) &&
+    o.truncated === (expectedReasons.length > 0) &&
+    JSON.stringify([...o.truncation_reasons].sort()) === JSON.stringify(expectedReasons), 'contradictory_truncation');
+  for (const [lost, , blocker] of truncations) assert(complete.blockers.includes(blocker) === lost, 'contradictory_truncation');
+  assert(!complete.complete || (!o.truncated && c.complete && parserOmitted === 0), 'contradictory_completeness');
   assert(r?.schema === 'agoragentic.parse-receipt.v1' && r.receipt_id === `rcpt_parse_${hash(`${s.source_hash}:${o.output_hash}`).slice(7, 19)}` && r.status === (complete.complete ? 'pending' : 'incomplete') && r.trap_scan_status === 'not_scanned' && r.output_hash === o.output_hash && r.parser_output_hash === o.parser_output_hash && r.evidence_unit_count === o.evidence_units.length && r.completeness_status === complete.status, 'receipt_mismatch');
   assert(Array.isArray(r.source_hashes) && r.source_hashes.length === 1 && r.source_hashes[0] === s.source_hash && JSON.stringify(r.evidence_coverage) === JSON.stringify(c) && JSON.stringify(r.completeness_blockers) === JSON.stringify(complete.blockers), 'receipt_binding_mismatch');
   const boundary = r.public_boundary;
@@ -49,6 +61,8 @@ export function inspectPacket(packet, sourceBytes) {
   return { scope: 'local_packet_consistency', output_hash_matches: true, source_bytes_hash_matches: sourceBytes === undefined ? null : true,
     semantic_correctness_verified: false, parser_authenticated: false, context_approved: false,
     complete: complete.complete, receipt_status: r.status,
+    parser_markdown: { original_chars: o.original_markdown_chars, retained_chars: o.markdown.length, omitted_chars: parserOmitted },
+    evidence_units: { available_chars: c.total_chars, covered_chars: c.covered_chars, omitted_chars: c.omitted_chars },
     warnings: [...new Set([...risk.limitations, ...complete.blockers, ...h.blockers])] };
 }
 
@@ -65,7 +79,8 @@ export function renderReview(packet, sourceBytes) {
 <aside><strong>Private document content.</strong> Do not publish this report. No upload, model call, OCR fallback, memory write, or context approval is performed by this review tool. Packet integrity does not prove parser authenticity, semantic correctness, or document safety.</aside>
 <section><h2>Result and boundaries</h2><dl>
 <dt>Parse receipt</dt><dd>${escape(check.receipt_status)} — trap scan and owner policy review remain required.</dd>
-<dt>Extraction coverage</dt><dd>${o.evidence_coverage.covered_chars} of ${o.evidence_coverage.total_chars} bounded Markdown characters; ${o.evidence_coverage.omitted_chars} omitted from evidence units.</dd>
+<dt>Parser Markdown retention</dt><dd>${check.parser_markdown.retained_chars} of ${check.parser_markdown.original_chars} parser-produced Markdown characters retained; ${check.parser_markdown.omitted_chars} omitted before evidence-unit construction.</dd>
+<dt>Evidence-unit coverage</dt><dd>${o.evidence_coverage.covered_chars} of ${o.evidence_coverage.total_chars} retained Markdown characters; ${o.evidence_coverage.omitted_chars} omitted from evidence units.</dd>
 <dt>Local source bytes</dt><dd>${check.source_bytes_hash_matches ? 'Matched the packet source hash.' : 'Not supplied independently; source hash is a packet claim.'}</dd>
 <dt>Output and evidence units</dt><dd>Hashes and ordered coverage match within the checked envelope.</dd>
 <dt>Semantic risk</dt><dd>${escape(packet.risk.semantic_risk)}; source-exact extraction is not claimed.</dd>
@@ -78,17 +93,28 @@ export function renderReview(packet, sourceBytes) {
 <section><h2>Next step</h2><p>Inspect omissions and semantic warnings against the original document. Keep the existing evidence JSON for the separately authorized platform trap scan and owner-scoped ECF handoff. Viewing this report does not satisfy either gate.</p></section></body></html>\n`;
 }
 export function readLocal(filename, max = MAX_PACKET_BYTES) {
-  const initial = fs.lstatSync(filename);
-  assert(initial.isFile() && !initial.isSymbolicLink() && initial.size <= max, 'invalid_local_file');
-  const fd = fs.openSync(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  assert(Number.isSafeInteger(max) && max >= 0 && max <= MAX_SOURCE_BYTES, 'invalid_local_file');
+  let fd;
+  const same = (a, b) => ['dev', 'ino', 'size', 'mtimeNs', 'ctimeNs', 'nlink'].every(k => a[k] === b[k]);
   try {
-    const s = fs.fstatSync(fd); assert(s.isFile() && s.size <= max, 'invalid_local_file');
-    const buffer = Buffer.alloc(s.size + 1); let n = 0;
+    // Open first, then validate the exact descriptor used for every read. No
+    // pre-open pathname check can authorize a different file after replacement.
+    fd = fs.openSync(filename, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const s = fs.fstatSync(fd, { bigint: true });
+    const named = fs.lstatSync(filename, { bigint: true });
+    assert(s.isFile() && named.isFile() && !named.isSymbolicLink() && s.nlink === 1n &&
+      s.ino !== 0n && s.size <= BigInt(max), 'invalid_local_file');
+    assert(same(s, named), 'input_changed');
+    const size = Number(s.size), buffer = Buffer.alloc(size + 1); let n = 0;
     while (n < buffer.length) { const got = fs.readSync(fd, buffer, n, buffer.length - n, null); if (!got) break; n += got; }
-    const after = fs.fstatSync(fd);
-    assert(n === s.size && after.size === s.size && after.mtimeMs === s.mtimeMs && after.ctimeMs === s.ctimeMs, 'input_changed');
+    const after = fs.fstatSync(fd, { bigint: true });
+    const current = fs.lstatSync(filename, { bigint: true });
+    assert(n === size && current.isFile() && !current.isSymbolicLink() && same(s, after) && same(s, current), 'input_changed');
     return buffer.subarray(0, n);
-  } finally { fs.closeSync(fd); }
+  } catch (error) {
+    if (['input_changed', 'invalid_local_file'].includes(error.code)) throw error;
+    fail('invalid_local_file');
+  } finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 export function writeReview(filename, html) {
   assert(Buffer.byteLength(html) <= 32 * 1024 * 1024, 'report_too_large');
