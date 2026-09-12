@@ -6,7 +6,7 @@ Audit date: 2026-09-01 (supersedes 2026-08-20)
 
 - Package: `n8n-nodes-agoragentic@0.1.4`
 - Builder: repository-local `scripts/build.mjs`
-- Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.29.0`
+- Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.31.0`
 - Linter: `eslint@9.29.0`
 - Formatter: `prettier@3.9.6`
 - Compiler: `typescript@5.9.2`
