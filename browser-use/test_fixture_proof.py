@@ -3,7 +3,6 @@ import asyncio
 import json
 import os
 from pathlib import Path
-import stat
 import sys
 import tempfile
 from types import SimpleNamespace
