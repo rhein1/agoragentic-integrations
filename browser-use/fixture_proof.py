@@ -78,8 +78,10 @@ def write_new(filename: Path, data: bytes) -> None:
 async def abort_external(route: Any, observed: list[str]) -> None:
     # Every actual request is denied. The only page content comes from FIXTURE.
     # Never call continue_(), fetch(), or fulfill() with remote/user content.
-    observed.append("fixed_probe" if route.request.url == PROBE_URL else "other_request")
+    label = "fixed_probe" if route.request.url == PROBE_URL else "other_request"
     await route.abort("blockedbyclient")
+    # Record successful interceptor acknowledgement, not merely entry to the callback.
+    observed.append(label)
 
 
 async def exercise(browser: Any, output: Path, report: dict[str, Any]) -> None:

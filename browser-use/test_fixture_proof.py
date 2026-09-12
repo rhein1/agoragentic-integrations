@@ -34,6 +34,18 @@ class FixtureBoundaryTests(unittest.TestCase):
             self.assertEqual(observed, ['fixed_probe' if url == PROBE_URL else 'other_request'])
             self.assertNotIn(url, json.dumps(observed))
 
+    def test_failed_abort_is_not_positive_interception_evidence(self):
+        observed = []
+        class Request:
+            url = PROBE_URL
+        class Route:
+            request = Request()
+            async def abort(self, code):
+                raise RuntimeError("synthetic abort failure")
+        with self.assertRaises(RuntimeError):
+            asyncio.run(abort_external(Route(), observed))
+        self.assertEqual(observed, [])
+
     def test_runtime_digest_matches_exact_regular_file(self):
         with tempfile.TemporaryDirectory() as root:
             file = Path(root) / 'fixture-binary'; file.write_bytes(b'not executed')
