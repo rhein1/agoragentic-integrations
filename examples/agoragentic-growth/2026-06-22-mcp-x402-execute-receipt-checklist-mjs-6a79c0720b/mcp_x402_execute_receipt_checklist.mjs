@@ -228,33 +228,35 @@ async function x402FetchFallback(url, options = {}) {
           throw err;
         }
 
-        let payResult;
-        try {
-          payResult = await pay({
-            url,
-            idempotencyKey,
-            challenge,
-            challengeParsed: challengeInfo.parsed,
-            method: rest.method || "GET",
-            body: rest.body,
-          });
-        } catch (error) {
-          error.x402 = {
-            kind: "payment-callback-error",
-            saw402,
-            paymentAuthorization,
-            paidChallenge,
-            idempotencyKey,
-          };
-          throw error;
+        if (!paymentAuthorization) {
+          let payResult;
+          try {
+            payResult = await pay({
+              url,
+              idempotencyKey,
+              challenge,
+              challengeParsed: challengeInfo.parsed,
+              method: rest.method || "GET",
+              body: rest.body,
+            });
+          } catch (error) {
+            error.x402 = {
+              kind: "payment-callback-error",
+              saw402,
+              paymentAuthorization,
+              paidChallenge,
+              idempotencyKey,
+            };
+            throw error;
+          }
+          if (!payResult || !payResult.authorization) {
+            const err = new Error("pay callback did not return an authorization");
+            err.code = "X402_PAYMENT_NOT_AUTHORIZED";
+            throw err;
+          }
+          paymentAuthorization = payResult.authorization;
+          paidChallenge = challenge;
         }
-        if (!payResult || !payResult.authorization) {
-          const err = new Error("pay callback did not return an authorization");
-          err.code = "X402_PAYMENT_NOT_AUTHORIZED";
-          throw err;
-        }
-        paymentAuthorization = payResult.authorization;
-        paidChallenge = challenge;
 
         response = await requestOnce();
       }

@@ -6,12 +6,11 @@ import {
   lstat,
   mkdir,
   mkdtemp,
-  open,
   readFile,
   readdir,
   rm,
+  stat,
 } from 'node:fs/promises';
-import { constants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,37 +91,24 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
       }
       seenCaseFolded.set(folded, relative);
       const absolute = path.join(directory, entry.name);
-      // Open first with O_NOFOLLOW and classify the opened handle itself:
-      // there is no lstat-then-read check-then-act window.
-      const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
-      let handle;
-      try {
-        handle = await open(absolute, constants.O_RDONLY | noFollow);
-      } catch (error) {
-        if (error?.code === 'ELOOP') throw new Error(`Symlinks are forbidden: ${relative}`);
-        throw error;
+      const info = await lstat(absolute);
+      if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
+      if (info.isDirectory()) {
+        await visit(absolute, relative);
+        continue;
       }
-      try {
-        const info = await handle.stat();
-        if (info.isDirectory()) {
-          await visit(absolute, relative);
-          continue;
-        }
-        if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
-        if (info.nlink > 1) throw new Error(`Hard-linked files are forbidden: ${relative}`);
-        totalBytes += info.size;
-        if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
-        if (totalBytes > maxBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
-        const content = await handle.readFile();
-        records.push({
-          path: relative,
-          bytes: content.byteLength,
-          content_hash: sha256Ref(content.toString('base64')),
-          source_path: absolute,
-        });
-      } finally {
-        await handle.close();
-      }
+      if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+      if (info.nlink > 1) throw new Error(`Hard-linked files are forbidden: ${relative}`);
+      totalBytes += info.size;
+      if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
+      if (totalBytes > maxBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+      const content = await readFile(absolute);
+      records.push({
+        path: relative,
+        bytes: content.byteLength,
+        content_hash: sha256Ref(content.toString('base64')),
+        source_path: absolute,
+      });
     }
   }
 
@@ -941,7 +927,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         throw error;
       }
     }
-    return await record.destroy_promise;
+    return record.destroy_promise;
   }
 
   async verifyDestroyed(input = {}) {

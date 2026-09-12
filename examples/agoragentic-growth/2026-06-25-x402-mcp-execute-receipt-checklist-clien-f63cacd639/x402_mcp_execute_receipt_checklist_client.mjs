@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 /* demo — moves no real funds */
 
-import { randomUUID } from 'node:crypto';
-
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_RECEIPT_POLL_ATTEMPTS = 4;
@@ -740,14 +738,14 @@ function generateSessionId() {
   if (globalThis.crypto?.randomUUID) {
     return `x402_${globalThis.crypto.randomUUID()}`;
   }
-  return `x402_${randomUUID()}`;
+  return `x402_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function generateIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
   }
-  return randomUUID();
+  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function sleep(ms) {

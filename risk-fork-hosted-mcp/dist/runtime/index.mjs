@@ -68661,6 +68661,9 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
     try {
       info = await handle.stat({ bigint: true });
       if (info.isDirectory()) {
+        if ((await lstat2(target, { bigint: true })).isSymbolicLink()) {
+          throw new Error("Immutable workspace export cleanup refuses symlinks");
+        }
         await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
         continue;
       }
@@ -68729,6 +68732,9 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
     try {
       info = await handle.stat({ bigint: true });
       if (info.isDirectory()) {
+        if ((await lstat2(target, { bigint: true })).isSymbolicLink()) {
+          throw new Error("Immutable workspace export cleanup refuses symlinks");
+        }
         await handle.close();
         handle = null;
         await makeOwnedTreeWritable(target, rootReal, state, depth + 1);
@@ -72175,7 +72181,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:9020bb396e66d625e917743f453a9846a24a7af9b3e3e90045f0ed2a1700ed7b" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:813d05a09c55bca6ace69587dee3d16d0597664d9d301f867b2530f499faa6bd" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
