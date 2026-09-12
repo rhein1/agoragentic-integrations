@@ -6,17 +6,17 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 156,
-    "occurrence_count": 310,
+    "file_count": 161,
+    "occurrence_count": 318,
     "category_file_counts": {
       "installer_or_clone": 30,
-      "machine_discovery": 52,
+      "machine_discovery": 53,
       "package_registry_metadata": 23,
-      "public_documentation": 76,
+      "public_documentation": 78,
       "raw_content_url": 2,
-      "release_or_provenance": 12,
+      "release_or_provenance": 13,
       "reusable_action": 2,
-      "source_or_test": 22
+      "source_or_test": 24
     }
   },
   "reusable_action_references": [
@@ -1788,6 +1788,16 @@
       ]
     },
     {
+      "path": "transaction-assurance/docs/runpay-offline-importer.md",
+      "occurrences": 2,
+      "line_numbers": [
+        14
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "transaction-assurance/examples/external-adopters/anchor-x402/README.md",
       "occurrences": 2,
       "line_numbers": [
@@ -1800,11 +1810,32 @@
       ]
     },
     {
+      "path": "transaction-assurance/examples/runpay/2026-09-09/provenance.json",
+      "occurrences": 1,
+      "line_numbers": [
+        26
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "transaction-assurance/examples/runpay/2026-09-09/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        66,
-        71
+        67,
+        72
       ],
       "categories": [
         "installer_or_clone",
@@ -1821,6 +1852,27 @@
       ],
       "categories": [
         "public_documentation"
+      ]
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-cli.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        18
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-profile.mjs",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        14
+      ],
+      "categories": [
+        "source_or_test"
       ]
     },
     {
