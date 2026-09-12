@@ -1,0 +1,29 @@
+{
+  "schema": "agoragentic.interchange.runpay-provenance.v1",
+  "reviewed_at": "2026-09-12T00:00:00Z",
+  "source": {
+    "provider": "run.pay",
+    "catalog_endpoint": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+    "service_evidence": "https://github.com/rhein1/agoragentic-integrations/issues/376#issuecomment-5606052246",
+    "receipt_evidence": "https://github.com/rhein1/agoragentic-integrations/issues/376#issuecomment-5601574306"
+  },
+  "evidence_scope": {
+    "catalog_service_count_claim": 206,
+    "fixtures_included": 2,
+    "services_with_declared_input_schema": 2,
+    "services_with_declared_output_schema": 0,
+    "services_with_reconstructed_output_schema": 1,
+    "services_with_missing_output_schema": 1,
+    "live_catalog_capture_performed_by_adapter": false,
+    "live_invocation_performed_by_adapter": false,
+    "settlement_verification_performed": false
+  },
+  "authority": {
+    "provider_identity_verified": false,
+    "trust_score_verified": false,
+    "eligible_for_execution": false,
+    "listing_publication_authorized": false,
+    "payment_authorized": false,
+    "settlement_confirmed": false
+  }
+}

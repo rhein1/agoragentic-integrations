@@ -1,0 +1,42 @@
+{
+  "fixture_schema": "agoragentic.interchange.runpay-service-fixture.v1",
+  "captured_at": "2026-09-09T17:30:24Z",
+  "source": {
+    "catalog_endpoint": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+    "issue_url": "https://github.com/rhein1/agoragentic-integrations/issues/376#issuecomment-5606052246"
+  },
+  "schema_provenance": {
+    "input": "declared",
+    "output": "missing"
+  },
+  "service": {
+    "id": "da3ddf15-34fa-4d1e-a5cb-a7d50a08f0fc",
+    "name": "Consensus Aggregator",
+    "description": "Aggregates multiple inputs into a single consensus result (majority or average mode).",
+    "category": "DATA",
+    "price_per_call": "0.02",
+    "currency": "USD",
+    "vendor_name": "[redacted]",
+    "trust_score": 68,
+    "total_calls": 1847,
+    "avg_ms": 210,
+    "error_rate": 0,
+    "schema_input": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["majority"],
+          "description": "Only majority is confirmed; other modes may exist on the vendor side but are not verified here."
+        },
+        "votes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "required": ["mode", "votes"]
+    },
+    "schema_output": null
+  }
+}

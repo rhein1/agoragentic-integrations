@@ -70,6 +70,7 @@ of reverse-engineering the private runtime:
 | [`research/README.md`](./research/README.md) | Paper-facing research record for the A2A, x402, outreach, testing, and production-hardening work. |
 | [`evidence/interchange-production-research-ledger.v1.json`](./evidence/interchange-production-research-ledger.v1.json) | Machine-readable experiments, source-change groups, production findings, current snapshot, and claim boundaries. |
 | [`schemas/interchange-production-research-ledger.schema.json`](./schemas/interchange-production-research-ledger.schema.json) | Validation schema for the research ledger. |
+| [`runpay/`](./runpay/) | Source-only run.pay issue #376 fixture normalizer and deterministic receipt replay; exact decimal prices are preserved and all execution, trust, payment, settlement, publication, and deployment authority remains false. |
 
 Run the no-spend x402 preflight:
 
@@ -95,6 +96,7 @@ Run the conformance checks:
 node interchange/clients/js/interchange-client.mjs
 python interchange/clients/python/interchange_client.py --self-test
 node scripts/verify-interchange-research.mjs
+cd interchange/runpay && npm ci --ignore-scripts && npm run check && npm test && npm run replay
 ```
 
 ## Builder path

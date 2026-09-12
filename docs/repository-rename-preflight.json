@@ -1,20 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.54.0",
-  "as_of": "2026-09-08",
+  "source_manifest_version": "2.55.0",
+  "as_of": "2026-09-12",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 156,
-    "occurrence_count": 310,
+    "file_count": 163,
+    "occurrence_count": 319,
     "category_file_counts": {
       "installer_or_clone": 30,
-      "machine_discovery": 52,
+      "machine_discovery": 58,
       "package_registry_metadata": 23,
-      "public_documentation": 76,
+      "public_documentation": 77,
       "raw_content_url": 2,
-      "release_or_provenance": 12,
+      "release_or_provenance": 13,
       "reusable_action": 2,
       "source_or_test": 22
     }
@@ -1054,7 +1054,7 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 19,
+      "occurrences": 20,
       "line_numbers": [
         16,
         37,
@@ -1066,15 +1066,16 @@
         103,
         111,
         119,
-        129,
-        162,
-        424,
-        436,
-        448,
-        460,
-        472,
-        484,
-        496
+        128,
+        138,
+        171,
+        433,
+        445,
+        457,
+        469,
+        481,
+        493,
+        505
       ],
       "categories": [
         "machine_discovery"
@@ -1084,7 +1085,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        288
+        291
       ],
       "categories": [
         "machine_discovery"
@@ -1101,6 +1102,78 @@
       "categories": [
         "machine_discovery",
         "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/consensus-aggregator.json",
+      "occurrences": 1,
+      "line_numbers": [
+        6
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/phone-validator-receipt.json",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/phone-validator.json",
+      "occurrences": 1,
+      "line_numbers": [
+        6
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/provenance.json",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/README.md",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "interchange/runpay/runpay-receipt-observation.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/runpay-service-import.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "machine_discovery"
       ]
     },
     {
