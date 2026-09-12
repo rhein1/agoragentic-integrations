@@ -21,8 +21,9 @@
   },
   "provenance": {
     "qualification_commit": "90994eef83da20c1574bf5ce001923e757040323",
-    "qualification_run": "https://github.com/rhein1/agoragentic-integrations/actions/runs/34706175723",
+    "qualification_run_id": "34706175723",
     "qualification_job": "103586514727",
+    "repository_scope": "this repository; preserve the run and commit IDs across repository renames",
     "observed_at": "2026-09-12T16:45:44Z",
     "publisher_signature_verified": false,
     "scope": "observed upstream downloads locked to reviewed digests; not a signature or an OS image lock"
