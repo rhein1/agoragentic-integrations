@@ -27,7 +27,7 @@
         "mode": {
           "type": "string",
           "enum": ["majority"],
-          "description": "Only majority is confirmed; other modes may exist on the vendor side but are not verified here."
+          "description": "Only majority is confirmed; other modes may exist on the vendor side but aren't verified here."
         },
         "votes": {
           "type": "array",

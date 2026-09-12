@@ -11,6 +11,14 @@ The fixture set contains two of the 206 services reported in the issue evidence:
 
 Every money value crosses the adapter boundary as an exact decimal string. JavaScript numbers, exponent notation, signs, whitespace, and malformed leading zeros are rejected. The adapter preserves the source string and never rounds or converts it through binary floating point. This follows the issue evidence that run.pay stores `price_per_call` as arbitrary-precision PostgreSQL `numeric` without a fixed scale.
 
+The canonical vendor-supplied source bytes live under
+`transaction-assurance/examples/runpay/2026-09-09/`. This package is their
+Interchange projection: it converts the three money tokens to exact decimal
+strings, represents an absent output schema explicitly as `null`, and adds
+fixture provenance. `provenance.json` pins both source files by SHA-256, and
+`canonical-fixtures.test.mjs` rejects byte drift or any other service/receipt
+content change.
+
 Schema provenance is explicit. `declared` means the service supplied the schema, `reconstructed` means it was inferred from the documented successful response and later stored by run.pay, and `missing` means the fixture has no schema. A missing schema stays `null`; the adapter does not invent one.
 
 The redacted receipt fixture is normalized as an observation only. Its source-reported `payment_status: completed` remains source-reported. It does not prove that the provider ran, an outcome exists, the named vendor controls an account, a chain receipt was observed, or settlement was confirmed. The optional declared intent is linked by a hash and checked against category and exact maximum price, but it remains unverified authorization.
