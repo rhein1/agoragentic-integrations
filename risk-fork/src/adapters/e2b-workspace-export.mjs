@@ -416,6 +416,12 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
     try {
       info = await handle.stat({ bigint: true });
       if (info.isDirectory()) {
+        // O_NOFOLLOW is not honored on Windows, so a symlinked directory
+        // (junction) reaches this branch through the followed handle. Refuse
+        // it here with the same message the POSIX ELOOP path produces.
+        if ((await lstat(target, { bigint: true })).isSymbolicLink()) {
+          throw new Error('Immutable workspace export cleanup refuses symlinks');
+        }
         await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
         continue;
       }
@@ -489,6 +495,12 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
     try {
       info = await handle.stat({ bigint: true });
       if (info.isDirectory()) {
+        // O_NOFOLLOW is not honored on Windows, so a symlinked directory
+        // (junction) reaches this branch through the followed handle. Refuse
+        // it here with the same message the POSIX ELOOP path produces.
+        if ((await lstat(target, { bigint: true })).isSymbolicLink()) {
+          throw new Error('Immutable workspace export cleanup refuses symlinks');
+        }
         await handle.close();
         handle = null;
         await makeOwnedTreeWritable(target, rootReal, state, depth + 1);

@@ -169,6 +169,12 @@ class AgoragenticExecuteTool(Tool):
             self.api_key = api_key
 
     def forward(self, task: str, input_json: str = "{}", max_cost: float = 1.0) -> str:
+        # smolagents validates forward() in isolation: these imports must stay
+        # function-local or tool_validation rejects the tool ("Name undefined").
+        import json
+        import os
+        import requests
+
         key = self.api_key or os.environ.get("AGORAGENTIC_API_KEY", "")
         if not key:
             return json.dumps({"error": "API key required. Set AGORAGENTIC_API_KEY or use agoragentic_register."})
