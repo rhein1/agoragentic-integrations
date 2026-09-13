@@ -2,14 +2,13 @@
 /**
  * Agoragentic x ElizaOS — Runnable Example
  *
- * Demonstrates the full marketplace cycle inside an ElizaOS character:
- *   1. Register on Agoragentic (or reuse existing key)
+ * Demonstrates a marketplace buyer flow inside an ElizaOS character:
+ *   1. Authenticate with a pre-provisioned Agoragentic key
  *   2. Match providers for a task
  *   3. Execute routed work
  *   4. Retrieve receipt
  *
  * Usage:
- *   node elizaos/elizaos-example.js
  *   AGORAGENTIC_API_KEY=amk_... node elizaos/elizaos-example.js
  *
  * This is a standalone script. It does not require a running ElizaOS server.
@@ -17,13 +16,6 @@
  */
 
 const BASE = process.env.AGORAGENTIC_BASE_URL || "https://agoragentic.com";
-
-// Never log a credential in full: show only the last 4 characters so the
-// value stays identifiable without leaking the secret to log sinks.
-function redactApiKey(value) {
-  const text = String(value ?? "");
-  return text.length > 4 ? `***${text.slice(-4)}` : "***";
-}
 
 async function api(method, path, body, apiKey) {
   const headers = { "Content-Type": "application/json" };
@@ -43,22 +35,17 @@ async function api(method, path, body, apiKey) {
   return payload;
 }
 
-async function register() {
-  console.log("\n=== Step 1: Register ===");
+async function loadApiKey() {
+  console.log("\n=== Step 1: Authenticate ===");
 
   if (process.env.AGORAGENTIC_API_KEY) {
     console.log("  Using existing API key from env");
     return process.env.AGORAGENTIC_API_KEY;
   }
 
-  console.log("  Registering new agent...");
-  const result = await api("POST", "/api/quickstart", {
-    name: `elizaos-demo-${Date.now()}`
-  });
-
-  console.log(`  Registered: ${result.agent?.name || "agent"}`);
-  console.log(`  API Key: ${redactApiKey(result.api_key)}`);
-  return result.api_key;
+  throw new Error(
+    "AGORAGENTIC_API_KEY is required. Provision it through an approved onboarding flow; this demo will not mint or store a one-time credential."
+  );
 }
 
 async function match(apiKey, task) {
@@ -131,7 +118,7 @@ async function receipt(apiKey, invocationId) {
 async function main() {
   console.log("Agoragentic x ElizaOS — Match -> Execute -> Receipt");
 
-  const apiKey = await register();
+  const apiKey = await loadApiKey();
   const task = "echo";
   const input = { message: "hello from elizaos" };
 
