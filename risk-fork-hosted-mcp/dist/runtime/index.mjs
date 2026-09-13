@@ -69573,7 +69573,6 @@ var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN = new RegExp(
   String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
   "gu"
 );
-var SECRET_ASSIGNMENT_VALUE_PATTERN = /\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/yu;
 var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN = new RegExp(
   `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES}]`,
   "u"
@@ -69593,6 +69592,60 @@ function exactPatternMatches(pattern, value) {
   pattern.lastIndex = 0;
   return matched;
 }
+function isSecretAssignmentWhitespace(character) {
+  const codePoint = character.charCodeAt(0);
+  return codePoint >= 9 && codePoint <= 13 || codePoint === 32 || codePoint === 160 || codePoint === 5760 || codePoint >= 8192 && codePoint <= 8202 || codePoint === 8232 || codePoint === 8233 || codePoint === 8239 || codePoint === 8287 || codePoint === 12288 || codePoint === 65279;
+}
+function isUnquotedSecretAssignmentTerminator(character) {
+  return isSecretAssignmentWhitespace(character) || character === "&" || character === '"' || character === "'" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+}
+function readSecretAssignmentValue(text, startIndex, valueEncoding) {
+  let index = startIndex;
+  while (index < text.length && isSecretAssignmentWhitespace(text[index])) index += 1;
+  if (index >= text.length) {
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+  const quote = text[index] === '"' || text[index] === "'" ? text[index] : null;
+  if (quote) {
+    const valueStart2 = index + 1;
+    let hasMinimumBytes = false;
+    index = valueStart2;
+    while (index < text.length) {
+      if (text[index] === quote) {
+        return { matched: true, hasMinimumBytes, nextIndex: index + 1 };
+      }
+      if (text[index] === "\\") {
+        index += 1;
+        if (index >= text.length) {
+          return { matched: false, hasMinimumBytes: false, nextIndex: index };
+        }
+      }
+      index += 1;
+      if (!hasMinimumBytes) {
+        hasMinimumBytes = Buffer.byteLength(
+          text.slice(valueStart2, index),
+          valueEncoding
+        ) >= MIN_SECRET_ASSIGNMENT_BYTES;
+      }
+      if (hasMinimumBytes) {
+        return { matched: true, hasMinimumBytes: true, nextIndex: index };
+      }
+    }
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+  const valueStart = index;
+  while (index < text.length && !isUnquotedSecretAssignmentTerminator(text[index])) {
+    index += 1;
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+  }
+  return {
+    matched: index > valueStart,
+    hasMinimumBytes: false,
+    nextIndex: index
+  };
+}
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
   const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN.test(text);
   const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN];
@@ -69604,11 +69657,9 @@ function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
       const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
       const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter) : exactPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter);
       if (!keyMatches || !delimiterMatches) continue;
-      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = assignmentPattern.lastIndex;
-      const valueMatch = SECRET_ASSIGNMENT_VALUE_PATTERN.exec(text);
-      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = 0;
-      const value = valueMatch?.[1] ?? valueMatch?.[2] ?? valueMatch?.[3] ?? "";
-      if (valueMatch && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      const value = readSecretAssignmentValue(text, assignmentPattern.lastIndex, valueEncoding);
+      assignmentPattern.lastIndex = value.nextIndex;
+      if (value.matched && value.hasMinimumBytes) {
         assignmentPattern.lastIndex = 0;
         return true;
       }
@@ -73162,7 +73213,6 @@ var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2 = new RegExp(
   String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}])`,
   "gu"
 );
-var SECRET_ASSIGNMENT_VALUE_PATTERN2 = /\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/yu;
 var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2 = new RegExp(
   `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}]`,
   "u"
@@ -73177,6 +73227,60 @@ function exactPatternMatches2(pattern, value) {
   pattern.lastIndex = 0;
   return matched;
 }
+function isSecretAssignmentWhitespace2(character) {
+  const codePoint = character.charCodeAt(0);
+  return codePoint >= 9 && codePoint <= 13 || codePoint === 32 || codePoint === 160 || codePoint === 5760 || codePoint >= 8192 && codePoint <= 8202 || codePoint === 8232 || codePoint === 8233 || codePoint === 8239 || codePoint === 8287 || codePoint === 12288 || codePoint === 65279;
+}
+function isUnquotedSecretAssignmentTerminator2(character) {
+  return isSecretAssignmentWhitespace2(character) || character === "&" || character === '"' || character === "'" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+}
+function readSecretAssignmentValue2(text, startIndex, valueEncoding) {
+  let index = startIndex;
+  while (index < text.length && isSecretAssignmentWhitespace2(text[index])) index += 1;
+  if (index >= text.length) {
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+  const quote = text[index] === '"' || text[index] === "'" ? text[index] : null;
+  if (quote) {
+    const valueStart2 = index + 1;
+    let hasMinimumBytes = false;
+    index = valueStart2;
+    while (index < text.length) {
+      if (text[index] === quote) {
+        return { matched: true, hasMinimumBytes, nextIndex: index + 1 };
+      }
+      if (text[index] === "\\") {
+        index += 1;
+        if (index >= text.length) {
+          return { matched: false, hasMinimumBytes: false, nextIndex: index };
+        }
+      }
+      index += 1;
+      if (!hasMinimumBytes) {
+        hasMinimumBytes = Buffer.byteLength(
+          text.slice(valueStart2, index),
+          valueEncoding
+        ) >= MIN_SECRET_ASSIGNMENT_BYTES2;
+      }
+      if (hasMinimumBytes) {
+        return { matched: true, hasMinimumBytes: true, nextIndex: index };
+      }
+    }
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+  const valueStart = index;
+  while (index < text.length && !isUnquotedSecretAssignmentTerminator2(text[index])) {
+    index += 1;
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+  }
+  return {
+    matched: index > valueStart,
+    hasMinimumBytes: false,
+    nextIndex: index
+  };
+}
 function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
   const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN2.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2.test(text);
   const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2];
@@ -73188,11 +73292,9 @@ function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
       const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
       const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter) : exactPatternMatches2(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter);
       if (!keyMatches || !delimiterMatches) continue;
-      SECRET_ASSIGNMENT_VALUE_PATTERN2.lastIndex = assignmentPattern.lastIndex;
-      const valueMatch = SECRET_ASSIGNMENT_VALUE_PATTERN2.exec(text);
-      SECRET_ASSIGNMENT_VALUE_PATTERN2.lastIndex = 0;
-      const value = valueMatch?.[1] ?? valueMatch?.[2] ?? valueMatch?.[3] ?? "";
-      if (valueMatch && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
+      const value = readSecretAssignmentValue2(text, assignmentPattern.lastIndex, valueEncoding);
+      assignmentPattern.lastIndex = value.nextIndex;
+      if (value.matched && value.hasMinimumBytes) {
         assignmentPattern.lastIndex = 0;
         return true;
       }
@@ -73589,7 +73691,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:f741a60af26e5a48d741b61fafc9f6c078c441552f79966567777a85bebf6a53" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:b9307367f983b4af9a526a28615421019e1212c34b802bb1357a7c9e44d5b9ab" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

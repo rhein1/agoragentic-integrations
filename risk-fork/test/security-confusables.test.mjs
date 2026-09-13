@@ -88,6 +88,11 @@ const SECRET_ASSIGNMENT_KEYS = Object.freeze([
   ['exact-key', 'api_key'],
   ['confusable-key', 'api_k\u0435y'],
 ]);
+const SECRET_ASSIGNMENT_VALUES = Object.freeze([
+  ['unquoted', SYNTHETIC_SECRET],
+  ['double-quoted-escapes', `"${'\\"!'.repeat(3)}"`],
+  ['single-quoted-escapes', `'${"\\'&".repeat(3)}'`],
+]);
 
 function encodeSecretAssignment(value, encoding) {
   if (encoding === 'utf8') return Buffer.from(value, 'utf8');
@@ -562,17 +567,16 @@ test('E2B exact-byte scan rejects every pinned assignment delimiter across UTF e
     assert.match(foldSecurityConfusables(delimiter), /^[=:]$/, codePointLabel(delimiter));
     for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
       for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
-        const bytes = encodeSecretAssignment(
-          `${key}${delimiter}${SYNTHETIC_SECRET}`,
-          encoding,
-        );
-        assert.throws(
-          () => scanE2BStagedBytesAuthorityFree([
-            stagedBytes('input.txt', bytes),
-          ]),
-          /authority|secret/i,
-          `${codePointLabel(delimiter)} ${keyLabel} ${encoding}`,
-        );
+        for (const [valueLabel, value] of SECRET_ASSIGNMENT_VALUES) {
+          const bytes = encodeSecretAssignment(`${key}${delimiter}${value}`, encoding);
+          assert.throws(
+            () => scanE2BStagedBytesAuthorityFree([
+              stagedBytes('input.txt', bytes),
+            ]),
+            /authority|secret/i,
+            `${codePointLabel(delimiter)} ${keyLabel} ${encoding} ${valueLabel}`,
+          );
+        }
       }
     }
   }
@@ -583,6 +587,59 @@ test('E2B assignment scan stays bounded on delimiter-dense benign bytes', () => 
   assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
     stagedBytes('delimiter-dense.txt', bytes),
   ]));
+});
+
+test('E2B assignment scan deterministically parses adversarial quoted escapes', {
+  timeout: 10_000,
+}, () => {
+  for (const [label, quote, escapeUnit] of [
+    ['double', '"', '\\"!'],
+    ['single', "'", "\\'&"],
+  ]) {
+    const shortValue = Buffer.from(
+      `api_key=${quote}${escapeUnit.repeat(2)}${quote}`,
+      'utf8',
+    );
+    assert.doesNotThrow(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes(`${label}-short.txt`, shortValue),
+      ]),
+      `${label} quoted six-byte value remains below the original-byte threshold`,
+    );
+
+    const minimumValue = Buffer.from(
+      `api_key=${quote}${escapeUnit.repeat(3)}${quote}`,
+      'utf8',
+    );
+    assert.throws(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes(`${label}-minimum.txt`, minimumValue),
+      ]),
+      /authority|secret/i,
+      `${label} quoted nine-byte value reaches the original-byte threshold`,
+    );
+
+    const adversarialBody = escapeUnit.repeat(256 * 1024);
+    const unterminated = Buffer.from(`api_key=${quote}${adversarialBody}`, 'utf8');
+    assert.throws(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes(`${label}-unterminated.txt`, unterminated),
+      ]),
+      /authority|secret/i,
+      `${label} unterminated quoted authority text fails closed`,
+    );
+    const terminated = Buffer.from(
+      `api_key=${quote}${adversarialBody}${quote}`,
+      'utf8',
+    );
+    assert.throws(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes(`${label}-terminated.txt`, terminated),
+      ]),
+      /authority|secret/i,
+      `${label} terminated quoted text remains secret-shaped`,
+    );
+  }
 });
 
 test('immutable E2B workspace export rejects confusable secret bytes before copying', async (t) => {
@@ -615,23 +672,57 @@ test('immutable E2B workspace export rejects pinned delimiters in UTF-8 and UTF-
   for (const delimiter of PINNED_SECRET_ASSIGNMENT_DELIMITERS) {
     for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
       for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
-        const bytes = encodeSecretAssignment(
-          `${key}${delimiter}${SYNTHETIC_SECRET}`,
-          encoding,
-        );
-        await writeFile(path.join(source, 'input.txt'), bytes);
-        await assert.rejects(
-          createImmutableWorkspaceExport({
-            source_workspace: source,
-            export_root: exportRoot,
-            export_id: `delimiter_${caseIndex}`,
-            expected_workspace_digest: sha256Ref('must-not-reach-copy'),
-          }),
-          /credential|secret/i,
-          `${codePointLabel(delimiter)} ${keyLabel} ${encoding}`,
-        );
-        caseIndex += 1;
+        for (const [valueLabel, value] of SECRET_ASSIGNMENT_VALUES) {
+          const bytes = encodeSecretAssignment(`${key}${delimiter}${value}`, encoding);
+          await writeFile(path.join(source, 'input.txt'), bytes);
+          await assert.rejects(
+            createImmutableWorkspaceExport({
+              source_workspace: source,
+              export_root: exportRoot,
+              export_id: `delimiter_${caseIndex}`,
+              expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+            }),
+            /credential|secret/i,
+            `${codePointLabel(delimiter)} ${keyLabel} ${encoding} ${valueLabel}`,
+          );
+          caseIndex += 1;
+        }
       }
+    }
+  }
+});
+
+test('immutable E2B workspace export deterministically parses adversarial quoted escapes', {
+  timeout: 20_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-quoted-escape-scan-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [label, quote, escapeUnit] of [
+    ['double', '"', '\\"!'],
+    ['single', "'", "\\'&"],
+  ]) {
+    const adversarialBody = escapeUnit.repeat(256 * 1024);
+    for (const [termination, bytes] of [
+      ['unterminated', Buffer.from(`api_key=${quote}${adversarialBody}`, 'utf8')],
+      ['terminated', Buffer.from(`api_key=${quote}${adversarialBody}${quote}`, 'utf8')],
+    ]) {
+      await writeFile(path.join(source, 'input.txt'), bytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `quoted_${termination}_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${label} ${termination}`,
+      );
+      caseIndex += 1;
     }
   }
 });

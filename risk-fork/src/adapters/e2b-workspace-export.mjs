@@ -55,7 +55,6 @@ const SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN = new RegExp(
   String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
   'gu',
 );
-const SECRET_ASSIGNMENT_VALUE_PATTERN = /\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/yu;
 const SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN = new RegExp(
   `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES}]`,
   'u',
@@ -75,6 +74,84 @@ function exactPatternMatches(pattern, value) {
   const matched = pattern.test(value);
   pattern.lastIndex = 0;
   return matched;
+}
+
+function isSecretAssignmentWhitespace(character) {
+  const codePoint = character.charCodeAt(0);
+  return (codePoint >= 0x0009 && codePoint <= 0x000d)
+    || codePoint === 0x0020
+    || codePoint === 0x00a0
+    || codePoint === 0x1680
+    || (codePoint >= 0x2000 && codePoint <= 0x200a)
+    || codePoint === 0x2028
+    || codePoint === 0x2029
+    || codePoint === 0x202f
+    || codePoint === 0x205f
+    || codePoint === 0x3000
+    || codePoint === 0xfeff;
+}
+
+function isUnquotedSecretAssignmentTerminator(character) {
+  return isSecretAssignmentWhitespace(character)
+    || character === '&'
+    || character === '"'
+    || character === "'"
+    || character === ','
+    || character === ';'
+    || character === '{'
+    || character === '}'
+    || character === ']';
+}
+
+function readSecretAssignmentValue(text, startIndex, valueEncoding) {
+  let index = startIndex;
+  while (index < text.length && isSecretAssignmentWhitespace(text[index])) index += 1;
+  if (index >= text.length) {
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+
+  const quote = text[index] === '"' || text[index] === "'" ? text[index] : null;
+  if (quote) {
+    const valueStart = index + 1;
+    let hasMinimumBytes = false;
+    index = valueStart;
+    while (index < text.length) {
+      if (text[index] === quote) {
+        return { matched: true, hasMinimumBytes, nextIndex: index + 1 };
+      }
+      if (text[index] === '\\') {
+        index += 1;
+        if (index >= text.length) {
+          return { matched: false, hasMinimumBytes: false, nextIndex: index };
+        }
+      }
+      index += 1;
+      if (!hasMinimumBytes) {
+        hasMinimumBytes = Buffer.byteLength(
+          text.slice(valueStart, index),
+          valueEncoding,
+        ) >= MIN_SECRET_ASSIGNMENT_BYTES;
+      }
+      if (hasMinimumBytes) {
+        return { matched: true, hasMinimumBytes: true, nextIndex: index };
+      }
+    }
+    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  }
+
+  const valueStart = index;
+  while (index < text.length && !isUnquotedSecretAssignmentTerminator(text[index])) {
+    index += 1;
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding)
+      >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+  }
+  return {
+    matched: index > valueStart,
+    hasMinimumBytes: false,
+    nextIndex: index,
+  };
 }
 
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
@@ -98,11 +175,9 @@ function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
         ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter)
         : exactPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter);
       if (!keyMatches || !delimiterMatches) continue;
-      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = assignmentPattern.lastIndex;
-      const valueMatch = SECRET_ASSIGNMENT_VALUE_PATTERN.exec(text);
-      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = 0;
-      const value = valueMatch?.[1] ?? valueMatch?.[2] ?? valueMatch?.[3] ?? '';
-      if (valueMatch && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      const value = readSecretAssignmentValue(text, assignmentPattern.lastIndex, valueEncoding);
+      assignmentPattern.lastIndex = value.nextIndex;
+      if (value.matched && value.hasMinimumBytes) {
         assignmentPattern.lastIndex = 0;
         return true;
       }
