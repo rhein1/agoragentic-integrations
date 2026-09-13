@@ -4,12 +4,12 @@ import {
   lstat,
   open,
   readdir,
-  readFile,
   realpath,
 } from 'node:fs/promises';
 import path from 'node:path';
 
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
+import { hashOpenedFileExact, readOpenedFileExact } from '../../src/util.mjs';
 
 export const BOOT_EVIDENCE_SCHEMA = 'agoragentic.risk-fork.e2b-boot-evidence.v1';
 export const E2B_BIRTH_REQUEST_SCHEMA =
@@ -76,7 +76,7 @@ const OBSERVATION_HASH_KEYS = Object.freeze([
   'ipv6_probe_hash',
 ]);
 const MAX_RUNTIME_FILES = 2_000;
-const MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
+export const MAX_RUNTIME_WORKSPACE_BYTES = 32 * 1024 * 1024;
 const MAX_RUNTIME_DEPTH = 128;
 const BIRTH_AUTHORITY_FLAGS = Object.freeze([
   'credentials_included',
@@ -225,7 +225,23 @@ export function sha256BytesRef(value) {
 }
 
 export async function sha256FileRef(file) {
-  return sha256BytesRef(await readFile(file));
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  const handle = await open(file, constants.O_RDONLY | nonBlock);
+  try {
+    const before = await handle.stat({ bigint: true });
+    if (!before.isFile()) throw new Error('SHA-256 source must be a regular file');
+    const digest = await hashOpenedFileExact(handle, {
+      expectedSize: before.size,
+      changedMessage: 'SHA-256 source changed while it was hashed',
+    });
+    const after = await handle.stat({ bigint: true });
+    if (stableIdentity(after) !== stableIdentity(before)) {
+      throw new Error('SHA-256 source changed while it was hashed');
+    }
+    return `sha256:${digest}`;
+  } finally {
+    await handle.close();
+  }
 }
 
 function stableIdentity(info) {
@@ -278,7 +294,12 @@ async function readStableRuntimeFile(absolute, relative, rootReal, remainingByte
     }
     const resolved = await realpath(absolute);
     assertWithin(rootReal, resolved, `Runtime workspace file ${relative}`);
-    const content = await handle.readFile();
+    const content = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: remainingBytes,
+      changedMessage: `Runtime workspace file changed while reading: ${relative}`,
+      limitMessage: 'Runtime workspace exceeds byte limit',
+    });
     const after = await handle.stat({ bigint: true });
     if (!after.isFile() || after.nlink > 1n || stableIdentity(after) !== stableIdentity(opened)) {
       throw new Error(`Runtime workspace file changed while reading: ${relative}`);
@@ -322,7 +343,7 @@ export async function inspectRuntimeWorkspace(workspaceRoot, options = {}) {
   }
   const rootReal = await realpath(root);
   const maxFiles = options.maxFiles ?? MAX_RUNTIME_FILES;
-  const maxBytes = options.maxBytes ?? MAX_RUNTIME_BYTES;
+  const maxBytes = options.maxBytes ?? MAX_RUNTIME_WORKSPACE_BYTES;
   const records = [];
   const foldedPaths = new Set();
   let totalBytes = 0;

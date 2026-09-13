@@ -6,7 +6,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { compileGstackArtifacts, GstackHarnessError } from './gstack-harness.mjs';
+import {
+  compileGstackArtifacts,
+  GstackHarnessError,
+  readOpenedArtifactExact,
+} from './gstack-harness.mjs';
 
 const execFileAsync = promisify(execFile);
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -183,6 +187,24 @@ test('a FIFO artifact fails closed within a bounded subprocess', {
   });
   assert.equal(result.ok, false);
   assert(result.finding_codes.includes('artifact_not_regular_file'));
+});
+
+test('artifact descriptor reader rejects deterministic growth after fstat', async t => {
+  const temp = await tempRoot();
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const artifact = path.join(temp, 'growing.md');
+  await fs.writeFile(artifact, '# reviewed\n', 'utf8');
+  const handle = await fs.open(artifact, 'r');
+  try {
+    const opened = await handle.stat({ bigint: true });
+    await fs.appendFile(artifact, 'later bytes\n', 'utf8');
+    await assert.rejects(
+      readOpenedArtifactExact(handle, opened.size, 'review'),
+      error => error instanceof GstackHarnessError && error.code === 'artifact_changed',
+    );
+  } finally {
+    await handle.close();
+  }
 });
 
 test('a project-local junction cannot relabel an outside artifact as project evidence', async t => {

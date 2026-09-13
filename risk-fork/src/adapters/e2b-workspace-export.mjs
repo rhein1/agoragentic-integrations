@@ -25,6 +25,7 @@ import {
   requireOpaqueRef,
   requireSha256Ref,
   requireString,
+  readOpenedFileExact,
   safeEqual,
   securityPatternMatches,
   securityPatternsMatch,
@@ -803,7 +804,12 @@ async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
       symlinkMessage: `Symlinks are forbidden: ${relative}`,
       changedMessage: `Workspace path changed while exporting: ${relative}`,
     });
-    const content = await handle.readFile();
+    const content = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: maxReadableBytes,
+      changedMessage: `Workspace file changed while exporting: ${relative}`,
+      limitMessage: `Workspace exceeds its bounded byte allowance at ${relative}`,
+    });
     const after = await handle.stat({ bigint: true });
     if (!after.isFile() || after.nlink > 1n) {
       throw new Error(`Workspace file changed type while exporting: ${relative}`);
@@ -1168,7 +1174,12 @@ async function validateOwnedCleanupManifest(target, exportId, rootReal) {
       symlinkMessage: 'Immutable workspace export cleanup manifest is not a regular file',
       changedMessage: 'Immutable workspace export cleanup manifest path changed',
     });
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: MAX_CLEANUP_MANIFEST_BYTES,
+      changedMessage: 'Immutable workspace export cleanup manifest changed during immutable export cleanup',
+      limitMessage: 'Immutable workspace export cleanup manifest exceeds its byte bound',
+    });
     if (bytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error('Immutable workspace export cleanup manifest exceeds its byte bound');
     }

@@ -52076,6 +52076,79 @@ function sha256Ref(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
 import { createHash as createHash2, timingSafeEqual } from "node:crypto";
 import path from "node:path";
+var MAX_INTERRUPTED_DESCRIPTOR_READS = 16;
+function descriptorReadSize(value, field) {
+  const size = typeof value === "bigint" ? value : BigInt(value);
+  if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new TypeError(`${field} must be a non-negative safe integer`);
+  }
+  return size;
+}
+async function readDescriptorAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== "EINTR" || interruptions >= MAX_INTERRUPTED_DESCRIPTOR_READS) {
+        throw error;
+      }
+      interruptions += 1;
+    }
+  }
+}
+async function readOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, "expectedSize");
+  const maxBytes = descriptorReadSize(options.maxBytes, "maxBytes");
+  const changedMessage = options.changedMessage ?? "File changed while it was read";
+  const limitMessage = options.limitMessage ?? "File exceeds its bounded byte allowance";
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+  const size = Number(expectedSize);
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await readDescriptorAt(handle, bytes, offset, size - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead) || result.bytesRead <= 0 || result.bytesRead > size - offset) {
+      throw new Error(changedMessage);
+    }
+    offset += result.bytesRead;
+  }
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return bytes;
+}
+async function hashOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, "expectedSize");
+  const maxBytes = descriptorReadSize(
+    options.maxBytes ?? Number.MAX_SAFE_INTEGER,
+    "maxBytes"
+  );
+  const changedMessage = options.changedMessage ?? "File changed while it was hashed";
+  const limitMessage = options.limitMessage ?? "File exceeds its bounded byte allowance";
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+  const hash = createHash2(options.algorithm ?? "sha256");
+  const chunk = Buffer.allocUnsafe(64 * 1024);
+  const size = Number(expectedSize);
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(chunk.byteLength, size - offset);
+    const result = await readDescriptorAt(handle, chunk, 0, length, offset);
+    if (!Number.isSafeInteger(result?.bytesRead) || result.bytesRead <= 0 || result.bytesRead > length) {
+      throw new Error(changedMessage);
+    }
+    hash.update(chunk.subarray(0, result.bytesRead));
+    offset += result.bytesRead;
+  }
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return hash.digest(options.encoding ?? "hex");
+}
 function detachArray2(value) {
   Object.setPrototypeOf(value, null);
   return value;
@@ -67824,7 +67897,7 @@ async function resolveE2BPackageDirectory() {
   }
   throw new Error("Unable to resolve the installed e2b package directory");
 }
-async function readStableRegularFile(file, root) {
+async function readStableRegularFile(file, root, maxBytes, limitMessage) {
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
   const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
@@ -67845,11 +67918,17 @@ async function readStableRegularFile(file, root) {
     if (opened.nlink !== 1) {
       throw new Error("E2B runtime SDK package tree contains a hard-linked file");
     }
+    if (opened.size > maxBytes) throw new Error(limitMessage);
     const resolved = await realpath(file);
     if (path3.relative(path3.resolve(file), resolved) !== "" || !isContainedPath(root, resolved)) {
       throw new Error("E2B runtime SDK package file escapes its canonical package directory");
     }
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes,
+      changedMessage: "E2B runtime SDK package file changed during inspection",
+      limitMessage
+    });
     const after = await handle.stat();
     const pathAfter = await lstat(file);
     const resolvedAfter = await realpath(file);
@@ -68035,7 +68114,21 @@ async function inspectRuntimePackageTree(root, anchor, state) {
       if (state.fileCount >= MAX_RUNTIME_SDK_FILES) {
         throw new Error(`E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_FILES} files`);
       }
-      const bytes = await readStableRegularFile(target, root);
+      const packageRemaining = MAX_RUNTIME_SDK_BYTES_PER_PACKAGE - packageBytes;
+      const closureRemaining = MAX_RUNTIME_SDK_BYTES - state.totalBytes;
+      if (info.size > packageRemaining) {
+        throw new Error(
+          `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes`
+        );
+      }
+      if (info.size > closureRemaining) {
+        throw new Error(
+          `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`
+        );
+      }
+      const readLimit = Math.min(packageRemaining, closureRemaining);
+      const limitMessage = packageRemaining <= closureRemaining ? `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes` : `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`;
+      const bytes = await readStableRegularFile(target, root, readLimit, limitMessage);
       packageBytes += bytes.byteLength;
       state.totalBytes += bytes.byteLength;
       state.fileCount += 1;
@@ -68686,7 +68779,23 @@ function sha256BytesRef(value) {
   return `sha256:${createHash3("sha256").update(bytes).digest("hex")}`;
 }
 async function sha256FileRef(file) {
-  return sha256BytesRef(await readFile3(file));
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  const handle = await open2(file, constants.O_RDONLY | nonBlock);
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error("E2B artifact hash source must be a regular file");
+    const digest = await hashOpenedFileExact(handle, {
+      expectedSize: before.size,
+      changedMessage: "E2B artifact changed while it was hashed"
+    });
+    const after = await handle.stat();
+    if (!sameFileIdentity(before, after)) {
+      throw new Error("E2B artifact changed while it was hashed");
+    }
+    return `sha256:${digest}`;
+  } finally {
+    await handle.close();
+  }
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
@@ -68757,7 +68866,7 @@ var OBSERVATION_HASH_KEYS = Object.freeze([
   "ipv4_probe_hash",
   "ipv6_probe_hash"
 ]);
-var MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
+var MAX_RUNTIME_WORKSPACE_BYTES = 32 * 1024 * 1024;
 var BIRTH_AUTHORITY_FLAGS = Object.freeze([
   "credentials_included",
   "wallet_material_included",
@@ -70190,7 +70299,12 @@ async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
       symlinkMessage: `Symlinks are forbidden: ${relative}`,
       changedMessage: `Workspace path changed while exporting: ${relative}`
     });
-    const content = await handle.readFile();
+    const content = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: maxReadableBytes,
+      changedMessage: `Workspace file changed while exporting: ${relative}`,
+      limitMessage: `Workspace exceeds its bounded byte allowance at ${relative}`
+    });
     const after = await handle.stat({ bigint: true });
     if (!after.isFile() || after.nlink > 1n) {
       throw new Error(`Workspace file changed type while exporting: ${relative}`);
@@ -70541,7 +70655,12 @@ async function validateOwnedCleanupManifest(target, exportId, rootReal) {
       symlinkMessage: "Immutable workspace export cleanup manifest is not a regular file",
       changedMessage: "Immutable workspace export cleanup manifest path changed"
     });
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: MAX_CLEANUP_MANIFEST_BYTES,
+      changedMessage: "Immutable workspace export cleanup manifest changed during immutable export cleanup",
+      limitMessage: "Immutable workspace export cleanup manifest exceeds its byte bound"
+    });
     if (bytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
     }
@@ -74375,7 +74494,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:45ad563f9bdd8f8d1b25d0b08e9fa3a0cdab27d7276b7b651d483336c581c5a6" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:d3ac9b2753e3dd599d7f58ccb05fdf2bed26a6efb97fc47248966b6c6cd28a01" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

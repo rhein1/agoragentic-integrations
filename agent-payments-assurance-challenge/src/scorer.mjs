@@ -11,6 +11,40 @@ const MAX_JSON_DEPTH = 64;
 const DECISIONS = new Set(['allow', 'deny', 'review', 'complete']);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const TOKEN_PATTERN = /^[a-z0-9][a-z0-9._:-]*$/;
+const MAX_INTERRUPTED_READS = 16;
+
+async function readAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_READS) throw error;
+      interruptions += 1;
+    }
+  }
+}
+
+export async function readOpenedJsonFileExact(handle, expectedSize, maxBytes) {
+  if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) throw new TypeError('invalid_file');
+  if (expectedSize > maxBytes) throw new RangeError('too_large');
+  const bytes = Buffer.alloc(expectedSize);
+  let offset = 0;
+  while (offset < expectedSize) {
+    const result = await readAt(handle, bytes, offset, expectedSize - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead)
+      || result.bytesRead <= 0
+      || result.bytesRead > expectedSize - offset) {
+      throw new Error('file_changed');
+    }
+    offset += result.bytesRead;
+  }
+  const probe = await readAt(handle, Buffer.allocUnsafe(1), 0, 1, expectedSize);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error('file_changed');
+  }
+  return bytes;
+}
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -144,7 +178,7 @@ export async function readJson(filePath, options = {}) {
       fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new TypeError('not_file');
       if (fileStat.size > maxBytes) throw new RangeError('too_large');
-      source = await handle.readFile('utf8');
+      source = (await readOpenedJsonFileExact(handle, fileStat.size, maxBytes)).toString('utf8');
     } finally {
       await handle.close();
     }

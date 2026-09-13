@@ -15,7 +15,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { TextDecoder } from 'node:util';
 
-import { securityPatternMatches } from '../../src/util.mjs';
+import { readOpenedFileExact, securityPatternMatches } from '../../src/util.mjs';
 
 import {
   canonicalize,
@@ -556,7 +556,12 @@ async function readBoundedRegularFile(target, maxBytes) {
         throw new Error('E2B birth request artifact ownership or mode is invalid');
       }
     }
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: during.size,
+      maxBytes,
+      changedMessage: 'E2B birth request artifact changed while it was consumed',
+      limitMessage: 'E2B birth request artifact is not a bounded regular file',
+    });
     const after = await handle.stat({ bigint: true });
     const pathAfter = await lstat(target, { bigint: true });
     if (BigInt(bytes.byteLength) !== during.size

@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 66,
-    "sha256": "sha256:45ad563f9bdd8f8d1b25d0b08e9fa3a0cdab27d7276b7b651d483336c581c5a6"
+    "sha256": "sha256:d3ac9b2753e3dd599d7f58ccb05fdf2bed26a6efb97fc47248966b6c6cd28a01"
   },
   "reviewed_sources": [
     {
@@ -39,18 +39,18 @@
     },
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
-      "bytes": 27492,
-      "sha256": "sha256:2eb68d2a154171b61448443950528ec021a0f2e457dc00ef0730b6cc647e0a22"
+      "bytes": 27743,
+      "sha256": "sha256:b830504b3445bc51847a351544785545e8e6a65a61b36e3777bb30cd2b7f50b5"
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
-      "bytes": 10114,
-      "sha256": "sha256:deaf3997976954cc93d1aa2f6405425c902f58e84206a82c0aa278bfa2d5dfb0"
+      "bytes": 11482,
+      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 14173,
-      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
+      "bytes": 15821,
+      "sha256": "sha256:2a8f0feaf43e08089268c25a4556e96755e4aae6253f1b564a69a373b1476ce7"
     },
     {
       "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
@@ -59,8 +59,8 @@
     },
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
-      "bytes": 31559,
-      "sha256": "sha256:136ab90b62d75dd2a13038ffe80f867c16e91a1b933e014a011bd94740b355cb"
+      "bytes": 32562,
+      "sha256": "sha256:ae5c7b0360a867532d291fa3e39a338a244b215a07fca2f7194ec2291c313037"
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
@@ -104,8 +104,8 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
-      "bytes": 56501,
-      "sha256": "sha256:95a91b5343f1aa85cb36f8035729555582be61db88f8a65cd95f3c37ec5cfa01"
+      "bytes": 57065,
+      "sha256": "sha256:d08725030e0169a89a81cda8c80f8a5e1725bd8b9ed64035bf383a637de3a15b"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
@@ -179,8 +179,8 @@
     },
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
-      "bytes": 78732,
-      "sha256": "sha256:27d7239e5103bdda6e0b359c225a226bbc54cf880bd6335d74cfadfc574a7525"
+      "bytes": 80491,
+      "sha256": "sha256:2242d0631e777a2d56fe0adf3ee9605d9ae1f2f867f5ce278c09222ebbd34868"
     },
     {
       "path": "risk-fork/src/framework-tool-adapter.mjs",
@@ -259,8 +259,8 @@
     },
     {
       "path": "risk-fork/src/util.mjs",
-      "bytes": 109405,
-      "sha256": "sha256:713254c37ba2f681669c83c045cdfc30535fe7ff53910f4998db90eb7635dbaa"
+      "bytes": 113023,
+      "sha256": "sha256:7f1b7d23e84f6f51d13b3973be94682bd1307b46c48540b12b2fe8ca0aaffafe"
     },
     {
       "path": "transaction-assurance/src/adapters/nevermined-cli.mjs",
@@ -2169,20 +2169,20 @@
     {
       "path": "risk-fork/e2b-template/bin/boot-guard.mjs",
       "source": "reviewed_source",
-      "bytes": 27492,
-      "sha256": "sha256:2eb68d2a154171b61448443950528ec021a0f2e457dc00ef0730b6cc647e0a22"
+      "bytes": 27743,
+      "sha256": "sha256:b830504b3445bc51847a351544785545e8e6a65a61b36e3777bb30cd2b7f50b5"
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
       "source": "reviewed_source",
-      "bytes": 10114,
-      "sha256": "sha256:deaf3997976954cc93d1aa2f6405425c902f58e84206a82c0aa278bfa2d5dfb0"
+      "bytes": 11482,
+      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
       "source": "reviewed_source",
-      "bytes": 14173,
-      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
+      "bytes": 15821,
+      "sha256": "sha256:2a8f0feaf43e08089268c25a4556e96755e4aae6253f1b564a69a373b1476ce7"
     },
     {
       "path": "risk-fork/e2b-template/lib/mcp-http-phase.mjs",
@@ -2193,8 +2193,8 @@
     {
       "path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source": "reviewed_source",
-      "bytes": 31559,
-      "sha256": "sha256:136ab90b62d75dd2a13038ffe80f867c16e91a1b933e014a011bd94740b355cb"
+      "bytes": 32562,
+      "sha256": "sha256:ae5c7b0360a867532d291fa3e39a338a244b215a07fca2f7194ec2291c313037"
     },
     {
       "path": "risk-fork/e2b-template/template.mjs",
@@ -2241,8 +2241,8 @@
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
       "source": "reviewed_source",
-      "bytes": 56501,
-      "sha256": "sha256:95a91b5343f1aa85cb36f8035729555582be61db88f8a65cd95f3c37ec5cfa01"
+      "bytes": 57065,
+      "sha256": "sha256:d08725030e0169a89a81cda8c80f8a5e1725bd8b9ed64035bf383a637de3a15b"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
@@ -2313,8 +2313,8 @@
     {
       "path": "risk-fork/src/e2b-qualification.mjs",
       "source": "reviewed_source",
-      "bytes": 78732,
-      "sha256": "sha256:27d7239e5103bdda6e0b359c225a226bbc54cf880bd6335d74cfadfc574a7525"
+      "bytes": 80491,
+      "sha256": "sha256:2242d0631e777a2d56fe0adf3ee9605d9ae1f2f867f5ce278c09222ebbd34868"
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
@@ -2367,8 +2367,8 @@
     {
       "path": "risk-fork/src/util.mjs",
       "source": "reviewed_source",
-      "bytes": 109405,
-      "sha256": "sha256:713254c37ba2f681669c83c045cdfc30535fe7ff53910f4998db90eb7635dbaa"
+      "bytes": 113023,
+      "sha256": "sha256:7f1b7d23e84f6f51d13b3973be94682bd1307b46c48540b12b2fe8ca0aaffafe"
     },
     {
       "path": "transaction-assurance/src/canonical.mjs",
@@ -2628,8 +2628,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3105735,
-    "sha256": "sha256:68a3ecb724d185563b408012ea7f2392b91e504d9dec4b8198602385627a3223"
+    "bytes": 3111081,
+    "sha256": "sha256:3a3193f45be9f46180c855fae55e39b6b35ac188cc64bf47c36b436d2889e794"
   },
   "packaged_assets": [
     {
@@ -2658,20 +2658,20 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
       "source_path": "risk-fork/e2b-template/bin/boot-guard.mjs",
-      "bytes": 27492,
-      "sha256": "sha256:2eb68d2a154171b61448443950528ec021a0f2e457dc00ef0730b6cc647e0a22"
+      "bytes": 27743,
+      "sha256": "sha256:b830504b3445bc51847a351544785545e8e6a65a61b36e3777bb30cd2b7f50b5"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs",
       "source_path": "risk-fork/e2b-template/bin/bootstrap.mjs",
-      "bytes": 10114,
-      "sha256": "sha256:deaf3997976954cc93d1aa2f6405425c902f58e84206a82c0aa278bfa2d5dfb0"
+      "bytes": 11482,
+      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/run.mjs",
       "source_path": "risk-fork/e2b-template/bin/run.mjs",
-      "bytes": 14173,
-      "sha256": "sha256:2e54bfccc1565792fe367cbb1786e99df369f8fe6378400ffa8c860f32cdc3fc"
+      "bytes": 15821,
+      "sha256": "sha256:2a8f0feaf43e08089268c25a4556e96755e4aae6253f1b564a69a373b1476ce7"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/mcp-http-phase.mjs",
@@ -2682,8 +2682,8 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/lib/runtime-contract.mjs",
       "source_path": "risk-fork/e2b-template/lib/runtime-contract.mjs",
-      "bytes": 31559,
-      "sha256": "sha256:136ab90b62d75dd2a13038ffe80f867c16e91a1b933e014a011bd94740b355cb"
+      "bytes": 32562,
+      "sha256": "sha256:ae5c7b0360a867532d291fa3e39a338a244b215a07fca2f7194ec2291c313037"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/template.mjs",
@@ -2712,8 +2712,8 @@
     {
       "path": "e2b-context/risk-fork/src/util.mjs",
       "source_path": "risk-fork/src/util.mjs",
-      "bytes": 109405,
-      "sha256": "sha256:713254c37ba2f681669c83c045cdfc30535fe7ff53910f4998db90eb7635dbaa"
+      "bytes": 113023,
+      "sha256": "sha256:7f1b7d23e84f6f51d13b3973be94682bd1307b46c48540b12b2fe8ca0aaffafe"
     },
     {
       "path": "e2b-context/transaction-assurance/src/canonical.mjs",

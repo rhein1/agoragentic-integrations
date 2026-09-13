@@ -19,6 +19,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify, TextDecoder } from 'node:util';
 
 import { GENERATED_NOT_CLIENT_VERIFIED_STATUS } from './config-generator.mjs';
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 const execFileAsync = promisify(execFile);
 const UTF8_FATAL = new TextDecoder('utf-8', { fatal: true });
@@ -373,7 +374,14 @@ async function enumerateTree(root, { includeBytes = false } = {}) {
           absolute_path: absolute,
           bytes: Number(entryStat.size),
         };
-        if (includeBytes) record.content = await handle.readFile();
+        if (includeBytes) {
+          record.content = await readOpenedFileExact(handle, {
+            expectedSize: entryStat.size,
+            maxBytes: OFFLINE_KIT_LIMITS.max_file_bytes,
+            changedMessage: `Offline-kit file changed while reading: ${relative}`,
+            limitMessage: `${relative} exceeds the per-file size limit`,
+          });
+        }
         const entryAfter = await handle.stat({ bigint: true });
         assertStableFilesystemIdentity(
           entryStat,
@@ -1297,7 +1305,12 @@ async function readCanonicalZip(zipPath) {
       linkMessage: 'Offline-kit ZIP must be a regular file',
       changedMessage: 'Offline-kit ZIP path changed while reading',
     });
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: zipStat.size,
+      maxBytes: OFFLINE_KIT_LIMITS.max_archive_bytes,
+      changedMessage: 'Offline-kit ZIP changed while reading',
+      limitMessage: 'ZIP exceeds the offline-kit byte limit',
+    });
     const zipAfter = await handle.stat({ bigint: true });
     assertStableFilesystemIdentity(zipStat, zipAfter, 'Offline-kit ZIP changed while reading');
     const zipRealAfter = await assertOpenedPathIdentity({
@@ -1496,7 +1509,12 @@ export async function verifyOfflineKit({ kitDirectory }) {
       rootReal: root,
       escapeMessage: `${MANIFEST_NAME} escapes the offline-kit root`,
     });
-    manifestBytes = await manifestHandle.readFile();
+    manifestBytes = await readOpenedFileExact(manifestHandle, {
+      expectedSize: manifestStat.size,
+      maxBytes: 4 * 1024 * 1024,
+      changedMessage: `${MANIFEST_NAME} changed while reading`,
+      limitMessage: 'Offline-kit manifest is too large',
+    });
     const manifestAfter = await manifestHandle.stat({ bigint: true });
     assertStableFilesystemIdentity(
       manifestStat,

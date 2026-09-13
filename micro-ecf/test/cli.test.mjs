@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import { indexSources, readOpenedFileExactSync } from '../src/core.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const microEcfRoot = path.join(__dirname, '..');
@@ -26,6 +29,40 @@ function write(filePath, text) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, text);
 }
+
+test('descriptor reads reject post-fstat growth and large SQLite provenance is streamed', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-descriptor-'));
+  const growing = path.join(tmp, 'growing.md');
+  let fd;
+  try {
+    write(growing, '# reviewed\n');
+    fd = fs.openSync(growing, 'r');
+    const opened = fs.fstatSync(fd, { bigint: true });
+    fs.appendFileSync(growing, 'later bytes\n');
+    assert.throws(
+      () => readOpenedFileExactSync(fd, opened.size, 1024),
+      /changed while it was read/,
+    );
+    fs.closeSync(fd);
+    fd = undefined;
+
+    fs.rmSync(growing);
+    const sqlite = path.join(tmp, 'provenance.sqlite');
+    const sqliteBytes = Buffer.alloc(256 * 1024, 0x61);
+    fs.writeFileSync(sqlite, sqliteBytes);
+    const sourceMap = indexSources(tmp, { maxFiles: 10, maxFileBytes: 64 });
+    const source = sourceMap.sources.find((entry) => entry.path === 'provenance.sqlite');
+    assert.equal(source.bytes, sqliteBytes.byteLength);
+    assert.equal(
+      source.hash,
+      `sha256:${crypto.createHash('sha256').update(sqliteBytes).digest('hex')}`,
+    );
+    assert.match(source.summary, /records file provenance only/);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
 
 test('micro-ecf CLI initializes, indexes, builds, and exports bounded local artifacts', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-cli-'));

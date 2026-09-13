@@ -50,6 +50,72 @@ const TEXT_EXTENSIONS = new Set([
 ]);
 
 const SQLITE_EXTENSIONS = new Set(['.db', '.sqlite', '.sqlite3']);
+const DESCRIPTOR_HASH_CHUNK_BYTES = 64 * 1024;
+const MAX_INTERRUPTED_DESCRIPTOR_READS = 16;
+
+function exactDescriptorSize(value) {
+  const size = typeof value === 'bigint' ? value : BigInt(value);
+  if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new TypeError('Opened file size is not a non-negative safe integer');
+  }
+  return Number(size);
+}
+
+function readDescriptorAtSync(fd, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return fs.readSync(fd, buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_DESCRIPTOR_READS) throw error;
+      interruptions += 1;
+    }
+  }
+}
+
+function consumeOpenedFileExactSync(fd, expectedSize, onChunk, changedMessage) {
+  const size = exactDescriptorSize(expectedSize);
+  const scratch = Buffer.allocUnsafe(Math.max(1, Math.min(DESCRIPTOR_HASH_CHUNK_BYTES, size)));
+  let position = 0;
+  while (position < size) {
+    const requested = Math.min(scratch.byteLength, size - position);
+    const bytesRead = readDescriptorAtSync(fd, scratch, 0, requested, position);
+    if (!Number.isSafeInteger(bytesRead) || bytesRead <= 0 || bytesRead > requested) {
+      throw new Error(changedMessage);
+    }
+    onChunk(scratch.subarray(0, bytesRead), position);
+    position += bytesRead;
+  }
+  const probe = readDescriptorAtSync(fd, scratch, 0, 1, size);
+  if (probe !== 0) throw new Error(changedMessage);
+  return size;
+}
+
+export function readOpenedFileExactSync(fd, expectedSize, maxBytes) {
+  const size = exactDescriptorSize(expectedSize);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || size > maxBytes) {
+    throw new RangeError('Opened file exceeds its bounded byte allowance');
+  }
+  const bytes = Buffer.alloc(size);
+  consumeOpenedFileExactSync(
+    fd,
+    size,
+    (chunk, position) => chunk.copy(bytes, position),
+    'Opened file changed while it was read',
+  );
+  return bytes;
+}
+
+function hashOpenedFileExactSync(fd, expectedSize, changedMessage) {
+  const hash = crypto.createHash('sha256');
+  const size = consumeOpenedFileExactSync(
+    fd,
+    expectedSize,
+    (chunk) => hash.update(chunk),
+    changedMessage,
+  );
+  return { size, sha256: hash.digest('hex') };
+}
 
 const DEFAULT_BLOCK_DIRS = new Set([
   '.cache',
@@ -635,23 +701,32 @@ export function indexSources(inputPath, options = {}) {
     const fd = fs.openSync(filePath, 'r');
     let stat;
     let buffer;
+    let sha;
     try {
-      stat = fs.fstatSync(fd);
-      if (stat.size > maxFileBytes && !SQLITE_EXTENSIONS.has(ext)) {
+      stat = fs.fstatSync(fd, { bigint: true });
+      if (stat.size > BigInt(maxFileBytes) && !SQLITE_EXTENSIONS.has(ext)) {
         blocked.push({ path: rel, reason: 'max_file_bytes_exceeded' });
         return;
       }
-      buffer = fs.readFileSync(fd);
+      if (SQLITE_EXTENSIONS.has(ext)) {
+        ({ sha256: sha } = hashOpenedFileExactSync(
+          fd,
+          stat.size,
+          `Source file changed while reading: ${rel}`,
+        ));
+      } else {
+        buffer = readOpenedFileExactSync(fd, stat.size, maxFileBytes);
+        sha = sha256(buffer);
+      }
     } finally {
       fs.closeSync(fd);
     }
 
-    const sha = sha256(buffer);
     sources.push({
       id: `src_${sha.slice(0, 12)}`,
       path: rel,
       type: classifySource(filePath),
-      bytes: stat.size,
+      bytes: Number(stat.size),
       hash: `sha256:${sha}`,
       summary: SQLITE_EXTENSIONS.has(ext)
         ? 'Local database file detected. Micro ECF records file provenance only; export schema/data summaries separately before Agent OS preview.'

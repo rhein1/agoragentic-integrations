@@ -25,6 +25,45 @@ export class GstackHarnessError extends Error {
   }
 }
 
+const MAX_INTERRUPTED_ARTIFACT_READS = 16;
+
+async function readArtifactAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_ARTIFACT_READS) throw error;
+      interruptions += 1;
+    }
+  }
+}
+
+export async function readOpenedArtifactExact(handle, expectedSize, stage) {
+  if (typeof expectedSize !== 'bigint'
+    || expectedSize < 0n
+    || expectedSize > BigInt(MAX_ARTIFACT_BYTES)) {
+    throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
+  }
+  const size = Number(expectedSize);
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await readArtifactAt(handle, bytes, offset, size - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead)
+      || result.bytesRead <= 0
+      || result.bytesRead > size - offset) {
+      throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);
+    }
+    offset += result.bytesRead;
+  }
+  const probe = await readArtifactAt(handle, Buffer.allocUnsafe(1), 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);
+  }
+  return bytes;
+}
+
 export async function compileGstackArtifacts({
   projectDir,
   outDir,
@@ -211,7 +250,7 @@ async function readArtifact({ stage, suppliedPath, projectRoot }) {
       throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
     }
     const openedReal = await bindArtifactPath({ absolutePath, opened, projectRoot, stage });
-    bytes = await handle.readFile();
+    bytes = await readOpenedArtifactExact(handle, opened.size, stage);
     const after = await handle.stat({ bigint: true });
     if (!after.isFile() || artifactIdentity(after) !== artifactIdentity(opened)) {
       throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);

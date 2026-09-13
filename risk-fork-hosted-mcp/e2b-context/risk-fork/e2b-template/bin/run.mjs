@@ -5,7 +5,6 @@ import {
   lstat,
   mkdir,
   open,
-  readFile,
   realpath,
   unlink,
 } from 'node:fs/promises';
@@ -29,14 +28,16 @@ import {
 } from '../lib/mcp-http-phase.mjs';
 import {
   canonicalize,
+  MAX_RUNTIME_WORKSPACE_BYTES,
   requireSha256Ref,
   sha256FileRef,
   sha256Ref,
 } from '../lib/runtime-contract.mjs';
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 const WORKSPACE_ROOT = '/workspace/agoragentic-risk-fork-v1';
 const RUNNER_ARTIFACT_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/run.mjs';
-const MAX_JOB_BYTES = 1024 * 1024;
+export const MAX_JOB_BYTES = 1024 * 1024;
 const JOB_KEYS = Object.freeze([
   'schema',
   'job_id',
@@ -190,7 +191,25 @@ async function ensureSafeParents(root, target) {
 
 async function openNoFollow(target, flags, mode) {
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
-  return open(target, flags | noFollow, mode);
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  return open(target, flags | noFollow | nonBlock, mode);
+}
+
+export async function readOpenedRunnerActionExact(handle, before) {
+  await readOpenedFileExact(handle, {
+    expectedSize: before.size,
+    maxBytes: MAX_RUNTIME_WORKSPACE_BYTES,
+    changedMessage: 'runner read target changed during the operation',
+    limitMessage: 'runner read target exceeds the runtime workspace byte limit',
+  });
+  const after = await handle.stat({ bigint: true });
+  if (!after.isFile()
+    || after.nlink > 1n
+    || String(before.dev) !== String(after.dev)
+    || String(before.ino) !== String(after.ino)
+    || String(before.size) !== String(after.size)) {
+    throw new Error('runner read target changed during the operation');
+  }
 }
 
 async function executeAction(root, action) {
@@ -223,13 +242,7 @@ async function executeAction(root, action) {
       throw new Error('runner refuses a non-regular or hard-linked target');
     }
     if (action.type === 'read') {
-      await handle.readFile();
-      const after = await handle.stat({ bigint: true });
-      if (String(before.dev) !== String(after.dev)
-        || String(before.ino) !== String(after.ino)
-        || String(before.size) !== String(after.size)) {
-        throw new Error('runner read target changed during the operation');
-      }
+      await readOpenedRunnerActionExact(handle, before);
       return;
     }
   } finally {
@@ -370,13 +383,47 @@ export async function runRunnerJob(options = {}) {
   return writeRunnerResult(resultPath, job.job_id, result);
 }
 
-async function readJob(target) {
-  const bytes = await readFile(target);
-  if (bytes.byteLength > MAX_JOB_BYTES) throw new Error('runner job exceeds its byte bound');
+export async function readOpenedRunnerJobExact(handle, expectedSize) {
+  const bytes = await readOpenedFileExact(handle, {
+    expectedSize,
+    maxBytes: MAX_JOB_BYTES,
+    changedMessage: 'runner job changed while it was read',
+    limitMessage: 'runner job exceeds its byte bound',
+  });
   try {
     return JSON.parse(bytes.toString('utf8'));
   } catch {
     throw new Error('runner job is invalid JSON');
+  }
+}
+
+export async function readRunnerJobFile(target) {
+  let handle;
+  try {
+    handle = await openNoFollow(target, constants.O_RDONLY);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error('runner refuses a non-regular or hard-linked job');
+    }
+    throw error;
+  }
+  try {
+    const before = await handle.stat({ bigint: true });
+    if (!before.isFile() || before.nlink > 1n) {
+      throw new Error('runner refuses a non-regular or hard-linked job');
+    }
+    const job = await readOpenedRunnerJobExact(handle, before.size);
+    const after = await handle.stat({ bigint: true });
+    if (!after.isFile()
+      || after.nlink > 1n
+      || String(before.dev) !== String(after.dev)
+      || String(before.ino) !== String(after.ino)
+      || String(before.size) !== String(after.size)) {
+      throw new Error('runner job changed while it was read');
+    }
+    return job;
+  } finally {
+    await handle.close();
   }
 }
 
@@ -406,7 +453,7 @@ export function parseRunnerTransportPaths(argv = process.argv) {
 
 async function main() {
   const { jobId, jobPath, resultPath } = parseRunnerTransportPaths();
-  const job = await readJob(jobPath);
+  const job = await readRunnerJobFile(jobPath);
   if (job?.job_id !== jobId) throw new Error('runner transport path does not bind the job id');
   await runRunnerJob({
     job,

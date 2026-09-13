@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   MAX_JSON_BYTES,
+  readOpenedJsonFileExact,
   readJson,
   scoreChallengeRun,
   sha256Ref,
@@ -227,6 +228,25 @@ test('bounded JSON reader rejects duplicate keys, excessive nesting, and oversiz
     await writeFile(oversizedPath, ' '.repeat(MAX_JSON_BYTES + 1), 'utf8');
     await assert.rejects(readJson(oversizedPath), /exceeds the .*byte limit/);
   } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('bounded JSON descriptor reader rejects deterministic growth after fstat', async () => {
+  const temporary = await mkdtemp(resolve(tmpdir(), 'assurance-challenge-growth-'));
+  const file = resolve(temporary, 'growing.json');
+  let handle;
+  try {
+    await writeFile(file, '{"ok":true}', 'utf8');
+    handle = await open(file, 'r');
+    const opened = await handle.stat();
+    await appendFile(file, '\n', 'utf8');
+    await assert.rejects(
+      readOpenedJsonFileExact(handle, opened.size, MAX_JSON_BYTES),
+      /file_changed/,
+    );
+  } finally {
+    await handle?.close();
     await rm(temporary, { recursive: true, force: true });
   }
 });

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import {
+  appendFile,
   chmod,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rm,
@@ -23,6 +25,7 @@ import {
   destroyImmutableWorkspaceExport,
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectRuntimeWorkspace } from '../e2b-template/lib/runtime-contract.mjs';
+import { hashOpenedFileExact, readOpenedFileExact } from '../src/util.mjs';
 
 const execFileAsync = promisify(execFile);
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,6 +69,49 @@ async function removeWritable(root) {
   }
   await rm(root, { recursive: true, force: true });
 }
+
+test('shared descriptor reader rejects deterministic growth after fstat', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-growth-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const file = path.join(temporary, 'growing.txt');
+  await writeFile(file, 'reviewed bytes');
+  const handle = await open(file, 'r');
+  try {
+    const opened = await handle.stat({ bigint: true });
+    await appendFile(file, 'later bytes');
+    await assert.rejects(
+      readOpenedFileExact(handle, {
+        expectedSize: opened.size,
+        maxBytes: 1024,
+        changedMessage: 'deterministic growth rejected',
+      }),
+      /deterministic growth rejected/,
+    );
+  } finally {
+    await handle.close();
+  }
+});
+
+test('shared streaming descriptor hash rejects deterministic growth after fstat', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hash-growth-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const file = path.join(temporary, 'growing.txt');
+  await writeFile(file, 'reviewed hash bytes');
+  const handle = await open(file, 'r');
+  try {
+    const opened = await handle.stat({ bigint: true });
+    await appendFile(file, 'later bytes');
+    await assert.rejects(
+      hashOpenedFileExact(handle, {
+        expectedSize: opened.size,
+        changedMessage: 'deterministic hash growth rejected',
+      }),
+      /deterministic hash growth rejected/,
+    );
+  } finally {
+    await handle.close();
+  }
+});
 
 test('workspace-export cleanup rejects manifest and payload FIFOs within a bounded subprocess', {
   skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,

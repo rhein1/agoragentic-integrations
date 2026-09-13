@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 import {
   canonicalize,
@@ -17,7 +20,7 @@ const IDENTITY_PATH = '/tmp/agoragentic-risk-fork-v1.identity.json';
 const WORKSPACE_ROOT = '/workspace/agoragentic-risk-fork-v1';
 const BOOTSTRAP_ARTIFACT_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/bootstrap.mjs';
 const RUNNER_ARTIFACT_PATH = '/opt/agoragentic/risk-fork/e2b-template/bin/run.mjs';
-const MAX_REQUEST_BYTES = 128 * 1024;
+export const MAX_BOOTSTRAP_REQUEST_BYTES = 128 * 1024;
 const REQUEST_KEYS = Object.freeze([
   'schema',
   'fork_identity',
@@ -141,13 +144,47 @@ function validateRequest(value) {
   return value;
 }
 
-async function readJsonBounded(target, maxBytes, field) {
-  const bytes = await readFile(target);
-  if (bytes.byteLength > maxBytes) throw new Error(`${field} exceeds its byte bound`);
+export async function readOpenedJsonBounded(handle, expectedSize, maxBytes, field) {
+  const bytes = await readOpenedFileExact(handle, {
+    expectedSize,
+    maxBytes,
+    changedMessage: `${field} changed while it was read`,
+    limitMessage: `${field} exceeds its byte bound`,
+  });
   try {
     return JSON.parse(bytes.toString('utf8'));
   } catch {
     throw new Error(`${field} is invalid JSON`);
+  }
+}
+
+export async function readJsonBounded(target, maxBytes, field) {
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  let handle;
+  try {
+    handle = await open(target, constants.O_RDONLY | noFollow | nonBlock);
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw new Error(`${field} must be a regular single-link file`);
+    throw error;
+  }
+  try {
+    const before = await handle.stat({ bigint: true });
+    if (!before.isFile() || before.nlink > 1n) {
+      throw new Error(`${field} must be a regular single-link file`);
+    }
+    const value = await readOpenedJsonBounded(handle, before.size, maxBytes, field);
+    const after = await handle.stat({ bigint: true });
+    if (!after.isFile()
+      || after.nlink > 1n
+      || String(before.dev) !== String(after.dev)
+      || String(before.ino) !== String(after.ino)
+      || String(before.size) !== String(after.size)) {
+      throw new Error(`${field} changed while it was read`);
+    }
+    return value;
+  } finally {
+    await handle.close();
   }
 }
 
@@ -157,7 +194,7 @@ export async function runBootstrap(options = {}) {
   if (!Number.isFinite(now.getTime())) throw new TypeError('bootstrap clock is invalid');
   const request = validateRequest(options.request ?? await readJsonBounded(
     options.identityPath ?? IDENTITY_PATH,
-    MAX_REQUEST_BYTES,
+    MAX_BOOTSTRAP_REQUEST_BYTES,
     'bootstrap request',
   ));
   const bootstrapArtifactPath = options.bootstrapArtifactPath ?? BOOTSTRAP_ARTIFACT_PATH;
@@ -175,7 +212,7 @@ export async function runBootstrap(options = {}) {
   const bootEvidence = validateBootEvidenceEnvelope(
     await readJsonBounded(
       options.bootEvidencePath ?? E2B_BOOT_EVIDENCE_PATH,
-      MAX_REQUEST_BYTES,
+      MAX_BOOTSTRAP_REQUEST_BYTES,
       'boot evidence',
     ),
     {

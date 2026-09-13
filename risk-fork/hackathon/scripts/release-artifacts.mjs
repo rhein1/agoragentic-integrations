@@ -9,6 +9,7 @@ import {
   OFFLINE_KIT_TRUTH,
   verifyZipArchive,
 } from '../src/offline-kit.mjs';
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 export const RELEASE_ARTIFACT_SCHEMA = 'agoragentic.risk-fork.hackathon-release-build.v1';
 export const SPDX_VERSION = 'SPDX-2.3';
@@ -275,7 +276,12 @@ async function readBounded(file, maxBytes = 8 * 1024 * 1024) {
       || info.size > maxBytes) {
       throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
     }
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: info.size,
+      maxBytes,
+      changedMessage: `Release artifact changed while it was read: ${path.basename(file)}`,
+      limitMessage: `Release artifact is not a bounded regular file: ${path.basename(file)}`,
+    });
     const after = await handle.stat();
     const pathAfter = await lstat(file);
     if (bytes.byteLength !== info.size
