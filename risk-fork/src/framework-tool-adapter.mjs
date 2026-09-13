@@ -14,6 +14,7 @@ import {
   requireOpaqueRef,
   requireSha256Ref,
   safeEqual,
+  securityKeyFingerprints,
 } from './util.mjs';
 
 export const RISK_FORK_FRAMEWORKS = Object.freeze([
@@ -117,10 +118,6 @@ function assertPlainDataObject(value, field, allowedKeys = null) {
   return descriptors;
 }
 
-function riskKeyFingerprint(value) {
-  return String(value).normalize('NFKC').replace(/[^A-Za-z0-9]+/g, '').toLowerCase();
-}
-
 function assertNoCallerRiskLabels(value, field) {
   const seen = new WeakSet();
   function walk(current, path) {
@@ -134,12 +131,15 @@ function assertNoCallerRiskLabels(value, field) {
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const fingerprint = riskKeyFingerprint(key);
-      if (fingerprint.startsWith('risk') || RISK_LABEL_FINGERPRINTS.has(fingerprint)) {
-        throw frameworkError(
-          RISK_FORK_FRAMEWORK_DIAGNOSTIC_CODES.ARGUMENTS_INVALID,
-          'Framework tool arguments must not supply risk or policy labels',
-        );
+      const fingerprints = securityKeyFingerprints(key);
+      for (let index = 0; index < fingerprints.length; index += 1) {
+        const fingerprint = fingerprints[index];
+        if (fingerprint.startsWith('risk') || RISK_LABEL_FINGERPRINTS.has(fingerprint)) {
+          throw frameworkError(
+            RISK_FORK_FRAMEWORK_DIAGNOSTIC_CODES.ARGUMENTS_INVALID,
+            'Framework tool arguments must not supply risk or policy labels',
+          );
+        }
       }
       walk(child, `${path}.${key}`);
     }
