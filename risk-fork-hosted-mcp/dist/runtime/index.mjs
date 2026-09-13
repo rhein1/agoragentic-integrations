@@ -69563,7 +69563,22 @@ var SECRET_CONTENT_PATTERNS = Object.freeze([
 ]);
 var SECRET_ASSIGNMENT_KEY = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
 var SECRET_ASSIGNMENT_KEY_PATTERN = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY})$`, "i");
-var SECRET_ASSIGNMENT_PATTERN = /(?:^|[^A-Za-z0-9_])(?:"([^"\r\n]{1,120})"|'([^'\r\n]{1,120})'|([^\s=:\n,;{}\[\]"']{1,120}))\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/gu;
+var SECRET_ASSIGNMENT_DELIMITER_SOURCES = String.raw`=:\u02D0\u02F8\u0589\u05C3\u0703\u0704\u1400\u16EC\u1803\u1809\u205A\u207C\u208C\u2236\u2260\u2E40\u30A0\uA4FD\uA4FF\uA789\uFE13\uFE30\uFE55\uFE66\uFF1A\uFF1D\u{10781}\u{11DD9}`;
+var SECRET_ASSIGNMENT_DELIMITER_PATTERN = /^[=:]$/u;
+var SECRET_ASSIGNMENT_EXACT_KEY_PATTERN = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY})"|'(${SECRET_ASSIGNMENT_KEY})'|(${SECRET_ASSIGNMENT_KEY}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
+  "giu"
+);
+var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
+  "gu"
+);
+var SECRET_ASSIGNMENT_VALUE_PATTERN = /\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/yu;
+var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN = new RegExp(
+  `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES}]`,
+  "u"
+);
+var NON_ASCII_PATTERN = /[^\x00-\x7f]/u;
 var MIN_SECRET_ASSIGNMENT_BYTES = 8;
 var BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
@@ -69579,30 +69594,52 @@ function exactPatternMatches(pattern, value) {
   return matched;
 }
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
-  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-  for (let match = SECRET_ASSIGNMENT_PATTERN.exec(text); match; match = SECRET_ASSIGNMENT_PATTERN.exec(text)) {
-    const key = match[1] ?? match[2] ?? match[3] ?? "";
-    const value = match[4] ?? match[5] ?? match[6] ?? "";
-    const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
-    if (keyMatches && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
-      SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-      return true;
+  const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN.test(text);
+  const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN];
+  for (const assignmentPattern of assignmentPatterns) {
+    assignmentPattern.lastIndex = 0;
+    for (let match = assignmentPattern.exec(text); match; match = assignmentPattern.exec(text)) {
+      const key = match[1] ?? match[2] ?? match[3] ?? "";
+      const delimiter = match[4] ?? "";
+      const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
+      const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter) : exactPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter);
+      if (!keyMatches || !delimiterMatches) continue;
+      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = assignmentPattern.lastIndex;
+      const valueMatch = SECRET_ASSIGNMENT_VALUE_PATTERN.exec(text);
+      SECRET_ASSIGNMENT_VALUE_PATTERN.lastIndex = 0;
+      const value = valueMatch?.[1] ?? valueMatch?.[2] ?? valueMatch?.[3] ?? "";
+      if (valueMatch && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+        assignmentPattern.lastIndex = 0;
+        return true;
+      }
     }
+    assignmentPattern.lastIndex = 0;
   }
-  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
   return false;
 }
 function bytePreservationTextViews(content) {
-  const views = [{ text: content.toString("latin1"), valueEncoding: "latin1" }];
+  const views = [{
+    text: content.toString("latin1"),
+    valueEncoding: "latin1",
+    normalizeAssignments: false
+  }];
   for (const offset of [0, 1]) {
     const available = content.byteLength - offset;
     const evenBytes = available - available % 2;
     if (evenBytes <= 0) continue;
     const aligned = content.subarray(offset, offset + evenBytes);
-    views.push({ text: aligned.toString("utf16le"), valueEncoding: "utf16le" });
+    views.push({
+      text: aligned.toString("utf16le"),
+      valueEncoding: "utf16le",
+      normalizeAssignments: true
+    });
     const bigEndian = Buffer.from(aligned);
     bigEndian.swap16();
-    views.push({ text: bigEndian.toString("utf16le"), valueEncoding: "utf16le" });
+    views.push({
+      text: bigEndian.toString("utf16le"),
+      valueEncoding: "utf16le",
+      normalizeAssignments: true
+    });
   }
   return views;
 }
@@ -69639,18 +69676,24 @@ function decodeCanonicalBase64(candidate) {
 function containsRecognizedSecretText(text) {
   return securityPatternsMatch(SECRET_CONTENT_PATTERNS, text) || containsSecretAssignment(text, { normalizeUnicode: true, valueEncoding: "utf8" });
 }
-function containsRecognizedSecretView(view, normalizeUnicode) {
-  const patternMatched = normalizeUnicode ? securityPatternsMatch(SECRET_CONTENT_PATTERNS, view.text) : SECRET_CONTENT_PATTERNS.some((pattern) => exactPatternMatches(pattern, view.text));
+function containsRecognizedSecretView(view, { normalizePatterns, normalizeAssignments }) {
+  const patternMatched = normalizePatterns ? securityPatternsMatch(SECRET_CONTENT_PATTERNS, view.text) : SECRET_CONTENT_PATTERNS.some((pattern) => exactPatternMatches(pattern, view.text));
   return patternMatched || containsSecretAssignment(view.text, {
-    normalizeUnicode,
+    normalizeUnicode: normalizeAssignments,
     valueEncoding: view.valueEncoding
   });
 }
 function containsRecognizedSecretPayload(content) {
   return bytePreservationTextViews(content).some(
-    (view) => containsRecognizedSecretView(view, false)
+    (view) => containsRecognizedSecretView(view, {
+      normalizePatterns: false,
+      normalizeAssignments: view.normalizeAssignments
+    })
   ) || canonicalUnicodeTextViews(content).some(
-    (view) => containsRecognizedSecretView(view, true)
+    (view) => containsRecognizedSecretView(view, {
+      normalizePatterns: true,
+      normalizeAssignments: true
+    })
   );
 }
 function containsRecognizedSecretBytes(content) {
@@ -73109,7 +73152,22 @@ var SECRET_CONTENT_PATTERNS2 = Object.freeze([
 ]);
 var SECRET_ASSIGNMENT_KEY2 = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|npm[_-]?token|slack[_-]?token|database[_-]?url|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
 var SECRET_ASSIGNMENT_KEY_PATTERN2 = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY2})$`, "i");
-var SECRET_ASSIGNMENT_PATTERN2 = /(?:^|[^A-Za-z0-9_])(?:"([^"\r\n]{1,120})"|'([^'\r\n]{1,120})'|([^\s=:\n,;{}\[\]"']{1,120}))\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/gu;
+var SECRET_ASSIGNMENT_DELIMITER_SOURCES2 = String.raw`=:\u02D0\u02F8\u0589\u05C3\u0703\u0704\u1400\u16EC\u1803\u1809\u205A\u207C\u208C\u2236\u2260\u2E40\u30A0\uA4FD\uA4FF\uA789\uFE13\uFE30\uFE55\uFE66\uFF1A\uFF1D\u{10781}\u{11DD9}`;
+var SECRET_ASSIGNMENT_DELIMITER_PATTERN2 = /^[=:]$/u;
+var SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2 = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY2})"|'(${SECRET_ASSIGNMENT_KEY2})'|(${SECRET_ASSIGNMENT_KEY2}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}])`,
+  "giu"
+);
+var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2 = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}])`,
+  "gu"
+);
+var SECRET_ASSIGNMENT_VALUE_PATTERN2 = /\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/yu;
+var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2 = new RegExp(
+  `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}]`,
+  "u"
+);
+var NON_ASCII_PATTERN2 = /[^\x00-\x7f]/u;
 var MIN_SECRET_ASSIGNMENT_BYTES2 = 8;
 var BASE64_CANDIDATE_PATTERN2 = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN2 = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
@@ -73120,30 +73178,52 @@ function exactPatternMatches2(pattern, value) {
   return matched;
 }
 function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
-  SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
-  for (let match = SECRET_ASSIGNMENT_PATTERN2.exec(text); match; match = SECRET_ASSIGNMENT_PATTERN2.exec(text)) {
-    const key = match[1] ?? match[2] ?? match[3] ?? "";
-    const value = match[4] ?? match[5] ?? match[6] ?? "";
-    const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
-    if (keyMatches && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
-      SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
-      return true;
+  const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN2.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2.test(text);
+  const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2];
+  for (const assignmentPattern of assignmentPatterns) {
+    assignmentPattern.lastIndex = 0;
+    for (let match = assignmentPattern.exec(text); match; match = assignmentPattern.exec(text)) {
+      const key = match[1] ?? match[2] ?? match[3] ?? "";
+      const delimiter = match[4] ?? "";
+      const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
+      const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter) : exactPatternMatches2(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter);
+      if (!keyMatches || !delimiterMatches) continue;
+      SECRET_ASSIGNMENT_VALUE_PATTERN2.lastIndex = assignmentPattern.lastIndex;
+      const valueMatch = SECRET_ASSIGNMENT_VALUE_PATTERN2.exec(text);
+      SECRET_ASSIGNMENT_VALUE_PATTERN2.lastIndex = 0;
+      const value = valueMatch?.[1] ?? valueMatch?.[2] ?? valueMatch?.[3] ?? "";
+      if (valueMatch && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
+        assignmentPattern.lastIndex = 0;
+        return true;
+      }
     }
+    assignmentPattern.lastIndex = 0;
   }
-  SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
   return false;
 }
 function bytePreservationTextViews2(content) {
-  const views = [{ text: content.toString("latin1"), valueEncoding: "latin1" }];
+  const views = [{
+    text: content.toString("latin1"),
+    valueEncoding: "latin1",
+    normalizeAssignments: false
+  }];
   for (const offset of [0, 1]) {
     const available = content.byteLength - offset;
     const evenBytes = available - available % 2;
     if (evenBytes <= 0) continue;
     const aligned = content.subarray(offset, offset + evenBytes);
-    views.push({ text: aligned.toString("utf16le"), valueEncoding: "utf16le" });
+    views.push({
+      text: aligned.toString("utf16le"),
+      valueEncoding: "utf16le",
+      normalizeAssignments: true
+    });
     const bigEndian = Buffer.from(aligned);
     bigEndian.swap16();
-    views.push({ text: bigEndian.toString("utf16le"), valueEncoding: "utf16le" });
+    views.push({
+      text: bigEndian.toString("utf16le"),
+      valueEncoding: "utf16le",
+      normalizeAssignments: true
+    });
   }
   return views;
 }
@@ -73180,18 +73260,24 @@ function decodeCanonicalBase642(candidate) {
 function containsRecognizedSecretText2(text) {
   return securityPatternsMatch(SECRET_CONTENT_PATTERNS2, text) || containsSecretAssignment2(text, { normalizeUnicode: true, valueEncoding: "utf8" });
 }
-function containsRecognizedSecretView2(view, normalizeUnicode) {
-  const patternMatched = normalizeUnicode ? securityPatternsMatch(SECRET_CONTENT_PATTERNS2, view.text) : SECRET_CONTENT_PATTERNS2.some((pattern) => exactPatternMatches2(pattern, view.text));
+function containsRecognizedSecretView2(view, { normalizePatterns, normalizeAssignments }) {
+  const patternMatched = normalizePatterns ? securityPatternsMatch(SECRET_CONTENT_PATTERNS2, view.text) : SECRET_CONTENT_PATTERNS2.some((pattern) => exactPatternMatches2(pattern, view.text));
   return patternMatched || containsSecretAssignment2(view.text, {
-    normalizeUnicode,
+    normalizeUnicode: normalizeAssignments,
     valueEncoding: view.valueEncoding
   });
 }
 function containsRecognizedSecretPayload2(content) {
   return bytePreservationTextViews2(content).some(
-    (view) => containsRecognizedSecretView2(view, false)
+    (view) => containsRecognizedSecretView2(view, {
+      normalizePatterns: false,
+      normalizeAssignments: view.normalizeAssignments
+    })
   ) || canonicalUnicodeTextViews2(content).some(
-    (view) => containsRecognizedSecretView2(view, true)
+    (view) => containsRecognizedSecretView2(view, {
+      normalizePatterns: true,
+      normalizeAssignments: true
+    })
   );
 }
 function containsRecognizedSecretBytes2(content) {
@@ -73503,7 +73589,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:65d6acd5d0c758d91179e9c63456b8da6acc7009df6adc6445367782401e92db" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:f741a60af26e5a48d741b61fafc9f6c078c441552f79966567777a85bebf6a53" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

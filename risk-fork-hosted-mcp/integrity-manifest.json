@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 66,
-    "sha256": "sha256:65d6acd5d0c758d91179e9c63456b8da6acc7009df6adc6445367782401e92db"
+    "sha256": "sha256:f741a60af26e5a48d741b61fafc9f6c078c441552f79966567777a85bebf6a53"
   },
   "reviewed_sources": [
     {
@@ -99,13 +99,13 @@
     },
     {
       "path": "risk-fork/src/adapters/e2b-source-verifier.mjs",
-      "bytes": 20753,
-      "sha256": "sha256:4755f9da5388a5ab98da3c632a8b6bcf13fb95c4979e6ff03d3466ceec03a99f"
+      "bytes": 23062,
+      "sha256": "sha256:2558d65cb563cf997da1a1eb757a59ae760bc66354b52113fe5ad30b5655a1e2"
     },
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
-      "bytes": 37926,
-      "sha256": "sha256:c3d31aae866704dcf43c3026fe7f620eaed029be34bf59804fd34d132e3cdb9f"
+      "bytes": 40235,
+      "sha256": "sha256:9728489313755dc12e2eb90bf3c1974d6ad6328f4259214471ca3626709ad5cf"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
@@ -2235,14 +2235,14 @@
     {
       "path": "risk-fork/src/adapters/e2b-source-verifier.mjs",
       "source": "reviewed_source",
-      "bytes": 20753,
-      "sha256": "sha256:4755f9da5388a5ab98da3c632a8b6bcf13fb95c4979e6ff03d3466ceec03a99f"
+      "bytes": 23062,
+      "sha256": "sha256:2558d65cb563cf997da1a1eb757a59ae760bc66354b52113fe5ad30b5655a1e2"
     },
     {
       "path": "risk-fork/src/adapters/e2b-workspace-export.mjs",
       "source": "reviewed_source",
-      "bytes": 37926,
-      "sha256": "sha256:c3d31aae866704dcf43c3026fe7f620eaed029be34bf59804fd34d132e3cdb9f"
+      "bytes": 40235,
+      "sha256": "sha256:9728489313755dc12e2eb90bf3c1974d6ad6328f4259214471ca3626709ad5cf"
     },
     {
       "path": "risk-fork/src/adapters/e2b.mjs",
@@ -2628,8 +2628,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3069961,
-    "sha256": "sha256:0ae41bf67dfe26c8370e36dfef8c45f2d63bc5b22ccf77d62429bec23ad50b41"
+    "bytes": 3074480,
+    "sha256": "sha256:9716e3babd07f1877eacfb3ff5eb013851fb56fbb793a4a1a07eddf6db2325ac"
   },
   "packaged_assets": [
     {

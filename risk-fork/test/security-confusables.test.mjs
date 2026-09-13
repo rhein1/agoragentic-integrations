@@ -46,6 +46,89 @@ import {
 } from '../src/util.mjs';
 
 const SYNTHETIC_SECRET = 'synthetic-value-123456';
+const PINNED_SECRET_ASSIGNMENT_DELIMITERS = Object.freeze([
+  '\u02D0',
+  '\u02F8',
+  '\u0589',
+  '\u05C3',
+  '\u0703',
+  '\u0704',
+  '\u1400',
+  '\u16EC',
+  '\u1803',
+  '\u1809',
+  '\u205A',
+  '\u207C',
+  '\u208C',
+  '\u2236',
+  '\u2260',
+  '\u2E40',
+  '\u30A0',
+  '\uA4FD',
+  '\uA4FF',
+  '\uA789',
+  '\uFE13',
+  '\uFE30',
+  '\uFE55',
+  '\uFE66',
+  '\uFF1A',
+  '\uFF1D',
+  '\u{10781}',
+  '\u{11DD9}',
+]);
+const SECRET_ASSIGNMENT_ENCODINGS = Object.freeze([
+  'utf8',
+  'utf8-bom',
+  'utf16le',
+  'utf16le-bom',
+  'utf16be',
+  'utf16be-bom',
+]);
+const SECRET_ASSIGNMENT_KEYS = Object.freeze([
+  ['exact-key', 'api_key'],
+  ['confusable-key', 'api_k\u0435y'],
+]);
+
+function encodeSecretAssignment(value, encoding) {
+  if (encoding === 'utf8') return Buffer.from(value, 'utf8');
+  if (encoding === 'utf8-bom') {
+    return Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(value, 'utf8')]);
+  }
+  const littleEndian = Buffer.from(value, 'utf16le');
+  const body = encoding.startsWith('utf16be') ? Buffer.from(littleEndian).swap16() : littleEndian;
+  if (encoding.endsWith('-bom')) {
+    const bom = encoding.startsWith('utf16be')
+      ? Buffer.from([0xfe, 0xff])
+      : Buffer.from([0xff, 0xfe]);
+    return Buffer.concat([bom, body]);
+  }
+  return body;
+}
+
+function stagedBytes(pathValue, bytes) {
+  return {
+    path: pathValue,
+    bytes: bytes.byteLength,
+    content_hash: sha256Ref(bytes.toString('base64')),
+    data_base64: bytes.toString('base64'),
+  };
+}
+
+function codePointLabel(value) {
+  return [...value]
+    .map((character) => `U+${character.codePointAt(0).toString(16).toUpperCase()}`)
+    .join('-');
+}
+
+test('assignment delimiter corpus exhausts the pinned Unicode security fold', () => {
+  const observed = [];
+  for (let codePoint = 0x80; codePoint <= 0x10ffff; codePoint += 1) {
+    if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
+    const character = String.fromCodePoint(codePoint);
+    if (/^[=:]$/.test(foldSecurityConfusables(character))) observed.push(character);
+  }
+  assert.deepEqual(observed, PINNED_SECRET_ASSIGNMENT_DELIMITERS);
+});
 
 test('scan-only confusable fold preserves ASCII and canonical payload text', () => {
   const ascii = 'm10 authorization api_key ignore previous instructions';
@@ -474,6 +557,34 @@ test('E2B exact-byte scans reject confusable secret paths and contents', () => {
   );
 });
 
+test('E2B exact-byte scan rejects every pinned assignment delimiter across UTF encodings', () => {
+  for (const delimiter of PINNED_SECRET_ASSIGNMENT_DELIMITERS) {
+    assert.match(foldSecurityConfusables(delimiter), /^[=:]$/, codePointLabel(delimiter));
+    for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
+      for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+        const bytes = encodeSecretAssignment(
+          `${key}${delimiter}${SYNTHETIC_SECRET}`,
+          encoding,
+        );
+        assert.throws(
+          () => scanE2BStagedBytesAuthorityFree([
+            stagedBytes('input.txt', bytes),
+          ]),
+          /authority|secret/i,
+          `${codePointLabel(delimiter)} ${keyLabel} ${encoding}`,
+        );
+      }
+    }
+  }
+});
+
+test('E2B assignment scan stays bounded on delimiter-dense benign bytes', () => {
+  const bytes = Buffer.from('a='.repeat(512 * 1024), 'ascii');
+  assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
+    stagedBytes('delimiter-dense.txt', bytes),
+  ]));
+});
+
 test('immutable E2B workspace export rejects confusable secret bytes before copying', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-confusables-'));
   const source = path.join(root, 'source');
@@ -491,6 +602,38 @@ test('immutable E2B workspace export rejects confusable secret bytes before copy
     }),
     /credential|secret/i,
   );
+});
+
+test('immutable E2B workspace export rejects pinned delimiters in UTF-8 and UTF-16', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-delimiter-scan-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const delimiter of PINNED_SECRET_ASSIGNMENT_DELIMITERS) {
+    for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
+      for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+        const bytes = encodeSecretAssignment(
+          `${key}${delimiter}${SYNTHETIC_SECRET}`,
+          encoding,
+        );
+        await writeFile(path.join(source, 'input.txt'), bytes);
+        await assert.rejects(
+          createImmutableWorkspaceExport({
+            source_workspace: source,
+            export_root: exportRoot,
+            export_id: `delimiter_${caseIndex}`,
+            expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+          }),
+          /credential|secret/i,
+          `${codePointLabel(delimiter)} ${keyLabel} ${encoding}`,
+        );
+        caseIndex += 1;
+      }
+    }
+  }
 });
 
 test('immutable E2B workspace export avoids mojibake and folded-value false positives', async (t) => {
