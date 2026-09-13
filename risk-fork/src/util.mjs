@@ -120,7 +120,7 @@ export function requireSha256Ref(value, field) {
 // - confusables.txt SHA-256: 091c7f82fc39ef208faf8f94d29c244de99254675e09de163160c810d13ef22a
 // - DerivedCoreProperties.txt SHA-256: 24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08
 // - UnicodeData.txt SHA-256: 2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c
-// - Unicode License v3 notice: ../NOTICE
+// - Unicode License v3 notice: package-root NOTICE
 const SECURITY_CONFUSABLES_DATA = String.raw`
 C6:AE D7:x E6:ae FE:p 131:i 132:lJ 152:OE 153:oe 17F:f 184:b 18D:g 192:f
 196:l 1A6:R 1A7:2 1B7:3 1BC:5 1BD:s 1BF:p 1C0:l 1C1:ll 21C:3 222:8 223:8
@@ -1137,6 +1137,7 @@ const DEFAULT_IGNORABLE_CODE_POINT_RANGES = Object.freeze(detachArray([
 // existing absolute input/byte limits; this is the fold's additional hard
 // relative-output bound.
 const SECURITY_NFKD_MAX_UTF16_EXPANSION = 18;
+export const SECURITY_FOLD_MAX_UTF16_OUTPUT = 1024 * 1024;
 
 export const SECURITY_UNICODE_17_PROFILE = Object.freeze({
   unicode_version: '17.0.0',
@@ -1149,6 +1150,7 @@ export const SECURITY_UNICODE_17_PROFILE = Object.freeze({
   ascii_confusable_prototype_count: 940,
   maximum_nfkd_utf16_expansion: SECURITY_NFKD_MAX_UTF16_EXPANSION,
   maximum_nfkd_expansion_code_point: 'U+FDFA',
+  maximum_fold_utf16_output: SECURITY_FOLD_MAX_UTF16_OUTPUT,
 });
 
 function isDefaultIgnorableCodePoint(codePoint) {
@@ -1189,22 +1191,30 @@ function decomposeUnicode17HangulSyllable(codePoint) {
   );
 }
 
-function foldUnmappedSecurityCharacter(character) {
+function foldSecurityCharacter(character, includeConfusables, depth = 0) {
+  if (depth > 32) {
+    throw new RangeError('security fold exceeded its decomposition depth bound');
+  }
   const codePoint = character.codePointAt(0);
+  if (isDefaultIgnorableCodePoint(codePoint) || isUnicode17MarkCodePoint(codePoint)) {
+    return '';
+  }
+  if (includeConfusables) {
+    const mapped = SECURITY_CONFUSABLES.get(codePoint);
+    if (mapped !== undefined) return mapped;
+  }
   const decomposition = SECURITY_UNICODE_17_NFKD.get(codePoint)
     ?? decomposeUnicode17HangulSyllable(codePoint)
     ?? character;
+  if (decomposition === character) return character;
   let folded = '';
   for (const normalizedCharacter of decomposition) {
-    const normalizedCodePoint = normalizedCharacter.codePointAt(0);
-    if (isDefaultIgnorableCodePoint(normalizedCodePoint)
-      || isUnicode17MarkCodePoint(normalizedCodePoint)) continue;
-    folded += normalizedCharacter;
+    folded += foldSecurityCharacter(normalizedCharacter, includeConfusables, depth + 1);
   }
   return folded;
 }
 
-export function foldSecurityConfusables(value) {
+function foldSecurityText(value, includeConfusables) {
   const original = String(value);
   const parts = createDetachedArray();
   const maximumLength = Math.max(
@@ -1220,14 +1230,7 @@ export function foldSecurityConfusables(value) {
     const codePoint = character.codePointAt(0);
     let replacement = character;
     if (codePoint > 0x7f) {
-      if (isDefaultIgnorableCodePoint(codePoint)) {
-        replacement = '';
-      } else {
-        const mapped = SECURITY_CONFUSABLES.get(codePoint);
-        replacement = mapped === undefined
-          ? foldUnmappedSecurityCharacter(character)
-          : mapped;
-      }
+      replacement = foldSecurityCharacter(character, includeConfusables);
     }
     if (replacement !== character) {
       changed = true;
@@ -1237,7 +1240,10 @@ export function foldSecurityConfusables(value) {
       if (replacement !== '') defineArrayIndex(parts, parts.length, replacement);
       outputLength += replacement.length - character.length;
       if (outputLength > maximumLength) {
-        throw new RangeError('security confusable fold exceeded its expansion bound');
+        throw new RangeError('security fold exceeded its relative expansion bound');
+      }
+      if (outputLength > SECURITY_FOLD_MAX_UTF16_OUTPUT) {
+        throw new RangeError('security fold exceeded its absolute output bound');
       }
       segmentStart = cursor + character.length;
     }
@@ -1251,18 +1257,78 @@ export function foldSecurityConfusables(value) {
   return joinStrings(parts, '');
 }
 
+export function foldSecurityCompatibility(value) {
+  return foldSecurityText(value, false);
+}
+
+export function foldSecurityConfusables(value) {
+  return foldSecurityText(value, true);
+}
+
 export function securityTextVariants(value) {
   const original = String(value);
-  const folded = foldSecurityConfusables(original);
-  return folded === original
-    ? Object.freeze(detachArray([original]))
-    : Object.freeze(detachArray([original, folded]));
+  const compatibility = foldSecurityCompatibility(original);
+  const confusable = foldSecurityConfusables(original);
+  const combined = foldSecurityConfusables(compatibility);
+  const variants = createDetachedArray();
+  function appendVariant(candidate) {
+    let seen = false;
+    for (let index = 0; index < variants.length; index += 1) {
+      if (variants[index] === candidate) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) defineArrayIndex(variants, variants.length, candidate);
+  }
+  appendVariant(original);
+  appendVariant(compatibility);
+  appendVariant(confusable);
+  appendVariant(combined);
+  return Object.freeze(variants);
 }
 
 export function securityKeyFingerprint(value) {
   return foldSecurityConfusables(value)
     .replace(/[^A-Za-z0-9]+/g, '')
     .toLowerCase();
+}
+
+export function securityKeyFingerprints(value) {
+  const variants = securityTextVariants(value);
+  const fingerprints = createDetachedArray();
+  for (let index = 0; index < variants.length; index += 1) {
+    const fingerprint = variants[index]
+      .replace(/[^A-Za-z0-9]+/g, '')
+      .toLowerCase();
+    let seen = false;
+    for (let fingerprintIndex = 0;
+      fingerprintIndex < fingerprints.length;
+      fingerprintIndex += 1) {
+      if (fingerprints[fingerprintIndex] === fingerprint) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) defineArrayIndex(fingerprints, fingerprints.length, fingerprint);
+  }
+  return Object.freeze(fingerprints);
+}
+
+const TOKEN_MEASUREMENT_KEY_FINGERPRINT =
+  /^(?:(?:(?:max|min)(?:input|output)?|input|output|prompt|completion|cached|reasoning|total|estimated|consumed|remaining)(?:tokens|tokens?(?:count|limit|budget|usage|used|remaining))|tokens?(?:count|limit|budget|usage|used|remaining))$/;
+
+export function isTokenMeasurementKey(value) {
+  const fingerprints = securityKeyFingerprints(value);
+  if (fingerprints.length === 0) return false;
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    if (!TOKEN_MEASUREMENT_KEY_FINGERPRINT.test(fingerprints[index])) return false;
+  }
+  return true;
+}
+
+export function isBoundedTokenMeasurementValue(value) {
+  return Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 }
 
 function testSecurityPattern(pattern, value) {

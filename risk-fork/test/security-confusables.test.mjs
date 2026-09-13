@@ -7,6 +7,7 @@ import test from 'node:test';
 import { sha256Ref } from '../src/canonical.mjs';
 import {
   containsObviousCapabilityLikeText,
+  isForbiddenAuthorityShapeEntry,
   isForbiddenAuthorityShapeKey,
 } from '../src/authority-shape.mjs';
 import { validateChildOperation } from '../src/child-operation.mjs';
@@ -30,12 +31,16 @@ import {
 import {
   createImmutableWorkspaceExport,
 } from '../src/adapters/e2b-workspace-export.mjs';
+import { inspectProcessEnvironmentBytes } from '../e2b-template/bin/boot-guard.mjs';
 import { validateDemoOperation } from '../hackathon/src/security.mjs';
 import {
   containsSecretShapedText,
   containsSerializedCredentialMaterial,
+  foldSecurityCompatibility,
   foldSecurityConfusables,
   securityKeyFingerprint,
+  securityTextVariants,
+  SECURITY_FOLD_MAX_UTF16_OUTPUT,
   SECURITY_UNICODE_17_PROFILE,
 } from '../src/util.mjs';
 
@@ -52,6 +57,23 @@ test('scan-only confusable fold preserves ASCII and canonical payload text', () 
   assert.equal(foldSecurityConfusables(folded), folded);
 });
 
+test('decomposed Unicode bases are recursively confusable-folded and every view is idempotent', () => {
+  for (const source of ['\u04D1uthority', '\u03ACuthority']) {
+    assert.equal(foldSecurityConfusables(source), 'authority', source);
+    const variants = securityTextVariants(source);
+    for (let index = 0; index < variants.length; index += 1) {
+      const variant = variants[index];
+      assert.equal(foldSecurityConfusables(foldSecurityConfusables(variant)), foldSecurityConfusables(variant));
+      assert.equal(foldSecurityCompatibility(foldSecurityCompatibility(variant)), foldSecurityCompatibility(variant));
+    }
+  }
+  const longSVariants = securityTextVariants('pa\u017F\u017Fword');
+  assert.equal(longSVariants.length, 3);
+  assert.equal(longSVariants[0], 'pa\u017F\u017Fword');
+  assert.equal(longSVariants[1], 'password');
+  assert.equal(longSVariants[2], 'paffword');
+});
+
 test('Unicode 17 security data is pinned independently of host ICU', async () => {
   assert.deepEqual(SECURITY_UNICODE_17_PROFILE, {
     unicode_version: '17.0.0',
@@ -64,6 +86,7 @@ test('Unicode 17 security data is pinned independently of host ICU', async () =>
     ascii_confusable_prototype_count: 940,
     maximum_nfkd_utf16_expansion: 18,
     maximum_nfkd_expansion_code_point: 'U+FDFA',
+    maximum_fold_utf16_output: 1024 * 1024,
   });
   assert.equal(foldSecurityConfusables('\u{1ACF}'), '');
   assert.equal(foldSecurityConfusables('\uAC01'), '\u1100\u1161\u11A8');
@@ -71,6 +94,15 @@ test('Unicode 17 security data is pinned independently of host ICU', async () =>
   for (const confusableSpace of ['\u1680', '\u2028', '\u2029']) {
     assert.equal(foldSecurityConfusables(confusableSpace), ' ');
   }
+  const maximumExpansion = foldSecurityConfusables('\uFDFA');
+  const withinAbsoluteBound = '\uFDFA'.repeat(
+    Math.floor(SECURITY_FOLD_MAX_UTF16_OUTPUT / maximumExpansion.length),
+  );
+  assert.ok(foldSecurityConfusables(withinAbsoluteBound).length <= SECURITY_FOLD_MAX_UTF16_OUTPUT);
+  assert.throws(
+    () => foldSecurityConfusables(`${withinAbsoluteBound}\uFDFA`),
+    /absolute output bound/,
+  );
 
   const source = await readFile(new URL('../src/util.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /\.normalize\(['"]NFKD['"]\)/);
@@ -88,6 +120,8 @@ test('structured-key fingerprints fold mixed scripts, marks, and default ignorab
     ['a\u0301uthority', 'authority'],
     ['a\u{1ACF}uthority', 'authority'],
     ['\u00E1uthority', 'authority'],
+    ['\u04D1uthority', 'authority'],
+    ['\u03ACuthority', 'authority'],
     ['\u{1D41A}uthority', 'authority'],
   ]);
   for (const [source, expected] of cases) {
@@ -103,6 +137,7 @@ test('secret and serialized-credential scans inspect raw and folded views', () =
     `api_k\u{1ACF}ey=${SYNTHETIC_SECRET}`,
     `api_k\u0435y\u2236${SYNTHETIC_SECRET}`,
     `api_k\u0435y\uA789${SYNTHETIC_SECRET}`,
+    `acce\u017F\u017F_token=${SYNTHETIC_SECRET}`,
   ]) assert.equal(containsSecretShapedText(text), true, text);
   assert.equal(
     containsSecretShapedText(`B\u0435arer ${SYNTHETIC_SECRET}`),
@@ -159,6 +194,8 @@ test('authority and child-operation boundaries reject confusable protected keys'
     'privileg\u0435',
     'private_k\u0435y',
     'api\u200B_key',
+    'pa\u017F\u017Fword',
+    '\u017Figning_key',
   ]) {
     assert.equal(isForbiddenAuthorityShapeKey(key), true, key);
     assert.throws(
@@ -191,6 +228,41 @@ test('authority and child-operation boundaries reject confusable protected keys'
     'max_token',
     'completion_token',
   ]) assert.equal(isForbiddenAuthorityShapeKey(key), true, key);
+});
+
+test('token measurement names require bounded numeric associated values at every JSON boundary', () => {
+  for (const key of ['completion_tokens', 'output_token_count', 'max_tokens']) {
+    assert.equal(isForbiddenAuthorityShapeEntry(key, 0), false, key);
+    assert.equal(isForbiddenAuthorityShapeEntry(key, Number.MAX_SAFE_INTEGER), false, key);
+    for (const value of ['42', [], {}, -1, -0, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      assert.equal(isForbiddenAuthorityShapeEntry(key, value), true, `${key}: ${String(value)}`);
+    }
+    for (const value of ['42', [], {}]) {
+      assert.throws(
+        () => validateChildOperation({ [key]: value }),
+        /authority or secret-bearing field/i,
+      );
+      assert.throws(
+        () => scanTaintedValue({ [key]: value }),
+        /authority or memory field/i,
+      );
+      const candidate = {
+        type: 'TYPED_RESULT',
+        payload: { [key]: value },
+        payload_schema: {
+          type: 'object',
+          properties: { [key]: true },
+          required: [key],
+          additionalProperties: false,
+        },
+      };
+      assert.throws(
+        () => createRiskForkImportEnvelope({ candidate }),
+        (error) => error?.code === RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_DLP_REJECTED,
+      );
+    }
+  }
+  assert.doesNotThrow(() => scanTaintedValue({ completion_tokens: 42 }));
 });
 
 test('typed-result taint validation rejects a confusable authority key', () => {
@@ -253,6 +325,16 @@ test('host imports reject confusable material for every candidate type', () => {
         payment_rail: null,
       },
     },
+    {
+      type: 'TYPED_RESULT',
+      payload: { ['pa\u017F\u017Fword']: 'opaque' },
+      payload_schema: {
+        type: 'object',
+        properties: { ['pa\u017F\u017Fword']: { type: 'string' } },
+        required: ['pa\u017F\u017Fword'],
+        additionalProperties: false,
+      },
+    },
   ];
 
   for (const candidate of candidates) {
@@ -290,7 +372,7 @@ test('clean canonical imports retain original bytes and accept token measurement
   assert.notEqual(foldSecurityConfusables(original), original);
 });
 
-test('framework caller risk labels reject confusable key spellings', () => {
+test('framework caller risk labels reject direct-confusable and compatibility key spellings', () => {
   const request = {
     schema: RISK_FORK_FRAMEWORK_SCHEMAS.request,
     request_id: 'request:synthetic-confusables',
@@ -304,6 +386,14 @@ test('framework caller risk labels reject confusable key spellings', () => {
   request.request_hash = sha256Ref(request);
   assert.throws(
     () => createRiskForkFrameworkToolPlan(request),
+    (error) => error?.code === RISK_FORK_FRAMEWORK_DIAGNOSTIC_CODES.ARGUMENTS_INVALID,
+  );
+  const compatibilityRequest = structuredClone(request);
+  compatibilityRequest.arguments = { ['ri\u017Fk_level']: 'LOW' };
+  compatibilityRequest.request_hash = null;
+  compatibilityRequest.request_hash = sha256Ref(compatibilityRequest);
+  assert.throws(
+    () => createRiskForkFrameworkToolPlan(compatibilityRequest),
     (error) => error?.code === RISK_FORK_FRAMEWORK_DIAGNOSTIC_CODES.ARGUMENTS_INVALID,
   );
 });
@@ -363,6 +453,24 @@ test('E2B exact-byte scans reject confusable secret paths and contents', () => {
   assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
     staged('résumé.txt', 'Привет, мир.'),
   ]));
+  assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
+    staged('soft-hyphen.txt', '\u00adPI_KEY=12345678'),
+  ]));
+  assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
+    staged('short-original-value.txt', 'api_key="½½½"'),
+  ]));
+  assert.throws(
+    () => scanE2BStagedBytesAuthorityFree([
+      staged('long-original-value.txt', 'api_key="12345678"'),
+    ]),
+    /authority|secret/i,
+  );
+  assert.throws(
+    () => scanE2BStagedBytesAuthorityFree([
+      staged('canonical-confusable.txt', `api_k\u0435y=${SYNTHETIC_SECRET}`),
+    ]),
+    /authority|secret/i,
+  );
 });
 
 test('immutable E2B workspace export rejects confusable secret bytes before copying', async (t) => {
@@ -382,6 +490,47 @@ test('immutable E2B workspace export rejects confusable secret bytes before copy
     }),
     /credential|secret/i,
   );
+});
+
+test('immutable E2B workspace export avoids mojibake and folded-value false positives', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-byte-scan-'));
+  const exportRoot = path.join(root, 'exports');
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  for (const [exportId, content] of [
+    ['soft_hyphen', '\u00adPI_KEY=12345678'],
+    ['short_original_value', 'api_key="½½½"'],
+  ]) {
+    const source = path.join(root, exportId);
+    await mkdir(source);
+    const bytes = Buffer.from(content, 'utf8');
+    await writeFile(path.join(source, 'input.txt'), bytes);
+    const expectedWorkspaceDigest = sha256Ref([{
+      path: 'input.txt',
+      bytes: bytes.byteLength,
+      content_hash: sha256Ref(bytes.toString('base64')),
+    }]);
+    const exported = await createImmutableWorkspaceExport({
+      source_workspace: source,
+      export_root: exportRoot,
+      export_id: exportId,
+      expected_workspace_digest: expectedWorkspaceDigest,
+    });
+    assert.equal(exported.workspace_digest, expectedWorkspaceDigest);
+  }
+});
+
+test('boot environment byte scan folds only a fatal canonical Unicode decode', () => {
+  const mojibakeTrap = inspectProcessEnvironmentBytes(
+    Buffer.from('\u00adPI_KEY=12345678\0', 'utf8'),
+  );
+  assert.equal(mojibakeTrap.forbidden_key_hashes.length, 0);
+  const exact = inspectProcessEnvironmentBytes(Buffer.from('API_KEY=12345678\0', 'utf8'));
+  assert.equal(exact.forbidden_key_hashes.length, 1);
+  const confusable = inspectProcessEnvironmentBytes(
+    Buffer.from('API_K\u0435Y=12345678\0', 'utf8'),
+  );
+  assert.equal(confusable.forbidden_key_hashes.length, 1);
 });
 
 test('hackathon operation gate folds demo-only secret field names', () => {
@@ -410,7 +559,7 @@ test('MCP host and stdio client raw scans stay wired to shared folded detectors'
   );
   assert.match(
     clientGateSource,
-    /function normalizedKey[\s\S]+foldSecurityConfusables\(value\)/,
+    /function normalizedKeys[\s\S]+securityTextVariants\(value\)/,
   );
   assert.match(
     clientGateSource,

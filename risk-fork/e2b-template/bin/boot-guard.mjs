@@ -13,6 +13,7 @@ import {
 import net from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { TextDecoder } from 'node:util';
 
 import { securityPatternMatches } from '../../src/util.mjs';
 
@@ -85,9 +86,18 @@ const CREDENTIAL_PATHS = Object.freeze([
 ]);
 
 function observedByteStringMatchesSecurityPattern(pattern, value) {
-  if (securityPatternMatches(pattern, value)) return true;
-  const utf8View = Buffer.from(value, 'latin1').toString('utf8');
-  return utf8View !== value && securityPatternMatches(pattern, utf8View);
+  pattern.lastIndex = 0;
+  const exactMatch = pattern.test(value);
+  pattern.lastIndex = 0;
+  if (exactMatch) return true;
+  try {
+    const utf8View = new TextDecoder('utf-8', { fatal: true }).decode(
+      Buffer.from(value, 'latin1'),
+    );
+    return utf8View !== value && securityPatternMatches(pattern, utf8View);
+  } catch {
+    return false;
+  }
 }
 
 export function containsForbiddenProcessText(value) {

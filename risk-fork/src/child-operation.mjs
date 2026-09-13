@@ -7,10 +7,12 @@ import {
   assertAllowedKeys,
   assertPlainObject,
   deepFreeze,
+  isBoundedTokenMeasurementValue,
+  isTokenMeasurementKey,
   normalizeRelativePath,
   requireEnum,
-  foldSecurityConfusables,
   securityPatternsMatch,
+  securityTextVariants,
 } from './util.mjs';
 
 const MAX_OPERATION_BYTES = 1024 * 1024;
@@ -34,12 +36,17 @@ const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|client[_-]?secret)=[^&\s]{8,}/i,
 ]);
 
-function normalizedKey(value) {
-  return foldSecurityConfusables(value)
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^A-Za-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+function normalizedKeys(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index]
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+  }
+  return normalized;
 }
 
 function scanAuthorityFreeJson(value, field) {
@@ -63,14 +70,15 @@ function scanAuthorityFreeJson(value, field) {
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const normalized = normalizedKey(key);
+      const normalized = normalizedKeys(key);
       if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, key)) {
         throw new TypeError(`${path}.<key> contains authority or secret-shaped material`);
       }
       if (DANGEROUS_KEYS.has(key)) {
         throw new TypeError(`${path}.<key> is a forbidden JSON key`);
       }
-      if (AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)) {
+      if (normalized.some((candidate) => AUTHORITY_OR_SECRET_KEY_PATTERN.test(candidate))
+        || (isTokenMeasurementKey(key) && !isBoundedTokenMeasurementValue(child))) {
         throw new TypeError(`${path}.<key> is an authority or secret-bearing field`);
       }
       walk(child, `${path}.<value>`, depth + 1);

@@ -3,14 +3,18 @@ import { types as utilTypes } from 'node:util';
 
 import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
 import { validateChildOperation } from './child-operation.mjs';
-import { containsObviousCapabilityLikeText, isForbiddenAuthorityShapeKey } from './authority-shape.mjs';
+import {
+  containsObviousCapabilityLikeText,
+  isForbiddenAuthorityShapeEntry,
+  isForbiddenAuthorityShapeKey,
+  isTokenMeasurementShapeKey,
+} from './authority-shape.mjs';
 import { COMMIT_TYPES, MCP_PHASES } from './constants.mjs';
 import {
   assertAllowedKeys,
   assertPlainObject,
   containsSecretShapedText,
   deepFreeze,
-  foldSecurityConfusables,
   normalizeRelativePath,
   requireEnum,
   requireExternalEndpoint,
@@ -20,6 +24,7 @@ import {
   requireSha256Ref,
   safeEqual,
   securityPatternsMatch,
+  securityTextVariants,
   uniqueStrings,
 } from './util.mjs';
 
@@ -191,16 +196,21 @@ function boundaryError(code, message) {
   return new RiskForkHostBoundaryError(code, message);
 }
 
-function normalizedKey(value) {
-  return foldSecurityConfusables(value)
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^A-Za-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+function normalizedKeys(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index]
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+  }
+  return normalized;
 }
 
-function keyFingerprint(value) {
-  return normalizedKey(value).replaceAll('_', '');
+function keyFingerprints(value) {
+  return normalizedKeys(value).map((normalized) => normalized.replaceAll('_', ''));
 }
 
 function assertNoCallerRiskLabels(value, field = 'operation') {
@@ -213,9 +223,9 @@ function assertNoCallerRiskLabels(value, field = 'operation') {
       );
     }
     for (const [key, child] of Object.entries(current)) {
-      const fingerprint = keyFingerprint(key);
-      if (CALLER_RISK_LABEL_FINGERPRINTS.has(fingerprint)
-        || fingerprint.startsWith('risk')) {
+      const fingerprints = keyFingerprints(key);
+      if (fingerprints.some((fingerprint) => CALLER_RISK_LABEL_FINGERPRINTS.has(fingerprint)
+        || fingerprint.startsWith('risk'))) {
         throw boundaryError(
           RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_RISK_LABEL_REJECTED,
           'Caller/model risk labels are not accepted by the host boundary',
@@ -234,6 +244,7 @@ function assertBoundedCanonicalJson(value, {
   maxDepth = 50,
   maxStringBytes = 512 * 1024,
   dlp = false,
+  dlpSchemaPath = null,
 }) {
   const state = { nodes: 0, seen: new WeakSet() };
   function rejectDlp() {
@@ -242,7 +253,7 @@ function assertBoundedCanonicalJson(value, {
       'Risk Fork import envelope failed privacy/DLP validation',
     );
   }
-  function walk(current, depth) {
+  function walk(current, depth, schemaContext = false, pathKeys = []) {
     state.nodes += 1;
     if (state.nodes > maxNodes || depth > maxDepth) {
       throw boundaryError(
@@ -345,14 +356,20 @@ function assertBoundedCanonicalJson(value, {
             `${field} contains a sparse array`,
           );
         }
-        walk(current[index], depth + 1);
+        walk(current[index], depth + 1, schemaContext, pathKeys);
       }
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const normalized = normalizedKey(key);
-      const fingerprint = keyFingerprint(key);
-      if (DANGEROUS_KEY_FINGERPRINTS.has(fingerprint)) {
+      const childPathKeys = [...pathKeys, key];
+      const entersSchemaContext = Array.isArray(dlpSchemaPath)
+        && childPathKeys.length === dlpSchemaPath.length
+        && childPathKeys.every((part, index) => part === dlpSchemaPath[index]);
+      const childSchemaContext = schemaContext || entersSchemaContext;
+      const normalized = normalizedKeys(key);
+      const fingerprints = keyFingerprints(key);
+      const tokenMeasurementKey = isTokenMeasurementShapeKey(key);
+      if (fingerprints.some((fingerprint) => DANGEROUS_KEY_FINGERPRINTS.has(fingerprint))) {
         throw boundaryError(
           dlp
             ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID
@@ -360,13 +377,18 @@ function assertBoundedCanonicalJson(value, {
           `${field} contains a forbidden JSON key`,
         );
       }
-      if (dlp && (FORBIDDEN_IMPORT_KEY_FINGERPRINTS.has(fingerprint)
-        || SENSITIVE_IMPORT_KEY_PATTERN.test(normalized)
-        || isForbiddenAuthorityShapeKey(key)
+      if (dlp && (fingerprints.some(
+        (fingerprint) => FORBIDDEN_IMPORT_KEY_FINGERPRINTS.has(fingerprint),
+      )
+        || (normalized.some((candidate) => SENSITIVE_IMPORT_KEY_PATTERN.test(candidate))
+          && !tokenMeasurementKey)
+        || (schemaContext
+          ? isForbiddenAuthorityShapeKey(key)
+          : isForbiddenAuthorityShapeEntry(key, child))
         || containsSecretShapedText(key))) {
         rejectDlp();
       }
-      walk(child, depth + 1);
+      walk(child, depth + 1, childSchemaContext, childPathKeys);
     }
   }
   try {
@@ -489,6 +511,7 @@ function normalizeImportEnvelope(value, options = {}) {
     maxDepth: MAX_IMPORT_DEPTH,
     maxStringBytes: MAX_IMPORT_STRING_BYTES,
     dlp: true,
+    dlpSchemaPath: ['candidate', 'payload_schema'],
   });
   assertAllowedKeys(clone, [
     'schema',
@@ -550,6 +573,7 @@ export function createRiskForkImportEnvelope(input = {}) {
       maxDepth: MAX_IMPORT_DEPTH,
       maxStringBytes: MAX_IMPORT_STRING_BYTES,
       dlp: true,
+      dlpSchemaPath: ['payload_schema'],
     });
     const importType = requireEnum(candidate.type, COMMIT_TYPES, 'Risk Fork import candidate.type');
     normalizeImportCandidate(candidate, importType);

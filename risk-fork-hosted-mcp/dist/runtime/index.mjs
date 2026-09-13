@@ -36364,7 +36364,7 @@ var require_mcp_server = __commonJS({
   "risk-fork-hosted-mcp/.build/upstream/mcp/mcp-server.js"(exports, module) {
     "use strict";
     var crypto2 = __require("crypto");
-    var { TextDecoder: TextDecoder2, types: { isProxy } } = __require("node:util");
+    var { TextDecoder: TextDecoder4, types: { isProxy } } = __require("node:util");
     var { version: PACKAGE_VERSION } = require_package();
     var DEFAULT_REMOTE_MCP_URL = "https://agoragentic.com/api/mcp";
     var REMOTE_MCP_URL = process.env.AGORAGENTIC_MCP_URL || DEFAULT_REMOTE_MCP_URL;
@@ -36818,20 +36818,20 @@ var require_mcp_server = __commonJS({
         while (index < text.length) {
           skipWhitespace();
           const key = readString();
-          const normalizedKey3 = key.normalize("NFC");
+          const normalizedKey = key.normalize("NFC");
           if (containsCredentialMaterial(key)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${field} contains a credential-shaped JSON object key`
             );
           }
-          if (keys.has(normalizedKey3)) {
+          if (keys.has(normalizedKey)) {
             throw new McpEnforcementError(
               "MCP_CREDENTIAL_MATERIAL_REJECTED",
               `${field} contains a duplicate JSON object key`
             );
           }
-          keys.add(normalizedKey3);
+          keys.add(normalizedKey);
           skipWhitespace();
           if (text[index] !== ":") syntaxError();
           index += 1;
@@ -37142,7 +37142,7 @@ var require_mcp_server = __commonJS({
       if (value.length > MAX_ENFORCEMENT_JSON_BYTES) return true;
       if (containsActiveHtmlMarkup(value.toString("utf8"))) return true;
       for (const encoding of ["utf-16le", "utf-16be"]) {
-        if (containsActiveHtmlMarkup(new TextDecoder2(encoding).decode(value))) return true;
+        if (containsActiveHtmlMarkup(new TextDecoder4(encoding).decode(value))) return true;
       }
       return containsActiveHtmlMarkup(decodeUtf32(value, true)) || containsActiveHtmlMarkup(decodeUtf32(value, false));
     }
@@ -37200,14 +37200,14 @@ var require_mcp_server = __commonJS({
         }
         const normalizedParentKey = normalizeImportedContentKey(parentKey ?? "");
         for (const [key, child] of Object.entries(current)) {
-          const normalizedKey3 = normalizeImportedContentKey(key);
-          if (MCP_APP_METADATA_KEYS.has(normalizedKey3) || normalizedParentKey === "meta" && normalizedKey3 === "ui") {
+          const normalizedKey = normalizeImportedContentKey(key);
+          if (MCP_APP_METADATA_KEYS.has(normalizedKey) || normalizedParentKey === "meta" && normalizedKey === "ui") {
             reject("MCP App UI metadata");
           }
-          if ((normalizedKey3 === "uri" || normalizedKey3.endsWith("resourceuri")) && typeof child === "string" && /^\s*(?:ui|data|javascript|vbscript|blob):/i.test(child)) {
+          if ((normalizedKey === "uri" || normalizedKey.endsWith("resourceuri")) && typeof child === "string" && /^\s*(?:ui|data|javascript|vbscript|blob):/i.test(child)) {
             reject("an active or MCP App resource reference");
           }
-          if (["mimetype", "mediatype", "contenttype"].includes(normalizedKey3) && isMcpAppOrActiveDocumentMediaType(child)) {
+          if (["mimetype", "mediatype", "contenttype"].includes(normalizedKey) && isMcpAppOrActiveDocumentMediaType(child)) {
             reject("an active HTML or MCP App media type");
           }
         }
@@ -53141,6 +53141,7 @@ var DEFAULT_IGNORABLE_CODE_POINT_RANGES = Object.freeze(detachArray2([
   Object.freeze(detachArray2([918e3, 921599]))
 ]));
 var SECURITY_NFKD_MAX_UTF16_EXPANSION = 18;
+var SECURITY_FOLD_MAX_UTF16_OUTPUT = 1024 * 1024;
 var SECURITY_UNICODE_17_PROFILE = Object.freeze({
   unicode_version: "17.0.0",
   confusables_sha256: "091c7f82fc39ef208faf8f94d29c244de99254675e09de163160c810d13ef22a",
@@ -53151,7 +53152,8 @@ var SECURITY_UNICODE_17_PROFILE = Object.freeze({
   mark_code_point_count: 2543,
   ascii_confusable_prototype_count: 940,
   maximum_nfkd_utf16_expansion: SECURITY_NFKD_MAX_UTF16_EXPANSION,
-  maximum_nfkd_expansion_code_point: "U+FDFA"
+  maximum_nfkd_expansion_code_point: "U+FDFA",
+  maximum_fold_utf16_output: SECURITY_FOLD_MAX_UTF16_OUTPUT
 });
 function isDefaultIgnorableCodePoint(codePoint) {
   for (let index = 0; index < DEFAULT_IGNORABLE_CODE_POINT_RANGES.length; index += 1) {
@@ -53188,18 +53190,27 @@ function decomposeUnicode17HangulSyllable(codePoint) {
     ...trailingIndex === 0 ? [] : [4519 + trailingIndex]
   );
 }
-function foldUnmappedSecurityCharacter(character) {
+function foldSecurityCharacter(character, includeConfusables, depth = 0) {
+  if (depth > 32) {
+    throw new RangeError("security fold exceeded its decomposition depth bound");
+  }
   const codePoint = character.codePointAt(0);
+  if (isDefaultIgnorableCodePoint(codePoint) || isUnicode17MarkCodePoint(codePoint)) {
+    return "";
+  }
+  if (includeConfusables) {
+    const mapped = SECURITY_CONFUSABLES.get(codePoint);
+    if (mapped !== void 0) return mapped;
+  }
   const decomposition = SECURITY_UNICODE_17_NFKD.get(codePoint) ?? decomposeUnicode17HangulSyllable(codePoint) ?? character;
+  if (decomposition === character) return character;
   let folded = "";
   for (const normalizedCharacter of decomposition) {
-    const normalizedCodePoint = normalizedCharacter.codePointAt(0);
-    if (isDefaultIgnorableCodePoint(normalizedCodePoint) || isUnicode17MarkCodePoint(normalizedCodePoint)) continue;
-    folded += normalizedCharacter;
+    folded += foldSecurityCharacter(normalizedCharacter, includeConfusables, depth + 1);
   }
   return folded;
 }
-function foldSecurityConfusables(value) {
+function foldSecurityText(value, includeConfusables) {
   const original = String(value);
   const parts = createDetachedArray2();
   const maximumLength = Math.max(
@@ -53214,12 +53225,7 @@ function foldSecurityConfusables(value) {
     const codePoint = character.codePointAt(0);
     let replacement = character;
     if (codePoint > 127) {
-      if (isDefaultIgnorableCodePoint(codePoint)) {
-        replacement = "";
-      } else {
-        const mapped = SECURITY_CONFUSABLES.get(codePoint);
-        replacement = mapped === void 0 ? foldUnmappedSecurityCharacter(character) : mapped;
-      }
+      replacement = foldSecurityCharacter(character, includeConfusables);
     }
     if (replacement !== character) {
       changed = true;
@@ -53229,7 +53235,10 @@ function foldSecurityConfusables(value) {
       if (replacement !== "") defineArrayIndex2(parts, parts.length, replacement);
       outputLength += replacement.length - character.length;
       if (outputLength > maximumLength) {
-        throw new RangeError("security confusable fold exceeded its expansion bound");
+        throw new RangeError("security fold exceeded its relative expansion bound");
+      }
+      if (outputLength > SECURITY_FOLD_MAX_UTF16_OUTPUT) {
+        throw new RangeError("security fold exceeded its absolute output bound");
       }
       segmentStart = cursor + character.length;
     }
@@ -53241,13 +53250,61 @@ function foldSecurityConfusables(value) {
   }
   return joinStrings(parts, "");
 }
+function foldSecurityCompatibility(value) {
+  return foldSecurityText(value, false);
+}
+function foldSecurityConfusables(value) {
+  return foldSecurityText(value, true);
+}
 function securityTextVariants(value) {
   const original = String(value);
-  const folded = foldSecurityConfusables(original);
-  return folded === original ? Object.freeze(detachArray2([original])) : Object.freeze(detachArray2([original, folded]));
+  const compatibility = foldSecurityCompatibility(original);
+  const confusable = foldSecurityConfusables(original);
+  const combined = foldSecurityConfusables(compatibility);
+  const variants = createDetachedArray2();
+  function appendVariant(candidate) {
+    let seen = false;
+    for (let index = 0; index < variants.length; index += 1) {
+      if (variants[index] === candidate) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) defineArrayIndex2(variants, variants.length, candidate);
+  }
+  appendVariant(original);
+  appendVariant(compatibility);
+  appendVariant(confusable);
+  appendVariant(combined);
+  return Object.freeze(variants);
 }
-function securityKeyFingerprint(value) {
-  return foldSecurityConfusables(value).replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+function securityKeyFingerprints(value) {
+  const variants = securityTextVariants(value);
+  const fingerprints = createDetachedArray2();
+  for (let index = 0; index < variants.length; index += 1) {
+    const fingerprint = variants[index].replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+    let seen = false;
+    for (let fingerprintIndex = 0; fingerprintIndex < fingerprints.length; fingerprintIndex += 1) {
+      if (fingerprints[fingerprintIndex] === fingerprint) {
+        seen = true;
+        break;
+      }
+    }
+    if (!seen) defineArrayIndex2(fingerprints, fingerprints.length, fingerprint);
+  }
+  return Object.freeze(fingerprints);
+}
+var TOKEN_MEASUREMENT_KEY_FINGERPRINT = /^(?:(?:(?:max|min)(?:input|output)?|input|output|prompt|completion|cached|reasoning|total|estimated|consumed|remaining)(?:tokens|tokens?(?:count|limit|budget|usage|used|remaining))|tokens?(?:count|limit|budget|usage|used|remaining))$/;
+function isTokenMeasurementKey(value) {
+  const fingerprints = securityKeyFingerprints(value);
+  if (fingerprints.length === 0) return false;
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    if (!TOKEN_MEASUREMENT_KEY_FINGERPRINT.test(fingerprints[index])) return false;
+  }
+  return true;
+}
+function isBoundedTokenMeasurementValue(value) {
+  return Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 }
 function testSecurityPattern(pattern, value) {
   pattern.lastIndex = 0;
@@ -53422,8 +53479,13 @@ var AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|authorisation|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))\s*[=:]\s*[^&\s"']{8,}/i,
   /[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|client[_-]?secret)=[^&\s]{8,}/i
 ]);
-function normalizedKey(value) {
-  return foldSecurityConfusables(value).replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+function normalizedKeys(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index].replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+  }
+  return normalized;
 }
 function scanAuthorityFreeJson(value, field) {
   let nodes = 0;
@@ -53445,14 +53507,14 @@ function scanAuthorityFreeJson(value, field) {
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const normalized = normalizedKey(key);
+      const normalized = normalizedKeys(key);
       if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, key)) {
         throw new TypeError(`${path8}.<key> contains authority or secret-shaped material`);
       }
       if (DANGEROUS_KEYS.has(key)) {
         throw new TypeError(`${path8}.<key> is a forbidden JSON key`);
       }
-      if (AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)) {
+      if (normalized.some((candidate) => AUTHORITY_OR_SECRET_KEY_PATTERN.test(candidate)) || isTokenMeasurementKey(key) && !isBoundedTokenMeasurementValue(child)) {
         throw new TypeError(`${path8}.<key> is an authority or secret-bearing field`);
       }
       walk(child, `${path8}.<value>`, depth + 1);
@@ -58474,18 +58536,30 @@ var AUTHORITY_FAMILIES = Object.freeze([
   "keymaterial",
   "privatekey",
   "signingkey",
-  "apikey"
+  "apikey",
+  "password",
+  "passphrase"
 ]);
-var SAFE_TOKEN_MEASUREMENT_FINGERPRINT = /^(?:(?:(?:max|min)(?:input|output)?|input|output|prompt|completion|cached|reasoning|total|estimated|consumed|remaining)(?:tokens|tokens?(?:count|limit|budget|usage|used|remaining))|tokens?(?:count|limit|budget|usage|used|remaining))$/;
-function normalizeAuthorityShapeKey(value) {
-  return securityKeyFingerprint(value);
-}
 function isForbiddenAuthorityShapeKey(value) {
-  const fingerprint = normalizeAuthorityShapeKey(value);
-  if (AUTHORITY_FAMILIES.some(
-    (family) => family !== "token" && fingerprint.includes(family)
-  )) return true;
-  return fingerprint.includes("token") && !SAFE_TOKEN_MEASUREMENT_FINGERPRINT.test(fingerprint);
+  const fingerprints = securityKeyFingerprints(value);
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    const fingerprint = fingerprints[index];
+    if (AUTHORITY_FAMILIES.some(
+      (family) => family !== "token" && fingerprint.includes(family)
+    )) return true;
+    if (fingerprint.includes("token") && !isTokenMeasurementKey(value)) return true;
+  }
+  return false;
+}
+function isSafeTokenMeasurementKey(value) {
+  return isTokenMeasurementKey(value);
+}
+function isTokenMeasurementShapeKey(value) {
+  return isSafeTokenMeasurementKey(value);
+}
+function isForbiddenAuthorityShapeEntry(key, value) {
+  if (isForbiddenAuthorityShapeKey(key)) return true;
+  return isSafeTokenMeasurementKey(key) && !isBoundedTokenMeasurementValue(value);
 }
 function containsObviousCapabilityLikeText(value) {
   const text = String(value);
@@ -58497,11 +58571,18 @@ function containsObviousCapabilityLikeText(value) {
       if (isForbiddenAuthorityShapeKey(assignment[1])) return true;
     }
   }
-  const fingerprint = normalizeAuthorityShapeKey(text);
-  const familyCount = AUTHORITY_FAMILIES.filter((family) => fingerprint.includes(family)).length;
-  if (familyCount >= 2) return true;
+  const fingerprints = securityKeyFingerprints(text);
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    const fingerprint = fingerprints[index];
+    const familyCount = AUTHORITY_FAMILIES.filter((family) => fingerprint.includes(family)).length;
+    if (familyCount >= 2) return true;
+  }
   const states = ["grant", "granted", "active", "enabled", "issued", "exposed", "ref", "value", "material"];
-  return AUTHORITY_FAMILIES.some((family) => fingerprint.includes(family) && states.some((state) => fingerprint.includes(state)));
+  for (let index = 0; index < fingerprints.length; index += 1) {
+    const fingerprint = fingerprints[index];
+    if (AUTHORITY_FAMILIES.some((family) => fingerprint.includes(family) && states.some((state) => fingerprint.includes(state)))) return true;
+  }
+  return false;
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/taint-gate.mjs
@@ -58569,8 +58650,8 @@ var SCHEMA_VALUE_KEYWORDS = Object.freeze([
   "anyOf",
   "oneOf"
 ]);
-function normalizeChildKey(value) {
-  return securityKeyFingerprint(value);
+function normalizeChildKeys(value) {
+  return securityKeyFingerprints(value);
 }
 function declaredJsonSchemaDialect(schema) {
   if (!Object.hasOwn(schema, "$schema")) return "2020-12";
@@ -58631,7 +58712,7 @@ function makeAjv(schema) {
   registerNestedSchemaResources(ajv, schema);
   return ajv;
 }
-function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", depth = 0) {
+function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", depth = 0, enforceMeasurementValues = true) {
   if (depth > limits.max_depth) {
     throw new TypeError(`Artifact nesting exceeds ${limits.max_depth} levels at ${path8}`);
   }
@@ -58648,7 +58729,15 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
   }
   if (Array.isArray(value)) {
     for (const [index, item] of value.entries()) {
-      walkStrings(item, visitor, limits, state, `${path8}[${index}]`, depth + 1);
+      walkStrings(
+        item,
+        visitor,
+        limits,
+        state,
+        `${path8}[${index}]`,
+        depth + 1,
+        enforceMeasurementValues
+      );
     }
     return;
   }
@@ -58658,14 +58747,29 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path8 = "$", 
       throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path8}.<key>`);
     }
     visitor(key, `${path8}.<key>`);
-    const normalizedKey3 = normalizeChildKey(key);
-    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKey3) || isForbiddenAuthorityShapeKey(key)) {
+    const normalizedKeys3 = normalizeChildKeys(key);
+    let forbiddenFingerprint = false;
+    for (let index = 0; index < normalizedKeys3.length; index += 1) {
+      if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKeys3[index])) {
+        forbiddenFingerprint = true;
+        break;
+      }
+    }
+    if (forbiddenFingerprint || isForbiddenAuthorityShapeKey(key) || enforceMeasurementValues && isForbiddenAuthorityShapeEntry(key, child)) {
       throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path8}.<key>`);
     }
-    walkStrings(child, visitor, limits, state, `${path8}.<value>`, depth + 1);
+    walkStrings(
+      child,
+      visitor,
+      limits,
+      state,
+      `${path8}.<value>`,
+      depth + 1,
+      enforceMeasurementValues
+    );
   }
 }
-function scanText(value, policy) {
+function scanText(value, policy, { enforceMeasurementValues = true } = {}) {
   const findings = [];
   walkStrings(value, (text, path8) => {
     const secretMatches = countSecurityPatternMatches(SECRET_PATTERNS, text);
@@ -58679,7 +58783,7 @@ function scanText(value, policy) {
         findings.push({ code: "prompt_injection_pattern", path: path8 });
       }
     }
-  }, policy);
+  }, policy, { nodes: 0 }, "$", 0, enforceMeasurementValues);
   return findings;
 }
 function assertClosedLocalSchema(schema) {
@@ -58777,7 +58881,9 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
 function validateTypedResult(candidate, context) {
   assertAllowedKeys(candidate, ["type", "payload", "payload_schema"], "typed result candidate");
   assertPlainObject(candidate.payload_schema, "typed result payload_schema");
-  const schemaFindings = scanText(candidate.payload_schema, context.policy);
+  const schemaFindings = scanText(candidate.payload_schema, context.policy, {
+    enforceMeasurementValues: false
+  });
   if (schemaFindings.length > 0) {
     throw new Error(`Typed result schema taint scan failed: ${schemaFindings[0].code}`);
   }
@@ -62336,11 +62442,16 @@ var RiskForkHostBoundaryError = class extends Error {
 function boundaryError(code, message) {
   return new RiskForkHostBoundaryError(code, message);
 }
-function normalizedKey2(value) {
-  return foldSecurityConfusables(value).replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+function normalizedKeys2(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index].replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+  }
+  return normalized;
 }
-function keyFingerprint(value) {
-  return normalizedKey2(value).replaceAll("_", "");
+function keyFingerprints(value) {
+  return normalizedKeys2(value).map((normalized) => normalized.replaceAll("_", ""));
 }
 function assertNoCallerRiskLabels(value, field = "operation") {
   function walk(current) {
@@ -62352,8 +62463,8 @@ function assertNoCallerRiskLabels(value, field = "operation") {
       );
     }
     for (const [key, child] of Object.entries(current)) {
-      const fingerprint = keyFingerprint(key);
-      if (CALLER_RISK_LABEL_FINGERPRINTS.has(fingerprint) || fingerprint.startsWith("risk")) {
+      const fingerprints = keyFingerprints(key);
+      if (fingerprints.some((fingerprint) => CALLER_RISK_LABEL_FINGERPRINTS.has(fingerprint) || fingerprint.startsWith("risk"))) {
         throw boundaryError(
           RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_RISK_LABEL_REJECTED,
           "Caller/model risk labels are not accepted by the host boundary"
@@ -62370,7 +62481,8 @@ function assertBoundedCanonicalJson(value, {
   maxNodes = 5e4,
   maxDepth = 50,
   maxStringBytes = 512 * 1024,
-  dlp = false
+  dlp = false,
+  dlpSchemaPath = null
 }) {
   const state = { nodes: 0, seen: /* @__PURE__ */ new WeakSet() };
   function rejectDlp() {
@@ -62379,7 +62491,7 @@ function assertBoundedCanonicalJson(value, {
       "Risk Fork import envelope failed privacy/DLP validation"
     );
   }
-  function walk(current, depth) {
+  function walk(current, depth, schemaContext = false, pathKeys = []) {
     state.nodes += 1;
     if (state.nodes > maxNodes || depth > maxDepth) {
       throw boundaryError(
@@ -62459,23 +62571,29 @@ function assertBoundedCanonicalJson(value, {
             `${field} contains a sparse array`
           );
         }
-        walk(current[index], depth + 1);
+        walk(current[index], depth + 1, schemaContext, pathKeys);
       }
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const normalized = normalizedKey2(key);
-      const fingerprint = keyFingerprint(key);
-      if (DANGEROUS_KEY_FINGERPRINTS.has(fingerprint)) {
+      const childPathKeys = [...pathKeys, key];
+      const entersSchemaContext = Array.isArray(dlpSchemaPath) && childPathKeys.length === dlpSchemaPath.length && childPathKeys.every((part, index) => part === dlpSchemaPath[index]);
+      const childSchemaContext = schemaContext || entersSchemaContext;
+      const normalized = normalizedKeys2(key);
+      const fingerprints = keyFingerprints(key);
+      const tokenMeasurementKey = isTokenMeasurementShapeKey(key);
+      if (fingerprints.some((fingerprint) => DANGEROUS_KEY_FINGERPRINTS.has(fingerprint))) {
         throw boundaryError(
           dlp ? RISK_FORK_HOST_DIAGNOSTIC_CODES.IMPORT_INVALID : RISK_FORK_HOST_DIAGNOSTIC_CODES.INVALID_BOUNDARY_INPUT,
           `${field} contains a forbidden JSON key`
         );
       }
-      if (dlp && (FORBIDDEN_IMPORT_KEY_FINGERPRINTS.has(fingerprint) || SENSITIVE_IMPORT_KEY_PATTERN.test(normalized) || isForbiddenAuthorityShapeKey(key) || containsSecretShapedText(key))) {
+      if (dlp && (fingerprints.some(
+        (fingerprint) => FORBIDDEN_IMPORT_KEY_FINGERPRINTS.has(fingerprint)
+      ) || normalized.some((candidate) => SENSITIVE_IMPORT_KEY_PATTERN.test(candidate)) && !tokenMeasurementKey || (schemaContext ? isForbiddenAuthorityShapeKey(key) : isForbiddenAuthorityShapeEntry(key, child)) || containsSecretShapedText(key))) {
         rejectDlp();
       }
-      walk(child, depth + 1);
+      walk(child, depth + 1, childSchemaContext, childPathKeys);
     }
   }
   try {
@@ -62587,7 +62705,8 @@ function normalizeImportEnvelope(value, options = {}) {
     maxNodes: MAX_IMPORT_NODES,
     maxDepth: MAX_IMPORT_DEPTH,
     maxStringBytes: MAX_IMPORT_STRING_BYTES,
-    dlp: true
+    dlp: true,
+    dlpSchemaPath: ["candidate", "payload_schema"]
   });
   assertAllowedKeys(clone, [
     "schema",
@@ -62645,7 +62764,8 @@ function createRiskForkImportEnvelope(input = {}) {
       maxNodes: MAX_IMPORT_NODES,
       maxDepth: MAX_IMPORT_DEPTH,
       maxStringBytes: MAX_IMPORT_STRING_BYTES,
-      dlp: true
+      dlp: true,
+      dlpSchemaPath: ["payload_schema"]
     });
     const importType = requireEnum(candidate.type, COMMIT_TYPES, "Risk Fork import candidate.type");
     normalizeImportCandidate(candidate, importType);
@@ -69427,6 +69547,7 @@ import {
   rm
 } from "node:fs/promises";
 import path5 from "node:path";
+import { TextDecoder as TextDecoder2 } from "node:util";
 var EXPORT_SCHEMA = "agoragentic.risk-fork.immutable-workspace-export.v1";
 var SECRET_PATH_PATTERN = /(?:^|\/)(?:\.env(?:\..*)?|\.aws|\.azure|\.config\/gcloud|\.docker\/config\.json|\.git-credentials|\.netrc|\.npmrc|\.pypirc|\.ssh|credentials?(?:\.[^/]*)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|private[_-]?key(?:\.[^/]*)?|secrets?(?:\.[^/]*)?|wallet(?:\.[^/]*)?)(?:$|\/)/i;
 var SECRET_CONTENT_PATTERNS = Object.freeze([
@@ -69441,10 +69562,8 @@ var SECRET_CONTENT_PATTERNS = Object.freeze([
   /\bgh[pousr]_[A-Za-z0-9]{20,}\b/
 ]);
 var SECRET_ASSIGNMENT_KEY = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
-var SECRET_ASSIGNMENT_PATTERN = new RegExp(
-  String.raw`(?:^|[^A-Za-z0-9_])(?:"${SECRET_ASSIGNMENT_KEY}"|'${SECRET_ASSIGNMENT_KEY}'|${SECRET_ASSIGNMENT_KEY})\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;}\]]+))`,
-  "gi"
-);
+var SECRET_ASSIGNMENT_KEY_PATTERN = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY})$`, "i");
+var SECRET_ASSIGNMENT_PATTERN = /(?:^|[^A-Za-z0-9_])(?:"([^"\r\n]{1,120})"|'([^'\r\n]{1,120})'|([^\s=:\n,;{}\[\]"']{1,120}))\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/gu;
 var MIN_SECRET_ASSIGNMENT_BYTES = 8;
 var BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
@@ -69453,37 +69572,61 @@ var MAX_WORKSPACE_DEPTH = 512;
 var MAX_CLEANUP_ENTRIES = MAX_WORKSPACE_ENTRIES + 2;
 var MAX_CLEANUP_DEPTH = MAX_WORKSPACE_DEPTH + 1;
 var MAX_CLEANUP_MANIFEST_BYTES = 64 * 1024 * 1024;
-function containsSecretAssignment(exactBytesText) {
-  const variants = securityTextVariants(exactBytesText);
-  for (let index = 0; index < variants.length; index += 1) {
-    SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-    for (let match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index]); match; match = SECRET_ASSIGNMENT_PATTERN.exec(variants[index])) {
-      const value = match[1] ?? match[2] ?? match[3] ?? "";
-      if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES) {
-        SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-        return true;
-      }
+function exactPatternMatches(pattern, value) {
+  pattern.lastIndex = 0;
+  const matched = pattern.test(value);
+  pattern.lastIndex = 0;
+  return matched;
+}
+function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
+  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+  for (let match = SECRET_ASSIGNMENT_PATTERN.exec(text); match; match = SECRET_ASSIGNMENT_PATTERN.exec(text)) {
+    const key = match[1] ?? match[2] ?? match[3] ?? "";
+    const value = match[4] ?? match[5] ?? match[6] ?? "";
+    const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
+    if (keyMatches && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
+      return true;
     }
   }
   SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
   return false;
 }
-function decodedTextViews(content) {
-  const views = /* @__PURE__ */ new Set([
-    content.toString("latin1"),
-    content.toString("utf8")
-  ]);
+function bytePreservationTextViews(content) {
+  const views = [{ text: content.toString("latin1"), valueEncoding: "latin1" }];
   for (const offset of [0, 1]) {
     const available = content.byteLength - offset;
     const evenBytes = available - available % 2;
     if (evenBytes <= 0) continue;
     const aligned = content.subarray(offset, offset + evenBytes);
-    views.add(aligned.toString("utf16le"));
+    views.push({ text: aligned.toString("utf16le"), valueEncoding: "utf16le" });
     const bigEndian = Buffer.from(aligned);
     bigEndian.swap16();
-    views.add(bigEndian.toString("utf16le"));
+    views.push({ text: bigEndian.toString("utf16le"), valueEncoding: "utf16le" });
   }
-  return [...views];
+  return views;
+}
+function fatalDecode(content, encoding) {
+  try {
+    return new TextDecoder2(encoding, { fatal: true }).decode(content);
+  } catch {
+    return null;
+  }
+}
+function canonicalUnicodeTextViews(content) {
+  const views = [];
+  const utf8 = fatalDecode(content, "utf-8");
+  if (utf8 !== null) views.push({ text: utf8, valueEncoding: "utf8" });
+  if (content.byteLength >= 2 && (content.byteLength - 2) % 2 === 0) {
+    if (content[0] === 255 && content[1] === 254) {
+      const utf16le = fatalDecode(content.subarray(2), "utf-16le");
+      if (utf16le !== null) views.push({ text: utf16le, valueEncoding: "utf16le" });
+    } else if (content[0] === 254 && content[1] === 255) {
+      const utf16be = fatalDecode(content.subarray(2), "utf-16be");
+      if (utf16be !== null) views.push({ text: utf16be, valueEncoding: "utf16le" });
+    }
+  }
+  return views;
 }
 function decodeCanonicalBase64(candidate) {
   const normalized = candidate.replaceAll("-", "+").replaceAll("_", "/").replace(/=+$/, "");
@@ -69494,21 +69637,35 @@ function decodeCanonicalBase64(candidate) {
   return decoded;
 }
 function containsRecognizedSecretText(text) {
-  return securityPatternsMatch(SECRET_CONTENT_PATTERNS, text) || containsSecretAssignment(text);
+  return securityPatternsMatch(SECRET_CONTENT_PATTERNS, text) || containsSecretAssignment(text, { normalizeUnicode: true, valueEncoding: "utf8" });
+}
+function containsRecognizedSecretView(view, normalizeUnicode) {
+  const patternMatched = normalizeUnicode ? securityPatternsMatch(SECRET_CONTENT_PATTERNS, view.text) : SECRET_CONTENT_PATTERNS.some((pattern) => exactPatternMatches(pattern, view.text));
+  return patternMatched || containsSecretAssignment(view.text, {
+    normalizeUnicode,
+    valueEncoding: view.valueEncoding
+  });
+}
+function containsRecognizedSecretPayload(content) {
+  return bytePreservationTextViews(content).some(
+    (view) => containsRecognizedSecretView(view, false)
+  ) || canonicalUnicodeTextViews(content).some(
+    (view) => containsRecognizedSecretView(view, true)
+  );
 }
 function containsRecognizedSecretBytes(content) {
-  const rawViews = decodedTextViews(content);
-  if (rawViews.some(containsRecognizedSecretText)) return true;
-  for (const text of rawViews) {
+  const rawViews = bytePreservationTextViews(content);
+  if (containsRecognizedSecretPayload(content)) return true;
+  for (const { text } of rawViews) {
     BASE64_CANDIDATE_PATTERN.lastIndex = 0;
     for (let match = BASE64_CANDIDATE_PATTERN.exec(text); match; match = BASE64_CANDIDATE_PATTERN.exec(text)) {
       const decoded = decodeCanonicalBase64(match[0]);
-      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+      if (decoded && containsRecognizedSecretPayload(decoded)) return true;
     }
     MIME_BASE64_BLOCK_PATTERN.lastIndex = 0;
     for (let match = MIME_BASE64_BLOCK_PATTERN.exec(text); match; match = MIME_BASE64_BLOCK_PATTERN.exec(text)) {
       const decoded = decodeCanonicalBase64(match[0].replace(/\s/g, ""));
-      if (decoded && decodedTextViews(decoded).some(containsRecognizedSecretText)) return true;
+      if (decoded && containsRecognizedSecretPayload(decoded)) return true;
     }
   }
   return false;
@@ -70294,23 +70451,23 @@ function buildE2BCleanSandboxCreateOptions(input = {}) {
     throw new TypeError("E2B clean sandbox metadata exceeds 32 entries");
   }
   for (const [key, value] of metadataEntries) {
-    const normalizedKey3 = requireString(key, "E2B clean sandbox metadata key", {
+    const normalizedKey = requireString(key, "E2B clean sandbox metadata key", {
       maxLength: 200,
       pattern: /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/
     });
-    if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey3)) {
+    if (!E2B_CLEAN_METADATA_KEYS.has(normalizedKey)) {
       throw new TypeError("E2B clean sandbox metadata contains an unsupported key");
     }
     if (value && typeof value === "object" && utilTypes3.isProxy(value)) {
-      throw new TypeError(`E2B clean sandbox metadata ${normalizedKey3} must not be a Proxy`);
+      throw new TypeError(`E2B clean sandbox metadata ${normalizedKey} must not be a Proxy`);
     }
-    const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey3}`, {
+    const normalizedValue = requireString(value, `E2B clean sandbox metadata ${normalizedKey}`, {
       maxLength: 1024
     });
-    if (normalizedKey3 !== key || normalizedValue !== value || /[^\x20-\x7e]/.test(normalizedValue)) {
+    if (normalizedKey !== key || normalizedValue !== value || /[^\x20-\x7e]/.test(normalizedValue)) {
       throw new TypeError("E2B clean sandbox metadata must use exact printable ASCII strings");
     }
-    metadata[normalizedKey3] = normalizedValue;
+    metadata[normalizedKey] = normalizedValue;
   }
   const profile = metadata["agoragentic.risk_fork.profile"];
   const expectedMetadataKeys = profile === PROFILE_METADATA_SCHEMA ? E2B_RUNTIME_METADATA_KEYS : profile === LIVE_QUALIFICATION_METADATA_SCHEMA ? E2B_LIVE_QUALIFICATION_METADATA_KEYS : null;
@@ -72912,6 +73069,7 @@ import {
   realpath as realpath3
 } from "node:fs/promises";
 import path7 from "node:path";
+import { TextDecoder as TextDecoder3 } from "node:util";
 var REQUEST_SCHEMA = "agoragentic.risk-fork.authority-free-source-request.v1";
 var ATTESTATION_SCHEMA = "agoragentic.risk-fork.authority-free-source-attestation.v1";
 var EVIDENCE_SCHEMA = "agoragentic.risk-fork.e2b-source-verification-evidence.v1";
@@ -72950,44 +73108,66 @@ var SECRET_CONTENT_PATTERNS2 = Object.freeze([
   /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp|https?):\/\/[^/\s:@]+:[^@\s/]{3,}@/i
 ]);
 var SECRET_ASSIGNMENT_KEY2 = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|npm[_-]?token|slack[_-]?token|database[_-]?url|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
-var SECRET_ASSIGNMENT_PATTERN2 = new RegExp(
-  String.raw`(?:^|[^A-Za-z0-9_])(?:"${SECRET_ASSIGNMENT_KEY2}"|'${SECRET_ASSIGNMENT_KEY2}'|${SECRET_ASSIGNMENT_KEY2})\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;}\]]+))`,
-  "gi"
-);
+var SECRET_ASSIGNMENT_KEY_PATTERN2 = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY2})$`, "i");
+var SECRET_ASSIGNMENT_PATTERN2 = /(?:^|[^A-Za-z0-9_])(?:"([^"\r\n]{1,120})"|'([^'\r\n]{1,120})'|([^\s=:\n,;{}\[\]"']{1,120}))\s*[=:]\s*(?:"((?:\\[\s\S]|[^"\\])*)"|'((?:\\[\s\S]|[^'\\])*)'|([^&\s"',;{}\]]+))/gu;
 var MIN_SECRET_ASSIGNMENT_BYTES2 = 8;
 var BASE64_CANDIDATE_PATTERN2 = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN2 = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
-function containsSecretAssignment2(exactBytesText) {
-  const variants = securityTextVariants(exactBytesText);
-  for (let index = 0; index < variants.length; index += 1) {
-    SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
-    for (let match = SECRET_ASSIGNMENT_PATTERN2.exec(variants[index]); match; match = SECRET_ASSIGNMENT_PATTERN2.exec(variants[index])) {
-      const value = match[1] ?? match[2] ?? match[3] ?? "";
-      if (value.length >= MIN_SECRET_ASSIGNMENT_BYTES2) {
-        SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
-        return true;
-      }
+function exactPatternMatches2(pattern, value) {
+  pattern.lastIndex = 0;
+  const matched = pattern.test(value);
+  pattern.lastIndex = 0;
+  return matched;
+}
+function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
+  SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
+  for (let match = SECRET_ASSIGNMENT_PATTERN2.exec(text); match; match = SECRET_ASSIGNMENT_PATTERN2.exec(text)) {
+    const key = match[1] ?? match[2] ?? match[3] ?? "";
+    const value = match[4] ?? match[5] ?? match[6] ?? "";
+    const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
+    if (keyMatches && Buffer.byteLength(value, valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
+      SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
+      return true;
     }
   }
   SECRET_ASSIGNMENT_PATTERN2.lastIndex = 0;
   return false;
 }
-function decodedTextViews2(content) {
-  const views = /* @__PURE__ */ new Set([
-    content.toString("latin1"),
-    content.toString("utf8")
-  ]);
+function bytePreservationTextViews2(content) {
+  const views = [{ text: content.toString("latin1"), valueEncoding: "latin1" }];
   for (const offset of [0, 1]) {
     const available = content.byteLength - offset;
     const evenBytes = available - available % 2;
     if (evenBytes <= 0) continue;
     const aligned = content.subarray(offset, offset + evenBytes);
-    views.add(aligned.toString("utf16le"));
+    views.push({ text: aligned.toString("utf16le"), valueEncoding: "utf16le" });
     const bigEndian = Buffer.from(aligned);
     bigEndian.swap16();
-    views.add(bigEndian.toString("utf16le"));
+    views.push({ text: bigEndian.toString("utf16le"), valueEncoding: "utf16le" });
   }
-  return [...views];
+  return views;
+}
+function fatalDecode2(content, encoding) {
+  try {
+    return new TextDecoder3(encoding, { fatal: true }).decode(content);
+  } catch {
+    return null;
+  }
+}
+function canonicalUnicodeTextViews2(content) {
+  const views = [];
+  const utf8 = fatalDecode2(content, "utf-8");
+  if (utf8 !== null) views.push({ text: utf8, valueEncoding: "utf8" });
+  if (content.byteLength >= 2 && (content.byteLength - 2) % 2 === 0) {
+    if (content[0] === 255 && content[1] === 254) {
+      const utf16le = fatalDecode2(content.subarray(2), "utf-16le");
+      if (utf16le !== null) views.push({ text: utf16le, valueEncoding: "utf16le" });
+    } else if (content[0] === 254 && content[1] === 255) {
+      const utf16be = fatalDecode2(content.subarray(2), "utf-16be");
+      if (utf16be !== null) views.push({ text: utf16be, valueEncoding: "utf16le" });
+    }
+  }
+  return views;
 }
 function decodeCanonicalBase642(candidate) {
   const normalized = candidate.replaceAll("-", "+").replaceAll("_", "/").replace(/=+$/, "");
@@ -72998,21 +73178,35 @@ function decodeCanonicalBase642(candidate) {
   return decoded;
 }
 function containsRecognizedSecretText2(text) {
-  return securityPatternsMatch(SECRET_CONTENT_PATTERNS2, text) || containsSecretAssignment2(text);
+  return securityPatternsMatch(SECRET_CONTENT_PATTERNS2, text) || containsSecretAssignment2(text, { normalizeUnicode: true, valueEncoding: "utf8" });
+}
+function containsRecognizedSecretView2(view, normalizeUnicode) {
+  const patternMatched = normalizeUnicode ? securityPatternsMatch(SECRET_CONTENT_PATTERNS2, view.text) : SECRET_CONTENT_PATTERNS2.some((pattern) => exactPatternMatches2(pattern, view.text));
+  return patternMatched || containsSecretAssignment2(view.text, {
+    normalizeUnicode,
+    valueEncoding: view.valueEncoding
+  });
+}
+function containsRecognizedSecretPayload2(content) {
+  return bytePreservationTextViews2(content).some(
+    (view) => containsRecognizedSecretView2(view, false)
+  ) || canonicalUnicodeTextViews2(content).some(
+    (view) => containsRecognizedSecretView2(view, true)
+  );
 }
 function containsRecognizedSecretBytes2(content) {
-  const rawViews = decodedTextViews2(content);
-  if (rawViews.some(containsRecognizedSecretText2)) return true;
-  for (const text of rawViews) {
+  const rawViews = bytePreservationTextViews2(content);
+  if (containsRecognizedSecretPayload2(content)) return true;
+  for (const { text } of rawViews) {
     BASE64_CANDIDATE_PATTERN2.lastIndex = 0;
     for (let match = BASE64_CANDIDATE_PATTERN2.exec(text); match; match = BASE64_CANDIDATE_PATTERN2.exec(text)) {
       const decoded = decodeCanonicalBase642(match[0]);
-      if (decoded && decodedTextViews2(decoded).some(containsRecognizedSecretText2)) return true;
+      if (decoded && containsRecognizedSecretPayload2(decoded)) return true;
     }
     MIME_BASE64_BLOCK_PATTERN2.lastIndex = 0;
     for (let match = MIME_BASE64_BLOCK_PATTERN2.exec(text); match; match = MIME_BASE64_BLOCK_PATTERN2.exec(text)) {
       const decoded = decodeCanonicalBase642(match[0].replace(/\s/g, ""));
-      if (decoded && decodedTextViews2(decoded).some(containsRecognizedSecretText2)) return true;
+      if (decoded && containsRecognizedSecretPayload2(decoded)) return true;
     }
   }
   return false;
@@ -73309,7 +73503,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:8bbe84a965b21bfaaf755ebd83cd116bd1cc46f80b75be2894e146c432b9904f" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:891e1c841f00a064cb2389bac5c2be55a32ca392c892e904741527d9c157a525" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

@@ -1520,6 +1520,12 @@ test('npm-packed artifact installs and runs with no repository or registry depen
         await readFile(path.join(repositoryRoot, 'risk-fork', 'NOTICE')),
       ),
     );
+    const installedUnicodeUtility = await readFile(
+      path.join(installed, 'e2b-context', 'risk-fork', 'src', 'util.mjs'),
+      'utf8',
+    );
+    assert.match(installedUnicodeUtility, /Unicode License v3 notice: package-root NOTICE/);
+    assert.doesNotMatch(installedUnicodeUtility, /Unicode License v3 notice: \.\.\/NOTICE/);
     const installedVerifyOutput = run(
       process.execPath,
       [path.join(installed, 'scripts', 'verify-integrity.mjs')],
