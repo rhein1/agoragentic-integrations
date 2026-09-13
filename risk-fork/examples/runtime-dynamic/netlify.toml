@@ -1,0 +1,9 @@
+[build]
+  publish = "risk-fork/examples/runtime-dynamic/public"
+# Use repository root as base directory. Static rehearsal only; no functions or secrets.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
