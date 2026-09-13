@@ -30,6 +30,7 @@ import {
 } from '../src/adapters/e2b-source-verifier.mjs';
 import {
   createImmutableWorkspaceExport,
+  destroyImmutableWorkspaceExport,
 } from '../src/adapters/e2b-workspace-export.mjs';
 import { inspectProcessEnvironmentBytes } from '../e2b-template/bin/boot-guard.mjs';
 import { validateDemoOperation } from '../hackathon/src/security.mjs';
@@ -495,7 +496,16 @@ test('immutable E2B workspace export rejects confusable secret bytes before copy
 test('immutable E2B workspace export avoids mojibake and folded-value false positives', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-byte-scan-'));
   const exportRoot = path.join(root, 'exports');
-  t.after(() => rm(root, { recursive: true, force: true }));
+  const exportIds = [];
+  t.after(async () => {
+    for (const exportId of exportIds) {
+      await destroyImmutableWorkspaceExport({
+        export_root: exportRoot,
+        export_id: exportId,
+      });
+    }
+    await rm(root, { recursive: true, force: true });
+  });
 
   for (const [exportId, content] of [
     ['soft_hyphen', '\u00adPI_KEY=12345678'],
@@ -516,6 +526,7 @@ test('immutable E2B workspace export avoids mojibake and folded-value false posi
       export_id: exportId,
       expected_workspace_digest: expectedWorkspaceDigest,
     });
+    exportIds.push(exported.export_id);
     assert.equal(exported.workspace_digest, expectedWorkspaceDigest);
   }
 });
