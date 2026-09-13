@@ -195,6 +195,18 @@ test('batch detects duplicates and conflicts on all affected observations', () =
   input.record.raw.push(withRaw({ amount: '777' }).record.raw);
   assert(normalizeNeverminedExport(input).records.every((r) => r.assessment.import_disposition === 'conflict'));
 });
+test('batch conflict groups do not taint a different payment identity', () => {
+  const input = fixture();
+  input.record.raw = [
+    fixture().record.raw,
+    withRaw({ status: 'Failed' }).record.raw,
+    withRaw({ id: 'synthetic-payment-002', requestId: 'synthetic-request-002' }).record.raw,
+  ];
+  const records = normalizeNeverminedExport(input).records;
+  assert.deepEqual(records.map((record) => record.assessment.import_disposition), ['conflict', 'conflict', 'new']);
+  assert.deepEqual(records[2].assessment.conflicts, []);
+  assert.deepEqual(records[2].assessment.prior_observation_keys, []);
+});
 test('redaction occurs before digest, output, and human reporting', () => {
   const input = withRaw({ apiKey: 'SECRET_CANARY_ONE', feeFailureReason: 'SECRET_CANARY_ONE', extra: { prompt: 'SECRET_CANARY_ONE' }, resourceUrl: 'https://user:SECRET_CANARY_ONE@service.example/path?token=SECRET_CANARY_ONE#SECRET_CANARY_ONE' });
   const a = normalize(input); const json = JSON.stringify(a) + renderNeverminedReport(a);
@@ -211,15 +223,23 @@ test('recognized secrets in allowed fields reject without echoing', () => {
 test('generic credential assignments in retained fields reject without echoing', () => {
   for (const [field, secret] of [
     ['id', 'api_key=TEST_ONLY_SECRET_123456'],
+    ['id', 'api key = TEST_ONLY_SECRET_123456'],
     ['requestId', 'password:TEST_ONLY_SECRET_123456'],
+    ['requestId', '{"api_key":"TEST_ONLY_SECRET_123456"}'],
     ['delegationId', 'client-secret="TEST_ONLY_SECRET_123456"'],
     ['txHash', 'refresh_token=TEST_ONLY_SECRET_123456'],
     ['createdAt', 'token=TEST_ONLY_SECRET_123456'],
+    ['createdAt', 'password="TEST ONLY SECRET 123456"'],
+    ['resourceUrl', 'https://service.example/%22api%20key%22%3A%22TEST%20ONLY%20SECRET%20123456%22'],
   ]) {
-    let error;
-    try { normalize(withRaw({ [field]: secret })); } catch (caught) { error = caught; }
+    let error; let record;
+    try { record = normalize(withRaw({ [field]: secret })); } catch (caught) { error = caught; }
+    assert.equal(record, undefined);
     assert.equal(error?.code, 'secret_in_evidence_field');
     assert(!String(error).includes(secret));
+    assert(!String(error?.stack).includes(secret));
+    assert(!String(error).includes('TEST_ONLY_SECRET'));
+    assert(!String(error).includes('TEST ONLY SECRET'));
   }
 });
 test('vendor fixture is unchanged and never labeled observed', () => {
@@ -263,6 +283,12 @@ test('actual CLI import works with network and DNS disabled before imports', () 
     const bad = path.join(temp, 'bad.json'); fs.writeFileSync(bad, '{"api_key":"SECRET_CANARY","api_key":1}');
     const invalid = spawnSync(process.execPath, [cli, 'nevermined', 'import', '--input', bad, '--profile', NEVERMINED_PROFILE_ID], { encoding: 'utf8' });
     assert.equal(invalid.status, 64); assert.equal(invalid.stdout, ''); assert(!invalid.stderr.includes('SECRET_CANARY'));
+    const credential = path.join(temp, 'credential.json');
+    fs.writeFileSync(credential, JSON.stringify(withRaw({ id: 'api key = TEST_ONLY_CLI_SECRET_123456' })));
+    const rejected = spawnSync(process.execPath, [cli, 'nevermined', 'import', '--input', credential, '--profile', NEVERMINED_PROFILE_ID], { encoding: 'utf8' });
+    assert.equal(rejected.status, 64); assert.equal(rejected.stdout, '');
+    assert(rejected.stderr.includes('secret_in_evidence_field'));
+    assert(!rejected.stderr.includes('TEST_ONLY_CLI_SECRET'));
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 });
 
@@ -273,4 +299,40 @@ test('blank or whitespace-bearing payment identifiers never establish identity',
     assert.equal(result.core.identifiers.payment_id, id);
     assert.equal(result.assessment.parse_status, 'incomplete');
   }
+});
+
+test('maximum same-identity batch comparison remains bounded', () => {
+  const moduleUrl = pathToFileURL(path.join(base, '../src/adapters/nevermined-ledger.mjs')).href;
+  const probeScript = `
+    import { normalizeNeverminedExport, NEVERMINED_PROFILE_ID, NEVERMINED_REVISION } from ${JSON.stringify(moduleUrl)};
+    const count = 1000;
+    const envelope = {
+      schema: 'agoragentic.nevermined-import.v1',
+      source: { provider: 'nevermined', namespace: 'synthetic:bounded-performance', record_kind: 'merchant_payment_ledger', schema_revision: NEVERMINED_REVISION },
+      profile_id: NEVERMINED_PROFILE_ID,
+      record: { raw: Array.from({ length: count }, (_, index) => ({ id: 'same-payment', requestId: 'request-' + index })) },
+    };
+    const started = performance.now();
+    const records = normalizeNeverminedExport(envelope).records;
+    process.stdout.write(JSON.stringify({
+      elapsed_ms: Math.round(performance.now() - started),
+      records: records.length,
+      all_conflicts: records.every((record) => record.assessment.import_disposition === 'conflict'),
+      first_refs: records[0].assessment.prior_observation_keys.length,
+      last_refs: records.at(-1).assessment.prior_observation_keys.length,
+      conflicts: records[0].assessment.conflicts,
+    }));
+  `;
+  const probe = spawnSync(process.execPath, ['--input-type=module', '--eval', probeScript], {
+    encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(probe.error, undefined, probe.error?.message);
+  assert.equal(probe.status, 0, probe.stderr);
+  const summary = JSON.parse(probe.stdout);
+  assert.equal(summary.records, 1000);
+  assert.equal(summary.all_conflicts, true);
+  assert.equal(summary.first_refs, 999);
+  assert.equal(summary.last_refs, 999);
+  assert.deepEqual(summary.conflicts, ['request_id']);
+  assert(summary.elapsed_ms < 10000);
 });

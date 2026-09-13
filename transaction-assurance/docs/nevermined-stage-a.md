@@ -136,6 +136,9 @@ finding. Full
 batch comparison exposes conflicts on both affected observations; nothing is
 automatically overwritten or retried. Known but unsupported checks are preserved
 independently, and missing delivery cannot clear a contradiction.
+Batch imports group observations by payment identity and extraction profile, then
+compute each group's conflict union once. Duplicate/update labels retain input
+ordering semantics without repeating the peer-to-peer comparison for every row.
 
 ## Privacy and digest scope
 
@@ -144,8 +147,10 @@ Unknown properties and `feeFailureReason` are dropped before hashing and output.
 HTTP(S) resource URLs lose userinfo, query and fragment; other URL schemes are
 omitted. Recognized credential patterns, including value-bearing generic
 assignments such as API keys, passwords, tokens, and client secrets, cause a
-value-free error when they appear in retained evidence fields. Never put secrets
-in source namespace/reference fields.
+value-free error when they appear in retained evidence fields. The assignment
+check tolerates whitespace, underscore and hyphen label separators, JSON-style
+quoted keys, quoted multi-word values, and bounded ASCII percent encoding in a
+retained URL path. Never put secrets in source namespace/reference fields.
 Pattern detection is not a universal secret detector: callers must not supply
 credentials disguised as ordinary identifiers or paths.
 
@@ -185,7 +190,8 @@ incomplete transfers. No fixture in this PR satisfies those gates.
 
 `test/nevermined-ledger.test.mjs` exercises parser, redaction, exact amounts,
 provenance, pairwise history contradictions, generic credential rejection,
-report generation, CLI exits and exclusive output.
+report generation, CLI exits, exclusive output, mixed-identity isolation, and a
+maximum-size 1,000-row batch performance bound.
 The actual CLI is spawned with HTTP, fetch, sockets and DNS blocked before module
 imports by `test/fixtures/nevermined-no-network-preload.mjs`.
 `test/nevermined-schema.test.mjs` validates input/output/batch schemas and rejects

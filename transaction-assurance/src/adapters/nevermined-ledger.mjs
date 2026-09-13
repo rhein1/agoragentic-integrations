@@ -9,11 +9,22 @@ const has = (value, key) => Object.hasOwn(value, key);
 const text = (value) => typeof value === 'string' && value.length ? value : null;
 const abbreviated = (value) => typeof value === 'string' && /…|\.\.\./u.test(value);
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
-const credentialAssignment = /(?:^|[^a-z0-9])(?:api[_-]?key|password|passwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth(?:orization)?[_-]?token|private[_-]?key|secret(?:[_-]?(?:access[_-]?key|key))?|token|credential)\s*(?:=|:)\s*["']?[^\s"',;]{8,}/iu;
-const secretLike = (value) => typeof value === 'string' && (
-  credentialAssignment.test(value)
-  || /(?:\b(?:bearer|basic)\s+\S+|\b(?:amk_|sk_(?:live|test)_|sk-proj-|nvm_(?:live|sandbox)_)[A-Za-z0-9_-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i.test(value)
-);
+const credentialAssignment = /(?:^|[^a-z0-9])["']?(?:api[\s_-]*key|password|passwd|client[\s_-]*secret|access[\s_-]*token|refresh[\s_-]*token|auth(?:orization)?[\s_-]*token|private[\s_-]*key|secret(?:[\s_-]*(?:access[\s_-]*key|key))?|token|credential)["']?\s*(?:=|:)\s*(?:"(?:\\.|[^"\\\r\n])+"|'(?:\\.|[^'\\\r\n])+'|[^\s"',;}\]]+)/iu;
+const recognizedSecret = /(?:\b(?:bearer|basic)\s+\S+|\b(?:amk_|sk_(?:live|test)_|sk-proj-|nvm_(?:live|sandbox)_)[A-Za-z0-9_-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i;
+function credentialCandidates(value) {
+  const candidates = [value];
+  let candidate = value;
+  // Decode bounded ASCII percent escapes so credentials cannot hide in a retained URL path.
+  for (let pass = 0; pass < 2; pass++) {
+    const decoded = candidate.replace(/%([0-7][0-9a-f])/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+    if (decoded === candidate) break;
+    candidates.push(decoded);
+    candidate = decoded;
+  }
+  return candidates;
+}
+const secretLike = (value) => typeof value === 'string'
+  && credentialCandidates(value).some((candidate) => credentialAssignment.test(candidate) || recognizedSecret.test(candidate));
 const allKeys = (obj, allowed) => { if (Object.keys(obj).some((key) => !allowed.includes(key))) fail('invalid_envelope'); };
 
 function validateEnvelope(input, allowArray = false) {
@@ -188,22 +199,19 @@ function compare(current, previous) {
   return conflicts;
 }
 
-function assessHistory(record, history) {
-  const key = record.core.identity.payment_identity_key;
-  if (!key) return freezeDeep(record);
-  const peers = history.filter((p) => p.core.identity.payment_identity_key === key && p.core.source.extraction_profile.digest === record.core.source.extraction_profile.digest);
-  const refs = peers.map((p) => p.core.identity.observation_key).filter(Boolean);
-  record.assessment.prior_observation_keys = [...new Set(refs)].sort();
-  const peerConflicts = [];
-  for (let left = 0; left < peers.length; left++) {
-    for (let right = left + 1; right < peers.length; right++) {
-      peerConflicts.push(...compare(peers[left], peers[right]));
+function collectConflicts(records) {
+  const conflicts = new Set();
+  for (let left = 0; left < records.length; left++) {
+    for (let right = left + 1; right < records.length; right++) {
+      for (const conflict of compare(records[left], records[right])) conflicts.add(conflict);
     }
   }
-  const conflicts = [...new Set([
-    ...peers.flatMap((p) => compare(record, p)),
-    ...peerConflicts,
-  ])].sort();
+  return [...conflicts].sort();
+}
+
+function applyHistoryAssessment(record, peers, conflicts) {
+  const refs = peers.map((peer) => peer.core.identity.observation_key).filter(Boolean);
+  record.assessment.prior_observation_keys = [...new Set(refs)].sort();
   record.assessment.conflicts = conflicts;
   // Contradictory supplied assertions are not independently established chain facts.
   // Missing delivery or an exact duplicate must never erase an existing conflict.
@@ -213,6 +221,13 @@ function assessHistory(record, history) {
   } else if (refs.includes(record.core.identity.observation_key)) record.assessment.import_disposition = 'duplicate';
   else if (peers.length) record.assessment.import_disposition = 'update';
   return freezeDeep(record);
+}
+
+function assessHistory(record, history) {
+  const key = record.core.identity.payment_identity_key;
+  if (!key) return freezeDeep(record);
+  const peers = history.filter((p) => p.core.identity.payment_identity_key === key && p.core.source.extraction_profile.digest === record.core.source.extraction_profile.digest);
+  return applyHistoryAssessment(record, peers, collectConflicts([record, ...peers]));
 }
 
 function historyRecords(input, options) {
@@ -245,12 +260,36 @@ export function normalizeNeverminedExport(input) {
   const prior = historyRecords(data, {});
   if (rows.length + prior.length > LIMITS.records) fail('limit_exceeded');
   const records = rows.map((raw) => baseRecord({ ...data, record: { raw }, history: [] }));
+  const groups = new Map();
+  const addToGroup = (record, kind, index = null) => {
+    const paymentKey = record.core.identity.payment_identity_key;
+    const profileDigest = record.core.source.extraction_profile.digest;
+    if (!paymentKey || !profileDigest) return;
+    const groupKey = `${paymentKey}\u0000${profileDigest}`;
+    if (!groups.has(groupKey)) groups.set(groupKey, { prior: [], batch: [], conflicts: [] });
+    groups.get(groupKey)[kind].push(index === null ? record : { index, record });
+  };
+  prior.forEach((record) => addToGroup(record, 'prior'));
+  records.forEach((record, index) => addToGroup(record, 'batch', index));
+  for (const group of groups.values()) {
+    group.conflicts = collectConflicts([...group.prior, ...group.batch.map((entry) => entry.record)]);
+  }
   // Earlier duplicates get 'new'; contradictions anywhere in a batch affect both observations.
   return freezeDeep({
     schema: 'agoragentic.nevermined-evidence-batch.v1',
     records: records.map((record, index) => {
-      const peers = [...prior, ...records.filter((other, i) => i !== index && (i < index || other.core.identity.observation_key !== record.core.identity.observation_key))];
-      return assessHistory(record, peers);
+      const paymentKey = record.core.identity.payment_identity_key;
+      const profileDigest = record.core.source.extraction_profile.digest;
+      if (!paymentKey || !profileDigest) return freezeDeep(record);
+      const group = groups.get(`${paymentKey}\u0000${profileDigest}`);
+      const observationKey = record.core.identity.observation_key;
+      const peers = [
+        ...group.prior,
+        ...group.batch
+          .filter((entry) => entry.index !== index && (entry.index < index || entry.record.core.identity.observation_key !== observationKey))
+          .map((entry) => entry.record),
+      ];
+      return applyHistoryAssessment(record, peers, group.conflicts);
     }),
   });
 }
