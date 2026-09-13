@@ -33,6 +33,7 @@ import {
 import { runBootstrap } from '../e2b-template/bin/bootstrap.mjs';
 import {
   classifyLiteralProbeOutcome,
+  containsForbiddenProcessText,
   inspectProcessEnvironmentBytes,
   runBirthWatcher,
 } from '../e2b-template/bin/boot-guard.mjs';
@@ -467,6 +468,18 @@ test('boot guard treats timeout as unknown and hashes provider credential keys w
     inspectProcessEnvironmentBytes(Buffer.from('MALFORMED_WITHOUT_EQUALS\0')).well_formed,
     false,
   );
+
+  const confusableKey = 'OPENAI_API_K\u0415Y';
+  const confusableKeyBytes = Buffer.from(`${confusableKey}=also-secret\0`, 'utf8');
+  const hashedByteView = confusableKeyBytes
+    .subarray(0, confusableKeyBytes.indexOf(0x3d))
+    .toString('latin1');
+  const confusable = inspectProcessEnvironmentBytes(confusableKeyBytes);
+  assert.deepEqual(confusable.key_hashes, [sha256Ref(hashedByteView)]);
+  assert.deepEqual(confusable.forbidden_key_hashes, [sha256Ref(hashedByteView)]);
+  assert.equal(JSON.stringify(confusable).includes(confusableKey), false);
+  assert.equal(containsForbiddenProcessText('op\u0435nai-worker'), true);
+  assert.equal(containsForbiddenProcessText('\uFDFA'.repeat(4)), false);
 });
 
 async function runtimeFixture(t) {

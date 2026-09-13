@@ -1,0 +1,19 @@
+{
+  "name": "@agoragentic/interchange-runpay-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline run.pay catalog and receipt normalization for Agoragentic Interchange.",
+  "scripts": {
+    "check": "node --check normalize.mjs && node --check replay.mjs",
+    "replay": "node replay.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}

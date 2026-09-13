@@ -54,6 +54,8 @@ import {
   requireSha256Ref,
   requireString,
   safeEqual,
+  securityPatternMatches,
+  securityPatternsMatch,
 } from '../util.mjs';
 import { E2BCleanupJournal } from './e2b-cleanup-journal.mjs';
 import {
@@ -576,7 +578,7 @@ function assertStrictSecretFreeJson(value, field, limits = {}) {
     if (depth > MAX_JSON_DEPTH) throw new TypeError(`${field} is too deeply nested`);
     if (current === null || typeof current === 'boolean') return;
     if (typeof current === 'string') {
-      if (SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(current))) {
+      if (securityPatternsMatch(SECRET_VALUE_PATTERNS, current)) {
         throw new TypeError(`${currentPath} contains secret-shaped material`);
       }
       return;
@@ -600,13 +602,13 @@ function assertStrictSecretFreeJson(value, field, limits = {}) {
     } else {
       assertPlainObject(current, currentPath);
       for (const [key, child] of Object.entries(current)) {
-        if (SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+        if (securityPatternsMatch(SECRET_VALUE_PATTERNS, key)) {
           throw new TypeError(`${currentPath}.<key> contains secret-shaped material`);
         }
         if (DANGEROUS_JSON_KEYS.has(key)) {
           throw new TypeError(`${currentPath}.<key> is a forbidden JSON key`);
         }
-        if (SECRET_KEY_PATTERN.test(key)) {
+        if (securityPatternMatches(SECRET_KEY_PATTERN, key)) {
           throw new TypeError(`${currentPath}.<key> is an authority or secret-bearing field`);
         }
         walk(child, `${currentPath}.<value>`, depth + 1);
