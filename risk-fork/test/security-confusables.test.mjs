@@ -1322,7 +1322,7 @@ test('immutable E2B workspace export preserves bounded BMP folded-escape parity'
   t.after(() => rm(root, { recursive: true, force: true }));
 
   let caseIndex = 0;
-  for (const [caseLabel, assignment] of PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES) {
+  for (const [, assignment] of PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES) {
     for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
       const bytes = encodeSecretAssignment(assignment, encoding);
       await writeFile(path.join(source, 'input.txt'), bytes);

@@ -227,11 +227,6 @@ function isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).normalizedWhitespace;
 }
 
-function isFoldedAway(character, normalizeUnicode) {
-  return normalizeUnicode
-    && secretAssignmentSyntaxProfile(character, true).foldedAway;
-}
-
 function secretAssignmentQuoteForms(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).quoteForms;
 }
