@@ -12,6 +12,35 @@ const validHash = x => typeof x === 'string' && /^sha256:[a-f0-9]{64}$/.test(x);
 const count = x => Number.isSafeInteger(x) && x >= 0;
 const codes = x => Array.isArray(x) && x.length <= 128 && x.every(s => typeof s === 'string' && s.length <= 1024);
 const escape = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const SEMANTIC_REVIEW_BLOCKER = 'semantic_review_required_before_financial_or_decision_use';
+
+// Consumer-side mirror of the producer's format risk contract. Packet mode
+// validates submitted claims against this profile instead of displaying them
+// as though a syntactically valid risk label were producer-compatible.
+const FORMAT_RISK = Object.freeze({
+  doc: ['medium', ['legacy_binary_document_may_reject_nonstandard_ole_containers', 'nested_tables_may_be_flattened', 'embedded_assets_need_separate_review']],
+  docx: ['medium', ['nested_tables_may_be_flattened', 'embedded_assets_need_separate_review', 'layout_text_boxes_headers_and_footers_may_be_lossy']],
+  odt: ['medium', ['layout_and_embedded_asset_semantics_may_be_lossy', 'nested_tables_may_be_flattened']],
+  rtf: ['medium', ['producer_specific_control_words_may_be_lossy', 'nested_tables_may_be_flattened']],
+  epub: ['medium', ['pathological_repeated_references_can_increase_parse_cost', 'layout_and_pagination_are_not_preserved']],
+  pdf: ['medium', ['scanned_or_image_only_pdf_requires_ocr_fallback', 'pdf_document_model_and_embedded_assets_are_not_available', 'reading_order_may_be_ambiguous_in_complex_layouts']],
+  ppt: ['medium', ['slide_boundaries_and_layout_may_be_lossy', 'embedded_assets_need_separate_review']],
+  pptx: ['medium', ['untitled_slide_boundaries_may_be_lossy', 'speaker_notes_and_layout_need_output_review', 'embedded_assets_need_separate_review']],
+  odp: ['medium', ['slide_boundaries_and_layout_may_be_lossy', 'embedded_assets_need_separate_review']],
+  xlsx: ['high', ['hidden_rows_and_columns_may_be_exposed_as_visible_content', 'number_formats_may_be_dropped_or_change_interpretation', 'worksheet_identity_and_source_coordinates_may_be_incomplete', 'merged_cell_spans_may_be_clipped', 'formulas_are_not_independently_recalculated']],
+  ods: ['high', ['hidden_rows_columns_and_display_formats_need_review', 'worksheet_source_coordinates_may_be_incomplete', 'formulas_are_not_independently_recalculated']],
+  csv: ['high', ['csv_has_no_content_signature_and_requires_an_explicit_or_filename_format', 'types_and_display_formats_are_not_authoritative']],
+});
+
+function checkRisk(packet) {
+  const { parser, source, risk, ecf_handoff: handoff } = packet;
+  const expected = FORMAT_RISK[parser?.format];
+  assert(expected && source?.source_format === parser.format, 'risk_format_mismatch');
+  assert(risk.semantic_risk === expected[0] &&
+    JSON.stringify(risk.limitations) === JSON.stringify(expected[1]), 'risk_profile_mismatch');
+  const blockerCount = handoff.blockers.filter(code => code === SEMANTIC_REVIEW_BLOCKER).length;
+  assert(blockerCount === (expected[0] === 'high' ? 1 : 0), 'risk_handoff_mismatch');
+}
 
 // Consumer profile for parser-worker's structure and parseCompleteness contract.
 // These fields remain packet claims, never parser authentication or approval.
@@ -93,6 +122,7 @@ export function inspectPacket(packet, sourceBytes) {
   assert(boundary?.parse_receipt_only === true && ['parser_executed_by_schema', 'memory_written', 'marketplace_publication_triggered', 'x402_route_created', 'settlement_triggered', 'trust_mutated', 'private_context_exposed'].every(k => boundary[k] === false), 'receipt_authority_mismatch');
   assert(risk?.source_exact === false && ['high', 'medium', 'unknown'].includes(risk.semantic_risk) && codes(risk.limitations) && codes(h.blockers), 'invalid_risk');
   checkStructure(packet);
+  checkRisk(packet);
   if (sourceBytes !== undefined) assert(Buffer.isBuffer(sourceBytes) && sourceBytes.length === s.size_bytes && hash(sourceBytes) === s.source_hash, 'source_bytes_mismatch');
   return { scope: 'local_packet_consistency', output_hash_matches: true, source_bytes_hash_matches: sourceBytes === undefined ? null : true,
     semantic_correctness_verified: false, parser_authenticated: false, context_approved: false,

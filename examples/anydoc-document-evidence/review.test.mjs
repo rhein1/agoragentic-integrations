@@ -12,11 +12,11 @@ export function fixture(markdown = '# Example\nLocal evidence.\n') {
   const completeness = { status: 'complete', complete: true, blockers: [] };
   return { schema: 'agoragentic.anydoc-document-evidence.v1',
     parser: { document_model_status: 'available', format: 'docx', provenance: { attested: true } },
-    source: { source_id: sourceId, source_hash: sourceHash, size_bytes: Buffer.byteLength('synthetic document'), filename: 'example.docx', raw_bytes_embedded: false },
+    source: { source_id: sourceId, source_hash: sourceHash, source_format: 'docx', size_bytes: Buffer.byteLength('synthetic document'), filename: 'example.docx', raw_bytes_embedded: false },
     output: { markdown, markdown_chars: markdown.length, original_markdown_chars: markdown.length, output_hash: outputHash, parser_output_hash: outputHash, evidence_coverage: coverage, completeness, truncated: false, truncation_reasons: [],
       structure: { status: 'available', block_count: 0, table_count: 0, note_count: 0, asset_count: 0, asset_bytes: 0, traversal_truncated: false },
       evidence_units: [{ schema: 'agoragentic.evidence-unit.v1', source_id: sourceId, reading_order: 0, markdown, source_char_range: [0, markdown.length], evidence_unit_id: `evu_${outputHash.slice(7,19)}_0`, trap_scan_status: 'not_scanned', provenance: { source_hash: sourceHash, output_hash: outputHash, aggregate_output_hash: outputHash } }] },
-    risk: { source_exact: false, semantic_risk: 'medium', limitations: ['layout_may_be_lossy'] },
+    risk: { source_exact: false, semantic_risk: 'medium', limitations: ['nested_tables_may_be_flattened', 'embedded_assets_need_separate_review', 'layout_text_boxes_headers_and_footers_may_be_lossy'] },
     authority: { grants_spend: false, grants_wallet_access: false, grants_deployment: false, grants_publication: false, grants_memory_write: false, grants_trust: false },
     ecf_handoff: { context_packet_ready: false, memory_write_allowed: false, marketplace_publication_allowed: false, x402_activation_allowed: false, trap_scan_required: true, trap_scan_status: 'not_scanned', blockers: ['platform_trap_scan_required'],
       receipt: { schema: 'agoragentic.parse-receipt.v1', receipt_id: `rcpt_parse_${hash(`${sourceHash}:${outputHash}`).slice(7,19)}`, status: 'pending', trap_scan_status: 'not_scanned', output_hash: outputHash, parser_output_hash: outputHash, source_hashes: [sourceHash], evidence_unit_count: 1, evidence_coverage: coverage, completeness_status: 'complete', completeness_blockers: [],
@@ -46,6 +46,35 @@ test('authority, context promotion and unsupported schemas fail closed', () => {
   for (const mutate of [p => p.authority.grants_spend = true, p => p.ecf_handoff.context_packet_ready = true, p => p.schema = 'unknown', p => p.ecf_handoff.receipt.public_boundary.memory_written = true]) {
     const p = fixture(); mutate(p); assert.throws(() => inspectPacket(p));
   }
+});
+test('format, semantic risk and limitations remain exactly bound', () => {
+  for (const mutate of [
+    p => { p.risk.semantic_risk = 'unknown'; },
+    p => { p.risk.limitations = []; },
+    p => { p.risk.limitations.push('invented_limitation'); },
+    p => { p.parser.format = 'csv'; },
+    p => { p.source.source_format = 'csv'; },
+  ]) {
+    const p = fixture(); mutate(p); assert.throws(() => inspectPacket(p));
+  }
+});
+test('high-risk formats require exactly one decision-use review blocker', () => {
+  const high = fixture();
+  high.parser.format = 'csv'; high.source.source_format = 'csv';
+  high.risk = { source_exact: false, semantic_risk: 'high', limitations: [
+    'csv_has_no_content_signature_and_requires_an_explicit_or_filename_format',
+    'types_and_display_formats_are_not_authoritative',
+  ] };
+  high.ecf_handoff.blockers.push('semantic_review_required_before_financial_or_decision_use');
+  assert.equal(inspectPacket(high).complete, true);
+  high.ecf_handoff.blockers.pop();
+  assert.throws(() => inspectPacket(high), { code: 'risk_handoff_mismatch' });
+  high.ecf_handoff.blockers.push('semantic_review_required_before_financial_or_decision_use', 'semantic_review_required_before_financial_or_decision_use');
+  assert.throws(() => inspectPacket(high), { code: 'risk_handoff_mismatch' });
+
+  const medium = fixture();
+  medium.ecf_handoff.blockers.push('semantic_review_required_before_financial_or_decision_use');
+  assert.throws(() => inspectPacket(medium), { code: 'risk_handoff_mismatch' });
 });
 test('hostile document markup is literal and cannot execute or navigate', () => {
   const html = renderReview(fixture('<script>alert(1)</script><img src="https://example.invalid/x">'));
@@ -167,7 +196,8 @@ test('every unavailable or failed model disposition has its exact completeness b
     ['unsupported_for_pdf', 'unavailable', 'document_structure_unavailable_for_pdf'],
     ['unavailable', 'unavailable', 'document_structure_unavailable'],
   ]) {
-    const p = fixture(); p.parser.document_model_status = model; p.parser.format = 'pdf'; p.output.structure.status = status;
+    const p = fixture(); p.parser.document_model_status = model; p.parser.format = 'pdf'; p.source.source_format = 'pdf'; p.output.structure.status = status;
+    p.risk.limitations = ['scanned_or_image_only_pdf_requires_ocr_fallback', 'pdf_document_model_and_embedded_assets_are_not_available', 'reading_order_may_be_ambiguous_in_complex_layouts'];
     assert.throws(() => inspectPacket(p), { code: 'structure_completeness_mismatch' });
     bindCompleteness(p, [blocker]); assert.equal(inspectPacket(p).complete, false);
     bindCompleteness(p, ['custom_parser_provenance_unverified']); p.parser.provenance.attested = false;
