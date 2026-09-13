@@ -1907,8 +1907,8 @@
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        67,
-        72
+        69,
+        74
       ],
       "categories": [
         "installer_or_clone",
