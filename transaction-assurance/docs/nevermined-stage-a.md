@@ -128,8 +128,11 @@ not used as a reason to fabricate settled or released money.
 
 For one payment identity, contradictory supplied facts produce `conflict` and
 `contradicted`, even if an exact duplicate also exists or delivery evidence is
-missing. All chain, matching, amount-comparison, authority and outcome fields
-still remain `not_checked`: the conflict is not a trusted chain finding. Full
+missing. Every supplied history observation is compared with every peer, so a
+current observation that omits the disputed field cannot erase a contradiction
+already present in history. All chain, matching, amount-comparison, authority and
+outcome fields still remain `not_checked`: the conflict is not a trusted chain
+finding. Full
 batch comparison exposes conflicts on both affected observations; nothing is
 automatically overwritten or retried. Known but unsupported checks are preserved
 independently, and missing delivery cannot clear a contradiction.
@@ -139,8 +142,10 @@ independently, and missing delivery cannot clear a contradiction.
 `core.original` is the **allowlisted, redacted projection**, not the original file.
 Unknown properties and `feeFailureReason` are dropped before hashing and output.
 HTTP(S) resource URLs lose userinfo, query and fragment; other URL schemes are
-omitted. Recognized credential patterns in retained evidence fields cause a
-value-free error. Never put secrets in source namespace/reference fields.
+omitted. Recognized credential patterns, including value-bearing generic
+assignments such as API keys, passwords, tokens, and client secrets, cause a
+value-free error when they appear in retained evidence fields. Never put secrets
+in source namespace/reference fields.
 Pattern detection is not a universal secret detector: callers must not supply
 credentials disguised as ordinary identifiers or paths.
 
@@ -179,7 +184,8 @@ incomplete transfers. No fixture in this PR satisfies those gates.
 ## Validation
 
 `test/nevermined-ledger.test.mjs` exercises parser, redaction, exact amounts,
-provenance, snapshots/history, report generation, CLI exits and exclusive output.
+provenance, pairwise history contradictions, generic credential rejection,
+report generation, CLI exits and exclusive output.
 The actual CLI is spawned with HTTP, fetch, sockets and DNS blocked before module
 imports by `test/fixtures/nevermined-no-network-preload.mjs`.
 `test/nevermined-schema.test.mjs` validates input/output/batch schemas and rejects

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -166,6 +166,17 @@ test('conflict survives duplicates and permutations of supplied history', () => 
     assert.equal(r.assessment.import_disposition, 'conflict'); assert.equal(r.assessment.overall_evidence_status, 'contradicted');
   }
 });
+test('peer-to-peer history conflicts survive a current observation with missing facts', () => {
+  const settled = fixture();
+  const failed = withRaw({ status: 'Failed', amount: '20000' });
+  const current = withRaw({ status: 'Issued', amount: null });
+  for (const history of [[settled, failed], [failed, settled]]) {
+    const result = normalize(current, { history });
+    assert.equal(result.assessment.import_disposition, 'conflict');
+    assert.equal(result.assessment.overall_evidence_status, 'contradicted');
+    assert.deepEqual(result.assessment.conflicts, ['amount_atomic', 'provider_status']);
+  }
+});
 test('absence in an older snapshot is not contradictory evidence', () => {
   const r = normalize(withRaw({ txHash: null }), { history: [fixture()] });
   assert.equal(r.assessment.import_disposition, 'update'); assert.equal(r.assessment.overall_evidence_status, 'unresolved');
@@ -197,6 +208,20 @@ test('recognized secrets in allowed fields reject without echoing', () => {
   let error; try { normalize(withRaw({ id: token })); } catch (e) { error = e; }
   assert.equal(error.code, 'secret_in_evidence_field'); assert(!String(error).includes(token));
 });
+test('generic credential assignments in retained fields reject without echoing', () => {
+  for (const [field, secret] of [
+    ['id', 'api_key=TEST_ONLY_SECRET_123456'],
+    ['requestId', 'password:TEST_ONLY_SECRET_123456'],
+    ['delegationId', 'client-secret="TEST_ONLY_SECRET_123456"'],
+    ['txHash', 'refresh_token=TEST_ONLY_SECRET_123456'],
+    ['createdAt', 'token=TEST_ONLY_SECRET_123456'],
+  ]) {
+    let error;
+    try { normalize(withRaw({ [field]: secret })); } catch (caught) { error = caught; }
+    assert.equal(error?.code, 'secret_in_evidence_field');
+    assert(!String(error).includes(secret));
+  }
+});
 test('vendor fixture is unchanged and never labeled observed', () => {
   const original = fs.readFileSync(path.join(example, 'vendor-docs-example.json'));
   const provenance = JSON.parse(fs.readFileSync(path.join(example, 'provenance.json')));
@@ -225,7 +250,7 @@ test('actual CLI import works with network and DNS disabled before imports', () 
   try {
     const cli = path.join(base, '../bin/agora-assure.mjs');
     const loader = path.join(base, 'fixtures/nevermined-no-network-preload.mjs');
-    const args = ['--import', loader, cli, 'nevermined', 'import', '--input', path.join(example, 'synthetic-import.json'), '--profile', NEVERMINED_PROFILE_ID];
+    const args = ['--import', pathToFileURL(loader).href, cli, 'nevermined', 'import', '--input', path.join(example, 'synthetic-import.json'), '--profile', NEVERMINED_PROFILE_ID];
     const call = (extra = []) => spawnSync(process.execPath, [...args, ...extra], { encoding: 'utf8', env: { ...process.env, NVM_API_KEY: 'NEVERMINED_ENV_SECRET_CANARY' }, timeout: 10000 });
     const result = call(); assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).records[0].assessment.overall_evidence_status, 'unresolved');

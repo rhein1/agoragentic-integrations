@@ -9,7 +9,11 @@ const has = (value, key) => Object.hasOwn(value, key);
 const text = (value) => typeof value === 'string' && value.length ? value : null;
 const abbreviated = (value) => typeof value === 'string' && /…|\.\.\./u.test(value);
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
-const secretLike = (value) => typeof value === 'string' && /(?:\b(?:bearer|basic)\s+\S+|\b(?:amk_|sk_(?:live|test)_|sk-proj-|nvm_(?:live|sandbox)_)[A-Za-z0-9_-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i.test(value);
+const credentialAssignment = /(?:^|[^a-z0-9])(?:api[_-]?key|password|passwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth(?:orization)?[_-]?token|private[_-]?key|secret(?:[_-]?(?:access[_-]?key|key))?|token|credential)\s*(?:=|:)\s*["']?[^\s"',;]{8,}/iu;
+const secretLike = (value) => typeof value === 'string' && (
+  credentialAssignment.test(value)
+  || /(?:\b(?:bearer|basic)\s+\S+|\b(?:amk_|sk_(?:live|test)_|sk-proj-|nvm_(?:live|sandbox)_)[A-Za-z0-9_-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i.test(value)
+);
 const allKeys = (obj, allowed) => { if (Object.keys(obj).some((key) => !allowed.includes(key))) fail('invalid_envelope'); };
 
 function validateEnvelope(input, allowArray = false) {
@@ -190,7 +194,16 @@ function assessHistory(record, history) {
   const peers = history.filter((p) => p.core.identity.payment_identity_key === key && p.core.source.extraction_profile.digest === record.core.source.extraction_profile.digest);
   const refs = peers.map((p) => p.core.identity.observation_key).filter(Boolean);
   record.assessment.prior_observation_keys = [...new Set(refs)].sort();
-  const conflicts = [...new Set(peers.flatMap((p) => compare(record, p)))].sort();
+  const peerConflicts = [];
+  for (let left = 0; left < peers.length; left++) {
+    for (let right = left + 1; right < peers.length; right++) {
+      peerConflicts.push(...compare(peers[left], peers[right]));
+    }
+  }
+  const conflicts = [...new Set([
+    ...peers.flatMap((p) => compare(record, p)),
+    ...peerConflicts,
+  ])].sort();
   record.assessment.conflicts = conflicts;
   // Contradictory supplied assertions are not independently established chain facts.
   // Missing delivery or an exact duplicate must never erase an existing conflict.
