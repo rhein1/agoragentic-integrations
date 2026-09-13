@@ -1,6 +1,6 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-09-01 (supersedes 2026-08-20)
+Audit date: 2026-09-13 (supersedes 2026-09-01)
 
 ## Candidate
 
@@ -38,8 +38,13 @@ The replacement keeps the CLI 0.44.4 validation behavior used by this package:
   credential/node rule exceptions;
 - `scripts/build.mjs` removes `dist`, invokes the pinned local TypeScript
   compiler, and copies PNG, SVG, and `__schema__` JSON assets; and
-- the direct lint dependencies are pinned to the versions already exercised in
-  the prior CLI-backed lockfile.
+- the direct lint dependencies are pinned as one compatibility set and every
+  version change must repeat the clean-install, lint, build, audit, and package
+  checks below before merge.
+
+The community plugin at 0.31.0 retains the exact `eslint@9.29.0` peer and the
+`n8n-workflow@>=2` peer used by this candidate. This update therefore does not
+broaden the rejected ESLint 10 boundary or the published runtime peer.
 
 The unused interactive `dev` and local `release` helpers were removed with the
 CLI. Trusted publishing is unchanged: `.github/workflows/publish-n8n.yml` still
