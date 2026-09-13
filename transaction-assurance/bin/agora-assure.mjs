@@ -24,6 +24,7 @@ Usage:
   agora-assure self-test
   agora-assure nevermined import --input <file> --profile <id> [--namespace <namespace>]
   agora-assure nevermined --help
+  agora-assure runpay import <fixture.json> --out <dir> --namespace <ns>
 
 The CLI never calls a network, signs a payment, moves money, creates a wallet,
 approves authority, deploys, publishes, or mutates marketplace trust.
@@ -204,6 +205,11 @@ async function main() {
     case 'self-test':
       print(selfTest());
       return;
+    case 'runpay': {
+      const { runRunpayCLI } = await import('../src/adapters/runpay-cli.mjs');
+      process.exitCode = runRunpayCLI(process.argv.slice(3));
+      return;
+    }
     default:
       throw new TypeError(`Unknown command: ${command}\n\n${usage()}`);
   }
