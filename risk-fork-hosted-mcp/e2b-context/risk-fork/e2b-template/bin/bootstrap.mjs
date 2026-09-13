@@ -163,11 +163,10 @@ export async function readJsonBounded(target, maxBytes, field) {
   const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
-    // Production callers supply fixed controller-owned transport paths; this
-    // call is read-only, excludes O_CREAT/O_TRUNC, rejects symlinks, and then
-    // validates the opened inode before consuming bounded bytes.
-    // codeql[js/insecure-temporary-file]
-    handle = await open(target, constants.O_RDONLY | noFollow | nonBlock);
+    // Production callers supply fixed controller-owned transport paths. The
+    // open remains read-only and excludes O_CREAT/O_TRUNC, so Node ignores the
+    // explicit owner-only mode; it is not authorization to add either flag.
+    handle = await open(target, constants.O_RDONLY | noFollow | nonBlock, 0o600);
   } catch (error) {
     if (error?.code === 'ELOOP') throw new Error(`${field} must be a regular single-link file`);
     throw error;
