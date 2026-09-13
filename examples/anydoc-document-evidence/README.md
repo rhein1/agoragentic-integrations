@@ -174,7 +174,7 @@ node review.mjs packet ./report.evidence.json ./report.review.html
 npm run test:review
 ```
 
-Packet mode checks internal consistency, not authenticity. It rejects an isolated risk, limitation, format, or decision-use blocker change that no longer matches the declared producer profile. Because its format and risk fields are unsigned claims, coordinated relabeling can remain internally consistent; the result still explicitly reports `parser_authenticated: false`, `semantic_correctness_verified: false`, and `context_approved: false`. Parse completeness never grants authority or completes the pending receipt.
+Packet mode checks internal consistency, not authenticity. It rejects parser-profile or format relabeling that contradicts the outer parser, source, evidence-unit, receipt, risk, completeness, or handoff fields. Those cross-bindings do not add a signature or establish that the declared parser actually ran: the result still explicitly reports `parser_authenticated: false`, `semantic_correctness_verified: false`, and `context_approved: false`. Parse completeness never grants authority or completes the pending receipt.
 
 The output must not already exist. Open the resulting private HTML in a local browser. It has no JavaScript or remote assets and does not turn review into trap-scan approval, context attachment, or a completed receipt. It does not repair or activate the hosted preview. Read [`LOCAL_REVIEW.md`](LOCAL_REVIEW.md) for verification limits and the remaining handoff gates.
 
