@@ -83,6 +83,9 @@
         "interchange_sam": {
           "$ref": "#/$defs/package"
         },
+        "interchange_runpay": {
+          "$ref": "#/$defs/package"
+        },
         "risk_fork": {
           "$ref": "#/$defs/package"
         },

@@ -24,6 +24,7 @@ Usage:
   agora-assure canonicalize <input.json>
   agora-assure hash <input.json>
   agora-assure self-test
+  agora-assure runpay import <fixture.json> --out <dir> --namespace <ns>
 
 The CLI never calls a network, signs a payment, moves money, creates a wallet,
 approves authority, deploys, publishes, or mutates marketplace trust.
@@ -148,7 +149,7 @@ function selfTest() {
   };
 }
 
-function main() {
+async function main() {
   const [command, file] = process.argv.slice(2);
   if (!command || command === '--help' || command === '-h' || command === 'help') {
     process.stdout.write(usage());
@@ -190,14 +191,17 @@ function main() {
     case 'self-test':
       print(selfTest());
       return;
+    case 'runpay': {
+      const { runRunpayCLI } = await import('../src/adapters/runpay-cli.mjs');
+      process.exitCode = runRunpayCLI(process.argv.slice(3));
+      return;
+    }
     default:
       throw new TypeError(`Unknown command: ${command}\n\n${usage()}`);
   }
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   process.stderr.write(`agora-assure: ${error.message}\n`);
   process.exitCode = 1;
-}
+});

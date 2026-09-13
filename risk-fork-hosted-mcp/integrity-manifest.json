@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 58,
-    "sha256": "sha256:891e1c841f00a064cb2389bac5c2be55a32ca392c892e904741527d9c157a525"
+    "files": 62,
+    "sha256": "sha256:bbbc46e9ec38a1f885d8ca9200528a9959cea4e0b45ba712df625cfe3ef5ee52"
   },
   "reviewed_sources": [
     {
@@ -261,6 +261,26 @@
       "path": "risk-fork/src/util.mjs",
       "bytes": 109405,
       "sha256": "sha256:713254c37ba2f681669c83c045cdfc30535fe7ff53910f4998db90eb7635dbaa"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-catalog.mjs",
+      "bytes": 21973,
+      "sha256": "sha256:efcea89056336fb9680caea2fd1680a27af0c836ab1fba644878723ecf1e100d"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-cli.mjs",
+      "bytes": 6463,
+      "sha256": "sha256:9202da340f72785a1420732ad26320f3e1d949fd0ed1574ccee5851254905e8b"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-json.mjs",
+      "bytes": 6991,
+      "sha256": "sha256:36f745fffc1fc17db6c0e1e309f4b84cd32c5fbec9d8c144f67fae0712c98c94"
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-profile.mjs",
+      "bytes": 3371,
+      "sha256": "sha256:033f21fdcb11b18faf96d19e756d7bfbabd005f2f6066cae3d1bed8e7ac98591"
     },
     {
       "path": "transaction-assurance/src/canonical.mjs",
@@ -2589,7 +2609,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 3069961,
-    "sha256": "sha256:0b6d06cbc095fc2395e89f8426208999729ac73c68e14271e5a0e0a62c2680a4"
+    "sha256": "sha256:78d4bf799bcca961653bbfb4ee4855bec09c19d352cd674dd07c92ca9579790b"
   },
   "packaged_assets": [
     {
