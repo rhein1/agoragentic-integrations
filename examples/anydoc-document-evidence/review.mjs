@@ -15,6 +15,27 @@ const escape = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&l
 const PLATFORM_TRAP_BLOCKER = 'platform_document_trap_scan_required_before_context_attachment';
 const SEMANTIC_REVIEW_BLOCKER = 'semantic_review_required_before_financial_or_decision_use';
 const PDF_OCR_BLOCKER = 'ocr_fallback_required_when_text_extraction_is_unsupported';
+const HANDOFF_KEYS = Object.freeze([
+  'trap_scan_required', 'trap_scan_status', 'context_packet_ready', 'memory_write_allowed',
+  'marketplace_publication_allowed', 'x402_activation_allowed', 'receipt', 'blockers',
+  'next_safe_action',
+]);
+const RECEIPT_KEYS = Object.freeze([
+  'schema', 'receipt_type', 'receipt_id', 'parse_job_id', 'context_packet_id',
+  'parser_engine', 'parser_version', 'parser_mode', 'source_hashes', 'parser_output_hash',
+  'output_hash', 'evidence_unit_count', 'evidence_coverage', 'table_count', 'image_count',
+  'formula_count', 'trap_scan_status', 'completeness_status', 'completeness_blockers',
+  'status', 'public_boundary', 'created_at',
+]);
+const PUBLIC_BOUNDARY_KEYS = Object.freeze([
+  'parse_receipt_only', 'parser_executed_by_schema', 'memory_written',
+  'marketplace_publication_triggered', 'x402_route_created', 'settlement_triggered',
+  'trust_mutated', 'private_context_exposed',
+]);
+const NEXT_SAFE_ACTION = Object.freeze({
+  complete: 'Run the Agoragentic document trap scan, review format-specific semantic warnings, then build an owner-scoped context packet.',
+  incomplete: 'Resolve every parse completeness blocker by reparsing with bounded limits, splitting the source, or repairing structure extraction before trap scanning or context attachment.',
+});
 const PINNED_PARSER = Object.freeze({ package: '@firecrawl/anydoc', package_version: '0.1.7', engine: 'firecrawl_anydoc' });
 const PINNED_NATIVE_BINDINGS = new Set([
   '@firecrawl/anydoc-darwin-arm64', '@firecrawl/anydoc-darwin-x64',
@@ -34,6 +55,9 @@ const ECF_DOCUMENT_TYPE = Object.freeze({
 const FORMAT_DETECTION = new Set(['caller', 'content', 'filename', 'extension_map']);
 const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...fields].sort());
+const validIsoInstant = value => typeof value === 'string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+  Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
 function checkParserProfile(parser) {
   const provenance = parser?.provenance;
@@ -165,7 +189,9 @@ export function inspectPacket(packet, sourceBytes) {
   const documentType = checkFormatEnvelope(packet);
   const authorityKeys = ['grants_spend', 'grants_wallet_access', 'grants_deployment', 'grants_publication', 'grants_memory_write', 'grants_trust'];
   assert(packet.authority && Object.keys(packet.authority).length === authorityKeys.length && authorityKeys.every(k => packet.authority[k] === false), 'authority_not_inert');
-  assert(h?.context_packet_ready === false && h.memory_write_allowed === false && h.marketplace_publication_allowed === false && h.x402_activation_allowed === false && h.trap_scan_required === true && h.trap_scan_status === 'not_scanned', 'handoff_not_pending');
+  assert(exactKeys(h, HANDOFF_KEYS) && h.context_packet_ready === false && h.memory_write_allowed === false &&
+    h.marketplace_publication_allowed === false && h.x402_activation_allowed === false &&
+    h.trap_scan_required === true && h.trap_scan_status === 'not_scanned', 'handoff_not_pending');
   assert(validHash(s?.source_hash) && s.raw_bytes_embedded === false && count(s.size_bytes) && s.size_bytes > 0 && s.size_bytes <= MAX_SOURCE_BYTES && typeof s.filename === 'string' && s.filename.length <= 255, 'invalid_source');
   assert(s.source_id === `src_${s.source_hash.slice(7, 19)}`, 'source_identity_mismatch');
   assert(typeof o?.markdown === 'string' && o.markdown.trim().length > 0 && o.markdown.length <= 5000000 && o.markdown_chars === o.markdown.length && count(o.original_markdown_chars) && o.original_markdown_chars >= o.markdown.length, 'invalid_output');
@@ -187,6 +213,7 @@ export function inspectPacket(packet, sourceBytes) {
   }
   assert(cursor === c.covered_chars && c.covered_output_hash === hash(o.markdown.slice(0, cursor)), 'coverage_hash_mismatch');
   assert(complete && ['complete', 'incomplete'].includes(complete.status) && complete.complete === (complete.status === 'complete') && codes(complete.blockers) && complete.complete === (complete.blockers.length === 0), 'invalid_completeness');
+  assert(h.next_safe_action === NEXT_SAFE_ACTION[complete.status], 'handoff_not_pending');
   // Truncation consistency is independent of unrelated completeness blockers.
   const parserOmitted = o.original_markdown_chars - o.markdown.length;
   const truncations = [
@@ -200,12 +227,20 @@ export function inspectPacket(packet, sourceBytes) {
     JSON.stringify([...o.truncation_reasons].sort()) === JSON.stringify(expectedReasons), 'contradictory_truncation');
   for (const [lost, , blocker] of truncations) assert(complete.blockers.includes(blocker) === lost, 'contradictory_truncation');
   assert(!complete.complete || (!o.truncated && c.complete && parserOmitted === 0), 'contradictory_completeness');
-  assert(r?.schema === 'agoragentic.parse-receipt.v1' && r.receipt_id === `rcpt_parse_${hash(`${s.source_hash}:${o.output_hash}`).slice(7, 19)}` && r.status === (complete.complete ? 'pending' : 'incomplete') && r.trap_scan_status === 'not_scanned' && r.output_hash === o.output_hash && r.parser_output_hash === o.parser_output_hash && r.evidence_unit_count === o.evidence_units.length && r.completeness_status === complete.status, 'receipt_mismatch');
+  assert(exactKeys(r, RECEIPT_KEYS) && r.schema === 'agoragentic.parse-receipt.v1' &&
+    r.receipt_type === 'document_parse_receipt' &&
+    r.receipt_id === `rcpt_parse_${hash(`${s.source_hash}:${o.output_hash}`).slice(7, 19)}` &&
+    r.parse_job_id === null && r.context_packet_id === null &&
+    r.status === (complete.complete ? 'pending' : 'incomplete') && r.trap_scan_status === 'not_scanned' &&
+    r.output_hash === o.output_hash && r.parser_output_hash === o.parser_output_hash &&
+    r.evidence_unit_count === o.evidence_units.length && r.completeness_status === complete.status &&
+    validIsoInstant(r.created_at), 'receipt_mismatch');
   assert(Array.isArray(r.source_hashes) && r.source_hashes.length === 1 && r.source_hashes[0] === s.source_hash && JSON.stringify(r.evidence_coverage) === JSON.stringify(c) && JSON.stringify(r.completeness_blockers) === JSON.stringify(complete.blockers), 'receipt_binding_mismatch');
   assert(r.parser_engine === packet.parser.engine && r.parser_version === packet.parser.package_version &&
     r.parser_mode === parserProfile.parserMode, 'receipt_parser_mismatch');
   const boundary = r.public_boundary;
-  assert(boundary?.parse_receipt_only === true && ['parser_executed_by_schema', 'memory_written', 'marketplace_publication_triggered', 'x402_route_created', 'settlement_triggered', 'trust_mutated', 'private_context_exposed'].every(k => boundary[k] === false), 'receipt_authority_mismatch');
+  assert(exactKeys(boundary, PUBLIC_BOUNDARY_KEYS) && boundary.parse_receipt_only === true &&
+    PUBLIC_BOUNDARY_KEYS.slice(1).every(k => boundary[k] === false), 'receipt_authority_mismatch');
   assert(risk?.source_exact === false && ['high', 'medium', 'unknown'].includes(risk.semantic_risk) && codes(risk.limitations) && codes(h.blockers), 'invalid_risk');
   const completenessBlockers = checkStructure(packet);
   checkRisk(packet);

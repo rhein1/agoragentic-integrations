@@ -9,6 +9,8 @@ const hash = b => `sha256:${createHash('sha256').update(b).digest('hex')}`;
 const PLATFORM_TRAP_BLOCKER = 'platform_document_trap_scan_required_before_context_attachment';
 const SEMANTIC_REVIEW_BLOCKER = 'semantic_review_required_before_financial_or_decision_use';
 const PDF_OCR_BLOCKER = 'ocr_fallback_required_when_text_extraction_is_unsupported';
+const COMPLETE_NEXT_ACTION = 'Run the Agoragentic document trap scan, review format-specific semantic warnings, then build an owner-scoped context packet.';
+const INCOMPLETE_NEXT_ACTION = 'Resolve every parse completeness blocker by reparsing with bounded limits, splitting the source, or repairing structure extraction before trap scanning or context attachment.';
 export function fixture(markdown = '# Example\nLocal evidence.\n') {
   const sourceHash = hash('synthetic document'), outputHash = hash(markdown), sourceId = `src_${sourceHash.slice(7,19)}`;
   const coverage = { total_chars: markdown.length, covered_chars: markdown.length, omitted_chars: 0, complete: true, coverage_kind: 'ordered_prefix', covered_output_hash: outputHash, first_omitted_char: null, max_unit_chars: 4000, max_units: 256 };
@@ -22,10 +24,11 @@ export function fixture(markdown = '# Example\nLocal evidence.\n') {
       evidence_units: [{ schema: 'agoragentic.evidence-unit.v1', source_id: sourceId, document_type: 'docx', source_format: 'docx', reading_order: 0, markdown, source_char_range: [0, markdown.length], evidence_unit_id: `evu_${outputHash.slice(7,19)}_0`, trap_scan_status: 'not_scanned', provenance: { parser_engine: 'firecrawl_anydoc', parser_version: '0.1.7', parser_attested: true, source_hash: sourceHash, output_hash: outputHash, aggregate_output_hash: outputHash } }] },
     risk: { source_exact: false, semantic_risk: 'medium', limitations: ['nested_tables_may_be_flattened', 'embedded_assets_need_separate_review', 'layout_text_boxes_headers_and_footers_may_be_lossy'] },
     authority: { grants_spend: false, grants_wallet_access: false, grants_deployment: false, grants_publication: false, grants_memory_write: false, grants_trust: false },
-    ecf_handoff: { context_packet_ready: false, memory_write_allowed: false, marketplace_publication_allowed: false, x402_activation_allowed: false, trap_scan_required: true, trap_scan_status: 'not_scanned', blockers: [PLATFORM_TRAP_BLOCKER],
-      receipt: { schema: 'agoragentic.parse-receipt.v1', receipt_id: `rcpt_parse_${hash(`${sourceHash}:${outputHash}`).slice(7,19)}`, status: 'pending', trap_scan_status: 'not_scanned', parser_engine: 'firecrawl_anydoc', parser_version: '0.1.7', parser_mode: 'isolated_local_fast_path', output_hash: outputHash, parser_output_hash: outputHash, source_hashes: [sourceHash], evidence_unit_count: 1, evidence_coverage: coverage, completeness_status: 'complete', completeness_blockers: [],
+    ecf_handoff: { context_packet_ready: false, memory_write_allowed: false, marketplace_publication_allowed: false, x402_activation_allowed: false, trap_scan_required: true, trap_scan_status: 'not_scanned', blockers: [PLATFORM_TRAP_BLOCKER], next_safe_action: COMPLETE_NEXT_ACTION,
+      receipt: { schema: 'agoragentic.parse-receipt.v1', receipt_type: 'document_parse_receipt', receipt_id: `rcpt_parse_${hash(`${sourceHash}:${outputHash}`).slice(7,19)}`, parse_job_id: null, context_packet_id: null, status: 'pending', trap_scan_status: 'not_scanned', parser_engine: 'firecrawl_anydoc', parser_version: '0.1.7', parser_mode: 'isolated_local_fast_path', output_hash: outputHash, parser_output_hash: outputHash, source_hashes: [sourceHash], evidence_unit_count: 1, evidence_coverage: coverage, completeness_status: 'complete', completeness_blockers: [],
         table_count: 0, image_count: 0, formula_count: 0,
-        public_boundary: { parse_receipt_only: true, parser_executed_by_schema: false, memory_written: false, marketplace_publication_triggered: false, x402_route_created: false, settlement_triggered: false, trust_mutated: false, private_context_exposed: false } } }
+        public_boundary: { parse_receipt_only: true, parser_executed_by_schema: false, memory_written: false, marketplace_publication_triggered: false, x402_route_created: false, settlement_triggered: false, trust_mutated: false, private_context_exposed: false },
+        created_at: '2026-09-13T00:00:00.000Z' } }
   };
 }
 
@@ -80,6 +83,39 @@ test('authority, context promotion and unsupported schemas fail closed', () => {
     const p = fixture(); mutate(p); assert.throws(() => inspectPacket(p));
   }
 });
+test('handoff envelope rejects demonstrated and unknown authority-shaped keys', () => {
+  for (const mutate of [
+    p => { p.ecf_handoff.context_approved = true; },
+    p => { p.ecf_handoff.owner_approved = false; },
+    p => { p.ecf_handoff.next_safe_action = 'Context is approved.'; },
+  ]) {
+    const p = fixture(); mutate(p);
+    assert.throws(() => inspectPacket(p), { code: 'handoff_not_pending' });
+  }
+});
+test('receipt envelope rejects authority substitutions and non-null promotion IDs', () => {
+  for (const mutate of [
+    p => { p.ecf_handoff.receipt.receipt_type = 'settlement_receipt'; },
+    p => { p.ecf_handoff.receipt.parse_job_id = 'parse_job_approved'; },
+    p => { p.ecf_handoff.receipt.context_packet_id = 'context_packet_approved'; },
+    p => { p.ecf_handoff.receipt.settlement_id = null; },
+    p => { delete p.ecf_handoff.receipt.receipt_type; },
+    p => { p.ecf_handoff.receipt.created_at = 'not-a-timestamp'; },
+  ]) {
+    const p = fixture(); mutate(p);
+    assert.throws(() => inspectPacket(p), { code: 'receipt_mismatch' });
+  }
+});
+test('public boundary rejects demonstrated and unknown authority-shaped keys', () => {
+  for (const mutate of [
+    p => { p.ecf_handoff.receipt.public_boundary.context_approved = true; },
+    p => { p.ecf_handoff.receipt.public_boundary.wallet_access_granted = false; },
+    p => { delete p.ecf_handoff.receipt.public_boundary.trust_mutated; },
+  ]) {
+    const p = fixture(); mutate(p);
+    assert.throws(() => inspectPacket(p), { code: 'receipt_authority_mismatch' });
+  }
+});
 test('format metadata, semantic risk and limitations remain exactly bound', () => {
   const alias = fixture(); setFormat(alias, 'docx', 'docm');
   assert.equal(inspectPacket(alias).complete, true);
@@ -131,6 +167,7 @@ test('incomplete prefix is retained as incomplete, not a failed or complete pars
   p.output.truncated = true; p.output.truncation_reasons = ['evidence_unit_limit'];
   Object.assign(p.ecf_handoff.receipt, { status: 'incomplete', completeness_status: 'incomplete', completeness_blockers: p.output.completeness.blockers });
   p.ecf_handoff.blockers.push(...p.output.completeness.blockers);
+  p.ecf_handoff.next_safe_action = INCOMPLETE_NEXT_ACTION;
   assert.equal(inspectPacket(p).receipt_status, 'incomplete');
   assert(renderReview(p).includes('3 of 6'));
 });
@@ -154,6 +191,7 @@ function parserTruncated() {
   p.output.completeness = { status: 'incomplete', complete: false, blockers: ['document_notes_require_review', 'markdown_output_limit_reached'] };
   Object.assign(p.ecf_handoff.receipt, { parser_output_hash: p.output.parser_output_hash, status: 'incomplete', completeness_status: 'incomplete', completeness_blockers: p.output.completeness.blockers });
   p.ecf_handoff.blockers.push(...p.output.completeness.blockers);
+  p.ecf_handoff.next_safe_action = INCOMPLETE_NEXT_ACTION;
   return p;
 }
 test('unrelated completeness blockers cannot hide parser truncation', () => {
@@ -222,6 +260,7 @@ function bindCompleteness(p, blockers) {
   p.ecf_handoff.blockers = [PLATFORM_TRAP_BLOCKER, ...blockers];
   if (p.risk.semantic_risk === 'high') p.ecf_handoff.blockers.push(SEMANTIC_REVIEW_BLOCKER);
   if (p.parser.format === 'pdf') p.ecf_handoff.blockers.push(PDF_OCR_BLOCKER);
+  p.ecf_handoff.next_safe_action = complete ? COMPLETE_NEXT_ACTION : INCOMPLETE_NEXT_ACTION;
 }
 test('structure object, strict booleans and counters cannot be missing or malformed', () => {
   for (const value of [undefined, null, {}, [], { status: 'failed', traversal_truncated: false }]) {

@@ -34,6 +34,28 @@ test('real pinned adapter CSV rejects inconsistent one-field risk downgrades', a
   }
 });
 
+test('real pinned adapter rejects authority-shaped handoff and receipt injections', async () => {
+  const bytes = Buffer.from('name,value\nexample,42\n');
+  const packet = await convertBytesToEvidence({ bytes, filename: 'example.csv', format: 'csv' });
+  for (const [mutate, code] of [
+    [candidate => { candidate.ecf_handoff.context_approved = true; }, 'handoff_not_pending'],
+    [candidate => { candidate.ecf_handoff.owner_approved = false; }, 'handoff_not_pending'],
+    [candidate => { candidate.ecf_handoff.next_safe_action = 'Context is approved.'; }, 'handoff_not_pending'],
+    [candidate => { candidate.ecf_handoff.receipt.receipt_type = 'settlement_receipt'; }, 'receipt_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.parse_job_id = 'parse_job_approved'; }, 'receipt_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.context_packet_id = 'context_packet_approved'; }, 'receipt_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.settlement_id = null; }, 'receipt_mismatch'],
+    [candidate => { delete candidate.ecf_handoff.receipt.receipt_type; }, 'receipt_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.created_at = 'not-a-timestamp'; }, 'receipt_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.public_boundary.context_approved = true; }, 'receipt_authority_mismatch'],
+    [candidate => { candidate.ecf_handoff.receipt.public_boundary.wallet_access_granted = false; }, 'receipt_authority_mismatch'],
+    [candidate => { delete candidate.ecf_handoff.receipt.public_boundary.trust_mutated; }, 'receipt_authority_mismatch'],
+  ]) {
+    const candidate = structuredClone(packet); mutate(candidate);
+    assert.throws(() => inspectPacket(candidate, bytes), { code });
+  }
+});
+
 test('coordinated format relabel is rejected while the original remains unauthenticated and inert', async () => {
   const bytes = Buffer.from('name,value\nexample,42\n');
   const packet = await convertBytesToEvidence({ bytes, filename: 'example.csv', format: 'csv' });
