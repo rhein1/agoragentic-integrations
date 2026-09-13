@@ -9,22 +9,34 @@ const has = (value, key) => Object.hasOwn(value, key);
 const text = (value) => typeof value === 'string' && value.length ? value : null;
 const abbreviated = (value) => typeof value === 'string' && /…|\.\.\./u.test(value);
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
-const credentialAssignment = /(?:^|[^a-z0-9])["']?(?:api[\s_-]*key|password|passwd|client[\s_-]*secret|access[\s_-]*token|refresh[\s_-]*token|auth(?:orization)?[\s_-]*token|private[\s_-]*key|secret(?:[\s_-]*(?:access[\s_-]*key|key))?|token|credential)["']?\s*(?:=|:)\s*(?:"(?:\\.|[^"\\\r\n])+"|'(?:\\.|[^'\\\r\n])+'|[^\s"',;}\]]+)/iu;
+const credentialAssignment = /(?:^|[^a-z0-9])["']?(?:api[\s_-]*key|password|passwd|client[\s_-]*secret|access[\s_-]*token|refresh[\s_-]*token|auth(?:orization)?[\s_-]*token|private[\s_-]*key|secret(?:[\s_-]*(?:access[\s_-]*key|key))?|token|credential)["']?\s*(?:=|:)\s*(?=[^\s,;}\]])/iu;
 const recognizedSecret = /(?:\b(?:bearer|basic)\s+\S+|\b(?:amk_|sk_(?:live|test)_|sk-proj-|nvm_(?:live|sandbox)_)[A-Za-z0-9_-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/i;
+const credentialDecodePasses = 8;
+const decodeAsciiPercentEscapes = (value) => value.replace(
+  /%([0-7][0-9a-f])/giu,
+  (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)),
+);
 function credentialCandidates(value) {
   const candidates = [value];
   let candidate = value;
-  // Decode bounded ASCII percent escapes so credentials cannot hide in a retained URL path.
-  for (let pass = 0; pass < 2; pass++) {
-    const decoded = candidate.replace(/%([0-7][0-9a-f])/giu, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
-    if (decoded === candidate) break;
+  // Decode to a bounded fixed point so credentials cannot hide in a retained URL path.
+  for (let pass = 0; pass < credentialDecodePasses; pass++) {
+    const decoded = decodeAsciiPercentEscapes(candidate);
+    if (decoded === candidate) return { candidates, reachedFixedPoint: true };
     candidates.push(decoded);
     candidate = decoded;
   }
-  return candidates;
+  return {
+    candidates,
+    reachedFixedPoint: decodeAsciiPercentEscapes(candidate) === candidate,
+  };
 }
-const secretLike = (value) => typeof value === 'string'
-  && credentialCandidates(value).some((candidate) => credentialAssignment.test(candidate) || recognizedSecret.test(candidate));
+const secretLike = (value) => {
+  if (typeof value !== 'string') return false;
+  const decoded = credentialCandidates(value);
+  return !decoded.reachedFixedPoint
+    || decoded.candidates.some((candidate) => credentialAssignment.test(candidate) || recognizedSecret.test(candidate));
+};
 const allKeys = (obj, allowed) => { if (Object.keys(obj).some((key) => !allowed.includes(key))) fail('invalid_envelope'); };
 
 function validateEnvelope(input, allowArray = false) {

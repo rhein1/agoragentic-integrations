@@ -18,6 +18,11 @@ const example = path.join(base, '../examples/nevermined/7c3e0c1');
 const fixture = () => JSON.parse(fs.readFileSync(path.join(example, 'synthetic-import.json'), 'utf8'));
 const withRaw = (changes) => { const input = fixture(); Object.assign(input.record.raw, changes); return input; };
 const code = (expected) => (error) => error?.code === expected;
+const encodeLayers = (value, layers) => {
+  let encoded = value;
+  for (let layer = 0; layer < layers; layer++) encoded = encodeURIComponent(encoded);
+  return encoded;
+};
 
 // Negative fixtures first: parsing cannot erase ambiguous syntax before normalization.
 for (const [name, input, expected] of [
@@ -221,16 +226,25 @@ test('recognized secrets in allowed fields reject without echoing', () => {
   assert.equal(error.code, 'secret_in_evidence_field'); assert(!String(error).includes(token));
 });
 test('generic credential assignments in retained fields reject without echoing', () => {
+  const encodedAssignment = '"api key":"TEST ONLY SECRET 123456"';
   for (const [field, secret] of [
     ['id', 'api_key=TEST_ONLY_SECRET_123456'],
     ['id', 'api key = TEST_ONLY_SECRET_123456'],
+    ['id', 'api_key="TEST ONLY SECRET 123456'],
+    ['id', 'api_key="TEST ONLY SECRET 123456\\'],
     ['requestId', 'password:TEST_ONLY_SECRET_123456'],
     ['requestId', '{"api_key":"TEST_ONLY_SECRET_123456"}'],
     ['delegationId', 'client-secret="TEST_ONLY_SECRET_123456"'],
+    ['delegationId', "client secret='TEST ONLY SECRET 123456"],
     ['txHash', 'refresh_token=TEST_ONLY_SECRET_123456'],
     ['createdAt', 'token=TEST_ONLY_SECRET_123456'],
     ['createdAt', 'password="TEST ONLY SECRET 123456"'],
-    ['resourceUrl', 'https://service.example/%22api%20key%22%3A%22TEST%20ONLY%20SECRET%20123456%22'],
+    ...[1, 2, 3].map((layers) => [
+      'resourceUrl',
+      `https://service.example/${encodeLayers(encodedAssignment, layers)}`,
+    ]),
+    ['resourceUrl', `https://service.example/${encodeLayers(encodedAssignment, 3).replaceAll('3A', '3a')}`],
+    ['resourceUrl', `https://service.example/${encodeLayers('ordinary%path', 10)}`],
   ]) {
     let error; let record;
     try { record = normalize(withRaw({ [field]: secret })); } catch (caught) { error = caught; }
@@ -283,12 +297,22 @@ test('actual CLI import works with network and DNS disabled before imports', () 
     const bad = path.join(temp, 'bad.json'); fs.writeFileSync(bad, '{"api_key":"SECRET_CANARY","api_key":1}');
     const invalid = spawnSync(process.execPath, [cli, 'nevermined', 'import', '--input', bad, '--profile', NEVERMINED_PROFILE_ID], { encoding: 'utf8' });
     assert.equal(invalid.status, 64); assert.equal(invalid.stdout, ''); assert(!invalid.stderr.includes('SECRET_CANARY'));
-    const credential = path.join(temp, 'credential.json');
-    fs.writeFileSync(credential, JSON.stringify(withRaw({ id: 'api key = TEST_ONLY_CLI_SECRET_123456' })));
-    const rejected = spawnSync(process.execPath, [cli, 'nevermined', 'import', '--input', credential, '--profile', NEVERMINED_PROFILE_ID], { encoding: 'utf8' });
-    assert.equal(rejected.status, 64); assert.equal(rejected.stdout, '');
-    assert(rejected.stderr.includes('secret_in_evidence_field'));
-    assert(!rejected.stderr.includes('TEST_ONLY_CLI_SECRET'));
+    for (const [name, value] of [
+      ['credential.json', 'api key = TEST_ONLY_CLI_SECRET_123456'],
+      ['credential-unclosed-double.json', 'api key = "TEST ONLY CLI SECRET 123456'],
+      ['credential-unclosed-single.json', "client secret = 'TEST ONLY CLI SECRET 123456"],
+      ['credential-triple-encoded.json', `https://service.example/${encodeLayers('"api key":"TEST ONLY CLI SECRET 123456"', 3)}`],
+      ['credential-over-cap.json', `https://service.example/${encodeLayers('"api key":"TEST ONLY CLI SECRET 123456"', 9)}`],
+    ]) {
+      const credential = path.join(temp, name);
+      const field = name.includes('encoded') ? 'resourceUrl' : 'id';
+      fs.writeFileSync(credential, JSON.stringify(withRaw({ [field]: value })));
+      const rejected = spawnSync(process.execPath, [cli, 'nevermined', 'import', '--input', credential, '--profile', NEVERMINED_PROFILE_ID], { encoding: 'utf8' });
+      assert.equal(rejected.status, 64); assert.equal(rejected.stdout, '');
+      assert(rejected.stderr.includes('secret_in_evidence_field'));
+      assert(!rejected.stderr.includes('TEST_ONLY_CLI_SECRET'));
+      assert(!rejected.stderr.includes('TEST ONLY CLI SECRET'));
+    }
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 });
 
