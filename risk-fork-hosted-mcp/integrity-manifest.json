@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 66,
-    "sha256": "sha256:d869055736d7da4df7cb7757c00f764a82d49026cec32766d16604467e2a28fc"
+    "sha256": "sha256:b164b387bb4f49291828e6b80e11a757237731d445c1a227b114873e5f7eabd9"
   },
   "reviewed_sources": [
     {
@@ -274,8 +274,8 @@
     },
     {
       "path": "transaction-assurance/src/adapters/nevermined-ledger.mjs",
-      "bytes": 19707,
-      "sha256": "sha256:c81482385509da99d308adb1143150e6450b47f844716afdce22d7dce326bacc"
+      "bytes": 19740,
+      "sha256": "sha256:e92bb306c391a3c754c91562c7ccd19fd06fb92a5cd79bb887d195983fdc679b"
     },
     {
       "path": "transaction-assurance/src/adapters/nevermined-profile.mjs",
@@ -2629,7 +2629,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 2970455,
-    "sha256": "sha256:c2f8bbae0ac7c1c900218ca336abc5c1fb1c2d28ca7ad26791e7e2e4ef6e59fd"
+    "sha256": "sha256:f43de78b2015511498d9d87df8ec6c5d3bb33ed98666d1411d71fc25669d8a1b"
   },
   "packaged_assets": [
     {

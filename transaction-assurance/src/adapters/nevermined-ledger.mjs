@@ -197,27 +197,35 @@ function baseRecord(input) {
 function facts(core) {
   return { ...core.identifiers, delegation_ref: core.authority_refs.delegation_ref, ...core.merchant_payment };
 }
-function compare(current, previous) {
-  const a = facts(current.core); const b = facts(previous.core);
-  const conflicts = NEVERMINED_PROFILE.immutable_fields.filter((key) => a[key] !== null && b[key] !== null && a[key] !== b[key]);
-  if (NEVERMINED_PROFILE.merchant_incompatible_pairs.some(([x, y]) => [x, y].includes(a.status_family) && [x, y].includes(b.status_family) && a.status_family !== b.status_family)) conflicts.push('provider_status');
-  const af = current.core.fee_legs[0]; const bf = previous.core.fee_legs[0];
-  if (af && bf) {
-    for (const key of ['amount_atomic', 'rate_bps', 'settlement_ref', 'authorization_nonce']) {
-      if (af[key] !== null && bf[key] !== null && af[key] !== bf[key]) conflicts.push(`fee.${key}`);
-    }
-    if (NEVERMINED_PROFILE.fee_incompatible_pairs.some(([x, y]) => [x, y].includes(af.provider_status) && [x, y].includes(bf.provider_status) && af.provider_status !== bf.provider_status)) conflicts.push('fee.provider_status');
-  }
-  return conflicts;
-}
 
 function collectConflicts(records) {
   const conflicts = new Set();
-  for (let left = 0; left < records.length; left++) {
-    for (let right = left + 1; right < records.length; right++) {
-      for (const conflict of compare(records[left], records[right])) conflicts.add(conflict);
+  const immutableValues = new Map(NEVERMINED_PROFILE.immutable_fields.map((key) => [key, new Set()]));
+  const feeFields = ['amount_atomic', 'rate_bps', 'settlement_ref', 'authorization_nonce'];
+  const feeValues = new Map(feeFields.map((key) => [key, new Set()]));
+  const merchantStatuses = new Set();
+  const feeStatuses = new Set();
+  for (const record of records) {
+    const recordFacts = facts(record.core);
+    for (const [key, values] of immutableValues) {
+      if (recordFacts[key] !== null) values.add(recordFacts[key]);
+      if (values.size > 1) conflicts.add(key);
     }
+    merchantStatuses.add(recordFacts.status_family);
+    const fee = record.core.fee_legs[0];
+    if (!fee) continue;
+    for (const [key, values] of feeValues) {
+      if (fee[key] !== null) values.add(fee[key]);
+      if (values.size > 1) conflicts.add(`fee.${key}`);
+    }
+    feeStatuses.add(fee.provider_status);
   }
+  if (NEVERMINED_PROFILE.merchant_incompatible_pairs.some(
+    ([left, right]) => merchantStatuses.has(left) && merchantStatuses.has(right),
+  )) conflicts.add('provider_status');
+  if (NEVERMINED_PROFILE.fee_incompatible_pairs.some(
+    ([left, right]) => feeStatuses.has(left) && feeStatuses.has(right),
+  )) conflicts.add('fee.provider_status');
   return [...conflicts].sort();
 }
 
