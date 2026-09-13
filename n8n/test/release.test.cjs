@@ -22,7 +22,7 @@ test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 		'n8n-workflow': '2.36.4',
 		prettier: '3.9.6',
 		typescript: '5.9.2',
-		'typescript-eslint': '8.65.0',
+		'typescript-eslint': '8.69.0',
 		zod: '3.25.76',
 	};
 

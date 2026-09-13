@@ -8,6 +8,7 @@ Audit date: 2026-09-13 (supersedes 2026-09-01)
 - Builder: repository-local `scripts/build.mjs`
 - Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.31.0`
 - Base lint rules: `eslint-plugin-n8n-nodes-base@2.0.0`
+- Type-aware lint stack: `typescript-eslint@8.69.0`
 - Linter: `eslint@9.29.0`
 - Formatter: `prettier@3.9.6`
 - Compiler: `typescript@5.9.2`
@@ -50,6 +51,10 @@ broaden the rejected ESLint 10 boundary or the published runtime peer.
 The base lint-rules plugin at 2.0.0 accepts ESLint 8.40 and newer. Its ESLint
 10 support does not require this candidate to move past the community plugin's
 exact ESLint 9.29.0 peer.
+
+The TypeScript ESLint stack at 8.69.0 accepts ESLint 9 and TypeScript versions
+from 4.8.4 through the 5.x line. The candidate's exact ESLint 9.29.0 and
+TypeScript 5.9.2 pins remain inside those peer ranges.
 
 The unused interactive `dev` and local `release` helpers were removed with the
 CLI. Trusted publishing is unchanged: `.github/workflows/publish-n8n.yml` still
