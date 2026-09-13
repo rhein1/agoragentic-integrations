@@ -354,9 +354,11 @@ async function readSource(sourcePath) {
   // Open with O_NOFOLLOW and stat the open descriptor (instead of
   // lstat-then-read by path) so the file cannot be swapped — or a symlink
   // planted — between the checks and the read.
+  const noFollow = Number.isInteger(fsConstants.O_NOFOLLOW) ? fsConstants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(fsConstants.O_NONBLOCK) ? fsConstants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | noFollow | nonBlock);
   } catch (err) {
     if (err && err.code === 'ELOOP') {
       throw new ReceiptVideoError('source_symlink_rejected', 'The source receipt must not be a symbolic link.');
@@ -367,11 +369,23 @@ async function readSource(sourcePath) {
   try {
     const stat = await handle.stat();
     if (!stat.isFile()) throw new ReceiptVideoError('source_not_regular_file', 'The source receipt must be a regular file.');
+    const pathStat = await fs.lstat(absolutePath);
+    if (pathStat.isSymbolicLink() || !sameFileIdentity(stat, pathStat)) {
+      throw new ReceiptVideoError('source_symlink_rejected', 'The source receipt must not be a symbolic link.');
+    }
     if (stat.size === 0 || stat.size > MAX_SOURCE_BYTES) {
       throw new ReceiptVideoError('source_size_invalid', `The source receipt must be between 1 and ${MAX_SOURCE_BYTES} bytes.`);
     }
     bytes = Buffer.alloc(stat.size);
-    await handle.read(bytes, 0, stat.size, 0);
+    const { bytesRead } = await handle.read(bytes, 0, stat.size, 0);
+    const after = await handle.stat();
+    const pathAfter = await fs.lstat(absolutePath);
+    if (bytesRead !== stat.size
+      || !sameFileIdentity(stat, after)
+      || pathAfter.isSymbolicLink()
+      || !sameFileIdentity(after, pathAfter)) {
+      throw new ReceiptVideoError('source_changed', 'The source receipt changed while it was read.');
+    }
   } finally {
     await handle.close();
   }
@@ -394,6 +408,17 @@ async function readSource(sourcePath) {
     throw new ReceiptVideoError('source_schema_invalid', `The source schema must be ${SOURCE_SCHEMA}.`);
   }
   return { absolutePath, bytes, parsed, sha256: sha256(bytes) };
+}
+
+function sameFileIdentity(left, right) {
+  return left.isFile()
+    && right.isFile()
+    && left.dev === right.dev
+    && left.ino === right.ino
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
+    && left.nlink === right.nlink;
 }
 
 async function readTemplate(templateId) {

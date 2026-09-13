@@ -233,7 +233,9 @@ function stableIdentity(info) {
     dev: String(info.dev),
     ino: String(info.ino),
     size: String(info.size),
-    mtime_ms: Number(info.mtimeMs),
+    nlink: String(info.nlink),
+    mode: String(info.mode),
+    mtime_ns: String(info.mtimeNs ?? BigInt(Math.trunc(Number(info.mtimeMs) * 1_000_000))),
   });
 }
 
@@ -250,9 +252,10 @@ async function readStableRuntimeFile(absolute, relative, rootReal, remainingByte
   // is no lstat-then-open check-then-act window, and every property below
   // describes the file that is actually read.
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await open(absolute, constants.O_RDONLY | noFollow);
+    handle = await open(absolute, constants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === 'ELOOP') {
       throw new Error(`Runtime workspace rejects a non-regular file: ${relative}`);
@@ -266,12 +269,31 @@ async function readStableRuntimeFile(absolute, relative, rootReal, remainingByte
     }
     if (opened.nlink > 1n) throw new Error(`Runtime workspace rejects a hard link: ${relative}`);
     if (opened.size > BigInt(remainingBytes)) throw new Error('Runtime workspace exceeds byte limit');
+    const openedPath = await lstat(absolute, { bigint: true });
+    if (openedPath.isSymbolicLink()) {
+      throw new Error(`Runtime workspace rejects a symlink: ${relative}`);
+    }
+    if (stableIdentity(openedPath) !== stableIdentity(opened)) {
+      throw new Error(`Runtime workspace path changed while reading: ${relative}`);
+    }
     const resolved = await realpath(absolute);
     assertWithin(rootReal, resolved, `Runtime workspace file ${relative}`);
     const content = await handle.readFile();
     const after = await handle.stat({ bigint: true });
-    if (stableIdentity(after) !== stableIdentity(opened)) {
+    if (!after.isFile() || after.nlink > 1n || stableIdentity(after) !== stableIdentity(opened)) {
       throw new Error(`Runtime workspace file changed while reading: ${relative}`);
+    }
+    const currentPath = await lstat(absolute, { bigint: true });
+    if (currentPath.isSymbolicLink()) {
+      throw new Error(`Runtime workspace rejects a symlink: ${relative}`);
+    }
+    if (stableIdentity(currentPath) !== stableIdentity(opened)) {
+      throw new Error(`Runtime workspace path changed while reading: ${relative}`);
+    }
+    const currentResolved = await realpath(absolute);
+    assertWithin(rootReal, currentResolved, `Runtime workspace file ${relative}`);
+    if (currentResolved !== resolved) {
+      throw new Error(`Runtime workspace file target changed while reading: ${relative}`);
     }
     return content;
   } finally {
@@ -311,6 +333,8 @@ export async function inspectRuntimeWorkspace(workspaceRoot, options = {}) {
     if (directoryInfo.isSymbolicLink() || !directoryInfo.isDirectory()) {
       throw new Error('Runtime workspace directory changed type');
     }
+    const directoryReal = await realpath(directory);
+    assertWithin(rootReal, directoryReal, `Runtime workspace directory ${prefix || '.'}`);
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
@@ -343,6 +367,17 @@ export async function inspectRuntimeWorkspace(workspaceRoot, options = {}) {
         bytes: content.byteLength,
         content_hash: sha256Ref(content.toString('base64')),
       });
+    }
+    const directoryAfter = await lstat(directory, { bigint: true });
+    if (directoryAfter.isSymbolicLink()
+      || !directoryAfter.isDirectory()
+      || stableIdentity(directoryAfter) !== stableIdentity(directoryInfo)) {
+      throw new Error(`Runtime workspace directory changed while reading: ${prefix || '.'}`);
+    }
+    const directoryRealAfter = await realpath(directory);
+    assertWithin(rootReal, directoryRealAfter, `Runtime workspace directory ${prefix || '.'}`);
+    if (directoryRealAfter !== directoryReal) {
+      throw new Error(`Runtime workspace directory target changed while reading: ${prefix || '.'}`);
     }
   }
 

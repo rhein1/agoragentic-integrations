@@ -66585,9 +66585,10 @@ async function resolveE2BPackageDirectory() {
 }
 async function readStableRegularFile(file, root) {
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await open2(file, constants.O_RDONLY | noFollow);
+    handle = await open2(file, constants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === "ELOOP") {
       throw new Error("E2B runtime SDK package tree contains a symlink or special file");
@@ -66596,19 +66597,22 @@ async function readStableRegularFile(file, root) {
   }
   try {
     const opened = await handle.stat();
-    if (!opened.isFile()) {
+    const pathOpened = await lstat(file);
+    if (!opened.isFile() || pathOpened.isSymbolicLink() || !sameFileIdentity(opened, pathOpened)) {
       throw new Error("E2B runtime SDK package tree contains a symlink or special file");
     }
     if (opened.nlink !== 1) {
       throw new Error("E2B runtime SDK package tree contains a hard-linked file");
     }
     const resolved = await realpath(file);
-    if (!isContainedPath(root, resolved)) {
+    if (path3.relative(path3.resolve(file), resolved) !== "" || !isContainedPath(root, resolved)) {
       throw new Error("E2B runtime SDK package file escapes its canonical package directory");
     }
     const bytes = await handle.readFile();
     const after = await handle.stat();
-    if (!sameFileIdentity(opened, after) || bytes.byteLength !== after.size) {
+    const pathAfter = await lstat(file);
+    const resolvedAfter = await realpath(file);
+    if (!sameFileIdentity(opened, after) || pathAfter.isSymbolicLink() || !sameFileIdentity(after, pathAfter) || path3.relative(path3.resolve(file), resolvedAfter) !== "" || !isContainedPath(root, resolvedAfter) || bytes.byteLength !== after.size) {
       throw new Error("E2B runtime SDK package file changed during inspection");
     }
     return bytes;
@@ -68440,7 +68444,8 @@ function stableIdentity(info) {
     dev: typeof info.dev === "bigint" ? info.dev.toString() : String(info.dev),
     ino: typeof info.ino === "bigint" ? info.ino.toString() : String(info.ino),
     size: typeof info.size === "bigint" ? info.size.toString() : String(info.size),
-    mtime_ms: Number(info.mtimeMs)
+    nlink: typeof info.nlink === "bigint" ? info.nlink.toString() : String(info.nlink),
+    mtime_ns: String(info.mtimeNs ?? BigInt(Math.trunc(Number(info.mtimeMs) * 1e6)))
   };
 }
 function assertWithinRealRoot(rootReal, candidateReal, field) {
@@ -68450,11 +68455,31 @@ function assertWithinRealRoot(rootReal, candidateReal, field) {
     throw new Error(`${field} escapes the workspace root`);
   }
 }
-async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
+function readOnlyNoFollowNonBlockingFlags({ directoryOnly = false } = {}) {
   const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants2.O_NONBLOCK) ? constants2.O_NONBLOCK : 0;
+  const directory = directoryOnly && Number.isInteger(constants2.O_DIRECTORY) ? constants2.O_DIRECTORY : 0;
+  return constants2.O_RDONLY | noFollow | nonBlock | directory;
+}
+async function bindOpenedPath({
+  target,
+  opened,
+  rootReal,
+  field,
+  symlinkMessage,
+  changedMessage
+}) {
+  const current = await lstat2(target, { bigint: true });
+  if (current.isSymbolicLink()) throw new Error(symlinkMessage);
+  assertStableCleanupIdentity(opened, current, changedMessage);
+  const resolved = await realpath2(target);
+  assertWithinRealRoot(rootReal, resolved, field);
+  return resolved;
+}
+async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
   let handle;
   try {
-    handle = await open4(absolute, constants2.O_RDONLY | noFollow);
+    handle = await open4(absolute, readOnlyNoFollowNonBlockingFlags());
   } catch (error) {
     if (error?.code === "ELOOP") throw new Error(`Symlinks are forbidden: ${relative}`);
     throw error;
@@ -68466,19 +68491,30 @@ async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
     if (opened.size > BigInt(maxReadableBytes)) {
       throw new Error(`Workspace exceeds its bounded byte allowance at ${relative}`);
     }
-    const openedReal = await realpath2(absolute);
-    assertWithinRealRoot(rootReal, openedReal, `Workspace file ${relative}`);
+    const openedReal = await bindOpenedPath({
+      target: absolute,
+      opened,
+      rootReal,
+      field: `Workspace file ${relative}`,
+      symlinkMessage: `Symlinks are forbidden: ${relative}`,
+      changedMessage: `Workspace path changed while exporting: ${relative}`
+    });
     const content = await handle.readFile();
     const after = await handle.stat({ bigint: true });
+    if (!after.isFile() || after.nlink > 1n) {
+      throw new Error(`Workspace file changed type while exporting: ${relative}`);
+    }
     if (JSON.stringify(stableIdentity(opened)) !== JSON.stringify(stableIdentity(after))) {
       throw new Error(`Workspace file changed while exporting: ${relative}`);
     }
-    const currentPath = await lstat2(absolute, { bigint: true });
-    if (JSON.stringify(stableIdentity(opened)) !== JSON.stringify(stableIdentity(currentPath))) {
-      throw new Error(`Workspace path changed while exporting: ${relative}`);
-    }
-    const currentReal = await realpath2(absolute);
-    assertWithinRealRoot(rootReal, currentReal, `Workspace file ${relative}`);
+    const currentReal = await bindOpenedPath({
+      target: absolute,
+      opened,
+      rootReal,
+      field: `Workspace file ${relative}`,
+      symlinkMessage: `Symlinks are forbidden: ${relative}`,
+      changedMessage: `Workspace path changed while exporting: ${relative}`
+    });
     if (currentReal !== openedReal) throw new Error(`Workspace path target changed: ${relative}`);
     assertNoSecretMaterial(relative, content);
     return content;
@@ -68602,12 +68638,11 @@ function assertStableCleanupIdentity(before, after, field) {
   }
 }
 async function makeOwnedDirectoryWritable(directory, before) {
-  const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
   const directoryOnly = Number.isInteger(constants2.O_DIRECTORY) ? constants2.O_DIRECTORY : 0;
   if (process.platform !== "win32" && directoryOnly !== 0) {
     let handle;
     try {
-      handle = await open4(directory, constants2.O_RDONLY | noFollow | directoryOnly);
+      handle = await open4(directory, readOnlyNoFollowNonBlockingFlags({ directoryOnly: true }));
       const opened = await handle.stat({ bigint: true });
       if (!opened.isDirectory()) {
         throw new Error("Immutable workspace export cleanup directory changed type");
@@ -68647,10 +68682,9 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
   }
   for (const entry of entries) {
     const target = path5.join(directory, entry.name);
-    const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
     let handle;
     try {
-      handle = await open4(target, constants2.O_RDONLY | noFollow);
+      handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
     } catch (error) {
       if (error?.code === "ELOOP") {
         throw new Error("Immutable workspace export cleanup refuses symlinks");
@@ -68658,35 +68692,39 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
       throw error;
     }
     let info;
+    let entryReal;
     try {
       info = await handle.stat({ bigint: true });
+      entryReal = await bindOpenedPath({
+        target,
+        opened: info,
+        rootReal,
+        field: "Immutable workspace export cleanup entry",
+        symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+        changedMessage: "Immutable workspace export cleanup entry path changed"
+      });
       if (info.isDirectory()) {
-        if ((await lstat2(target, { bigint: true })).isSymbolicLink()) {
-          throw new Error("Immutable workspace export cleanup refuses symlinks");
-        }
         await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
-        continue;
-      }
-      if (!info.isFile()) {
+      } else if (!info.isFile()) {
         throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
-      }
-      if (info.nlink > 1n) {
+      } else if (info.nlink > 1n) {
         throw new Error("Immutable workspace export cleanup refuses hard-linked files");
       }
+      const after2 = await handle.stat({ bigint: true });
+      assertStableCleanupIdentity(info, after2, "Immutable workspace export cleanup entry");
     } finally {
       await handle.close();
     }
-    const fileReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, fileReal, "Immutable workspace export cleanup file");
-    const current = await lstat2(target, { bigint: true });
-    if (current.isSymbolicLink() || !current.isFile() || current.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses a changed or hard-linked file path");
-    }
-    assertStableCleanupIdentity(info, current, "Immutable workspace export cleanup file path");
-    const currentReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, currentReal, "Immutable workspace export cleanup file");
-    if (currentReal !== fileReal) {
-      throw new Error("Immutable workspace export cleanup file target changed");
+    const currentReal = await bindOpenedPath({
+      target,
+      opened: info,
+      rootReal,
+      field: "Immutable workspace export cleanup entry",
+      symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+      changedMessage: "Immutable workspace export cleanup entry path changed"
+    });
+    if (currentReal !== entryReal) {
+      throw new Error("Immutable workspace export cleanup entry target changed");
     }
   }
   const after = await lstat2(directory, { bigint: true });
@@ -68718,10 +68756,9 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
   }
   for (const entry of entries) {
     const target = path5.join(directory, entry.name);
-    const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
     let handle;
     try {
-      handle = await open4(target, constants2.O_RDONLY | noFollow);
+      handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
     } catch (error) {
       if (error?.code === "ELOOP") {
         throw new Error("Immutable workspace export cleanup refuses symlinks");
@@ -68729,49 +68766,47 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
       throw error;
     }
     let info;
+    let entryReal;
     try {
       info = await handle.stat({ bigint: true });
+      entryReal = await bindOpenedPath({
+        target,
+        opened: info,
+        rootReal,
+        field: "Immutable workspace export cleanup entry",
+        symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+        changedMessage: "Immutable workspace export cleanup entry path changed"
+      });
       if (info.isDirectory()) {
-        if ((await lstat2(target, { bigint: true })).isSymbolicLink()) {
-          throw new Error("Immutable workspace export cleanup refuses symlinks");
-        }
         await handle.close();
         handle = null;
         await makeOwnedTreeWritable(target, rootReal, state, depth + 1);
-        continue;
-      }
-      if (!info.isFile()) {
+      } else if (!info.isFile()) {
         throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
-      }
-      if (info.nlink > 1n) {
+      } else if (info.nlink > 1n) {
         throw new Error("Immutable workspace export cleanup refuses hard-linked files");
+      } else {
+        await handle.chmod(384);
+        const writableFile = await handle.stat({ bigint: true });
+        if (!writableFile.isFile() || writableFile.nlink > 1n) {
+          throw new Error("Immutable workspace export cleanup refuses hard-linked files");
+        }
+        assertStableCleanupIdentity(info, writableFile, "Immutable workspace export cleanup file");
       }
-      const preReal = await realpath2(target);
-      assertWithinRealRoot(rootReal, preReal, "Immutable workspace export cleanup file");
-      await handle.chmod(384);
-      const writableFile = await handle.stat({ bigint: true });
-      if (writableFile.nlink > 1n) {
-        throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-      }
-      assertStableCleanupIdentity(info, writableFile, "Immutable workspace export cleanup file");
     } finally {
       await handle?.close().catch(() => {
       });
     }
-    const fileReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, fileReal, "Immutable workspace export cleanup file");
-    const current = await lstat2(target, { bigint: true });
-    if (current.isSymbolicLink() || !current.isFile()) {
-      throw new Error("Immutable workspace export cleanup file path changed type");
-    }
-    if (current.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-    }
-    assertStableCleanupIdentity(info, current, "Immutable workspace export cleanup file path");
-    const currentReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, currentReal, "Immutable workspace export cleanup file");
-    if (currentReal !== fileReal) {
-      throw new Error("Immutable workspace export cleanup file target changed");
+    const currentReal = await bindOpenedPath({
+      target,
+      opened: info,
+      rootReal,
+      field: "Immutable workspace export cleanup entry",
+      symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+      changedMessage: "Immutable workspace export cleanup entry path changed"
+    });
+    if (currentReal !== entryReal) {
+      throw new Error("Immutable workspace export cleanup entry target changed");
     }
   }
   const after = await lstat2(directory, { bigint: true });
@@ -68785,12 +68820,11 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
     throw new Error("Immutable workspace export cleanup directory target changed");
   }
 }
-async function validateOwnedCleanupManifest(target, exportId) {
+async function validateOwnedCleanupManifest(target, exportId, rootReal) {
   const manifestPath = path5.join(target, "manifest.json");
-  const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
   let handle;
   try {
-    handle = await open4(manifestPath, constants2.O_RDONLY | noFollow);
+    handle = await open4(manifestPath, readOnlyNoFollowNonBlockingFlags());
   } catch (error) {
     if (error?.code === "ELOOP") {
       throw new Error("Immutable workspace export cleanup manifest is not a regular file");
@@ -68808,6 +68842,14 @@ async function validateOwnedCleanupManifest(target, exportId) {
     if (opened.size > BigInt(MAX_CLEANUP_MANIFEST_BYTES)) {
       throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
     }
+    const openedReal = await bindOpenedPath({
+      target: manifestPath,
+      opened,
+      rootReal,
+      field: "Immutable workspace export cleanup manifest",
+      symlinkMessage: "Immutable workspace export cleanup manifest is not a regular file",
+      changedMessage: "Immutable workspace export cleanup manifest path changed"
+    });
     const bytes = await handle.readFile();
     if (bytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
@@ -68817,6 +68859,17 @@ async function validateOwnedCleanupManifest(target, exportId) {
       throw new Error("Immutable workspace export cleanup refuses a hard-linked manifest");
     }
     assertStableCleanupIdentity(opened, after, "Immutable workspace export cleanup manifest");
+    const currentReal = await bindOpenedPath({
+      target: manifestPath,
+      opened,
+      rootReal,
+      field: "Immutable workspace export cleanup manifest",
+      symlinkMessage: "Immutable workspace export cleanup manifest is not a regular file",
+      changedMessage: "Immutable workspace export cleanup manifest path changed"
+    });
+    if (currentReal !== openedReal) {
+      throw new Error("Immutable workspace export cleanup manifest target changed");
+    }
     validateManifest(JSON.parse(bytes.toString("utf8")), { exportId });
   } finally {
     await handle.close();
@@ -68848,7 +68901,7 @@ async function removeOwnedExportTree({ root, target, exportId, requireManifest }
   if (targetReal === rootReal) {
     throw new Error("Immutable workspace export cleanup refuses its configured root");
   }
-  if (requireManifest) await validateOwnedCleanupManifest(target, exportId);
+  if (requireManifest) await validateOwnedCleanupManifest(target, exportId, rootReal);
   await validateOwnedTreeForCleanup(target, rootReal, { entries: 0 });
   await makeOwnedTreeWritable(target, rootReal, { entries: 0 });
   const targetAfter = await lstat2(target, { bigint: true });
@@ -72181,7 +72234,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:813d05a09c55bca6ace69587dee3d16d0597664d9d301f867b2530f499faa6bd" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:1aab928cf1605bbc3543163ff0be527350347d0b3de673f4e6f92980c0f9a623" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

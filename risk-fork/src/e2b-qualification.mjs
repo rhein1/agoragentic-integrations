@@ -1194,9 +1194,10 @@ async function readStableRegularFile(file, root) {
   // is no lstat-then-open check-then-act window, and every property below
   // describes the file that is actually read.
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await open(file, constants.O_RDONLY | noFollow);
+    handle = await open(file, constants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === 'ELOOP') {
       throw new Error('E2B runtime SDK package tree contains a symlink or special file');
@@ -1205,19 +1206,29 @@ async function readStableRegularFile(file, root) {
   }
   try {
     const opened = await handle.stat();
-    if (!opened.isFile()) {
+    const pathOpened = await lstat(file);
+    if (!opened.isFile()
+      || pathOpened.isSymbolicLink()
+      || !sameFileIdentity(opened, pathOpened)) {
       throw new Error('E2B runtime SDK package tree contains a symlink or special file');
     }
     if (opened.nlink !== 1) {
       throw new Error('E2B runtime SDK package tree contains a hard-linked file');
     }
     const resolved = await realpath(file);
-    if (!isContainedPath(root, resolved)) {
+    if (path.relative(path.resolve(file), resolved) !== '' || !isContainedPath(root, resolved)) {
       throw new Error('E2B runtime SDK package file escapes its canonical package directory');
     }
     const bytes = await handle.readFile();
     const after = await handle.stat();
-    if (!sameFileIdentity(opened, after) || bytes.byteLength !== after.size) {
+    const pathAfter = await lstat(file);
+    const resolvedAfter = await realpath(file);
+    if (!sameFileIdentity(opened, after)
+      || pathAfter.isSymbolicLink()
+      || !sameFileIdentity(after, pathAfter)
+      || path.relative(path.resolve(file), resolvedAfter) !== ''
+      || !isContainedPath(root, resolvedAfter)
+      || bytes.byteLength !== after.size) {
       throw new Error('E2B runtime SDK package file changed during inspection');
     }
     return bytes;

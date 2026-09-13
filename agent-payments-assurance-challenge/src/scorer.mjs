@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 
 export const MAX_JSON_BYTES = 1024 * 1024;
@@ -137,7 +138,8 @@ export async function readJson(filePath, options = {}) {
     // Open first and stat the opened file itself: no stat-then-read
     // check-then-act window. (Plain open preserves stat's symlink-following
     // semantics; no O_NOFOLLOW is added.)
-    const handle = await open(filePath, 'r');
+    const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+    const handle = await open(filePath, constants.O_RDONLY | nonBlock);
     try {
       fileStat = await handle.stat();
       if (!fileStat.isFile()) throw new TypeError('not_file');

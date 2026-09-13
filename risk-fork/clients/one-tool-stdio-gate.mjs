@@ -30,6 +30,7 @@ const MAX_JSON_NUMBER_TOKEN_CHARACTERS = 1024;
 const MAX_GATEWAY_STDERR_BYTES = 64 * 1024;
 const SHUTDOWN_GRACE_MS = 500;
 const SHUTDOWN_FORCE_EXIT_MS = 1500;
+const SHUTDOWN_SIGNAL_DRAIN_MS = 100;
 const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
 const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
@@ -535,6 +536,7 @@ async function serve(options) {
   let initializeRequestPending = false;
   let toolsListRequestPending = false;
   let gatewayStderrBytes = 0;
+  let terminationDrainRequired = false;
   const gatewayProcessGroup = process.platform !== 'win32' && Number.isSafeInteger(child.pid)
     ? -child.pid
     : null;
@@ -626,12 +628,28 @@ async function serve(options) {
     }, SHUTDOWN_FORCE_EXIT_MS);
   }
 
-  activeTerminationHandler = (signal) => close(0, `Client gate received ${signal}`);
+  activeTerminationHandler = (signal) => {
+    terminationDrainRequired = true;
+    close(0, `Client gate received ${signal}`);
+  };
 
   child.once('close', () => {
     if (!closing || gatewayTreeExists()) return;
     if (escalationTimer) clearTimeout(escalationTimer);
-    if (!clientOutputBackpressured && forceExitTimer) clearTimeout(forceExitTimer);
+    if (!clientOutputBackpressured && forceExitTimer) {
+      clearTimeout(forceExitTimer);
+      forceExitTimer = null;
+      if (terminationDrainRequired) {
+        // Keep signal listeners active briefly after the gateway exits. On
+        // macOS a repeated terminal SIGHUP can otherwise land during process
+        // teardown after libuv has stopped dispatching the listener, changing
+        // a clean bounded shutdown into signal termination.
+        forceExitTimer = setTimeout(
+          () => process.exit(process.exitCode ?? 0),
+          SHUTDOWN_SIGNAL_DRAIN_MS,
+        );
+      }
+    }
   });
 
   child.stdin.on('error', () => close(78, 'Gateway input pipe failed'));

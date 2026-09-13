@@ -501,11 +501,13 @@ async function readBoundedRegularFile(target, maxBytes) {
   // Open first with O_NOFOLLOW and validate the opened handle itself: there
   // is no lstat-then-open check-then-act window, and every bound below
   // describes the file that is actually read.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
     handle = await open(
       target,
-      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      constants.O_RDONLY | noFollow | nonBlock,
     );
   } catch (error) {
     if (error?.code === 'ELOOP') {
@@ -515,7 +517,10 @@ async function readBoundedRegularFile(target, maxBytes) {
   }
   try {
     const during = await handle.stat({ bigint: true });
+    const pathDuring = await lstat(target, { bigint: true });
     if (!during.isFile()
+      || pathDuring.isSymbolicLink()
+      || stableRuntimeFileIdentity(pathDuring) !== stableRuntimeFileIdentity(during)
       || during.nlink !== 1n
       || during.size > BigInt(maxBytes)) {
       throw new Error('E2B birth request artifact is not a bounded regular file');
