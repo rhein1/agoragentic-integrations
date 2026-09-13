@@ -179,7 +179,11 @@ class FixtureBoundaryTests(unittest.TestCase):
                 self.assertFalse(work.done())
                 self.assertEqual(len(report['cases']), 1)
                 work.cancel()
-                with self.assertRaises(asyncio.CancelledError): await work
+                done, pending = await asyncio.wait({work}, timeout=2)
+                self.assertEqual(pending, set())
+                self.assertEqual(done, {work})
+                with self.assertRaises(asyncio.CancelledError):
+                    work.result()
                 self.assertTrue(context.closed)
                 self.assertEqual(report['cancellation_stage'], 'after_first_screenshot')
             asyncio.run(probe())

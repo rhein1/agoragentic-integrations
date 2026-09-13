@@ -35,7 +35,7 @@ The committed qualification lock targets **Python 3.12.10 on Linux x86_64 / Ubun
 ```sh
 python -m pip install --require-hashes --only-binary=:all: -r browser-use/requirements-proof.txt
 python -m playwright install chromium
-python -m unittest discover -s browser-use -p test_fixture_proof.py
+python -m unittest discover -s browser-use -p "test_*proof.py"
 python browser-use/fixture_proof.py /path/to/new-output-directory
 ```
 

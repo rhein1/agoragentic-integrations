@@ -197,7 +197,7 @@ async def run_proof(output: Path, *, chromium_path: Path | None = None,
                                 report["status"] = "cancelled"
                                 work.cancel()
                             elif work in done:
-                                await work
+                                work.result()
                             else:
                                 raise TimeoutError("fixture_deadline")
                 finally:

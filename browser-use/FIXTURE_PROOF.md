@@ -29,12 +29,12 @@ The owner-controlled cancellation event races the active fixture task. Outstandi
 ## Validation
 
 ```sh
-python -m unittest discover -s browser-use -p test_fixture_proof.py
+python -m unittest discover -s browser-use -p "test_*proof.py"
 python browser-use/fixture_proof.py /path/to/new-output-directory
 python browser-use/fixture_proof.py /path/to/another-new-directory --cancel-after-first-case
 ```
 
-The original boundary suite contained seven tests, not six. The review corrections add eight: private-copy replacement/tamper checks, resource-tree pinning, descriptor identity, an end-to-end launch-boundary test double, active cancellation, lock completeness and dependency drift. All **15 provider/browser-free tests** passed locally. Those fake-driver tests do not prove real browser behavior; the real Chromium, hash-enforced setup, three viewport checks and both cancellation modes require current-head CI evidence.
+The original boundary suite contained seven tests, not six. The review corrections add eight: private-copy replacement/tamper checks, resource-tree pinning, descriptor identity, an end-to-end launch-boundary test double, active cancellation, lock completeness and dependency drift. The runtime budget suite adds six more checks for aggregate ceilings, exact-boundary copies, pre-read rejection, source growth, post-read identity changes and invalid budgets. All **21 provider/browser-free tests** run through the command above. Those fake-driver tests do not prove real browser behavior; the real Chromium, hash-enforced setup, three viewport checks and both cancellation modes require current-head CI evidence.
 
 Historical local Chromium 144 observations, including an administrator-blocked route probe, remain historical only. No Browser Use process, provider, model, public website, customer session, wallet or settlement path is exercised by this fixture.
 
