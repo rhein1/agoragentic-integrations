@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/nevermined-evidence-batch.v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "records"
+  ],
+  "properties": {
+    "schema": {
+      "const": "agoragentic.nevermined-evidence-batch.v1"
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "https://agoragentic.com/schema/nevermined-evidence.v1.json"
+      }
+    }
+  }
+}

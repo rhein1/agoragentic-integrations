@@ -1,0 +1,66 @@
+{
+  "basis": "vendor_documentation_example",
+  "provider": "nevermined",
+  "repository": "nevermined-io/docs",
+  "commit": "7c3e0c1dd00119f8e72983572c1807e78a9c1ee2",
+  "path": "products/catalog/router/ledger.mdx",
+  "section": "List payments",
+  "endpoint": "GET /api/v1/router/payments",
+  "git_blob": "40c5314dba599315497bf6a3d240f5ea8598b433",
+  "source_url": "https://github.com/nevermined-io/docs/blob/7c3e0c1dd00119f8e72983572c1807e78a9c1ee2/products/catalog/router/ledger.mdx",
+  "fixture": "vendor-docs-example.json",
+  "fixture_hash": "sha256:3cb34a79d187301de455e5da0bb55999d740faa6398b7927f68ab6de582e9bdf",
+  "hash_scope": "UTF-8 JSON block content with trailing LF; not the complete MDX file",
+  "unchanged_abbreviations_preserved": true,
+  "observed_transaction": false,
+  "sanitized_real_export": false,
+  "api_version_header_contract_verified": false,
+  "synthetic_fixture": "synthetic-import.json",
+  "synthetic_changed_fields": {
+    "id": {
+      "vendor_example": "b1f9c2e4-…",
+      "synthetic": "synthetic-payment-001"
+    },
+    "amount": {
+      "vendor_example": "1000",
+      "synthetic": "10000"
+    },
+    "merchantAddress": {
+      "vendor_example": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
+      "synthetic": "0x1111111111111111111111111111111111111111"
+    },
+    "txHash": {
+      "vendor_example": "0xfc8af37b…",
+      "synthetic": "0x3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "delegationId": {
+      "vendor_example": "5e7481c3-…",
+      "synthetic": "synthetic-delegation-001"
+    },
+    "requestId": {
+      "vendor_example": "order-1234",
+      "synthetic": "synthetic-request-001"
+    },
+    "buyer": {
+      "vendor_example": "0x8D6A5233…",
+      "synthetic": "0x2222222222222222222222222222222222222222"
+    },
+    "feeAtomic": {
+      "vendor_example": "0",
+      "synthetic": "200"
+    },
+    "feeBps": {
+      "vendor_example": 0,
+      "synthetic": 200
+    },
+    "feeStatus": {
+      "vendor_example": "None",
+      "synthetic": "Submitted"
+    },
+    "feeNonce": {
+      "vendor_example": null,
+      "synthetic": "0x4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "claim_boundary": "Documentation-derived parser tests only. No payment, account, live export, chain lookup, partnership, or production compatibility is established."
+}

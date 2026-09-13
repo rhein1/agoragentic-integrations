@@ -1,0 +1,26 @@
+[
+  {
+    "id": "b1f9c2e4-…",
+    "createdAt": "2026-07-01T09:00:55.605Z",
+    "status": "Settled",
+    "protocol": "x402",
+    "network": "base",
+    "asset": "USDC",
+    "amount": "1000",
+    "merchantAddress": "0x209693Bc6afc0C5328bA36FaF03C514EF312287C",
+    "txHash": "0xfc8af37b…",
+    "delegationId": "5e7481c3-…",
+    "requestId": "order-1234",
+    "resourceUrl": "https://service.example/api/resource",
+    "buyer": "0x8D6A5233…",
+    "feeAtomic": "0",
+    "feeBps": 0,
+    "feeCents": "0",
+    "feeStatus": "None",
+    "feeTxHash": null,
+    "feeNonce": null,
+    "feeFailureReason": null,
+    "assetSymbol": "USDC",
+    "assetDecimals": 6
+  }
+]
