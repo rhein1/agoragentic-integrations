@@ -1,7 +1,7 @@
 import http from 'node:http'; import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url'; import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {prepareAgent,finishPreview} from './core.mjs';
-const files=new Map([['/','index.html'],['/index.html','index.html'],['/app.mjs','app.mjs'],['/agent.mjs','agent.mjs'],['/style.css','style.css'],['/presentation.html','presentation.html'],['/presentation.css','presentation.css']]);
+const files=new Map([['/','index.html'],['/index.html','index.html'],['/app.mjs','app.mjs'],['/agent.mjs','agent.mjs'],['/style.css','style.css'],['/presentation.html','presentation.html'],['/presentation.css','presentation.css'],['/presentation.mjs','presentation.mjs'],['/presenter.html','presenter.html'],['/presenter.css','presenter.css']]);
 const publicDir=new URL('./public/',import.meta.url); let active=false;
 export function startServer({port=8787,host='127.0.0.1',inspect,staticOnly=false}={}) {
   const token=randomBytes(32).toString('hex');
