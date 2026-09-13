@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import {
-  appendFile,
   chmod,
   lstat,
   mkdir,
   mkdtemp,
-  open,
   readFile,
   readdir,
   rm,
@@ -70,47 +68,52 @@ async function removeWritable(root) {
   await rm(root, { recursive: true, force: true });
 }
 
-test('shared descriptor reader rejects deterministic growth after fstat', async (t) => {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-growth-'));
-  t.after(() => rm(temporary, { recursive: true, force: true }));
-  const file = path.join(temporary, 'growing.txt');
-  await writeFile(file, 'reviewed bytes');
-  const handle = await open(file, 'r');
-  try {
-    const opened = await handle.stat({ bigint: true });
-    await appendFile(file, 'later bytes');
-    await assert.rejects(
-      readOpenedFileExact(handle, {
-        expectedSize: opened.size,
-        maxBytes: 1024,
-        changedMessage: 'deterministic growth rejected',
-      }),
-      /deterministic growth rejected/,
-    );
-  } finally {
-    await handle.close();
-  }
+function simulatedGrowingDescriptor(content) {
+  const reviewed = Buffer.from(content, 'utf8');
+  let interrupted = false;
+  return {
+    expectedSize: BigInt(reviewed.byteLength),
+    handle: {
+      async read(buffer, offset, length, position) {
+        if (!interrupted) {
+          interrupted = true;
+          const error = new Error('interrupted');
+          error.code = 'EINTR';
+          throw error;
+        }
+        if (position === reviewed.byteLength) {
+          buffer[offset] = 0x21;
+          return { bytesRead: 1, buffer };
+        }
+        const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+        reviewed.copy(buffer, offset, position, position + bytesRead);
+        return { bytesRead, buffer };
+      },
+    },
+  };
+}
+
+test('shared descriptor reader rejects simulated growth after partial and interrupted reads', async () => {
+  const simulated = simulatedGrowingDescriptor('reviewed bytes');
+  await assert.rejects(
+    readOpenedFileExact(simulated.handle, {
+      expectedSize: simulated.expectedSize,
+      maxBytes: 1024,
+      changedMessage: 'deterministic growth rejected',
+    }),
+    /deterministic growth rejected/,
+  );
 });
 
-test('shared streaming descriptor hash rejects deterministic growth after fstat', async (t) => {
-  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hash-growth-'));
-  t.after(() => rm(temporary, { recursive: true, force: true }));
-  const file = path.join(temporary, 'growing.txt');
-  await writeFile(file, 'reviewed hash bytes');
-  const handle = await open(file, 'r');
-  try {
-    const opened = await handle.stat({ bigint: true });
-    await appendFile(file, 'later bytes');
-    await assert.rejects(
-      hashOpenedFileExact(handle, {
-        expectedSize: opened.size,
-        changedMessage: 'deterministic hash growth rejected',
-      }),
-      /deterministic hash growth rejected/,
-    );
-  } finally {
-    await handle.close();
-  }
+test('shared streaming descriptor hash rejects simulated growth after partial reads', async () => {
+  const simulated = simulatedGrowingDescriptor('reviewed hash bytes');
+  await assert.rejects(
+    hashOpenedFileExact(simulated.handle, {
+      expectedSize: simulated.expectedSize,
+      changedMessage: 'deterministic hash growth rejected',
+    }),
+    /deterministic hash growth rejected/,
+  );
 });
 
 test('workspace-export cleanup rejects manifest and payload FIFOs within a bounded subprocess', {

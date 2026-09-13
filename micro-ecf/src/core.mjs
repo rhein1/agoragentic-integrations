@@ -61,11 +61,11 @@ function exactDescriptorSize(value) {
   return Number(size);
 }
 
-function readDescriptorAtSync(fd, buffer, offset, length, position) {
+function readDescriptorAtSync(fd, buffer, offset, length, position, readSync = fs.readSync) {
   let interruptions = 0;
   while (true) {
     try {
-      return fs.readSync(fd, buffer, offset, length, position);
+      return readSync(fd, buffer, offset, length, position);
     } catch (error) {
       if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_DESCRIPTOR_READS) throw error;
       interruptions += 1;
@@ -73,25 +73,31 @@ function readDescriptorAtSync(fd, buffer, offset, length, position) {
   }
 }
 
-function consumeOpenedFileExactSync(fd, expectedSize, onChunk, changedMessage) {
+function consumeOpenedFileExactSync(
+  fd,
+  expectedSize,
+  onChunk,
+  changedMessage,
+  readSync = fs.readSync,
+) {
   const size = exactDescriptorSize(expectedSize);
   const scratch = Buffer.allocUnsafe(Math.max(1, Math.min(DESCRIPTOR_HASH_CHUNK_BYTES, size)));
   let position = 0;
   while (position < size) {
     const requested = Math.min(scratch.byteLength, size - position);
-    const bytesRead = readDescriptorAtSync(fd, scratch, 0, requested, position);
+    const bytesRead = readDescriptorAtSync(fd, scratch, 0, requested, position, readSync);
     if (!Number.isSafeInteger(bytesRead) || bytesRead <= 0 || bytesRead > requested) {
       throw new Error(changedMessage);
     }
     onChunk(scratch.subarray(0, bytesRead), position);
     position += bytesRead;
   }
-  const probe = readDescriptorAtSync(fd, scratch, 0, 1, size);
+  const probe = readDescriptorAtSync(fd, scratch, 0, 1, size, readSync);
   if (probe !== 0) throw new Error(changedMessage);
   return size;
 }
 
-export function readOpenedFileExactSync(fd, expectedSize, maxBytes) {
+export function readOpenedFileExactSync(fd, expectedSize, maxBytes, readSync = fs.readSync) {
   const size = exactDescriptorSize(expectedSize);
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0 || size > maxBytes) {
     throw new RangeError('Opened file exceeds its bounded byte allowance');
@@ -102,6 +108,7 @@ export function readOpenedFileExactSync(fd, expectedSize, maxBytes) {
     size,
     (chunk, position) => chunk.copy(bytes, position),
     'Opened file changed while it was read',
+    readSync,
   );
   return bytes;
 }

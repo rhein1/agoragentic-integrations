@@ -163,6 +163,10 @@ export async function readJsonBounded(target, maxBytes, field) {
   const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
+    // Production callers supply fixed controller-owned transport paths; this
+    // call is read-only, excludes O_CREAT/O_TRUNC, rejects symlinks, and then
+    // validates the opened inode before consuming bounded bytes.
+    // codeql[js/insecure-temporary-file]
     handle = await open(target, constants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === 'ELOOP') throw new Error(`${field} must be a regular single-link file`);

@@ -30,23 +30,31 @@ function write(filePath, text) {
   fs.writeFileSync(filePath, text);
 }
 
-test('descriptor reads reject post-fstat growth and large SQLite provenance is streamed', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-descriptor-'));
-  const growing = path.join(tmp, 'growing.md');
-  let fd;
-  try {
-    write(growing, '# reviewed\n');
-    fd = fs.openSync(growing, 'r');
-    const opened = fs.fstatSync(fd, { bigint: true });
-    fs.appendFileSync(growing, 'later bytes\n');
-    assert.throws(
-      () => readOpenedFileExactSync(fd, opened.size, 1024),
-      /changed while it was read/,
-    );
-    fs.closeSync(fd);
-    fd = undefined;
+test('descriptor reads reject simulated growth and large SQLite provenance is streamed', () => {
+  const reviewed = Buffer.from('# reviewed\n', 'utf8');
+  let interrupted = false;
+  const readSync = (_fd, buffer, offset, length, position) => {
+    if (!interrupted) {
+      interrupted = true;
+      const error = new Error('interrupted');
+      error.code = 'EINTR';
+      throw error;
+    }
+    if (position === reviewed.byteLength) {
+      buffer[offset] = 0x21;
+      return 1;
+    }
+    const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+    reviewed.copy(buffer, offset, position, position + bytesRead);
+    return bytesRead;
+  };
+  assert.throws(
+    () => readOpenedFileExactSync(-1, reviewed.byteLength, 1024, readSync),
+    /changed while it was read/,
+  );
 
-    fs.rmSync(growing);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-descriptor-'));
+  try {
     const sqlite = path.join(tmp, 'provenance.sqlite');
     const sqliteBytes = Buffer.alloc(256 * 1024, 0x61);
     fs.writeFileSync(sqlite, sqliteBytes);
@@ -59,7 +67,6 @@ test('descriptor reads reject post-fstat growth and large SQLite provenance is s
     );
     assert.match(source.summary, /records file provenance only/);
   } finally {
-    if (fd !== undefined) fs.closeSync(fd);
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });

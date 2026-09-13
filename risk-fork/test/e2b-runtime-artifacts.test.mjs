@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
 import {
-  appendFile,
   chmod,
   link,
   lstat,
   mkdir,
   mkdtemp,
-  open,
   readFile,
   realpath,
   rename,
@@ -578,29 +576,51 @@ function bootstrapRequest(value, phase, workspaceDigest) {
   return request;
 }
 
-test('shipped E2B descriptor readers reject growth and enforce limits before reading', async (t) => {
-  const root = await canonicalFixtureRoot('risk-fork-e2b-bounded-read-');
-  t.after(() => rm(root, { recursive: true, force: true }));
+test('shipped E2B descriptor readers reject simulated growth and enforce pre-read limits', async () => {
+  const growingDescriptor = (content) => {
+    const reviewed = Buffer.from(content, 'utf8');
+    let interrupted = false;
+    return {
+      expectedSize: BigInt(reviewed.byteLength),
+      handle: {
+        async read(buffer, offset, length, position) {
+          if (!interrupted) {
+            interrupted = true;
+            const error = new Error('interrupted');
+            error.code = 'EINTR';
+            throw error;
+          }
+          if (position === reviewed.byteLength) {
+            buffer[offset] = 0x21;
+            return { bytesRead: 1, buffer };
+          }
+          const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+          reviewed.copy(buffer, offset, position, position + bytesRead);
+          return { bytesRead, buffer };
+        },
+      },
+    };
+  };
 
   const cases = [
     {
       name: 'runner action',
       content: 'reviewed action bytes',
-      read: (handle, opened) => readOpenedRunnerActionExact(handle, opened),
+      read: (handle, expectedSize) => readOpenedRunnerActionExact(handle, { size: expectedSize }),
       expected: /runner read target changed during the operation/,
     },
     {
       name: 'runner job',
       content: '{"schema":"reviewed-job"}',
-      read: (handle, opened) => readOpenedRunnerJobExact(handle, opened.size),
+      read: (handle, expectedSize) => readOpenedRunnerJobExact(handle, expectedSize),
       expected: /runner job changed while it was read/,
     },
     {
       name: 'bootstrap request',
       content: '{"schema":"reviewed-bootstrap"}',
-      read: (handle, opened) => readOpenedJsonBounded(
+      read: (handle, expectedSize) => readOpenedJsonBounded(
         handle,
-        opened.size,
+        expectedSize,
         MAX_BOOTSTRAP_REQUEST_BYTES,
         'bootstrap request',
       ),
@@ -609,16 +629,12 @@ test('shipped E2B descriptor readers reject growth and enforce limits before rea
   ];
 
   for (const value of cases) {
-    const target = path.join(root, `${value.name.replaceAll(' ', '-')}.json`);
-    await writeFile(target, value.content);
-    const handle = await open(target, 'r');
-    try {
-      const opened = await handle.stat({ bigint: true });
-      await appendFile(target, '\nbytes added after fstat');
-      await assert.rejects(value.read(handle, opened), value.expected);
-    } finally {
-      await handle.close();
-    }
+    const simulated = growingDescriptor(value.content);
+    await assert.rejects(
+      value.read(simulated.handle, simulated.expectedSize),
+      value.expected,
+      value.name,
+    );
   }
 
   let readCalls = 0;

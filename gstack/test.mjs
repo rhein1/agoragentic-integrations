@@ -189,22 +189,30 @@ test('a FIFO artifact fails closed within a bounded subprocess', {
   assert(result.finding_codes.includes('artifact_not_regular_file'));
 });
 
-test('artifact descriptor reader rejects deterministic growth after fstat', async t => {
-  const temp = await tempRoot();
-  t.after(() => fs.rm(temp, { recursive: true, force: true }));
-  const artifact = path.join(temp, 'growing.md');
-  await fs.writeFile(artifact, '# reviewed\n', 'utf8');
-  const handle = await fs.open(artifact, 'r');
-  try {
-    const opened = await handle.stat({ bigint: true });
-    await fs.appendFile(artifact, 'later bytes\n', 'utf8');
-    await assert.rejects(
-      readOpenedArtifactExact(handle, opened.size, 'review'),
-      error => error instanceof GstackHarnessError && error.code === 'artifact_changed',
-    );
-  } finally {
-    await handle.close();
-  }
+test('artifact descriptor reader rejects simulated growth after partial and interrupted reads', async () => {
+  const reviewed = Buffer.from('# reviewed\n', 'utf8');
+  let interrupted = false;
+  const handle = {
+    async read(buffer, offset, length, position) {
+      if (!interrupted) {
+        interrupted = true;
+        const error = new Error('interrupted');
+        error.code = 'EINTR';
+        throw error;
+      }
+      if (position === reviewed.byteLength) {
+        buffer[offset] = 0x21;
+        return { bytesRead: 1, buffer };
+      }
+      const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+      reviewed.copy(buffer, offset, position, position + bytesRead);
+      return { bytesRead, buffer };
+    },
+  };
+  await assert.rejects(
+    readOpenedArtifactExact(handle, BigInt(reviewed.byteLength), 'review'),
+    error => error instanceof GstackHarnessError && error.code === 'artifact_changed',
+  );
 });
 
 test('a project-local junction cannot relabel an outside artifact as project evidence', async t => {

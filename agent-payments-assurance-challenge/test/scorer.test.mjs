@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
@@ -232,23 +232,30 @@ test('bounded JSON reader rejects duplicate keys, excessive nesting, and oversiz
   }
 });
 
-test('bounded JSON descriptor reader rejects deterministic growth after fstat', async () => {
-  const temporary = await mkdtemp(resolve(tmpdir(), 'assurance-challenge-growth-'));
-  const file = resolve(temporary, 'growing.json');
-  let handle;
-  try {
-    await writeFile(file, '{"ok":true}', 'utf8');
-    handle = await open(file, 'r');
-    const opened = await handle.stat();
-    await appendFile(file, '\n', 'utf8');
-    await assert.rejects(
-      readOpenedJsonFileExact(handle, opened.size, MAX_JSON_BYTES),
-      /file_changed/,
-    );
-  } finally {
-    await handle?.close();
-    await rm(temporary, { recursive: true, force: true });
-  }
+test('bounded JSON descriptor reader rejects simulated growth after partial and interrupted reads', async () => {
+  const reviewed = Buffer.from('{"ok":true}', 'utf8');
+  let interrupted = false;
+  const handle = {
+    async read(buffer, offset, length, position) {
+      if (!interrupted) {
+        interrupted = true;
+        const error = new Error('interrupted');
+        error.code = 'EINTR';
+        throw error;
+      }
+      if (position === reviewed.byteLength) {
+        buffer[offset] = 0x0a;
+        return { bytesRead: 1, buffer };
+      }
+      const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+      reviewed.copy(buffer, offset, position, position + bytesRead);
+      return { bytesRead, buffer };
+    },
+  };
+  await assert.rejects(
+    readOpenedJsonFileExact(handle, reviewed.byteLength, MAX_JSON_BYTES),
+    /file_changed/,
+  );
 });
 
 test('bounded JSON reader rejects a FIFO without waiting for a writer', {

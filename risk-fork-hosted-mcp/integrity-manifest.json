@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 66,
-    "sha256": "sha256:d3ac9b2753e3dd599d7f58ccb05fdf2bed26a6efb97fc47248966b6c6cd28a01"
+    "sha256": "sha256:54b526bb609fdc32230f0015ab4e70b12388f951111facf1a2dc0a71fcdddc58"
   },
   "reviewed_sources": [
     {
@@ -44,8 +44,8 @@
     },
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
-      "bytes": 11482,
-      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
+      "bytes": 11747,
+      "sha256": "sha256:8b5d623707f704c891399f89bb212a483669c681072771fb7f6dac3d1bfad701"
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
@@ -2175,8 +2175,8 @@
     {
       "path": "risk-fork/e2b-template/bin/bootstrap.mjs",
       "source": "reviewed_source",
-      "bytes": 11482,
-      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
+      "bytes": 11747,
+      "sha256": "sha256:8b5d623707f704c891399f89bb212a483669c681072771fb7f6dac3d1bfad701"
     },
     {
       "path": "risk-fork/e2b-template/bin/run.mjs",
@@ -2629,7 +2629,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 3111081,
-    "sha256": "sha256:3a3193f45be9f46180c855fae55e39b6b35ac188cc64bf47c36b436d2889e794"
+    "sha256": "sha256:6d4b722e9304095e03cbfb408068e8d8ee1e6afcfddd2abb9bd57f048939ba03"
   },
   "packaged_assets": [
     {
@@ -2664,8 +2664,8 @@
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/bootstrap.mjs",
       "source_path": "risk-fork/e2b-template/bin/bootstrap.mjs",
-      "bytes": 11482,
-      "sha256": "sha256:a925373f109005979b74bfad1a81acd6665673fb5dcf695934ffdbbfed89711e"
+      "bytes": 11747,
+      "sha256": "sha256:8b5d623707f704c891399f89bb212a483669c681072771fb7f6dac3d1bfad701"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/run.mjs",
