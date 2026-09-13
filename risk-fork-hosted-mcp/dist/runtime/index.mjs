@@ -69563,21 +69563,14 @@ var SECRET_CONTENT_PATTERNS = Object.freeze([
 ]);
 var SECRET_ASSIGNMENT_KEY = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
 var SECRET_ASSIGNMENT_KEY_PATTERN = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY})$`, "i");
-var SECRET_ASSIGNMENT_DELIMITER_SOURCES = String.raw`=:\u02D0\u02F8\u0589\u05C3\u0703\u0704\u1400\u16EC\u1803\u1809\u205A\u207C\u208C\u2236\u2260\u2E40\u30A0\uA4FD\uA4FF\uA789\uFE13\uFE30\uFE55\uFE66\uFF1A\uFF1D\u{10781}\u{11DD9}`;
-var SECRET_ASSIGNMENT_DELIMITER_PATTERN = /^[=:]$/u;
-var SECRET_ASSIGNMENT_EXACT_KEY_PATTERN = new RegExp(
-  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY})"|'(${SECRET_ASSIGNMENT_KEY})'|(${SECRET_ASSIGNMENT_KEY}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
+var SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY})"|'(${SECRET_ASSIGNMENT_KEY})'|(${SECRET_ASSIGNMENT_KEY}))\s*[=:]`,
   "giu"
 );
-var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN = new RegExp(
-  String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES}])`,
-  "gu"
-);
-var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN = new RegExp(
-  `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES}]`,
-  "u"
-);
 var NON_ASCII_PATTERN = /[^\x00-\x7f]/u;
+var MAX_SECRET_ASSIGNMENT_KEY_UTF16 = 120;
+var MAX_SECURITY_SYNTAX_PROFILE_CACHE_ENTRIES = 4096;
+var SECURITY_SYNTAX_PROFILE_CACHE = /* @__PURE__ */ new Map();
 var MIN_SECRET_ASSIGNMENT_BYTES = 8;
 var BASE64_CANDIDATE_PATTERN = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
@@ -69592,50 +69585,144 @@ function exactPatternMatches(pattern, value) {
   pattern.lastIndex = 0;
   return matched;
 }
+function sourceCharacterAt(text, index) {
+  if (index >= text.length) return null;
+  const character = String.fromCodePoint(text.codePointAt(index));
+  return { character, nextIndex: index + character.length };
+}
 function isSecretAssignmentWhitespace(character) {
   const codePoint = character.charCodeAt(0);
   return codePoint >= 9 && codePoint <= 13 || codePoint === 32 || codePoint === 160 || codePoint === 5760 || codePoint >= 8192 && codePoint <= 8202 || codePoint === 8232 || codePoint === 8233 || codePoint === 8239 || codePoint === 8287 || codePoint === 12288 || codePoint === 65279;
 }
-function isUnquotedSecretAssignmentTerminator(character) {
-  return isSecretAssignmentWhitespace(character) || character === "&" || character === '"' || character === "'" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+function inspectSecretAssignmentSyntaxVariants(variants) {
+  const quoteForms = [];
+  let normalizedWhitespace = false;
+  let foldedAway = false;
+  let hasSingleDelimiter = false;
+  let hasMultiDelimiterFold = false;
+  let identifierTail = false;
+  let potentialKeyStart = false;
+  for (let index = 0; index < variants.length; index += 1) {
+    const variant = variants[index];
+    if (variant.length === 0) {
+      foldedAway = true;
+      continue;
+    }
+    let onlyWhitespace = true;
+    let onlyQuotes = true;
+    let onlyDelimiters = true;
+    for (const character of variant) {
+      if (!isSecretAssignmentWhitespace(character)) onlyWhitespace = false;
+      if (character !== "'" && character !== '"') onlyQuotes = false;
+      if (character !== "=" && character !== ":") onlyDelimiters = false;
+    }
+    if (onlyWhitespace) normalizedWhitespace = true;
+    if (onlyQuotes && !quoteForms.includes(variant)) quoteForms.push(variant);
+    if (onlyDelimiters) {
+      if (variant.length === 1) hasSingleDelimiter = true;
+      else hasMultiDelimiterFold = true;
+    }
+    const first = variant[0].toLowerCase();
+    if ("acdmnprsw".includes(first)) potentialKeyStart = true;
+    const tail = variant[variant.length - 1];
+    if (tail >= "A" && tail <= "Z" || tail >= "a" && tail <= "z" || tail >= "0" && tail <= "9" || tail === "_") {
+      identifierTail = true;
+    }
+  }
+  return Object.freeze({
+    delimiterKind: hasMultiDelimiterFold ? "fail_closed_multi" : hasSingleDelimiter ? "single" : null,
+    foldedAway,
+    identifierTail,
+    normalizedWhitespace,
+    potentialKeyStart,
+    quoteForms: Object.freeze(quoteForms)
+  });
 }
-function readSecretAssignmentValue(text, startIndex, valueEncoding) {
+function secretAssignmentSyntaxProfile(character, normalizeUnicode) {
+  if (!normalizeUnicode) return inspectSecretAssignmentSyntaxVariants([character]);
+  let profile = SECURITY_SYNTAX_PROFILE_CACHE.get(character);
+  if (profile) return profile;
+  profile = inspectSecretAssignmentSyntaxVariants(securityTextVariants(character));
+  if (SECURITY_SYNTAX_PROFILE_CACHE.size < MAX_SECURITY_SYNTAX_PROFILE_CACHE_ENTRIES) {
+    SECURITY_SYNTAX_PROFILE_CACHE.set(character, profile);
+  }
+  return profile;
+}
+function isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile(character, normalizeUnicode).normalizedWhitespace;
+}
+function isFoldedAway(character, normalizeUnicode) {
+  return normalizeUnicode && secretAssignmentSyntaxProfile(character, true).foldedAway;
+}
+function secretAssignmentQuoteForms(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile(character, normalizeUnicode).quoteForms;
+}
+function classifySecretAssignmentDelimiter(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile(character, normalizeUnicode).delimiterKind;
+}
+function isInterTokenWhitespace(character, normalizeUnicode) {
+  if (secretAssignmentQuoteForms(character, normalizeUnicode).length > 0 || classifySecretAssignmentDelimiter(character, normalizeUnicode)) {
+    return false;
+  }
+  return isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) || isFoldedAway(character, normalizeUnicode);
+}
+function isUnquotedSecretAssignmentTerminator(character, normalizeUnicode) {
+  return isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) || secretAssignmentQuoteForms(character, normalizeUnicode).length > 0 || character === "&" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+}
+function readQuotedSecretAssignmentValue(text, valueStart, valueEncoding, normalizeUnicode, quoteForm) {
+  let index = valueStart;
+  while (index < text.length) {
+    const token = sourceCharacterAt(text, index);
+    if (secretAssignmentQuoteForms(token.character, normalizeUnicode).includes(quoteForm)) {
+      return { matched: true, hasMinimumBytes: false, nextIndex: token.nextIndex };
+    }
+    if (text[index] === "\\") {
+      const escaped = sourceCharacterAt(text, token.nextIndex);
+      if (!escaped) {
+        return { matched: false, hasMinimumBytes: false, nextIndex: token.nextIndex };
+      }
+      index = escaped.nextIndex;
+    } else {
+      index = token.nextIndex;
+    }
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+  }
+  return { matched: false, hasMinimumBytes: false, nextIndex: index };
+}
+function readSecretAssignmentValue(text, startIndex, valueEncoding, normalizeUnicode) {
   let index = startIndex;
-  while (index < text.length && isSecretAssignmentWhitespace(text[index])) index += 1;
+  for (let token = sourceCharacterAt(text, index); token && isInterTokenWhitespace(token.character, normalizeUnicode); token = sourceCharacterAt(text, index)) {
+    index = token.nextIndex;
+  }
   if (index >= text.length) {
     return { matched: false, hasMinimumBytes: false, nextIndex: index };
   }
-  const quote = text[index] === '"' || text[index] === "'" ? text[index] : null;
-  if (quote) {
-    const valueStart2 = index + 1;
-    let hasMinimumBytes = false;
-    index = valueStart2;
-    while (index < text.length) {
-      if (text[index] === quote) {
-        return { matched: true, hasMinimumBytes, nextIndex: index + 1 };
-      }
-      if (text[index] === "\\") {
-        index += 1;
-        if (index >= text.length) {
-          return { matched: false, hasMinimumBytes: false, nextIndex: index };
-        }
-      }
-      index += 1;
-      if (!hasMinimumBytes) {
-        hasMinimumBytes = Buffer.byteLength(
-          text.slice(valueStart2, index),
-          valueEncoding
-        ) >= MIN_SECRET_ASSIGNMENT_BYTES;
-      }
-      if (hasMinimumBytes) {
-        return { matched: true, hasMinimumBytes: true, nextIndex: index };
-      }
+  const openingToken = sourceCharacterAt(text, index);
+  const openingQuoteForms = secretAssignmentQuoteForms(
+    openingToken.character,
+    normalizeUnicode
+  );
+  if (openingQuoteForms.length > 0) {
+    const valueStart2 = openingToken.nextIndex;
+    let matchedShortValue = null;
+    for (const quoteForm of openingQuoteForms) {
+      const result = readQuotedSecretAssignmentValue(
+        text,
+        valueStart2,
+        valueEncoding,
+        normalizeUnicode,
+        quoteForm
+      );
+      if (result.hasMinimumBytes) return result;
+      if (result.matched) matchedShortValue = result;
     }
-    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+    return matchedShortValue ?? { matched: false, hasMinimumBytes: false, nextIndex: text.length };
   }
   const valueStart = index;
-  while (index < text.length && !isUnquotedSecretAssignmentTerminator(text[index])) {
-    index += 1;
+  for (let token = sourceCharacterAt(text, index); token && !isUnquotedSecretAssignmentTerminator(token.character, normalizeUnicode); token = sourceCharacterAt(text, index)) {
+    index = token.nextIndex;
     if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES) {
       return { matched: true, hasMinimumBytes: true, nextIndex: index };
     }
@@ -69646,25 +69733,129 @@ function readSecretAssignmentValue(text, startIndex, valueEncoding) {
     nextIndex: index
   };
 }
+function secretAssignmentKeyMatches(key, normalizeUnicode) {
+  return normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
+}
+function finishSecretAssignmentSyntax(text, key, index, normalizeUnicode) {
+  if (!secretAssignmentKeyMatches(key, normalizeUnicode)) return null;
+  let token = sourceCharacterAt(text, index);
+  while (token && isInterTokenWhitespace(token.character, normalizeUnicode)) {
+    index = token.nextIndex;
+    token = sourceCharacterAt(text, index);
+  }
+  if (!token) return null;
+  const delimiterKind = classifySecretAssignmentDelimiter(
+    token.character,
+    normalizeUnicode
+  );
+  if (!delimiterKind) return null;
+  return { delimiterKind, valueStart: token.nextIndex };
+}
+function readQuotedSecretAssignmentSyntax(text, keyStart, openingQuoteForm, normalizeUnicode) {
+  let index = keyStart;
+  while (index < text.length) {
+    const token = sourceCharacterAt(text, index);
+    const closingQuoteForms = secretAssignmentQuoteForms(
+      token.character,
+      normalizeUnicode
+    );
+    if (closingQuoteForms.includes(openingQuoteForm)) {
+      if (index === keyStart) return null;
+      return finishSecretAssignmentSyntax(
+        text,
+        text.slice(keyStart, index),
+        token.nextIndex,
+        normalizeUnicode
+      );
+    }
+    if (token.nextIndex - keyStart > MAX_SECRET_ASSIGNMENT_KEY_UTF16 || isNormalizedSecretAssignmentWhitespace(token.character, normalizeUnicode)) {
+      return null;
+    }
+    index = token.nextIndex;
+  }
+  return null;
+}
+function readSecretAssignmentSyntax(text, startIndex, normalizeUnicode) {
+  const openingToken = sourceCharacterAt(text, startIndex);
+  const openingQuoteForms = secretAssignmentQuoteForms(
+    openingToken.character,
+    normalizeUnicode
+  );
+  if (openingQuoteForms.length > 0) {
+    const keyStart = openingToken.nextIndex;
+    for (const openingQuoteForm of openingQuoteForms) {
+      const syntax = readQuotedSecretAssignmentSyntax(
+        text,
+        keyStart,
+        openingQuoteForm,
+        normalizeUnicode
+      );
+      if (syntax) return syntax;
+    }
+    return null;
+  }
+  let index = startIndex;
+  while (index < text.length) {
+    const token = sourceCharacterAt(text, index);
+    if (classifySecretAssignmentDelimiter(token.character, normalizeUnicode) || isNormalizedSecretAssignmentWhitespace(token.character, normalizeUnicode) || secretAssignmentQuoteForms(token.character, normalizeUnicode).length > 0 || token.character === "&" || token.character === "," || token.character === ";" || token.character === "{" || token.character === "}" || token.character === "[" || token.character === "]") {
+      break;
+    }
+    if (token.nextIndex - startIndex > MAX_SECRET_ASSIGNMENT_KEY_UTF16) return null;
+    index = token.nextIndex;
+  }
+  if (index === startIndex) return null;
+  return finishSecretAssignmentSyntax(
+    text,
+    text.slice(startIndex, index),
+    index,
+    normalizeUnicode
+  );
+}
+function endsWithNormalizedIdentifierCharacter(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile(character, normalizeUnicode).identifierTail;
+}
+function isPotentialSecretAssignmentStart(character, normalizeUnicode) {
+  const profile = secretAssignmentSyntaxProfile(character, normalizeUnicode);
+  return profile.quoteForms.length > 0 || profile.potentialKeyStart;
+}
+function containsExactSecretAssignment(text, valueEncoding) {
+  SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.lastIndex = 0;
+  for (let match = SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.exec(text); match; match = SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.exec(text)) {
+    const value = readSecretAssignmentValue(
+      text,
+      SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.lastIndex,
+      valueEncoding,
+      false
+    );
+    if (value.matched && value.hasMinimumBytes) {
+      SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.lastIndex = 0;
+      return true;
+    }
+  }
+  SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN.lastIndex = 0;
+  return false;
+}
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
-  const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN.test(text);
-  const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN];
-  for (const assignmentPattern of assignmentPatterns) {
-    assignmentPattern.lastIndex = 0;
-    for (let match = assignmentPattern.exec(text); match; match = assignmentPattern.exec(text)) {
-      const key = match[1] ?? match[2] ?? match[3] ?? "";
-      const delimiter = match[4] ?? "";
-      const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key) : exactPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN, key);
-      const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter) : exactPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN, delimiter);
-      if (!keyMatches || !delimiterMatches) continue;
-      const value = readSecretAssignmentValue(text, assignmentPattern.lastIndex, valueEncoding);
-      assignmentPattern.lastIndex = value.nextIndex;
-      if (value.matched && value.hasMinimumBytes) {
-        assignmentPattern.lastIndex = 0;
-        return true;
+  if (!normalizeUnicode || !NON_ASCII_PATTERN.test(text)) {
+    return containsExactSecretAssignment(text, valueEncoding);
+  }
+  let previousCharacter = null;
+  for (let index = 0; index < text.length; ) {
+    const token = sourceCharacterAt(text, index);
+    if (isPotentialSecretAssignmentStart(token.character, normalizeUnicode) && (previousCharacter === null || !endsWithNormalizedIdentifierCharacter(previousCharacter, normalizeUnicode))) {
+      const syntax = readSecretAssignmentSyntax(text, index, normalizeUnicode);
+      if (syntax) {
+        const value = readSecretAssignmentValue(
+          text,
+          syntax.valueStart,
+          valueEncoding,
+          normalizeUnicode
+        );
+        if (value.matched && value.hasMinimumBytes) return true;
       }
     }
-    assignmentPattern.lastIndex = 0;
+    previousCharacter = token.character;
+    index = token.nextIndex;
   }
   return false;
 }
@@ -73203,21 +73394,14 @@ var SECRET_CONTENT_PATTERNS2 = Object.freeze([
 ]);
 var SECRET_ASSIGNMENT_KEY2 = String.raw`(?:api[_-]?key|access[_-]?token|refresh[_-]?token|npm[_-]?token|slack[_-]?token|database[_-]?url|authorization|credential|password|passphrase|private[_-]?key|client[_-]?secret|seed[_-]?phrase|mnemonic|wallet[_-]?(?:key|secret))`;
 var SECRET_ASSIGNMENT_KEY_PATTERN2 = new RegExp(`^(?:${SECRET_ASSIGNMENT_KEY2})$`, "i");
-var SECRET_ASSIGNMENT_DELIMITER_SOURCES2 = String.raw`=:\u02D0\u02F8\u0589\u05C3\u0703\u0704\u1400\u16EC\u1803\u1809\u205A\u207C\u208C\u2236\u2260\u2E40\u30A0\uA4FD\uA4FF\uA789\uFE13\uFE30\uFE55\uFE66\uFF1A\uFF1D\u{10781}\u{11DD9}`;
-var SECRET_ASSIGNMENT_DELIMITER_PATTERN2 = /^[=:]$/u;
-var SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2 = new RegExp(
-  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY2})"|'(${SECRET_ASSIGNMENT_KEY2})'|(${SECRET_ASSIGNMENT_KEY2}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}])`,
+var SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2 = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])(?:"(${SECRET_ASSIGNMENT_KEY2})"|'(${SECRET_ASSIGNMENT_KEY2})'|(${SECRET_ASSIGNMENT_KEY2}))\s*[=:]`,
   "giu"
 );
-var SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2 = new RegExp(
-  String.raw`(?<![A-Za-z0-9_])(?:"((?=[^"\r\n]{0,119}[^\x00-\x7f"\r\n])[^"\r\n]{1,120})"|'((?=[^'\r\n]{0,119}[^\x00-\x7f'\r\n])[^'\r\n]{1,120})'|((?=[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{0,119}[^\x00-\x7f\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"'])[^\s${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}\n,;{}\[\]"']{1,120}))\s*([${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}])`,
-  "gu"
-);
-var SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2 = new RegExp(
-  `[${SECRET_ASSIGNMENT_DELIMITER_SOURCES2}]`,
-  "u"
-);
 var NON_ASCII_PATTERN2 = /[^\x00-\x7f]/u;
+var MAX_SECRET_ASSIGNMENT_KEY_UTF162 = 120;
+var MAX_SECURITY_SYNTAX_PROFILE_CACHE_ENTRIES2 = 4096;
+var SECURITY_SYNTAX_PROFILE_CACHE2 = /* @__PURE__ */ new Map();
 var MIN_SECRET_ASSIGNMENT_BYTES2 = 8;
 var BASE64_CANDIDATE_PATTERN2 = /[A-Za-z0-9+/_-]{16,}={0,2}/g;
 var MIME_BASE64_BLOCK_PATTERN2 = /(?:[A-Za-z0-9+/_-]{4,76}[ \t]*\r?\n){1,}[A-Za-z0-9+/_-]{2,76}={0,2}/g;
@@ -73227,50 +73411,144 @@ function exactPatternMatches2(pattern, value) {
   pattern.lastIndex = 0;
   return matched;
 }
+function sourceCharacterAt2(text, index) {
+  if (index >= text.length) return null;
+  const character = String.fromCodePoint(text.codePointAt(index));
+  return { character, nextIndex: index + character.length };
+}
 function isSecretAssignmentWhitespace2(character) {
   const codePoint = character.charCodeAt(0);
   return codePoint >= 9 && codePoint <= 13 || codePoint === 32 || codePoint === 160 || codePoint === 5760 || codePoint >= 8192 && codePoint <= 8202 || codePoint === 8232 || codePoint === 8233 || codePoint === 8239 || codePoint === 8287 || codePoint === 12288 || codePoint === 65279;
 }
-function isUnquotedSecretAssignmentTerminator2(character) {
-  return isSecretAssignmentWhitespace2(character) || character === "&" || character === '"' || character === "'" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+function inspectSecretAssignmentSyntaxVariants2(variants) {
+  const quoteForms = [];
+  let normalizedWhitespace = false;
+  let foldedAway = false;
+  let hasSingleDelimiter = false;
+  let hasMultiDelimiterFold = false;
+  let identifierTail = false;
+  let potentialKeyStart = false;
+  for (let index = 0; index < variants.length; index += 1) {
+    const variant = variants[index];
+    if (variant.length === 0) {
+      foldedAway = true;
+      continue;
+    }
+    let onlyWhitespace = true;
+    let onlyQuotes = true;
+    let onlyDelimiters = true;
+    for (const character of variant) {
+      if (!isSecretAssignmentWhitespace2(character)) onlyWhitespace = false;
+      if (character !== "'" && character !== '"') onlyQuotes = false;
+      if (character !== "=" && character !== ":") onlyDelimiters = false;
+    }
+    if (onlyWhitespace) normalizedWhitespace = true;
+    if (onlyQuotes && !quoteForms.includes(variant)) quoteForms.push(variant);
+    if (onlyDelimiters) {
+      if (variant.length === 1) hasSingleDelimiter = true;
+      else hasMultiDelimiterFold = true;
+    }
+    const first = variant[0].toLowerCase();
+    if ("acdmnprsw".includes(first)) potentialKeyStart = true;
+    const tail = variant[variant.length - 1];
+    if (tail >= "A" && tail <= "Z" || tail >= "a" && tail <= "z" || tail >= "0" && tail <= "9" || tail === "_") {
+      identifierTail = true;
+    }
+  }
+  return Object.freeze({
+    delimiterKind: hasMultiDelimiterFold ? "fail_closed_multi" : hasSingleDelimiter ? "single" : null,
+    foldedAway,
+    identifierTail,
+    normalizedWhitespace,
+    potentialKeyStart,
+    quoteForms: Object.freeze(quoteForms)
+  });
 }
-function readSecretAssignmentValue2(text, startIndex, valueEncoding) {
+function secretAssignmentSyntaxProfile2(character, normalizeUnicode) {
+  if (!normalizeUnicode) return inspectSecretAssignmentSyntaxVariants2([character]);
+  let profile = SECURITY_SYNTAX_PROFILE_CACHE2.get(character);
+  if (profile) return profile;
+  profile = inspectSecretAssignmentSyntaxVariants2(securityTextVariants(character));
+  if (SECURITY_SYNTAX_PROFILE_CACHE2.size < MAX_SECURITY_SYNTAX_PROFILE_CACHE_ENTRIES2) {
+    SECURITY_SYNTAX_PROFILE_CACHE2.set(character, profile);
+  }
+  return profile;
+}
+function isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile2(character, normalizeUnicode).normalizedWhitespace;
+}
+function isFoldedAway2(character, normalizeUnicode) {
+  return normalizeUnicode && secretAssignmentSyntaxProfile2(character, true).foldedAway;
+}
+function secretAssignmentQuoteForms2(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile2(character, normalizeUnicode).quoteForms;
+}
+function classifySecretAssignmentDelimiter2(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile2(character, normalizeUnicode).delimiterKind;
+}
+function isInterTokenWhitespace2(character, normalizeUnicode) {
+  if (secretAssignmentQuoteForms2(character, normalizeUnicode).length > 0 || classifySecretAssignmentDelimiter2(character, normalizeUnicode)) {
+    return false;
+  }
+  return isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) || isFoldedAway2(character, normalizeUnicode);
+}
+function isUnquotedSecretAssignmentTerminator2(character, normalizeUnicode) {
+  return isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) || secretAssignmentQuoteForms2(character, normalizeUnicode).length > 0 || character === "&" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
+}
+function readQuotedSecretAssignmentValue2(text, valueStart, valueEncoding, normalizeUnicode, quoteForm) {
+  let index = valueStart;
+  while (index < text.length) {
+    const token = sourceCharacterAt2(text, index);
+    if (secretAssignmentQuoteForms2(token.character, normalizeUnicode).includes(quoteForm)) {
+      return { matched: true, hasMinimumBytes: false, nextIndex: token.nextIndex };
+    }
+    if (text[index] === "\\") {
+      const escaped = sourceCharacterAt2(text, token.nextIndex);
+      if (!escaped) {
+        return { matched: false, hasMinimumBytes: false, nextIndex: token.nextIndex };
+      }
+      index = escaped.nextIndex;
+    } else {
+      index = token.nextIndex;
+    }
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+  }
+  return { matched: false, hasMinimumBytes: false, nextIndex: index };
+}
+function readSecretAssignmentValue2(text, startIndex, valueEncoding, normalizeUnicode) {
   let index = startIndex;
-  while (index < text.length && isSecretAssignmentWhitespace2(text[index])) index += 1;
+  for (let token = sourceCharacterAt2(text, index); token && isInterTokenWhitespace2(token.character, normalizeUnicode); token = sourceCharacterAt2(text, index)) {
+    index = token.nextIndex;
+  }
   if (index >= text.length) {
     return { matched: false, hasMinimumBytes: false, nextIndex: index };
   }
-  const quote = text[index] === '"' || text[index] === "'" ? text[index] : null;
-  if (quote) {
-    const valueStart2 = index + 1;
-    let hasMinimumBytes = false;
-    index = valueStart2;
-    while (index < text.length) {
-      if (text[index] === quote) {
-        return { matched: true, hasMinimumBytes, nextIndex: index + 1 };
-      }
-      if (text[index] === "\\") {
-        index += 1;
-        if (index >= text.length) {
-          return { matched: false, hasMinimumBytes: false, nextIndex: index };
-        }
-      }
-      index += 1;
-      if (!hasMinimumBytes) {
-        hasMinimumBytes = Buffer.byteLength(
-          text.slice(valueStart2, index),
-          valueEncoding
-        ) >= MIN_SECRET_ASSIGNMENT_BYTES2;
-      }
-      if (hasMinimumBytes) {
-        return { matched: true, hasMinimumBytes: true, nextIndex: index };
-      }
+  const openingToken = sourceCharacterAt2(text, index);
+  const openingQuoteForms = secretAssignmentQuoteForms2(
+    openingToken.character,
+    normalizeUnicode
+  );
+  if (openingQuoteForms.length > 0) {
+    const valueStart2 = openingToken.nextIndex;
+    let matchedShortValue = null;
+    for (const quoteForm of openingQuoteForms) {
+      const result = readQuotedSecretAssignmentValue2(
+        text,
+        valueStart2,
+        valueEncoding,
+        normalizeUnicode,
+        quoteForm
+      );
+      if (result.hasMinimumBytes) return result;
+      if (result.matched) matchedShortValue = result;
     }
-    return { matched: false, hasMinimumBytes: false, nextIndex: index };
+    return matchedShortValue ?? { matched: false, hasMinimumBytes: false, nextIndex: text.length };
   }
   const valueStart = index;
-  while (index < text.length && !isUnquotedSecretAssignmentTerminator2(text[index])) {
-    index += 1;
+  for (let token = sourceCharacterAt2(text, index); token && !isUnquotedSecretAssignmentTerminator2(token.character, normalizeUnicode); token = sourceCharacterAt2(text, index)) {
+    index = token.nextIndex;
     if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding) >= MIN_SECRET_ASSIGNMENT_BYTES2) {
       return { matched: true, hasMinimumBytes: true, nextIndex: index };
     }
@@ -73281,25 +73559,129 @@ function readSecretAssignmentValue2(text, startIndex, valueEncoding) {
     nextIndex: index
   };
 }
+function secretAssignmentKeyMatches2(key, normalizeUnicode) {
+  return normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
+}
+function finishSecretAssignmentSyntax2(text, key, index, normalizeUnicode) {
+  if (!secretAssignmentKeyMatches2(key, normalizeUnicode)) return null;
+  let token = sourceCharacterAt2(text, index);
+  while (token && isInterTokenWhitespace2(token.character, normalizeUnicode)) {
+    index = token.nextIndex;
+    token = sourceCharacterAt2(text, index);
+  }
+  if (!token) return null;
+  const delimiterKind = classifySecretAssignmentDelimiter2(
+    token.character,
+    normalizeUnicode
+  );
+  if (!delimiterKind) return null;
+  return { delimiterKind, valueStart: token.nextIndex };
+}
+function readQuotedSecretAssignmentSyntax2(text, keyStart, openingQuoteForm, normalizeUnicode) {
+  let index = keyStart;
+  while (index < text.length) {
+    const token = sourceCharacterAt2(text, index);
+    const closingQuoteForms = secretAssignmentQuoteForms2(
+      token.character,
+      normalizeUnicode
+    );
+    if (closingQuoteForms.includes(openingQuoteForm)) {
+      if (index === keyStart) return null;
+      return finishSecretAssignmentSyntax2(
+        text,
+        text.slice(keyStart, index),
+        token.nextIndex,
+        normalizeUnicode
+      );
+    }
+    if (token.nextIndex - keyStart > MAX_SECRET_ASSIGNMENT_KEY_UTF162 || isNormalizedSecretAssignmentWhitespace2(token.character, normalizeUnicode)) {
+      return null;
+    }
+    index = token.nextIndex;
+  }
+  return null;
+}
+function readSecretAssignmentSyntax2(text, startIndex, normalizeUnicode) {
+  const openingToken = sourceCharacterAt2(text, startIndex);
+  const openingQuoteForms = secretAssignmentQuoteForms2(
+    openingToken.character,
+    normalizeUnicode
+  );
+  if (openingQuoteForms.length > 0) {
+    const keyStart = openingToken.nextIndex;
+    for (const openingQuoteForm of openingQuoteForms) {
+      const syntax = readQuotedSecretAssignmentSyntax2(
+        text,
+        keyStart,
+        openingQuoteForm,
+        normalizeUnicode
+      );
+      if (syntax) return syntax;
+    }
+    return null;
+  }
+  let index = startIndex;
+  while (index < text.length) {
+    const token = sourceCharacterAt2(text, index);
+    if (classifySecretAssignmentDelimiter2(token.character, normalizeUnicode) || isNormalizedSecretAssignmentWhitespace2(token.character, normalizeUnicode) || secretAssignmentQuoteForms2(token.character, normalizeUnicode).length > 0 || token.character === "&" || token.character === "," || token.character === ";" || token.character === "{" || token.character === "}" || token.character === "[" || token.character === "]") {
+      break;
+    }
+    if (token.nextIndex - startIndex > MAX_SECRET_ASSIGNMENT_KEY_UTF162) return null;
+    index = token.nextIndex;
+  }
+  if (index === startIndex) return null;
+  return finishSecretAssignmentSyntax2(
+    text,
+    text.slice(startIndex, index),
+    index,
+    normalizeUnicode
+  );
+}
+function endsWithNormalizedIdentifierCharacter2(character, normalizeUnicode) {
+  return secretAssignmentSyntaxProfile2(character, normalizeUnicode).identifierTail;
+}
+function isPotentialSecretAssignmentStart2(character, normalizeUnicode) {
+  const profile = secretAssignmentSyntaxProfile2(character, normalizeUnicode);
+  return profile.quoteForms.length > 0 || profile.potentialKeyStart;
+}
+function containsExactSecretAssignment2(text, valueEncoding) {
+  SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.lastIndex = 0;
+  for (let match = SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.exec(text); match; match = SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.exec(text)) {
+    const value = readSecretAssignmentValue2(
+      text,
+      SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.lastIndex,
+      valueEncoding,
+      false
+    );
+    if (value.matched && value.hasMinimumBytes) {
+      SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.lastIndex = 0;
+      return true;
+    }
+  }
+  SECRET_ASSIGNMENT_EXACT_SYNTAX_PATTERN2.lastIndex = 0;
+  return false;
+}
 function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
-  const inspectConfusableKeys = normalizeUnicode && NON_ASCII_PATTERN2.test(text) && SECRET_ASSIGNMENT_DELIMITER_SOURCE_PATTERN2.test(text);
-  const assignmentPatterns = inspectConfusableKeys ? [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2, SECRET_ASSIGNMENT_CONFUSABLE_KEY_PATTERN2] : [SECRET_ASSIGNMENT_EXACT_KEY_PATTERN2];
-  for (const assignmentPattern of assignmentPatterns) {
-    assignmentPattern.lastIndex = 0;
-    for (let match = assignmentPattern.exec(text); match; match = assignmentPattern.exec(text)) {
-      const key = match[1] ?? match[2] ?? match[3] ?? "";
-      const delimiter = match[4] ?? "";
-      const keyMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_KEY_PATTERN2, key) : exactPatternMatches2(SECRET_ASSIGNMENT_KEY_PATTERN2, key);
-      const delimiterMatches = normalizeUnicode ? securityPatternMatches(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter) : exactPatternMatches2(SECRET_ASSIGNMENT_DELIMITER_PATTERN2, delimiter);
-      if (!keyMatches || !delimiterMatches) continue;
-      const value = readSecretAssignmentValue2(text, assignmentPattern.lastIndex, valueEncoding);
-      assignmentPattern.lastIndex = value.nextIndex;
-      if (value.matched && value.hasMinimumBytes) {
-        assignmentPattern.lastIndex = 0;
-        return true;
+  if (!normalizeUnicode || !NON_ASCII_PATTERN2.test(text)) {
+    return containsExactSecretAssignment2(text, valueEncoding);
+  }
+  let previousCharacter = null;
+  for (let index = 0; index < text.length; ) {
+    const token = sourceCharacterAt2(text, index);
+    if (isPotentialSecretAssignmentStart2(token.character, normalizeUnicode) && (previousCharacter === null || !endsWithNormalizedIdentifierCharacter2(previousCharacter, normalizeUnicode))) {
+      const syntax = readSecretAssignmentSyntax2(text, index, normalizeUnicode);
+      if (syntax) {
+        const value = readSecretAssignmentValue2(
+          text,
+          syntax.valueStart,
+          valueEncoding,
+          normalizeUnicode
+        );
+        if (value.matched && value.hasMinimumBytes) return true;
       }
     }
-    assignmentPattern.lastIndex = 0;
+    previousCharacter = token.character;
+    index = token.nextIndex;
   }
   return false;
 }
@@ -73691,7 +74073,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:b9307367f983b4af9a526a28615421019e1212c34b802bb1357a7c9e44d5b9ab" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:d9017ecde22e25f6f8a5a5a99d92d3d7e67b97040522652aa458f6603d4b1773" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

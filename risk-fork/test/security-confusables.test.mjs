@@ -76,6 +76,25 @@ const PINNED_SECRET_ASSIGNMENT_DELIMITERS = Object.freeze([
   '\u{10781}',
   '\u{11DD9}',
 ]);
+const PINNED_MULTI_CHARACTER_ASSIGNMENT_DELIMITERS = Object.freeze([
+  ['\u2A74', '::='],
+  ['\u2A75', '=='],
+  ['\u2A76', '==='],
+]);
+const PINNED_SECRET_ASSIGNMENT_QUOTE_PAIRS = Object.freeze([
+  ['fullwidth-single', '\uFF07', '\uFF07'],
+  ['fullwidth-double', '\uFF02', '\uFF02'],
+  ['smart-single', '\u2018', '\u2019'],
+  ['smart-single-reversed', '\u2019', '\u2018'],
+  ['smart-double', '\u201C', '\u201D'],
+  ['smart-double-reversed', '\u201D', '\u201C'],
+  ['fullwidth-single-smart-close', '\uFF07', '\u2019'],
+  ['smart-single-fullwidth-close', '\u2018', '\uFF07'],
+  ['fullwidth-double-smart-close', '\uFF02', '\u201D'],
+  ['smart-double-fullwidth-close', '\u201C', '\uFF02'],
+  ['prime-single', '\u2032', '\u2035'],
+  ['prime-double', '\u2033', '\u2036'],
+]);
 const SECRET_ASSIGNMENT_ENCODINGS = Object.freeze([
   'utf8',
   'utf8-bom',
@@ -125,14 +144,18 @@ function codePointLabel(value) {
     .join('-');
 }
 
-test('assignment delimiter corpus exhausts the pinned Unicode security fold', () => {
+test('assignment delimiter corpus exhausts single and multi-character security folds', () => {
   const observed = [];
+  const observedMultiCharacter = [];
   for (let codePoint = 0x80; codePoint <= 0x10ffff; codePoint += 1) {
     if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
     const character = String.fromCodePoint(codePoint);
-    if (/^[=:]$/.test(foldSecurityConfusables(character))) observed.push(character);
+    const folded = foldSecurityConfusables(character);
+    if (/^[=:]$/.test(folded)) observed.push(character);
+    if (/^[=:]{2,}$/.test(folded)) observedMultiCharacter.push([character, folded]);
   }
   assert.deepEqual(observed, PINNED_SECRET_ASSIGNMENT_DELIMITERS);
+  assert.deepEqual(observedMultiCharacter, PINNED_MULTI_CHARACTER_ASSIGNMENT_DELIMITERS);
 });
 
 test('scan-only confusable fold preserves ASCII and canonical payload text', () => {
@@ -562,9 +585,13 @@ test('E2B exact-byte scans reject confusable secret paths and contents', () => {
   );
 });
 
-test('E2B exact-byte scan rejects every pinned assignment delimiter across UTF encodings', () => {
-  for (const delimiter of PINNED_SECRET_ASSIGNMENT_DELIMITERS) {
-    assert.match(foldSecurityConfusables(delimiter), /^[=:]$/, codePointLabel(delimiter));
+test('E2B exact-byte scan rejects every single and multi-character delimiter fold', () => {
+  const delimiters = [
+    ...PINNED_SECRET_ASSIGNMENT_DELIMITERS.map((delimiter) => [delimiter, foldSecurityConfusables(delimiter)]),
+    ...PINNED_MULTI_CHARACTER_ASSIGNMENT_DELIMITERS,
+  ];
+  for (const [delimiter, folded] of delimiters) {
+    assert.match(folded, /^[=:]+$/, codePointLabel(delimiter));
     for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
       for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
         for (const [valueLabel, value] of SECRET_ASSIGNMENT_VALUES) {
@@ -582,11 +609,66 @@ test('E2B exact-byte scan rejects every pinned assignment delimiter across UTF e
   }
 });
 
-test('E2B assignment scan stays bounded on delimiter-dense benign bytes', () => {
-  const bytes = Buffer.from('a='.repeat(512 * 1024), 'ascii');
-  assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
-    stagedBytes('delimiter-dense.txt', bytes),
-  ]));
+test('E2B exact-byte scan rejects folded quote syntax across UTF encodings', () => {
+  for (const [quoteLabel, openingQuote, closingQuote] of PINNED_SECRET_ASSIGNMENT_QUOTE_PAIRS) {
+    for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
+      for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+        const bytes = encodeSecretAssignment(
+          `${openingQuote}${key}${closingQuote}\uFF1A${SYNTHETIC_SECRET}`,
+          encoding,
+        );
+        assert.throws(
+          () => scanE2BStagedBytesAuthorityFree([
+            stagedBytes('input.txt', bytes),
+          ]),
+          /authority|secret/i,
+          `${quoteLabel} ${keyLabel} ${encoding}`,
+        );
+      }
+    }
+  }
+});
+
+test('E2B structural folds preserve original-value byte thresholds', () => {
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const isUtf16 = encoding.startsWith('utf16');
+    const belowThreshold = isUtf16 ? '123' : '1234567';
+    const atThreshold = isUtf16 ? '1234' : '12345678';
+    for (const [label, assignment] of [
+      ['multi-delimiter', (value) => `api_key\u2A74${value}`],
+      ['folded-quotes', (value) => `\uFF07api_key\uFF07\uFF1A${value}`],
+      ['smart-quotes', (value) => `\u2018api_key\u2019\uFF1A${value}`],
+    ]) {
+      const shortBytes = encodeSecretAssignment(assignment(belowThreshold), encoding);
+      assert.doesNotThrow(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes(`${label}-short.txt`, shortBytes),
+        ]),
+        `${label} ${encoding} stays below eight original value bytes`,
+      );
+      const minimumBytes = encodeSecretAssignment(assignment(atThreshold), encoding);
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes(`${label}-minimum.txt`, minimumBytes),
+        ]),
+        /authority|secret/i,
+        `${label} ${encoding} reaches eight original value bytes`,
+      );
+    }
+  }
+});
+
+test('E2B assignment scan stays bounded on delimiter-dense benign bytes', {
+  timeout: 10_000,
+}, () => {
+  for (const [label, bytes] of [
+    ['ascii', Buffer.from('a='.repeat(512 * 1024), 'ascii')],
+    ['folded', Buffer.from('\u0430\u2A74'.repeat(128 * 1024), 'utf8')],
+  ]) {
+    assert.doesNotThrow(() => scanE2BStagedBytesAuthorityFree([
+      stagedBytes(`${label}-delimiter-dense.txt`, bytes),
+    ]), label);
+  }
 });
 
 test('E2B assignment scan deterministically parses adversarial quoted escapes', {
@@ -661,7 +743,7 @@ test('immutable E2B workspace export rejects confusable secret bytes before copy
   );
 });
 
-test('immutable E2B workspace export rejects pinned delimiters in UTF-8 and UTF-16', async (t) => {
+test('immutable E2B workspace export rejects single and multi-character delimiter folds', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-delimiter-scan-'));
   const source = path.join(root, 'source');
   const exportRoot = path.join(root, 'exports');
@@ -669,7 +751,11 @@ test('immutable E2B workspace export rejects pinned delimiters in UTF-8 and UTF-
   t.after(() => rm(root, { recursive: true, force: true }));
 
   let caseIndex = 0;
-  for (const delimiter of PINNED_SECRET_ASSIGNMENT_DELIMITERS) {
+  const delimiters = [
+    ...PINNED_SECRET_ASSIGNMENT_DELIMITERS,
+    ...PINNED_MULTI_CHARACTER_ASSIGNMENT_DELIMITERS.map(([delimiter]) => delimiter),
+  ];
+  for (const delimiter of delimiters) {
     for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
       for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
         for (const [valueLabel, value] of SECRET_ASSIGNMENT_VALUES) {
@@ -687,6 +773,40 @@ test('immutable E2B workspace export rejects pinned delimiters in UTF-8 and UTF-
           );
           caseIndex += 1;
         }
+      }
+    }
+  }
+});
+
+test('immutable E2B workspace export rejects folded quote syntax across UTF encodings', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-quote-fold-scan-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [quoteLabel, openingQuote, closingQuote] of PINNED_SECRET_ASSIGNMENT_QUOTE_PAIRS) {
+    for (const [keyLabel, key] of SECRET_ASSIGNMENT_KEYS) {
+      for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+        const bytes = encodeSecretAssignment(
+          `${openingQuote}${key}${closingQuote}\uFF1A${SYNTHETIC_SECRET}`,
+          encoding,
+        );
+        await writeFile(path.join(source, 'input.txt'), bytes);
+        await assert.rejects(
+          createImmutableWorkspaceExport({
+            source_workspace: source,
+            export_root: exportRoot,
+            export_id: `quote_fold_${caseIndex}`,
+            expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+          }),
+          /credential|secret/i,
+          `${quoteLabel} ${keyLabel} ${encoding}`,
+        );
+        caseIndex += 1;
       }
     }
   }
