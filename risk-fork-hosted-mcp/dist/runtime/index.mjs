@@ -69707,20 +69707,18 @@ function secretAssignmentSyntaxProfile(character, normalizeUnicode) {
 function isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).normalizedWhitespace;
 }
-function isFoldedAway(character, normalizeUnicode) {
-  return normalizeUnicode && secretAssignmentSyntaxProfile(character, true).foldedAway;
-}
 function secretAssignmentQuoteForms(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).quoteForms;
 }
 function classifySecretAssignmentDelimiter(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).delimiterKind;
 }
-function isInterTokenWhitespace(character, normalizeUnicode) {
-  if (secretAssignmentQuoteForms(character, normalizeUnicode).length > 0 || classifySecretAssignmentDelimiter(character, normalizeUnicode)) {
+function isInterTokenWhitespace(character, normalizeUnicode, allowQuoteRole = false) {
+  const profile = secretAssignmentSyntaxProfile(character, normalizeUnicode);
+  if (!allowQuoteRole && profile.quoteForms.length > 0 || profile.delimiterKind) {
     return false;
   }
-  return isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) || isFoldedAway(character, normalizeUnicode);
+  return profile.normalizedWhitespace || profile.foldedAway;
 }
 function isUnquotedSecretAssignmentTerminator(character, normalizeUnicode) {
   return isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode) || secretAssignmentQuoteForms(character, normalizeUnicode).length > 0 || character === "&" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
@@ -69831,7 +69829,7 @@ function secretAssignmentKeyMatches(key, normalizeUnicode) {
 function finishSecretAssignmentSyntax(text, key, index, normalizeUnicode) {
   if (!secretAssignmentKeyMatches(key, normalizeUnicode)) return null;
   let token = sourceCharacterAt(text, index);
-  while (token && isInterTokenWhitespace(token.character, normalizeUnicode)) {
+  while (token && isInterTokenWhitespace(token.character, normalizeUnicode, true)) {
     index = token.nextIndex;
     token = sourceCharacterAt(text, index);
   }
@@ -69959,9 +69957,8 @@ function containsExactSecretAssignment(text, valueEncoding) {
   return false;
 }
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
-  if (!normalizeUnicode || !NON_ASCII_PATTERN.test(text)) {
-    return containsExactSecretAssignment(text, valueEncoding);
-  }
+  if (containsExactSecretAssignment(text, valueEncoding)) return true;
+  if (!normalizeUnicode || !NON_ASCII_PATTERN.test(text)) return false;
   let previousCharacter = null;
   for (let index = 0; index < text.length; ) {
     const token = sourceCharacterAt(text, index);
@@ -73657,20 +73654,18 @@ function secretAssignmentSyntaxProfile2(character, normalizeUnicode) {
 function isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile2(character, normalizeUnicode).normalizedWhitespace;
 }
-function isFoldedAway2(character, normalizeUnicode) {
-  return normalizeUnicode && secretAssignmentSyntaxProfile2(character, true).foldedAway;
-}
 function secretAssignmentQuoteForms2(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile2(character, normalizeUnicode).quoteForms;
 }
 function classifySecretAssignmentDelimiter2(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile2(character, normalizeUnicode).delimiterKind;
 }
-function isInterTokenWhitespace2(character, normalizeUnicode) {
-  if (secretAssignmentQuoteForms2(character, normalizeUnicode).length > 0 || classifySecretAssignmentDelimiter2(character, normalizeUnicode)) {
+function isInterTokenWhitespace2(character, normalizeUnicode, allowQuoteRole = false) {
+  const profile = secretAssignmentSyntaxProfile2(character, normalizeUnicode);
+  if (!allowQuoteRole && profile.quoteForms.length > 0 || profile.delimiterKind) {
     return false;
   }
-  return isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) || isFoldedAway2(character, normalizeUnicode);
+  return profile.normalizedWhitespace || profile.foldedAway;
 }
 function isUnquotedSecretAssignmentTerminator2(character, normalizeUnicode) {
   return isNormalizedSecretAssignmentWhitespace2(character, normalizeUnicode) || secretAssignmentQuoteForms2(character, normalizeUnicode).length > 0 || character === "&" || character === "," || character === ";" || character === "{" || character === "}" || character === "]";
@@ -73781,7 +73776,7 @@ function secretAssignmentKeyMatches2(key, normalizeUnicode) {
 function finishSecretAssignmentSyntax2(text, key, index, normalizeUnicode) {
   if (!secretAssignmentKeyMatches2(key, normalizeUnicode)) return null;
   let token = sourceCharacterAt2(text, index);
-  while (token && isInterTokenWhitespace2(token.character, normalizeUnicode)) {
+  while (token && isInterTokenWhitespace2(token.character, normalizeUnicode, true)) {
     index = token.nextIndex;
     token = sourceCharacterAt2(text, index);
   }
@@ -73909,9 +73904,8 @@ function containsExactSecretAssignment2(text, valueEncoding) {
   return false;
 }
 function containsSecretAssignment2(text, { normalizeUnicode, valueEncoding }) {
-  if (!normalizeUnicode || !NON_ASCII_PATTERN2.test(text)) {
-    return containsExactSecretAssignment2(text, valueEncoding);
-  }
+  if (containsExactSecretAssignment2(text, valueEncoding)) return true;
+  if (!normalizeUnicode || !NON_ASCII_PATTERN2.test(text)) return false;
   let previousCharacter = null;
   for (let index = 0; index < text.length; ) {
     const token = sourceCharacterAt2(text, index);
@@ -74321,7 +74315,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:59aa04eefb59d8439779a09825512ba4bb994d01d5deb1c5316cb8984119cfcb" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:a2ce101cf2c3a272afa3f8fb145184a72a3b0fde77530925790ddb5c818c91f4" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

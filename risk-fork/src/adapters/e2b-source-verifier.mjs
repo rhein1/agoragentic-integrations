@@ -264,13 +264,13 @@ function classifySecretAssignmentDelimiter(character, normalizeUnicode) {
   return secretAssignmentSyntaxProfile(character, normalizeUnicode).delimiterKind;
 }
 
-function isInterTokenWhitespace(character, normalizeUnicode) {
-  if (secretAssignmentQuoteForms(character, normalizeUnicode).length > 0
-    || classifySecretAssignmentDelimiter(character, normalizeUnicode)) {
+function isInterTokenWhitespace(character, normalizeUnicode, allowQuoteRole = false) {
+  const profile = secretAssignmentSyntaxProfile(character, normalizeUnicode);
+  if ((!allowQuoteRole && profile.quoteForms.length > 0)
+    || profile.delimiterKind) {
     return false;
   }
-  return isNormalizedSecretAssignmentWhitespace(character, normalizeUnicode)
-    || isFoldedAway(character, normalizeUnicode);
+  return profile.normalizedWhitespace || profile.foldedAway;
 }
 
 function isUnquotedSecretAssignmentTerminator(character, normalizeUnicode) {
@@ -413,7 +413,7 @@ function secretAssignmentKeyMatches(key, normalizeUnicode) {
 function finishSecretAssignmentSyntax(text, key, index, normalizeUnicode) {
   if (!secretAssignmentKeyMatches(key, normalizeUnicode)) return null;
   let token = sourceCharacterAt(text, index);
-  while (token && isInterTokenWhitespace(token.character, normalizeUnicode)) {
+  while (token && isInterTokenWhitespace(token.character, normalizeUnicode, true)) {
     index = token.nextIndex;
     token = sourceCharacterAt(text, index);
   }
@@ -573,9 +573,8 @@ function containsExactSecretAssignment(text, valueEncoding) {
 }
 
 function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
-  if (!normalizeUnicode || !NON_ASCII_PATTERN.test(text)) {
-    return containsExactSecretAssignment(text, valueEncoding);
-  }
+  if (containsExactSecretAssignment(text, valueEncoding)) return true;
+  if (!normalizeUnicode || !NON_ASCII_PATTERN.test(text)) return false;
   let previousCharacter = null;
   for (let index = 0; index < text.length;) {
     const token = sourceCharacterAt(text, index);

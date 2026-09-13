@@ -132,6 +132,15 @@ const PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS = Object.freeze([
   ['\u1E9A', "a'"],
   ['\u{1E067}', "r'"],
 ]);
+const PINNED_QUOTE_WHITESPACE_ROLE_FOLDS = Object.freeze([
+  Object.freeze(['\u00B4', Object.freeze(['´', ' ', "'"])]),
+  Object.freeze(['\u02DD', Object.freeze(['˝', ' ', "''"])]),
+  Object.freeze(['\u0384', Object.freeze(['΄', ' ', "'"])]),
+  Object.freeze(['\u1FBD', Object.freeze(['᾽', ' ', "'"])]),
+  Object.freeze(['\u1FBF', Object.freeze(['᾿', ' ', "'"])]),
+  Object.freeze(['\u1FFD', Object.freeze(['´', ' ', "'"])]),
+  Object.freeze(['\u1FFE', Object.freeze(['῾', ' ', "'"])]),
+]);
 const PINNED_SECRET_ASSIGNMENT_KEY_NAMES = Object.freeze([
   'api_key',
   'access_token',
@@ -254,10 +263,16 @@ function collectPinnedAssignmentStructuralSources() {
     if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
     const character = String.fromCodePoint(codePoint);
     const variants = securityTextVariants(character);
+    const sourceVariants = [];
     const structuralVariants = [];
     const mixedStructuralVariants = [];
+    const whitespaceForms = [];
     for (let index = 0; index < variants.length; index += 1) {
       const variant = variants[index];
+      sourceVariants.push(variant);
+      if (/^\s+$/u.test(variant) && !whitespaceForms.includes(variant)) {
+        whitespaceForms.push(variant);
+      }
       if (!/['"\\:=]/u.test(variant)) continue;
       if (/^['"\\:=]+$/u.test(variant)) {
         if (!structuralVariants.includes(variant)) structuralVariants.push(variant);
@@ -272,7 +287,9 @@ function collectPinnedAssignmentStructuralSources() {
       escapeForms: Object.freeze(structuralVariants.filter((value) => /^\\+$/u.test(value))),
       mixedStructuralVariants: Object.freeze(mixedStructuralVariants),
       quoteForms: Object.freeze(structuralVariants.filter((value) => /^['"]+$/u.test(value))),
+      sourceVariants: Object.freeze(sourceVariants),
       structuralVariants: Object.freeze(structuralVariants),
+      whitespaceForms: Object.freeze(whitespaceForms),
     }));
   }
   return Object.freeze(profiles);
@@ -414,6 +431,15 @@ test('assignment structural corpus exhausts pinned quote, escape, and ambiguous 
       .filter((profile) => profile.mixedStructuralVariants.length > 0)
       .map((profile) => [profile.character, profile.mixedStructuralVariants[0]]),
     PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS,
+  );
+});
+
+test('assignment structural corpus pins quote and whitespace cross-role folds', () => {
+  assert.deepEqual(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.quoteForms.length > 0 && profile.whitespaceForms.length > 0)
+      .map((profile) => [profile.character, profile.sourceVariants]),
+    PINNED_QUOTE_WHITESPACE_ROLE_FOLDS,
   );
 });
 
@@ -986,6 +1012,51 @@ test('E2B exact-byte scan preserves short and rejects long quote-literal branche
   }
 });
 
+test('E2B exact-byte scan preserves the literal branch inside normalized quoted values', () => {
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const minimumBytes = encodeSecretAssignment('api_key="123\uFF02456789"', encoding);
+    assert.throws(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes('exact-literal-minimum.txt', minimumBytes),
+      ]),
+      /authority|secret/i,
+      `${encoding} literal branch reaches eight original value bytes`,
+    );
+  }
+});
+
+test('E2B exact-byte scan preserves quote and whitespace parse roles', () => {
+  assert.equal(PINNED_QUOTE_WHITESPACE_ROLE_FOLDS.length, 7);
+  for (const [character] of PINNED_QUOTE_WHITESPACE_ROLE_FOLDS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const isUtf16 = encoding.startsWith('utf16');
+      const belowThreshold = isUtf16 ? '123' : '1234567';
+      const atThreshold = isUtf16 ? '1234' : '12345678';
+      const shortBytes = encodeSecretAssignment(
+        `api_key${character}=${belowThreshold}`,
+        encoding,
+      );
+      assert.doesNotThrow(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('quote-whitespace-short.txt', shortBytes),
+        ]),
+        `${codePointLabel(character)} ${encoding} whitespace branch stays below threshold`,
+      );
+      const minimumBytes = encodeSecretAssignment(
+        `api_key${character}=${atThreshold}`,
+        encoding,
+      );
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('quote-whitespace-minimum.txt', minimumBytes),
+        ]),
+        /authority|secret/i,
+        `${codePointLabel(character)} ${encoding} whitespace branch reaches threshold`,
+      );
+    }
+  }
+});
+
 test('E2B exact-byte structural inventory preserves safe controls', () => {
   for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
     const bytes = encodeSecretAssignment(PINNED_STRUCTURAL_ASSIGNMENT_SAFE_CONTROL, encoding);
@@ -1406,6 +1477,88 @@ test('immutable E2B workspace export preserves short and rejects long quote-lite
         }),
         /credential|secret/i,
         `${caseLabel} ${encoding} long branch`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export preserves the literal branch inside normalized quoted values', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-exact-literal-branch-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const minimumBytes = encodeSecretAssignment('api_key="123\uFF02456789"', encoding);
+    await writeFile(path.join(source, 'input.txt'), minimumBytes);
+    await assert.rejects(
+      createImmutableWorkspaceExport({
+        source_workspace: source,
+        export_root: exportRoot,
+        export_id: `exact_literal_minimum_${caseIndex}`,
+        expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+      }),
+      /credential|secret/i,
+      `${encoding} literal branch reaches eight original value bytes`,
+    );
+    caseIndex += 1;
+  }
+});
+
+test('immutable E2B workspace export preserves quote and whitespace parse roles', {
+  timeout: 60_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-quote-whitespace-roles-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [character] of PINNED_QUOTE_WHITESPACE_ROLE_FOLDS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const isUtf16 = encoding.startsWith('utf16');
+      const belowThreshold = isUtf16 ? '123' : '1234567';
+      const atThreshold = isUtf16 ? '1234' : '12345678';
+      const shortBytes = encodeSecretAssignment(
+        `api_key${character}=${belowThreshold}`,
+        encoding,
+      );
+      await writeFile(path.join(source, 'input.txt'), shortBytes);
+      const value = await createImmutableWorkspaceExport({
+        source_workspace: source,
+        export_root: exportRoot,
+        export_id: `quote_whitespace_short_${caseIndex}`,
+        expected_workspace_digest: sha256Ref([{
+          path: 'input.txt',
+          bytes: shortBytes.byteLength,
+          content_hash: sha256Ref(shortBytes.toString('base64')),
+        }]),
+      });
+      await destroyImmutableWorkspaceExport({
+        export_root: exportRoot,
+        export_id: value.export_id,
+      });
+
+      const minimumBytes = encodeSecretAssignment(
+        `api_key${character}=${atThreshold}`,
+        encoding,
+      );
+      await writeFile(path.join(source, 'input.txt'), minimumBytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `quote_whitespace_minimum_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${codePointLabel(character)} ${encoding} whitespace branch reaches threshold`,
       );
       caseIndex += 1;
     }
