@@ -14,11 +14,11 @@ test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 	const lock = readJson('package-lock.json');
 	const expectedDevDependencies = {
 		'@eslint/js': '9.29.0',
-		'@n8n/eslint-plugin-community-nodes': '0.29.0',
+		'@n8n/eslint-plugin-community-nodes': '0.31.0',
 		eslint: '9.29.0',
 		'eslint-import-resolver-typescript': '4.4.5',
 		'eslint-plugin-import-x': '4.17.1',
-		'eslint-plugin-n8n-nodes-base': '1.16.7',
+		'eslint-plugin-n8n-nodes-base': '2.0.0',
 		'n8n-workflow': '2.36.4',
 		prettier: '3.9.6',
 		typescript: '5.9.2',
