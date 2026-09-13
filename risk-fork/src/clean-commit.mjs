@@ -773,7 +773,7 @@ function createFileParentHeadInternals(directory, clock) {
       });
 
       let authorityRequest;
-      let authorityReserved = authorityBefore;
+      let authorityReserved;
       let proof;
       try {
         authorityRequest = await prepareUnderReservation(

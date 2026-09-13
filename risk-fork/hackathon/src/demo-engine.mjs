@@ -1137,7 +1137,7 @@ async function recoverStaleActiveLock(rootHandle, recoveryLock, controls) {
   try {
     liveness = await controls.ownerLiveness(initial.record.pid);
   } catch {
-    liveness = 'indeterminate';
+    // ownerLiveness failed; liveness stays 'indeterminate'
   }
   if (liveness === 'live') {
     throw lockError('DEMO_ACTIVE_LOCK_LIVE', 'Demo active lock owner is still live');
@@ -2010,7 +2010,7 @@ class DemoEngine {
     let ownedCleanupFailure = null;
     let stateFailure = null;
     let rootVerificationFailure = null;
-    let lockCleanup = { status: 'unknown', removed: false, failure: null };
+    let lockCleanup;
 
     // From this point forward, the acquired lock and any exact run allocation are
     // owned by this single boundary. No post-lock failure may escape before both

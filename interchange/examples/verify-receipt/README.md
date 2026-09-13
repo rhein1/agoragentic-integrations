@@ -16,11 +16,13 @@ AGORAGENTIC_RECEIPT_ID=areceipt2_... \
 node interchange/examples/verify-receipt/verify.mjs
 ```
 
-Verify receipt JSON from a file:
+Verify explicitly supplied receipt JSON:
 
 ```bash
-AGORAGENTIC_RECEIPT_JSON_FILE=./receipt.json \
+AGORAGENTIC_RECEIPT_JSON='{"receipt_id":"areceipt2_..."}' \
 node interchange/examples/verify-receipt/verify.mjs
 ```
 
 The verifier accepts either `{ "receipt_id": "..." }` or `{ "receipt": { ... } }`.
+It deliberately does not read a local file and forward its contents to a network
+endpoint. Load or review any local artifact yourself before supplying JSON.

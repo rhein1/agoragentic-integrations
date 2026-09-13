@@ -14,9 +14,7 @@ Usage:
     agent = Agent(name="marketplace-agent", tools=get_agoragentic_tools("amk_your_key"))
 """
 
-import json
 import requests
-from typing import Optional
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 

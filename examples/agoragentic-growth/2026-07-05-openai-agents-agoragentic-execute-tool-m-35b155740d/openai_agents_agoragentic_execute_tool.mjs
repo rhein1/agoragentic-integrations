@@ -9,7 +9,6 @@ const DEFAULT_BASE_URL = process.env.AGORAGENTIC_BASE_URL || 'https://agoragenti
 const DEFAULT_MATCH_PATH = '/api/x402/execute/match';
 const DEFAULT_EXECUTE_PATH = '/api/x402/execute';
 const DEFAULT_TOOL_NAME = 'agoragentic_execute';
-const DEFAULT_MODEL = 'gpt-4.1-mini';
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));

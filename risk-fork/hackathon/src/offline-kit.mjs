@@ -11,14 +11,15 @@ import {
   realpath,
   rename,
   rm,
-  stat,
   writeFile,
 } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify, TextDecoder } from 'node:util';
 
 import { GENERATED_NOT_CLIENT_VERIFIED_STATUS } from './config-generator.mjs';
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 const execFileAsync = promisify(execFile);
 const UTF8_FATAL = new TextDecoder('utf-8', { fatal: true });
@@ -180,10 +181,6 @@ function stableJson(value) {
   return `${JSON.stringify(stableValue(value), null, 2)}\n`;
 }
 
-function toArchivePath(input) {
-  return input.split(path.sep).join('/');
-}
-
 export function assertSafeArchivePath(input) {
   if (typeof input !== 'string' || input.length === 0) {
     throw new Error('Archive entry path must be a non-empty string');
@@ -258,21 +255,83 @@ function assertRegularFile(fileStat, label) {
   if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
     throw new Error(`${label} must be a regular file`);
   }
-  if (fileStat.nlink !== 1) throw new Error(`${label} must not be hard linked`);
+  if (fileStat.nlink !== 1 && fileStat.nlink !== 1n) {
+    throw new Error(`${label} must not be hard linked`);
+  }
   if (fileStat.size > OFFLINE_KIT_LIMITS.max_file_bytes) {
     throw new Error(`${label} exceeds the per-file size limit`);
   }
 }
 
+function stableFilesystemIdentity(info) {
+  return JSON.stringify({
+    dev: String(info.dev),
+    ino: String(info.ino),
+    size: String(info.size),
+    nlink: String(info.nlink),
+    mode: String(info.mode),
+    mtime_ns: String(info.mtimeNs ?? BigInt(Math.trunc(Number(info.mtimeMs) * 1_000_000))),
+  });
+}
+
+function assertStableFilesystemIdentity(before, after, message) {
+  if (stableFilesystemIdentity(before) !== stableFilesystemIdentity(after)) {
+    throw new Error(message);
+  }
+}
+
+function readOnlyNoFollowNonBlockingFlags() {
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  return constants.O_RDONLY | noFollow | nonBlock;
+}
+
+async function assertOpenedPathIdentity({
+  absolute,
+  opened,
+  linkMessage,
+  changedMessage,
+  rootReal = null,
+  escapeMessage = null,
+}) {
+  const pathInfo = await lstat(absolute, { bigint: true });
+  if (pathInfo.isSymbolicLink()) throw new Error(linkMessage);
+  assertStableFilesystemIdentity(opened, pathInfo, changedMessage);
+  const resolved = await realpath(absolute);
+  if (rootReal !== null && !isSameOrInside(rootReal, resolved)) {
+    throw new Error(escapeMessage ?? changedMessage);
+  }
+  return resolved;
+}
+
 async function enumerateTree(root, { includeBytes = false } = {}) {
   const absoluteRoot = normalizeAbsolute(root, 'Tree root');
-  const rootStat = await lstat(absoluteRoot);
+  const rootStat = await lstat(absoluteRoot, { bigint: true });
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new Error('Tree root must be a real directory');
   }
+  const rootReal = await realpath(absoluteRoot);
   const files = [];
   const directories = [];
-  const visit = async (absoluteDirectory, relativeDirectory = '') => {
+  const visit = async (
+    absoluteDirectory,
+    relativeDirectory = '',
+    expectedDirectoryIdentity = rootStat,
+    expectedDirectoryReal = rootReal,
+  ) => {
+    const directoryBefore = await lstat(absoluteDirectory, { bigint: true });
+    if (directoryBefore.isSymbolicLink() || !directoryBefore.isDirectory()) {
+      throw new Error(`Links are forbidden in offline kits: ${relativeDirectory || '.'}`);
+    }
+    assertStableFilesystemIdentity(
+      expectedDirectoryIdentity,
+      directoryBefore,
+      `Offline-kit directory changed while enumerating: ${relativeDirectory || '.'}`,
+    );
+    const directoryReal = await realpath(absoluteDirectory);
+    if (!isSameOrInside(rootReal, directoryReal) || directoryReal !== expectedDirectoryReal) {
+      throw new Error(`Offline-kit directory target changed while enumerating: ${relativeDirectory || '.'}`);
+    }
     const entries = await readdir(absoluteDirectory, { withFileTypes: true });
     entries.sort((left, right) => rawPathCompare(left.name, right.name));
     for (const entry of entries) {
@@ -281,26 +340,85 @@ async function enumerateTree(root, { includeBytes = false } = {}) {
         : entry.name;
       assertSafeArchivePath(relative);
       const absolute = path.join(absoluteDirectory, entry.name);
-      const entryStat = await lstat(absolute);
-      if (entryStat.isSymbolicLink()) throw new Error(`Links are forbidden in offline kits: ${relative}`);
-      if (entryStat.isDirectory()) {
-        directories.push(relative);
-        await visit(absolute, relative);
-      } else if (entryStat.isFile()) {
+      // O_NONBLOCK prevents special files such as FIFOs from stalling before
+      // descriptor classification. O_NOFOLLOW is only one layer: Windows does
+      // not honor it, so bind the descriptor to lstat/realpath before and after
+      // any read or recursion.
+      let handle;
+      try {
+        handle = await open(absolute, readOnlyNoFollowNonBlockingFlags());
+      } catch (error) {
+        if (error?.code === 'ELOOP') throw new Error(`Links are forbidden in offline kits: ${relative}`);
+        throw error;
+      }
+      try {
+        const entryStat = await handle.stat({ bigint: true });
+        const entryReal = await assertOpenedPathIdentity({
+          absolute,
+          opened: entryStat,
+          linkMessage: `Links are forbidden in offline kits: ${relative}`,
+          changedMessage: `Offline-kit path changed while enumerating: ${relative}`,
+          rootReal,
+          escapeMessage: `Offline-kit path escapes its root: ${relative}`,
+        });
+        if (entryStat.isDirectory()) {
+          directories.push(relative);
+          await handle.close();
+          handle = null;
+          await visit(absolute, relative, entryStat, entryReal);
+          continue;
+        }
         assertRegularFile(entryStat, relative);
         const record = {
           path: relative,
           absolute_path: absolute,
-          bytes: entryStat.size,
+          bytes: Number(entryStat.size),
         };
-        if (includeBytes) record.content = await readFile(absolute);
+        if (includeBytes) {
+          record.content = await readOpenedFileExact(handle, {
+            expectedSize: entryStat.size,
+            maxBytes: OFFLINE_KIT_LIMITS.max_file_bytes,
+            changedMessage: `Offline-kit file changed while reading: ${relative}`,
+            limitMessage: `${relative} exceeds the per-file size limit`,
+          });
+        }
+        const entryAfter = await handle.stat({ bigint: true });
+        assertStableFilesystemIdentity(
+          entryStat,
+          entryAfter,
+          `Offline-kit file changed while reading: ${relative}`,
+        );
+        const entryRealAfter = await assertOpenedPathIdentity({
+          absolute,
+          opened: entryStat,
+          linkMessage: `Links are forbidden in offline kits: ${relative}`,
+          changedMessage: `Offline-kit path changed while reading: ${relative}`,
+          rootReal,
+          escapeMessage: `Offline-kit path escapes its root: ${relative}`,
+        });
+        if (entryRealAfter !== entryReal) {
+          throw new Error(`Offline-kit path target changed while reading: ${relative}`);
+        }
         files.push(record);
-      } else {
-        throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+      } finally {
+        await handle?.close();
       }
       if (files.length > OFFLINE_KIT_LIMITS.max_files) {
         throw new Error('Offline kit exceeds the file-count limit');
       }
+    }
+    const directoryAfter = await lstat(absoluteDirectory, { bigint: true });
+    if (directoryAfter.isSymbolicLink() || !directoryAfter.isDirectory()) {
+      throw new Error(`Offline-kit directory changed type while enumerating: ${relativeDirectory || '.'}`);
+    }
+    assertStableFilesystemIdentity(
+      directoryBefore,
+      directoryAfter,
+      `Offline-kit directory changed while enumerating: ${relativeDirectory || '.'}`,
+    );
+    const directoryRealAfter = await realpath(absoluteDirectory);
+    if (!isSameOrInside(rootReal, directoryRealAfter) || directoryRealAfter !== directoryReal) {
+      throw new Error(`Offline-kit directory target changed while enumerating: ${relativeDirectory || '.'}`);
     }
   };
   await visit(absoluteRoot);
@@ -1168,13 +1286,44 @@ function parseCanonicalZip(archive) {
 
 async function readCanonicalZip(zipPath) {
   const absolute = normalizeAbsolute(zipPath, 'zipPath');
-  const zipStat = await lstat(absolute);
-  assertRegularFile(zipStat, 'Offline-kit ZIP');
-  if (zipStat.size > OFFLINE_KIT_LIMITS.max_archive_bytes) {
-    throw new Error('ZIP exceeds the offline-kit byte limit');
+  let handle;
+  try {
+    handle = await open(absolute, readOnlyNoFollowNonBlockingFlags());
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw new Error('Offline-kit ZIP must be a regular file');
+    throw error;
   }
-  const bytes = await readFile(absolute);
-  return { absolute, bytes, ...parseCanonicalZip(bytes) };
+  try {
+    const zipStat = await handle.stat({ bigint: true });
+    assertRegularFile(zipStat, 'Offline-kit ZIP');
+    if (zipStat.size > BigInt(OFFLINE_KIT_LIMITS.max_archive_bytes)) {
+      throw new Error('ZIP exceeds the offline-kit byte limit');
+    }
+    const zipReal = await assertOpenedPathIdentity({
+      absolute,
+      opened: zipStat,
+      linkMessage: 'Offline-kit ZIP must be a regular file',
+      changedMessage: 'Offline-kit ZIP path changed while reading',
+    });
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: zipStat.size,
+      maxBytes: OFFLINE_KIT_LIMITS.max_archive_bytes,
+      changedMessage: 'Offline-kit ZIP changed while reading',
+      limitMessage: 'ZIP exceeds the offline-kit byte limit',
+    });
+    const zipAfter = await handle.stat({ bigint: true });
+    assertStableFilesystemIdentity(zipStat, zipAfter, 'Offline-kit ZIP changed while reading');
+    const zipRealAfter = await assertOpenedPathIdentity({
+      absolute,
+      opened: zipStat,
+      linkMessage: 'Offline-kit ZIP must be a regular file',
+      changedMessage: 'Offline-kit ZIP path changed while reading',
+    });
+    if (zipRealAfter !== zipReal) throw new Error('Offline-kit ZIP target changed while reading');
+    return { absolute, bytes, ...parseCanonicalZip(bytes) };
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function verifyZipArchive({ zipPath }) {
@@ -1340,10 +1489,50 @@ export async function verifyOfflineKit({ kitDirectory }) {
     throw new Error('Offline kit must be a real directory');
   }
   const manifestPath = path.join(root, MANIFEST_NAME);
-  const manifestStat = await lstat(manifestPath);
-  assertRegularFile(manifestStat, MANIFEST_NAME);
-  if (manifestStat.size > 4 * 1024 * 1024) throw new Error('Offline-kit manifest is too large');
-  const manifestBytes = await readFile(manifestPath);
+  let manifestHandle;
+  try {
+    manifestHandle = await open(manifestPath, readOnlyNoFollowNonBlockingFlags());
+  } catch (error) {
+    if (error?.code === 'ELOOP') throw new Error(`${MANIFEST_NAME} must be a regular file`);
+    throw error;
+  }
+  let manifestBytes;
+  try {
+    const manifestStat = await manifestHandle.stat({ bigint: true });
+    assertRegularFile(manifestStat, MANIFEST_NAME);
+    if (manifestStat.size > 4n * 1024n * 1024n) throw new Error('Offline-kit manifest is too large');
+    const manifestReal = await assertOpenedPathIdentity({
+      absolute: manifestPath,
+      opened: manifestStat,
+      linkMessage: `${MANIFEST_NAME} must be a regular file`,
+      changedMessage: `${MANIFEST_NAME} path changed while reading`,
+      rootReal: root,
+      escapeMessage: `${MANIFEST_NAME} escapes the offline-kit root`,
+    });
+    manifestBytes = await readOpenedFileExact(manifestHandle, {
+      expectedSize: manifestStat.size,
+      maxBytes: 4 * 1024 * 1024,
+      changedMessage: `${MANIFEST_NAME} changed while reading`,
+      limitMessage: 'Offline-kit manifest is too large',
+    });
+    const manifestAfter = await manifestHandle.stat({ bigint: true });
+    assertStableFilesystemIdentity(
+      manifestStat,
+      manifestAfter,
+      `${MANIFEST_NAME} changed while reading`,
+    );
+    const manifestRealAfter = await assertOpenedPathIdentity({
+      absolute: manifestPath,
+      opened: manifestStat,
+      linkMessage: `${MANIFEST_NAME} must be a regular file`,
+      changedMessage: `${MANIFEST_NAME} path changed while reading`,
+      rootReal: root,
+      escapeMessage: `${MANIFEST_NAME} escapes the offline-kit root`,
+    });
+    if (manifestRealAfter !== manifestReal) throw new Error(`${MANIFEST_NAME} target changed while reading`);
+  } finally {
+    await manifestHandle.close();
+  }
   let manifest;
   try {
     manifest = JSON.parse(UTF8_FATAL.decode(manifestBytes));

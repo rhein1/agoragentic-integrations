@@ -212,17 +212,15 @@ function createInlineX402Fetch() {
             paymentAuthorized: true,
           });
         }
-        if (!cachedPayment) {
-          cachedChallenge = parsePaymentRequired(paymentRequired)[0] ?? null;
-          cachedPayment = normalizePayResult(await pay(paymentRequired, {
-            url,
-            method,
-            headers: requestHeaders,
-            body: requestBody,
-            idempotencyKey,
-            challenge: cachedChallenge,
-          }));
-        }
+        cachedChallenge = parsePaymentRequired(paymentRequired)[0] ?? null;
+        cachedPayment = normalizePayResult(await pay(paymentRequired, {
+          url,
+          method,
+          headers: requestHeaders,
+          body: requestBody,
+          idempotencyKey,
+          challenge: cachedChallenge,
+        }));
       } catch (error) {
         if (typeof error?.status === "number") throw error;
         if (!cachedPayment) throw error;

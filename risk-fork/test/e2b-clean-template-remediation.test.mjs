@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import {
   chmod,
   link,
@@ -19,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { canonicalize, sha256Ref } from '../src/canonical.mjs';
+import { canonicalize } from '../src/canonical.mjs';
 import { E2BRiskForkAdapter, E2B_RISK_FORK_PATHS } from '../src/adapters/e2b.mjs';
 import {
   E2B_BOOT_EVIDENCE_PATH,
@@ -1707,11 +1706,18 @@ test('sanitized export rejects case-folding path collisions before provider allo
   const upper = path.join(value.source, 'CaseName.txt');
   const lower = path.join(value.source, 'casename.txt');
   await writeFile(upper, 'upper\n');
-  if (existsSync(lower)) {
-    t.skip('Filesystem is case-insensitive; case-folding collision fixture cannot be constructed on this volume');
-    return;
+  // Create exclusively: on a case-insensitive volume this collides with the
+  // just-written CaseName.txt and reports EEXIST instead of a
+  // check-then-act existsSync probe.
+  try {
+    await writeFile(lower, 'lower\n', { flag: 'wx' });
+  } catch (error) {
+    if (error.code === 'EEXIST') {
+      t.skip('Filesystem is case-insensitive; case-folding collision fixture cannot be constructed on this volume');
+      return;
+    }
+    throw error;
   }
-  await writeFile(lower, 'lower\n');
   await assert.rejects(
     value.adapter.createSavepoint({ capsule: value.capsule, source_workspace: value.source }),
     /case|collision/i,

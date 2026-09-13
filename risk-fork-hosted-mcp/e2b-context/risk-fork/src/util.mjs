@@ -1,6 +1,102 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 
+const MAX_INTERRUPTED_DESCRIPTOR_READS = 16;
+
+function descriptorReadSize(value, field) {
+  const size = typeof value === 'bigint' ? value : BigInt(value);
+  if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new TypeError(`${field} must be a non-negative safe integer`);
+  }
+  return size;
+}
+
+async function readDescriptorAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_DESCRIPTOR_READS) {
+        throw error;
+      }
+      interruptions += 1;
+    }
+  }
+}
+
+/**
+ * Read exactly the already-observed descriptor length, then probe its original
+ * EOF once. This prevents a file that grows after fstat from making readFile()
+ * allocate or consume bytes outside the caller's reviewed bound.
+ */
+export async function readOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, 'expectedSize');
+  const maxBytes = descriptorReadSize(options.maxBytes, 'maxBytes');
+  const changedMessage = options.changedMessage ?? 'File changed while it was read';
+  const limitMessage = options.limitMessage ?? 'File exceeds its bounded byte allowance';
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+
+  const size = Number(expectedSize);
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await readDescriptorAt(handle, bytes, offset, size - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead)
+      || result.bytesRead <= 0
+      || result.bytesRead > size - offset) {
+      throw new Error(changedMessage);
+    }
+    offset += result.bytesRead;
+  }
+
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return bytes;
+}
+
+/**
+ * Hash exactly the already-observed descriptor length using fixed-size reads,
+ * then probe its original EOF once. Unlike readOpenedFileExact(), this keeps
+ * memory bounded even when the trusted artifact itself is large.
+ */
+export async function hashOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, 'expectedSize');
+  const maxBytes = descriptorReadSize(
+    options.maxBytes ?? Number.MAX_SAFE_INTEGER,
+    'maxBytes',
+  );
+  const changedMessage = options.changedMessage ?? 'File changed while it was hashed';
+  const limitMessage = options.limitMessage ?? 'File exceeds its bounded byte allowance';
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+
+  const hash = createHash(options.algorithm ?? 'sha256');
+  const chunk = Buffer.allocUnsafe(64 * 1024);
+  const size = Number(expectedSize);
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(chunk.byteLength, size - offset);
+    const result = await readDescriptorAt(handle, chunk, 0, length, offset);
+    if (!Number.isSafeInteger(result?.bytesRead)
+      || result.bytesRead <= 0
+      || result.bytesRead > length) {
+      throw new Error(changedMessage);
+    }
+    hash.update(chunk.subarray(0, result.bytesRead));
+    offset += result.bytesRead;
+  }
+
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return hash.digest(options.encoding ?? 'hex');
+}
+
 function detachArray(value) {
   Object.setPrototypeOf(value, null);
   return value;

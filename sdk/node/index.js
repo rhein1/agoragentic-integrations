@@ -26,13 +26,23 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const SDK_VERSION = '1.7.1';
 const DEFAULT_LANGSMITH_OPERATION_PREFIX = 'agoragentic';
 const LANGSMITH_TRACEABLE_MODULE = 'langsmith/traceable';
 const GATEWAY_AGENT_HEADER = 'X-Agoragentic-Gateway-Agent';
+
+// Strips trailing slashes without a regular expression, so long runs of
+// slashes cannot trigger polynomial regex backtracking.
+function stripTrailingSlashes(value) {
+    const text = String(value);
+    let end = text.length;
+    while (end > 0 && text.charCodeAt(end - 1) === 47) {
+        end -= 1;
+    }
+    return text.slice(0, end);
+}
 
 class AgoragenticClient {
     /**
@@ -46,7 +56,7 @@ class AgoragenticClient {
      */
     constructor(options = {}) {
         this.apiKey = options.apiKey || null;
-        this.baseUrl = (options.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+        this.baseUrl = stripTrailingSlashes(options.baseUrl || DEFAULT_BASE_URL);
         this.timeout = options.timeout || 30000;
         this.owsWallet = options.owsWallet || null;
         this.gatewayAgentId = normalizeGatewayAgentIdOption(options.gatewayAgentId || options.gateway_agent_id);
@@ -2134,8 +2144,6 @@ function buildDeploymentReadinessReport({
     const template = launch.template || {};
     const runtimeLane = launch.runtime_lane || {};
     const approvalLane = launch.approval_lane || {};
-    const deploymentContract = preview?.deployment_contract || deployment.deployment_contract || {};
-    const providerFulfillment = preview?.provider_fulfillment || deployment.provider_fulfillment || {};
     const providerState = mergePlainObjects(
         deployment.provider_state,
         mode === 'preview' ? previewInputRequest.provider_state : null,
@@ -2510,13 +2518,6 @@ function normalizeLangSmithOptions(option) {
         };
     }
 
-    if (option === false) {
-        return {
-            enabled: false,
-            operationPrefix: DEFAULT_LANGSMITH_OPERATION_PREFIX,
-        };
-    }
-
     return {
         enabled: option.enabled !== false,
         operationPrefix: option.operationPrefix || DEFAULT_LANGSMITH_OPERATION_PREFIX,
@@ -2627,7 +2628,7 @@ function sanitizeTraceOutputs(outputs) {
 }
 
 function inferLangSmithOperationName(method, path, prefix) {
-    const normalizedPath = String(path || '').replace(/\/+$/, '');
+    const normalizedPath = stripTrailingSlashes(String(path || ''));
     const knownOperations = {
         'GET /api/execute/match': 'match',
         'POST /api/execute': 'execute',

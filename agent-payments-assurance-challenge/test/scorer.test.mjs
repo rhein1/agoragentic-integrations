@@ -8,6 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   MAX_JSON_BYTES,
+  readOpenedJsonFileExact,
   readJson,
   scoreChallengeRun,
   sha256Ref,
@@ -25,6 +26,7 @@ const challenge = JSON.parse(await readFile(challengePath, 'utf8'));
 const safeRun = JSON.parse(await readFile(safeRunPath, 'utf8'));
 const unsafeRun = JSON.parse(await readFile(unsafeRunPath, 'utf8'));
 const expectedChallengeHash = 'sha256:8833a95aa8258effd914bd93ef83086a11f0a589552e7b562b63c787c3a0daea';
+const scorerModuleUrl = new URL('../src/scorer.mjs', import.meta.url).href;
 
 function copy(value) {
   return structuredClone(value);
@@ -225,6 +227,62 @@ test('bounded JSON reader rejects duplicate keys, excessive nesting, and oversiz
     const oversizedPath = resolve(temporary, 'oversized.json');
     await writeFile(oversizedPath, ' '.repeat(MAX_JSON_BYTES + 1), 'utf8');
     await assert.rejects(readJson(oversizedPath), /exceeds the .*byte limit/);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('bounded JSON descriptor reader rejects simulated growth after partial and interrupted reads', async () => {
+  const reviewed = Buffer.from('{"ok":true}', 'utf8');
+  let interrupted = false;
+  const handle = {
+    async read(buffer, offset, length, position) {
+      if (!interrupted) {
+        interrupted = true;
+        const error = new Error('interrupted');
+        error.code = 'EINTR';
+        throw error;
+      }
+      if (position === reviewed.byteLength) {
+        buffer[offset] = 0x0a;
+        return { bytesRead: 1, buffer };
+      }
+      const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+      reviewed.copy(buffer, offset, position, position + bytesRead);
+      return { bytesRead, buffer };
+    },
+  };
+  await assert.rejects(
+    readOpenedJsonFileExact(handle, reviewed.byteLength, MAX_JSON_BYTES),
+    /file_changed/,
+  );
+});
+
+test('bounded JSON reader rejects a FIFO without waiting for a writer', {
+  skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
+}, async () => {
+  const temporary = await mkdtemp(resolve(tmpdir(), 'assurance-challenge-fifo-'));
+  try {
+    const fifoPath = resolve(temporary, 'blocking.json');
+    const created = spawnSync('mkfifo', [fifoPath], { encoding: 'utf8' });
+    assert.equal(created.status, 0, created.stderr);
+    const script = `
+      const { readJson } = await import(${JSON.stringify(scorerModuleUrl)});
+      try {
+        await readJson(process.argv[1]);
+        process.exitCode = 2;
+      } catch (error) {
+        process.stdout.write(String(error?.message ?? error));
+      }
+    `;
+    const probe = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', script, fifoPath],
+      { encoding: 'utf8', timeout: 2_000 },
+    );
+    assert.equal(probe.error, undefined);
+    assert.equal(probe.status, 0, probe.stderr);
+    assert.match(probe.stdout, /could not be read/);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

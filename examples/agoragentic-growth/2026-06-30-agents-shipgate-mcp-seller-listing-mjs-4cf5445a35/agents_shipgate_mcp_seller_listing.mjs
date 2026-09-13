@@ -430,7 +430,6 @@ function createInlineX402Fetch() {
     }
 
     let authorization = null;
-    let paidChallengeId = null;
     let paidTransientRetries = 0;
 
     while (true) {
@@ -464,10 +463,8 @@ function createInlineX402Fetch() {
           throw new Error("x402Fetch received HTTP 402 but no pay callback was supplied");
         }
         const challenge = await response.json();
-        const challengeId = challenge.challenge_id || challenge.id || null;
         const payment = await pay({ challenge, url, method, body, idempotencyKey });
         authorization = payment?.authorization || payment?.paymentAuthorization || payment?.token || null;
-        paidChallengeId = challengeId;
         if (!authorization) {
           throw new Error("pay callback must return an authorization token");
         }

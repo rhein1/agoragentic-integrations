@@ -13,7 +13,6 @@ _LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+[^)]*)?\)")
 _REF_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(\S+)", re.MULTILINE)
 _REF_USE_RE = re.compile(r"!?\[([^\]]+)\]\[([^\]]*)\]")
 _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
-_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 
 
 def _is_external(target: str) -> bool:

@@ -94,7 +94,6 @@ def recover(
     source = DeterministicSequence(outcomes)
     transitions: List[Transition] = []
     delays: List[int] = []
-    state = TEMPORARILY_UNAVAILABLE
 
     for attempt in range(1, policy.max_attempts + 1):
         outcome = source.next()

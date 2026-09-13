@@ -19,10 +19,6 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function randomId(prefix) {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
-}
-
 function stableJson(value) {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableJson(item)).join(",")}]`;

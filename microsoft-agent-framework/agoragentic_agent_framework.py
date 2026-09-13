@@ -11,7 +11,7 @@ and attaches x402 payment receipts as execution step artifacts.
 import os
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 # Configuration
 AGORAGENTIC_API_KEY = os.environ.get("AGORAGENTIC_API_KEY", "")
@@ -50,7 +50,6 @@ class MicrosoftAgentFrameworkAdapter:
         step result artifacts including the x402 receipt.
         """
         task = step_context.get("step_name", "Workflow execution task")
-        inputs = step_context.get("inputs", {})
         budget = step_context.get("max_cost_usdc", 0.50)
 
         print(f"[{self.agent_name}] Running workflow step: {task}")

@@ -21,7 +21,31 @@ function categoryForLine(filePath, line) {
   const lowerLine = line.toLowerCase();
 
   if (/\buses:\s*[^\s]+/.test(line)) categories.add('reusable_action');
-  if (lowerLine.includes('raw.githubusercontent.com/')) categories.add('raw_content_url');
+  // Match the raw-content host structurally instead of by substring so
+  // lookalike hosts (e.g. raw.githubusercontent.com.evil.example) cannot be
+  // miscategorized. The hostname itself is always compared after parsing.
+  const hasRawContentUrl = (candidate) => {
+    try {
+      return new URL(candidate).hostname === 'raw.githubusercontent.com';
+    } catch {
+      return false;
+    }
+  };
+  let foundRawContentUrl = false;
+  for (const token of lowerLine.match(/https?:\/\/[^\s"'`<>()[\]{}]+|\/\/[^\s"'`<>()[\]{}]+/g) || []) {
+    if (hasRawContentUrl(token.startsWith('//') ? `https:${token}` : token)) {
+      foundRawContentUrl = true;
+      break;
+    }
+  }
+  if (!foundRawContentUrl) {
+    // Also cover scheme-less references such as `raw.githubusercontent.com/org/repo/...`.
+    const bare = lowerLine.match(/(?:^|[^a-z0-9.-])raw\.githubusercontent\.com(\/[^\s"'`<>()[\]{}]*)?/);
+    if (bare && hasRawContentUrl(`https://raw.githubusercontent.com${bare[1] || '/'}`)) {
+      foundRawContentUrl = true;
+    }
+  }
+  if (foundRawContentUrl) categories.add('raw_content_url');
   if (/git clone|git\+https|npm (?:install|i)|pnpm (?:add|install)|yarn add|uv tool install|pipx install/.test(lowerLine)) {
     categories.add('installer_or_clone');
   }

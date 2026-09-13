@@ -14,7 +14,7 @@ Usage:
 
 import json
 import requests
-from typing import Optional, Type
+from typing import Type
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 
@@ -54,7 +54,9 @@ class AgoragenticExecuteTool(BaseTool):
     description = "Route a task through Agoragentic execute() with provider selection, receipts, and settlement."
     args_schema: Type[BaseModel] = ExecuteInput
 
-    def _execute(self, task: str, input_data: str = "{}", constraints: str = "{}", api_key: str = "") -> str:
+    def _execute(self, task: str = "", input_data: str = "{}", constraints: str = "{}", api_key: str = "") -> str:
+        if not task:
+            raise TypeError("AgoragenticExecuteTool._execute() missing required argument: 'task'")
         payload = {"task": task}
         parsed_input = json.loads(input_data or "{}")
         parsed_constraints = json.loads(constraints or "{}")
@@ -79,7 +81,9 @@ class AgoragenticMatchTool(BaseTool):
     description = "Preview eligible routed providers before execution."
     args_schema: Type[BaseModel] = MatchInput
 
-    def _execute(self, task: str, max_cost: float = -1, min_trust: str = "", api_key: str = "") -> str:
+    def _execute(self, task: str = "", max_cost: float = -1, min_trust: str = "", api_key: str = "") -> str:
+        if not task:
+            raise TypeError("AgoragenticMatchTool._execute() missing required argument: 'task'")
         params = {"task": task}
         if max_cost >= 0:
             params["max_cost"] = str(max_cost)
@@ -119,7 +123,9 @@ class AgoragenticInvokeTool(BaseTool):
     description = "Compatibility direct-provider invocation when a known capability ID is required."
     args_schema: Type[BaseModel] = InvokeInput
 
-    def _execute(self, capability_id: str, input_data: str = "{}", api_key: str = "") -> str:
+    def _execute(self, capability_id: str = "", input_data: str = "{}", api_key: str = "") -> str:
+        if not capability_id:
+            raise TypeError("AgoragenticInvokeTool._execute() missing required argument: 'capability_id'")
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/invoke/{capability_id}",
                              json={"input": json.loads(input_data)},
                              headers=_headers(api_key), timeout=60)
@@ -136,7 +142,9 @@ class AgoragenticRegisterTool(BaseTool):
     description = "Create an Agoragentic API key for a buyer, seller, or dual-purpose agent."
     args_schema: Type[BaseModel] = RegisterInput
 
-    def _execute(self, agent_name: str, intent: str = "both") -> str:
+    def _execute(self, agent_name: str = "", intent: str = "both") -> str:
+        if not agent_name:
+            raise TypeError("AgoragenticRegisterTool._execute() missing required argument: 'agent_name'")
         resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/quickstart",
                              json={"name": agent_name, "intent": intent},
                              headers={"Content-Type": "application/json"}, timeout=30)
@@ -154,7 +162,9 @@ class AgoragenticMemoryTool(BaseTool):
     description = "Read or write scoped Agent OS memory when policy allows it."
     args_schema: Type[BaseModel] = MemoryInput
 
-    def _execute(self, key: str, value: str = "", api_key: str = "") -> str:
+    def _execute(self, key: str = "", value: str = "", api_key: str = "") -> str:
+        if not key:
+            raise TypeError("AgoragenticMemoryTool._execute() missing required argument: 'key'")
         if value:
             resp = requests.post(f"{AGORAGENTIC_BASE_URL}/api/vault/memory",
                                  json={"input": {"key": key, "value": value}},

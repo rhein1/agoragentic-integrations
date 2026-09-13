@@ -18,7 +18,6 @@ import {
 import { serveStdioMcp } from '../src/mcp-server.mjs';
 import { SCENARIO_IDS, listScenarios } from '../src/scenarios.mjs';
 import {
-  RISK_FORK_DEMO_BANNER,
   assertDemoTruth,
   createDemoTruth,
   initializeOwnedDemoRoot,

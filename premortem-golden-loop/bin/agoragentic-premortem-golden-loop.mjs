@@ -227,7 +227,9 @@ function exitFor(parsed, blockers, warnings, goldenLoopFailures) {
 
 function openReport(filePath) {
   const child = process.platform === 'win32'
-    ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', 'start', '', filePath], { detached: true, stdio: 'ignore' })
+    // explorer.exe accepts the report as a distinct argument. Avoid cmd.exe:
+    // it would reinterpret both environment-derived paths and CLI input.
+    ? spawn('explorer.exe', [filePath], { detached: true, stdio: 'ignore', windowsHide: true })
     : process.platform === 'darwin'
       ? spawn('open', [filePath], { detached: true, stdio: 'ignore' })
       : spawn('xdg-open', [filePath], { detached: true, stdio: 'ignore' });

@@ -11,6 +11,7 @@ import {
   readdir,
   realpath,
 } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -21,11 +22,13 @@ import {
   assertPlainObject,
   boundedInteger,
   deepFreeze,
+  hashOpenedFileExact,
   requireEnum,
   requireIsoDate,
   requireOpaqueRef,
   requireSha256Ref,
   requireString,
+  readOpenedFileExact,
   safeEqual,
 } from './util.mjs';
 
@@ -1188,27 +1191,52 @@ async function resolveE2BPackageDirectory() {
   throw new Error('Unable to resolve the installed e2b package directory');
 }
 
-async function readStableRegularFile(file, root) {
-  const before = await lstat(file);
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error('E2B runtime SDK package tree contains a symlink or special file');
+async function readStableRegularFile(file, root, maxBytes, limitMessage) {
+  // Open first with O_NOFOLLOW and validate the opened handle itself: there
+  // is no lstat-then-open check-then-act window, and every property below
+  // describes the file that is actually read.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  let handle;
+  try {
+    handle = await open(file, constants.O_RDONLY | noFollow | nonBlock);
+  } catch (error) {
+    if (error?.code === 'ELOOP') {
+      throw new Error('E2B runtime SDK package tree contains a symlink or special file');
+    }
+    throw error;
   }
-  if (before.nlink !== 1) {
-    throw new Error('E2B runtime SDK package tree contains a hard-linked file');
-  }
-  const resolved = await realpath(file);
-  if (!isContainedPath(root, resolved)) {
-    throw new Error('E2B runtime SDK package file escapes its canonical package directory');
-  }
-  const handle = await open(file, 'r');
   try {
     const opened = await handle.stat();
-    if (!sameFileIdentity(before, opened)) {
-      throw new Error('E2B runtime SDK package file changed before inspection');
+    const pathOpened = await lstat(file);
+    if (!opened.isFile()
+      || pathOpened.isSymbolicLink()
+      || !sameFileIdentity(opened, pathOpened)) {
+      throw new Error('E2B runtime SDK package tree contains a symlink or special file');
     }
-    const bytes = await handle.readFile();
+    if (opened.nlink !== 1) {
+      throw new Error('E2B runtime SDK package tree contains a hard-linked file');
+    }
+    if (opened.size > maxBytes) throw new Error(limitMessage);
+    const resolved = await realpath(file);
+    if (path.relative(path.resolve(file), resolved) !== '' || !isContainedPath(root, resolved)) {
+      throw new Error('E2B runtime SDK package file escapes its canonical package directory');
+    }
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes,
+      changedMessage: 'E2B runtime SDK package file changed during inspection',
+      limitMessage,
+    });
     const after = await handle.stat();
-    if (!sameFileIdentity(opened, after) || bytes.byteLength !== after.size) {
+    const pathAfter = await lstat(file);
+    const resolvedAfter = await realpath(file);
+    if (!sameFileIdentity(opened, after)
+      || pathAfter.isSymbolicLink()
+      || !sameFileIdentity(after, pathAfter)
+      || path.relative(path.resolve(file), resolvedAfter) !== ''
+      || !isContainedPath(root, resolvedAfter)
+      || bytes.byteLength !== after.size) {
       throw new Error('E2B runtime SDK package file changed during inspection');
     }
     return bytes;
@@ -1419,7 +1447,23 @@ async function inspectRuntimePackageTree(root, anchor, state) {
       if (state.fileCount >= MAX_RUNTIME_SDK_FILES) {
         throw new Error(`E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_FILES} files`);
       }
-      const bytes = await readStableRegularFile(target, root);
+      const packageRemaining = MAX_RUNTIME_SDK_BYTES_PER_PACKAGE - packageBytes;
+      const closureRemaining = MAX_RUNTIME_SDK_BYTES - state.totalBytes;
+      if (info.size > packageRemaining) {
+        throw new Error(
+          `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes`,
+        );
+      }
+      if (info.size > closureRemaining) {
+        throw new Error(
+          `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`,
+        );
+      }
+      const readLimit = Math.min(packageRemaining, closureRemaining);
+      const limitMessage = packageRemaining <= closureRemaining
+        ? `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes`
+        : `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`;
+      const bytes = await readStableRegularFile(target, root, readLimit, limitMessage);
       packageBytes += bytes.byteLength;
       state.totalBytes += bytes.byteLength;
       state.fileCount += 1;
@@ -2132,5 +2176,21 @@ export function sha256BytesRef(value) {
 }
 
 export async function sha256FileRef(file) {
-  return sha256BytesRef(await readFile(file));
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  const handle = await open(file, constants.O_RDONLY | nonBlock);
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error('E2B artifact hash source must be a regular file');
+    const digest = await hashOpenedFileExact(handle, {
+      expectedSize: before.size,
+      changedMessage: 'E2B artifact changed while it was hashed',
+    });
+    const after = await handle.stat();
+    if (!sameFileIdentity(before, after)) {
+      throw new Error('E2B artifact changed while it was hashed');
+    }
+    return `sha256:${digest}`;
+  } finally {
+    await handle.close();
+  }
 }

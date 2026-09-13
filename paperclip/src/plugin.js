@@ -16,7 +16,7 @@
  * Router-first: execute() is default, invoke() only when approval-required
  */
 
-const { AgoragenticClient, AgoragenticError, TRUST_LEVELS } = require('./client');
+const { AgoragenticClient } = require('./client');
 
 // ─── Plugin Definition (Paperclip SDK pattern) ─────────────────────
 
@@ -292,7 +292,6 @@ function createAgoragenticPlugin() {
     if (!result.cost || !ctx.http) return;
 
     const companyId = toolCtx?.companyId;
-    const agentId = toolCtx?.agentId;
     if (!companyId) return;
 
     try {

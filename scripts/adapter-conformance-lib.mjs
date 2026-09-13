@@ -5,7 +5,8 @@ import path from "node:path";
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const PARSER_TIMEOUT_MS = 10_000;
-const TEST_FILE_PATTERN = /(?:^|\/)(?:test|tests)\/|(?:\.test|\.spec)\.[^.]+$/i;
+const MAX_READ_INTERRUPT_RETRIES = 16;
+const TEST_FILE_PATTERN = /^(?:test|tests)\/[\s\S]*$|^[\s\S]*\/(?:test|tests)\/[\s\S]*$|^[\s\S]*\.(?:test|spec)\.[^.]+$/i;
 const SKIP_DIRECTORIES = new Set([".git", "coverage", "dist", "node_modules"]);
 
 const FLOW_EXPECTATIONS_BY_INTEGRATION = Object.freeze({
@@ -72,10 +73,57 @@ function resolveRepoPath(root, relativePath) {
 }
 
 function readBoundedText(filePath) {
-  const stat = fs.statSync(filePath);
-  if (!stat.isFile()) return { ok: false, reason: "path_is_not_a_file" };
-  if (stat.size > MAX_TEXT_BYTES) return { ok: false, reason: "file_exceeds_2_mib", size_bytes: stat.size };
-  return { ok: true, text: fs.readFileSync(filePath, "utf8"), size_bytes: stat.size };
+  // Open the file first and stat the descriptor (instead of stat-then-read by
+  // path) so the file cannot be swapped between the type/size check and the
+  // read itself.
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+  } catch {
+    return { ok: false, reason: "path_open_failed" };
+  }
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) return { ok: false, reason: "path_is_not_a_file" };
+    if (stat.size > MAX_TEXT_BYTES) return { ok: false, reason: "file_exceeds_2_mib", size_bytes: stat.size };
+    const buffer = Buffer.alloc(stat.size);
+    // A descriptor read may complete with fewer bytes than requested. Advance
+    // only by the reported count, retry bounded interruptions, and never scan
+    // a zero-filled tail as though it came from the file.
+    let offset = 0;
+    let interruptedReads = 0;
+    while (offset < stat.size) {
+      const remaining = stat.size - offset;
+      let bytesRead;
+      try {
+        bytesRead = fs.readSync(fd, buffer, offset, remaining, offset);
+      } catch (error) {
+        if (error?.code === "EINTR" && interruptedReads < MAX_READ_INTERRUPT_RETRIES) {
+          interruptedReads += 1;
+          continue;
+        }
+        return {
+          ok: false,
+          reason: error?.code === "EINTR" ? "file_read_interrupted" : "file_read_failed",
+          size_bytes: stat.size,
+        };
+      }
+      if (!Number.isSafeInteger(bytesRead) || bytesRead < 0 || bytesRead > remaining) {
+        return { ok: false, reason: "file_read_count_invalid", size_bytes: stat.size };
+      }
+      if (bytesRead === 0) {
+        return {
+          ok: false,
+          reason: "file_ended_before_advertised_size",
+          size_bytes: stat.size,
+        };
+      }
+      offset += bytesRead;
+    }
+    return { ok: true, text: buffer.toString("utf8"), size_bytes: stat.size };
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function commandFailure(result) {

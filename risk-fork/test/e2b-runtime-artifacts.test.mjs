@@ -27,10 +27,15 @@ import {
   createE2BBirthRequest,
   e2bBirthRequestPaths,
   inspectRuntimeWorkspace,
+  MAX_RUNTIME_WORKSPACE_BYTES,
   sha256FileRef,
   validateE2BBirthAttestation,
 } from '../e2b-template/lib/runtime-contract.mjs';
-import { runBootstrap } from '../e2b-template/bin/bootstrap.mjs';
+import {
+  MAX_BOOTSTRAP_REQUEST_BYTES,
+  readOpenedJsonBounded,
+  runBootstrap,
+} from '../e2b-template/bin/bootstrap.mjs';
 import {
   classifyLiteralProbeOutcome,
   containsForbiddenProcessText,
@@ -38,7 +43,10 @@ import {
   runBirthWatcher,
 } from '../e2b-template/bin/boot-guard.mjs';
 import {
+  MAX_JOB_BYTES,
   parseRunnerTransportPaths,
+  readOpenedRunnerActionExact,
+  readOpenedRunnerJobExact,
   runRunnerJob,
 } from '../e2b-template/bin/run.mjs';
 import { createRiskForkE2BTemplate } from '../e2b-template/template.mjs';
@@ -567,6 +575,96 @@ function bootstrapRequest(value, phase, workspaceDigest) {
   request.request_hash = sha256Ref({ ...request, request_hash: null });
   return request;
 }
+
+test('shipped E2B descriptor readers reject simulated growth and enforce pre-read limits', async () => {
+  const growingDescriptor = (content) => {
+    const reviewed = Buffer.from(content, 'utf8');
+    let interrupted = false;
+    return {
+      expectedSize: BigInt(reviewed.byteLength),
+      handle: {
+        async read(buffer, offset, length, position) {
+          if (!interrupted) {
+            interrupted = true;
+            const error = new Error('interrupted');
+            error.code = 'EINTR';
+            throw error;
+          }
+          if (position === reviewed.byteLength) {
+            buffer[offset] = 0x21;
+            return { bytesRead: 1, buffer };
+          }
+          const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+          reviewed.copy(buffer, offset, position, position + bytesRead);
+          return { bytesRead, buffer };
+        },
+      },
+    };
+  };
+
+  const cases = [
+    {
+      name: 'runner action',
+      content: 'reviewed action bytes',
+      read: (handle, expectedSize) => readOpenedRunnerActionExact(handle, { size: expectedSize }),
+      expected: /runner read target changed during the operation/,
+    },
+    {
+      name: 'runner job',
+      content: '{"schema":"reviewed-job"}',
+      read: (handle, expectedSize) => readOpenedRunnerJobExact(handle, expectedSize),
+      expected: /runner job changed while it was read/,
+    },
+    {
+      name: 'bootstrap request',
+      content: '{"schema":"reviewed-bootstrap"}',
+      read: (handle, expectedSize) => readOpenedJsonBounded(
+        handle,
+        expectedSize,
+        MAX_BOOTSTRAP_REQUEST_BYTES,
+        'bootstrap request',
+      ),
+      expected: /bootstrap request changed while it was read/,
+    },
+  ];
+
+  for (const value of cases) {
+    const simulated = growingDescriptor(value.content);
+    await assert.rejects(
+      value.read(simulated.handle, simulated.expectedSize),
+      value.expected,
+      value.name,
+    );
+  }
+
+  let readCalls = 0;
+  const unreadableHandle = {
+    async read() {
+      readCalls += 1;
+      throw new Error('descriptor must not be read above the limit');
+    },
+  };
+  await assert.rejects(
+    readOpenedRunnerJobExact(unreadableHandle, BigInt(MAX_JOB_BYTES) + 1n),
+    /runner job exceeds its byte bound/,
+  );
+  await assert.rejects(
+    readOpenedJsonBounded(
+      unreadableHandle,
+      BigInt(MAX_BOOTSTRAP_REQUEST_BYTES) + 1n,
+      MAX_BOOTSTRAP_REQUEST_BYTES,
+      'bootstrap request',
+    ),
+    /bootstrap request exceeds its byte bound/,
+  );
+  await assert.rejects(
+    readOpenedRunnerActionExact(unreadableHandle, {
+      size: BigInt(MAX_RUNTIME_WORKSPACE_BYTES) + 1n,
+    }),
+    /runner read target exceeds the runtime workspace byte limit/,
+  );
+  assert.equal(readCalls, 0, 'oversized descriptors must be rejected before any read/allocation');
+});
 
 test('bootstrap exact-binds fresh boot evidence, runtime artifacts, request, and pre/post workspace', async (t) => {
   const value = await runtimeFixture(t);

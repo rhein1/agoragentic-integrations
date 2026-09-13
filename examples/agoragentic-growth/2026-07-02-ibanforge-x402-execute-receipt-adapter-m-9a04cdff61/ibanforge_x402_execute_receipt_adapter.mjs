@@ -251,16 +251,14 @@ function createFallbackX402Fetch() {
           });
         }
 
-        if (!cachedPayment) {
-          cachedPayment = normalizePayResult(await pay(challengePayload, {
-            url,
-            method,
-            headers: clone(requestHeaders),
-            body: requestBody,
-            idempotencyKey,
-          }));
-          paidChallenge = { challenge_id: challengeId };
-        }
+        cachedPayment = normalizePayResult(await pay(challengePayload, {
+          url,
+          method,
+          headers: clone(requestHeaders),
+          body: requestBody,
+          idempotencyKey,
+        }));
+        paidChallenge = { challenge_id: challengeId };
       } catch (error) {
         if (error instanceof ExecuteHttpError) throw error;
         if (!cachedPayment) throw error;

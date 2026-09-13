@@ -264,7 +264,7 @@ class X402ReceiptChecklistClient:
         try:
             candidates.append(base64.b64decode(value.encode("utf-8"), validate=True).decode("utf-8"))
         except Exception:
-            pass
+            pass  # intentionally ignored: non-base64 input simply skips the decoded candidate
         for candidate in candidates:
             try:
                 return json.loads(candidate)
@@ -403,7 +403,11 @@ class DemoPaidCallHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(encoded)))
         if extra_headers:
             for key, value in extra_headers.items():
-                self.send_header(key, value)
+                # Strip CR/LF so header names/values cannot smuggle
+                # HTTP response splitting into the response.
+                safe_key = str(key).replace("\r", "").replace("\n", "")
+                safe_value = str(value).replace("\r", "").replace("\n", "")
+                self.send_header(safe_key, safe_value)
         self.end_headers()
         self.wfile.write(encoded)
 

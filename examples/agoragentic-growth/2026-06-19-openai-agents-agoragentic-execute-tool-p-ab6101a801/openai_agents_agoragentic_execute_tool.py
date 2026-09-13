@@ -300,7 +300,7 @@ def make_execute_tool(
     try:
         setattr(tool, "_agoragentic_runner", _runner)
     except Exception:
-        pass
+        pass  # intentionally ignored: runner annotation is best-effort; the tool works without it
     return tool
 
 

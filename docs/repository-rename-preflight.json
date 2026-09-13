@@ -7,7 +7,7 @@
   "target_repository": null,
   "summary": {
     "file_count": 168,
-    "occurrence_count": 327,
+    "occurrence_count": 328,
     "category_file_counts": {
       "installer_or_clone": 30,
       "machine_discovery": 59,
@@ -862,7 +862,7 @@
       "path": "elizaos/package.json",
       "occurrences": 1,
       "line_numbers": [
-        23
+        24
       ],
       "categories": [
         "machine_discovery",
@@ -893,7 +893,7 @@
       "path": "examples/agoragentic-growth/2026-07-02-ibanforge-x402-execute-receipt-adapter-m-9a04cdff61/ibanforge_x402_execute_receipt_adapter.mjs",
       "occurrences": 1,
       "line_numbers": [
-        357
+        355
       ],
       "categories": [
         "source_or_test"
@@ -1012,7 +1012,7 @@
       "path": "hyperframes/package.json",
       "occurrences": 1,
       "line_numbers": [
-        27
+        31
       ],
       "categories": [
         "installer_or_clone",
@@ -1378,9 +1378,9 @@
       "path": "opencode/package.json",
       "occurrences": 3,
       "line_numbers": [
-        35,
         38,
-        40
+        41,
+        43
       ],
       "categories": [
         "installer_or_clone",
@@ -1534,7 +1534,7 @@
       "path": "risk-fork/hackathon/scripts/release-artifacts.mjs",
       "occurrences": 1,
       "line_numbers": [
-        161
+        163
       ],
       "categories": [
         "installer_or_clone",
@@ -1619,9 +1619,10 @@
     },
     {
       "path": "scripts/verify-integrations-json.js",
-      "occurrences": 1,
+      "occurrences": 2,
       "line_numbers": [
-        299
+        321,
+        322
       ],
       "categories": [
         "source_or_test"
@@ -1907,8 +1908,8 @@
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        69,
-        74
+        72,
+        77
       ],
       "categories": [
         "installer_or_clone",

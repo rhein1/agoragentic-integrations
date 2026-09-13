@@ -114,7 +114,6 @@ export function makeBinding({ capsule = makeCapsule(), identity = makeForkIdenti
     mcp_method: capsule.proposed_interaction.mcp_method,
     raw_method: capsule.proposed_interaction.raw_method,
     tool_name: capsule.proposed_interaction.tool_name,
-    effective_arguments: argumentsValue,
     provider_ref: 'provider:1',
     target_ref: capsule.proposed_interaction.target_ref,
     amount: overrides.amount,

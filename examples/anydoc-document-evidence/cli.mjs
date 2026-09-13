@@ -69,21 +69,11 @@ function sameFileIdentity(left, right) {
 
 async function openOutputWithoutTruncating(outputPath) {
   const flags = constants.O_WRONLY | (constants.O_NOFOLLOW || 0);
-  try {
-    return await open(outputPath, flags);
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-    try {
-      return await open(
-        outputPath,
-        flags | constants.O_CREAT | constants.O_EXCL,
-        0o600,
-      );
-    } catch (createError) {
-      if (createError?.code === 'EEXIST') return open(outputPath, flags);
-      throw createError;
-    }
-  }
+  // Single atomic open: create the file when missing (O_CREAT) but never
+  // truncate it here. Truncation happens only after the same-file identity
+  // check in writeOutputSafely, so the source document cannot be clobbered
+  // by a symlink or path race. O_NOFOLLOW refuses to follow a trailing symlink.
+  return open(outputPath, flags | constants.O_CREAT, 0o600);
 }
 
 async function writeOutputSafely(inputPath, outputPath, body) {

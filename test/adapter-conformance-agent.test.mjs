@@ -122,6 +122,119 @@ test("credential findings identify the rule and path without echoing the value",
   assert.equal(serialized.includes(secret), false);
 });
 
+test("bounded descriptor reads consume repeated short reads and scan credential-shaped tail content", async () => {
+  const root = fixtureRoot();
+  const secret = "amk_1234567890abcdefghijklmnopqrstuvwxyz";
+  write(
+    root,
+    "demo/README.md",
+    `# Demo\n\nagoragentic_execute\n${"safe fixture text\n".repeat(32)}${secret}\n`,
+  );
+  const originalReadSync = fs.readSync;
+  let readCalls = 0;
+  fs.readSync = function shortRead(fd, buffer, offset, length, position) {
+    readCalls += 1;
+    return originalReadSync.call(fs, fd, buffer, offset, Math.min(length, 7), position);
+  };
+
+  try {
+    const result = await validateIntegration(
+      root,
+      entry("demo", "markdown", "demo/README.md", "demo/README.md"),
+    );
+    const serialized = JSON.stringify(result);
+    const check = result.checks.find((item) => item.id === "credential_literals");
+
+    assert(readCalls > 1);
+    assert.equal(result.result, "fail");
+    assert.equal(check.state, "fail");
+    assert.deepEqual(check.evidence.findings, [
+      { code: "agoragentic_api_key", path: "demo/README.md" },
+    ]);
+    assert.equal(serialized.includes(secret), false);
+  } finally {
+    fs.readSync = originalReadSync;
+  }
+});
+
+test("bounded descriptor reads retry an interrupted read without skipping content", async () => {
+  const root = fixtureRoot();
+  write(root, "demo/README.md", "# Demo\n\nagoragentic_execute\n");
+  const originalReadSync = fs.readSync;
+  let interrupted = false;
+  fs.readSync = function interruptedRead(...args) {
+    if (!interrupted) {
+      interrupted = true;
+      const error = new Error("synthetic interrupted read");
+      error.code = "EINTR";
+      throw error;
+    }
+    return originalReadSync.apply(fs, args);
+  };
+
+  try {
+    const result = await validateIntegration(
+      root,
+      entry("demo", "markdown", "demo/README.md", "demo/README.md"),
+    );
+
+    assert.equal(interrupted, true);
+    assert.equal(result.result, "pass");
+    assert.equal(result.checks.find((item) => item.id === "credential_literals").state, "pass");
+  } finally {
+    fs.readSync = originalReadSync;
+  }
+});
+
+test("bounded descriptor reads fail closed after repeated interruptions", async () => {
+  const root = fixtureRoot();
+  write(root, "demo/README.md", "# Demo\n\nagoragentic_execute\n");
+  const originalReadSync = fs.readSync;
+  let readCalls = 0;
+  fs.readSync = () => {
+    readCalls += 1;
+    const error = new Error("synthetic repeated interrupted read");
+    error.code = "EINTR";
+    throw error;
+  };
+
+  try {
+    const result = await validateIntegration(
+      root,
+      entry("demo", "markdown", "demo/README.md", "demo/README.md"),
+    );
+    const syntax = result.checks.find((item) => item.id === "primary_syntax");
+
+    assert.equal(result.result, "fail");
+    assert.equal(syntax.state, "fail");
+    assert.equal(syntax.evidence.reason, "file_read_interrupted");
+    assert.equal(readCalls, 17);
+  } finally {
+    fs.readSync = originalReadSync;
+  }
+});
+
+test("bounded descriptor reads fail closed when EOF precedes the advertised size", async () => {
+  const root = fixtureRoot();
+  write(root, "demo/README.md", "# Demo\n\nagoragentic_execute\n");
+  const originalReadSync = fs.readSync;
+  fs.readSync = () => 0;
+
+  try {
+    const result = await validateIntegration(
+      root,
+      entry("demo", "markdown", "demo/README.md", "demo/README.md"),
+    );
+    const syntax = result.checks.find((item) => item.id === "primary_syntax");
+
+    assert.equal(result.result, "fail");
+    assert.equal(syntax.state, "fail");
+    assert.equal(syntax.evidence.reason, "file_ended_before_advertised_size");
+  } finally {
+    fs.readSync = originalReadSync;
+  }
+});
+
 test("syntax diagnostics redact credential-shaped values from offending source lines", async () => {
   const root = fixtureRoot();
   const secret = "amk_abcdefghijklmnopqrstuvwxyz1234567890";

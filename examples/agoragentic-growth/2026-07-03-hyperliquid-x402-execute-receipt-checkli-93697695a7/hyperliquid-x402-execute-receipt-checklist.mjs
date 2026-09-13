@@ -166,15 +166,13 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired: lastPaymentRequired,
         });
       }
-      if (!cachedPayment) {
-        cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
-          url,
-          method,
-          headers: requestHeaders,
-          body: requestBody,
-          idempotencyKey,
-        }));
-      }
+      cachedPayment = normalizePayResult(await pay(lastPaymentRequired, {
+        url,
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        idempotencyKey,
+      }));
     } catch (error) {
       if (typeof error?.status === "number") throw error;
       if (!cachedPayment) throw error;

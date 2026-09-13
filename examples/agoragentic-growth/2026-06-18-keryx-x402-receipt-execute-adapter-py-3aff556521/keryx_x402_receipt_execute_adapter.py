@@ -9,7 +9,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
 
 class AdapterError(Exception):

@@ -55,11 +55,6 @@ function createPaywall(options = {}) {
         throw new Error('[agoragentic/settle] options.listingId is required');
     }
 
-    const client = agoragentic({
-        apiKey: options.apiKey,
-        baseUrl: options.baseUrl,
-    });
-
     const receiptHeader = (options.receiptHeader || 'x-agoragentic-receipt').toLowerCase();
 
     return async function agoragenticPaywall(req, res, next) {

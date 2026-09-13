@@ -47,7 +47,13 @@ export function containsObviousCapabilityLikeText(value) {
   for (let index = 0; index < variants.length; index += 1) {
     const candidate = variants[index];
     if (/bearer\s+[a-z0-9._~+\/-]{8,}/i.test(candidate)) return true;
-    for (const assignment of candidate.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})\s*[:=]/g)) {
+    // Finds `key:` / `key =` style assignments without nesting quantified
+    // character classes (which risks polynomial backtracking). The key pattern
+    // uses a single bounded quantifier; the separator check is a separate
+    // anchored test so neither regex has adjacent overlapping quantifiers.
+    for (const assignment of candidate.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})/g)) {
+      const rest = candidate.slice(assignment.index + assignment[0].length);
+      if (!/^\s*[:=]/.test(rest)) continue;
       if (isForbiddenAuthorityShapeKey(assignment[1])) return true;
     }
   }

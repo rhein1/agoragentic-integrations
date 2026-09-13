@@ -14,7 +14,6 @@ import {
   requireMcpMethodName,
   requireOpaqueRef,
   requireSha256Ref,
-  requireString,
   safeEqual,
   uniqueStrings,
 } from './util.mjs';

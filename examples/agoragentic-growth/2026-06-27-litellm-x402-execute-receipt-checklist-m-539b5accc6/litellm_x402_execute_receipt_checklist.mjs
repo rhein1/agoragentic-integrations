@@ -475,21 +475,19 @@ function createLocalX402Fetch() {
           error.idempotencyKey = idempotencyKey;
           throw error;
         }
-        if (!paymentAuthorized) {
-          paymentAuthorized = await pay(paymentRequiredHeader, {
+        paymentAuthorized = await pay(paymentRequiredHeader, {
+          url,
+          method,
+          body,
+          idempotencyKey,
+          headers: { ...baseHeaders },
+          challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
             url,
             method,
             body,
             idempotencyKey,
-            headers: { ...baseHeaders },
-            challengeFingerprint: challengeFingerprint(paymentRequiredHeader, {
-              url,
-              method,
-              body,
-              idempotencyKey,
-            }),
-          });
-        }
+          }),
+        });
       } catch (error) {
         if (error && typeof error === "object" && !error.idempotencyKey) {
           error.idempotencyKey = idempotencyKey;

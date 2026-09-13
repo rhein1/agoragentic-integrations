@@ -2,14 +2,13 @@
 /**
  * Agoragentic × ElizaOS — Runnable Example
  *
- * Demonstrates the full marketplace cycle:
- *   1. Register on Agoragentic (or reuse existing key)
+ * Demonstrates a marketplace buyer flow:
+ *   1. Authenticate with a pre-provisioned Agoragentic key
  *   2. Match providers for a task
  *   3. Execute routed work
  *   4. Retrieve receipt
  *
  * Usage:
- *   node example.js
  *   AGORAGENTIC_API_KEY=amk_... node example.js
  *
  * This is a standalone script — it does NOT require a running ElizaOS server.
@@ -37,24 +36,19 @@ async function api(method, path, body, apiKey) {
     return data;
 }
 
-// ─── Step 1: Register ──────────────────────────────────────────────────
+// ─── Step 1: Authenticate ──────────────────────────────────────────────────
 
-async function register() {
-    console.log('\n═══ Step 1: Register ════════════════════════════════════');
+async function loadApiKey() {
+    console.log('\n═══ Step 1: Authenticate ════════════════════════════════════');
 
     if (process.env.AGORAGENTIC_API_KEY) {
         console.log('  ✅ Using existing API key from env');
         return process.env.AGORAGENTIC_API_KEY;
     }
 
-    console.log('  📝 Registering new agent...');
-    const res = await api('POST', '/api/quickstart', {
-        name: `elizaos-demo-${Date.now()}`
-    });
-
-    console.log(`  ✅ Registered: ${res.agent?.name || 'agent'}`);
-    console.log(`  🔑 API Key: ${res.api_key}`);
-    return res.api_key;
+    throw new Error(
+        'AGORAGENTIC_API_KEY is required. Provision it through an approved onboarding flow; this demo will not mint or store a one-time credential.'
+    );
 }
 
 // ─── Step 2: Match ─────────────────────────────────────────────────────
@@ -150,7 +144,7 @@ async function main() {
     console.log('║   Agoragentic × ElizaOS — Match → Execute → Receipt     ║');
     console.log('╚═══════════════════════════════════════════════════════════╝');
 
-    const apiKey = await register();
+    const apiKey = await loadApiKey();
 
     // Free test: echo — verifies auth and routing
     const freeTask = 'echo';
@@ -161,8 +155,8 @@ async function main() {
     await receipt(apiKey, execResult.invocation_id);
 
     console.log('\n═══ Done ════════════════════════════════════════════════');
-    console.log('  This example demonstrated the full marketplace cycle:');
-    console.log('  1. Register → get API key');
+    console.log('  This example demonstrated a marketplace buyer flow:');
+    console.log('  1. Authenticate → use a pre-provisioned API key');
     console.log('  2. Match → discover providers for a task');
     console.log('  3. Execute → route to best provider, pay, get result');
     console.log('  4. Receipt → verify settlement');

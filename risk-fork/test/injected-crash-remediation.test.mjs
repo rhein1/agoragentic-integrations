@@ -555,7 +555,7 @@ test('injected parent-head reservation crash is COMMIT_AMBIGUOUS and cannot ente
     });
     let mutationEffects = 0;
     let injectCrash = true;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = typedCommitInput(
       prepared,
       governance,
@@ -598,7 +598,7 @@ test('injected authorization-consumption crash is COMMIT_AMBIGUOUS and never exe
     });
     let executionEffects = 0;
     let injectCrash = true;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = actionCommitInput(
       prepared,
       governance,
@@ -643,7 +643,7 @@ test('injected parent mutation crash is COMMIT_AMBIGUOUS and mutation is attempt
       governance,
     });
     let mutationAttempts = 0;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = typedCommitInput(
       prepared,
       governance,
@@ -679,7 +679,7 @@ test('injected external-action crash is COMMIT_AMBIGUOUS and execution is attemp
       binding: prepared.binding,
     });
     let executionAttempts = 0;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = actionCommitInput(
       prepared,
       governance,
@@ -718,7 +718,7 @@ test('injected parent finalization crash is COMMIT_AMBIGUOUS after one completed
       governance,
     });
     let mutationAttempts = 0;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = typedCommitInput(
       prepared,
       governance,
@@ -754,7 +754,7 @@ test('injected authorization finalization crash is COMMIT_AMBIGUOUS after one ex
       binding: prepared.binding,
     });
     let executionAttempts = 0;
-    const controller = makeController(new InjectedCrashProvider());
+    makeController(new InjectedCrashProvider());
     const input = actionCommitInput(
       prepared,
       governance,

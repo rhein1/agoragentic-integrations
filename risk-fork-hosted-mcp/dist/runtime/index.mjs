@@ -25670,9 +25670,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
           return `${varKind} ${this.name}${rhs};` + _n;
         }
-        optimizeNames(names, constants3) {
+        optimizeNames(names, constants4) {
           if (!names[this.name.str]) return;
-          if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants3);
+          if (this.rhs) this.rhs = optimizeExpr(this.rhs, names, constants4);
           return this;
         }
         get names() {
@@ -25689,9 +25689,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         render({ _n }) {
           return `${this.lhs} = ${this.rhs};` + _n;
         }
-        optimizeNames(names, constants3) {
+        optimizeNames(names, constants4) {
           if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects) return;
-          this.rhs = optimizeExpr(this.rhs, names, constants3);
+          this.rhs = optimizeExpr(this.rhs, names, constants4);
           return this;
         }
         get names() {
@@ -25750,8 +25750,8 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         optimizeNodes() {
           return `${this.code}` ? this : void 0;
         }
-        optimizeNames(names, constants3) {
-          this.code = optimizeExpr(this.code, names, constants3);
+        optimizeNames(names, constants4) {
+          this.code = optimizeExpr(this.code, names, constants4);
           return this;
         }
         get names() {
@@ -25777,12 +25777,12 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           }
           return nodes.length > 0 ? this : void 0;
         }
-        optimizeNames(names, constants3) {
+        optimizeNames(names, constants4) {
           const { nodes } = this;
           let i = nodes.length;
           while (i--) {
             const n = nodes[i];
-            if (n.optimizeNames(names, constants3)) continue;
+            if (n.optimizeNames(names, constants4)) continue;
             subtractNames(names, n.names);
             nodes.splice(i, 1);
           }
@@ -25829,11 +25829,11 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           if (cond === false || !this.nodes.length) return void 0;
           return this;
         }
-        optimizeNames(names, constants3) {
+        optimizeNames(names, constants4) {
           var _a;
-          this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants3);
-          if (!(super.optimizeNames(names, constants3) || this.else)) return;
-          this.condition = optimizeExpr(this.condition, names, constants3);
+          this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants4);
+          if (!(super.optimizeNames(names, constants4) || this.else)) return;
+          this.condition = optimizeExpr(this.condition, names, constants4);
           return this;
         }
         get names() {
@@ -25855,9 +25855,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         render(opts) {
           return `for(${this.iteration})` + super.render(opts);
         }
-        optimizeNames(names, constants3) {
-          if (!super.optimizeNames(names, constants3)) return;
-          this.iteration = optimizeExpr(this.iteration, names, constants3);
+        optimizeNames(names, constants4) {
+          if (!super.optimizeNames(names, constants4)) return;
+          this.iteration = optimizeExpr(this.iteration, names, constants4);
           return this;
         }
         get names() {
@@ -25892,9 +25892,9 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
         render(opts) {
           return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
         }
-        optimizeNames(names, constants3) {
-          if (!super.optimizeNames(names, constants3)) return;
-          this.iterable = optimizeExpr(this.iterable, names, constants3);
+        optimizeNames(names, constants4) {
+          if (!super.optimizeNames(names, constants4)) return;
+          this.iterable = optimizeExpr(this.iterable, names, constants4);
           return this;
         }
         get names() {
@@ -25933,11 +25933,11 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           (_b = this.finally) === null || _b === void 0 || _b.optimizeNodes();
           return this;
         }
-        optimizeNames(names, constants3) {
+        optimizeNames(names, constants4) {
           var _a, _b;
-          super.optimizeNames(names, constants3);
-          (_a = this.catch) === null || _a === void 0 || _a.optimizeNames(names, constants3);
-          (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants3);
+          super.optimizeNames(names, constants4);
+          (_a = this.catch) === null || _a === void 0 || _a.optimizeNames(names, constants4);
+          (_b = this.finally) === null || _b === void 0 || _b.optimizeNames(names, constants4);
           return this;
         }
         get names() {
@@ -26186,7 +26186,7 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
       function addExprNames(names, from) {
         return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
       }
-      function optimizeExpr(expr, names, constants3) {
+      function optimizeExpr(expr, names, constants4) {
         if (expr instanceof code_1.Name) return replaceName(expr);
         if (!canOptimize(expr)) return expr;
         return new code_1._Code(expr._items.reduce((items, c) => {
@@ -26196,13 +26196,13 @@ var require_ajvProvider_ZaoO9afR = __commonJS({
           return items;
         }, []));
         function replaceName(n) {
-          const c = constants3[n.str];
+          const c = constants4[n.str];
           if (c === void 0 || names[n.str] !== 1) return n;
           delete names[n.str];
           return c;
         }
         function canOptimize(e) {
-          return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants3[c.str] !== void 0);
+          return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants4[c.str] !== void 0);
         }
       }
       function subtractNames(names, from) {
@@ -36663,7 +36663,7 @@ var require_mcp_server = __commonJS({
       return value;
     }
     function normalizeCredentialKeyTokens(key) {
-      return String(key).replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map((token) => token.endsWith("s") && !token.endsWith("ss") ? token.slice(0, -1) : token);
+      return String(key).replace(/(?<=[A-Z])(?=[A-Z][a-z])/g, "_").replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map((token) => token.endsWith("s") && !token.endsWith("ss") ? token.slice(0, -1) : token);
     }
     function credentialKeyClassification(key) {
       const tokens = normalizeCredentialKeyTokens(key);
@@ -37996,7 +37996,7 @@ var require_mcp_server = __commonJS({
       path: path8,
       body
     }) {
-      const adapter = requireEnforcementBoundary(enforcementBoundary);
+      requireEnforcementBoundary(enforcementBoundary);
       throw new McpEnforcementError(
         "MCP_FALLBACK_EFFECT_FENCE_REQUIRED",
         "MCP fallback is disabled until a durable host effect fence is qualified"
@@ -44312,11 +44312,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants3) {
+      optimizeNames(names, constants4) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants3);
+          this.rhs = optimizeExpr(this.rhs, names, constants4);
         return this;
       }
       get names() {
@@ -44333,10 +44333,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants3) {
+      optimizeNames(names, constants4) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants3);
+        this.rhs = optimizeExpr(this.rhs, names, constants4);
         return this;
       }
       get names() {
@@ -44397,8 +44397,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants3) {
-        this.code = optimizeExpr(this.code, names, constants3);
+      optimizeNames(names, constants4) {
+        this.code = optimizeExpr(this.code, names, constants4);
         return this;
       }
       get names() {
@@ -44427,12 +44427,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants3) {
+      optimizeNames(names, constants4) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants3))
+          if (n.optimizeNames(names, constants4))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -44485,12 +44485,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants3) {
+      optimizeNames(names, constants4) {
         var _a;
-        this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants3);
-        if (!(super.optimizeNames(names, constants3) || this.else))
+        this.else = (_a = this.else) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants4);
+        if (!(super.optimizeNames(names, constants4) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants3);
+        this.condition = optimizeExpr(this.condition, names, constants4);
         return this;
       }
       get names() {
@@ -44513,10 +44513,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants3) {
-        if (!super.optimizeNames(names, constants3))
+      optimizeNames(names, constants4) {
+        if (!super.optimizeNames(names, constants4))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants3);
+        this.iteration = optimizeExpr(this.iteration, names, constants4);
         return this;
       }
       get names() {
@@ -44552,10 +44552,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants3) {
-        if (!super.optimizeNames(names, constants3))
+      optimizeNames(names, constants4) {
+        if (!super.optimizeNames(names, constants4))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants3);
+        this.iterable = optimizeExpr(this.iterable, names, constants4);
         return this;
       }
       get names() {
@@ -44597,11 +44597,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants3) {
+      optimizeNames(names, constants4) {
         var _a, _b;
-        super.optimizeNames(names, constants3);
-        (_a = this.catch) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants3);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants3);
+        super.optimizeNames(names, constants4);
+        (_a = this.catch) === null || _a === void 0 ? void 0 : _a.optimizeNames(names, constants4);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants4);
         return this;
       }
       get names() {
@@ -44902,7 +44902,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants3) {
+    function optimizeExpr(expr, names, constants4) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -44917,14 +44917,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants3[n.str];
+        const c = constants4[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants3[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants4[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -52076,6 +52076,79 @@ function sha256Ref(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/util.mjs
 import { createHash as createHash2, timingSafeEqual } from "node:crypto";
 import path from "node:path";
+var MAX_INTERRUPTED_DESCRIPTOR_READS = 16;
+function descriptorReadSize(value, field) {
+  const size = typeof value === "bigint" ? value : BigInt(value);
+  if (size < 0n || size > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new TypeError(`${field} must be a non-negative safe integer`);
+  }
+  return size;
+}
+async function readDescriptorAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== "EINTR" || interruptions >= MAX_INTERRUPTED_DESCRIPTOR_READS) {
+        throw error;
+      }
+      interruptions += 1;
+    }
+  }
+}
+async function readOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, "expectedSize");
+  const maxBytes = descriptorReadSize(options.maxBytes, "maxBytes");
+  const changedMessage = options.changedMessage ?? "File changed while it was read";
+  const limitMessage = options.limitMessage ?? "File exceeds its bounded byte allowance";
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+  const size = Number(expectedSize);
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await readDescriptorAt(handle, bytes, offset, size - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead) || result.bytesRead <= 0 || result.bytesRead > size - offset) {
+      throw new Error(changedMessage);
+    }
+    offset += result.bytesRead;
+  }
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return bytes;
+}
+async function hashOpenedFileExact(handle, options = {}) {
+  const expectedSize = descriptorReadSize(options.expectedSize, "expectedSize");
+  const maxBytes = descriptorReadSize(
+    options.maxBytes ?? Number.MAX_SAFE_INTEGER,
+    "maxBytes"
+  );
+  const changedMessage = options.changedMessage ?? "File changed while it was hashed";
+  const limitMessage = options.limitMessage ?? "File exceeds its bounded byte allowance";
+  if (expectedSize > maxBytes) throw new Error(limitMessage);
+  const hash = createHash2(options.algorithm ?? "sha256");
+  const chunk = Buffer.allocUnsafe(64 * 1024);
+  const size = Number(expectedSize);
+  let offset = 0;
+  while (offset < size) {
+    const length = Math.min(chunk.byteLength, size - offset);
+    const result = await readDescriptorAt(handle, chunk, 0, length, offset);
+    if (!Number.isSafeInteger(result?.bytesRead) || result.bytesRead <= 0 || result.bytesRead > length) {
+      throw new Error(changedMessage);
+    }
+    hash.update(chunk.subarray(0, result.bytesRead));
+    offset += result.bytesRead;
+  }
+  const eofProbe = Buffer.allocUnsafe(1);
+  const probe = await readDescriptorAt(handle, eofProbe, 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new Error(changedMessage);
+  }
+  return hash.digest(options.encoding ?? "hex");
+}
 function detachArray2(value) {
   Object.setPrototypeOf(value, null);
   return value;
@@ -58218,7 +58291,6 @@ async function getAuditTrail(state, input = {}) {
       rows: result.rows
     });
     await client.query("ROLLBACK");
-    transactionOpen = false;
     return verified;
   } catch (error) {
     if (transactionOpen) await client.query("ROLLBACK").catch(() => {
@@ -58567,7 +58639,9 @@ function containsObviousCapabilityLikeText(value) {
   for (let index = 0; index < variants.length; index += 1) {
     const candidate = variants[index];
     if (/bearer\s+[a-z0-9._~+\/-]{8,}/i.test(candidate)) return true;
-    for (const assignment of candidate.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})\s*[:=]/g)) {
+    for (const assignment of candidate.matchAll(/(?:^|[\s,;{])([^=:\n,;{}]{1,120})/g)) {
+      const rest = candidate.slice(assignment.index + assignment[0].length);
+      if (!/^\s*[:=]/.test(rest)) continue;
       if (isForbiddenAuthorityShapeKey(assignment[1])) return true;
     }
   }
@@ -60160,7 +60234,7 @@ function createFileParentHeadInternals(directory, clock) {
         pending_transaction: intent
       });
       let authorityRequest;
-      let authorityReserved = authorityBefore;
+      let authorityReserved;
       let proof;
       try {
         authorityRequest = await prepareUnderReservation(
@@ -66760,6 +66834,7 @@ import {
   readdir,
   realpath
 } from "node:fs/promises";
+import { constants } from "node:fs";
 import { createRequire } from "node:module";
 import path3 from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -67822,27 +67897,42 @@ async function resolveE2BPackageDirectory() {
   }
   throw new Error("Unable to resolve the installed e2b package directory");
 }
-async function readStableRegularFile(file, root) {
-  const before = await lstat(file);
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error("E2B runtime SDK package tree contains a symlink or special file");
+async function readStableRegularFile(file, root, maxBytes, limitMessage) {
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  let handle;
+  try {
+    handle = await open2(file, constants.O_RDONLY | noFollow | nonBlock);
+  } catch (error) {
+    if (error?.code === "ELOOP") {
+      throw new Error("E2B runtime SDK package tree contains a symlink or special file");
+    }
+    throw error;
   }
-  if (before.nlink !== 1) {
-    throw new Error("E2B runtime SDK package tree contains a hard-linked file");
-  }
-  const resolved = await realpath(file);
-  if (!isContainedPath(root, resolved)) {
-    throw new Error("E2B runtime SDK package file escapes its canonical package directory");
-  }
-  const handle = await open2(file, "r");
   try {
     const opened = await handle.stat();
-    if (!sameFileIdentity(before, opened)) {
-      throw new Error("E2B runtime SDK package file changed before inspection");
+    const pathOpened = await lstat(file);
+    if (!opened.isFile() || pathOpened.isSymbolicLink() || !sameFileIdentity(opened, pathOpened)) {
+      throw new Error("E2B runtime SDK package tree contains a symlink or special file");
     }
-    const bytes = await handle.readFile();
+    if (opened.nlink !== 1) {
+      throw new Error("E2B runtime SDK package tree contains a hard-linked file");
+    }
+    if (opened.size > maxBytes) throw new Error(limitMessage);
+    const resolved = await realpath(file);
+    if (path3.relative(path3.resolve(file), resolved) !== "" || !isContainedPath(root, resolved)) {
+      throw new Error("E2B runtime SDK package file escapes its canonical package directory");
+    }
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes,
+      changedMessage: "E2B runtime SDK package file changed during inspection",
+      limitMessage
+    });
     const after = await handle.stat();
-    if (!sameFileIdentity(opened, after) || bytes.byteLength !== after.size) {
+    const pathAfter = await lstat(file);
+    const resolvedAfter = await realpath(file);
+    if (!sameFileIdentity(opened, after) || pathAfter.isSymbolicLink() || !sameFileIdentity(after, pathAfter) || path3.relative(path3.resolve(file), resolvedAfter) !== "" || !isContainedPath(root, resolvedAfter) || bytes.byteLength !== after.size) {
       throw new Error("E2B runtime SDK package file changed during inspection");
     }
     return bytes;
@@ -68024,7 +68114,21 @@ async function inspectRuntimePackageTree(root, anchor, state) {
       if (state.fileCount >= MAX_RUNTIME_SDK_FILES) {
         throw new Error(`E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_FILES} files`);
       }
-      const bytes = await readStableRegularFile(target, root);
+      const packageRemaining = MAX_RUNTIME_SDK_BYTES_PER_PACKAGE - packageBytes;
+      const closureRemaining = MAX_RUNTIME_SDK_BYTES - state.totalBytes;
+      if (info.size > packageRemaining) {
+        throw new Error(
+          `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes`
+        );
+      }
+      if (info.size > closureRemaining) {
+        throw new Error(
+          `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`
+        );
+      }
+      const readLimit = Math.min(packageRemaining, closureRemaining);
+      const limitMessage = packageRemaining <= closureRemaining ? `E2B runtime package exceeds ${MAX_RUNTIME_SDK_BYTES_PER_PACKAGE} bytes` : `E2B runtime dependency closure exceeds ${MAX_RUNTIME_SDK_BYTES} bytes`;
+      const bytes = await readStableRegularFile(target, root, readLimit, limitMessage);
       packageBytes += bytes.byteLength;
       state.totalBytes += bytes.byteLength;
       state.fileCount += 1;
@@ -68675,7 +68779,23 @@ function sha256BytesRef(value) {
   return `sha256:${createHash3("sha256").update(bytes).digest("hex")}`;
 }
 async function sha256FileRef(file) {
-  return sha256BytesRef(await readFile3(file));
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
+  const handle = await open2(file, constants.O_RDONLY | nonBlock);
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) throw new Error("E2B artifact hash source must be a regular file");
+    const digest = await hashOpenedFileExact(handle, {
+      expectedSize: before.size,
+      changedMessage: "E2B artifact changed while it was hashed"
+    });
+    const after = await handle.stat();
+    if (!sameFileIdentity(before, after)) {
+      throw new Error("E2B artifact changed while it was hashed");
+    }
+    return `sha256:${digest}`;
+  } finally {
+    await handle.close();
+  }
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
@@ -68746,7 +68866,7 @@ var OBSERVATION_HASH_KEYS = Object.freeze([
   "ipv4_probe_hash",
   "ipv6_probe_hash"
 ]);
-var MAX_RUNTIME_BYTES = 32 * 1024 * 1024;
+var MAX_RUNTIME_WORKSPACE_BYTES = 32 * 1024 * 1024;
 var BIRTH_AUTHORITY_FLAGS = Object.freeze([
   "credentials_included",
   "wallet_material_included",
@@ -69535,7 +69655,7 @@ var E2BCleanupJournal = class {
 };
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-workspace-export.mjs
-import { constants } from "node:fs";
+import { constants as constants2 } from "node:fs";
 import {
   chmod,
   lstat as lstat2,
@@ -70124,7 +70244,8 @@ function stableIdentity(info) {
     dev: typeof info.dev === "bigint" ? info.dev.toString() : String(info.dev),
     ino: typeof info.ino === "bigint" ? info.ino.toString() : String(info.ino),
     size: typeof info.size === "bigint" ? info.size.toString() : String(info.size),
-    mtime_ms: Number(info.mtimeMs)
+    nlink: typeof info.nlink === "bigint" ? info.nlink.toString() : String(info.nlink),
+    mtime_ns: String(info.mtimeNs ?? BigInt(Math.trunc(Number(info.mtimeMs) * 1e6)))
   };
 }
 function assertWithinRealRoot(rootReal, candidateReal, field) {
@@ -70134,44 +70255,76 @@ function assertWithinRealRoot(rootReal, candidateReal, field) {
     throw new Error(`${field} escapes the workspace root`);
   }
 }
+function readOnlyNoFollowNonBlockingFlags({ directoryOnly = false } = {}) {
+  const noFollow = Number.isInteger(constants2.O_NOFOLLOW) ? constants2.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants2.O_NONBLOCK) ? constants2.O_NONBLOCK : 0;
+  const directory = directoryOnly && Number.isInteger(constants2.O_DIRECTORY) ? constants2.O_DIRECTORY : 0;
+  return constants2.O_RDONLY | noFollow | nonBlock | directory;
+}
+async function bindOpenedPath({
+  target,
+  opened,
+  rootReal,
+  field,
+  symlinkMessage,
+  changedMessage
+}) {
+  const current = await lstat2(target, { bigint: true });
+  if (current.isSymbolicLink()) throw new Error(symlinkMessage);
+  assertStableCleanupIdentity(opened, current, changedMessage);
+  const resolved = await realpath2(target);
+  assertWithinRealRoot(rootReal, resolved, field);
+  return resolved;
+}
 async function readStableFile(absolute, relative, rootReal, maxReadableBytes) {
-  const before = await lstat2(absolute, { bigint: true });
-  if (before.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
-  if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
-  if (before.nlink > 1n) throw new Error(`Hard-linked files are forbidden: ${relative}`);
-  const beforeReal = await realpath2(absolute);
-  assertWithinRealRoot(rootReal, beforeReal, `Workspace file ${relative}`);
-  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
   let handle;
   try {
-    handle = await open4(absolute, constants.O_RDONLY | noFollow);
+    handle = await open4(absolute, readOnlyNoFollowNonBlockingFlags());
+  } catch (error) {
+    if (error?.code === "ELOOP") throw new Error(`Symlinks are forbidden: ${relative}`);
+    throw error;
+  }
+  try {
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isFile() || opened.nlink > 1n) {
-      throw new Error(`Workspace entry changed type while exporting: ${relative}`);
-    }
+    if (!opened.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+    if (opened.nlink > 1n) throw new Error(`Hard-linked files are forbidden: ${relative}`);
     if (opened.size > BigInt(maxReadableBytes)) {
       throw new Error(`Workspace exceeds its bounded byte allowance at ${relative}`);
     }
-    if (JSON.stringify(stableIdentity(before)) !== JSON.stringify(stableIdentity(opened))) {
-      throw new Error(`Workspace path changed while it was opened: ${relative}`);
-    }
-    const content = await handle.readFile();
+    const openedReal = await bindOpenedPath({
+      target: absolute,
+      opened,
+      rootReal,
+      field: `Workspace file ${relative}`,
+      symlinkMessage: `Symlinks are forbidden: ${relative}`,
+      changedMessage: `Workspace path changed while exporting: ${relative}`
+    });
+    const content = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: maxReadableBytes,
+      changedMessage: `Workspace file changed while exporting: ${relative}`,
+      limitMessage: `Workspace exceeds its bounded byte allowance at ${relative}`
+    });
     const after = await handle.stat({ bigint: true });
+    if (!after.isFile() || after.nlink > 1n) {
+      throw new Error(`Workspace file changed type while exporting: ${relative}`);
+    }
     if (JSON.stringify(stableIdentity(opened)) !== JSON.stringify(stableIdentity(after))) {
       throw new Error(`Workspace file changed while exporting: ${relative}`);
     }
-    const currentPath = await lstat2(absolute, { bigint: true });
-    if (JSON.stringify(stableIdentity(before)) !== JSON.stringify(stableIdentity(currentPath))) {
-      throw new Error(`Workspace path changed while exporting: ${relative}`);
-    }
-    const currentReal = await realpath2(absolute);
-    assertWithinRealRoot(rootReal, currentReal, `Workspace file ${relative}`);
-    if (currentReal !== beforeReal) throw new Error(`Workspace path target changed: ${relative}`);
+    const currentReal = await bindOpenedPath({
+      target: absolute,
+      opened,
+      rootReal,
+      field: `Workspace file ${relative}`,
+      symlinkMessage: `Symlinks are forbidden: ${relative}`,
+      changedMessage: `Workspace path changed while exporting: ${relative}`
+    });
+    if (currentReal !== openedReal) throw new Error(`Workspace path target changed: ${relative}`);
     assertNoSecretMaterial(relative, content);
     return content;
   } finally {
-    await handle?.close().catch(() => {
-    });
+    await handle.close();
   }
 }
 async function enumerateWorkspace(root, { maxFiles, maxBytes, includeContent }) {
@@ -70290,12 +70443,11 @@ function assertStableCleanupIdentity(before, after, field) {
   }
 }
 async function makeOwnedDirectoryWritable(directory, before) {
-  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
-  const directoryOnly = Number.isInteger(constants.O_DIRECTORY) ? constants.O_DIRECTORY : 0;
+  const directoryOnly = Number.isInteger(constants2.O_DIRECTORY) ? constants2.O_DIRECTORY : 0;
   if (process.platform !== "win32" && directoryOnly !== 0) {
     let handle;
     try {
-      handle = await open4(directory, constants.O_RDONLY | noFollow | directoryOnly);
+      handle = await open4(directory, readOnlyNoFollowNonBlockingFlags({ directoryOnly: true }));
       const opened = await handle.stat({ bigint: true });
       if (!opened.isDirectory()) {
         throw new Error("Immutable workspace export cleanup directory changed type");
@@ -70335,44 +70487,49 @@ async function validateOwnedTreeForCleanup(directory, rootReal, state, depth = 0
   }
   for (const entry of entries) {
     const target = path5.join(directory, entry.name);
-    const info = await lstat2(target, { bigint: true });
-    if (info.isSymbolicLink()) {
-      throw new Error("Immutable workspace export cleanup refuses symlinks");
-    }
-    if (info.isDirectory()) {
-      await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
-      continue;
-    }
-    if (!info.isFile()) {
-      throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
-    }
-    if (info.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-    }
-    const fileReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, fileReal, "Immutable workspace export cleanup file");
-    const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
     let handle;
     try {
-      handle = await open4(target, constants.O_RDONLY | noFollow);
-      const opened = await handle.stat({ bigint: true });
-      if (!opened.isFile() || opened.nlink > 1n) {
-        throw new Error("Immutable workspace export cleanup refuses a changed or hard-linked file");
+      handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
+    } catch (error) {
+      if (error?.code === "ELOOP") {
+        throw new Error("Immutable workspace export cleanup refuses symlinks");
       }
-      assertStableCleanupIdentity(info, opened, "Immutable workspace export cleanup file");
-    } finally {
-      await handle?.close().catch(() => {
+      throw error;
+    }
+    let info;
+    let entryReal;
+    try {
+      info = await handle.stat({ bigint: true });
+      entryReal = await bindOpenedPath({
+        target,
+        opened: info,
+        rootReal,
+        field: "Immutable workspace export cleanup entry",
+        symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+        changedMessage: "Immutable workspace export cleanup entry path changed"
       });
+      if (info.isDirectory()) {
+        await validateOwnedTreeForCleanup(target, rootReal, state, depth + 1);
+      } else if (!info.isFile()) {
+        throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
+      } else if (info.nlink > 1n) {
+        throw new Error("Immutable workspace export cleanup refuses hard-linked files");
+      }
+      const after2 = await handle.stat({ bigint: true });
+      assertStableCleanupIdentity(info, after2, "Immutable workspace export cleanup entry");
+    } finally {
+      await handle.close();
     }
-    const current = await lstat2(target, { bigint: true });
-    if (current.isSymbolicLink() || !current.isFile() || current.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses a changed or hard-linked file path");
-    }
-    assertStableCleanupIdentity(info, current, "Immutable workspace export cleanup file path");
-    const currentReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, currentReal, "Immutable workspace export cleanup file");
-    if (currentReal !== fileReal) {
-      throw new Error("Immutable workspace export cleanup file target changed");
+    const currentReal = await bindOpenedPath({
+      target,
+      opened: info,
+      rootReal,
+      field: "Immutable workspace export cleanup entry",
+      symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+      changedMessage: "Immutable workspace export cleanup entry path changed"
+    });
+    if (currentReal !== entryReal) {
+      throw new Error("Immutable workspace export cleanup entry target changed");
     }
   }
   const after = await lstat2(directory, { bigint: true });
@@ -70404,56 +70561,57 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
   }
   for (const entry of entries) {
     const target = path5.join(directory, entry.name);
-    const info = await lstat2(target, { bigint: true });
-    if (info.isSymbolicLink()) {
-      throw new Error("Immutable workspace export cleanup refuses symlinks");
-    }
-    if (info.isDirectory()) {
-      await makeOwnedTreeWritable(target, rootReal, state, depth + 1);
-      continue;
-    }
-    if (!info.isFile()) {
-      throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
-    }
-    if (info.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-    }
-    const fileReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, fileReal, "Immutable workspace export cleanup file");
-    const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
     let handle;
     try {
-      handle = await open4(target, constants.O_RDONLY | noFollow);
-      const openedFile = await handle.stat({ bigint: true });
-      if (!openedFile.isFile()) {
-        throw new Error("Immutable workspace export cleanup file changed type");
+      handle = await open4(target, readOnlyNoFollowNonBlockingFlags());
+    } catch (error) {
+      if (error?.code === "ELOOP") {
+        throw new Error("Immutable workspace export cleanup refuses symlinks");
       }
-      if (openedFile.nlink > 1n) {
+      throw error;
+    }
+    let info;
+    let entryReal;
+    try {
+      info = await handle.stat({ bigint: true });
+      entryReal = await bindOpenedPath({
+        target,
+        opened: info,
+        rootReal,
+        field: "Immutable workspace export cleanup entry",
+        symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+        changedMessage: "Immutable workspace export cleanup entry path changed"
+      });
+      if (info.isDirectory()) {
+        await handle.close();
+        handle = null;
+        await makeOwnedTreeWritable(target, rootReal, state, depth + 1);
+      } else if (!info.isFile()) {
+        throw new Error("Immutable workspace export cleanup refuses special filesystem entries");
+      } else if (info.nlink > 1n) {
         throw new Error("Immutable workspace export cleanup refuses hard-linked files");
+      } else {
+        await handle.chmod(384);
+        const writableFile = await handle.stat({ bigint: true });
+        if (!writableFile.isFile() || writableFile.nlink > 1n) {
+          throw new Error("Immutable workspace export cleanup refuses hard-linked files");
+        }
+        assertStableCleanupIdentity(info, writableFile, "Immutable workspace export cleanup file");
       }
-      assertStableCleanupIdentity(info, openedFile, "Immutable workspace export cleanup file");
-      await handle.chmod(384);
-      const writableFile = await handle.stat({ bigint: true });
-      if (writableFile.nlink > 1n) {
-        throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-      }
-      assertStableCleanupIdentity(openedFile, writableFile, "Immutable workspace export cleanup file");
     } finally {
       await handle?.close().catch(() => {
       });
     }
-    const current = await lstat2(target, { bigint: true });
-    if (current.isSymbolicLink() || !current.isFile()) {
-      throw new Error("Immutable workspace export cleanup file path changed type");
-    }
-    if (current.nlink > 1n) {
-      throw new Error("Immutable workspace export cleanup refuses hard-linked files");
-    }
-    assertStableCleanupIdentity(info, current, "Immutable workspace export cleanup file path");
-    const currentReal = await realpath2(target);
-    assertWithinRealRoot(rootReal, currentReal, "Immutable workspace export cleanup file");
-    if (currentReal !== fileReal) {
-      throw new Error("Immutable workspace export cleanup file target changed");
+    const currentReal = await bindOpenedPath({
+      target,
+      opened: info,
+      rootReal,
+      field: "Immutable workspace export cleanup entry",
+      symlinkMessage: "Immutable workspace export cleanup refuses symlinks",
+      changedMessage: "Immutable workspace export cleanup entry path changed"
+    });
+    if (currentReal !== entryReal) {
+      throw new Error("Immutable workspace export cleanup entry target changed");
     }
   }
   const after = await lstat2(directory, { bigint: true });
@@ -70467,31 +70625,42 @@ async function makeOwnedTreeWritable(directory, rootReal, state, depth = 0) {
     throw new Error("Immutable workspace export cleanup directory target changed");
   }
 }
-async function validateOwnedCleanupManifest(target, exportId) {
+async function validateOwnedCleanupManifest(target, exportId, rootReal) {
   const manifestPath = path5.join(target, "manifest.json");
-  const before = await lstat2(manifestPath, { bigint: true });
-  if (before.isSymbolicLink() || !before.isFile()) {
-    throw new Error("Immutable workspace export cleanup manifest is not a regular file");
-  }
-  if (before.nlink > 1n) {
-    throw new Error("Immutable workspace export cleanup refuses a hard-linked manifest");
-  }
-  if (before.size > BigInt(MAX_CLEANUP_MANIFEST_BYTES)) {
-    throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
-  }
-  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
   let handle;
   try {
-    handle = await open4(manifestPath, constants.O_RDONLY | noFollow);
+    handle = await open4(manifestPath, readOnlyNoFollowNonBlockingFlags());
+  } catch (error) {
+    if (error?.code === "ELOOP") {
+      throw new Error("Immutable workspace export cleanup manifest is not a regular file");
+    }
+    throw error;
+  }
+  try {
     const opened = await handle.stat({ bigint: true });
     if (!opened.isFile()) {
-      throw new Error("Immutable workspace export cleanup manifest changed type");
+      throw new Error("Immutable workspace export cleanup manifest is not a regular file");
     }
     if (opened.nlink > 1n) {
       throw new Error("Immutable workspace export cleanup refuses a hard-linked manifest");
     }
-    assertStableCleanupIdentity(before, opened, "Immutable workspace export cleanup manifest");
-    const bytes = await handle.readFile();
+    if (opened.size > BigInt(MAX_CLEANUP_MANIFEST_BYTES)) {
+      throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
+    }
+    const openedReal = await bindOpenedPath({
+      target: manifestPath,
+      opened,
+      rootReal,
+      field: "Immutable workspace export cleanup manifest",
+      symlinkMessage: "Immutable workspace export cleanup manifest is not a regular file",
+      changedMessage: "Immutable workspace export cleanup manifest path changed"
+    });
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: opened.size,
+      maxBytes: MAX_CLEANUP_MANIFEST_BYTES,
+      changedMessage: "Immutable workspace export cleanup manifest changed during immutable export cleanup",
+      limitMessage: "Immutable workspace export cleanup manifest exceeds its byte bound"
+    });
     if (bytes.byteLength > MAX_CLEANUP_MANIFEST_BYTES) {
       throw new Error("Immutable workspace export cleanup manifest exceeds its byte bound");
     }
@@ -70500,10 +70669,20 @@ async function validateOwnedCleanupManifest(target, exportId) {
       throw new Error("Immutable workspace export cleanup refuses a hard-linked manifest");
     }
     assertStableCleanupIdentity(opened, after, "Immutable workspace export cleanup manifest");
+    const currentReal = await bindOpenedPath({
+      target: manifestPath,
+      opened,
+      rootReal,
+      field: "Immutable workspace export cleanup manifest",
+      symlinkMessage: "Immutable workspace export cleanup manifest is not a regular file",
+      changedMessage: "Immutable workspace export cleanup manifest path changed"
+    });
+    if (currentReal !== openedReal) {
+      throw new Error("Immutable workspace export cleanup manifest target changed");
+    }
     validateManifest(JSON.parse(bytes.toString("utf8")), { exportId });
   } finally {
-    await handle?.close().catch(() => {
-    });
+    await handle.close();
   }
 }
 async function removeOwnedExportTree({ root, target, exportId, requireManifest }) {
@@ -70532,7 +70711,7 @@ async function removeOwnedExportTree({ root, target, exportId, requireManifest }
   if (targetReal === rootReal) {
     throw new Error("Immutable workspace export cleanup refuses its configured root");
   }
-  if (requireManifest) await validateOwnedCleanupManifest(target, exportId);
+  if (requireManifest) await validateOwnedCleanupManifest(target, exportId, rootReal);
   await validateOwnedTreeForCleanup(target, rootReal, { entries: 0 });
   await makeOwnedTreeWritable(target, rootReal, { entries: 0 });
   const targetAfter = await lstat2(target, { bigint: true });
@@ -73247,7 +73426,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     }
     record.destruction_status = "destroy_requested";
     this.#poisonAllocationUntilReconciled(record.record_id);
-    const Sandbox = await this.#sandboxClass();
+    await this.#sandboxClass();
     try {
       await this.cleanupJournal.markSandboxCleanupRequested(record.record_id, record.sandbox_id);
       await record.sandbox.kill();
@@ -73467,7 +73646,7 @@ import {
   createPublicKey as createPublicKey2,
   verify as verifySignature2
 } from "node:crypto";
-import { constants as constants2 } from "node:fs";
+import { constants as constants3 } from "node:fs";
 import {
   lstat as lstat3,
   mkdir as mkdir4,
@@ -74147,7 +74326,7 @@ async function persistEvidence(directory, record) {
   const target = path7.join(directory, name);
   const handle = await open5(
     target,
-    constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL,
+    constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL,
     256
   );
   try {
@@ -74315,7 +74494,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:b1a4e2fe5170f14fc5d74307de5929ca0a7b66e0a9fcea2f9a0960ca2fc387b0" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:bd9f6ba4c15f524630445dfcc80d3e94e41a073e6573cef8654cf3c93604ba34" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

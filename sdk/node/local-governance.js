@@ -101,7 +101,6 @@ function detectAdapters(cwd = process.cwd(), fsImpl = fs) {
 function initializeProject(options = {}) {
     const cwd = path.resolve(options.cwd || process.cwd());
     const policyPath = resolveProjectPath(cwd, options.policyPath || DEFAULT_POLICY_FILE, 'policy');
-    const exists = fs.existsSync(policyPath);
     const proposal = {
         schema: 'agoragentic.init-plan.v1',
         cwd_digest: digest(path.basename(cwd)),
@@ -112,19 +111,25 @@ function initializeProject(options = {}) {
     };
 
     if (!options.write) {
-        return { ...proposal, status: exists ? 'existing_policy_detected' : 'planned', written: false };
-    }
-    if (exists && !options.force) {
-        throw governanceError('policy_exists', `Refusing to overwrite ${proposal.policy_path}; add --force with --yes to replace it.`, 2);
+        return { ...proposal, status: fs.existsSync(policyPath) ? 'existing_policy_detected' : 'planned', written: false };
     }
 
+    const content = `${JSON.stringify(createDefaultPolicy(), null, 2)}\n`;
     fs.mkdirSync(path.dirname(policyPath), { recursive: true });
-    fs.writeFileSync(policyPath, `${JSON.stringify(createDefaultPolicy(), null, 2)}\n`, {
-        encoding: 'utf8',
-        mode: 0o600,
-        flag: options.force ? 'w' : 'wx',
-    });
-    return { ...proposal, status: exists ? 'replaced' : 'created', written: true };
+    // Create exclusively: no existsSync-then-write check-then-act window. An
+    // EEXIST means the policy appeared (or was already there); --force then
+    // replaces it, otherwise the original policy_exists refusal is preserved.
+    try {
+        fs.writeFileSync(policyPath, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        return { ...proposal, status: 'created', written: true };
+    } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+    }
+    if (!options.force) {
+        throw governanceError('policy_exists', `Refusing to overwrite ${proposal.policy_path}; add --force with --yes to replace it.`, 2);
+    }
+    fs.writeFileSync(policyPath, content, { encoding: 'utf8', mode: 0o600 });
+    return { ...proposal, status: 'replaced', written: true };
 }
 
 function loadPolicy(policy = DEFAULT_POLICY_FILE, options = {}) {
@@ -133,12 +138,20 @@ function loadPolicy(policy = DEFAULT_POLICY_FILE, options = {}) {
     }
     const cwd = path.resolve(options.cwd || process.cwd());
     const policyPath = resolveProjectPath(cwd, policy || DEFAULT_POLICY_FILE, 'policy');
-    if (!fs.existsSync(policyPath)) {
-        throw governanceError('policy_missing', `No local governance policy found at ${relativeDisplayPath(cwd, policyPath)}. Run "agoragentic init --yes" first.`, 2);
+    // Read directly and map ENOENT to policy_missing: no existsSync-then-read
+    // check-then-act window.
+    let raw;
+    try {
+        raw = fs.readFileSync(policyPath, 'utf8');
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            throw governanceError('policy_missing', `No local governance policy found at ${relativeDisplayPath(cwd, policyPath)}. Run "agoragentic init --yes" first.`, 2);
+        }
+        throw err;
     }
     let parsed;
     try {
-        parsed = JSON.parse(fs.readFileSync(policyPath, 'utf8'));
+        parsed = JSON.parse(raw);
     } catch (err) {
         throw governanceError('policy_invalid', `Policy must use JSON-compatible YAML: ${err.message}`, 2);
     }

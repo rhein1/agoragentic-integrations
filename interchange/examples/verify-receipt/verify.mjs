@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import fs from 'node:fs';
 
 const endpoint = process.env.AGORAGENTIC_RECEIPT_VERIFY_URL
   || 'https://agoragentic.com/api/commerce/interchange/receipts/verify';
@@ -7,18 +6,20 @@ const endpoint = process.env.AGORAGENTIC_RECEIPT_VERIFY_URL
 function usage() {
   console.log(`Usage:
   AGORAGENTIC_RECEIPT_ID=areceipt2_... node interchange/examples/verify-receipt/verify.mjs
-  AGORAGENTIC_RECEIPT_JSON_FILE=./receipt.json node interchange/examples/verify-receipt/verify.mjs
+  AGORAGENTIC_RECEIPT_JSON='{"receipt_id":"..."}' node interchange/examples/verify-receipt/verify.mjs
   node interchange/examples/verify-receipt/verify.mjs --demo-missing
 
 This example is read-only. It never spends funds or mutates trust.`);
 }
 
 function parseReceiptJson() {
+  if (process.env.AGORAGENTIC_RECEIPT_JSON_FILE) {
+    throw new Error(
+      'File-based receipt upload is disabled; pass a receipt ID or explicit AGORAGENTIC_RECEIPT_JSON.',
+    );
+  }
   if (process.env.AGORAGENTIC_RECEIPT_JSON) {
     return JSON.parse(process.env.AGORAGENTIC_RECEIPT_JSON);
-  }
-  if (process.env.AGORAGENTIC_RECEIPT_JSON_FILE) {
-    return JSON.parse(fs.readFileSync(process.env.AGORAGENTIC_RECEIPT_JSON_FILE, 'utf8'));
   }
   return null;
 }

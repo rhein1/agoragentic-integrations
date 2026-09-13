@@ -203,7 +203,7 @@ test('environment flags cannot activate execution or influence the planner', () 
   try {
     process.env.AGORAGENTIC_EXECUTE = 'true';
     assert.equal(run().authority.execution_enabled, false);
-    assert.throws(() => executeIncomeAction({ live: true }), /SOURCE_ONLY_PREVIEW_NO_EXECUTION/);
+    assert.throws(() => executeIncomeAction(), /SOURCE_ONLY_PREVIEW_NO_EXECUTION/);
   } finally { if (old === undefined) delete process.env.AGORAGENTIC_EXECUTE; else process.env.AGORAGENTIC_EXECUTE = old; }
 });
 test('planner does not invoke fetch', () => {

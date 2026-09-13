@@ -19,11 +19,18 @@ const MCP_V2_PROTOCOL_VERSION = '2026-07-28';
 const PACKED_FIXTURE_API_KEY = 'amk_packed_fixture_key';
 
 const npmCli = process.env.npm_execpath;
-const npmCommand = npmCli
-    ? process.execPath
-    : process.platform === 'win32'
-        ? process.env.ComSpec || 'cmd.exe'
-        : 'npm';
+function resolveNpmCommand() {
+    if (npmCli) return process.execPath;
+    if (process.platform !== 'win32') return 'npm';
+    const comSpec = process.env.ComSpec || 'cmd.exe';
+    // Allowlist: the interpreter must be the Windows command processor itself,
+    // never an attacker-influenced executable from the environment.
+    if (!/(?:^|\\)cmd\.exe$/i.test(comSpec)) {
+        throw new Error(`Refusing to run npm with unexpected ComSpec: ${comSpec}`);
+    }
+    return comSpec;
+}
+const npmCommand = resolveNpmCommand();
 
 function runNpm(args, options = {}) {
     const commandArgs = npmCli

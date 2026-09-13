@@ -155,11 +155,13 @@ class RenderedPage:
 
 
 class Fetcher(Protocol):
-    def fetch(self, url: str, limits: Limits) -> FetchResult: ...
+    def fetch(self, url: str, limits: Limits) -> FetchResult:
+        """Fetch a URL under the given limits."""
 
 
 class Renderer(Protocol):
-    def render(self, url: str, html: str) -> RenderedPage: ...
+    def render(self, url: str, html: str) -> RenderedPage:
+        """Render HTML into a page."""
 
 
 def _now_iso() -> str:
@@ -368,7 +370,7 @@ def _abort_connection(connection: http.client.HTTPConnection) -> None:
         try:
             socket_handle.shutdown(socket.SHUT_RDWR)
         except OSError:
-            pass
+            pass  # intentionally ignored: shutdown is best-effort before close
     connection.close()
 
 
@@ -490,7 +492,8 @@ class SafeHttpFetcher:
         def validate() -> None:
             try:
                 result["destination"] = validate_destination(url, resolver=self._resolver)
-            except BaseException as exc:
+            except (Exception, KeyboardInterrupt, SystemExit,
+                    GeneratorExit) as exc:  # shuttled; re-raised by the joining thread below
                 result["error"] = exc
             finally:
                 completed.set()

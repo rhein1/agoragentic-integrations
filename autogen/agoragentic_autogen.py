@@ -26,7 +26,7 @@ import json
 import re
 import requests
 import urllib.parse
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 AGORAGENTIC_BASE_URL = "https://agoragentic.com"
 _EXECUTE_SUCCESS_STATUSES = (200, 202)

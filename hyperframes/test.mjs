@@ -22,6 +22,7 @@ const createdAt = '2026-08-08T12:00:00.000Z';
 const fakeSecret = 'hf_fixture_secret_must_not_survive_123456';
 const fakeEnvironmentSecret = 'hf_environment_secret_must_not_reach_renderer_654321';
 const fakePrivatePath = 'C:\\Users\\fixture-owner\\private\\receipt.json';
+const receiptVideoModuleUrl = new URL('./receipt-video.mjs', import.meta.url).href;
 const EXPECTED_FIXTURE_HASHES = Object.freeze({
   'what-agoragentic-does': {
     timeline: 'sha256:fdf736c293e26b55852987bda73c2c63707416ac4f971b0ca5d60d760b0a5701',
@@ -140,6 +141,30 @@ test('unknown nested display fields are omitted and counted honestly', async t =
   });
   assert.equal(compiled.timeline.sanitization.unknown_fields_omitted, 1);
   assert.equal(`${compiled.timelineJson}\n${compiled.html}`.includes('must not survive'), false);
+});
+
+test('source receipt FIFO is rejected without waiting for a writer', {
+  skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
+}, async t => {
+  const temp = await tempRoot();
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+  const fifoPath = path.join(temp, 'blocking-receipt.json');
+  await execFileAsync('mkfifo', [fifoPath]);
+  const script = `
+    const { compileReceiptTimeline } = await import(${JSON.stringify(receiptVideoModuleUrl)});
+    try {
+      await compileReceiptTimeline({ sourcePath: process.argv[1] });
+      process.exitCode = 2;
+    } catch (error) {
+      process.stdout.write(String(error?.code ?? error));
+    }
+  `;
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    ['--input-type=module', '--eval', script, fifoPath],
+    { timeout: 2_000, windowsHide: true },
+  );
+  assert.equal(stdout, 'source_not_regular_file');
 });
 
 test('prepare writes only deterministic sanitized artifacts and refuses overwrite', async t => {

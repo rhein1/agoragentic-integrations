@@ -11,11 +11,18 @@ const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agoragentic-risk-fo
 const packRoot = path.join(temporaryRoot, 'pack');
 const consumerRoot = path.join(temporaryRoot, 'consumer');
 const npmCli = process.env.npm_execpath;
-const npmCommand = npmCli
-    ? process.execPath
-    : process.platform === 'win32'
-        ? process.env.ComSpec || 'cmd.exe'
-        : 'npm';
+function resolveNpmCommand() {
+    if (npmCli) return process.execPath;
+    if (process.platform !== 'win32') return 'npm';
+    const comSpec = process.env.ComSpec || 'cmd.exe';
+    // Allowlist: the interpreter must be the Windows command processor itself,
+    // never an attacker-influenced executable from the environment.
+    if (!/(?:^|\\)cmd\.exe$/i.test(comSpec)) {
+        throw new Error(`Refusing to run npm with unexpected ComSpec: ${comSpec}`);
+    }
+    return comSpec;
+}
+const npmCommand = resolveNpmCommand();
 
 function runNpm(args, cwd) {
     const commandArgs = npmCli
