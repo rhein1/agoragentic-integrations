@@ -95,6 +95,110 @@ const PINNED_SECRET_ASSIGNMENT_QUOTE_PAIRS = Object.freeze([
   ['prime-single', '\u2032', '\u2035'],
   ['prime-double', '\u2033', '\u2036'],
 ]);
+const PINNED_SECRET_ASSIGNMENT_ESCAPES = Object.freeze([
+  ['\u2216', '\\'],
+  ['\u244A', '\\\\'],
+  ['\u27CD', '\\'],
+  ['\u29F5', '\\'],
+  ['\u29F9', '\\'],
+  ['\u2CF9', '\\\\'],
+  ['\u2F02', '\\'],
+  ['\u31D4', '\\'],
+  ['\u4E36', '\\'],
+  ['\uFE68', '\\'],
+  ['\uFF3C', '\\'],
+  ['\u{1D20F}', '\\'],
+  ['\u{1D23B}', '\\'],
+]);
+const PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS = Object.freeze([
+  ['\u0149', "'n"],
+  ['\u0181', "'B"],
+  ['\u0187', "C'"],
+  ['\u018A', "'D"],
+  ['\u0193', "G'"],
+  ['\u0198', "K'"],
+  ['\u01A0', "O'"],
+  ['\u01A1', "o'"],
+  ['\u01A4', "'P"],
+  ['\u01AC', "'T"],
+  ['\u01B3', "'Y"],
+  ['\u0491', "r'"],
+  ['\u05F1', "l'"],
+  ['\u13A4', "O'"],
+  ['\u1467', "U'"],
+  ['\u1486', "P'"],
+  ['\u1487', "d'"],
+  ['\u1488', "b'"],
+  ['\u1E9A', "a'"],
+  ['\u{1E067}', "r'"],
+]);
+const PINNED_SECRET_ASSIGNMENT_KEY_NAMES = Object.freeze([
+  'api_key',
+  'access_token',
+  'refresh_token',
+  'npm_token',
+  'slack_token',
+  'database_url',
+  'authorization',
+  'credential',
+  'password',
+  'passphrase',
+  'private_key',
+  'client_secret',
+  'seed_phrase',
+  'mnemonic',
+  'wallet_key',
+  'wallet_secret',
+]);
+
+function mixedQuotedKeyAttacks() {
+  const cases = [];
+  for (const [character, folded] of PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS) {
+    const openingQuote = folded[0];
+    const openingFragment = folded.slice(1);
+    if ((openingQuote === "'" || openingQuote === '"') && openingFragment.length > 0) {
+      for (const key of PINNED_SECRET_ASSIGNMENT_KEY_NAMES) {
+        if (!key.toLowerCase().startsWith(openingFragment.toLowerCase())) continue;
+        cases.push([
+          `${codePointLabel(character)} mixed quoted-key prefix for ${key}`,
+          `${character}${key.slice(openingFragment.length)}${openingQuote}\uFF1A12345678`,
+        ]);
+      }
+    }
+    const closingQuote = folded[folded.length - 1];
+    const closingFragment = folded.slice(0, -1);
+    if ((closingQuote === "'" || closingQuote === '"') && closingFragment.length > 0) {
+      for (const key of PINNED_SECRET_ASSIGNMENT_KEY_NAMES) {
+        if (!key.toLowerCase().endsWith(closingFragment.toLowerCase())) continue;
+        cases.push([
+          `${codePointLabel(character)} mixed quoted-key suffix for ${key}`,
+          `${closingQuote}${key.slice(0, -closingFragment.length)}${character}\uFF1A12345678`,
+        ]);
+      }
+    }
+  }
+  return Object.freeze(cases);
+}
+
+const PINNED_MIXED_QUOTED_KEY_ATTACKS = mixedQuotedKeyAttacks();
+const PINNED_QUOTE_LITERAL_BRANCH_CASES = Object.freeze([
+  [
+    'folded-only-close',
+    "api_key='a\u2019",
+    "api_key='a\u201912345678",
+  ],
+  [
+    'folded-only-open-and-close',
+    'api_key=\u2018a\u2019',
+    'api_key=\u2018a\u201912345678',
+  ],
+]);
+const PINNED_MIXED_STRUCTURAL_SAFE_TEXT = [
+  'Vietnamese letters: \u01A0 \u01A1.',
+  'Yiddish ligature: \u05F1.',
+  'Ukrainian letter: \u0491.',
+  'Localized path label: docs/\u01A0/\u05F1/\u0491.md',
+].join('\n');
 const SECRET_ASSIGNMENT_ENCODINGS = Object.freeze([
   'utf8',
   'utf8-bom',
@@ -144,18 +248,173 @@ function codePointLabel(value) {
     .join('-');
 }
 
-test('assignment delimiter corpus exhausts single and multi-character security folds', () => {
-  const observed = [];
-  const observedMultiCharacter = [];
+function collectPinnedAssignmentStructuralSources() {
+  const profiles = [];
   for (let codePoint = 0x80; codePoint <= 0x10ffff; codePoint += 1) {
     if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
     const character = String.fromCodePoint(codePoint);
-    const folded = foldSecurityConfusables(character);
-    if (/^[=:]$/.test(folded)) observed.push(character);
-    if (/^[=:]{2,}$/.test(folded)) observedMultiCharacter.push([character, folded]);
+    const variants = securityTextVariants(character);
+    const structuralVariants = [];
+    const mixedStructuralVariants = [];
+    for (let index = 0; index < variants.length; index += 1) {
+      const variant = variants[index];
+      if (!/['"\\:=]/u.test(variant)) continue;
+      if (/^['"\\:=]+$/u.test(variant)) {
+        if (!structuralVariants.includes(variant)) structuralVariants.push(variant);
+      } else if (!mixedStructuralVariants.includes(variant)) {
+        mixedStructuralVariants.push(variant);
+      }
+    }
+    if (structuralVariants.length === 0 && mixedStructuralVariants.length === 0) continue;
+    profiles.push(Object.freeze({
+      character,
+      delimiterForms: Object.freeze(structuralVariants.filter((value) => /^[=:]+$/u.test(value))),
+      escapeForms: Object.freeze(structuralVariants.filter((value) => /^\\+$/u.test(value))),
+      mixedStructuralVariants: Object.freeze(mixedStructuralVariants),
+      quoteForms: Object.freeze(structuralVariants.filter((value) => /^['"]+$/u.test(value))),
+      structuralVariants: Object.freeze(structuralVariants),
+    }));
   }
+  return Object.freeze(profiles);
+}
+
+const PINNED_ASSIGNMENT_STRUCTURAL_SOURCES = collectPinnedAssignmentStructuralSources();
+
+function structuralAssignmentRejectCases() {
+  const cases = [];
+  for (const profile of PINNED_ASSIGNMENT_STRUCTURAL_SOURCES) {
+    const sourceLabel = codePointLabel(profile.character);
+    if (profile.delimiterForms.length > 0) {
+      cases.push([
+        `${sourceLabel} delimiter`,
+        `api_key${profile.character}${SYNTHETIC_SECRET}`,
+      ]);
+    }
+    if (profile.quoteForms.length > 0) {
+      cases.push([
+        `${sourceLabel} quoted key`,
+        `${profile.character}api_key${profile.character}:${SYNTHETIC_SECRET}`,
+      ]);
+      cases.push([
+        `${sourceLabel} quoted value`,
+        `api_key:${profile.character}${SYNTHETIC_SECRET}${profile.character}`,
+      ]);
+    }
+    if (profile.escapeForms.length > 0) {
+      const parities = new Set(profile.escapeForms.map((value) => value.length % 2));
+      const escapeRun = parities.size > 1 || parities.has(1)
+        ? profile.character
+        : `${profile.character}\\`;
+      for (const quote of ['"', "'"]) {
+        cases.push([
+          `${sourceLabel} ${quote} escape`,
+          `api_key=${quote}a${escapeRun}${quote}${SYNTHETIC_SECRET}${quote}`,
+        ]);
+        cases.push([
+          `${sourceLabel} ${quote} escape across folded-away text`,
+          `api_key=${quote}${escapeRun}\u00AD${quote}${SYNTHETIC_SECRET}${quote}`,
+        ]);
+      }
+    }
+    if (profile.structuralVariants.length > 1) {
+      cases.push([
+        `${sourceLabel} ambiguous structural value opener`,
+        `api_key=${profile.character}x${profile.character}`,
+      ]);
+    }
+  }
+  return Object.freeze(cases);
+}
+
+const PINNED_STRUCTURAL_ASSIGNMENT_REJECT_CASES = structuralAssignmentRejectCases();
+
+function structuralAssignmentSafeControlText() {
+  const lines = [];
+  for (const profile of PINNED_ASSIGNMENT_STRUCTURAL_SOURCES) {
+    if (profile.delimiterForms.length > 0) {
+      lines.push(`ordinary_field${profile.character}short`);
+    }
+    if (profile.quoteForms.length > 0) {
+      lines.push(`${profile.character}ordinary quoted text${profile.character}`);
+    }
+    if (profile.escapeForms.length > 0) {
+      lines.push(`ordinary path fragment ${profile.character}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+const PINNED_STRUCTURAL_ASSIGNMENT_SAFE_CONTROL = structuralAssignmentSafeControlText();
+
+function structuralAssignmentEscapeParitySafeCases() {
+  const cases = [];
+  for (const profile of PINNED_ASSIGNMENT_STRUCTURAL_SOURCES) {
+    if (profile.escapeForms.length === 0) continue;
+    // Supplementary source characters deliberately trip conservative misaligned UTF-16
+    // byte views, so safe parity controls are limited to values that stay below the
+    // original-byte threshold in every inspected view.
+    if (profile.character.length !== 1) continue;
+    const parities = new Set(profile.escapeForms.map((value) => value.length % 2));
+    if (parities.size !== 1) continue;
+    const escapeRun = parities.has(1) ? `${profile.character}\u2216` : profile.character;
+    for (const quote of ['"', "'"]) {
+      cases.push([
+        `${codePointLabel(profile.character)} ${quote} even escape parity`,
+        `api_key=${quote}${escapeRun}${quote}12345678`,
+      ]);
+    }
+  }
+  return Object.freeze(cases);
+}
+
+const PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES = structuralAssignmentEscapeParitySafeCases();
+
+test('assignment delimiter corpus exhausts single and multi-character security folds', () => {
+  const delimiterProfiles = PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+    .filter((profile) => profile.delimiterForms.length > 0);
+  const observed = delimiterProfiles
+    .filter((profile) => profile.delimiterForms.some((value) => value.length === 1))
+    .map((profile) => profile.character);
+  const observedMultiCharacter = delimiterProfiles
+    .filter((profile) => profile.delimiterForms.some((value) => value.length > 1))
+    .map((profile) => [
+      profile.character,
+      profile.delimiterForms.find((value) => value.length > 1),
+    ]);
   assert.deepEqual(observed, PINNED_SECRET_ASSIGNMENT_DELIMITERS);
   assert.deepEqual(observedMultiCharacter, PINNED_MULTI_CHARACTER_ASSIGNMENT_DELIMITERS);
+});
+
+test('assignment structural corpus exhausts pinned quote, escape, and ambiguous folds', () => {
+  assert.equal(PINNED_ASSIGNMENT_STRUCTURAL_SOURCES.length, 117);
+  assert.deepEqual(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.escapeForms.length > 0)
+      .map((profile) => [profile.character, profile.escapeForms[0]]),
+    PINNED_SECRET_ASSIGNMENT_ESCAPES,
+  );
+  assert.deepEqual(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.structuralVariants.length > 1)
+      .map((profile) => profile.character),
+    ['\uFF02'],
+  );
+  assert.equal(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.quoteForms.length > 0).length,
+    53,
+  );
+  assert.equal(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.mixedStructuralVariants.length > 0).length,
+    20,
+  );
+  assert.deepEqual(
+    PINNED_ASSIGNMENT_STRUCTURAL_SOURCES
+      .filter((profile) => profile.mixedStructuralVariants.length > 0)
+      .map((profile) => [profile.character, profile.mixedStructuralVariants[0]]),
+    PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS,
+  );
 });
 
 test('scan-only confusable fold preserves ASCII and canonical payload text', () => {
@@ -629,6 +888,116 @@ test('E2B exact-byte scan rejects folded quote syntax across UTF encodings', () 
   }
 });
 
+test('E2B exact-byte scan rejects every pinned assignment structural fold', {
+  timeout: 30_000,
+}, () => {
+  assert.equal(PINNED_STRUCTURAL_ASSIGNMENT_REJECT_CASES.length, 190);
+  for (const [caseLabel, assignment] of PINNED_STRUCTURAL_ASSIGNMENT_REJECT_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('structural-fold.txt', bytes),
+        ]),
+        /authority|secret/i,
+        `${caseLabel} ${encoding}`,
+      );
+    }
+  }
+});
+
+test('E2B exact-byte scan preserves bounded BMP folded-escape parity', () => {
+  assert.equal(PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES.length, 22);
+  for (const [caseLabel, assignment] of PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      assert.doesNotThrow(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('escape-parity-safe.txt', bytes),
+        ]),
+        `${caseLabel} ${encoding}`,
+      );
+    }
+  }
+});
+
+test('E2B normalized byte scan rejects mixed structural folds after secret syntax', () => {
+  for (const [character, folded] of PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(`api_key=${character}`, encoding);
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('mixed-structural-fold.txt', bytes),
+        ]),
+        /authority|secret/i,
+        `${codePointLabel(character)} -> ${folded} ${encoding}`,
+      );
+    }
+  }
+});
+
+test('E2B exact-byte scan rejects mixed quoted-key boundaries', () => {
+  assert.equal(PINNED_MIXED_QUOTED_KEY_ATTACKS.length, 9);
+  for (const [caseLabel, assignment] of PINNED_MIXED_QUOTED_KEY_ATTACKS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('mixed-quoted-key.txt', bytes),
+        ]),
+        /authority|secret/i,
+        `${caseLabel} ${encoding}`,
+      );
+    }
+  }
+});
+
+test('E2B exact-byte scan preserves ordinary mixed-fold international text', () => {
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const bytes = encodeSecretAssignment(PINNED_MIXED_STRUCTURAL_SAFE_TEXT, encoding);
+    assert.doesNotThrow(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes('localized/\u01A0/\u05F1/\u0491.txt', bytes),
+      ]),
+      encoding,
+    );
+  }
+});
+
+test('E2B exact-byte scan preserves short and rejects long quote-literal branches', () => {
+  for (const [caseLabel, shortAssignment, longAssignment] of PINNED_QUOTE_LITERAL_BRANCH_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const shortBytes = encodeSecretAssignment(shortAssignment, encoding);
+      assert.doesNotThrow(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('quote-literal-short.txt', shortBytes),
+        ]),
+        `${caseLabel} ${encoding} short branch`,
+      );
+      const longBytes = encodeSecretAssignment(longAssignment, encoding);
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('quote-literal-long.txt', longBytes),
+        ]),
+        /authority|secret/i,
+        `${caseLabel} ${encoding} long branch`,
+      );
+    }
+  }
+});
+
+test('E2B exact-byte structural inventory preserves safe controls', () => {
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const bytes = encodeSecretAssignment(PINNED_STRUCTURAL_ASSIGNMENT_SAFE_CONTROL, encoding);
+    assert.doesNotThrow(
+      () => scanE2BStagedBytesAuthorityFree([
+        stagedBytes('structural-safe-controls.txt', bytes),
+      ]),
+      encoding,
+    );
+  }
+});
+
 test('E2B structural folds preserve original-value byte thresholds', () => {
   for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
     const isUtf16 = encoding.startsWith('utf16');
@@ -724,6 +1093,37 @@ test('E2B assignment scan deterministically parses adversarial quoted escapes', 
   }
 });
 
+test('E2B assignment scan counts a trailing escape at the original-byte threshold', () => {
+  for (const [quoteLabel, openingQuote] of [['ascii-single', "'"], ['ascii-double', '"']]) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const isUtf16 = encoding.startsWith('utf16');
+      const belowThreshold = isUtf16 ? '12' : '123456';
+      const atThreshold = isUtf16 ? '123' : '1234567';
+      const shortBytes = encodeSecretAssignment(
+        `api_key=${openingQuote}${belowThreshold}\\`,
+        encoding,
+      );
+      assert.doesNotThrow(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('trailing-escape-short.txt', shortBytes),
+        ]),
+        `${quoteLabel} ${encoding} trailing escape remains below eight original bytes`,
+      );
+      const minimumBytes = encodeSecretAssignment(
+        `api_key=${openingQuote}${atThreshold}\\`,
+        encoding,
+      );
+      assert.throws(
+        () => scanE2BStagedBytesAuthorityFree([
+          stagedBytes('trailing-escape-minimum.txt', minimumBytes),
+        ]),
+        /authority|secret/i,
+        `${quoteLabel} ${encoding} trailing escape reaches eight original bytes`,
+      );
+    }
+  }
+});
+
 test('immutable E2B workspace export rejects confusable secret bytes before copying', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-confusables-'));
   const source = path.join(root, 'source');
@@ -812,6 +1212,235 @@ test('immutable E2B workspace export rejects folded quote syntax across UTF enco
   }
 });
 
+test('immutable E2B workspace export rejects every pinned assignment structural fold', {
+  timeout: 60_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-structural-fold-scan-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [caseLabel, assignment] of PINNED_STRUCTURAL_ASSIGNMENT_REJECT_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      await writeFile(path.join(source, 'input.txt'), bytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `structural_fold_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${caseLabel} ${encoding}`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export preserves bounded BMP folded-escape parity', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-escape-parity-safe-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [caseLabel, assignment] of PINNED_STRUCTURAL_ESCAPE_PARITY_SAFE_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      await writeFile(path.join(source, 'input.txt'), bytes);
+      const value = await createImmutableWorkspaceExport({
+        source_workspace: source,
+        export_root: exportRoot,
+        export_id: `escape_parity_safe_${caseIndex}`,
+        expected_workspace_digest: sha256Ref([{
+          path: 'input.txt',
+          bytes: bytes.byteLength,
+          content_hash: sha256Ref(bytes.toString('base64')),
+        }]),
+      });
+      await destroyImmutableWorkspaceExport({
+        export_root: exportRoot,
+        export_id: value.export_id,
+      });
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export rejects mixed structural folds after secret syntax', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mixed-structural-fold-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [character, folded] of PINNED_MIXED_ASSIGNMENT_STRUCTURAL_FOLDS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(`api_key=${character}`, encoding);
+      await writeFile(path.join(source, 'input.txt'), bytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `mixed_structural_fold_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${codePointLabel(character)} -> ${folded} ${encoding}`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export rejects mixed quoted-key boundaries', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mixed-quoted-key-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [caseLabel, assignment] of PINNED_MIXED_QUOTED_KEY_ATTACKS) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const bytes = encodeSecretAssignment(assignment, encoding);
+      await writeFile(path.join(source, 'input.txt'), bytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `mixed_quoted_key_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${caseLabel} ${encoding}`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export preserves ordinary mixed-fold international text', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mixed-structural-safe-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  const relativePath = 'localized/\u01A0/\u05F1/\u0491.txt';
+  const inputPath = path.join(source, ...relativePath.split('/'));
+  await mkdir(source);
+  await mkdir(path.dirname(inputPath), { recursive: true });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const bytes = encodeSecretAssignment(PINNED_MIXED_STRUCTURAL_SAFE_TEXT, encoding);
+    await writeFile(inputPath, bytes);
+    const value = await createImmutableWorkspaceExport({
+      source_workspace: source,
+      export_root: exportRoot,
+      export_id: `mixed_structural_safe_${caseIndex}`,
+      expected_workspace_digest: sha256Ref([{
+        path: relativePath,
+        bytes: bytes.byteLength,
+        content_hash: sha256Ref(bytes.toString('base64')),
+      }]),
+    });
+    await destroyImmutableWorkspaceExport({
+      export_root: exportRoot,
+      export_id: value.export_id,
+    });
+    caseIndex += 1;
+  }
+});
+
+test('immutable E2B workspace export preserves short and rejects long quote-literal branches', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-quote-literal-branches-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [caseLabel, shortAssignment, longAssignment] of PINNED_QUOTE_LITERAL_BRANCH_CASES) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const shortBytes = encodeSecretAssignment(shortAssignment, encoding);
+      await writeFile(path.join(source, 'input.txt'), shortBytes);
+      const value = await createImmutableWorkspaceExport({
+        source_workspace: source,
+        export_root: exportRoot,
+        export_id: `quote_literal_short_${caseIndex}`,
+        expected_workspace_digest: sha256Ref([{
+          path: 'input.txt',
+          bytes: shortBytes.byteLength,
+          content_hash: sha256Ref(shortBytes.toString('base64')),
+        }]),
+      });
+      await destroyImmutableWorkspaceExport({
+        export_root: exportRoot,
+        export_id: value.export_id,
+      });
+
+      const longBytes = encodeSecretAssignment(longAssignment, encoding);
+      await writeFile(path.join(source, 'input.txt'), longBytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `quote_literal_long_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${caseLabel} ${encoding} long branch`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export structural inventory preserves safe controls', async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-structural-safe-controls-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+    const bytes = encodeSecretAssignment(PINNED_STRUCTURAL_ASSIGNMENT_SAFE_CONTROL, encoding);
+    await writeFile(path.join(source, 'input.txt'), bytes);
+    const value = await createImmutableWorkspaceExport({
+      source_workspace: source,
+      export_root: exportRoot,
+      export_id: `structural_safe_control_${caseIndex}`,
+      expected_workspace_digest: sha256Ref([{
+        path: 'input.txt',
+        bytes: bytes.byteLength,
+        content_hash: sha256Ref(bytes.toString('base64')),
+      }]),
+    });
+    await destroyImmutableWorkspaceExport({
+      export_root: exportRoot,
+      export_id: value.export_id,
+    });
+    caseIndex += 1;
+  }
+});
+
 test('immutable E2B workspace export deterministically parses adversarial quoted escapes', {
   timeout: 20_000,
 }, async (t) => {
@@ -841,6 +1470,61 @@ test('immutable E2B workspace export deterministically parses adversarial quoted
         }),
         /credential|secret/i,
         `${label} ${termination}`,
+      );
+      caseIndex += 1;
+    }
+  }
+});
+
+test('immutable E2B workspace export counts a trailing escape at the original-byte threshold', {
+  timeout: 30_000,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-trailing-escape-scan-'));
+  const source = path.join(root, 'source');
+  const exportRoot = path.join(root, 'exports');
+  await mkdir(source);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  let caseIndex = 0;
+  for (const [quoteLabel, openingQuote] of [['ascii-single', "'"], ['ascii-double', '"']]) {
+    for (const encoding of SECRET_ASSIGNMENT_ENCODINGS) {
+      const isUtf16 = encoding.startsWith('utf16');
+      const belowThreshold = isUtf16 ? '12' : '123456';
+      const atThreshold = isUtf16 ? '123' : '1234567';
+      const shortBytes = encodeSecretAssignment(
+        `api_key=${openingQuote}${belowThreshold}\\`,
+        encoding,
+      );
+      await writeFile(path.join(source, 'input.txt'), shortBytes);
+      const shortExport = await createImmutableWorkspaceExport({
+        source_workspace: source,
+        export_root: exportRoot,
+        export_id: `trailing_escape_short_${caseIndex}`,
+        expected_workspace_digest: sha256Ref([{
+          path: 'input.txt',
+          bytes: shortBytes.byteLength,
+          content_hash: sha256Ref(shortBytes.toString('base64')),
+        }]),
+      });
+      await destroyImmutableWorkspaceExport({
+        export_root: exportRoot,
+        export_id: shortExport.export_id,
+      });
+
+      const minimumBytes = encodeSecretAssignment(
+        `api_key=${openingQuote}${atThreshold}\\`,
+        encoding,
+      );
+      await writeFile(path.join(source, 'input.txt'), minimumBytes);
+      await assert.rejects(
+        createImmutableWorkspaceExport({
+          source_workspace: source,
+          export_root: exportRoot,
+          export_id: `trailing_escape_minimum_${caseIndex}`,
+          expected_workspace_digest: sha256Ref('must-not-reach-copy'),
+        }),
+        /credential|secret/i,
+        `${quoteLabel} ${encoding} trailing escape reaches eight original bytes`,
       );
       caseIndex += 1;
     }

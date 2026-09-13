@@ -115,12 +115,33 @@ function isSecretAssignmentWhitespace(character) {
     || codePoint === 0xfeff;
 }
 
+function isSecretAssignmentKeyFragment(value) {
+  if (value.length === 0) return false;
+  for (const character of value) {
+    if (!((character >= 'A' && character <= 'Z')
+      || (character >= 'a' && character <= 'z')
+      || (character >= '0' && character <= '9')
+      || character === '_'
+      || character === '-')) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function inspectSecretAssignmentSyntaxVariants(variants) {
+  const structuralForms = [];
   const quoteForms = [];
+  const mixedQuoteOpeners = [];
+  const mixedQuoteClosers = [];
   let normalizedWhitespace = false;
   let foldedAway = false;
   let hasSingleDelimiter = false;
   let hasMultiDelimiterFold = false;
+  let hasOddEscapeFold = false;
+  let hasEvenEscapeFold = false;
+  let hasMixedStructuralVariant = false;
+  let hasNonQuoteVariant = false;
   let identifierTail = false;
   let potentialKeyStart = false;
 
@@ -133,16 +154,56 @@ function inspectSecretAssignmentSyntaxVariants(variants) {
     let onlyWhitespace = true;
     let onlyQuotes = true;
     let onlyDelimiters = true;
+    let onlyEscapes = true;
+    let onlyStructural = true;
+    let hasStructuralToken = false;
     for (const character of variant) {
       if (!isSecretAssignmentWhitespace(character)) onlyWhitespace = false;
       if (character !== "'" && character !== '"') onlyQuotes = false;
       if (character !== '=' && character !== ':') onlyDelimiters = false;
+      if (character !== '\\') onlyEscapes = false;
+      if (character === "'"
+        || character === '"'
+        || character === '\\'
+        || character === '='
+        || character === ':') {
+        hasStructuralToken = true;
+      } else {
+        onlyStructural = false;
+      }
+    }
+    if (!onlyQuotes) hasNonQuoteVariant = true;
+    if (hasStructuralToken && !onlyStructural) {
+      hasMixedStructuralVariant = true;
+      const openingQuoteForm = variant[0];
+      const openingKeyFragment = variant.slice(1);
+      if ((openingQuoteForm === "'" || openingQuoteForm === '"')
+        && isSecretAssignmentKeyFragment(openingKeyFragment)) {
+        mixedQuoteOpeners.push(Object.freeze({
+          keyFragment: openingKeyFragment,
+          quoteForm: openingQuoteForm,
+        }));
+      }
+      const closingQuoteForm = variant[variant.length - 1];
+      const closingKeyFragment = variant.slice(0, -1);
+      if ((closingQuoteForm === "'" || closingQuoteForm === '"')
+        && isSecretAssignmentKeyFragment(closingKeyFragment)) {
+        mixedQuoteClosers.push(Object.freeze({
+          keyFragment: closingKeyFragment,
+          quoteForm: closingQuoteForm,
+        }));
+      }
     }
     if (onlyWhitespace) normalizedWhitespace = true;
+    if (onlyStructural && !structuralForms.includes(variant)) structuralForms.push(variant);
     if (onlyQuotes && !quoteForms.includes(variant)) quoteForms.push(variant);
     if (onlyDelimiters) {
       if (variant.length === 1) hasSingleDelimiter = true;
       else hasMultiDelimiterFold = true;
+    }
+    if (onlyEscapes) {
+      if (variant.length % 2 === 0) hasEvenEscapeFold = true;
+      else hasOddEscapeFold = true;
     }
     const first = variant[0].toLowerCase();
     if ('acdmnprsw'.includes(first)) potentialKeyStart = true;
@@ -156,11 +217,19 @@ function inspectSecretAssignmentSyntaxVariants(variants) {
   }
 
   return Object.freeze({
+    ambiguousStructuralForms: structuralForms.length > 1,
     delimiterKind: hasMultiDelimiterFold
       ? 'fail_closed_multi'
       : (hasSingleDelimiter ? 'single' : null),
+    escapeParity: hasOddEscapeFold && hasEvenEscapeFold
+      ? 'ambiguous'
+      : (hasOddEscapeFold ? 'odd' : (hasEvenEscapeFold ? 'even' : null)),
     foldedAway,
+    hasMixedStructuralVariant,
+    hasQuoteLiteralAmbiguity: quoteForms.length > 0 && hasNonQuoteVariant,
     identifierTail,
+    mixedQuoteClosers: Object.freeze(mixedQuoteClosers),
+    mixedQuoteOpeners: Object.freeze(mixedQuoteOpeners),
     normalizedWhitespace,
     potentialKeyStart,
     quoteForms: Object.freeze(quoteForms),
@@ -223,26 +292,62 @@ function readQuotedSecretAssignmentValue(
   quoteForm,
 ) {
   let index = valueStart;
+  let escapePending = false;
+  let matchedShortClose = null;
   while (index < text.length) {
     const token = sourceCharacterAt(text, index);
-    if (secretAssignmentQuoteForms(token.character, normalizeUnicode).includes(quoteForm)) {
-      return { matched: true, hasMinimumBytes: false, nextIndex: token.nextIndex };
+    const profile = secretAssignmentSyntaxProfile(token.character, normalizeUnicode);
+    if (profile.ambiguousStructuralForms || profile.hasMixedStructuralVariant) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: token.nextIndex };
     }
-    if (text[index] === '\\') {
-      const escaped = sourceCharacterAt(text, token.nextIndex);
-      if (!escaped) {
-        return { matched: false, hasMinimumBytes: false, nextIndex: token.nextIndex };
-      }
-      index = escaped.nextIndex;
-    } else {
-      index = token.nextIndex;
+    if (!escapePending && profile.quoteForms.includes(quoteForm)) {
+      const close = { matched: true, hasMinimumBytes: false, nextIndex: token.nextIndex };
+      if (!profile.hasQuoteLiteralAmbiguity) return close;
+      matchedShortClose ??= close;
     }
+    index = token.nextIndex;
+    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding)
+      >= MIN_SECRET_ASSIGNMENT_BYTES) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+    if (profile.escapeParity === 'ambiguous') {
+      return { matched: true, hasMinimumBytes: true, nextIndex: index };
+    }
+    if (profile.escapeParity) {
+      escapePending = profile.escapeParity === 'odd' ? !escapePending : escapePending;
+    } else if (!profile.foldedAway) {
+      escapePending = false;
+    }
+  }
+  return matchedShortClose
+    ?? { matched: false, hasMinimumBytes: false, nextIndex: index };
+}
+
+function readUnquotedSecretAssignmentValue(text, valueStart, valueEncoding, normalizeUnicode) {
+  let index = valueStart;
+  for (let token = sourceCharacterAt(text, index); token;
+    token = sourceCharacterAt(text, index)) {
+    const profile = secretAssignmentSyntaxProfile(token.character, normalizeUnicode);
+    if (profile.ambiguousStructuralForms || profile.hasMixedStructuralVariant) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: token.nextIndex };
+    }
+    const quoteLiteralAmbiguity = profile.hasQuoteLiteralAmbiguity
+      && profile.quoteForms.length > 0;
+    if (!quoteLiteralAmbiguity
+      && isUnquotedSecretAssignmentTerminator(token.character, normalizeUnicode)) {
+      break;
+    }
+    index = token.nextIndex;
     if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding)
       >= MIN_SECRET_ASSIGNMENT_BYTES) {
       return { matched: true, hasMinimumBytes: true, nextIndex: index };
     }
   }
-  return { matched: false, hasMinimumBytes: false, nextIndex: index };
+  return {
+    matched: index > valueStart,
+    hasMinimumBytes: false,
+    nextIndex: index,
+  };
 }
 
 function readSecretAssignmentValue(text, startIndex, valueEncoding, normalizeUnicode) {
@@ -257,11 +362,18 @@ function readSecretAssignmentValue(text, startIndex, valueEncoding, normalizeUni
   }
 
   const openingToken = sourceCharacterAt(text, index);
-  const openingQuoteForms = secretAssignmentQuoteForms(
+  const openingProfile = secretAssignmentSyntaxProfile(
     openingToken.character,
     normalizeUnicode,
   );
+  const openingQuoteForms = openingProfile.quoteForms;
+  if (openingProfile.hasMixedStructuralVariant) {
+    return { matched: true, hasMinimumBytes: true, nextIndex: openingToken.nextIndex };
+  }
   if (openingQuoteForms.length > 0) {
+    if (openingProfile.ambiguousStructuralForms) {
+      return { matched: true, hasMinimumBytes: true, nextIndex: openingToken.nextIndex };
+    }
     const valueStart = openingToken.nextIndex;
     let matchedShortValue = null;
     for (const quoteForm of openingQuoteForms) {
@@ -275,25 +387,21 @@ function readSecretAssignmentValue(text, startIndex, valueEncoding, normalizeUni
       if (result.hasMinimumBytes) return result;
       if (result.matched) matchedShortValue = result;
     }
+    if (openingProfile.hasQuoteLiteralAmbiguity) {
+      const literalResult = readUnquotedSecretAssignmentValue(
+        text,
+        index,
+        valueEncoding,
+        normalizeUnicode,
+      );
+      if (literalResult.hasMinimumBytes) return literalResult;
+      matchedShortValue ??= literalResult;
+    }
     return matchedShortValue
       ?? { matched: false, hasMinimumBytes: false, nextIndex: text.length };
   }
 
-  const valueStart = index;
-  for (let token = sourceCharacterAt(text, index);
-    token && !isUnquotedSecretAssignmentTerminator(token.character, normalizeUnicode);
-    token = sourceCharacterAt(text, index)) {
-    index = token.nextIndex;
-    if (Buffer.byteLength(text.slice(valueStart, index), valueEncoding)
-      >= MIN_SECRET_ASSIGNMENT_BYTES) {
-      return { matched: true, hasMinimumBytes: true, nextIndex: index };
-    }
-  }
-  return {
-    matched: index > valueStart,
-    hasMinimumBytes: false,
-    nextIndex: index,
-  };
+  return readUnquotedSecretAssignmentValue(text, index, valueEncoding, normalizeUnicode);
 }
 
 function secretAssignmentKeyMatches(key, normalizeUnicode) {
@@ -310,12 +418,14 @@ function finishSecretAssignmentSyntax(text, key, index, normalizeUnicode) {
     token = sourceCharacterAt(text, index);
   }
   if (!token) return null;
-  const delimiterKind = classifySecretAssignmentDelimiter(
-    token.character,
-    normalizeUnicode,
-  );
+  const delimiterProfile = secretAssignmentSyntaxProfile(token.character, normalizeUnicode);
+  const delimiterKind = delimiterProfile.delimiterKind;
   if (!delimiterKind) return null;
-  return { delimiterKind, valueStart: token.nextIndex };
+  return {
+    failClosed: delimiterProfile.ambiguousStructuralForms,
+    delimiterKind,
+    valueStart: token.nextIndex,
+  };
 }
 
 function readQuotedSecretAssignmentSyntax(
@@ -323,24 +433,41 @@ function readQuotedSecretAssignmentSyntax(
   keyStart,
   openingQuoteForm,
   normalizeUnicode,
+  keyPrefix = '',
 ) {
   let index = keyStart;
   while (index < text.length) {
     const token = sourceCharacterAt(text, index);
-    const closingQuoteForms = secretAssignmentQuoteForms(
-      token.character,
-      normalizeUnicode,
-    );
+    const closingProfile = secretAssignmentSyntaxProfile(token.character, normalizeUnicode);
+    const closingQuoteForms = closingProfile.quoteForms;
     if (closingQuoteForms.includes(openingQuoteForm)) {
-      if (index === keyStart) return null;
-      return finishSecretAssignmentSyntax(
+      if (index === keyStart && keyPrefix.length === 0) return null;
+      if (keyPrefix.length + index - keyStart > MAX_SECRET_ASSIGNMENT_KEY_UTF16) return null;
+      const syntax = finishSecretAssignmentSyntax(
         text,
-        text.slice(keyStart, index),
+        `${keyPrefix}${text.slice(keyStart, index)}`,
         token.nextIndex,
         normalizeUnicode,
       );
+      return syntax && closingProfile.ambiguousStructuralForms
+        ? { ...syntax, failClosed: true }
+        : syntax;
     }
-    if (token.nextIndex - keyStart > MAX_SECRET_ASSIGNMENT_KEY_UTF16
+    for (const mixedCloser of closingProfile.mixedQuoteClosers) {
+      if (mixedCloser.quoteForm !== openingQuoteForm) continue;
+      if (keyPrefix.length + index - keyStart + mixedCloser.keyFragment.length
+        > MAX_SECRET_ASSIGNMENT_KEY_UTF16) {
+        return null;
+      }
+      const syntax = finishSecretAssignmentSyntax(
+        text,
+        `${keyPrefix}${text.slice(keyStart, index)}${mixedCloser.keyFragment}`,
+        token.nextIndex,
+        normalizeUnicode,
+      );
+      if (syntax) return { ...syntax, failClosed: true };
+    }
+    if (keyPrefix.length + token.nextIndex - keyStart > MAX_SECRET_ASSIGNMENT_KEY_UTF16
       || isNormalizedSecretAssignmentWhitespace(token.character, normalizeUnicode)) {
       return null;
     }
@@ -351,11 +478,14 @@ function readQuotedSecretAssignmentSyntax(
 
 function readSecretAssignmentSyntax(text, startIndex, normalizeUnicode) {
   const openingToken = sourceCharacterAt(text, startIndex);
-  const openingQuoteForms = secretAssignmentQuoteForms(
+  const openingProfile = secretAssignmentSyntaxProfile(
     openingToken.character,
     normalizeUnicode,
   );
+  const openingQuoteForms = openingProfile.quoteForms;
+  let attemptedQuotedSyntax = false;
   if (openingQuoteForms.length > 0) {
+    attemptedQuotedSyntax = true;
     const keyStart = openingToken.nextIndex;
     for (const openingQuoteForm of openingQuoteForms) {
       const syntax = readQuotedSecretAssignmentSyntax(
@@ -364,10 +494,25 @@ function readSecretAssignmentSyntax(text, startIndex, normalizeUnicode) {
         openingQuoteForm,
         normalizeUnicode,
       );
-      if (syntax) return syntax;
+      if (syntax) {
+        return openingProfile.ambiguousStructuralForms
+          ? { ...syntax, failClosed: true }
+          : syntax;
+      }
     }
-    return null;
   }
+  for (const mixedOpener of openingProfile.mixedQuoteOpeners) {
+    attemptedQuotedSyntax = true;
+    const syntax = readQuotedSecretAssignmentSyntax(
+      text,
+      openingToken.nextIndex,
+      mixedOpener.quoteForm,
+      normalizeUnicode,
+      mixedOpener.keyFragment,
+    );
+    if (syntax) return { ...syntax, failClosed: true };
+  }
+  if (attemptedQuotedSyntax) return null;
 
   let index = startIndex;
   while (index < text.length) {
@@ -402,7 +547,9 @@ function endsWithNormalizedIdentifierCharacter(character, normalizeUnicode) {
 
 function isPotentialSecretAssignmentStart(character, normalizeUnicode) {
   const profile = secretAssignmentSyntaxProfile(character, normalizeUnicode);
-  return profile.quoteForms.length > 0 || profile.potentialKeyStart;
+  return profile.quoteForms.length > 0
+    || profile.mixedQuoteOpeners.length > 0
+    || profile.potentialKeyStart;
 }
 
 function containsExactSecretAssignment(text, valueEncoding) {
@@ -437,6 +584,7 @@ function containsSecretAssignment(text, { normalizeUnicode, valueEncoding }) {
         || !endsWithNormalizedIdentifierCharacter(previousCharacter, normalizeUnicode))) {
       const syntax = readSecretAssignmentSyntax(text, index, normalizeUnicode);
       if (syntax) {
+        if (syntax.failClosed) return true;
         const value = readSecretAssignmentValue(
           text,
           syntax.valueStart,
