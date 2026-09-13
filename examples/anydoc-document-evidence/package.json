@@ -32,15 +32,15 @@
     "conformance/run-conformance.mjs",
     "SKILL.md",
     "README.md",
-    "listing-candidates.json"
+    "listing-candidates.json", "review.mjs", "review.test.mjs", "review-adapter.test.mjs", "LOCAL_REVIEW.md"
   ],
   "dependencies": {
     "@firecrawl/anydoc": "0.1.7"
   },
   "scripts": {
-    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs && node --check verify-packed.mjs && node --check conformance/run-conformance.mjs",
-    "test": "node --test test.mjs",
-    "test:adversarial": "node --test test.mjs",
+    "check": "node --check agoragentic-anydoc.mjs && node --check cli.mjs && node --check network-deny.mjs && node --check parser-worker.mjs && node --check test-fixtures/fake-anydoc.mjs && node --check test.mjs && node --check smoke-anydoc.mjs && node --check verify-packed.mjs && node --check conformance/run-conformance.mjs && node --check review.mjs && node --check review.test.mjs && node --check review-adapter.test.mjs",
+    "test": "node --test test.mjs review.test.mjs review-adapter.test.mjs", "test:review": "node --test review.test.mjs review-adapter.test.mjs",
+    "test:adversarial": "node --test test.mjs review.test.mjs review-adapter.test.mjs",
     "smoke:anydoc": "node smoke-anydoc.mjs",
     "conformance:install": "python -m pip install --disable-pip-version-check --require-hashes -r conformance/requirements.txt",
     "conformance:generate": "python conformance/generate-fixtures.py",
