@@ -12,7 +12,76 @@ const validHash = x => typeof x === 'string' && /^sha256:[a-f0-9]{64}$/.test(x);
 const count = x => Number.isSafeInteger(x) && x >= 0;
 const codes = x => Array.isArray(x) && x.length <= 128 && x.every(s => typeof s === 'string' && s.length <= 1024);
 const escape = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const PLATFORM_TRAP_BLOCKER = 'platform_document_trap_scan_required_before_context_attachment';
 const SEMANTIC_REVIEW_BLOCKER = 'semantic_review_required_before_financial_or_decision_use';
+const PDF_OCR_BLOCKER = 'ocr_fallback_required_when_text_extraction_is_unsupported';
+const PINNED_PARSER = Object.freeze({ package: '@firecrawl/anydoc', package_version: '0.1.7', engine: 'firecrawl_anydoc' });
+const PINNED_NATIVE_BINDINGS = new Set([
+  '@firecrawl/anydoc-darwin-arm64', '@firecrawl/anydoc-darwin-x64',
+  '@firecrawl/anydoc-linux-arm64-gnu', '@firecrawl/anydoc-linux-arm64-musl',
+  '@firecrawl/anydoc-linux-x64-gnu', '@firecrawl/anydoc-linux-x64-musl',
+  '@firecrawl/anydoc-win32-x64-msvc',
+]);
+const CUSTOM_PARSER = Object.freeze({ package: 'custom_parser_module', package_version: null, engine: 'custom_parser_module' });
+const FORMAT_ALIASES = Object.freeze({
+  docm: 'docx', pot: 'ppt', pps: 'ppt', pptm: 'pptx', ppsm: 'pptx', ppsx: 'pptx',
+  xls: 'xlsx', xlsb: 'xlsx', xlsm: 'xlsx',
+});
+const ECF_DOCUMENT_TYPE = Object.freeze({
+  doc: 'docx', docx: 'docx', odt: 'docx', rtf: 'docx', epub: 'markdown', pdf: 'pdf',
+  ppt: 'pptx', pptx: 'pptx', odp: 'pptx', xlsx: 'xlsx', ods: 'xlsx', csv: 'xlsx',
+});
+const FORMAT_DETECTION = new Set(['caller', 'content', 'filename', 'extension_map']);
+const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
+  JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...fields].sort());
+
+function checkParserProfile(parser) {
+  const provenance = parser?.provenance;
+  assert(provenance && typeof provenance === 'object' && !Array.isArray(provenance), 'invalid_structure_provenance');
+  let expected, parserMode;
+  if (provenance.module_kind === 'pinned_dependency') {
+    assert(exactKeys(provenance, ['package', 'package_version', 'native_binding', 'engine', 'module_kind', 'attested', 'version_verified_at_runtime']) &&
+      provenance.package === PINNED_PARSER.package && provenance.package_version === PINNED_PARSER.package_version &&
+      provenance.engine === PINNED_PARSER.engine && provenance.attested === true && provenance.version_verified_at_runtime === true,
+    'invalid_structure_provenance');
+    const binding = provenance.native_binding;
+    const resolvedBinding = exactKeys(binding, ['package', 'package_version']) &&
+      ((PINNED_NATIVE_BINDINGS.has(binding.package) && binding.package_version === PINNED_PARSER.package_version) ||
+        (binding.package === 'bundled_or_unresolved_native_binding' && binding.package_version === null));
+    assert(resolvedBinding, 'invalid_structure_provenance');
+    expected = PINNED_PARSER;
+    parserMode = 'isolated_local_fast_path';
+  } else if (provenance.module_kind === 'test_only_custom_module') {
+    assert(exactKeys(provenance, ['package', 'package_version', 'native_binding', 'engine', 'module_kind', 'module_reference', 'attested', 'version_verified_at_runtime']) &&
+      provenance.package === CUSTOM_PARSER.package && provenance.package_version === CUSTOM_PARSER.package_version &&
+      provenance.native_binding === null && provenance.engine === CUSTOM_PARSER.engine &&
+      typeof provenance.module_reference === 'string' && provenance.module_reference.length > 0 && provenance.module_reference.length <= 255 &&
+      !/[\u0000-\u001f\u007f]/.test(provenance.module_reference) &&
+      provenance.attested === false && provenance.version_verified_at_runtime === false,
+    'invalid_structure_provenance');
+    expected = CUSTOM_PARSER;
+    parserMode = 'isolated_custom_test_module';
+  } else {
+    fail('invalid_structure_provenance');
+  }
+  assert(parser.package === expected.package && parser.package_version === expected.package_version &&
+    parser.engine === expected.engine && parser.ocr_used === (provenance.attested ? false : 'unknown'),
+  'parser_provenance_mismatch');
+  return { parserMode, provenance };
+}
+
+function checkFormatEnvelope(packet) {
+  const parser = packet?.parser, source = packet?.source;
+  const requested = parser?.requested_format;
+  const canonical = FORMAT_ALIASES[requested] || requested;
+  const documentType = ECF_DOCUMENT_TYPE[parser?.format];
+  assert(typeof requested === 'string' && requested.length > 0 && requested.length <= 16 &&
+    canonical === parser.format && parser.format_alias_applied === (requested !== parser.format) &&
+    FORMAT_DETECTION.has(parser.detected_by) && source?.source_format === parser.format &&
+    source.requested_format === requested && source.ecf_document_type === documentType,
+  'format_envelope_mismatch');
+  return documentType;
+}
 
 // Consumer-side mirror of the producer's format risk contract. Packet mode
 // validates submitted claims against this profile instead of displaying them
@@ -42,6 +111,15 @@ function checkRisk(packet) {
   assert(blockerCount === (expected[0] === 'high' ? 1 : 0), 'risk_handoff_mismatch');
 }
 
+function checkHandoff(packet, completenessBlockers) {
+  const expected = [PLATFORM_TRAP_BLOCKER, ...completenessBlockers];
+  if (packet.risk.semantic_risk === 'high') expected.push(SEMANTIC_REVIEW_BLOCKER);
+  if (packet.parser.format === 'pdf') expected.push(PDF_OCR_BLOCKER);
+  const actual = packet.ecf_handoff.blockers;
+  assert(actual.length === expected.length && new Set(actual).size === actual.length &&
+    expected.every(code => actual.includes(code)), 'structure_handoff_mismatch');
+}
+
 // Consumer profile for parser-worker's structure and parseCompleteness contract.
 // These fields remain packet claims, never parser authentication or approval.
 function checkStructure(packet) {
@@ -57,7 +135,8 @@ function checkStructure(packet) {
   const expectedStatus = ['disabled_by_caller', 'unsupported_for_pdf'].includes(model) ? 'unavailable' : model;
   assert(s.status === expectedStatus && (s.status === 'available' ||
     (fields.every(k => s[k] === 0) && s.traversal_truncated === false)), 'contradictory_structure');
-  assert(model !== 'unsupported_for_pdf' || p.format === 'pdf', 'contradictory_structure');
+  assert((model === 'unsupported_for_pdf') === (p.format === 'pdf') &&
+    (s.asset_count !== 0 || s.asset_bytes === 0), 'contradictory_structure');
   const blockers = [
     [o.original_markdown_chars > o.markdown.length, 'markdown_output_limit_reached'],
     [!o.evidence_coverage.complete, 'evidence_unit_coverage_incomplete'],
@@ -71,10 +150,10 @@ function checkStructure(packet) {
     [!p.provenance.attested, 'custom_parser_provenance_unverified'],
   ].filter(([required]) => required).map(([, name]) => name).sort();
   assert(JSON.stringify([...o.completeness.blockers].sort()) === JSON.stringify(blockers), 'structure_completeness_mismatch');
-  assert(blockers.every(name => packet.ecf_handoff.blockers.includes(name)), 'structure_handoff_mismatch');
   const r = packet.ecf_handoff.receipt;
   assert(r.table_count === s.table_count && r.image_count === s.asset_count && r.formula_count === 0,
     'structure_receipt_mismatch');
+  return blockers;
 }
 
 /** Check the existing adapter envelope. Integrity is not parser authentication or semantic truth. */
@@ -82,6 +161,8 @@ export function inspectPacket(packet, sourceBytes) {
   assert(packet?.schema === 'agoragentic.anydoc-document-evidence.v1', 'unsupported_packet');
   const { source: s, output: o, ecf_handoff: h, risk } = packet;
   const r = h?.receipt, c = o?.evidence_coverage, complete = o?.completeness;
+  const parserProfile = checkParserProfile(packet.parser);
+  const documentType = checkFormatEnvelope(packet);
   const authorityKeys = ['grants_spend', 'grants_wallet_access', 'grants_deployment', 'grants_publication', 'grants_memory_write', 'grants_trust'];
   assert(packet.authority && Object.keys(packet.authority).length === authorityKeys.length && authorityKeys.every(k => packet.authority[k] === false), 'authority_not_inert');
   assert(h?.context_packet_ready === false && h.memory_write_allowed === false && h.marketplace_publication_allowed === false && h.x402_activation_allowed === false && h.trap_scan_required === true && h.trap_scan_status === 'not_scanned', 'handoff_not_pending');
@@ -96,9 +177,12 @@ export function inspectPacket(packet, sourceBytes) {
   let cursor = 0;
   for (const [index, u] of o.evidence_units.entries()) {
     assert(u.schema === 'agoragentic.evidence-unit.v1' && u.source_id === s.source_id && u.reading_order === index && typeof u.markdown === 'string' && u.markdown.length > 0 && u.markdown.length <= c.max_unit_chars && u.trap_scan_status === 'not_scanned', 'invalid_unit');
+    assert(u.source_format === packet.parser.format && u.document_type === documentType, 'unit_format_mismatch');
     const end = cursor + u.markdown.length, p = u.provenance;
     assert(Array.isArray(u.source_char_range) && u.source_char_range.length === 2 && u.source_char_range[0] === cursor && u.source_char_range[1] === end && o.markdown.slice(cursor, end) === u.markdown, 'unit_coverage_mismatch');
     assert(p?.source_hash === s.source_hash && p.aggregate_output_hash === o.output_hash && p.output_hash === hash(u.markdown) && u.evidence_unit_id === `evu_${p.output_hash.slice(7, 19)}_${index}`, 'unit_hash_mismatch');
+    assert(p.parser_engine === packet.parser.engine && p.parser_version === packet.parser.package_version &&
+      p.parser_attested === parserProfile.provenance.attested, 'unit_provenance_mismatch');
     cursor = end;
   }
   assert(cursor === c.covered_chars && c.covered_output_hash === hash(o.markdown.slice(0, cursor)), 'coverage_hash_mismatch');
@@ -118,11 +202,14 @@ export function inspectPacket(packet, sourceBytes) {
   assert(!complete.complete || (!o.truncated && c.complete && parserOmitted === 0), 'contradictory_completeness');
   assert(r?.schema === 'agoragentic.parse-receipt.v1' && r.receipt_id === `rcpt_parse_${hash(`${s.source_hash}:${o.output_hash}`).slice(7, 19)}` && r.status === (complete.complete ? 'pending' : 'incomplete') && r.trap_scan_status === 'not_scanned' && r.output_hash === o.output_hash && r.parser_output_hash === o.parser_output_hash && r.evidence_unit_count === o.evidence_units.length && r.completeness_status === complete.status, 'receipt_mismatch');
   assert(Array.isArray(r.source_hashes) && r.source_hashes.length === 1 && r.source_hashes[0] === s.source_hash && JSON.stringify(r.evidence_coverage) === JSON.stringify(c) && JSON.stringify(r.completeness_blockers) === JSON.stringify(complete.blockers), 'receipt_binding_mismatch');
+  assert(r.parser_engine === packet.parser.engine && r.parser_version === packet.parser.package_version &&
+    r.parser_mode === parserProfile.parserMode, 'receipt_parser_mismatch');
   const boundary = r.public_boundary;
   assert(boundary?.parse_receipt_only === true && ['parser_executed_by_schema', 'memory_written', 'marketplace_publication_triggered', 'x402_route_created', 'settlement_triggered', 'trust_mutated', 'private_context_exposed'].every(k => boundary[k] === false), 'receipt_authority_mismatch');
   assert(risk?.source_exact === false && ['high', 'medium', 'unknown'].includes(risk.semantic_risk) && codes(risk.limitations) && codes(h.blockers), 'invalid_risk');
-  checkStructure(packet);
+  const completenessBlockers = checkStructure(packet);
   checkRisk(packet);
+  checkHandoff(packet, completenessBlockers);
   if (sourceBytes !== undefined) assert(Buffer.isBuffer(sourceBytes) && sourceBytes.length === s.size_bytes && hash(sourceBytes) === s.source_hash, 'source_bytes_mismatch');
   return { scope: 'local_packet_consistency', output_hash_matches: true, source_bytes_hash_matches: sourceBytes === undefined ? null : true,
     semantic_correctness_verified: false, parser_authenticated: false, context_approved: false,
