@@ -1,20 +1,20 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.55.0",
-  "as_of": "2026-09-12",
+  "source_manifest_version": "2.56.0",
+  "as_of": "2026-09-14",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 174,
-    "occurrence_count": 339,
+    "file_count": 177,
+    "occurrence_count": 345,
     "category_file_counts": {
       "installer_or_clone": 31,
-      "machine_discovery": 59,
+      "machine_discovery": 61,
       "package_registry_metadata": 23,
       "public_documentation": 85,
       "raw_content_url": 2,
-      "release_or_provenance": 14,
+      "release_or_provenance": 17,
       "reusable_action": 2,
       "source_or_test": 24
     }
@@ -1105,6 +1105,18 @@
       ]
     },
     {
+      "path": "interchange/runpay/evidence/readonly-catalog-2026-09-14.json",
+      "occurrences": 2,
+      "line_numbers": [
+        5,
+        6
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
       "path": "interchange/runpay/fixtures/consensus-aggregator.json",
       "occurrences": 1,
       "line_numbers": [
@@ -1148,12 +1160,35 @@
     },
     {
       "path": "interchange/runpay/README.md",
-      "occurrences": 1,
+      "occurrences": 2,
       "line_numbers": [
-        3
+        3,
+        5
       ],
       "categories": [
         "public_documentation"
+      ]
+    },
+    {
+      "path": "interchange/runpay/readonly-catalog-evidence.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        16
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/readonly-catalog-evidence.schema.json",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
       ]
     },
     {

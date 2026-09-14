@@ -2,6 +2,8 @@
 
 This private, source-only package normalizes a pinned run.pay compatibility fixture into reviewable Agoragentic Interchange records. It is an offline proof for [issue #376](https://github.com/rhein1/agoragentic-integrations/issues/376), not a live connector.
 
+It also contains an offline processor for the bounded public-catalog trial authorized in [issue #395](https://github.com/rhein1/agoragentic-integrations/issues/395). The processor accepts operator-captured response bytes and a capture manifest; it has no HTTP client and cannot repeat the trial.
+
 The fixture set contains two of the 206 services reported in the issue evidence:
 
 | Service | Price | Input schema | Output schema |
@@ -62,3 +64,52 @@ The output contracts are [`runpay-service-import.schema.json`](./runpay-service-
 ## Promotion requirements
 
 A future live adapter needs a separately reviewed catalog transport, authenticated provider and account binding, current reachability evidence, commercial terms, execution authorization, outcome validation, payment authorization, and independent settlement verification. Those capabilities are outside this reference and require separate authorization and review.
+
+## Bounded read-only catalog evidence
+
+The authorized trial ran on 2026-09-14 with three unauthenticated `GET`
+requests: the first ten records twice, followed by records 11–20. The first
+page was byte-identical across both captures, the two distinct pages had no
+service overlap, and the catalog reported 210 services. No credential,
+provider invocation, payment, wallet action, redirect, listing publication,
+trust mutation, deployment, or activation was used.
+The processor enforces that exact request plan and rejects duplicate or extra
+query parameters.
+
+The capture also found contract drift that blocks automatic fixture/profile or
+listing updates:
+
+- the reported total changed from 206 to 210;
+- the top-level response includes `has_more`;
+- `categories` differed between pages and cannot be treated as a catalog-wide
+  list from this evidence;
+- `schema_input` and `schema_output` were absent for both fixture service IDs,
+  despite the earlier issue statement that they were returned by the catalog;
+- seven observed service fields sit outside the pinned offline allowlist and
+  remain omitted from normalized output.
+
+The checked-in [redacted evidence packet](./evidence/readonly-catalog-2026-09-14.json)
+contains raw-response byte counts and SHA-256 digests, exact decimal price
+tokens, pseudonymous hashed service/vendor linkage references, hash-bound request
+timestamps and canonical URLs, pagination observations, and all-false
+authority flags. Raw responses remain operator-local and are not committed.
+The stable service/vendor hashes allow correlation and may be dictionary
+matched against the public catalog; they are pseudonymous references, not a
+secrecy guarantee.
+The three-request authorization is exhausted; another network request needs a
+new explicit authorization.
+
+Replay the processor against operator-held captures without network access:
+
+```bash
+node readonly-catalog-evidence.mjs \
+  --manifest capture-manifest.json \
+  --capture response-1.json \
+  --capture response-2.json \
+  --capture response-3.json
+```
+
+[`readonly-catalog-evidence.schema.json`](./readonly-catalog-evidence.schema.json)
+defines the strict packet contract. Tests exercise deterministic replay,
+exact-decimal retention, digest tampering, request and endpoint bounds,
+redaction, contract drift, schema validation, and authority escalation denial.

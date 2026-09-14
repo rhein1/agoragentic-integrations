@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/interchange/runpay-readonly-catalog-evidence.v1.json",
+  "title": "run.pay bounded read-only catalog evidence",
+  "description": "Redacted, hash-bound evidence from an explicitly authorized bounded public catalog trial. It grants no execution, payment, trust, listing, deployment, or activation authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "recorded_at",
+    "provenance",
+    "trial",
+    "normalization",
+    "observations",
+    "contract_drift",
+    "authority",
+    "evidence_sha256"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.interchange.runpay-readonly-catalog-evidence.v1" },
+    "recorded_at": { "type": "string", "format": "date-time" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "authorization_ref", "endpoint", "capture_kind", "raw_capture_storage", "raw_capture_embedded"],
+      "properties": {
+        "issue": { "const": "https://github.com/rhein1/agoragentic-integrations/issues/395" },
+        "authorization_ref": { "const": "https://github.com/rhein1/agoragentic-integrations/issues/395#issuecomment-5667477524" },
+        "endpoint": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog" },
+        "capture_kind": { "const": "authorized_public_readonly_catalog" },
+        "raw_capture_storage": { "const": "operator_local_only" },
+        "raw_capture_embedded": { "const": false }
+      }
+    },
+    "trial": { "$ref": "#/$defs/trial" },
+    "normalization": { "$ref": "#/$defs/normalization" },
+    "observations": { "$ref": "#/$defs/observations" },
+    "contract_drift": { "$ref": "#/$defs/contractDrift" },
+    "authority": { "$ref": "#/$defs/authority" },
+    "evidence_sha256": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_count", "maximum_authorized_requests", "method", "authentication", "credentials_supplied", "redirect_followed", "provider_invoked", "payment_attempted", "wallet_action_attempted", "funds_moved", "requests"],
+      "properties": {
+        "request_count": { "const": 3 },
+        "maximum_authorized_requests": { "const": 3 },
+        "method": { "const": "GET" },
+        "authentication": { "const": "none" },
+        "credentials_supplied": { "const": false },
+        "redirect_followed": { "const": false },
+        "provider_invoked": { "const": false },
+        "payment_attempted": { "const": false },
+        "wallet_action_attempted": { "const": false },
+        "funds_moved": { "const": false },
+        "requests": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "$ref": "#/$defs/requestPageZeroFirst" },
+            { "$ref": "#/$defs/requestPageZeroRepeat" },
+            { "$ref": "#/$defs/requestPageTen" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "requestPageZeroFirst": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 1 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0" }
+      }
+    },
+    "requestPageZeroRepeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 2 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0" }
+      }
+    },
+    "requestPageTen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 3 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=10" }
+      }
+    },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transaction_assurance_parser", "transaction_assurance_profile", "interchange_decimal_contract", "exact_decimal_source_tokens_preserved", "deterministic_redacted_projection", "raw_service_names_retained", "raw_vendor_names_retained", "raw_service_endpoints_retained"],
+      "properties": {
+        "transaction_assurance_parser": { "const": "transaction-assurance/src/adapters/runpay-json.mjs" },
+        "transaction_assurance_profile": { "const": "runpay.catalog.2026-09-09" },
+        "interchange_decimal_contract": { "const": "interchange/runpay/normalize.mjs#exactDecimal" },
+        "exact_decimal_source_tokens_preserved": { "const": true },
+        "deterministic_redacted_projection": { "const": true },
+        "raw_service_names_retained": { "const": false },
+        "raw_vendor_names_retained": { "const": false },
+        "raw_service_endpoints_retained": { "const": false }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_ref", "fixture_service", "category", "price_exact", "vendor_ref", "input_schema_present", "output_schema_present"],
+      "properties": {
+        "service_ref": { "$ref": "#/$defs/digest" },
+        "fixture_service": { "type": "boolean" },
+        "category": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "price_exact": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$", "maxLength": 128 },
+        "vendor_ref": { "$ref": "#/$defs/digest" },
+        "input_schema_present": { "type": "boolean" },
+        "output_schema_present": { "type": "boolean" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "offset", "limit", "total", "has_more", "top_level_fields", "service_field_union", "service_field_intersection", "categories_observed", "services", "raw_response", "redacted_projection_sha256"],
+      "properties": {
+        "request": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "offset": { "type": "integer", "minimum": 0 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "total": { "type": "integer", "minimum": 0 },
+        "has_more": { "type": "boolean" },
+        "top_level_fields": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "service_field_union": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "service_field_intersection": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "categories_observed": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 64 }, "uniqueItems": true },
+        "services": { "type": "array", "maxItems": 20, "items": { "$ref": "#/$defs/service" } },
+        "raw_response": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sha256", "bytes", "embedded"],
+          "properties": {
+            "sha256": { "$ref": "#/$defs/digest" },
+            "bytes": { "type": "integer", "minimum": 1, "maximum": 262144 },
+            "embedded": { "const": false }
+          }
+        },
+        "redacted_projection_sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "schemaPresence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_ref", "observations", "input_schema_present", "output_schema_present"],
+      "properties": {
+        "service_ref": { "$ref": "#/$defs/digest" },
+        "observations": { "type": "integer", "minimum": 0 },
+        "input_schema_present": { "type": "boolean" },
+        "output_schema_present": { "type": "boolean" }
+      }
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reported_service_total", "total_consistent_across_pages", "page_service_counts", "unique_service_count", "repeated_first_page_byte_identical", "first_and_next_page_overlap_count", "categories_consistent_across_pages", "known_fixture_schema_presence", "pages"],
+      "properties": {
+        "reported_service_total": { "type": "integer", "minimum": 0 },
+        "total_consistent_across_pages": { "type": "boolean" },
+        "page_service_counts": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 20 } },
+        "unique_service_count": { "type": "integer", "minimum": 0, "maximum": 60 },
+        "repeated_first_page_byte_identical": { "type": "boolean" },
+        "first_and_next_page_overlap_count": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "categories_consistent_across_pages": { "type": "boolean" },
+        "known_fixture_schema_presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["consensus_aggregator", "phone_validator"],
+          "properties": {
+            "consensus_aggregator": { "$ref": "#/$defs/schemaPresence" },
+            "phone_validator": { "$ref": "#/$defs/schemaPresence" }
+          }
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 1 }, "limit": { "const": 10 }, "offset": { "const": 0 } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 2 }, "limit": { "const": 10 }, "offset": { "const": 0 } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 3 }, "limit": { "const": 10 }, "offset": { "const": 10 } } }
+              ]
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "contractDrift": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detected", "findings", "automatic_profile_update_allowed", "automatic_listing_import_allowed"],
+      "properties": {
+        "detected": { "type": "boolean" },
+        "findings": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/finding" } },
+        "automatic_profile_update_allowed": { "const": false },
+        "automatic_listing_import_allowed": { "const": false }
+      }
+    },
+    "finding": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "expected", "observed"],
+          "properties": {
+            "code": { "const": "catalog_total_changed" },
+            "expected": { "const": 206 },
+            "observed": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "field", "observed_on_all_pages"],
+          "properties": {
+            "code": { "const": "top_level_field_added" },
+            "field": { "const": "has_more" },
+            "observed_on_all_pages": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "affected_fixture_services"],
+          "properties": {
+            "code": { "const": "fixture_schema_fields_absent" },
+            "affected_fixture_services": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/digest" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "observed"],
+          "properties": {
+            "code": { "const": "categories_page_dependent" },
+            "observed": { "const": true }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "fields"],
+          "properties": {
+            "code": { "const": "service_fields_outside_offline_profile" },
+            "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_identity_verified", "vendor_identity_verified", "trust_score_verified", "reachability_verified_beyond_catalog_get", "eligible_for_execution", "invocation_authorized", "payment_authorized", "settlement_confirmed", "trust_mutation_authorized", "listing_publication_authorized", "deployment_authorized", "production_activation_authorized"],
+      "properties": {
+        "provider_identity_verified": { "const": false },
+        "vendor_identity_verified": { "const": false },
+        "trust_score_verified": { "const": false },
+        "reachability_verified_beyond_catalog_get": { "const": false },
+        "eligible_for_execution": { "const": false },
+        "invocation_authorized": { "const": false },
+        "payment_authorized": { "const": false },
+        "settlement_confirmed": { "const": false },
+        "trust_mutation_authorized": { "const": false },
+        "listing_publication_authorized": { "const": false },
+        "deployment_authorized": { "const": false },
+        "production_activation_authorized": { "const": false }
+      }
+    }
+  }
+}

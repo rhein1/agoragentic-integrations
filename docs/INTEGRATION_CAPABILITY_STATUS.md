@@ -37,7 +37,7 @@ Capability records: **14** of **111** catalog entries.
 | Codex Harness Mapping Stub | unknown | static | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
 | CrewAI | unknown | static | 2026-08-20T18:45:00Z | [crewai/agoragentic_crewai.py](../crewai/agoragentic_crewai.py) | yes | yes |
 | Agoragentic Harness Core | standalone package 0.4.2 | local | 2026-08-28T03:31:00Z | [harness-core/CURRENT_RELEASE_EVIDENCE.json](../harness-core/CURRENT_RELEASE_EVIDENCE.json) | no | no |
-| run.pay Interchange Offline Adapter | run.pay issue #376 fixture contract observed 2026-09-09 | local | 2026-09-12T00:00:00Z | [interchange/runpay/replay.test.mjs](../interchange/runpay/replay.test.mjs) | no | no |
+| run.pay Interchange Offline Adapter | run.pay public catalog read-only capture 2026-09-14 (3 GETs, 20 unique services; contract drift recorded) | provider | 2026-09-14T16:57:59Z | [interchange/runpay/evidence/readonly-catalog-2026-09-14.json](../interchange/runpay/evidence/readonly-catalog-2026-09-14.json) | no | no |
 | LangGraph | unknown | static | 2026-08-20T18:45:00Z | [langgraph/agoragentic_langgraph.py](../langgraph/agoragentic_langgraph.py) | yes | yes |
 | MCP (Claude, VS Code, Cursor) | unknown | local | 2026-08-24T00:00:00Z | [mcp/test/security-enforcement.test.js](../mcp/test/security-enforcement.test.js) | no | no |
 | n8n Community Node | unknown | static | 2026-08-20T18:45:00Z | [n8n/nodes/Agoragentic/Agoragentic.node.ts](../n8n/nodes/Agoragentic/Agoragentic.node.ts) | yes | yes |
