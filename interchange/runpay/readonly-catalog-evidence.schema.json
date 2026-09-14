@@ -44,9 +44,9 @@
     "trial": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["request_count", "maximum_authorized_requests", "method", "authentication", "credentials_supplied", "redirect_followed", "provider_invoked", "payment_attempted", "wallet_action_attempted", "funds_moved"],
+      "required": ["request_count", "maximum_authorized_requests", "method", "authentication", "credentials_supplied", "redirect_followed", "provider_invoked", "payment_attempted", "wallet_action_attempted", "funds_moved", "requests"],
       "properties": {
-        "request_count": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "request_count": { "const": 3 },
         "maximum_authorized_requests": { "const": 3 },
         "method": { "const": "GET" },
         "authentication": { "const": "none" },
@@ -55,7 +55,51 @@
         "provider_invoked": { "const": false },
         "payment_attempted": { "const": false },
         "wallet_action_attempted": { "const": false },
-        "funds_moved": { "const": false }
+        "funds_moved": { "const": false },
+        "requests": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "$ref": "#/$defs/requestPageZeroFirst" },
+            { "$ref": "#/$defs/requestPageZeroRepeat" },
+            { "$ref": "#/$defs/requestPageTen" }
+          ],
+          "items": false
+        }
+      }
+    },
+    "requestPageZeroFirst": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 1 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0" }
+      }
+    },
+    "requestPageZeroRepeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 2 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0" }
+      }
+    },
+    "requestPageTen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "started_at", "completed_at", "url"],
+      "properties": {
+        "request": { "const": 3 },
+        "started_at": { "type": "string", "format": "date-time" },
+        "completed_at": { "type": "string", "format": "date-time" },
+        "url": { "const": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=10" }
       }
     },
     "normalization": {

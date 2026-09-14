@@ -73,6 +73,8 @@ page was byte-identical across both captures, the two distinct pages had no
 service overlap, and the catalog reported 210 services. No credential,
 provider invocation, payment, wallet action, redirect, listing publication,
 trust mutation, deployment, or activation was used.
+The processor enforces that exact request plan and rejects duplicate or extra
+query parameters.
 
 The capture also found contract drift that blocks automatic fixture/profile or
 listing updates:
@@ -88,8 +90,12 @@ listing updates:
 
 The checked-in [redacted evidence packet](./evidence/readonly-catalog-2026-09-14.json)
 contains raw-response byte counts and SHA-256 digests, exact decimal price
-tokens, hashed service/vendor references, pagination observations, and all-false
+tokens, pseudonymous hashed service/vendor linkage references, hash-bound request
+timestamps and canonical URLs, pagination observations, and all-false
 authority flags. Raw responses remain operator-local and are not committed.
+The stable service/vendor hashes allow correlation and may be dictionary
+matched against the public catalog; they are pseudonymous references, not a
+secrecy guarantee.
 The three-request authorization is exhausted; another network request needs a
 new explicit authorization.
 

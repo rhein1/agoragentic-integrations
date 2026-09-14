@@ -22,6 +22,11 @@ const AUTHORIZED_BEFORE = Date.parse('2026-09-28T16:46:41Z');
 const MAX_REQUESTS = 3;
 const MAX_RESPONSE_BYTES = 262_144;
 const MAX_PAGE_SIZE = 20;
+const CAPTURE_PLAN = Object.freeze([
+  Object.freeze({ limit: 10, offset: 0 }),
+  Object.freeze({ limit: 10, offset: 0 }),
+  Object.freeze({ limit: 10, offset: 10 }),
+]);
 const KNOWN_FIXTURES = Object.freeze({
   consensus_aggregator: 'da3ddf15-34fa-4d1e-a5cb-a7d50a08f0fc',
   phone_validator: 'd5ff985c-e50a-431a-84f1-b339ae0700b8',
@@ -62,8 +67,9 @@ function validateUrl(value) {
   if (`${parsed.origin}${parsed.pathname}` !== AUTHORIZED_ENDPOINT || parsed.username || parsed.password || parsed.hash) {
     fail('runpay_capture_url_not_authorized');
   }
-  for (const key of parsed.searchParams.keys()) {
-    if (!RUNPAY_PROFILE.catalog_endpoint.query_params.includes(key)) fail('runpay_capture_query_not_authorized');
+  const keys = [...parsed.searchParams.keys()];
+  if (keys.length !== 2 || new Set(keys).size !== keys.length || !keys.includes('limit') || !keys.includes('offset')) {
+    fail('runpay_capture_query_not_authorized');
   }
   const limitText = parsed.searchParams.get('limit');
   const offsetText = parsed.searchParams.get('offset');
@@ -73,14 +79,20 @@ function validateUrl(value) {
   if (!offsetText || !/^\d+$/u.test(offsetText) || !Number.isSafeInteger(Number(offsetText))) {
     fail('runpay_capture_offset_invalid');
   }
-  return { value: parsed.toString(), limit: Number(limitText), offset: Number(offsetText) };
+  const limit = Number(limitText);
+  const offset = Number(offsetText);
+  return {
+    value: `${AUTHORIZED_ENDPOINT}?limit=${limit}&offset=${offset}`,
+    limit,
+    offset,
+  };
 }
 
 function validateManifest(manifest, captureBuffers) {
   if (!isRecord(manifest) || manifest.issue !== RUNPAY_ISSUE_395 || manifest.authorization !== RUNPAY_AUTHORIZATION_REF) {
     fail('runpay_capture_manifest_invalid');
   }
-  if (!Number.isSafeInteger(manifest.request_count) || manifest.request_count < 1 || manifest.request_count > MAX_REQUESTS) {
+  if (manifest.request_count !== MAX_REQUESTS) {
     fail('runpay_capture_request_count_invalid');
   }
   if (!Array.isArray(manifest.captures) || manifest.captures.length !== manifest.request_count || captureBuffers.length !== manifest.request_count) {
@@ -97,7 +109,7 @@ function validateManifest(manifest, captureBuffers) {
   }
 
   let previousCompletedAt = null;
-  return manifest.captures.map((capture, index) => {
+  const captures = manifest.captures.map((capture, index) => {
     if (!isRecord(capture) || capture.request !== index + 1 || capture.http_status !== 200) fail('runpay_capture_metadata_invalid');
     if (typeof capture.content_type !== 'string' || !capture.content_type.toLowerCase().startsWith('application/json')) {
       fail('runpay_capture_content_type_invalid');
@@ -123,6 +135,10 @@ function validateManifest(manifest, captureBuffers) {
       sha256: capture.sha256,
     };
   });
+  if (captures.some((capture, index) => (
+    capture.url.limit !== CAPTURE_PLAN[index].limit || capture.url.offset !== CAPTURE_PLAN[index].offset
+  ))) fail('runpay_capture_plan_mismatch');
+  return captures;
 }
 
 function normalizeService(service) {
@@ -252,6 +268,12 @@ export function buildReadonlyCatalogEvidence({ manifest, captureBuffers }) {
       payment_attempted: false,
       wallet_action_attempted: false,
       funds_moved: false,
+      requests: captures.map((capture) => ({
+        request: capture.request,
+        started_at: capture.started_at,
+        completed_at: capture.completed_at,
+        url: capture.url.value,
+      })),
     },
     normalization: {
       transaction_assurance_parser: 'transaction-assurance/src/adapters/runpay-json.mjs',
@@ -318,7 +340,7 @@ async function main() {
     return;
   }
   if (!args.manifest || !args.captures.length) fail('runpay_capture_arguments_required');
-  const manifest = JSON.parse(await readFile(args.manifest, 'utf8'));
+  const manifest = parseRunpayJson(await readFile(args.manifest));
   const captureBuffers = await Promise.all(args.captures.map((capture) => readFile(capture)));
   const evidence = buildReadonlyCatalogEvidence({ manifest, captureBuffers });
   const output = `${JSON.stringify(evidence, null, 2)}\n`;

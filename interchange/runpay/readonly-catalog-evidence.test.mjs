@@ -76,6 +76,13 @@ test('builds deterministic redacted evidence with exact decimal source tokens', 
   const first = buildReadonlyCatalogEvidence(input);
   const second = buildReadonlyCatalogEvidence(input);
   assert.deepEqual(first, second);
+  const shiftedManifest = manifest(captureBuffers);
+  shiftedManifest.captures[0].started_at = '2026-09-14T16:50:02Z';
+  shiftedManifest.captures[0].completed_at = '2026-09-14T16:50:03Z';
+  assert.notEqual(
+    buildReadonlyCatalogEvidence({ manifest: shiftedManifest, captureBuffers }).evidence_sha256,
+    first.evidence_sha256,
+  );
   assert.equal(first.observations.reported_service_total, 210);
   assert.equal(first.observations.unique_service_count, 3);
   assert.equal(first.observations.repeated_first_page_byte_identical, true);
@@ -134,6 +141,41 @@ test('rejects tampered bytes, excess requests, unauthorized URLs, timestamps, an
     /runpay_capture_url_not_authorized/,
   );
 
+  const filtered = manifest(captureBuffers);
+  filtered.captures[0].url = `${endpoint}?category=DATA&limit=10&offset=0`;
+  assert.throws(
+    () => buildReadonlyCatalogEvidence({ manifest: filtered, captureBuffers }),
+    /runpay_capture_query_not_authorized/,
+  );
+
+  const duplicate = manifest(captureBuffers);
+  duplicate.captures[0].url = `${endpoint}?limit=10&limit=20&offset=0`;
+  assert.throws(
+    () => buildReadonlyCatalogEvidence({ manifest: duplicate, captureBuffers }),
+    /runpay_capture_query_not_authorized/,
+  );
+
+  const duplicateOffset = manifest(captureBuffers);
+  duplicateOffset.captures[0].url = `${endpoint}?limit=10&offset=0&offset=10`;
+  assert.throws(
+    () => buildReadonlyCatalogEvidence({ manifest: duplicateOffset, captureBuffers }),
+    /runpay_capture_query_not_authorized/,
+  );
+
+  const shortenedBuffers = captureBuffers.slice(0, 2);
+  assert.throws(
+    () => buildReadonlyCatalogEvidence({ manifest: manifest(shortenedBuffers), captureBuffers: shortenedBuffers }),
+    /runpay_capture_request_count_invalid/,
+  );
+
+  const shuffled = manifest(captureBuffers);
+  shuffled.captures[1].url = `${endpoint}?limit=10&offset=10`;
+  shuffled.captures[2].url = `${endpoint}?limit=10&offset=0`;
+  assert.throws(
+    () => buildReadonlyCatalogEvidence({ manifest: shuffled, captureBuffers }),
+    /runpay_capture_plan_mismatch/,
+  );
+
   const invalidDate = manifest(captureBuffers);
   invalidDate.captures[0].started_at = '2026-09-31T16:50:00Z';
   assert.throws(
@@ -150,8 +192,9 @@ test('rejects tampered bytes, excess requests, unauthorized URLs, timestamps, an
   );
 
   const exponent = Buffer.from('{"services":[{"id":"d5ff985c-e50a-431a-84f1-b339ae0700b8","category":"DATA","price_per_call":1e-3,"vendor_name":"vendor"}],"total":206,"categories":["DATA"],"has_more":false}');
+  const exponentBuffers = [exponent, exponent, response({ offset: 10 })];
   assert.throws(
-    () => buildReadonlyCatalogEvidence({ manifest: manifest([exponent]), captureBuffers: [exponent] }),
+    () => buildReadonlyCatalogEvidence({ manifest: manifest(exponentBuffers), captureBuffers: exponentBuffers }),
     /runpay_capture_price_invalid/,
   );
 });
@@ -166,6 +209,11 @@ test('committed capture evidence satisfies the strict schema and self-hash', asy
   const { evidence_sha256: digest, ...body } = evidence;
   assert.equal(digest, hashRef(body));
   assert.equal(evidence.trial.request_count, 3);
+  assert.deepEqual(evidence.trial.requests.map(({ request, url }) => ({ request, url })), [
+    { request: 1, url: `${endpoint}?limit=10&offset=0` },
+    { request: 2, url: `${endpoint}?limit=10&offset=0` },
+    { request: 3, url: `${endpoint}?limit=10&offset=10` },
+  ]);
   assert.equal(evidence.observations.reported_service_total, 210);
   assert.equal(evidence.observations.unique_service_count, 20);
   assert.equal(evidence.observations.first_and_next_page_overlap_count, 0);
