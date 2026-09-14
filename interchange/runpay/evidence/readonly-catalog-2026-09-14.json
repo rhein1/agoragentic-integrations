@@ -1,0 +1,598 @@
+{
+  "schema": "agoragentic.interchange.runpay-readonly-catalog-evidence.v1",
+  "recorded_at": "2026-09-14T16:57:59.6073404Z",
+  "provenance": {
+    "issue": "https://github.com/rhein1/agoragentic-integrations/issues/395",
+    "authorization_ref": "https://github.com/rhein1/agoragentic-integrations/issues/395#issuecomment-5667477524",
+    "endpoint": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog",
+    "capture_kind": "authorized_public_readonly_catalog",
+    "raw_capture_storage": "operator_local_only",
+    "raw_capture_embedded": false
+  },
+  "trial": {
+    "request_count": 3,
+    "maximum_authorized_requests": 3,
+    "method": "GET",
+    "authentication": "none",
+    "credentials_supplied": false,
+    "redirect_followed": false,
+    "provider_invoked": false,
+    "payment_attempted": false,
+    "wallet_action_attempted": false,
+    "funds_moved": false,
+    "requests": [
+      {
+        "request": 1,
+        "started_at": "2026-09-14T16:57:58.30529Z",
+        "completed_at": "2026-09-14T16:57:58.9513665Z",
+        "url": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0"
+      },
+      {
+        "request": 2,
+        "started_at": "2026-09-14T16:57:58.9562628Z",
+        "completed_at": "2026-09-14T16:57:59.262211Z",
+        "url": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=0"
+      },
+      {
+        "request": 3,
+        "started_at": "2026-09-14T16:57:59.2625729Z",
+        "completed_at": "2026-09-14T16:57:59.6073404Z",
+        "url": "https://runpay-backend-visibility-production.up.railway.app/api/services/catalog?limit=10&offset=10"
+      }
+    ]
+  },
+  "normalization": {
+    "transaction_assurance_parser": "transaction-assurance/src/adapters/runpay-json.mjs",
+    "transaction_assurance_profile": "runpay.catalog.2026-09-09",
+    "interchange_decimal_contract": "interchange/runpay/normalize.mjs#exactDecimal",
+    "exact_decimal_source_tokens_preserved": true,
+    "deterministic_redacted_projection": true,
+    "raw_service_names_retained": false,
+    "raw_vendor_names_retained": false,
+    "raw_service_endpoints_retained": false
+  },
+  "observations": {
+    "reported_service_total": 210,
+    "total_consistent_across_pages": true,
+    "page_service_counts": [
+      10,
+      10,
+      10
+    ],
+    "unique_service_count": 20,
+    "repeated_first_page_byte_identical": true,
+    "first_and_next_page_overlap_count": 0,
+    "categories_consistent_across_pages": false,
+    "known_fixture_schema_presence": {
+      "consensus_aggregator": {
+        "service_ref": "sha256:e1446f6207891eb3f12317d3a635a84dc5a356cd651a113c66d0dd7ee2774969",
+        "observations": 2,
+        "input_schema_present": false,
+        "output_schema_present": false
+      },
+      "phone_validator": {
+        "service_ref": "sha256:7b338cdb42431506e8237b491589c1b6f63fde659dc89e817f6b1883dbb1cd81",
+        "observations": 2,
+        "input_schema_present": false,
+        "output_schema_present": false
+      }
+    },
+    "pages": [
+      {
+        "request": 1,
+        "offset": 0,
+        "limit": 10,
+        "total": 210,
+        "has_more": true,
+        "top_level_fields": [
+          "categories",
+          "has_more",
+          "services",
+          "total"
+        ],
+        "service_field_union": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "service_field_intersection": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "categories_observed": [
+          "AI",
+          "DATA"
+        ],
+        "services": [
+          {
+            "service_ref": "sha256:7b338cdb42431506e8237b491589c1b6f63fde659dc89e817f6b1883dbb1cd81",
+            "fixture_service": true,
+            "category": "DATA",
+            "price_exact": "0.015",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:e1446f6207891eb3f12317d3a635a84dc5a356cd651a113c66d0dd7ee2774969",
+            "fixture_service": true,
+            "category": "AI",
+            "price_exact": "0.02",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:41abd05545a7a4754657fe3a595e4b7e935a9bd947aadc29f3360a919d203590",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:dd51af4e23e7f4fe3394e47b83be2aa2d3f2e5e8e50251134f68ff403d5d25f0",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:acdfc155022387126ed78fcc96c06d45d2c79982dc369f670aef8015df030fc4",
+            "fixture_service": false,
+            "category": "DATA",
+            "price_exact": "5",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:d3fdc184308d8f01c3e91ac84654a9ae90c2c2420d15753aaa2c973301b75662",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.05",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:c3135a9653379a7f41e165d544cb502b1b8c9fd31637e2d38a41adf65871b237",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.05",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:1afd370d312dd2f52b76d9a68a329d58a72fa4203029a2f48c489466b19dde1d",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:ea5ad15a18e2e8f4077f533c5c18344e9729981a6b146bd70ac990852561fe07",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:89bd1257dea963dff31c62e2c490157b80c262d6ae35c6ef550098e0183e4b25",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.5",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          }
+        ],
+        "raw_response": {
+          "sha256": "sha256:7f763352c330210325fa4bfc18f11f7fcc1ae1cabf15e3fa4ea7839e87cddb1a",
+          "bytes": 7601,
+          "embedded": false
+        },
+        "redacted_projection_sha256": "sha256:1afdfee05e39d57a2389388cedbbcf2960d1062611c97bb74e2c75e8deb6ef68"
+      },
+      {
+        "request": 2,
+        "offset": 0,
+        "limit": 10,
+        "total": 210,
+        "has_more": true,
+        "top_level_fields": [
+          "categories",
+          "has_more",
+          "services",
+          "total"
+        ],
+        "service_field_union": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "service_field_intersection": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "categories_observed": [
+          "AI",
+          "DATA"
+        ],
+        "services": [
+          {
+            "service_ref": "sha256:7b338cdb42431506e8237b491589c1b6f63fde659dc89e817f6b1883dbb1cd81",
+            "fixture_service": true,
+            "category": "DATA",
+            "price_exact": "0.015",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:e1446f6207891eb3f12317d3a635a84dc5a356cd651a113c66d0dd7ee2774969",
+            "fixture_service": true,
+            "category": "AI",
+            "price_exact": "0.02",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:41abd05545a7a4754657fe3a595e4b7e935a9bd947aadc29f3360a919d203590",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:dd51af4e23e7f4fe3394e47b83be2aa2d3f2e5e8e50251134f68ff403d5d25f0",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:acdfc155022387126ed78fcc96c06d45d2c79982dc369f670aef8015df030fc4",
+            "fixture_service": false,
+            "category": "DATA",
+            "price_exact": "5",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:d3fdc184308d8f01c3e91ac84654a9ae90c2c2420d15753aaa2c973301b75662",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.05",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:c3135a9653379a7f41e165d544cb502b1b8c9fd31637e2d38a41adf65871b237",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.05",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:1afd370d312dd2f52b76d9a68a329d58a72fa4203029a2f48c489466b19dde1d",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:ea5ad15a18e2e8f4077f533c5c18344e9729981a6b146bd70ac990852561fe07",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:89bd1257dea963dff31c62e2c490157b80c262d6ae35c6ef550098e0183e4b25",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.5",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          }
+        ],
+        "raw_response": {
+          "sha256": "sha256:7f763352c330210325fa4bfc18f11f7fcc1ae1cabf15e3fa4ea7839e87cddb1a",
+          "bytes": 7601,
+          "embedded": false
+        },
+        "redacted_projection_sha256": "sha256:1afdfee05e39d57a2389388cedbbcf2960d1062611c97bb74e2c75e8deb6ef68"
+      },
+      {
+        "request": 3,
+        "offset": 10,
+        "limit": 10,
+        "total": 210,
+        "has_more": true,
+        "top_level_fields": [
+          "categories",
+          "has_more",
+          "services",
+          "total"
+        ],
+        "service_field_union": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "service_field_intersection": [
+          "avg_ms",
+          "calls_7d",
+          "category",
+          "created_at",
+          "description",
+          "error_rate",
+          "id",
+          "marketing_copy",
+          "min_agent_score",
+          "name",
+          "price_per_call",
+          "smart_score",
+          "total_calls",
+          "trust_score",
+          "vendor_name",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ],
+        "categories_observed": [
+          "AI",
+          "DATA",
+          "MEDIA"
+        ],
+        "services": [
+          {
+            "service_ref": "sha256:426bd66304e18cd04d6992e7b10ab7c600e0ed4cfeabd396dde5c97992ffc52f",
+            "fixture_service": false,
+            "category": "DATA",
+            "price_exact": "0.02",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:72c117509779458d517892dfa7542b6297fcf6d0cf54ef73fcd246b5c359796f",
+            "fixture_service": false,
+            "category": "MEDIA",
+            "price_exact": "0.01",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:52d0f97d2b43a12047c933fa6cb4f988bcd1fe0b885123119f10ed58559ff3d0",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:28276a431e326d71c384a666786bcdf8af54242d3bf558575f402cc2ae56ce4f",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:9f1ee93261fde6e7c6272382aa658bee3e457d40a58ded160a19e5d1116bd7b6",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:84a338d569a8cea48dde3416ddb4cdf70354f5f42ecef1307e2f5ff054e0c1b5",
+            "fixture_service": false,
+            "category": "MEDIA",
+            "price_exact": "0.01",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:e7df6ef5c32f47cd267f8cb6244aed3168e630c022ca98ac7071e1a03a1154ad",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:c1653cc686134df149939a0f35f48b7178fe51bc74d4e6c2fe756d689ce217c6",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.01",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:1a72b410dbd7d6901b906fdd5daf22b4c6131d2d919bf2eadf62aa826377cb2c",
+            "fixture_service": false,
+            "category": "AI",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          },
+          {
+            "service_ref": "sha256:8a8c7bf12898e7513e54d548ad606620c740eeb4f9e5a2d00d9c7e3bb3e8d62e",
+            "fixture_service": false,
+            "category": "DATA",
+            "price_exact": "0.005",
+            "vendor_ref": "sha256:acec6a8d3e7c9c10d0fcff1d4df81a3eca9f4fbe22e2324ba92350b9bbd9e95d",
+            "input_schema_present": false,
+            "output_schema_present": false
+          }
+        ],
+        "raw_response": {
+          "sha256": "sha256:4eadb5440f8c922e08496357df799552f4dfe1cfa217799c0d6d80aa5fbc1984",
+          "bytes": 8328,
+          "embedded": false
+        },
+        "redacted_projection_sha256": "sha256:42989e5bb7414a429461c85a2492e476a02b1ca8d0db0ee74bbb0908cf2aae01"
+      }
+    ]
+  },
+  "contract_drift": {
+    "detected": true,
+    "findings": [
+      {
+        "code": "catalog_total_changed",
+        "expected": 206,
+        "observed": 210
+      },
+      {
+        "code": "top_level_field_added",
+        "field": "has_more",
+        "observed_on_all_pages": true
+      },
+      {
+        "code": "fixture_schema_fields_absent",
+        "affected_fixture_services": [
+          "sha256:e1446f6207891eb3f12317d3a635a84dc5a356cd651a113c66d0dd7ee2774969",
+          "sha256:7b338cdb42431506e8237b491589c1b6f63fde659dc89e817f6b1883dbb1cd81"
+        ]
+      },
+      {
+        "code": "categories_page_dependent",
+        "observed": true
+      },
+      {
+        "code": "service_fields_outside_offline_profile",
+        "fields": [
+          "calls_7d",
+          "created_at",
+          "marketing_copy",
+          "min_agent_score",
+          "smart_score",
+          "x402_crypto_endpoint",
+          "x402_endpoint"
+        ]
+      }
+    ],
+    "automatic_profile_update_allowed": false,
+    "automatic_listing_import_allowed": false
+  },
+  "authority": {
+    "provider_identity_verified": false,
+    "vendor_identity_verified": false,
+    "trust_score_verified": false,
+    "reachability_verified_beyond_catalog_get": false,
+    "eligible_for_execution": false,
+    "invocation_authorized": false,
+    "payment_authorized": false,
+    "settlement_confirmed": false,
+    "trust_mutation_authorized": false,
+    "listing_publication_authorized": false,
+    "deployment_authorized": false,
+    "production_activation_authorized": false
+  },
+  "evidence_sha256": "sha256:1b30513e1a13cb10762a9c520fee256360b99e01643f6613f3cba2ebb215bc92"
+}

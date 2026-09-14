@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Offline run.pay catalog and receipt normalization for Agoragentic Interchange.",
   "scripts": {
-    "check": "node --check normalize.mjs && node --check replay.mjs",
+    "check": "node --check normalize.mjs && node --check replay.mjs && node --check readonly-catalog-evidence.mjs",
     "replay": "node replay.mjs",
     "test": "node --test *.test.mjs"
   },
