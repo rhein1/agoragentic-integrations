@@ -177,7 +177,7 @@
       "properties": {
         "reported_service_total": { "type": "integer", "minimum": 0 },
         "total_consistent_across_pages": { "type": "boolean" },
-        "page_service_counts": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 20 } },
+        "page_service_counts": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "integer", "minimum": 0, "maximum": 20 } },
         "unique_service_count": { "type": "integer", "minimum": 0, "maximum": 60 },
         "repeated_first_page_byte_identical": { "type": "boolean" },
         "first_and_next_page_overlap_count": { "type": "integer", "minimum": 0, "maximum": 20 },
@@ -191,7 +191,32 @@
             "phone_validator": { "$ref": "#/$defs/schemaPresence" }
           }
         },
-        "pages": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "$ref": "#/$defs/page" } }
+        "pages": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 1 }, "limit": { "const": 10 }, "offset": { "const": 0 } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 2 }, "limit": { "const": 10 }, "offset": { "const": 0 } } }
+              ]
+            },
+            {
+              "allOf": [
+                { "$ref": "#/$defs/page" },
+                { "type": "object", "properties": { "request": { "const": 3 }, "limit": { "const": 10 }, "offset": { "const": 10 } } }
+              ]
+            }
+          ],
+          "items": false
+        }
       }
     },
     "contractDrift": {

@@ -219,4 +219,17 @@ test('committed capture evidence satisfies the strict schema and self-hash', asy
   assert.equal(evidence.observations.first_and_next_page_overlap_count, 0);
   assert.equal(evidence.contract_drift.detected, true);
   assert.equal(Object.values(evidence.authority).some(Boolean), false);
+
+  const truncated = structuredClone(evidence);
+  truncated.observations.pages.pop();
+  truncated.observations.page_service_counts.pop();
+  delete truncated.evidence_sha256;
+  truncated.evidence_sha256 = hashRef(truncated);
+  assert.equal(validate(truncated), false);
+
+  const wrongPage = structuredClone(evidence);
+  wrongPage.observations.pages[2].offset = 20;
+  delete wrongPage.evidence_sha256;
+  wrongPage.evidence_sha256 = hashRef(wrongPage);
+  assert.equal(validate(wrongPage), false);
 });
