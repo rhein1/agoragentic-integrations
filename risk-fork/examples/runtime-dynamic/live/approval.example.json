@@ -1,0 +1,18 @@
+{
+  "schema": "agoragentic.runtime-owner-approval.v1",
+  "approved": false,
+  "revoked": false,
+  "network": "eip155:84532",
+  "wallet_model": "dynamic_developer_owned_server_wallet",
+  "wallet_address": "REPLACE_WITH_DEDICATED_TEST_WALLET",
+  "seller_address": "REPLACE_WITH_OWNER_APPROVED_TEST_SELLER_EOA",
+  "approved_plan_hash": "REPLACE_AFTER_REVIEWING_PREPARED_PLAN",
+  "expires_at": "REPLACE_WITH_UTC_EXPIRY_WITHIN_15_MINUTES",
+  "unit_price_wei": "1000000000000",
+  "max_payment_wei": "10000000000000",
+  "max_fee_per_gas_wei": "1000000000",
+  "max_total_cost_wei": "50000000000000",
+  "reviewed_head": "REPLACE_WITH_EXACT_REVIEWED_COMMIT",
+  "hosted_ci_passed": false,
+  "ci_run_url": "REPLACE_WITH_ACTUAL_PASSING_RUN"
+}

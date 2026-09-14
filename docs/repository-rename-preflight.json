@@ -6,13 +6,13 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 171,
-    "occurrence_count": 334,
+    "file_count": 177,
+    "occurrence_count": 345,
     "category_file_counts": {
-      "installer_or_clone": 30,
+      "installer_or_clone": 31,
       "machine_discovery": 61,
       "package_registry_metadata": 23,
-      "public_documentation": 79,
+      "public_documentation": 85,
       "raw_content_url": 2,
       "release_or_provenance": 17,
       "reusable_action": 2,
@@ -1553,6 +1553,69 @@
       ],
       "categories": [
         "source_or_test"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/docs/SUBMISSION.md",
+      "occurrences": 1,
+      "line_numbers": [
+        19
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/docs/VALIDATION.md",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        9
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/index.html",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/presentation.html",
+      "occurrences": 3,
+      "line_numbers": [
+        1
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/presenter.html",
+      "occurrences": 2,
+      "line_numbers": [
+        1,
+        4
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "public_documentation"
       ]
     },
     {

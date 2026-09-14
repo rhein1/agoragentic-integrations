@@ -655,6 +655,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       execution_generation: 0,
       active_execution: null,
       destroy_promise: null,
+      destroy_reason: null,
       ttl_timer: null,
     };
     this.forks.set(ref, record);
@@ -770,6 +771,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         measurements: cloneJson(lastExecution),
       };
     } catch (error) {
+      if (error?.code === 'LOCAL_REFERENCE_EXECUTION_CANCELLED'
+        && record.status === 'destroying'
+        && record.destroy_reason === 'provider_ttl_expired') {
+        error = forkExpiredError();
+      }
       if (error?.code === 'LOCAL_REFERENCE_FORK_EXPIRED') {
         finishExecution();
         await this.destroyFork({ fork_ref: record.ref, reason: 'provider_ttl_expired' });
@@ -918,6 +924,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       });
     }
     if (!record.destroy_promise) {
+      record.destroy_reason = input.reason ?? 'unspecified';
       const attempt = this.#destroyForkRecord(record);
       record.destroy_promise = attempt;
       try {
