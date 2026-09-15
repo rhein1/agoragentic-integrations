@@ -64,3 +64,5 @@ test('rejects malformed chain evidence and authority shapes', () => {
 
 // Exercise the read-only Bankr client through the existing hosted Interchange gate.
 import './bankr-interchange.test.mjs';
+// No real provider calls: Flash contract and no-execution regression fixtures.
+import './runtime-flash.test.mjs';
