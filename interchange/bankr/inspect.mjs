@@ -10,7 +10,6 @@ const VERIFY = `${SURFACE}/receipts/verify`;
 const LIMIT = 262144;
 const TIMEOUT_MS = 10000;
 const ID = /^areceipt2_[A-Za-z0-9_-]{1,160}$/;
-const own = (o, k) => o && typeof o === 'object' && Object.hasOwn(o, k);
 const obj = x => !!x && typeof x === 'object' && !Array.isArray(x);
 const bool = x => typeof x === 'boolean' ? x : null;
 const hash = text => `sha256:${createHash('sha256').update(text).digest('hex')}`;
