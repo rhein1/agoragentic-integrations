@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {atomic,quoteRequest,prepareFixture,reviewFixture,runFlashLab,FLASH_MODES,ASSETS} from '../interchange/flash/governor.mjs';
-import {plan,projectQuote,requestQuote,main} from '../interchange/flash/quote-only.mjs';
+import {projectQuote,requestQuote,main} from '../interchange/flash/quote-only.mjs';
 import {boundedJson} from '../interchange/flash/http.mjs';
 const NOW=1789495200000;
 const now=()=>NOW;
