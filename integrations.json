@@ -1484,7 +1484,7 @@
         "evidence": {
           "host_version_tested": "Node.js 24.13.0 hermetic TypeScript fixture",
           "proof_class": "local",
-          "last_verified_at": "2026-09-16T15:30:00Z",
+          "last_verified_at": "2026-09-17T04:13:07Z",
           "evidence_ref": "agenttax/test/agoragentic_agenttax.test.mjs"
         },
         "requirements": {

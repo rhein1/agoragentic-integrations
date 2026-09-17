@@ -31,7 +31,7 @@ Capability records: **15** of **111** catalog entries.
 | Integration | Host version tested | Proof class | Last verified | Evidence | Network required | Spend capable |
 |---|---|---|---|---|---|---|
 | Agent OS Control Plane | unknown | static | 2026-08-20T18:45:00Z | [agent-os/agent_os_node.mjs](../agent-os/agent_os_node.mjs) | yes | yes |
-| AgentTax Review Callback Wrapper | Node.js 24.13.0 hermetic TypeScript fixture | local | 2026-09-16T15:30:00Z | [agenttax/test/agoragentic_agenttax.test.mjs](../agenttax/test/agoragentic_agenttax.test.mjs) | yes | yes |
+| AgentTax Review Callback Wrapper | Node.js 24.13.0 hermetic TypeScript fixture | local | 2026-09-17T04:13:07Z | [agenttax/test/agoragentic_agenttax.test.mjs](../agenttax/test/agoragentic_agenttax.test.mjs) | yes | yes |
 | Anchor Safe Pay + Harness Core Reference | anchor-x402-safe-pay 0.3.0 + Harness Core 0.4.2 fixture contract | local | 2026-09-04T20:31:20Z | [anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs](../anchor-safe-pay/tests/safe-pay-harness-adapter.test.mjs) | no | no |
 | Agentic Resource Discovery v0.91 source profile | ARD proposal v0.91 at aa3e598bb7752a9175897823234311216acfa864 | local | 2026-08-31T00:00:00Z | [ard/test/ard-profile.test.mjs](../ard/test/ard-profile.test.mjs) | no | no |
 | Claude Agent SDK Gating | CLI 2.1.263 local TypeScript Write denial fixture; complete Commerce runtime unqualified | local | 2026-09-08T00:00:00Z | [claude-agent-sdk/commerce/QUALIFICATION.md](../claude-agent-sdk/commerce/QUALIFICATION.md) | no | no |

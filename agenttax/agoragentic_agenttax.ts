@@ -35,7 +35,8 @@ export interface TaxReviewedExecutionRequest {
   task: string;
   input: JsonObject;
   maxCost: number;
-  units?: number;
+  /** This source wrapper currently qualifies single-unit quotes only. */
+  units?: 1;
   taxContext?: TaxReviewContext;
 }
 
@@ -64,12 +65,111 @@ export type TaxReviewCallback = (
   reviewPayload: Readonly<JsonObject>,
 ) => Promise<TaxReviewDecision>;
 
+export type TaxReviewedExecutionErrorCode =
+  | "tax_reviewed_execution_rejected"
+  | "tax_reviewed_execution_outcome_unknown";
+
+/**
+ * A paid execution did not produce a usable success or pending-approval result.
+ * `retryable` is deliberately false: reconcile the quote before any new attempt.
+ */
+export class TaxReviewedExecutionError extends Error {
+  readonly code: TaxReviewedExecutionErrorCode;
+  readonly quote_id: string;
+  readonly retryable = false;
+  readonly reconciliation_path = "/api/commerce/reconciliation";
+  readonly http_status?: number;
+  readonly server_code?: string;
+
+  constructor(options: {
+    code: TaxReviewedExecutionErrorCode;
+    quoteId: string;
+    httpStatus?: number;
+    serverCode?: string;
+    cause?: unknown;
+  }) {
+    const outcome = options.code === "tax_reviewed_execution_outcome_unknown"
+      ? "outcome is unknown"
+      : "was rejected";
+    super(
+      `Execution ${outcome} for quote ${options.quoteId}. `
+      + "Do not retry or create a new quote until platform activity is reconciled.",
+    );
+    this.name = "TaxReviewedExecutionError";
+    this.code = options.code;
+    this.quote_id = options.quoteId;
+    this.http_status = options.httpStatus;
+    this.server_code = options.serverCode;
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, "cause", { value: options.cause, enumerable: false });
+    }
+  }
+}
+
+class AgoragenticRequestError extends Error {
+  readonly httpStatus?: number;
+  readonly responseReceived: boolean;
+  readonly serverCode?: string;
+
+  constructor(options: {
+    message: string;
+    httpStatus?: number;
+    responseReceived: boolean;
+    serverCode?: string;
+    cause?: unknown;
+  }) {
+    super(options.message);
+    this.name = "AgoragenticRequestError";
+    this.httpStatus = options.httpStatus;
+    this.responseReceived = options.responseReceived;
+    this.serverCode = options.serverCode;
+    if (options.cause !== undefined) {
+      Object.defineProperty(this, "cause", { value: options.cause, enumerable: false });
+    }
+  }
+}
+
+interface JsonHttpResponse {
+  data: JsonObject;
+  httpStatus: number;
+}
+
+function hasOwn(value: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function compareUtf16(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function assertWellFormedUnicode(value: string, path: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new TypeError(`${path} must not contain an unpaired UTF-16 surrogate.`);
+      }
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      throw new TypeError(`${path} must not contain an unpaired UTF-16 surrogate.`);
+    }
+  }
+}
+
+function defineJsonProperty(target: JsonObject, key: string, value: JsonValue): void {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
+
 function cloneStrictJson(value: unknown, path = "$", active = new WeakSet<object>()): JsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
+  if (value === null || typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    assertWellFormedUnicode(value, path);
     return value;
   }
   if (typeof value === "number") {
@@ -93,7 +193,7 @@ function cloneStrictJson(value: unknown, path = "$", active = new WeakSet<object
       }
       const output: JsonValue[] = [];
       for (let index = 0; index < value.length; index += 1) {
-        if (!Object.prototype.hasOwnProperty.call(value, index)) {
+        if (!hasOwn(value, index)) {
           throw new TypeError(`${path}[${index}] must not be a sparse array slot.`);
         }
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
@@ -110,17 +210,19 @@ function cloneStrictJson(value: unknown, path = "$", active = new WeakSet<object
       throw new TypeError(`${path} must be a plain JSON object.`);
     }
 
-    const output: JsonObject = {};
-    for (const key of Reflect.ownKeys(value).sort((left, right) => {
-      if (typeof left !== "string" || typeof right !== "string") return 0;
-      return compareUtf16(left, right);
-    })) {
+    const ownKeys = Reflect.ownKeys(value);
+    for (const key of ownKeys) {
       if (typeof key !== "string") throw new TypeError(`${path} must not contain symbol keys.`);
+      assertWellFormedUnicode(key, `${path} key`);
+    }
+    const stringKeys = (ownKeys as string[]).sort(compareUtf16);
+    const output: JsonObject = {};
+    for (const key of stringKeys) {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
       if (!descriptor?.enumerable || !("value" in descriptor)) {
         throw new TypeError(`${path}.${key} must be an enumerable data property.`);
       }
-      output[key] = cloneStrictJson(descriptor.value, `${path}.${key}`, active);
+      defineJsonProperty(output, key, cloneStrictJson(descriptor.value, `${path}.${key}`, active));
     }
     return output;
   } finally {
@@ -147,19 +249,39 @@ function deepFreeze<T extends JsonValue>(value: T): T {
 function withoutPayloadDigest(payload: JsonObject): JsonObject {
   const unsignedPayload: JsonObject = {};
   for (const [key, value] of Object.entries(payload)) {
-    if (key !== "review_payload_sha256") unsignedPayload[key] = value;
+    if (key !== "review_payload_sha256") defineJsonProperty(unsignedPayload, key, value);
   }
   return unsignedPayload;
 }
 
+/** RFC 8785 JSON Canonicalization Scheme serialization for strict JSON values. */
+function canonicalJson(value: JsonValue): string {
+  if (value === null || typeof value !== "object") {
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined) throw new TypeError("Canonical JSON received a non-JSON value.");
+    return serialized;
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const members = Object.keys(value)
+    .sort(compareUtf16)
+    .map((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor)) {
+        throw new TypeError(`Canonical JSON member ${key} is not a data property.`);
+      }
+      return `${JSON.stringify(key)}:${canonicalJson(descriptor.value)}`;
+    });
+  return `{${members.join(",")}}`;
+}
+
 async function sha256Json(value: JsonObject): Promise<string> {
   const canonical = cloneStrictJsonObject(value);
-  const bytes = new TextEncoder().encode(JSON.stringify(canonical));
+  const bytes = new TextEncoder().encode(canonicalJson(canonical));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** Compute the digest an external reviewer must return for this exact payload. */
+/** Compute the RFC 8785/JCS digest an external reviewer must return for this exact payload. */
 export async function hashTaxReviewPayload(payload: JsonObject): Promise<string> {
   const canonicalPayload = cloneStrictJsonObject(payload, "reviewPayload");
   return sha256Json(withoutPayloadDigest(canonicalPayload));
@@ -209,17 +331,20 @@ function validateRequest(request: TaxReviewedExecutionRequest): {
   task: string;
   input: JsonObject;
   maxCost: number;
-  units: number;
+  units: 1;
   taxContext: JsonObject;
 } {
+  if (!request || typeof request !== "object") {
+    throw new TypeError("request must be an object.");
+  }
   const capabilityId = requireNonEmptyString(request.capabilityId, "capabilityId");
   const task = requireNonEmptyString(request.task, "task");
   if (!Number.isFinite(request.maxCost) || request.maxCost < 0) {
     throw new TypeError("maxCost must be a finite, non-negative number.");
   }
   const units = request.units ?? 1;
-  if (!Number.isSafeInteger(units) || units <= 0) {
-    throw new TypeError("units must be a positive safe integer.");
+  if (units !== 1) {
+    throw new TypeError("This wrapper supports only units: 1.");
   }
   return {
     capabilityId,
@@ -234,10 +359,18 @@ function validateRequest(request: TaxReviewedExecutionRequest): {
 function responseMessage(data: unknown): string {
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
-    if (typeof record.message === "string") return record.message;
-    if (typeof record.error === "string") return record.error;
+    if (hasOwn(record, "message") && typeof record.message === "string") return record.message;
+    if (hasOwn(record, "error") && typeof record.error === "string") return record.error;
   }
   return "request failed";
+}
+
+function responseCode(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const record = data as Record<string, unknown>;
+  if (hasOwn(record, "error") && typeof record.error === "string") return record.error;
+  if (hasOwn(record, "code") && typeof record.code === "string") return record.code;
+  return undefined;
 }
 
 function parseUsdAmount(value: JsonValue | undefined): number {
@@ -246,10 +379,41 @@ function parseUsdAmount(value: JsonValue | undefined): number {
   return Number(value);
 }
 
+function validateQuote(
+  quoteValue: unknown,
+  expectedCapabilityId: string,
+  maxCost: number,
+  path: string,
+  requireFresh = true,
+): JsonObject {
+  const quote = cloneStrictJsonObject(quoteValue, path);
+  requireNonEmptyString(quote.quote_id, `${path}.quote_id`);
+  const capability = cloneStrictJsonObject(quote.capability, `${path}.capability`);
+  if (capability.id !== expectedCapabilityId) {
+    throw new Error("Quote capability does not match the requested capability.");
+  }
+  const quotedPrice = parseUsdAmount(quote.quoted_price_usdc);
+  if (!Number.isFinite(quotedPrice) || quotedPrice < 0 || quotedPrice > maxCost) {
+    throw new Error("Quote price is invalid or exceeds maxCost.");
+  }
+  if (quote.execution_ready !== true) {
+    throw new Error("Quote is not execution-ready.");
+  }
+  const quoteExpiry = typeof quote.expires_at === "string" ? Date.parse(quote.expires_at) : Number.NaN;
+  if (!Number.isFinite(quoteExpiry)) {
+    throw new Error("Quote expiry is missing or invalid.");
+  }
+  if (requireFresh && quoteExpiry <= Date.now()) {
+    throw new Error("Quote is expired.");
+  }
+  return quote;
+}
+
 export class AgoragenticAgentTaxClient {
   private readonly apiKey?: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  readonly #pendingResults = new WeakSet<object>();
 
   constructor(options: AgentTaxClientOptions = {}) {
     this.apiKey = options.apiKey;
@@ -267,50 +431,94 @@ export class AgoragenticAgentTaxClient {
     };
   }
 
-  private async requestJson(path: string, init: RequestInit, operation: string): Promise<JsonObject> {
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+  private async requestJson(path: string, init: RequestInit, operation: string): Promise<JsonHttpResponse> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.baseUrl}${path}`, init);
+    } catch (cause) {
+      throw new AgoragenticRequestError({
+        message: `${operation} failed before a response was received.`,
+        responseReceived: false,
+        cause,
+      });
+    }
+
     let data: unknown;
     try {
       data = await response.json();
-    } catch {
-      throw new Error(`${operation} returned a non-JSON response.`);
+    } catch (cause) {
+      throw new AgoragenticRequestError({
+        message: `${operation} returned a non-JSON response.`,
+        httpStatus: response.status,
+        responseReceived: true,
+        cause,
+      });
     }
     if (!response.ok) {
-      throw new Error(`${operation} failed with HTTP ${response.status}: ${responseMessage(data)}`);
+      throw new AgoragenticRequestError({
+        message: `${operation} failed with HTTP ${response.status}: ${responseMessage(data)}`,
+        httpStatus: response.status,
+        responseReceived: true,
+        serverCode: responseCode(data),
+      });
     }
-    return cloneStrictJsonObject(data, `${operation} response`);
+    return {
+      data: cloneStrictJsonObject(data, `${operation} response`),
+      httpStatus: response.status,
+    };
   }
 
   private async createQuote(
     capabilityId: string,
     input: JsonObject,
-    units: number,
+    units: 1,
     maxCost: number,
   ): Promise<JsonObject> {
-    const envelope = await this.requestJson("/commerce/quotes", {
+    const response = await this.requestJson("/commerce/quotes", {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify({ capability_id: capabilityId, input, units }),
     }, "Quote creation");
+    return validateQuote(
+      response.data.quote,
+      capabilityId,
+      maxCost,
+      "Quote creation response.quote",
+    );
+  }
 
-    const quote = cloneStrictJsonObject(envelope.quote, "Quote creation response.quote");
-    requireNonEmptyString(quote.quote_id, "quote.quote_id");
-    const capability = cloneStrictJsonObject(quote.capability, "quote.capability");
-    if (capability.id !== capabilityId) {
-      throw new Error("Quote capability does not match the requested capability.");
+  private async validateReviewPayload(reviewPayload: JsonObject): Promise<JsonObject> {
+    const snapshot = deepFreeze(cloneStrictJsonObject(reviewPayload, "reviewPayload"));
+    if (snapshot.schema_version !== "agoragentic.external-review.v1"
+      || snapshot.review_type !== "marketplace_purchase") {
+      throw new TypeError("reviewPayload has an unsupported schema or review type.");
     }
-    const quotedPrice = parseUsdAmount(quote.quoted_price_usdc);
-    if (!Number.isFinite(quotedPrice) || quotedPrice < 0 || quotedPrice > maxCost) {
-      throw new Error("Quote price is invalid or exceeds maxCost.");
+    if (!hasOwn(snapshot, "review_payload_sha256")
+      || typeof snapshot.review_payload_sha256 !== "string") {
+      throw new TypeError("reviewPayload.review_payload_sha256 is required.");
     }
-    if (quote.execution_ready !== true) {
-      throw new Error("Quote is not execution-ready.");
+    const expectedDigest = await hashTaxReviewPayload(snapshot);
+    if (snapshot.review_payload_sha256 !== expectedDigest) {
+      throw new TypeError("reviewPayload digest does not match its contents.");
     }
-    const quoteExpiry = typeof quote.expires_at === "string" ? Date.parse(quote.expires_at) : Number.NaN;
-    if (!Number.isFinite(quoteExpiry) || quoteExpiry <= Date.now()) {
-      throw new Error("Quote expiry is missing, invalid, or expired.");
+    const capabilityId = requireNonEmptyString(snapshot.capability_id, "reviewPayload.capability_id");
+    if (typeof snapshot.max_cost_usdc !== "number"
+      || !Number.isFinite(snapshot.max_cost_usdc)
+      || snapshot.max_cost_usdc < 0) {
+      throw new TypeError("reviewPayload.max_cost_usdc must be a finite, non-negative number.");
     }
-    return quote;
+    if (snapshot.units !== 1) throw new TypeError("reviewPayload.units must equal 1.");
+    requireNonEmptyString(snapshot.task, "reviewPayload.task");
+    cloneStrictJsonObject(snapshot.input, "reviewPayload.input");
+    cloneStrictJsonObject(snapshot.tax_context, "reviewPayload.tax_context");
+    validateQuote(
+      snapshot.quote,
+      capabilityId,
+      snapshot.max_cost_usdc,
+      "reviewPayload.quote",
+      false,
+    );
+    return snapshot;
   }
 
   /** Create a no-spend, quote-bound packet for an external reviewer. */
@@ -325,6 +533,7 @@ export class AgoragenticAgentTaxClient {
     const unsignedPayload = cloneStrictJsonObject({
       schema_version: "agoragentic.external-review.v1",
       review_type: "marketplace_purchase",
+      capability_id: validated.capabilityId,
       task: validated.task,
       input: validated.input,
       max_cost_usdc: validated.maxCost,
@@ -339,20 +548,35 @@ export class AgoragenticAgentTaxClient {
     return deepFreeze(reviewPayload);
   }
 
-  /** Execute only the exact durable quote approved by the external reviewer. */
+  /** Prepare, externally review, and execute one durable quote. */
   async executeWithTaxReview(
     request: TaxReviewedExecutionRequest,
     reviewTaxCallback: TaxReviewCallback,
   ): Promise<JsonObject> {
     const reviewPayload = await this.prepareTaxReview(request);
     const review = await reviewTaxCallback(reviewPayload);
-    const reviewRecord = cloneStrictJsonObject(review, "review");
+    return this.#executeApprovedTaxReview(reviewPayload, review);
+  }
 
-    const expectedPayloadHash = await hashTaxReviewPayload(reviewPayload);
+  async #executeApprovedTaxReview(
+    reviewPayload: JsonObject,
+    review: TaxReviewDecision,
+  ): Promise<JsonObject> {
+    const payloadSnapshot = await this.validateReviewPayload(reviewPayload);
+    const reviewRecord = cloneStrictJsonObject(review, "review");
+    const expectedPayloadHash = payloadSnapshot.review_payload_sha256;
     const expiresAt = typeof reviewRecord.expires_at === "string"
       ? Date.parse(reviewRecord.expires_at)
       : Number.NaN;
-    const invalidApproval = reviewRecord.status !== "approved"
+    const requiredApprovalFieldsAreOwn = [
+      "approved",
+      "status",
+      "review_id",
+      "review_payload_sha256",
+      "expires_at",
+    ].every((field) => hasOwn(reviewRecord, field));
+    const invalidApproval = !requiredApprovalFieldsAreOwn
+      || reviewRecord.status !== "approved"
       || reviewRecord.approved !== true
       || typeof reviewRecord.review_id !== "string"
       || !reviewRecord.review_id.trim()
@@ -360,41 +584,168 @@ export class AgoragenticAgentTaxClient {
       || !Number.isFinite(expiresAt)
       || expiresAt <= Date.now();
 
+    const quote = cloneStrictJsonObject(payloadSnapshot.quote, "reviewPayload.quote");
+    const quoteId = requireNonEmptyString(quote.quote_id, "reviewPayload.quote.quote_id");
     if (invalidApproval) {
       return cloneStrictJsonObject({
         status: "blocked",
-        message: typeof reviewRecord.reason === "string"
+        quote_id: quoteId,
+        message: hasOwn(reviewRecord, "reason") && typeof reviewRecord.reason === "string"
           ? reviewRecord.reason
           : reviewRecord.status === "advisory"
             ? "Advisory tax review cannot authorize execution."
             : "Tax review approval was missing, expired, or not bound to this payload.",
         review: reviewRecord,
-        review_payload: reviewPayload,
+        review_payload: payloadSnapshot,
       });
     }
 
-    const quote = cloneStrictJsonObject(reviewPayload.quote, "reviewPayload.quote");
-    const quoteId = requireNonEmptyString(quote.quote_id, "reviewPayload.quote.quote_id");
     const quoteExpiresAt = typeof quote.expires_at === "string"
       ? Date.parse(quote.expires_at)
       : Number.NaN;
     if (!Number.isFinite(quoteExpiresAt) || quoteExpiresAt <= Date.now()) {
       return cloneStrictJsonObject({
         status: "blocked",
+        quote_id: quoteId,
         message: "The reviewed quote expired before execution.",
         review: reviewRecord,
-        review_payload: reviewPayload,
+        review_payload: payloadSnapshot,
       });
     }
-    const task = requireNonEmptyString(reviewPayload.task, "reviewPayload.task");
-    const input = cloneStrictJsonObject(reviewPayload.input, "reviewPayload.input");
-    const execution = await this.requestJson("/execute", {
-      method: "POST",
-      headers: this.authHeaders(),
-      body: JSON.stringify({ quote_id: quoteId, task, input }),
-    }, "Quote execution");
+    const input = cloneStrictJsonObject(payloadSnapshot.input, "reviewPayload.input");
 
-    return cloneStrictJsonObject({ review: reviewRecord, review_payload: reviewPayload, execution });
+    let response: JsonHttpResponse;
+    try {
+      response = await this.requestJson("/execute", {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify({ quote_id: quoteId, input }),
+      }, "Quote execution");
+    } catch (cause) {
+      const requestError = cause instanceof AgoragenticRequestError ? cause : undefined;
+      const definitiveRejection = requestError?.responseReceived === true
+        && requestError.httpStatus !== undefined
+        && requestError.httpStatus >= 400
+        && requestError.httpStatus < 500;
+      throw new TaxReviewedExecutionError({
+        code: definitiveRejection
+          ? "tax_reviewed_execution_rejected"
+          : "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: requestError?.httpStatus,
+        serverCode: requestError?.serverCode,
+        cause,
+      });
+    }
+
+    const execution = response.data;
+    const executionError = hasOwn(execution, "error") && typeof execution.error === "string"
+      ? execution.error
+      : undefined;
+    const pendingApproval = executionError === "pending_approval"
+      || execution.status === "pending_approval";
+    const normalizedStatus = typeof execution.status === "string"
+      ? execution.status.toLowerCase()
+      : undefined;
+    const rejectedStatus = normalizedStatus !== undefined
+      && ["failed", "failure", "error", "rejected", "cancelled", "canceled"].includes(normalizedStatus);
+    if ((executionError && executionError !== "pending_approval") || rejectedStatus) {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_rejected",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: executionError || `execution_${normalizedStatus}`,
+      });
+    }
+    if (pendingApproval
+      && normalizedStatus !== undefined
+      && normalizedStatus !== "pending_approval") {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: "contradictory_pending_execution_status",
+      });
+    }
+    if (pendingApproval) {
+      let approvalId: string | undefined;
+      if (execution.approval && typeof execution.approval === "object"
+        && !Array.isArray(execution.approval)) {
+        const approval = cloneStrictJsonObject(execution.approval, "execution.approval");
+        const rawApprovalId = approval.approval_id ?? approval.id;
+        if (typeof rawApprovalId === "string" && rawApprovalId.trim()) {
+          approvalId = rawApprovalId.trim();
+        }
+      }
+      if (!approvalId) {
+        throw new TaxReviewedExecutionError({
+          code: "tax_reviewed_execution_outcome_unknown",
+          quoteId,
+          httpStatus: response.httpStatus,
+          serverCode: "malformed_pending_approval",
+        });
+      }
+    } else if (normalizedStatus !== "success" && normalizedStatus !== "completed") {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: normalizedStatus
+          ? `unexpected_execution_status_${normalizedStatus}`
+          : "malformed_execution_response",
+      });
+    } else if (typeof execution.invocation_id !== "string" || !execution.invocation_id.trim()) {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: "missing_invocation_id",
+      });
+    }
+
+    const result = deepFreeze(cloneStrictJsonObject({
+      quote_id: quoteId,
+      http_status: response.httpStatus,
+      execution_state: pendingApproval ? "pending_approval" : "returned",
+      review: reviewRecord,
+      review_payload: payloadSnapshot,
+      execution,
+    }));
+    if (pendingApproval) this.#pendingResults.add(result);
+    return result;
+  }
+
+  /** Retry one opaque in-memory `pending_approval` result after supervisor approval. */
+  async retryPendingTaxReview(pendingResult: JsonObject): Promise<JsonObject> {
+    if (!this.#pendingResults.has(pendingResult)) {
+      throw new TypeError("pendingResult is not an active result issued by this client.");
+    }
+    this.#pendingResults.delete(pendingResult);
+    const result = cloneStrictJsonObject(pendingResult, "pendingResult");
+    const execution = cloneStrictJsonObject(result.execution, "pendingResult.execution");
+    const pendingApproval = result.execution_state === "pending_approval"
+      && (execution.error === "pending_approval"
+        || execution.status === "pending_approval");
+    if (!pendingApproval) {
+      throw new TypeError("pendingResult is not a pending_approval execution result.");
+    }
+    const reviewPayload = cloneStrictJsonObject(
+      result.review_payload,
+      "pendingResult.review_payload",
+    );
+    const quote = cloneStrictJsonObject(reviewPayload.quote, "pendingResult.review_payload.quote");
+    const reviewedQuoteId = requireNonEmptyString(
+      quote.quote_id,
+      "pendingResult.review_payload.quote.quote_id",
+    );
+    if (result.quote_id !== reviewedQuoteId) {
+      throw new TypeError("pendingResult quote_id does not match its reviewed quote.");
+    }
+    const review = cloneStrictJsonObject(result.review, "pendingResult.review");
+    return this.#executeApprovedTaxReview(
+      reviewPayload,
+      review as unknown as TaxReviewDecision,
+    );
   }
 }
 

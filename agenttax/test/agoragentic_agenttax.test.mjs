@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   AgoragenticAgentTaxClient,
+  TaxReviewedExecutionError,
   hashTaxReviewPayload,
 } from "../agoragentic_agenttax.ts";
 
@@ -53,7 +54,11 @@ test("approved execution consumes the exact reviewed quote and immutable input",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
       if (url.endsWith("/commerce/quotes")) return response(quoteEnvelope());
-      return response({ status: "completed", receipt: { id: "rcpt-1" } });
+      return response({
+        status: "completed",
+        invocation_id: "inv-1",
+        receipt: { id: "rcpt-1" },
+      });
     },
   });
 
@@ -76,8 +81,9 @@ test("approved execution consumes the exact reviewed quote and immutable input",
   assert.equal(quoteBody.capability_id, "cap-reviewed-1");
   assert.equal(quoteBody.input.text, "quarterly report");
   assert.equal(executeBody.quote_id, "quote-reviewed-1");
-  assert.equal(executeBody.task, "summarize");
+  assert.equal("task" in executeBody, false);
   assert.equal(executeBody.input.text, "quarterly report");
+  assert.equal(result.quote_id, "quote-reviewed-1");
   assert.equal(result.review.review_id, "tax-review-1");
   assert.equal(result.execution.status, "completed");
 });
@@ -150,6 +156,27 @@ test("missing, expired, and mismatched approvals fail closed", async (t) => {
   }
 });
 
+test("approval fields hidden under an own __proto__ key cannot authorize execution", async () => {
+  const calls = [];
+  const client = new AgoragenticAgentTaxClient({
+    apiKey: "amk_test",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return response(quoteEnvelope());
+    },
+  });
+
+  const result = await client.executeWithTaxReview(executionRequest(), async (payload) => {
+    const maliciousReview = JSON.parse('{"__proto__":{}}');
+    Object.assign(maliciousReview.__proto__, await approval(payload));
+    return maliciousReview;
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(calls.length, 1);
+  assert.equal(Object.prototype.approved, undefined);
+});
+
 test("quote validation binds capability, ceiling, readiness, and expiry", async (t) => {
   const cases = [
     {
@@ -177,6 +204,22 @@ test("quote validation binds capability, ceiling, readiness, and expiry", async 
   }
 });
 
+test("multi-unit requests fail before network access", async () => {
+  let calls = 0;
+  const client = new AgoragenticAgentTaxClient({
+    apiKey: "amk_test",
+    fetchImpl: async () => {
+      calls += 1;
+      return response(quoteEnvelope());
+    },
+  });
+  await assert.rejects(
+    client.prepareTaxReview(executionRequest({ units: 2 })),
+    /supports only units: 1/,
+  );
+  assert.equal(calls, 0);
+});
+
 test("a quote that expires during review is not executed", async () => {
   const calls = [];
   const client = new AgoragenticAgentTaxClient({
@@ -199,6 +242,53 @@ test("a quote that expires during review is not executed", async () => {
   assert.equal(calls.length, 1);
 });
 
+test("pending supervisor approval can resume the same reviewed quote", async () => {
+  const calls = [];
+  let executeAttempts = 0;
+  const client = new AgoragenticAgentTaxClient({
+    apiKey: "amk_test",
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      if (url.endsWith("/commerce/quotes")) return response(quoteEnvelope());
+      executeAttempts += 1;
+      if (executeAttempts === 1) {
+        return response({
+          error: "pending_approval",
+          approval: { approval_id: "approval-1" },
+        }, { status: 202 });
+      }
+      return response({ status: "completed", invocation_id: "inv-1" });
+    },
+  });
+
+  const pending = await client.executeWithTaxReview(executionRequest(), approval);
+  assert.equal(pending.execution.error, "pending_approval");
+  assert.equal(pending.execution_state, "pending_approval");
+  const completed = await client.retryPendingTaxReview(pending);
+
+  assert.equal(completed.execution.status, "completed");
+  assert.equal(calls.filter((call) => call.url.endsWith("/commerce/quotes")).length, 1);
+  const executeBodies = calls
+    .filter((call) => call.url.endsWith("/execute"))
+    .map((call) => JSON.parse(call.init.body));
+  assert.equal(executeBodies.length, 2);
+  assert.equal(executeBodies[0].quote_id, "quote-reviewed-1");
+  assert.deepEqual(executeBodies[1], executeBodies[0]);
+
+  const tampered = JSON.parse(JSON.stringify(pending));
+  tampered.review_payload.input.text = "changed after review";
+  await assert.rejects(client.retryPendingTaxReview(tampered), /not an active result/);
+  await assert.rejects(client.retryPendingTaxReview(pending), /not an active result/);
+  assert.equal(Reflect.set(completed, "execution_state", "pending_approval"), false);
+  const forgedCompleted = JSON.parse(JSON.stringify(completed));
+  forgedCompleted.execution_state = "pending_approval";
+  forgedCompleted.http_status = 202;
+  forgedCompleted.execution.status = "pending_approval";
+  await assert.rejects(client.retryPendingTaxReview(forgedCompleted), /not an active result/);
+  await assert.rejects(client.retryPendingTaxReview(completed), /not an active result/);
+  assert.equal(calls.length, 3);
+});
+
 test("quote and execute HTTP failures fail closed", async (t) => {
   await t.test("quote failure", async () => {
     const client = new AgoragenticAgentTaxClient({
@@ -215,11 +305,131 @@ test("quote and execute HTTP failures fail closed", async (t) => {
         ? response(quoteEnvelope())
         : response({ error: "execution refused" }, { ok: false, status: 409 }),
     });
-    await assert.rejects(
-      client.executeWithTaxReview(executionRequest(), approval),
-      /HTTP 409: execution refused/,
-    );
+    await assert.rejects(client.executeWithTaxReview(executionRequest(), approval), (error) => {
+      assert.equal(error instanceof TaxReviewedExecutionError, true);
+      assert.equal(error.code, "tax_reviewed_execution_rejected");
+      assert.equal(error.quote_id, "quote-reviewed-1");
+      assert.equal(error.http_status, 409);
+      assert.equal(error.server_code, "execution refused");
+      assert.equal(error.retryable, false);
+      return true;
+    });
   });
+});
+
+test("ambiguous paid execution failures carry non-retryable reconciliation context", async () => {
+  let calls = 0;
+  const client = new AgoragenticAgentTaxClient({
+    apiKey: "amk_test",
+    fetchImpl: async (url) => {
+      calls += 1;
+      if (url.endsWith("/commerce/quotes")) return response(quoteEnvelope());
+      throw new Error("socket closed after request write");
+    },
+  });
+
+  await assert.rejects(client.executeWithTaxReview(executionRequest(), approval), (error) => {
+    assert.equal(error instanceof TaxReviewedExecutionError, true);
+    assert.equal(error.code, "tax_reviewed_execution_outcome_unknown");
+    assert.equal(error.quote_id, "quote-reviewed-1");
+    assert.equal(error.retryable, false);
+    assert.equal(error.reconciliation_path, "/api/commerce/reconciliation");
+    return true;
+  });
+  assert.equal(calls, 2);
+});
+
+test("server-failed paid execution is outcome-unknown and non-retryable", async () => {
+  const client = new AgoragenticAgentTaxClient({
+    apiKey: "amk_test",
+    fetchImpl: async (url) => url.endsWith("/commerce/quotes")
+      ? response(quoteEnvelope())
+      : response({ error: "temporary failure" }, { ok: false, status: 503 }),
+  });
+
+  await assert.rejects(client.executeWithTaxReview(executionRequest(), approval), (error) => {
+    assert.equal(error instanceof TaxReviewedExecutionError, true);
+    assert.equal(error.code, "tax_reviewed_execution_outcome_unknown");
+    assert.equal(error.quote_id, "quote-reviewed-1");
+    assert.equal(error.http_status, 503);
+    assert.equal(error.retryable, false);
+    return true;
+  });
+});
+
+test("2xx execution error and malformed envelopes are not reported as success", async (t) => {
+  for (const testCase of [
+    {
+      name: "explicit error",
+      body: { error: "execution refused" },
+      code: "tax_reviewed_execution_rejected",
+      serverCode: "execution refused",
+    },
+    {
+      name: "malformed response",
+      body: { output: "missing status and invocation" },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "malformed_execution_response",
+    },
+    {
+      name: "failed status",
+      body: { status: "failed" },
+      code: "tax_reviewed_execution_rejected",
+      serverCode: "execution_failed",
+    },
+    {
+      name: "202 contradictory error",
+      body: { error: "execution refused" },
+      httpStatus: 202,
+      code: "tax_reviewed_execution_rejected",
+      serverCode: "execution refused",
+    },
+    {
+      name: "unknown status",
+      body: { status: "unknown", invocation_id: "inv-unknown" },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "unexpected_execution_status_unknown",
+    },
+    {
+      name: "empty 202",
+      body: {},
+      httpStatus: 202,
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "malformed_execution_response",
+    },
+    {
+      name: "success missing invocation",
+      body: { status: "completed" },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "missing_invocation_id",
+    },
+    {
+      name: "contradictory pending and completed",
+      body: {
+        error: "pending_approval",
+        status: "completed",
+        approval: { approval_id: "approval-contradictory" },
+      },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "contradictory_pending_execution_status",
+    },
+  ]) {
+    await t.test(testCase.name, async () => {
+      const client = new AgoragenticAgentTaxClient({
+        apiKey: "amk_test",
+        fetchImpl: async (url) => url.endsWith("/commerce/quotes")
+          ? response(quoteEnvelope())
+          : response(testCase.body, { status: testCase.httpStatus ?? 200 }),
+      });
+      await assert.rejects(client.executeWithTaxReview(executionRequest(), approval), (error) => {
+        assert.equal(error instanceof TaxReviewedExecutionError, true);
+        assert.equal(error.code, testCase.code);
+        assert.equal(error.server_code, testCase.serverCode);
+        assert.equal(error.quote_id, "quote-reviewed-1");
+        return true;
+      });
+    });
+  }
 });
 
 test("hashing is deterministic across object and Unicode key order", async () => {
@@ -236,12 +446,33 @@ test("hashing is deterministic across object and Unicode key order", async () =>
   assert.equal(await hashTaxReviewPayload(left), await hashTaxReviewPayload(right));
 });
 
+test("RFC 8785 hashing sorts numeric-looking and reserved keys as strings", async () => {
+  const numericKeys = JSON.parse('{"2":"b","10":"a"}');
+  assert.equal(
+    await hashTaxReviewPayload(numericKeys),
+    "a76f9931f09e47db676e50eebb06409ca3288449353bcd0eed02e168f7c6caf2",
+  );
+
+  const reservedLeft = JSON.parse(
+    '{"prototype":"third","__proto__":{"safe":true},"constructor":"second"}',
+  );
+  const reservedRight = JSON.parse(
+    '{"constructor":"second","prototype":"third","__proto__":{"safe":true}}',
+  );
+  assert.equal(
+    await hashTaxReviewPayload(reservedLeft),
+    await hashTaxReviewPayload(reservedRight),
+  );
+  assert.equal(Object.prototype.safe, undefined);
+});
+
 test("non-JSON values and ambiguous structures are rejected", async (t) => {
   const cases = [
     { name: "Date", payload: { value: new Date() }, message: /plain JSON object/ },
     { name: "undefined", payload: { value: undefined }, message: /JSON-compatible/ },
     { name: "non-finite number", payload: { value: Number.NaN }, message: /finite JSON numbers/ },
     { name: "sparse array", payload: { value: Array(1) }, message: /sparse array slot/ },
+    { name: "unpaired surrogate", payload: { value: "\ud800" }, message: /unpaired UTF-16 surrogate/ },
   ];
   for (const testCase of cases) {
     await t.test(testCase.name, async () => {
