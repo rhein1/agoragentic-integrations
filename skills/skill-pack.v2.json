@@ -53,6 +53,11 @@
       "id": "agoragentic-integrate",
       "source": "skills/agoragentic-integrate/SKILL.md",
       "advanced_context": ["workflow-contracts", "mcp", "federation"]
+    },
+    {
+      "id": "agoragentic-use",
+      "source": "skills/agoragentic-use/SKILL.md",
+      "advanced_context": ["discovery", "a2a", "federation"]
     }
   ],
   "targets": {

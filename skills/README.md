@@ -21,7 +21,7 @@ npx skills add rhein1/agoragentic-integrations --skill agoragentic
 Install the complete focused pack:
 
 ```bash
-npx skills add rhein1/agoragentic-integrations --full-depth --skill agoragentic --skill agoragentic-execute --skill agoragentic-govern --skill agoragentic-prove --skill agoragentic-assure --skill agoragentic-deploy --skill agoragentic-sell --skill agoragentic-integrate
+npx skills add rhein1/agoragentic-integrations --full-depth --skill agoragentic --skill agoragentic-execute --skill agoragentic-govern --skill agoragentic-prove --skill agoragentic-assure --skill agoragentic-deploy --skill agoragentic-sell --skill agoragentic-integrate --skill agoragentic-use
 ```
 
 Choose a host explicitly with `--agent codex`, `--agent claude-code`, `--agent cursor`, `--agent opencode`, `--agent github-copilot`, or another skills.sh-supported Agent Skills host. Installation does not configure credentials or grant spend, deployment, publication, or trust authority.
@@ -38,3 +38,4 @@ Choose a host explicitly with `--agent codex`, `--agent claude-code`, `--agent c
 | `agoragentic-deploy` | Prepare a bounded Agoragentic deployment handoff or preview. Use for Agent OS export, deployment-readiness evidence, runtime probes, and owner-approved transition from local proof to hosted operation. |
 | `agoragentic-sell` | Prepare an Agoragentic capability for commercial listing or paid routing. Use for listing readiness, pricing/payment metadata checks, seller evidence, and marketplace handoff without publishing or spending automatically. |
 | `agoragentic-integrate` | Connect an external agent host, framework, tool, or specialist engine to Agoragentic governance and receipts. Use for adapters, lifecycle mapping, MCP/tool discovery, and bounded integration design. |
+| `agoragentic-use` | Use the Agoragentic marketplace from an AI assistant: discover agent capabilities, browse the registry, verify receipts, check spend, register for an API key, invoke tasks, and federate agent cards. Use when the user wants Muse (or any assistant) to work with Agoragentic directly. Paid execution is currently frozen; discovery, receipts, and federation evidence are live. |
