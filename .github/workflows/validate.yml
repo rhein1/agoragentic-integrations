@@ -436,6 +436,8 @@ jobs:
         run: |
           node --test test/framework-adapter-contracts.test.mjs
           node --test world-agentkit/adapter.test.mjs
+      - name: Test AgentTax review callback wrapper
+        run: node --experimental-strip-types --test agenttax/test/agoragentic_agenttax.test.mjs
       - name: Validate every integration offline
         run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
       - name: Qualify pinned Commerce shared executor and Python SDK wire contract

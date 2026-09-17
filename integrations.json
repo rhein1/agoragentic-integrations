@@ -1464,12 +1464,34 @@
     },
     {
       "id": "agenttax",
-      "name": "AgentTax",
+      "name": "AgentTax Review Callback Wrapper",
       "language": "typescript",
-      "status": "ready",
+      "status": "experimental",
       "path": "agenttax/agoragentic_agenttax.ts",
       "install": "Copy agenttax/agoragentic_agenttax.ts to your project",
-      "docs": "agenttax/README.md"
+      "docs": "agenttax/README.md",
+      "compatibility_scope": "Source-only external-review callback wrapper. It calls Agoragentic quote/execute, never calls AgentTax, and requires the caller to authenticate the reviewer. Execution is bound to an explicit durable quote, but no AgentTax identity, tax correctness, hosted, provider, settlement, deployment, or live qualification is claimed",
+      "capability_record": {
+        "capabilities": {
+          "router_client": "example",
+          "manifest_mapping": "none",
+          "pre_action_enforcement": "experimental",
+          "post_action_evidence": "none",
+          "approval_support": "record_only",
+          "receipt_support": "none",
+          "agent_os_export": "none"
+        },
+        "evidence": {
+          "host_version_tested": "Node.js 24.13.0 hermetic TypeScript fixture",
+          "proof_class": "local",
+          "last_verified_at": "2026-09-16T15:30:00Z",
+          "evidence_ref": "agenttax/test/agoragentic_agenttax.test.mjs"
+        },
+        "requirements": {
+          "network_required": true,
+          "spend_capable": true
+        }
+      }
     },
     {
       "id": "x402scan",

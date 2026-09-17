@@ -1,25 +1,26 @@
-# Agoragentic x AgentTax
+# Agoragentic external review callback (AgentTax example)
 
-Use AgentTax with Agoragentic when a buyer or operator wants tax-review or compliance review before a marketplace purchase executes.
+Use this source-only wrapper when a buyer or operator requires an external tax or compliance review before a marketplace purchase executes.
 
-This wrapper is intentionally narrow:
+The boundary is intentionally narrow:
 
-- AgentTax is treated as the review layer.
-- Agoragentic is still the routing, execution, and settlement layer.
-- This does not claim native tax filing, withholding, or remittance inside Agoragentic.
+- The application supplies and authenticates the external reviewer; this file does not call AgentTax.
+- Agoragentic creates a durable quote for an explicit capability and executes only that reviewed quote.
+- A payload digest detects accidental or in-process mutation. It is not a reviewer signature or proof of AgentTax identity.
+- This wrapper does not claim tax filing, withholding, remittance, or jurisdiction-specific correctness.
 
-## Install
+## Installation
 
-```bash
-npm install
-```
+Copy `agoragentic_agenttax.ts` into an application with a TypeScript toolchain. This directory has no package manifest and no published AgentTax package dependency.
 
-Official surfaces:
+AgentTax reference links, not qualified dependencies:
 
 - Site: <https://www.agenttax.io/>
 - API docs: <https://www.agenttax.io/api-docs>
 
-## Example
+## No-spend review packet
+
+`prepareTaxReview` calls the Agoragentic quote endpoint, which is a network operation but does not execute the purchase.
 
 ```ts
 import { AgoragenticAgentTaxClient } from "./agoragentic_agenttax";
@@ -28,32 +29,55 @@ const client = new AgoragenticAgentTaxClient({
   apiKey: process.env.AGORAGENTIC_API_KEY
 });
 
-const result = await client.executeWithTaxReview(
-  "summarize",
-  { text: "Summarize the quarterly report." },
-  0.50,
-  async (reviewPayload) => {
-    console.log("Send this review payload through AgentTax:", reviewPayload);
-    return {
-      approved: true,
-      review_id: "tax_review_123",
-      classification: "software_service"
-    };
-  },
-  { jurisdiction: "US", buyerEntity: "Treasury Agent LLC" }
-);
+const request = {
+  capabilityId: "cap_reviewed_listing",
+  task: "summarize",
+  input: { text: "Summarize the quarterly report." },
+  maxCost: 0.50,
+  taxContext: {
+    buyerJurisdiction: "US-NY",
+    sellerJurisdiction: "US-CA",
+    buyerEntity: "Treasury Agent LLC"
+  }
+};
 
-console.log(result);
+const reviewPayload = await client.prepareTaxReview(request);
+console.log(reviewPayload);
 ```
 
-## What this wrapper does
+The quote must be unexpired, execution-ready, for the requested capability, and at or below `maxCost`; otherwise preparation fails closed.
 
-- previews the routed provider set and expected price
-- packages the preview into a tax-review payload
-- executes only after your external review callback returns `approved: true`
+## Reviewed execution
 
-## What it does not claim
+`executeWithTaxReview` can spend. Call it only after replacing the fail-closed callback below with a separately authenticated reviewer integration.
 
-- native AgentTax tax filing inside Agoragentic
-- automatic remittance or withholding
-- tax advice or jurisdiction-specific correctness by itself
+```ts
+const result = await client.executeWithTaxReview(
+  request,
+  async () => ({
+    approved: false,
+    status: "denied",
+    reason: "No authenticated external reviewer is configured."
+  })
+);
+
+console.log(result); // { status: "blocked", ... }
+```
+
+An approving reviewer must return all of these fields:
+
+- `approved: true`
+- `status: "approved"` (missing status never implies approval)
+- a non-empty `review_id`
+- the exact `review_payload_sha256` from the reviewed packet
+- a valid future `expires_at`
+
+The application is responsible for authenticating that response. The wrapper freezes the reviewed snapshot, validates the decision, and posts the same task and input with the reviewed `quote_id`; it does not let a match preview silently route to a different provider.
+
+## Jurisdiction compatibility
+
+Use `buyerJurisdiction` and `sellerJurisdiction` explicitly. The deprecated `jurisdiction` field is applied to both sides only when it does not conflict with either explicit value. Conflicts fail closed.
+
+## Network and authority boundary
+
+The only hosted calls made by this file are to Agoragentic `/api/commerce/quotes` and, after valid approval, `/api/execute`. It never contacts AgentTax. Local tests use hermetic HTTP fixtures and establish source behavior only; they do not qualify AgentTax, a provider, settlement, deployment, or live operation.
