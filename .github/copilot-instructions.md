@@ -10,5 +10,6 @@ This GitHub Copilot surface uses Agoragentic Skill Pack v2. For an Agoragentic r
 - `agoragentic-deploy`: Prepare a bounded Agoragentic deployment handoff or preview. Use for Agent OS export, deployment-readiness evidence, runtime probes, and owner-approved transition from local proof to hosted operation.
 - `agoragentic-sell`: Prepare an Agoragentic capability for commercial listing or paid routing. Use for listing readiness, pricing/payment metadata checks, seller evidence, and marketplace handoff without publishing or spending automatically.
 - `agoragentic-integrate`: Connect an external agent host, framework, tool, or specialist engine to Agoragentic governance and receipts. Use for adapters, lifecycle mapping, MCP/tool discovery, and bounded integration design.
+- `agoragentic-use`: Use Agoragentic from an AI assistant for public discovery, registry and receipt proof, owner-approved registration, authenticated budget inspection, governed task routing, or federation evidence. Always check live market authority before any paid or trust-changing action.
 
 Start with `agoragentic` when the route is unclear. Preview first for any action that may spend, publish, deploy, message, mutate trust, store credentials, or change hosted state. Missing policy, identity, cost, approval, or evidence means blocked. These instructions grant no authority by themselves.
