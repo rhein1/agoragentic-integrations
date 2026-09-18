@@ -16,9 +16,16 @@ function quoteEnvelope(overrides = {}) {
     quote: {
       quote_id: "quote-reviewed-1",
       capability: { id: "cap-reviewed-1", category: "summarize" },
+      units: 1,
       quoted_price_usdc: 0.4,
       execution_ready: true,
+      preview_only: false,
+      status: "ready",
       expires_at: new Date(Date.now() + 120_000).toISOString(),
+      buyer_context: { buyer_id: "buyer-private-1" },
+      wallet_balance_usdc: 250,
+      active_subscription: { id: "subscription-private-1" },
+      payment_methods: { wallet_balance: { supported: true } },
       ...overrides,
     },
   };
@@ -66,7 +73,13 @@ test("approved execution consumes the exact reviewed quote and immutable input",
     assert.equal(Object.isFrozen(payload), true);
     assert.equal(Object.isFrozen(payload.input), true);
     assert.equal(Object.isFrozen(payload.quote), true);
+    assert.equal(payload.quote.capability.id, "cap-reviewed-1");
+    assert.equal("buyer_context" in payload.quote, false);
+    assert.equal("wallet_balance_usdc" in payload.quote, false);
+    assert.equal("active_subscription" in payload.quote, false);
+    assert.equal("payment_methods" in payload.quote, false);
     assert.equal(Reflect.set(payload.input, "text", "callback mutation"), false);
+    request.task = "caller mutation";
     request.input.text = "caller mutation";
     return approval(payload);
   });
@@ -81,7 +94,7 @@ test("approved execution consumes the exact reviewed quote and immutable input",
   assert.equal(quoteBody.capability_id, "cap-reviewed-1");
   assert.equal(quoteBody.input.text, "quarterly report");
   assert.equal(executeBody.quote_id, "quote-reviewed-1");
-  assert.equal("task" in executeBody, false);
+  assert.equal(executeBody.task, "summarize");
   assert.equal(executeBody.input.text, "quarterly report");
   assert.equal(result.quote_id, "quote-reviewed-1");
   assert.equal(result.review.review_id, "tax-review-1");
@@ -185,7 +198,10 @@ test("quote validation binds capability, ceiling, readiness, and expiry", async 
       message: /does not match/i,
     },
     { name: "over ceiling", quote: { quoted_price_usdc: 0.51 }, message: /exceeds maxCost/i },
+    { name: "multiple quoted units", quote: { units: 2 }, message: /units must equal 1/i },
     { name: "not ready", quote: { execution_ready: false }, message: /not execution-ready/i },
+    { name: "preview only", quote: { preview_only: true }, message: /must not be preview-only/i },
+    { name: "non-ready status", quote: { status: "preview" }, message: /status must be ready/i },
     {
       name: "expired quote",
       quote: { expires_at: new Date(Date.now() - 1).toISOString() },
@@ -253,8 +269,8 @@ test("pending supervisor approval can resume the same reviewed quote", async () 
       executeAttempts += 1;
       if (executeAttempts === 1) {
         return response({
-          error: "pending_approval",
-          approval: { approval_id: "approval-1" },
+          status: "pending_approval",
+          approval_id: "approval-1",
         }, { status: 202 });
       }
       return response({ status: "completed", invocation_id: "inv-1" });
@@ -262,7 +278,8 @@ test("pending supervisor approval can resume the same reviewed quote", async () 
   });
 
   const pending = await client.executeWithTaxReview(executionRequest(), approval);
-  assert.equal(pending.execution.error, "pending_approval");
+  assert.equal(pending.execution.status, "pending_approval");
+  assert.equal(pending.execution.approval_id, "approval-1");
   assert.equal(pending.execution_state, "pending_approval");
   const completed = await client.retryPendingTaxReview(pending);
 
@@ -311,6 +328,29 @@ test("quote and execute HTTP failures fail closed", async (t) => {
       assert.equal(error.quote_id, "quote-reviewed-1");
       assert.equal(error.http_status, 409);
       assert.equal(error.server_code, "execution refused");
+      assert.equal(error.retryable, false);
+      return true;
+    });
+  });
+
+  await t.test("non-JSON 4xx execute response is outcome-unknown", async () => {
+    const client = new AgoragenticAgentTaxClient({
+      apiKey: "amk_test",
+      fetchImpl: async (url) => url.endsWith("/commerce/quotes")
+        ? response(quoteEnvelope())
+        : {
+            ok: false,
+            status: 409,
+            json: async () => {
+              throw new SyntaxError("invalid JSON");
+            },
+          },
+    });
+    await assert.rejects(client.executeWithTaxReview(executionRequest(), approval), (error) => {
+      assert.equal(error instanceof TaxReviewedExecutionError, true);
+      assert.equal(error.code, "tax_reviewed_execution_outcome_unknown");
+      assert.equal(error.quote_id, "quote-reviewed-1");
+      assert.equal(error.http_status, 409);
       assert.equal(error.retryable, false);
       return true;
     });
@@ -398,6 +438,13 @@ test("2xx execution error and malformed envelopes are not reported as success", 
       serverCode: "malformed_execution_response",
     },
     {
+      name: "pending approval missing approval id",
+      body: { status: "pending_approval" },
+      httpStatus: 202,
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "malformed_pending_approval",
+    },
+    {
       name: "success missing invocation",
       body: { status: "completed" },
       code: "tax_reviewed_execution_outcome_unknown",
@@ -411,7 +458,24 @@ test("2xx execution error and malformed envelopes are not reported as success", 
         approval: { approval_id: "approval-contradictory" },
       },
       code: "tax_reviewed_execution_outcome_unknown",
-      serverCode: "contradictory_pending_execution_status",
+      serverCode: "contradictory_execution_envelope",
+    },
+    {
+      name: "completed with explicit failure and structured error",
+      body: {
+        status: "completed",
+        success: false,
+        invocation_id: "inv-contradictory",
+        error: { code: "provider_failed" },
+      },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "malformed_execution_response",
+    },
+    {
+      name: "invocation with an explicit failure flag",
+      body: { success: false, invocation_id: "inv-failed" },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "contradictory_execution_envelope",
     },
   ]) {
     await t.test(testCase.name, async () => {
@@ -467,11 +531,21 @@ test("RFC 8785 hashing sorts numeric-looking and reserved keys as strings", asyn
 });
 
 test("non-JSON values and ambiguous structures are rejected", async (t) => {
+  const arrayWithOutOfRangeNumericProperty = [];
+  Object.defineProperty(arrayWithOutOfRangeNumericProperty, "4294967295", {
+    enumerable: true,
+    value: "not an array index",
+  });
   const cases = [
     { name: "Date", payload: { value: new Date() }, message: /plain JSON object/ },
     { name: "undefined", payload: { value: undefined }, message: /JSON-compatible/ },
     { name: "non-finite number", payload: { value: Number.NaN }, message: /finite JSON numbers/ },
     { name: "sparse array", payload: { value: Array(1) }, message: /sparse array slot/ },
+    {
+      name: "out-of-range numeric array property",
+      payload: { value: arrayWithOutOfRangeNumericProperty },
+      message: /non-index array properties/,
+    },
     { name: "unpaired surrogate", payload: { value: "\ud800" }, message: /unpaired UTF-16 surrogate/ },
   ];
   for (const testCase of cases) {

@@ -34,7 +34,6 @@ const request = {
   task: "summarize",
   input: { text: "Summarize the quarterly report." },
   maxCost: 0.50,
-  units: 1,
   taxContext: {
     buyerJurisdiction: "US-NY",
     sellerJurisdiction: "US-CA",
@@ -73,7 +72,7 @@ An approving reviewer must return all of these fields:
 - the exact `review_payload_sha256` from the reviewed packet
 - a valid future `expires_at`
 
-The application is responsible for authenticating that response. The wrapper freezes the reviewed snapshot, validates the decision, and posts the same input with the reviewed `quote_id`; it does not let a match preview silently route to a different provider. The digest uses RFC 8785 JSON Canonicalization Scheme ordering and rejects non-JSON values, unpaired Unicode surrogates, accessors, sparse arrays, and non-finite numbers.
+The application is responsible for authenticating that response. The wrapper freezes the reviewed snapshot, validates the decision, and posts the same task and input with the reviewed `quote_id`; it does not let a match preview silently route to a different provider. The review packet includes an allowlisted transaction view of the quote and omits buyer context, wallet balances, subscriptions, payment methods, and checkout instructions. The digest uses RFC 8785 JSON Canonicalization Scheme ordering and rejects non-JSON values, unpaired Unicode surrogates, accessors, sparse arrays, and non-finite numbers.
 
 ## Pending approval and same-quote retry
 

@@ -36,6 +36,7 @@ on:
       - 'opencode/**'
       - 'sdk/**'
       - 'coinbase-agentic-wallets/**'
+      - 'agenttax/**'
       - 'x402/**'
       - 'interchange/**'
       - 'ard/**'

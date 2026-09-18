@@ -109,12 +109,14 @@ export class TaxReviewedExecutionError extends Error {
 class AgoragenticRequestError extends Error {
   readonly httpStatus?: number;
   readonly responseReceived: boolean;
+  readonly explicitErrorEnvelope: boolean;
   readonly serverCode?: string;
 
   constructor(options: {
     message: string;
     httpStatus?: number;
     responseReceived: boolean;
+    explicitErrorEnvelope?: boolean;
     serverCode?: string;
     cause?: unknown;
   }) {
@@ -122,6 +124,7 @@ class AgoragenticRequestError extends Error {
     this.name = "AgoragenticRequestError";
     this.httpStatus = options.httpStatus;
     this.responseReceived = options.responseReceived;
+    this.explicitErrorEnvelope = options.explicitErrorEnvelope === true;
     this.serverCode = options.serverCode;
     if (options.cause !== undefined) {
       Object.defineProperty(this, "cause", { value: options.cause, enumerable: false });
@@ -187,7 +190,10 @@ function cloneStrictJson(value: unknown, path = "$", active = new WeakSet<object
       const keys = Reflect.ownKeys(value);
       for (const key of keys) {
         if (key === "length") continue;
-        if (typeof key !== "string" || !/^(0|[1-9]\d*)$/.test(key)) {
+        const index = typeof key === "string" && /^(0|[1-9]\d*)$/.test(key)
+          ? Number(key)
+          : Number.NaN;
+        if (!Number.isSafeInteger(index) || index < 0 || index >= value.length) {
           throw new TypeError(`${path} must not contain non-index array properties.`);
         }
       }
@@ -387,19 +393,35 @@ function validateQuote(
   requireFresh = true,
 ): JsonObject {
   const quote = cloneStrictJsonObject(quoteValue, path);
-  requireNonEmptyString(quote.quote_id, `${path}.quote_id`);
-  const capability = cloneStrictJsonObject(quote.capability, `${path}.capability`);
+  requireNonEmptyString(hasOwn(quote, "quote_id") ? quote.quote_id : undefined, `${path}.quote_id`);
+  const capability = cloneStrictJsonObject(
+    hasOwn(quote, "capability") ? quote.capability : undefined,
+    `${path}.capability`,
+  );
   if (capability.id !== expectedCapabilityId) {
     throw new Error("Quote capability does not match the requested capability.");
   }
-  const quotedPrice = parseUsdAmount(quote.quoted_price_usdc);
+  const quotedPrice = parseUsdAmount(
+    hasOwn(quote, "quoted_price_usdc") ? quote.quoted_price_usdc : undefined,
+  );
   if (!Number.isFinite(quotedPrice) || quotedPrice < 0 || quotedPrice > maxCost) {
     throw new Error("Quote price is invalid or exceeds maxCost.");
   }
-  if (quote.execution_ready !== true) {
+  if (!hasOwn(quote, "units") || quote.units !== 1) {
+    throw new Error("Quote units must equal 1.");
+  }
+  if (!hasOwn(quote, "execution_ready") || quote.execution_ready !== true) {
     throw new Error("Quote is not execution-ready.");
   }
-  const quoteExpiry = typeof quote.expires_at === "string" ? Date.parse(quote.expires_at) : Number.NaN;
+  if (!hasOwn(quote, "preview_only") || quote.preview_only !== false) {
+    throw new Error("Quote must not be preview-only.");
+  }
+  if (!hasOwn(quote, "status") || quote.status !== "ready") {
+    throw new Error("Quote status must be ready.");
+  }
+  const quoteExpiry = hasOwn(quote, "expires_at") && typeof quote.expires_at === "string"
+    ? Date.parse(quote.expires_at)
+    : Number.NaN;
   if (!Number.isFinite(quoteExpiry)) {
     throw new Error("Quote expiry is missing or invalid.");
   }
@@ -407,6 +429,56 @@ function validateQuote(
     throw new Error("Quote is expired.");
   }
   return quote;
+}
+
+const REVIEW_QUOTE_FIELDS = [
+  "quote_id",
+  "preview_only",
+  "execution_ready",
+  "status",
+  "quoted_at",
+  "expires_at",
+  "commerce_mode",
+  "pricing_model",
+  "units",
+  "unit_price_usdc",
+  "quoted_price_usdc",
+  "currency",
+  "payment_network",
+  "payment_asset",
+  "settlement_network",
+  "settlement_asset",
+  "normalization_path",
+  "source_amount_usdc",
+  "settled_amount_usdc",
+] as const;
+
+const REVIEW_CAPABILITY_FIELDS = [
+  "id",
+  "slug",
+  "name",
+  "category",
+  "listing_type",
+  "seller_id",
+  "seller_name",
+] as const;
+
+function buildReviewQuote(quote: JsonObject): JsonObject {
+  const capability = cloneStrictJsonObject(quote.capability, "quote.capability");
+  const reviewCapability: JsonObject = {};
+  for (const field of REVIEW_CAPABILITY_FIELDS) {
+    if (hasOwn(capability, field)) {
+      reviewCapability[field] = cloneStrictJson(capability[field], `quote.capability.${field}`);
+    }
+  }
+
+  const reviewQuote: JsonObject = { capability: reviewCapability };
+  for (const field of REVIEW_QUOTE_FIELDS) {
+    if (hasOwn(quote, field)) {
+      reviewQuote[field] = cloneStrictJson(quote[field], `quote.${field}`);
+    }
+  }
+  return cloneStrictJsonObject(reviewQuote, "reviewQuote");
 }
 
 export class AgoragenticAgentTaxClient {
@@ -455,11 +527,13 @@ export class AgoragenticAgentTaxClient {
       });
     }
     if (!response.ok) {
+      const serverCode = responseCode(data);
       throw new AgoragenticRequestError({
         message: `${operation} failed with HTTP ${response.status}: ${responseMessage(data)}`,
         httpStatus: response.status,
         responseReceived: true,
-        serverCode: responseCode(data),
+        explicitErrorEnvelope: serverCode !== undefined,
+        serverCode,
       });
     }
     return {
@@ -538,7 +612,7 @@ export class AgoragenticAgentTaxClient {
       input: validated.input,
       max_cost_usdc: validated.maxCost,
       units: validated.units,
-      quote,
+      quote: buildReviewQuote(quote),
       tax_context: validated.taxContext,
     });
     const reviewPayload = cloneStrictJsonObject({
@@ -612,6 +686,7 @@ export class AgoragenticAgentTaxClient {
         review_payload: payloadSnapshot,
       });
     }
+    const task = requireNonEmptyString(payloadSnapshot.task, "reviewPayload.task");
     const input = cloneStrictJsonObject(payloadSnapshot.input, "reviewPayload.input");
 
     let response: JsonHttpResponse;
@@ -619,11 +694,12 @@ export class AgoragenticAgentTaxClient {
       response = await this.requestJson("/execute", {
         method: "POST",
         headers: this.authHeaders(),
-        body: JSON.stringify({ quote_id: quoteId, input }),
+        body: JSON.stringify({ quote_id: quoteId, task, input }),
       }, "Quote execution");
     } catch (cause) {
       const requestError = cause instanceof AgoragenticRequestError ? cause : undefined;
       const definitiveRejection = requestError?.responseReceived === true
+        && requestError.explicitErrorEnvelope
         && requestError.httpStatus !== undefined
         && requestError.httpStatus >= 400
         && requestError.httpStatus < 500;
@@ -639,16 +715,49 @@ export class AgoragenticAgentTaxClient {
     }
 
     const execution = response.data;
-    const executionError = hasOwn(execution, "error") && typeof execution.error === "string"
-      ? execution.error
+    const hasExecutionError = hasOwn(execution, "error");
+    const rawExecutionError = hasExecutionError ? execution.error : undefined;
+    const executionError = typeof rawExecutionError === "string"
+      ? rawExecutionError
+      : undefined;
+    const rawExecutionStatus = hasOwn(execution, "status") ? execution.status : undefined;
+    const normalizedStatus = typeof rawExecutionStatus === "string"
+      ? rawExecutionStatus.toLowerCase()
       : undefined;
     const pendingApproval = executionError === "pending_approval"
-      || execution.status === "pending_approval";
-    const normalizedStatus = typeof execution.status === "string"
-      ? execution.status.toLowerCase()
-      : undefined;
+      || normalizedStatus === "pending_approval";
     const rejectedStatus = normalizedStatus !== undefined
       && ["failed", "failure", "error", "rejected", "cancelled", "canceled"].includes(normalizedStatus);
+    const successfulStatus = normalizedStatus === "success" || normalizedStatus === "completed";
+    const malformedError = hasExecutionError
+      && rawExecutionError !== null
+      && rawExecutionError !== undefined
+      && typeof rawExecutionError !== "string";
+    const hasExecutionSuccess = hasOwn(execution, "success");
+    const executionSuccess = hasExecutionSuccess ? execution.success : undefined;
+    const malformedSuccessFlag = hasExecutionSuccess
+      && typeof executionSuccess !== "boolean";
+    const contradictoryEnvelope = (pendingApproval
+      && normalizedStatus !== undefined
+      && normalizedStatus !== "pending_approval")
+      || (normalizedStatus === "pending_approval"
+        && executionError !== undefined
+        && executionError !== "pending_approval")
+      || (executionError !== undefined
+        && executionError !== "pending_approval"
+        && successfulStatus)
+      || (executionSuccess === false && !rejectedStatus)
+      || (executionSuccess === true && rejectedStatus);
+    if (malformedError || malformedSuccessFlag || contradictoryEnvelope) {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: malformedError || malformedSuccessFlag
+          ? "malformed_execution_response"
+          : "contradictory_execution_envelope",
+      });
+    }
     if ((executionError && executionError !== "pending_approval") || rejectedStatus) {
       throw new TaxReviewedExecutionError({
         code: "tax_reviewed_execution_rejected",
@@ -657,21 +766,18 @@ export class AgoragenticAgentTaxClient {
         serverCode: executionError || `execution_${normalizedStatus}`,
       });
     }
-    if (pendingApproval
-      && normalizedStatus !== undefined
-      && normalizedStatus !== "pending_approval") {
-      throw new TaxReviewedExecutionError({
-        code: "tax_reviewed_execution_outcome_unknown",
-        quoteId,
-        httpStatus: response.httpStatus,
-        serverCode: "contradictory_pending_execution_status",
-      });
-    }
     if (pendingApproval) {
       let approvalId: string | undefined;
-      if (execution.approval && typeof execution.approval === "object"
-        && !Array.isArray(execution.approval)) {
-        const approval = cloneStrictJsonObject(execution.approval, "execution.approval");
+      const topLevelApprovalId = hasOwn(execution, "approval_id")
+        ? execution.approval_id
+        : undefined;
+      if (typeof topLevelApprovalId === "string" && topLevelApprovalId.trim()) {
+        approvalId = topLevelApprovalId.trim();
+      }
+      const nestedApproval = hasOwn(execution, "approval") ? execution.approval : undefined;
+      if (!approvalId && nestedApproval && typeof nestedApproval === "object"
+        && !Array.isArray(nestedApproval)) {
+        const approval = cloneStrictJsonObject(nestedApproval, "execution.approval");
         const rawApprovalId = approval.approval_id ?? approval.id;
         if (typeof rawApprovalId === "string" && rawApprovalId.trim()) {
           approvalId = rawApprovalId.trim();
@@ -694,7 +800,9 @@ export class AgoragenticAgentTaxClient {
           ? `unexpected_execution_status_${normalizedStatus}`
           : "malformed_execution_response",
       });
-    } else if (typeof execution.invocation_id !== "string" || !execution.invocation_id.trim()) {
+    } else if (!hasOwn(execution, "invocation_id")
+      || typeof execution.invocation_id !== "string"
+      || !execution.invocation_id.trim()) {
       throw new TaxReviewedExecutionError({
         code: "tax_reviewed_execution_outcome_unknown",
         quoteId,
