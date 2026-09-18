@@ -31,6 +31,11 @@ export function parseSkill(text, expectedId = null) {
   assert.match(fields.name || '', SKILL_NAME_PATTERN, 'skill name must be lowercase kebab-case');
   assert.ok(fields.description, 'skill description is required');
   assert.ok(fields.description.length <= 1024, 'skill description must be at most 1024 characters');
+  assert.doesNotMatch(
+    fields.description,
+    /:\s/,
+    "skill description must be a portable plain YAML scalar without ': '",
+  );
   if (expectedId) assert.equal(fields.name, expectedId, 'skill name must match its directory id');
   return { fields, body: match[2], text: normalized };
 }

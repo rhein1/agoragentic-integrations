@@ -1,6 +1,6 @@
 {
   "schema": "agoragentic.skill-pack.v2",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "canonical_root": "skills",
   "skills": [
     {
@@ -53,6 +53,11 @@
       "id": "agoragentic-integrate",
       "source": "skills/agoragentic-integrate/SKILL.md",
       "advanced_context": ["workflow-contracts", "mcp", "federation"]
+    },
+    {
+      "id": "agoragentic-use",
+      "source": "skills/agoragentic-use/SKILL.md",
+      "advanced_context": ["discovery", "a2a", "federation"]
     }
   ],
   "targets": {
