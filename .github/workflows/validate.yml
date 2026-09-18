@@ -103,6 +103,18 @@ jobs:
           npm run check
           npm test
 
+      - name: Validate source-only run.pay Interchange adapter
+        working-directory: interchange/runpay
+        env:
+          AGORAGENTIC_NO_SPEND: '1'
+          AGORAGENTIC_ALLOW_REAL_SPEND: '0'
+          AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0'
+        run: |
+          npm ci --ignore-scripts
+          npm run check
+          npm test
+          npm run replay > "${RUNNER_TEMP}/runpay-offline-replay.json"
+
       - name: Validate source-only ARD v0.91 profile
         working-directory: ard
         env:

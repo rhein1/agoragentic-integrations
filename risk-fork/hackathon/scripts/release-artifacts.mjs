@@ -9,6 +9,7 @@ import {
   OFFLINE_KIT_TRUTH,
   verifyZipArchive,
 } from '../src/offline-kit.mjs';
+import { readOpenedFileExact } from '../../src/util.mjs';
 
 export const RELEASE_ARTIFACT_SCHEMA = 'agoragentic.risk-fork.hackathon-release-build.v1';
 export const SPDX_VERSION = 'SPDX-2.3';
@@ -255,9 +256,10 @@ async function readBounded(file, maxBytes = 8 * 1024 * 1024) {
   // Open first with O_NOFOLLOW and validate the opened handle itself: no
   // lstat-then-read check-then-act window.
   const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await open(file, constants.O_RDONLY | noFollow);
+    handle = await open(file, constants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === 'ELOOP') {
       throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
@@ -266,13 +268,43 @@ async function readBounded(file, maxBytes = 8 * 1024 * 1024) {
   }
   try {
     const info = await handle.stat();
-    if (!info.isFile() || info.nlink !== 1 || info.size > maxBytes) {
+    const pathInfo = await lstat(file);
+    if (!info.isFile()
+      || pathInfo.isSymbolicLink()
+      || !sameFileIdentity(info, pathInfo)
+      || info.nlink !== 1
+      || info.size > maxBytes) {
       throw new Error(`Release artifact is not a bounded regular file: ${path.basename(file)}`);
     }
-    return await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: info.size,
+      maxBytes,
+      changedMessage: `Release artifact changed while it was read: ${path.basename(file)}`,
+      limitMessage: `Release artifact is not a bounded regular file: ${path.basename(file)}`,
+    });
+    const after = await handle.stat();
+    const pathAfter = await lstat(file);
+    if (bytes.byteLength !== info.size
+      || !sameFileIdentity(info, after)
+      || pathAfter.isSymbolicLink()
+      || !sameFileIdentity(after, pathAfter)) {
+      throw new Error(`Release artifact changed while it was read: ${path.basename(file)}`);
+    }
+    return bytes;
   } finally {
     await handle.close();
   }
+}
+
+function sameFileIdentity(left, right) {
+  return left.isFile()
+    && right.isFile()
+    && left.dev === right.dev
+    && left.ino === right.ino
+    && left.size === right.size
+    && left.mtimeMs === right.mtimeMs
+    && left.ctimeMs === right.ctimeMs
+    && left.nlink === right.nlink;
 }
 
 async function assertRecord(directory, record, label) {

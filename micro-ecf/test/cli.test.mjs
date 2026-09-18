@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import { indexSources, readOpenedFileExactSync } from '../src/core.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const microEcfRoot = path.join(__dirname, '..');
@@ -26,6 +29,47 @@ function write(filePath, text) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, text);
 }
+
+test('descriptor reads reject simulated growth and large SQLite provenance is streamed', () => {
+  const reviewed = Buffer.from('# reviewed\n', 'utf8');
+  let interrupted = false;
+  const readSync = (_fd, buffer, offset, length, position) => {
+    if (!interrupted) {
+      interrupted = true;
+      const error = new Error('interrupted');
+      error.code = 'EINTR';
+      throw error;
+    }
+    if (position === reviewed.byteLength) {
+      buffer[offset] = 0x21;
+      return 1;
+    }
+    const bytesRead = Math.min(3, length, reviewed.byteLength - position);
+    reviewed.copy(buffer, offset, position, position + bytesRead);
+    return bytesRead;
+  };
+  assert.throws(
+    () => readOpenedFileExactSync(-1, reviewed.byteLength, 1024, readSync),
+    /changed while it was read/,
+  );
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-descriptor-'));
+  try {
+    const sqlite = path.join(tmp, 'provenance.sqlite');
+    const sqliteBytes = Buffer.alloc(256 * 1024, 0x61);
+    fs.writeFileSync(sqlite, sqliteBytes);
+    const sourceMap = indexSources(tmp, { maxFiles: 10, maxFileBytes: 64 });
+    const source = sourceMap.sources.find((entry) => entry.path === 'provenance.sqlite');
+    assert.equal(source.bytes, sqliteBytes.byteLength);
+    assert.equal(
+      source.hash,
+      `sha256:${crypto.createHash('sha256').update(sqliteBytes).digest('hex')}`,
+    );
+    assert.match(source.summary, /records file provenance only/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
 
 test('micro-ecf CLI initializes, indexes, builds, and exports bounded local artifacts', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'micro-ecf-cli-'));

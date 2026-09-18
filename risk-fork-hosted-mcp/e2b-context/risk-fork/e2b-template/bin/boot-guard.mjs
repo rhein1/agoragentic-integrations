@@ -13,6 +13,9 @@ import {
 import net from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { TextDecoder } from 'node:util';
+
+import { readOpenedFileExact, securityPatternMatches } from '../../src/util.mjs';
 
 import {
   canonicalize,
@@ -68,6 +71,25 @@ const CREDENTIAL_PATHS = Object.freeze([
   '/root/.ssh',
 ]);
 
+function observedByteStringMatchesSecurityPattern(pattern, value) {
+  pattern.lastIndex = 0;
+  const exactMatch = pattern.test(value);
+  pattern.lastIndex = 0;
+  if (exactMatch) return true;
+  try {
+    const utf8View = new TextDecoder('utf-8', { fatal: true }).decode(
+      Buffer.from(value, 'latin1'),
+    );
+    return utf8View !== value && securityPatternMatches(pattern, utf8View);
+  } catch {
+    return false;
+  }
+}
+
+export function containsForbiddenProcessText(value) {
+  return securityPatternMatches(FORBIDDEN_PROCESS_PATTERN, value);
+}
+
 export function classifyLiteralProbeOutcome(outcome) {
   if (outcome === 'connected') {
     return { status: 'connected', local_denial_observed: false };
@@ -99,7 +121,9 @@ export function inspectProcessEnvironmentBytes(value) {
     const key = record.slice(0, separator);
     const keyHash = sha256Ref(key);
     keyHashes.push(keyHash);
-    if (FORBIDDEN_ENVIRONMENT_KEY_PATTERN.test(key)) forbiddenKeyHashes.push(keyHash);
+    if (observedByteStringMatchesSecurityPattern(FORBIDDEN_ENVIRONMENT_KEY_PATTERN, key)) {
+      forbiddenKeyHashes.push(keyHash);
+    }
   }
   keyHashes.sort();
   forbiddenKeyHashes.sort();
@@ -168,7 +192,7 @@ async function observeProcesses() {
     const normalized = cmdline.toString('utf8').replaceAll('\0', ' ').trim().slice(0, 8_192);
     const digest = sha256Ref(normalized || `pid:${entry.name}:empty`);
     hashes.push(digest);
-    if (FORBIDDEN_PROCESS_PATTERN.test(normalized)) forbidden.push(digest);
+    if (containsForbiddenProcessText(normalized)) forbidden.push(digest);
   }
   hashes.sort();
   forbidden.sort();
@@ -501,11 +525,13 @@ async function readBoundedRegularFile(target, maxBytes) {
   // Open first with O_NOFOLLOW and validate the opened handle itself: there
   // is no lstat-then-open check-then-act window, and every bound below
   // describes the file that is actually read.
+  const noFollow = Number.isInteger(constants.O_NOFOLLOW) ? constants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
   let handle;
   try {
     handle = await open(
       target,
-      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      constants.O_RDONLY | noFollow | nonBlock,
     );
   } catch (error) {
     if (error?.code === 'ELOOP') {
@@ -515,7 +541,10 @@ async function readBoundedRegularFile(target, maxBytes) {
   }
   try {
     const during = await handle.stat({ bigint: true });
+    const pathDuring = await lstat(target, { bigint: true });
     if (!during.isFile()
+      || pathDuring.isSymbolicLink()
+      || stableRuntimeFileIdentity(pathDuring) !== stableRuntimeFileIdentity(during)
       || during.nlink !== 1n
       || during.size > BigInt(maxBytes)) {
       throw new Error('E2B birth request artifact is not a bounded regular file');
@@ -527,7 +556,12 @@ async function readBoundedRegularFile(target, maxBytes) {
         throw new Error('E2B birth request artifact ownership or mode is invalid');
       }
     }
-    const bytes = await handle.readFile();
+    const bytes = await readOpenedFileExact(handle, {
+      expectedSize: during.size,
+      maxBytes,
+      changedMessage: 'E2B birth request artifact changed while it was consumed',
+      limitMessage: 'E2B birth request artifact is not a bounded regular file',
+    });
     const after = await handle.stat({ bigint: true });
     const pathAfter = await lstat(target, { bigint: true });
     if (BigInt(bytes.byteLength) !== during.size

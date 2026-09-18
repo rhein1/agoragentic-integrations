@@ -1,0 +1,38 @@
+{
+  "schema": "agoragentic.nevermined-import.v1",
+  "source": {
+    "provider": "nevermined",
+    "namespace": "synthetic:sandbox:example",
+    "record_kind": "merchant_payment_ledger",
+    "schema_revision": "7c3e0c1dd00119f8e72983572c1807e78a9c1ee2",
+    "captured_at": "2026-09-09T00:00:00Z",
+    "record_ref": "fixture:synthetic-payment-001"
+  },
+  "profile_id": "nevermined.merchant-payment.7c3e0c1dd00119f8e72983572c1807e78a9c1ee2",
+  "record": {
+    "raw": {
+      "id": "synthetic-payment-001",
+      "createdAt": "2026-07-01T09:00:55.605Z",
+      "status": "Settled",
+      "protocol": "x402",
+      "network": "base",
+      "asset": "USDC",
+      "amount": "10000",
+      "merchantAddress": "0x1111111111111111111111111111111111111111",
+      "txHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+      "delegationId": "synthetic-delegation-001",
+      "requestId": "synthetic-request-001",
+      "resourceUrl": "https://service.example/api/resource",
+      "buyer": "0x2222222222222222222222222222222222222222",
+      "feeAtomic": "200",
+      "feeBps": 200,
+      "feeCents": "0",
+      "feeStatus": "Submitted",
+      "feeTxHash": null,
+      "feeNonce": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "feeFailureReason": null,
+      "assetSymbol": "USDC",
+      "assetDecimals": 6
+    }
+  }
+}

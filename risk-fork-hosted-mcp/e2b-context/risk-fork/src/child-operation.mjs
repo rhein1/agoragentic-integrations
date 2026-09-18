@@ -7,8 +7,12 @@ import {
   assertAllowedKeys,
   assertPlainObject,
   deepFreeze,
+  isBoundedTokenMeasurementValue,
+  isTokenMeasurementKey,
   normalizeRelativePath,
   requireEnum,
+  securityPatternsMatch,
+  securityTextVariants,
 } from './util.mjs';
 
 const MAX_OPERATION_BYTES = 1024 * 1024;
@@ -18,7 +22,7 @@ const MAX_LOCAL_ACTIONS = 500;
 const MAX_LOCAL_FILE_BYTES = 512 * 1024;
 
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
+const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|privilege|privileges|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
 
 const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
@@ -32,13 +36,17 @@ const AUTHORITY_OR_SECRET_VALUE_PATTERNS = Object.freeze([
   /[?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|authorization|credential|password|client[_-]?secret)=[^&\s]{8,}/i,
 ]);
 
-function normalizedKey(value) {
-  return value
-    .normalize('NFKC')
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^A-Za-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+function normalizedKeys(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index]
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+  }
+  return normalized;
 }
 
 function scanAuthorityFreeJson(value, field) {
@@ -49,7 +57,7 @@ function scanAuthorityFreeJson(value, field) {
     if (nodes > MAX_OPERATION_NODES) throw new TypeError(`${field} is too complex`);
     if (depth > MAX_OPERATION_DEPTH) throw new TypeError(`${field} is too deeply nested`);
     if (typeof current === 'string') {
-      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(current))) {
+      if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, current)) {
         throw new TypeError(`${path} contains authority or secret-shaped material`);
       }
       return;
@@ -62,14 +70,15 @@ function scanAuthorityFreeJson(value, field) {
       return;
     }
     for (const [key, child] of Object.entries(current)) {
-      const normalized = normalizedKey(key);
-      if (AUTHORITY_OR_SECRET_VALUE_PATTERNS.some((pattern) => pattern.test(key))) {
+      const normalized = normalizedKeys(key);
+      if (securityPatternsMatch(AUTHORITY_OR_SECRET_VALUE_PATTERNS, key)) {
         throw new TypeError(`${path}.<key> contains authority or secret-shaped material`);
       }
       if (DANGEROUS_KEYS.has(key)) {
         throw new TypeError(`${path}.<key> is a forbidden JSON key`);
       }
-      if (AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)) {
+      if (normalized.some((candidate) => AUTHORITY_OR_SECRET_KEY_PATTERN.test(candidate))
+        || (isTokenMeasurementKey(key) && !isBoundedTokenMeasurementValue(child))) {
         throw new TypeError(`${path}.<key> is an authority or secret-bearing field`);
       }
       walk(child, `${path}.<value>`, depth + 1);

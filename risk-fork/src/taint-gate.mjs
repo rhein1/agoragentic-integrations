@@ -5,7 +5,11 @@ import addFormats from 'ajv-formats';
 import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
 import { ACTION_OPERATIONS, COMMIT_TYPES } from './constants.mjs';
 import { verifyExecutionBinding } from './contracts.mjs';
-import { containsObviousCapabilityLikeText, isForbiddenAuthorityShapeKey } from './authority-shape.mjs';
+import {
+  containsObviousCapabilityLikeText,
+  isForbiddenAuthorityShapeEntry,
+  isForbiddenAuthorityShapeKey,
+} from './authority-shape.mjs';
 import {
   AGORAGENTIC_GENERATED_API_KEY_PATTERN,
   BEARER_CREDENTIAL_PATTERN,
@@ -15,6 +19,7 @@ import {
   assertPlainObject,
   boundedInteger,
   cloneJson,
+  countSecurityPatternMatches,
   deepFreeze,
   isPathAllowed,
   normalizeRelativePath,
@@ -24,6 +29,7 @@ import {
   requireSha256Ref,
   requireString,
   safeEqual,
+  securityKeyFingerprints,
   uniqueStrings,
 } from './util.mjs';
 
@@ -95,11 +101,8 @@ const SCHEMA_VALUE_KEYWORDS = Object.freeze([
   'oneOf',
 ]);
 
-function normalizeChildKey(value) {
-  return value
-    .normalize('NFKC')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .toLowerCase();
+function normalizeChildKeys(value) {
+  return securityKeyFingerprints(value);
 }
 
 function declaredJsonSchemaDialect(schema) {
@@ -165,7 +168,15 @@ function makeAjv(schema) {
   return ajv;
 }
 
-function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', depth = 0) {
+function walkStrings(
+  value,
+  visitor,
+  limits,
+  state = { nodes: 0 },
+  path = '$',
+  depth = 0,
+  enforceMeasurementValues = true,
+) {
   if (depth > limits.max_depth) {
     throw new TypeError(`Artifact nesting exceeds ${limits.max_depth} levels at ${path}`);
   }
@@ -182,7 +193,15 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', d
   }
   if (Array.isArray(value)) {
     for (const [index, item] of value.entries()) {
-      walkStrings(item, visitor, limits, state, `${path}[${index}]`, depth + 1);
+      walkStrings(
+        item,
+        visitor,
+        limits,
+        state,
+        `${path}[${index}]`,
+        depth + 1,
+        enforceMeasurementValues,
+      );
     }
     return;
   }
@@ -192,28 +211,46 @@ function walkStrings(value, visitor, limits, state = { nodes: 0 }, path = '$', d
       throw new TypeError(`Artifact key exceeds ${limits.max_string_bytes} bytes at ${path}.<key>`);
     }
     visitor(key, `${path}.<key>`);
-    const normalizedKey = normalizeChildKey(key);
-    if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKey)
-      || isForbiddenAuthorityShapeKey(key)) {
+    const normalizedKeys = normalizeChildKeys(key);
+    let forbiddenFingerprint = false;
+    for (let index = 0; index < normalizedKeys.length; index += 1) {
+      if (FORBIDDEN_CHILD_KEY_FINGERPRINTS.has(normalizedKeys[index])) {
+        forbiddenFingerprint = true;
+        break;
+      }
+    }
+    if (forbiddenFingerprint
+      || isForbiddenAuthorityShapeKey(key)
+      || (enforceMeasurementValues && isForbiddenAuthorityShapeEntry(key, child))) {
       throw new Error(`Child artifact cannot carry trusted authority or memory field at ${path}.<key>`);
     }
-    walkStrings(child, visitor, limits, state, `${path}.<value>`, depth + 1);
+    walkStrings(
+      child,
+      visitor,
+      limits,
+      state,
+      `${path}.<value>`,
+      depth + 1,
+      enforceMeasurementValues,
+    );
   }
 }
 
-function scanText(value, policy) {
+function scanText(value, policy, { enforceMeasurementValues = true } = {}) {
   const findings = [];
   walkStrings(value, (text, path) => {
-    for (const pattern of SECRET_PATTERNS) {
-      if (pattern.test(text)) findings.push({ code: 'secret_pattern', path });
+    const secretMatches = countSecurityPatternMatches(SECRET_PATTERNS, text);
+    for (let index = 0; index < secretMatches; index += 1) {
+      findings.push({ code: 'secret_pattern', path });
     }
     if (containsObviousCapabilityLikeText(text)) findings.push({ code: 'authority_shape', path });
     if (!policy.allow_prompt_injection_text) {
-      for (const pattern of PROMPT_INJECTION_PATTERNS) {
-        if (pattern.test(text)) findings.push({ code: 'prompt_injection_pattern', path });
+      const promptMatches = countSecurityPatternMatches(PROMPT_INJECTION_PATTERNS, text);
+      for (let index = 0; index < promptMatches; index += 1) {
+        findings.push({ code: 'prompt_injection_pattern', path });
       }
     }
-  }, policy);
+  }, policy, { nodes: 0 }, '$', 0, enforceMeasurementValues);
   return findings;
 }
 
@@ -318,7 +355,9 @@ function buildArtifact({ commitType, sourceForkId, validatedAt, body, validation
 function validateTypedResult(candidate, context) {
   assertAllowedKeys(candidate, ['type', 'payload', 'payload_schema'], 'typed result candidate');
   assertPlainObject(candidate.payload_schema, 'typed result payload_schema');
-  const schemaFindings = scanText(candidate.payload_schema, context.policy);
+  const schemaFindings = scanText(candidate.payload_schema, context.policy, {
+    enforceMeasurementValues: false,
+  });
   if (schemaFindings.length > 0) {
     throw new Error(`Typed result schema taint scan failed: ${schemaFindings[0].code}`);
   }

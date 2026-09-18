@@ -25,6 +25,45 @@ export class GstackHarnessError extends Error {
   }
 }
 
+const MAX_INTERRUPTED_ARTIFACT_READS = 16;
+
+async function readArtifactAt(handle, buffer, offset, length, position) {
+  let interruptions = 0;
+  while (true) {
+    try {
+      return await handle.read(buffer, offset, length, position);
+    } catch (error) {
+      if (error?.code !== 'EINTR' || interruptions >= MAX_INTERRUPTED_ARTIFACT_READS) throw error;
+      interruptions += 1;
+    }
+  }
+}
+
+export async function readOpenedArtifactExact(handle, expectedSize, stage) {
+  if (typeof expectedSize !== 'bigint'
+    || expectedSize < 0n
+    || expectedSize > BigInt(MAX_ARTIFACT_BYTES)) {
+    throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
+  }
+  const size = Number(expectedSize);
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < size) {
+    const result = await readArtifactAt(handle, bytes, offset, size - offset, offset);
+    if (!Number.isSafeInteger(result?.bytesRead)
+      || result.bytesRead <= 0
+      || result.bytesRead > size - offset) {
+      throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);
+    }
+    offset += result.bytesRead;
+  }
+  const probe = await readArtifactAt(handle, Buffer.allocUnsafe(1), 0, 1, size);
+  if (!Number.isSafeInteger(probe?.bytesRead) || probe.bytesRead !== 0) {
+    throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);
+  }
+  return bytes;
+}
+
 export async function compileGstackArtifacts({
   projectDir,
   outDir,
@@ -191,12 +230,11 @@ export async function compileGstackArtifacts({
 
 async function readArtifact({ stage, suppliedPath, projectRoot }) {
   const absolutePath = path.resolve(String(suppliedPath));
-  // Open first with O_NOFOLLOW and validate the opened file itself: no
-  // lstat-then-read check-then-act window.
   const noFollow = Number.isInteger(fsConstants.O_NOFOLLOW) ? fsConstants.O_NOFOLLOW : 0;
+  const nonBlock = Number.isInteger(fsConstants.O_NONBLOCK) ? fsConstants.O_NONBLOCK : 0;
   let handle;
   try {
-    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | noFollow);
+    handle = await fs.open(absolutePath, fsConstants.O_RDONLY | noFollow | nonBlock);
   } catch (error) {
     if (error?.code === 'ELOOP') {
       throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
@@ -205,15 +243,22 @@ async function readArtifact({ stage, suppliedPath, projectRoot }) {
   }
   let bytes;
   try {
-    const stat = await handle.stat();
-    if (stat.isSymbolicLink()) throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
-    if (!stat.isFile()) throw new GstackHarnessError('artifact_not_regular_file', `The ${stage} artifact must be a regular file.`);
-    if (stat.size === 0) throw new GstackHarnessError('artifact_empty', `The ${stage} artifact is empty.`);
-    if (stat.size > MAX_ARTIFACT_BYTES) {
+    const opened = await handle.stat({ bigint: true });
+    if (!opened.isFile()) throw new GstackHarnessError('artifact_not_regular_file', `The ${stage} artifact must be a regular file.`);
+    if (opened.size === 0n) throw new GstackHarnessError('artifact_empty', `The ${stage} artifact is empty.`);
+    if (opened.size > BigInt(MAX_ARTIFACT_BYTES)) {
       throw new GstackHarnessError('artifact_too_large', `The ${stage} artifact exceeds ${MAX_ARTIFACT_BYTES} bytes.`);
     }
-
-    bytes = await handle.readFile();
+    const openedReal = await bindArtifactPath({ absolutePath, opened, projectRoot, stage });
+    bytes = await readOpenedArtifactExact(handle, opened.size, stage);
+    const after = await handle.stat({ bigint: true });
+    if (!after.isFile() || artifactIdentity(after) !== artifactIdentity(opened)) {
+      throw new GstackHarnessError('artifact_changed', `The ${stage} artifact changed while it was being read.`);
+    }
+    const currentReal = await bindArtifactPath({ absolutePath, opened, projectRoot, stage });
+    if (currentReal !== openedReal) {
+      throw new GstackHarnessError('artifact_changed', `The ${stage} artifact target changed while it was being read.`);
+    }
   } finally {
     await handle.close();
   }
@@ -255,6 +300,41 @@ async function readArtifact({ stage, suppliedPath, projectRoot }) {
     raw_content_retained: false,
     claim_extracted: false,
   };
+}
+
+function artifactIdentity(info) {
+  return JSON.stringify({
+    dev: String(info.dev),
+    ino: String(info.ino),
+    size: String(info.size),
+    nlink: String(info.nlink),
+    mode: String(info.mode),
+    mtime_ns: String(info.mtimeNs ?? BigInt(Math.trunc(Number(info.mtimeMs) * 1_000_000))),
+  });
+}
+
+function isSameOrInside(rootPath, candidatePath) {
+  const relative = path.relative(rootPath, candidatePath);
+  return relative === ''
+    || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
+
+async function bindArtifactPath({ absolutePath, opened, projectRoot, stage }) {
+  const current = await fs.lstat(absolutePath, { bigint: true });
+  if (current.isSymbolicLink()) {
+    throw new GstackHarnessError('artifact_symlink_rejected', `The ${stage} artifact must not be a symbolic link.`);
+  }
+  if (artifactIdentity(current) !== artifactIdentity(opened)) {
+    throw new GstackHarnessError('artifact_changed', `The ${stage} artifact path changed while it was being read.`);
+  }
+  const resolved = await fs.realpath(absolutePath);
+  if (isSameOrInside(projectRoot, absolutePath)) {
+    const projectReal = await fs.realpath(projectRoot);
+    if (!isSameOrInside(projectReal, resolved)) {
+      throw new GstackHarnessError('artifact_path_escape', `The ${stage} artifact escapes the project through a linked path.`);
+    }
+  }
+  return resolved;
 }
 
 function safeReference(absolutePath, projectRoot) {

@@ -1,22 +1,22 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.54.0",
-  "as_of": "2026-09-08",
+  "source_manifest_version": "2.56.0",
+  "as_of": "2026-09-14",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 156,
-    "occurrence_count": 311,
+    "file_count": 177,
+    "occurrence_count": 345,
     "category_file_counts": {
-      "installer_or_clone": 30,
-      "machine_discovery": 52,
+      "installer_or_clone": 31,
+      "machine_discovery": 61,
       "package_registry_metadata": 23,
-      "public_documentation": 76,
+      "public_documentation": 85,
       "raw_content_url": 2,
-      "release_or_provenance": 12,
+      "release_or_provenance": 17,
       "reusable_action": 2,
-      "source_or_test": 22
+      "source_or_test": 24
     }
   },
   "reusable_action_references": [
@@ -862,7 +862,7 @@
       "path": "elizaos/package.json",
       "occurrences": 1,
       "line_numbers": [
-        23
+        24
       ],
       "categories": [
         "machine_discovery",
@@ -1054,7 +1054,7 @@
     },
     {
       "path": "integrations.json",
-      "occurrences": 19,
+      "occurrences": 20,
       "line_numbers": [
         16,
         37,
@@ -1066,15 +1066,16 @@
         103,
         111,
         119,
-        129,
-        162,
-        424,
-        436,
-        448,
-        460,
-        472,
-        484,
-        496
+        128,
+        138,
+        171,
+        433,
+        445,
+        457,
+        469,
+        481,
+        493,
+        505
       ],
       "categories": [
         "machine_discovery"
@@ -1084,7 +1085,7 @@
       "path": "integrations.schema.json",
       "occurrences": 1,
       "line_numbers": [
-        288
+        291
       ],
       "categories": [
         "machine_discovery"
@@ -1101,6 +1102,113 @@
       "categories": [
         "machine_discovery",
         "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/evidence/readonly-catalog-2026-09-14.json",
+      "occurrences": 2,
+      "line_numbers": [
+        5,
+        6
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/consensus-aggregator.json",
+      "occurrences": 1,
+      "line_numbers": [
+        6
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/phone-validator-receipt.json",
+      "occurrences": 1,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/fixtures/phone-validator.json",
+      "occurrences": 1,
+      "line_numbers": [
+        6
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/provenance.json",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        8
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        3,
+        5
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "interchange/runpay/readonly-catalog-evidence.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        16
+      ],
+      "categories": [
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/readonly-catalog-evidence.schema.json",
+      "occurrences": 2,
+      "line_numbers": [
+        27,
+        28
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "interchange/runpay/runpay-receipt-observation.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "machine_discovery"
+      ]
+    },
+    {
+      "path": "interchange/runpay/runpay-service-import.schema.json",
+      "occurrences": 1,
+      "line_numbers": [
+        22
+      ],
+      "categories": [
+        "machine_discovery"
       ]
     },
     {
@@ -1448,6 +1556,69 @@
       ]
     },
     {
+      "path": "risk-fork/examples/runtime-dynamic/docs/SUBMISSION.md",
+      "occurrences": 1,
+      "line_numbers": [
+        19
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/docs/VALIDATION.md",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        9
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/index.html",
+      "occurrences": 1,
+      "line_numbers": [
+        3
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/presentation.html",
+      "occurrences": 3,
+      "line_numbers": [
+        1
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/public/presenter.html",
+      "occurrences": 2,
+      "line_numbers": [
+        1,
+        4
+      ],
+      "categories": [
+        "installer_or_clone",
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/examples/runtime-dynamic/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "risk-fork/GETTING_STARTED.md",
       "occurrences": 1,
       "line_numbers": [
@@ -1461,7 +1632,7 @@
       "path": "risk-fork/hackathon/scripts/release-artifacts.mjs",
       "occurrences": 1,
       "line_numbers": [
-        162
+        163
       ],
       "categories": [
         "installer_or_clone",
@@ -1518,7 +1689,7 @@
       "path": "risk-fork/SECURITY_MODEL.md",
       "occurrences": 3,
       "line_numbers": [
-        178
+        180
       ],
       "categories": [
         "public_documentation"
@@ -1789,6 +1960,16 @@
       ]
     },
     {
+      "path": "transaction-assurance/docs/runpay-offline-importer.md",
+      "occurrences": 2,
+      "line_numbers": [
+        14
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "transaction-assurance/examples/external-adopters/anchor-x402/README.md",
       "occurrences": 2,
       "line_numbers": [
@@ -1801,11 +1982,32 @@
       ]
     },
     {
+      "path": "transaction-assurance/examples/runpay/2026-09-09/provenance.json",
+      "occurrences": 1,
+      "line_numbers": [
+        26
+      ],
+      "categories": [
+        "machine_discovery",
+        "release_or_provenance"
+      ]
+    },
+    {
+      "path": "transaction-assurance/examples/runpay/2026-09-09/README.md",
+      "occurrences": 2,
+      "line_numbers": [
+        5
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "transaction-assurance/package.json",
       "occurrences": 2,
       "line_numbers": [
-        69,
-        74
+        72,
+        77
       ],
       "categories": [
         "installer_or_clone",
@@ -1822,6 +2024,27 @@
       ],
       "categories": [
         "public_documentation"
+      ]
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-cli.mjs",
+      "occurrences": 1,
+      "line_numbers": [
+        18
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
+      "path": "transaction-assurance/src/adapters/runpay-profile.mjs",
+      "occurrences": 2,
+      "line_numbers": [
+        7,
+        14
+      ],
+      "categories": [
+        "source_or_test"
       ]
     },
     {

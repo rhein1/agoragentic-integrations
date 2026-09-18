@@ -1,0 +1,9 @@
+{
+  "name": "agoragentic-runtime-dynamic-live-demo",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Owner-operated Base Sepolia demo only; not a published signer",
+  "engines": {"node": ">=22"},
+  "dependencies": {"@dynamic-labs-wallet/node-evm": "0.0.225", "viem": "2.38.2"}
+}

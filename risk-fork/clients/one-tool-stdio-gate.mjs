@@ -14,7 +14,13 @@ import { spawn } from 'node:child_process';
 import { TextDecoder } from 'node:util';
 
 import { RISK_FORK_CLIENT_GATE_MAX_GATEWAY_BYTES } from '../src/client-adoption.mjs';
-import { containsSerializedCredentialMaterial } from '../src/util.mjs';
+import {
+  containsSerializedCredentialMaterial,
+  isBoundedTokenMeasurementValue,
+  isTokenMeasurementKey,
+  securityPatternMatches,
+  securityTextVariants,
+} from '../src/util.mjs';
 
 const TOOL_NAME = 'risk_fork_protect';
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -30,6 +36,7 @@ const MAX_JSON_NUMBER_TOKEN_CHARACTERS = 1024;
 const MAX_GATEWAY_STDERR_BYTES = 64 * 1024;
 const SHUTDOWN_GRACE_MS = 500;
 const SHUTDOWN_FORCE_EXIT_MS = 1500;
+const SHUTDOWN_SIGNAL_DRAIN_MS = 100;
 const GATEWAY_REQUEST_ID_PREFIX = 'risk-fork-client-gate:';
 const JSON_NUMBER_TOKEN_PATTERN = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 const AUTHORITY_OR_SECRET_KEY_PATTERN = /(?:^|_)(?:api_key|apikey|access_token|accesstoken|refresh_token|refreshtoken|id_token|idtoken|auth|authorization|authorisation|authority|bearer|credential|credentials|password|passwd|passphrase|secret|client_secret|clientsecret|private_key|privatekey|signing_key|signingkey|seed_phrase|seedphrase|mnemonic|wallet|wallet_key|walletkey|approval|permission|permissions|capability_grant|capabilitygrant|capability_token|capabilitytoken|can_spend|can_execute|can_deploy|can_publish)(?:$|_)/i;
@@ -181,36 +188,43 @@ function isJsonRpcMessage(value) {
   return isPlainObject(value) && value.jsonrpc === '2.0';
 }
 
-function normalizedKey(value) {
-  return value
-    .normalize('NFKC')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^A-Za-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
+function normalizedKeys(value) {
+  const variants = securityTextVariants(value);
+  const normalized = [];
+  for (let index = 0; index < variants.length; index += 1) {
+    normalized[index] = variants[index]
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+  }
+  return normalized;
 }
 
 function isAuthorityOrSecretKey(value) {
-  const normalized = normalizedKey(value);
-  return AUTHORITY_OR_SECRET_KEY_PATTERN.test(normalized)
+  return normalizedKeys(value).some((normalized) => (
+    securityPatternMatches(AUTHORITY_OR_SECRET_KEY_PATTERN, normalized)
     || /(?:^|_)token(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
     || /(?:^|_)(?:api|ai(?:api)?)_?key(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
     || /(?:^|_)key_(?:raw|value|secret|payload|credential)$/.test(normalized)
-    || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized);
+    || /(?:^|_)access_?key_?id(?:_(?:raw|value|secret|payload|credential))?$/.test(normalized)
+  ));
 }
 
 function isCredentialTupleKey(value) {
-  return CREDENTIAL_TUPLE_KEY_PATTERN.test(normalizedKey(value));
+  return normalizedKeys(value).some(
+    (normalized) => securityPatternMatches(CREDENTIAL_TUPLE_KEY_PATTERN, normalized),
+  );
 }
 
 function containsCredentialMaterial(value) {
-  const normalized = normalizedKey(value);
+  const normalized = normalizedKeys(value);
   return containsSerializedCredentialMaterial(value)
-    || normalized === 'authorization'
-    || normalized === 'authorisation'
-    || normalized === 'proxy_authorization'
-    || normalized === 'proxy_authorisation';
+    || normalized.some((candidate) => candidate === 'authorization'
+      || candidate === 'authorisation'
+      || candidate === 'proxy_authorization'
+      || candidate === 'proxy_authorisation');
 }
 
 function decimalRationalKey(token) {
@@ -317,7 +331,10 @@ function encodeBoundedSecretFreeJson(value, boundary, { allowRequestProgressToke
         throw fail(`${boundary} contained an invalid MCP progress token`);
       }
       if (!isStandardProgressToken
-        && (isAuthorityOrSecretKey(key) || containsCredentialMaterial(key))) {
+        && (isAuthorityOrSecretKey(key)
+          || (isTokenMeasurementKey(key)
+            && !isBoundedTokenMeasurementValue(current.value[key]))
+          || containsCredentialMaterial(key))) {
         throw fail(`${boundary} contained a credential-shaped property`);
       }
       let childLocation = 'other';
@@ -535,6 +552,7 @@ async function serve(options) {
   let initializeRequestPending = false;
   let toolsListRequestPending = false;
   let gatewayStderrBytes = 0;
+  let terminationDrainRequired = false;
   const gatewayProcessGroup = process.platform !== 'win32' && Number.isSafeInteger(child.pid)
     ? -child.pid
     : null;
@@ -626,12 +644,28 @@ async function serve(options) {
     }, SHUTDOWN_FORCE_EXIT_MS);
   }
 
-  activeTerminationHandler = (signal) => close(0, `Client gate received ${signal}`);
+  activeTerminationHandler = (signal) => {
+    terminationDrainRequired = true;
+    close(0, `Client gate received ${signal}`);
+  };
 
   child.once('close', () => {
     if (!closing || gatewayTreeExists()) return;
     if (escalationTimer) clearTimeout(escalationTimer);
-    if (!clientOutputBackpressured && forceExitTimer) clearTimeout(forceExitTimer);
+    if (!clientOutputBackpressured && forceExitTimer) {
+      clearTimeout(forceExitTimer);
+      forceExitTimer = null;
+      if (terminationDrainRequired) {
+        // Keep signal listeners active briefly after the gateway exits. On
+        // macOS a repeated terminal SIGHUP can otherwise land during process
+        // teardown after libuv has stopped dispatching the listener, changing
+        // a clean bounded shutdown into signal termination.
+        forceExitTimer = setTimeout(
+          () => process.exit(process.exitCode ?? 0),
+          SHUTDOWN_SIGNAL_DRAIN_MS,
+        );
+      }
+    }
   });
 
   child.stdin.on('error', () => close(78, 'Gateway input pipe failed'));
