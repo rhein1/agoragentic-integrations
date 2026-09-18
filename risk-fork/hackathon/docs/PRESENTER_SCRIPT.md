@@ -3,7 +3,9 @@
 > **DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION**
 
 Presentation scope updated September 18, 2026, at the owner's direction. Submit
-and present Risk Fork only, using two existing scenarios from its demo engine.
+and present Risk Fork only, using the existing malicious-MCP scenario plus a
+separate local synthetic payment-proposal proof over the reviewed Risk Fork
+core.
 Interchange, Governed Agent, Governed Signals, Flash, Bankr and Dynamic are not
 part of this submission. This script changes the presentation sequence; it does
 not add a new runtime, Next-button UI, provider integration or live run.
@@ -28,7 +30,7 @@ The source inspected for this revision was integrations commit
 | Main case | Existing scenario | Actual boundary |
 | --- | --- | --- |
 | Hostile tool interaction | `e2b-malicious-mcp-containment` | Real controller and E2B adapter; injected fake SDK and local malicious stdio subprocess. No real E2B provider allocation or OS-isolation proof. |
-| Consequential action | `irreversible-deployment-proposal` | Existing local-reference protocol; IRREVERSIBLE work leaves only as a consequential-action proposal. No deployment or clean commit. |
+| Synthetic payment proposal | Marketplace `runtime-risk-fork-payment-proof.mjs`, using the reviewed Risk Fork core and the historical/superseded `irreversible-deployment-proposal` fixture internally | Six fixed local preparation checks for synthetic `$50` to `$60,000` DEMOUSDC; no signer, payment, settlement, provider qualification or production protection. |
 
 The first case is explicitly **FAKE E2B — LOCAL CONTRACT SIMULATION — NOT AN
 ISOLATION BOUNDARY**. Do not call it a live cloud attack, live MicroVM, or general
@@ -60,32 +62,44 @@ if ($LASTEXITCODE -ne 0) { throw 'Unable to verify checkout cleanliness.' }
 if ($checkoutChanges.Count -ne 0) { throw 'Checkout has unreviewed changes.' }
 ```
 
-From the repository root, first inspect `doctor` and the plans:
+From the repository root, first inspect `doctor` and the malicious-MCP plan. The
+payment proof is a separate Marketplace-side operator check; it is not a new
+Risk Fork scenario or an integration-provider run:
 
 ```powershell
 node risk-fork/hackathon/bin/risk-fork-demo.mjs doctor
 if ($LASTEXITCODE -ne 0) { throw 'Local readiness check failed.' }
 node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario e2b-malicious-mcp-containment
 if ($LASTEXITCODE -ne 0) { throw 'Malicious-MCP plan failed.' }
-node risk-fork/hackathon/bin/risk-fork-demo.mjs plan --scenario irreversible-deployment-proposal
-if ($LASTEXITCODE -ne 0) { throw 'Deployment-proposal plan failed.' }
 ```
 
-Then record both cases and start the existing recorder:
+Then record the malicious-MCP case and run the separate payment-preparation proof.
+For this proof, `$kit` must be the pinned, verified offline-kit root; the
+Marketplace script refuses an unreviewed kit:
 
 ```powershell
-node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario e2b-malicious-mcp-containment
+$marketplaceRoot = 'C:\projects\Agent Marketplace'
+$kit = (Get-Location).Path
+$mcpRecord = Join-Path $kit 'risk-fork-malicious-mcp-record.json'
+$paymentRecord = Join-Path $kit 'risk-fork-payment-proof.json'
+node (Join-Path $kit 'risk-fork/hackathon/bin/risk-fork-demo.mjs') run --scenario e2b-malicious-mcp-containment *> $mcpRecord
 if ($LASTEXITCODE -ne 0) { throw 'Malicious-MCP run needs investigation. Do not claim success.' }
-node risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario irreversible-deployment-proposal
-if ($LASTEXITCODE -ne 0) { throw 'Deployment-proposal run needs investigation. Do not claim success.' }
-node risk-fork/hackathon/bin/risk-fork-demo.mjs serve
+Push-Location $marketplaceRoot
+try {
+  node (Join-Path $marketplaceRoot 'scripts/runtime-risk-fork-payment-proof.mjs') --kit $kit *> $paymentRecord
+  if ($LASTEXITCODE -ne 0) { throw 'Payment-preparation proof needs investigation. Do not claim success.' }
+} finally {
+  Pop-Location
+}
+node (Join-Path $kit 'risk-fork/hackathon/bin/risk-fork-demo.mjs') serve
 ```
 
 Open the exact token-bearing loopback launch URL printed by `serve`. Keep its
 local token private. The recorder loads retained records at startup; it is a
 **REPLAY**, not a newly executing provider session. Match the scenario and run ID
-with the output of the two commands above; do not silently select an older good
-run after a new failure. Restart the recorder after recording a new run.
+with the malicious-MCP record above; do not silently select an older good run
+after a new failure. The payment report is separate local preparation evidence,
+not a payment receipt. Restart the recorder after recording a new run.
 
 The existing ten-run quota includes earlier runs. If exhausted, preserve needed
 evidence and follow [owned-root cleanup instructions](CLEANUP_TROUBLESHOOTING.md).
@@ -128,39 +142,53 @@ JSON result alone is not a guarantee of semantic safety.
 
 **Takeaway: "Risky work gets a separate place to run, not a copy of your authority."**
 
-## Case 2 — A useful proposal is not permission to deploy
+## Case 2 — A small probe is not permission for `$60,000`
 
 Transition:
 
 > "Malicious tools are one reason for Risk Fork. Ordinary useful work is another.
-> A trusted helper can still propose a consequential action. Now the requested
-> operation is a deployment. Preparing it must not mean publishing it."
+> A trusted helper can still propose a consequential action. Here the requested
+> operation is a synthetic payment proposal. Preparing it must not mean paying
+> anyone."
 
-Use `irreversible-deployment-proposal`, not a newly invented money-transfer
-fixture. The existing fixture binds a synthetic release, target, provider and
-arguments, with commit type `CONSEQUENTIAL_ACTION_PROPOSAL`.
+Use the separate Marketplace `scripts/runtime-risk-fork-payment-proof.mjs`
+against the reviewed kit. It exercises the existing `RiskForkController`, local
+reference adapter, execution binding, and clean-side validator with synthetic
+amounts, chain, asset and recipient values. It does not load a wallet, call a
+provider, send a payment, or qualify a provider.
 
 | Beat | Point to | What to say |
 | --- | --- | --- |
-| 1. Identify the consequence | IRREVERSIBLE classification and deployment reason | "Trusting the helper does not make deploying its result a read-only action." |
-| 2. Prepare under the boundary | Savepoint/fork lifecycle and constrained candidate | "The child prepares a proposal; it does not receive a deploy credential." |
-| 3. Validate the permitted return | Proposal type and binding evidence | "Only the allowed proposal crosses back. It is not a token granting execution." |
-| 4. Verify cleanup separately | Recorded request, absence and cleanup status | "Preparation is not complete merely because a worker says it finished." |
-| 5. Stop before the real effect | `prepared_not_committed` and `clean_commit_performed: false` | "Nothing was deployed. A separate clean-side authorization would be needed to perform the action." |
+| 1. Prepare the `$50` proposal | First fixed local preparation check and binding | "The child prepares a synthetic `$50` DEMOUSDC proposal; no payment occurs." |
+| 2. Reject an amount escalation | `$60,000` under the `$50` binding | "The clean-side validator rejects an amount above the bound proposal." |
+| 3. Reject recipient drift | Lookalike recipient argument | "Changing the recipient is not the same proposal, so the binding rejects it." |
+| 4. Reject chain drift | Changed chain under the `$60,000` proposal | "The validator rejects a changed chain rather than broadening authority." |
+| 5. Reject expiry drift | Expired `$60,000` binding | "An expired binding cannot authorize the proposal." |
+| 6. Show the positive control | Fresh exact `$60,000` preparation | "A fresh exact proposal can be prepared locally; that is still not payment." |
 
-**Takeaway: "Ready to review is not authorized to deploy."**
+**Takeaway: "Ready to review is not authorized to pay."**
 
-Do not animate a production release or say an authorized deployment completed.
-The current demo deliberately has no clean commit. For a technical question about
-actual bounded file work, `high-filesystem-write` already writes a synthetic file
-inside the local-reference copy. For a question about stale authority,
-`stale-governance-binding` is an existing negative fixture. These are optional
-rehearsal/Q&A checks, not more chapters or a new product to build before the show.
+Inspect lifecycle events and cleanup for all six outcomes. They are local
+preparation evidence only: no signer, payment,
+settlement, provider qualification, clean commit or production protection is
+established. Do not narrate a payment, execution, settlement, provider approval
+or live protection. The report's receipt-shaped fields are protocol evidence,
+not a payment receipt.
+
+### Superseded historical case — deployment proposal
+
+The old `irreversible-deployment-proposal` chapter is retained only as a fixture
+and regression-test scenario. It is historical/superseded for the active show;
+do not run, narrate or relabel it as the current financial proof. Its boundary
+remains local proposal preparation with no deployment, no clean commit and no
+production action.
 
 ## Presenter acceptance and stop conditions
 
-Before the event, rehearse both commands on the actual laptop and inspect the
-current retained evidence. This document does not record a fresh successful run.
+Before the event, rehearse both active evidence paths on the actual laptop and
+inspect the current retained evidence. This document does not record a fresh
+successful run. Inspect the malicious-MCP recorder record and the separate
+payment-proof report; the latter must show all six fixed preparation outcomes.
 Keep the simulation banner and replay label visible. Never infer success from
 an exit code or screenshot alone: inspect the scenario, decision, validation,
 cleanup and receipt binding in the same run. A missing artifact, recorder failure,
