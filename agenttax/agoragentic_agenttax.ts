@@ -737,6 +737,17 @@ export class AgoragenticAgentTaxClient {
     const executionSuccess = hasExecutionSuccess ? execution.success : undefined;
     const malformedSuccessFlag = hasExecutionSuccess
       && typeof executionSuccess !== "boolean";
+    const hasExecutionQuoteId = hasOwn(execution, "quote_id");
+    const executionQuoteId = hasExecutionQuoteId ? execution.quote_id : undefined;
+    if (hasExecutionQuoteId
+      && (typeof executionQuoteId !== "string" || executionQuoteId !== quoteId)) {
+      throw new TaxReviewedExecutionError({
+        code: "tax_reviewed_execution_outcome_unknown",
+        quoteId,
+        httpStatus: response.httpStatus,
+        serverCode: "execution_quote_id_mismatch",
+      });
+    }
     const contradictoryEnvelope = (pendingApproval
       && normalizedStatus !== undefined
       && normalizedStatus !== "pending_approval")
@@ -746,6 +757,7 @@ export class AgoragenticAgentTaxClient {
       || (executionError !== undefined
         && executionError !== "pending_approval"
         && successfulStatus)
+      || (pendingApproval && hasExecutionSuccess)
       || (executionSuccess === false && !rejectedStatus)
       || (executionSuccess === true && rejectedStatus);
     if (malformedError || malformedSuccessFlag || contradictoryEnvelope) {
@@ -831,9 +843,15 @@ export class AgoragenticAgentTaxClient {
     this.#pendingResults.delete(pendingResult);
     const result = cloneStrictJsonObject(pendingResult, "pendingResult");
     const execution = cloneStrictJsonObject(result.execution, "pendingResult.execution");
+    const normalizedPendingError = typeof execution.error === "string"
+      ? execution.error.toLowerCase()
+      : undefined;
+    const normalizedPendingStatus = typeof execution.status === "string"
+      ? execution.status.toLowerCase()
+      : undefined;
     const pendingApproval = result.execution_state === "pending_approval"
-      && (execution.error === "pending_approval"
-        || execution.status === "pending_approval");
+      && (normalizedPendingError === "pending_approval"
+        || normalizedPendingStatus === "pending_approval");
     if (!pendingApproval) {
       throw new TypeError("pendingResult is not a pending_approval execution result.");
     }

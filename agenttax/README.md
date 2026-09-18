@@ -90,7 +90,7 @@ if (result.execution_state === "pending_approval") {
 
 ## Ambiguous execution outcome
 
-A connection failure, 5xx response, non-JSON response, unknown 2xx status, empty HTTP 202 response, or malformed success envelope after `POST /api/execute` may mean the paid request reached the server. Successful execution requires an explicit `success` or `completed` status plus a non-empty invocation ID. Pending approval requires an explicit `pending_approval` indicator plus an approval ID. Otherwise the wrapper throws `TaxReviewedExecutionError` with:
+A connection failure, 5xx response, non-JSON response, unknown 2xx status, empty HTTP 202 response, returned quote-ID mismatch, or malformed success envelope after `POST /api/execute` may mean the paid request reached the server. Successful execution requires an explicit `success` or `completed` status plus a non-empty invocation ID. Pending approval requires an explicit `pending_approval` indicator plus an approval ID and cannot simultaneously claim success. Any returned `quote_id` must equal the reviewed quote exactly. Otherwise the wrapper throws `TaxReviewedExecutionError` with:
 
 - `code: "tax_reviewed_execution_outcome_unknown"`
 - the exact `quote_id`

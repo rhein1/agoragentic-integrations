@@ -63,6 +63,7 @@ test("approved execution consumes the exact reviewed quote and immutable input",
       if (url.endsWith("/commerce/quotes")) return response(quoteEnvelope());
       return response({
         status: "completed",
+        quote_id: "quote-reviewed-1",
         invocation_id: "inv-1",
         receipt: { id: "rcpt-1" },
       });
@@ -269,16 +270,17 @@ test("pending supervisor approval can resume the same reviewed quote", async () 
       executeAttempts += 1;
       if (executeAttempts === 1) {
         return response({
-          status: "pending_approval",
+          status: "PENDING_APPROVAL",
+          quote_id: "quote-reviewed-1",
           approval_id: "approval-1",
         }, { status: 202 });
       }
-      return response({ status: "completed", invocation_id: "inv-1" });
+      return response({ status: "completed", quote_id: "quote-reviewed-1", invocation_id: "inv-1" });
     },
   });
 
   const pending = await client.executeWithTaxReview(executionRequest(), approval);
-  assert.equal(pending.execution.status, "pending_approval");
+  assert.equal(pending.execution.status, "PENDING_APPROVAL");
   assert.equal(pending.execution.approval_id, "approval-1");
   assert.equal(pending.execution_state, "pending_approval");
   const completed = await client.retryPendingTaxReview(pending);
@@ -459,6 +461,38 @@ test("2xx execution error and malformed envelopes are not reported as success", 
       },
       code: "tax_reviewed_execution_outcome_unknown",
       serverCode: "contradictory_execution_envelope",
+    },
+    {
+      name: "pending approval cannot also claim success",
+      body: {
+        status: "pending_approval",
+        success: true,
+        approval_id: "approval-contradictory",
+      },
+      httpStatus: 202,
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "contradictory_execution_envelope",
+    },
+    {
+      name: "completed response cannot substitute the reviewed quote",
+      body: {
+        status: "completed",
+        quote_id: "quote-other",
+        invocation_id: "inv-other",
+      },
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "execution_quote_id_mismatch",
+    },
+    {
+      name: "pending response cannot substitute the reviewed quote",
+      body: {
+        status: "pending_approval",
+        quote_id: "quote-other",
+        approval_id: "approval-other",
+      },
+      httpStatus: 202,
+      code: "tax_reviewed_execution_outcome_unknown",
+      serverCode: "execution_quote_id_mismatch",
     },
     {
       name: "completed with explicit failure and structured error",
