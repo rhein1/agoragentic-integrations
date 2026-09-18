@@ -1,23 +1,21 @@
-# Runtime: Interchange + Risk Fork
+# Runtime: Risk Fork
 
 > **DEMO ONLY — LOCAL PROTOCOL SIMULATOR — NOT AN ISOLATION BOUNDARY — NO LIVE PROTECTION**
 
-Presentation scope updated September 17, 2026, at the owner's direction.
-Keep the existing full Interchange demonstration unchanged. Present Risk Fork
-as the second product, with two connected cases from the existing demo engine.
-Do not present Governed Agent / Governed Signals / Flash or build a replacement
-trading scenario for this show. This script changes the presentation sequence;
-it does not add a new runtime, Next-button UI, provider integration or live run.
+Presentation scope updated September 18, 2026, at the owner's direction. Submit
+and present Risk Fork only, using two existing scenarios from its demo engine.
+Interchange, Governed Agent, Governed Signals, Flash, Bankr and Dynamic are not
+part of this submission. This script changes the presentation sequence; it does
+not add a new runtime, Next-button UI, provider integration or live run.
 
 ## The show, in one sentence
 
-**Interchange explains the governed job between agents; Risk Fork explains how
-risky work can be prepared without handing it the trusted parent's authority.**
+**Risk Fork shows how risky work can be prepared without handing it the trusted
+parent's authority.**
 
-Shared branding is not a claim that Interchange currently invokes Risk Fork.
-Do not narrate an integrated end-to-end flow unless that exact call path and its
-evidence have separately been exercised. An Interchange policy check, capability
-verification sandbox, or signed receipt is not a Risk Fork lifecycle by itself.
+Do not narrate an Interchange-to-Risk-Fork flow. An Interchange policy check,
+capability verification sandbox, or signed receipt is not a Risk Fork lifecycle
+by itself and is outside this submission.
 
 ## What already exists
 
@@ -29,7 +27,7 @@ The source inspected for this revision was integrations commit
 
 | Main case | Existing scenario | Actual boundary |
 | --- | --- | --- |
-| Hostile tool interaction | `e2b-malicious-mcp-containment` | Real controller and E2B adapter; injected fake SDK and local malicious stdio subprocess. No E2B allocation or OS-isolation proof. |
+| Hostile tool interaction | `e2b-malicious-mcp-containment` | Real controller and E2B adapter; injected fake SDK and local malicious stdio subprocess. No real E2B provider allocation or OS-isolation proof. |
 | Consequential action | `irreversible-deployment-proposal` | Existing local-reference protocol; IRREVERSIBLE work leaves only as a consequential-action proposal. No deployment or clean commit. |
 
 The first case is explicitly **FAKE E2B — LOCAL CONTRACT SIMULATION — NOT AN
@@ -39,10 +37,28 @@ its modeled denials are not eight confirmed cloud exploits prevented.
 
 ## Preparation: run the existing implementation
 
-Use a reviewed, dependency-installed source checkout or verified offline kit.
-Use the [quickstart](QUICKSTART.md) for installation. Do not reinstall dependencies
+Use either a clean checkout pinned to the exact approved 40-character commit or
+a verified commit-bound offline kit. For a source checkout, require a successful
+`Risk Fork Release Candidate` workflow for that exact commit and record the
+commit with the rehearsal evidence. For an offline kit, verify its `.sha256` and
+`.build.json` as specified by the [release runbook](RELEASE_RUNBOOK.md), then run
+`verify-offline-kit`; the manifest's `source_commit` is the source of truth. Use
+the [quickstart](QUICKSTART.md) for installation. Do not reinstall dependencies
 inside an extracted offline kit. Use a credential-free environment; do not load
 production `.env` files, wallet keys, or an E2B key.
+
+For a source checkout, fail closed before rehearsal:
+
+```powershell
+$reviewedCommit = 'REPLACE_WITH_APPROVED_40_CHARACTER_COMMIT'
+$currentCommit = git rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or $reviewedCommit -notmatch '^[0-9a-f]{40}$' -or $currentCommit -ne $reviewedCommit) {
+  throw 'Checkout is not pinned to the approved source commit.'
+}
+$checkoutChanges = @(git status --porcelain)
+if ($LASTEXITCODE -ne 0) { throw 'Unable to verify checkout cleanliness.' }
+if ($checkoutChanges.Count -ne 0) { throw 'Checkout has unreviewed changes.' }
+```
 
 From the repository root, first inspect `doctor` and the plans:
 
@@ -158,12 +174,10 @@ Actual E2B qualification remains a separate task under the
 The word "fork" does not mean an external payment, disclosure or deployment can
 be undone afterward. Consequential authority stays on the clean side.
 
-## Track scope
+## Submission scope
 
-The owner-supplied Runtime Hacker Runbook makes Bankr integration optional.
-Keep the established Interchange presentation as the finance/commerce entry;
-show Risk Fork as the distinct cybersecurity product. A shared presentation does
-not itself satisfy a sponsor requirement. Dynamic requires a working
-Dynamic-backed wallet/payment action; this local show does not demonstrate one.
-Flash is not in this presentation. Do not spend remaining preparation time adding
-social trading merely to retain a third demo.
+The current owner direction is a Risk-Fork-only submission. Do not include or
+claim Bankr, Dynamic, Interchange, Flash, Governed Agent or Governed Signals in
+the submitted demo or narration. Their presence elsewhere in the repository is
+not submission evidence. If the owner changes the plan later, update and review
+the submission artifacts explicitly; do not widen this script by inference.
