@@ -61,3 +61,6 @@ test('rejects malformed chain evidence and authority shapes', () => {
   delete missingAuthority.external_experiments[0].authority_after.money;
   assert.throws(() => validateJsonSchema(missingAuthority, schema), /authority_after\.money is required/);
 });
+
+// Exercise the read-only Bankr client through the existing hosted Interchange gate.
+import './bankr-interchange.test.mjs';
