@@ -35,4 +35,4 @@ Exit 0 means the requested observation completed; for `status` it additionally r
 
 Save command output and the exact source revision. Note the host, time, HTTP/cache evidence, prompt, observed result and any failure. Redact account/user details. Do not include credentials, private receipts or usable signatures. The report's no-effect claims describe this helper's request policy, not an independent audit of server internals.
 
-Use the [demo-day guide](../hackathon-2026-09/PRESENTER_GUIDE.md) and [evidence checklist](../hackathon-2026-09/READINESS.md). No new custody, signing, paid execution, token, federation, deployment or production-activation authority is granted.
+The [former Interchange demo-day guide](../hackathon-2026-09/PRESENTER_GUIDE.md) and [evidence checklist](../hackathon-2026-09/READINESS.md) are archived rehearsal material, not the current Risk-Fork-only submission plan. No new custody, signing, paid execution, token, federation, deployment or production-activation authority is granted.

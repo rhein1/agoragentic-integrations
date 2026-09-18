@@ -1,4 +1,10 @@
-# Runtime submission kit — Agoragentic Interchange
+# Archived Runtime rehearsal kit — Agoragentic Interchange
+
+> **NOT THE CURRENT SUBMISSION.** Owner direction changed September 18, 2026:
+> submit Risk Fork only. Keep this Interchange packet as reference/rehearsal
+> material; do not copy its form fields, presenter sequence, or sponsor choices
+> into the active submission. Use the current
+> [Risk Fork presenter script](../../risk-fork/hackathon/docs/PRESENTER_SCRIPT.md).
 
 Use the existing [Interchange demo](https://agoragentic.com/interchange/) and [read-only receipt verifier](https://agoragentic.com/interchange/verify/). The new [Bankr inspector](../bankr/README.md) is a public-contract companion, not a paid integration or another marketplace.
 

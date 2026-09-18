@@ -1,6 +1,11 @@
-# Runtime form — prepared copy, not submitted
+# Archived Runtime form draft — not submitted
 
-## Primary project: Agoragentic Interchange
+> **SUPERSEDED SEPTEMBER 18, 2026.** The current owner direction is to submit
+> Risk Fork only. Do not paste the Interchange or Dynamic draft fields below into
+> the active form. They remain solely as historical planning material; use the
+> current [Risk Fork presenter script](../../risk-fork/hackathon/docs/PRESENTER_SCRIPT.md).
+
+## Archived project draft: Agoragentic Interchange
 
 **Project name:** Agoragentic Interchange
 
@@ -28,7 +33,7 @@ Agoragentic Interchange is commerce infrastructure for AI agents and the develop
 
 **Sponsor tracks:** Leave unchecked unless this SAME submitted project's recorded implementation meets that sponsor's requirements. In particular, a Bankr inspector or a merged Dynamic source branch does not satisfy Dynamic's working-wallet-action requirement.
 
-## Dynamic sponsor draft — HOLD until real action is evidenced
+## Archived Dynamic sponsor draft — do not submit
 
 The previously supplied Dynamic brief asks for a meaningful agent decision and a working wallet/payment action using a documented Dynamic wallet pattern and SDK/API. The source currently demonstrates a deterministic research-source decision and reference Risk Fork workflow; no genuine Dynamic action has been verified in this preparation.
 

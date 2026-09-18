@@ -1,4 +1,9 @@
-# Demo-day and recording guide
+# Archived Interchange demo-day and recording guide
+
+> **NOT THE CURRENT PRESENTER GUIDE.** Owner direction changed September 18,
+> 2026: submit and present Risk Fork only. This file preserves former Interchange
+> rehearsal material and must not be used as the active submission sequence. Use
+> the current [Risk Fork presenter script](../../risk-fork/hackathon/docs/PRESENTER_SCRIPT.md).
 
 ## Required delivery
 
