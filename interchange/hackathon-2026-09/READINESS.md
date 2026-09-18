@@ -1,4 +1,9 @@
-# Submission readiness — explicit evidence levels
+# Archived Interchange readiness — explicit evidence levels
+
+> **NOT THE CURRENT SUBMISSION CHECKLIST.** Owner direction changed September
+> 18, 2026: submit Risk Fork only. The checks below remain historical Interchange
+> evidence and do not authorize or describe the active submission. Use the
+> current [Risk Fork presenter script](../../risk-fork/hackathon/docs/PRESENTER_SCRIPT.md).
 
 ## Confirmed from September 14 Runtime screenshots
 
