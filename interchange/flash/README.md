@@ -1,6 +1,6 @@
-# Governed agent / Flash order-review candidate
+# Governed agent / Flash order-review reference
 
-A narrow, no-execution companion for the shared Runtime hackathon showcase. This does not add a trading strategy, general financial agent, wallet integration, or live-order route. It is not a replacement for Risk Fork or Interchange.
+A narrow, no-execution reference retained for future qualification. **It is not submission material; the current hackathon plan is Risk Fork only.** This does not add a trading strategy, general financial agent, wallet integration, or live-order route. It is not a replacement for Risk Fork or Interchange.
 
 ## Two deliberately separate paths
 
@@ -18,7 +18,7 @@ node interchange/flash/quote-only.mjs plan
 
 The tests use injected HTTP responses. Actual Flash credential issuance, provider response compatibility and host/network behavior remain untested. The new tests are loaded by the existing Interchange production-research gate; no workflow edit is required.
 
-## Optional, separately approved quote observation
+## Optional, separately approved quote observation (not needed for the submission)
 
 The endpoint is fixed to `POST https://flash.definitive.fi/v1/quote`. Before approving this operation, review the exact request plan and the provider's current API terms and quota implications. Quotes may consume provider quota even though no funds move. Supply a dedicated `FLASH_API_KEY` only through the operator's private environment. Never put it in the website, chat, repository, recording, logs or a downloadable configuration.
 
@@ -32,7 +32,7 @@ Remove-Item Env:AGORA_FLASH_QUOTE_APPROVAL
 
 No key example is included. The client expects the owner to provision `FLASH_API_KEY` privately. It uses fixed Base WETH/USDC market parameters, no funder address, no arbitrary URL/headers, no credential forwarding, no redirects and no automatic retry. Quantities are capped at 10 USDC for a buy or 0.01 WETH for a sell. These are quote-request caps, not authorization to trade. Flash documentation lists `funderAddress` as optional; whether this exact quote works for an actual account must still be qualified.
 
-Only known response fields are projected. Setup, permit and order-signing payloads are deliberately not returned to the caller or executed. Reported output amounts are retained as strings with **amount-unit qualification required**; this client does not silently decide their units, compute a verified exchange rate or claim a slippage/allowance test against an uninterpreted provider response. Stop on unrecognized fields, authentication/payment challenges, redirection, oversize, timeout or substitution.
+The client pins the current documented top-level response fields and the scalar fields it projects. Known setup, permit and order-signing containers are treated as opaque material: their presence is reported, but their contents are deliberately not returned to the caller or executed. Reported amounts are retained as strings with **amount-unit qualification required**; this client does not silently decide their units, compute a verified exchange rate or claim a slippage/allowance test against an uninterpreted provider response. The spent leg must canonically equal the requested quantity. Stop on unrecognized or incomplete response fields, authentication/payment challenges, redirection, oversize, timeout or substitution.
 
 ## Before any future execution adapter
 
@@ -40,7 +40,7 @@ Qualify the exact quote and setup schema, allowance/spender chain, signature-bou
 
 ## Source basis and remaining gaps
 
-Official documentation inspected September 15, 2026:
+Official documentation and OpenAPI inspected September 18, 2026:
 
 - [Placing orders](https://flash.definitive.fi/docs/placing-orders): `buy` qty is contra asset spent; `sell` qty is target asset sold. Addresses identify assets, not just tickers.
 - [Quote API](https://flash.definitive.fi/docs/api-reference/flash/quote): request shape, optional funder, quote and setup fields. Only the selected known subset is used; actual output-unit interpretation remains unqualified.

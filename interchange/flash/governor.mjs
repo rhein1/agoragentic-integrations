@@ -9,6 +9,8 @@ export const ASSETS = Object.freeze({
 export const FLASH_MODES = Object.freeze(['clean','over-budget','wrong-asset','recipient-change','unlimited-approval','expired','revoked','offchain-protection']);
 const freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};
 function fail(s){throw new Error(s);}
+const plain=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const exactKeys=(value,keys)=>plain(value)&&Object.keys(value).length===keys.length&&Object.keys(value).every(k=>keys.includes(k));
 export function atomic(value,decimals){
   if(!Number.isInteger(decimals)||decimals<0||decimals>18||typeof value!=='string'||value.length>40||!/^(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value))fail('invalid_decimal');
   const [whole,fraction='']=value.split('.');if(fraction.length>decimals)fail('excess_precision');
@@ -45,12 +47,17 @@ export function reviewFixture(serialized,now=Date.now()){
   if(typeof serialized!=='string'||serialized.length>8192||!Number.isSafeInteger(now)||now<0)fail('invalid_review_input');
   let pair;try{pair=JSON.parse(serialized);}catch{fail('invalid_json');}
   const o=pair?.owner,q=pair?.quote;
-  if(!o||!q||o.schema!=='agoragentic.flash.review-mandate.v1'||q.schema!=='agoragentic.flash.unsigned-quote-fixture.v1'||q.synthetic!==true)fail('fixture_schema_required');
+  const allowedPair=['owner','quote','symbol','mode'];
   const allowedO=['schema','request','network','spendAsset','spendCeilingAtomic','recipient','revoked','requireIndependentPriceProtection'];
   const allowedQ=['schema','synthetic','network','side','spendAsset','spendAtomic','recipient','requiredAllowanceAtomic','quotedAt','expiresAt','priceProtection'];
-  if(Object.keys(o).some(k=>!allowedO.includes(k))||Object.keys(q).some(k=>!allowedQ.includes(k)))fail('unknown_review_fields');
+  const allowedR=['targetChain','contraChain','targetAsset','contraAsset','side','qty','orderType','maxSlippage','maxPriceImpact','forceMinimalAllowance'];
+  if(!plain(pair)||!plain(o)||!plain(q)||!plain(o.request))fail('fixture_schema_required');
+  if([[pair,allowedPair],[o,allowedO],[q,allowedQ],[o.request,allowedR]].some(([value,keys])=>Object.keys(value).some(k=>!keys.includes(k))))fail('unknown_review_fields');
+  if(!exactKeys(pair,allowedPair)||!exactKeys(o,allowedO)||!exactKeys(q,allowedQ)||!exactKeys(o.request,allowedR))fail('fixture_schema_required');
+  if(o.schema!=='agoragentic.flash.review-mandate.v1'||q.schema!=='agoragentic.flash.unsigned-quote-fixture.v1'||q.synthetic!==true)fail('fixture_schema_required');
   if(typeof o.revoked!=='boolean'||typeof o.requireIndependentPriceProtection!=='boolean')fail('invalid_authority_state');
-  const request=quoteRequest(o.request),symbol=request.side==='buy'?'USDC':'WETH';
+  const request=quoteRequest({side:o.request.side,qty:o.request.qty}),symbol=request.side==='buy'?'USDC':'WETH';
+  if(allowedR.some(k=>o.request[k]!==request[k])||pair.symbol!==symbol||!FLASH_MODES.includes(pair.mode))fail('request_binding_unrecognized');
   const uint=x=>typeof x==='string'&&/^(0|[1-9][0-9]{0,77})$/.test(x);
   if(![o.spendCeilingAtomic,q.spendAtomic,q.requiredAllowanceAtomic].every(uint))fail('invalid_atomic_amount');
   const checks=[];const check=(id,label,passed)=>checks.push({id,label,passed:passed===true});
