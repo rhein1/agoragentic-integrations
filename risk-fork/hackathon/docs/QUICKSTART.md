@@ -161,3 +161,7 @@ verification false, and exits with code 2.
 Continue with
 [cleanup and troubleshooting](./CLEANUP_TROUBLESHOOTING.md) if any cleanup or
 manifest result is not verified.
+
+Reviewers starting from the currently published older alpha ZIP can follow
+[the no-provider-spend self-test](./REVIEWER_SELF_TEST.md). Its optional local
+Docker MCP experiment is separate from this default fake-E2B path.
