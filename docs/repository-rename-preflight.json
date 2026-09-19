@@ -6,17 +6,17 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 177,
-    "occurrence_count": 345,
+    "file_count": 182,
+    "occurrence_count": 365,
     "category_file_counts": {
       "installer_or_clone": 31,
       "machine_discovery": 61,
       "package_registry_metadata": 23,
-      "public_documentation": 85,
+      "public_documentation": 89,
       "raw_content_url": 2,
       "release_or_provenance": 17,
       "reusable_action": 2,
-      "source_or_test": 24
+      "source_or_test": 25
     }
   },
   "reusable_action_references": [
@@ -143,15 +143,28 @@
       ]
     },
     {
+      "path": ".agents/skills/agoragentic-use/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        136,
+        147,
+        148,
+        149
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": ".agents/skills/agoragentic/SKILL.md",
       "occurrences": 6,
       "line_numbers": [
-        34,
-        38,
+        35,
         39,
-        41,
+        40,
         42,
-        43
+        43,
+        44
       ],
       "categories": [
         "public_documentation"
@@ -247,15 +260,28 @@
       ]
     },
     {
+      "path": ".cursor/rules/agoragentic-use.mdc",
+      "occurrences": 4,
+      "line_numbers": [
+        138,
+        149,
+        150,
+        151
+      ],
+      "categories": [
+        "source_or_test"
+      ]
+    },
+    {
       "path": ".cursor/rules/agoragentic.mdc",
       "occurrences": 6,
       "line_numbers": [
-        36,
-        40,
+        37,
         41,
-        43,
+        42,
         44,
-        45
+        45,
+        46
       ],
       "categories": [
         "source_or_test"
@@ -362,15 +388,28 @@
       ]
     },
     {
+      "path": ".opencode/skills/agoragentic-use/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        136,
+        147,
+        148,
+        149
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": ".opencode/skills/agoragentic/SKILL.md",
       "occurrences": 6,
       "line_numbers": [
-        34,
-        38,
+        35,
         39,
-        41,
+        40,
         42,
-        43
+        43,
+        44
       ],
       "categories": [
         "public_documentation"
@@ -653,15 +692,28 @@
       ]
     },
     {
+      "path": "claude-code/plugin/skills/agoragentic-use/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        136,
+        147,
+        148,
+        149
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "claude-code/plugin/skills/agoragentic/SKILL.md",
       "occurrences": 6,
       "line_numbers": [
-        34,
-        38,
+        35,
         39,
-        41,
+        40,
         42,
-        43
+        43,
+        44
       ],
       "categories": [
         "public_documentation"
@@ -1699,7 +1751,7 @@
       "path": "scripts/generate-skill-pack.mjs",
       "occurrences": 3,
       "line_numbers": [
-        61
+        66
       ],
       "categories": [
         "source_or_test"
@@ -1801,12 +1853,12 @@
       "path": "SKILL.md",
       "occurrences": 6,
       "line_numbers": [
-        34,
-        38,
+        35,
         39,
-        41,
+        40,
         42,
-        43
+        43,
+        44
       ],
       "categories": [
         "public_documentation"
@@ -1891,15 +1943,28 @@
       ]
     },
     {
+      "path": "skills/agoragentic-use/SKILL.md",
+      "occurrences": 4,
+      "line_numbers": [
+        136,
+        147,
+        148,
+        149
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
       "path": "skills/agoragentic/SKILL.md",
       "occurrences": 6,
       "line_numbers": [
-        34,
-        38,
+        35,
         39,
-        41,
+        40,
         42,
-        43
+        43,
+        44
       ],
       "categories": [
         "public_documentation"
