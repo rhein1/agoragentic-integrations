@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rm,
@@ -737,13 +738,17 @@ test('client adoption planning rejects a paused same-size partial version by rev
     const secondVersion = Buffer.alloc(size, 0x62);
     const firstHash = `sha256:${createHash('sha256').update(firstVersion).digest('hex')}`;
     const secondHash = `sha256:${createHash('sha256').update(secondVersion).digest('hex')}`;
-    // Model a paused same-size overwrite without a path write after an open handle.
-    const partialVersion = Buffer.concat([
-      secondVersion.subarray(0, size / 2),
-      firstVersion.subarray(size / 2),
-    ]);
-    assert.equal(partialVersion.length, size);
-    await writeFile(gateway, partialVersion);
+    await writeFile(gateway, firstVersion);
+
+    const handle = await open(gateway, 'r+');
+    try {
+      const partial = secondVersion.subarray(0, size / 2);
+      const { bytesWritten } = await handle.write(partial, 0, partial.length, 0);
+      assert.equal(bytesWritten, partial.length);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
 
     for (const reviewedHash of [firstHash, secondHash]) {
       const refused = runCli([
