@@ -9,7 +9,6 @@ import {
   readFile,
   readdir,
   rm,
-  stat,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -934,7 +933,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         throw error;
       }
     }
-    return record.destroy_promise;
+    return await record.destroy_promise;
   }
 
   async verifyDestroyed(input = {}) {
