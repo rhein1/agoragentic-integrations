@@ -1,4 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {prepareAgent,finishPreview,sha} from '../examples/runtime-dynamic/core.mjs';
 import {rehearse,options} from '../examples/runtime-dynamic/public/agent.mjs';
 import {authorize,dispatchOnce} from '../examples/runtime-dynamic/live/authorization.mjs';
@@ -38,3 +39,37 @@ function mockSdk({chain=84532,wrongRecipient=false}={}){
 test('real SDK wrapper performs one bound sign and broadcast under injected SDK',async()=>{const m=mockSdk(),p=await make(),a=authorize(p,policy(p),NOW);const action=await createDynamicAction({environment_id:'fixture',api_token:'fixture',account_address:a.from},{load:m.load});const r=await action({...a,assertCurrent(){}});assert.equal(r.status,'confirmed_testnet');assert.equal(m.counts.sign,1);assert.equal(m.counts.broadcast,1);});
 test('wrong RPC chain blocks signing',async()=>{const m=mockSdk({chain:1}),p=await make(),a=authorize(p,policy(p),NOW);const action=await createDynamicAction({environment_id:'fixture',api_token:'fixture',account_address:a.from},{load:m.load});await assert.rejects(action({...a,assertCurrent(){}}));assert.equal(m.counts.sign,0);});
 test('wrong signed recipient blocks broadcasting',async()=>{const m=mockSdk({wrongRecipient:true}),p=await make(),a=authorize(p,policy(p),NOW);const action=await createDynamicAction({environment_id:'fixture',api_token:'fixture',account_address:a.from},{load:m.load});await assert.rejects(action({...a,assertCurrent(){}}),/signed_transaction_mismatch/);assert.equal(m.counts.broadcast,0);});
+const liveRoot=new URL('../examples/runtime-dynamic/live/',import.meta.url);
+const liveJson=file=>JSON.parse(readFileSync(new URL(file,liveRoot),'utf8'));
+function atLeast(version,floor){
+ const parse=value=>{assert.match(value,/^\d+\.\d+\.\d+$/);return value.split('.').map(Number);};
+ const actual=parse(version),minimum=parse(floor);
+ for(let i=0;i<3;i++){if(actual[i]!==minimum[i])return actual[i]>minimum[i];}
+ return true;
+}
+function lockedVersions(lock,name){
+ return Object.entries(lock.packages).filter(([path])=>path===`node_modules/${name}`||path.endsWith(`/node_modules/${name}`)).map(([,entry])=>entry.version);
+}
+test('live Dynamic dependency lock excludes the known vulnerable transitive ranges',()=>{
+ const manifest=liveJson('package.json'),lock=liveJson('package-lock.json');
+ assert.equal(manifest.dependencies['@walletconnect/utils'],'2.21.10');
+ assert.equal(manifest.overrides['@walletconnect/utils'],'$@walletconnect/utils');
+ assert.equal(manifest.overrides.axios,'1.18.0');
+ assert.equal(manifest.overrides.uuid,'11.1.1');
+ assert.equal(manifest.overrides.viem.ws,'8.21.3');
+ assert.equal(manifest.overrides['ethjs-unit']['bn.js'],'4.12.3');
+ assert.equal(manifest.overrides['number-to-bn']['bn.js'],'4.12.3');
+ assert.equal(Object.hasOwn(manifest.overrides,'query-string'),false);
+ assert.equal(Object.hasOwn(manifest.overrides,'ws'),false);
+ assert.equal(Object.hasOwn(manifest.overrides,'bn.js'),false);
+ for(const [name,floor] of [['@walletconnect/utils','2.21.10'],['axios','1.18.0'],['uuid','11.1.1']]){
+  const versions=lockedVersions(lock,name);assert.ok(versions.length>0,name);
+  for(const version of versions)assert.equal(atLeast(version,floor),true,`${name}@${version}`);
+ }
+ assert.deepEqual(lockedVersions(lock,'query-string'),[]);
+ assert.deepEqual(lockedVersions(lock,'decode-uri-component'),[]);
+ const ws8=lockedVersions(lock,'ws').filter(version=>version.startsWith('8.'));
+ assert.ok(ws8.length>0);for(const version of ws8)assert.equal(atLeast(version,'8.21.0'),true,`ws@${version}`);
+ const bn4=lockedVersions(lock,'bn.js').filter(version=>version.startsWith('4.'));
+ assert.ok(bn4.length>0);for(const version of bn4)assert.equal(atLeast(version,'4.12.3'),true,`bn.js@${version}`);
+});
