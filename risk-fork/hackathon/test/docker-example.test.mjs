@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import readline from 'node:readline';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 
@@ -25,10 +27,21 @@ function makeDocker({ endpoint = 'npipe:////./pipe/docker_engine', os = 'linux',
   imageEnvironment = ['PATH=/usr/local/bin', 'NODE_VERSION=22.0.0', 'YARN_VERSION=1.0.0'],
   imageVolumes = null, containerState = 'absent', ownerNonce = NONCE } = {}) {
   const calls = [];
+  const boundCalls = [];
   let state = containerState;
   const execDocker = async (args) => {
-    calls.push(args);
-    const key = args.slice(0, 2).join(' ');
+    const command = [...args];
+    let config = null;
+    let host = null;
+    while (['--config', '--host'].includes(command[0])) {
+      const flag = command.shift();
+      const value = command.shift();
+      if (flag === '--config') config = value;
+      else host = value;
+    }
+    calls.push(command);
+    boundCalls.push({ command, config, host });
+    const key = command.slice(0, 2).join(' ');
     if (key === 'context show') return success('desktop-linux\n');
     if (key === 'context inspect') return success(`${JSON.stringify(endpoint)}\n`);
     if (key === 'info --format') return success(`${os}\n`);
@@ -46,13 +59,13 @@ function makeDocker({ endpoint = 'npipe:////./pipe/docker_engine', os = 'linux',
       }));
     }
     if (key === 'container rm') {
-      assert.equal(args[3], CONTAINER_ID);
+      assert.equal(command[3], CONTAINER_ID);
       state = 'absent';
       return success(`${CONTAINER_ID}\n`);
     }
-    throw new Error(`Unexpected mocked Docker command: ${args.join(' ')}`);
+    throw new Error(`Unexpected mocked Docker command: ${command.join(' ')}`);
   };
-  return { execDocker, calls, setContainerState(value) { state = value; } };
+  return { execDocker, calls, boundCalls, setContainerState(value) { state = value; } };
 }
 
 function responseLines() {
@@ -84,10 +97,25 @@ function fakeDockerChild({ exitCode = 0, output = responseLines(), closeOnInput 
     queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
     return true;
   };
+  const replies = output.trim().split('\n').map(JSON.parse);
+  let pending = '';
+  child.stdin.on('data', (chunk) => {
+    pending += chunk.toString('utf8');
+    let newline;
+    while ((newline = pending.indexOf('\n')) !== -1) {
+      const line = pending.slice(0, newline);
+      pending = pending.slice(newline + 1);
+      const request = JSON.parse(line);
+      if (Object.hasOwn(request, 'id')) {
+        const reply = replies.find((value) => value.id === request.id);
+        if (reply) queueMicrotask(() => child.stdout.write(`${JSON.stringify(reply)}\n`));
+      }
+    }
+  });
   child.stdin.on('finish', () => {
     if (!closeOnInput) return;
     queueMicrotask(() => {
-      child.stdout.end(output);
+      child.stdout.end();
       child.stderr.end();
       child.emit('close', exitCode, null);
     });
@@ -100,27 +128,49 @@ test('standalone synthetic fixture speaks bounded MCP stdio without dependencies
   const child = spawn(process.execPath, ['--input-type=module', '--eval', source], {
     env: { PATH: process.env.PATH ?? '' }, shell: false, stdio: ['pipe', 'pipe', 'pipe'],
   });
-  const output = [];
+  const exit = new Promise((resolve) => child.once('close', resolve));
+  const lines = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+  const responses = lines[Symbol.asyncIterator]();
   const diagnostics = [];
-  child.stdout.on('data', (chunk) => output.push(chunk));
   child.stderr.on('data', (chunk) => diagnostics.push(chunk));
+  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })}\n`);
+  const initialized = JSON.parse((await responses.next()).value);
+  assert.equal(initialized.result.protocolVersion, '2025-06-18');
+  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })}\n`);
+  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
+  const listed = JSON.parse((await responses.next()).value);
+  child.stdin.end(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: {
+      name: 'risk_fork_synthetic_untrusted_tool', arguments: {},
+    } })}\n`);
+  const called = JSON.parse((await responses.next()).value);
+  const code = await exit;
+  lines.close();
+  assert.equal(code, 0);
+  assert.equal(Buffer.concat(diagnostics).length, 0);
+  assert.match(listed.result.tools[0].description, /UNTRUSTED MCP DESCRIPTION/);
+  assert.equal(called.result.structuredContent.provider_calls, 0);
+  assert.equal(called.result.structuredContent.schema,
+    'agoragentic.risk-fork.local-docker-example.v1');
+  assert.equal(called.result.structuredContent.authority_granted, false);
+});
+
+test('synthetic MCP refuses tools before initialization acknowledgement', async () => {
+  const source = await readFile(new URL('../docker-example/synthetic-mcp.mjs', import.meta.url), 'utf8');
+  const child = spawn(process.execPath, ['--input-type=module', '--eval', source], {
+    env: { PATH: process.env.PATH ?? '' }, shell: false, stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const output = [];
+  child.stdout.on('data', (chunk) => output.push(chunk));
   child.stdin.end([
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
     { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: {
-      name: 'risk_fork_synthetic_untrusted_tool', arguments: {},
-    } },
   ].map((item) => JSON.stringify(item)).join('\n') + '\n');
   const code = await new Promise((resolve) => child.once('close', resolve));
   assert.equal(code, 0);
-  assert.equal(Buffer.concat(diagnostics).length, 0);
-  const replies = Buffer.concat(output).toString('utf8').trim().split('\n').map(JSON.parse);
-  assert.equal(replies.length, 3);
-  assert.match(replies[1].result.tools[0].description, /UNTRUSTED MCP DESCRIPTION/);
-  assert.equal(replies[2].result.structuredContent.provider_calls, 0);
-  assert.equal(replies[2].result.structuredContent.schema,
-    'agoragentic.risk-fork.local-docker-example.v1');
-  assert.equal(replies[2].result.structuredContent.authority_granted, false);
+  const responses = Buffer.concat(output).toString('utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(responses[0].id, 1);
+  assert.equal(responses[1].id, 2);
+  assert.equal(responses[1].error.code, -32000);
 });
 
 test('SIGINT ends the exact child, verifies owned cleanup, and removes signal handlers', async () => {
@@ -129,7 +179,7 @@ test('SIGINT ends the exact child, verifies owned cleanup, and removes signal ha
   let child;
   let handlersDuringCleanup = 0;
   const execute = async (args, environment) => {
-    if (args[0] === 'container' && args[1] === 'inspect') {
+    if (args.includes('container') && args.includes('inspect')) {
       handlersDuringCleanup = signals.listenerCount('SIGTERM');
       signals.emit('SIGTERM');
     }
@@ -190,7 +240,7 @@ test('preflight fails before Docker run on remote endpoint, Windows engine, unsa
   }
   const missing = makeDocker();
   const original = missing.execDocker;
-  missing.execDocker = async (args, environment) => args[0] === 'image'
+  missing.execDocker = async (args, environment) => args.includes('image')
     ? { ok: false, stdout: '', stderr: 'No such image' }
     : original(args, environment);
   await assert.rejects(preflightDockerExample({ execDocker: missing.execDocker, environment: {} }),
@@ -211,6 +261,79 @@ test('mocked local Docker probe verifies MCP and exact absent container', async 
   assert.equal(result.provider_calls, 0);
   assert.equal(result.e2b_qualified, false);
   assert.equal(mock.calls.some((args) => args[0] === 'container' && args[1] === 'inspect'), true);
+  assert.equal(runs[0][0], '--config');
+  assert.equal(runs[0][2], '--host');
+  assert.equal(runs[0][3], 'npipe:////./pipe/docker_engine');
+  assert.equal(mock.boundCalls.filter((call) => call.command[0] !== 'context')
+    .every((call) => call.host === 'npipe:////./pipe/docker_engine'), true);
+  assert.equal(mock.boundCalls.filter((call) => call.command[0] === 'container')
+    .every((call) => call.config === runs[0][1]), true);
+});
+
+test('container launch uses an empty config and never inherits HOME proxy configuration', async () => {
+  const mock = makeDocker();
+  let observed = false;
+  await runDockerExample({
+    execDocker: mock.execDocker,
+    environment: { HOME: '/synthetic-home-with-proxy', USERPROFILE: 'C:\\synthetic-proxy-home' },
+    nonce: NONCE,
+    spawnDocker(args, childEnvironment) {
+      assert.equal(args[0], '--config');
+      assert.deepEqual(readdirSync(args[1]), []);
+      assert.equal(childEnvironment.HOME, undefined);
+      assert.equal(childEnvironment.USERPROFILE, undefined);
+      observed = true;
+      return fakeDockerChild();
+    },
+  });
+  assert.equal(observed, true);
+});
+
+test('context changes after preflight cannot move run or cleanup to another daemon', async () => {
+  const mock = makeDocker({ containerState: 'present' });
+  let changed = false;
+  const result = await runDockerExample({
+    execDocker: async (args, environment) => {
+      if (args.includes('image')) changed = true;
+      if (changed && args.includes('container')) {
+        assert.equal(args[args.indexOf('--host') + 1], 'npipe:////./pipe/docker_engine');
+      }
+      return mock.execDocker(args, environment);
+    },
+    environment: {}, nonce: NONCE,
+    spawnDocker(args) {
+      assert.equal(args[args.indexOf('--host') + 1], 'npipe:////./pipe/docker_engine');
+      return fakeDockerChild();
+    },
+  });
+  assert.equal(changed, true);
+  assert.equal(result.cleanup, 'verified_absent');
+});
+
+test('WSL probe passes its local endpoint and isolated in-distro config to every Docker call', async () => {
+  const mock = makeDocker({ endpoint: 'unix:///var/run/docker.sock' });
+  let removed = false;
+  const result = await runDockerExample({
+    execDocker: mock.execDocker,
+    environment: { RISK_FORK_DOCKER_WSL_DISTRO: 'Ubuntu-24.04' },
+    platform: 'win32', nonce: NONCE,
+    async createConfig(command, _environment, distro) {
+      assert.equal(command.binary, 'wsl.exe');
+      assert.equal(distro, 'Ubuntu-24.04');
+      return { directory: '/tmp/rf-docker-cli-mock', remove: async () => { removed = true; } };
+    },
+    spawnDocker(args) {
+      assert.deepEqual(args.slice(0, 4), [
+        '--config', '/tmp/rf-docker-cli-mock', '--host', 'unix:///var/run/docker.sock',
+      ]);
+      return fakeDockerChild();
+    },
+  });
+  assert.equal(result.cleanup, 'verified_absent');
+  assert.equal(removed, true);
+  assert.equal(mock.boundCalls.filter((call) => call.command[0] === 'container')
+    .every((call) => call.config === '/tmp/rf-docker-cli-mock'
+      && call.host === 'unix:///var/run/docker.sock'), true);
 });
 
 test('failed run removes only an exact-owned container and verifies absence', async () => {
@@ -219,6 +342,34 @@ test('failed run removes only an exact-owned container and verifies absence', as
     execDocker: mock.execDocker, environment: {}, nonce: NONCE,
     spawnDocker() { return fakeDockerChild({ exitCode: 1 }); },
   }), (error) => error.code === 'DOCKER_RUN_FAILED' && error.cleanup === 'verified_absent');
+  assert.equal(mock.calls.some((args) => args[0] === 'container' && args[1] === 'rm'), true);
+});
+
+test('serve-mode child stdin error fails closed but still verifies exact owned cleanup', async () => {
+  const mock = makeDocker({ containerState: 'present' });
+  const clientInput = new PassThrough();
+  await assert.rejects(runDockerExample({
+    mode: 'serve', execDocker: mock.execDocker, environment: {}, nonce: NONCE,
+    stdin: clientInput,
+    spawnDocker() {
+      const child = fakeDockerChild({ closeOnInput: false });
+      queueMicrotask(() => child.stdin.emit('error', new Error('EPIPE')));
+      return child;
+    },
+  }), (error) => error.code === 'DOCKER_STDIN_FAILED' && error.cleanup === 'verified_absent');
+  assert.equal(mock.calls.some((args) => args[0] === 'container' && args[1] === 'rm'), true);
+});
+
+test('unclosed Docker client never reports verified cleanup', async () => {
+  const mock = makeDocker({ containerState: 'present' });
+  await assert.rejects(runDockerExample({
+    execDocker: mock.execDocker, environment: {}, nonce: NONCE, probeTimeoutMs: 1,
+    spawnDocker() {
+      const child = fakeDockerChild({ closeOnInput: false });
+      child.kill = () => true;
+      return child;
+    },
+  }), (error) => error.code === 'DOCKER_CHILD_NOT_CLOSED' && error.cleanup === 'unknown');
   assert.equal(mock.calls.some((args) => args[0] === 'container' && args[1] === 'rm'), true);
 });
 

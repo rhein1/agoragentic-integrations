@@ -47,7 +47,8 @@ node risk-fork/hackathon/docker-example/runner.mjs probe
 ```
 
 The probe exchanges `initialize`, `tools/list`, and `tools/call` with the
-synthetic server over stdio. It verifies the closed response, then checks the
+synthetic server over stdio, sending `notifications/initialized` only after
+the initialize response. It verifies the closed response, then checks the
 exact container's absence. A successful response says
 `verified_local_mcp_probe`, `provider_calls: 0`, and
 `cleanup: "verified_absent"`. Missing image, remote daemon context, Windows
@@ -76,6 +77,13 @@ not copied from a host mount. The container is named and labelled with a fresh
 random nonce. On completion or error the runner only force-removes a container
 whose exact name, ID, and ownership label match that nonce, and separately
 checks absence. An unreachable daemon leaves cleanup `unknown`, never success.
+After verifying a local Docker endpoint, the runner pins that exact endpoint for
+image inspection, launch, and cleanup. Launch and cleanup use a new empty Docker
+client config directory, so user-level proxy settings cannot be injected into
+the fixture; the directory is removed only when it is empty. In WSL, that
+directory is created inside the selected local distribution. If the Docker
+client never exits after bounded termination attempts, cleanup remains
+`unknown`, even if a container absence check appears to pass.
 
 Docker daemon access is powerful and is not a security boundary for an
 untrusted *host user*. Do not expose this runner as a public web launch service

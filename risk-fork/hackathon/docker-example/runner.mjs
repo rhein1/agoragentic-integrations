@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import { spawn, execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rmdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const IMAGE = 'node:22-alpine';
-const FIXTURE_SHA256 = 'b15a88a6636b5413b01db9786c5eae5309e87cf6ed4c546156bc26168a0b4d45';
+const FIXTURE_SHA256 = 'b8886a8d57e7414962c3a9e3eaa281db254bff1793daa3dc2135f025148c96d2';
 const FIXTURE_URL = new URL('./synthetic-mcp.mjs', import.meta.url);
 const LABEL = 'agoragentic.risk-fork.local-docker-example.nonce';
 const MAX_FIXTURE_BYTES = 12 * 1024;
@@ -55,6 +57,40 @@ function minimalDockerEnvironment(environment) {
     TMP: environment.TMP,
     TMPDIR: environment.TMPDIR,
   }).filter(([, value]) => typeof value === 'string' && value.length > 0));
+}
+
+function boundDockerEnvironment(environment) {
+  return Object.fromEntries(Object.entries({
+    PATH: environment.PATH,
+    Path: environment.Path,
+    SystemRoot: environment.SystemRoot,
+    WINDIR: environment.WINDIR,
+    TEMP: environment.TEMP,
+    TMP: environment.TMP,
+    TMPDIR: environment.TMPDIR,
+  }).filter(([, value]) => typeof value === 'string' && value.length > 0));
+}
+
+async function createEmptyDockerConfig(command, environment, distro) {
+  if (command.binary === 'wsl.exe') {
+    const { stdout } = await execFileAsync('wsl.exe', [
+      '-d', distro, '--exec', 'mktemp', '-d', '/tmp/rf-docker-cli-XXXXXXXX',
+    ], { env: environment, windowsHide: true, timeout: 7_000, maxBuffer: 1024 });
+    const directory = stdout.trim();
+    if (!/^\/tmp\/rf-docker-cli-[A-Za-z0-9]{8}$/u.test(directory)) {
+      throw new DockerExampleError('DOCKER_CONFIG_UNVERIFIED');
+    }
+    return {
+      directory,
+      async remove() {
+        await execFileAsync('wsl.exe', ['-d', distro, '--exec', 'rmdir', '--', directory], {
+          env: environment, windowsHide: true, timeout: 7_000, maxBuffer: 1024,
+        });
+      },
+    };
+  }
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'rf-docker-cli-'));
+  return { directory, remove: () => rmdir(directory) };
 }
 
 export function dockerCommandForEnvironment(environment = process.env, platform = process.platform) {
@@ -123,6 +159,7 @@ function parseLocalEndpoint(value) {
     || !(endpoint.startsWith('unix:///') || endpoint.startsWith('npipe:////./pipe/'))) {
     throw new DockerExampleError('REMOTE_DOCKER_ENDPOINT_BLOCKED');
   }
+  return endpoint;
 }
 
 function validateImage(value) {
@@ -158,17 +195,17 @@ export async function preflightDockerExample({
   if (!/^[A-Za-z0-9._-]{1,80}$/u.test(context)) {
     throw new DockerExampleError('DOCKER_CONTEXT_UNVERIFIED');
   }
-  parseLocalEndpoint(requireResult(await execute([
+  const endpoint = parseLocalEndpoint(requireResult(await execute([
     'context', 'inspect', context, '--format', '{{json .Endpoints.docker.Host}}',
   ], dockerEnvironment), 'DOCKER_ENDPOINT_UNAVAILABLE'));
-  if (requireResult(await execute(['info', '--format', '{{.OSType}}'], dockerEnvironment),
+  if (requireResult(await execute(['--host', endpoint, 'info', '--format', '{{.OSType}}'], dockerEnvironment),
     'DOCKER_DAEMON_UNAVAILABLE') !== 'linux') {
     throw new DockerExampleError('LINUX_CONTAINER_ENGINE_REQUIRED');
   }
-  const imageId = validateImage(requireResult(await execute([
+  const imageId = validateImage(requireResult(await execute(['--host', endpoint,
     'image', 'inspect', IMAGE, '--format', '{{json .}}',
   ], dockerEnvironment), 'LOCAL_IMAGE_MISSING_NO_PULL'));
-  return Object.freeze({ dockerEnvironment, source, imageId });
+  return Object.freeze({ dockerEnvironment, source, imageId, endpoint });
 }
 
 export function dockerRunArgs({ name, nonce, source, imageId }) {
@@ -220,56 +257,75 @@ export async function cleanupDockerExample({ execDocker, environment, name, nonc
 }
 
 function probeRequests() {
-  return [
-    { jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+  return {
+    initialize: { jsonrpc: '2.0', id: 1, method: 'initialize', params: {
       protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'local-no-spend-probe', version: '1' },
     } },
-    { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: {
+    initialized: { jsonrpc: '2.0', method: 'notifications/initialized', params: {} },
+    list: { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+    call: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: {
       name: 'risk_fork_synthetic_untrusted_tool', arguments: {},
     } },
-  ];
+  };
 }
 
-function verifyProbeOutput(output) {
-  let responses;
-  try { responses = output.trim().split(/\r?\n/u).map((line) => JSON.parse(line)); }
-  catch { throw new DockerExampleError('MCP_RESPONSE_INVALID'); }
-  if (responses.length !== 3 || responses.some((entry, index) => entry?.jsonrpc !== '2.0'
-    || entry.id !== index + 1 || entry.error)) {
+function verifyProbeResponse(response, stage) {
+  if (response?.jsonrpc !== '2.0' || response.id !== stage + 1 || response.error) {
     throw new DockerExampleError('MCP_RESPONSE_INVALID');
   }
-  const [initialized, listed, called] = responses.map((entry) => entry.result);
-  if (initialized?.protocolVersion !== '2025-06-18'
-    || initialized.serverInfo?.name !== 'risk-fork-local-docker-synthetic'
-    || listed?.tools?.length !== 1
-    || listed.tools[0]?.name !== 'risk_fork_synthetic_untrusted_tool'
-    || !listed.tools[0]?.description?.includes('SYNTHETIC UNTRUSTED MCP DESCRIPTION')
-    || called?.structuredContent?.schema !== DOCKER_EXAMPLE_TRUTH.schema) {
+  const result = response.result;
+  if (stage === 0) {
+    if (result?.protocolVersion !== '2025-06-18'
+      || result.serverInfo?.name !== 'risk-fork-local-docker-synthetic') {
+      throw new DockerExampleError('MCP_RESPONSE_INVALID');
+    }
+    return;
+  }
+  if (stage === 1) {
+    if (result?.tools?.length !== 1
+      || result.tools[0]?.name !== 'risk_fork_synthetic_untrusted_tool'
+      || !result.tools[0]?.description?.includes('SYNTHETIC UNTRUSTED MCP DESCRIPTION')) {
+      throw new DockerExampleError('MCP_RESPONSE_INVALID');
+    }
+    return;
+  }
+  if (stage !== 2 || result?.structuredContent?.schema !== DOCKER_EXAMPLE_TRUTH.schema) {
     throw new DockerExampleError('MCP_RESPONSE_INVALID');
   }
   for (const key of ['demo_only', 'provider_calls', 'network_used', 'credentials_used',
     'authority_granted', 'clean_commit_performed', 'e2b_qualified', 'live_traffic_protected']) {
-    if (called.structuredContent[key] !== DOCKER_EXAMPLE_TRUTH[key]) {
+    if (result.structuredContent[key] !== DOCKER_EXAMPLE_TRUTH[key]) {
       throw new DockerExampleError('MCP_TRUTH_INVALID');
     }
   }
-  if (called.structuredContent.result !== 'synthetic_untrusted_data') {
+  if (result.structuredContent.result !== 'synthetic_untrusted_data') {
     throw new DockerExampleError('MCP_RESPONSE_INVALID');
   }
-  return true;
 }
 
 async function runChild(child, { mode, timeoutMs, stdout = process.stdout, stdin = process.stdin }) {
-  let output = '';
+  let pending = '';
+  let probeStage = 0;
+  let protocolFailure = null;
+  let inputFailure = false;
   let outputBytes = 0;
   let diagnosticBytes = 0;
   let timedOut = false;
-  if (mode === 'probe') {
-    child.stdin.end(`${probeRequests().map((item) => JSON.stringify(item)).join('\n')}\n`);
-  } else {
-    stdin.pipe(child.stdin);
-  }
+  const requests = mode === 'probe' ? probeRequests() : null;
+  const failInput = () => {
+    inputFailure = true;
+    child.kill();
+  };
+  child.stdin.on('error', failInput);
+  const sendProbe = (request, end = false) => {
+    try {
+      const line = `${JSON.stringify(request)}\n`;
+      if (end) child.stdin.end(line);
+      else child.stdin.write(line);
+    } catch {
+      failInput();
+    }
+  };
   const exit = await new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -277,37 +333,77 @@ async function runChild(child, { mode, timeoutMs, stdout = process.stdout, stdin
       settled = true;
       clearTimeout(timer);
       clearTimeout(grace);
+      clearTimeout(hardGrace);
       resolve(value);
     };
     let grace;
+    let hardGrace;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill();
-      grace = setTimeout(() => finish({ code: null, signal: 'timeout' }), 2_000);
+      grace = setTimeout(() => {
+        child.kill('SIGKILL');
+        hardGrace = setTimeout(() => finish({ code: null, signal: 'unclosed' }), 2_000);
+      }, 2_000);
     }, timeoutMs);
     child.stdout.on('data', (chunk) => {
       outputBytes += Buffer.byteLength(chunk);
       if (outputBytes > MAX_OUTPUT_BYTES) {
+        protocolFailure = new DockerExampleError('DOCKER_OUTPUT_LIMIT');
         child.kill();
         return;
       }
-      if (mode === 'probe') output += chunk.toString('utf8');
-      else stdout.write(chunk);
+      if (mode !== 'probe') {
+        stdout.write(chunk);
+        return;
+      }
+      pending += chunk.toString('utf8');
+      let newline;
+      while (!protocolFailure && (newline = pending.indexOf('\n')) !== -1) {
+        const line = pending.slice(0, newline).replace(/\r$/u, '');
+        pending = pending.slice(newline + 1);
+        try {
+          verifyProbeResponse(JSON.parse(line), probeStage);
+          if (pending.length > 0) throw new DockerExampleError('MCP_RESPONSE_INVALID');
+          probeStage += 1;
+          if (probeStage === 1) {
+            sendProbe(requests.initialized);
+            sendProbe(requests.list);
+          } else if (probeStage === 2) {
+            sendProbe(requests.call);
+          } else if (probeStage === 3) {
+            child.stdin.end();
+          }
+        } catch (error) {
+          protocolFailure = error instanceof DockerExampleError
+            ? error : new DockerExampleError('MCP_RESPONSE_INVALID');
+          child.kill();
+        }
+      }
     });
     child.stderr.on('data', (chunk) => {
       diagnosticBytes += Buffer.byteLength(chunk);
       if (diagnosticBytes > MAX_OUTPUT_BYTES) child.kill();
     });
-    child.once('error', () => finish({ code: null, signal: 'error' }));
+    child.once('error', () => finish({ code: null, signal: 'unclosed' }));
     child.once('close', (code, signal) => finish({ code, signal }));
+    if (mode === 'probe') sendProbe(requests.initialize);
+    else {
+      try { stdin.pipe(child.stdin); } catch { failInput(); }
+    }
   });
   if (mode === 'serve') stdin.unpipe(child.stdin);
+  if (exit.signal === 'unclosed') throw new DockerExampleError('DOCKER_CHILD_NOT_CLOSED', 'unknown');
   if (timedOut) throw new DockerExampleError('DOCKER_RUN_TIMEOUT');
+  if (inputFailure) throw new DockerExampleError('DOCKER_STDIN_FAILED');
+  if (protocolFailure) throw protocolFailure;
   if (outputBytes > MAX_OUTPUT_BYTES || diagnosticBytes > MAX_OUTPUT_BYTES) {
     throw new DockerExampleError('DOCKER_OUTPUT_LIMIT');
   }
   if (exit.code !== 0 || diagnosticBytes !== 0) throw new DockerExampleError('DOCKER_RUN_FAILED');
-  if (mode === 'probe') verifyProbeOutput(output);
+  if (mode === 'probe' && (probeStage !== 3 || pending.length > 0)) {
+    throw new DockerExampleError('MCP_RESPONSE_INVALID');
+  }
 }
 
 export async function runDockerExample({
@@ -321,16 +417,24 @@ export async function runDockerExample({
   stdout = process.stdout,
   signalEmitter = process,
   nonce = randomBytes(16).toString('hex'),
+  probeTimeoutMs = PROBE_TIMEOUT_MS,
+  createConfig = createEmptyDockerConfig,
 } = {}) {
-  if (!['probe', 'serve'].includes(mode) || !/^[a-f0-9]{32}$/u.test(nonce)) {
+  if (!['probe', 'serve'].includes(mode) || !/^[a-f0-9]{32}$/u.test(nonce)
+    || !Number.isInteger(probeTimeoutMs) || probeTimeoutMs < 1 || probeTimeoutMs > PROBE_TIMEOUT_MS) {
     throw new DockerExampleError('EXAMPLE_ARGUMENT_INVALID');
   }
   const command = dockerCommandForEnvironment(environment, platform);
   const execute = execDocker ?? ((args, env) => defaultExec(args, env, command));
   const launch = spawnDocker ?? ((args, env) => defaultSpawn(args, env, command));
-  const { dockerEnvironment, source, imageId } = await preflightDockerExample({
+  const { dockerEnvironment, source, imageId, endpoint } = await preflightDockerExample({
     execDocker: execute, readFixture, environment, platform,
   });
+  const isolatedEnvironment = boundDockerEnvironment(dockerEnvironment);
+  const config = await createConfig(command, isolatedEnvironment,
+    environment.RISK_FORK_DOCKER_WSL_DISTRO);
+  const bind = (args) => ['--config', config.directory, '--host', endpoint, ...args];
+  const executeBound = (args) => execute(bind(args), isolatedEnvironment);
   const name = `rf-local-mcp-${nonce}`;
   const args = dockerRunArgs({ name, nonce, source, imageId });
   let failure = null;
@@ -345,10 +449,10 @@ export async function runDockerExample({
   signalEmitter.on('SIGTERM', interrupt);
   try {
     try {
-      child = launch(args, dockerEnvironment);
+      child = launch(bind(args), isolatedEnvironment);
       try {
         await runChild(child, {
-          mode, timeoutMs: mode === 'probe' ? PROBE_TIMEOUT_MS : SERVE_TIMEOUT_MS, stdin, stdout,
+          mode, timeoutMs: mode === 'probe' ? probeTimeoutMs : SERVE_TIMEOUT_MS, stdin, stdout,
         });
       } catch (error) {
         if (interrupted) throw new DockerExampleError('DOCKER_RUN_INTERRUPTED');
@@ -362,14 +466,14 @@ export async function runDockerExample({
     let cleanup;
     try {
       cleanup = await cleanupDockerExample({
-        execDocker: execute, environment: dockerEnvironment, name, nonce,
+        execDocker: executeBound, environment: isolatedEnvironment, name, nonce,
       });
     } catch {
       throw new DockerExampleError('CONTAINER_CLEANUP_UNKNOWN', 'unknown');
     }
     if (interrupted && !failure) failure = new DockerExampleError('DOCKER_RUN_INTERRUPTED');
     if (failure) {
-      failure.cleanup = cleanup;
+      failure.cleanup = failure.code === 'DOCKER_CHILD_NOT_CLOSED' ? 'unknown' : cleanup;
       throw failure;
     }
     return Object.freeze({
@@ -384,6 +488,9 @@ export async function runDockerExample({
   } finally {
     signalEmitter.off('SIGINT', interrupt);
     signalEmitter.off('SIGTERM', interrupt);
+    try { await config.remove(); } catch {
+      throw new DockerExampleError('DOCKER_CONFIG_CLEANUP_UNKNOWN', 'unknown');
+    }
   }
 }
 

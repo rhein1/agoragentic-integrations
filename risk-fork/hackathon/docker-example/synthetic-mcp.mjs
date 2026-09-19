@@ -20,6 +20,8 @@ function failure(id, code, message) {
 
 let pending = '';
 let messages = 0;
+let initialized = false;
+let initializationAcknowledged = false;
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   pending += chunk;
@@ -49,8 +51,18 @@ process.stdin.on('data', (chunk) => {
       failure(request?.id ?? null, -32600, 'Invalid request');
       continue;
     }
+    if (request.method === 'notifications/initialized') {
+      if (initialized && !Object.hasOwn(request, 'id')) initializationAcknowledged = true;
+      else process.exitCode = 2;
+      continue;
+    }
     if (!Object.hasOwn(request, 'id')) continue;
     if (request.method === 'initialize') {
+      if (initialized) {
+        failure(request.id, -32600, 'Already initialized');
+        continue;
+      }
+      initialized = true;
       reply(request.id, {
         protocolVersion: '2025-06-18',
         capabilities: { tools: { listChanged: false } },
@@ -58,6 +70,10 @@ process.stdin.on('data', (chunk) => {
         instructions: BANNER,
       });
     } else if (request.method === 'tools/list') {
+      if (!initializationAcknowledged) {
+        failure(request.id, -32000, 'Initialization incomplete');
+        continue;
+      }
       reply(request.id, {
         tools: [{
           name: TOOL,
@@ -66,6 +82,10 @@ process.stdin.on('data', (chunk) => {
         }],
       });
     } else if (request.method === 'tools/call') {
+      if (!initializationAcknowledged) {
+        failure(request.id, -32000, 'Initialization incomplete');
+        continue;
+      }
       if (request.params?.name !== TOOL
         || !request.params.arguments
         || typeof request.params.arguments !== 'object'
