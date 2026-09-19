@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
@@ -177,6 +178,21 @@ function assertEvidenceHash(evidence) {
 const WINDOWS_LOCK_READY = 'RISK_FORK_TEST_LOCK_READY';
 const WINDOWS_LOCK_START_TIMEOUT_MS = 45_000;
 const WINDOWS_LOCK_CLOSE_TIMEOUT_MS = 15_000;
+const execFileAsync = promisify(execFile);
+
+test('local workspace rejects a FIFO without opening or blocking on it', {
+  skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-fifo-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await execFileAsync('mkfifo', [path.join(source, 'blocking.pipe')]);
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /special filesystem entry/,
+  );
+});
 
 function waitForExactStdoutLine(child, expectedLine, timeoutMs) {
   return new Promise((resolve, reject) => {

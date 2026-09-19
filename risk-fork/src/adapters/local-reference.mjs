@@ -47,7 +47,14 @@ const runnerPath = fileURLToPath(new URL('./local-runner.mjs', import.meta.url))
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
 const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
-const LOCAL_READ_ONLY_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
+// Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
+// O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
+// blocking the capture.  Windows does not expose those flags; the descriptor
+// is still checked against a post-open lstat before any bytes are read.
+function localReadOnlyFlags() {
+  if (process.platform === 'win32') return fsConstants.O_RDONLY;
+  return fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
+}
 // Constructor injection is a trusted test seam, never a production provider boundary.
 const testOperationRunners = new WeakMap();
 const capturedContentByRecord = new WeakMap();
@@ -112,24 +119,25 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
       }
       seenCaseFolded.set(folded, relative);
       const absolute = path.join(directory, entry.name);
-      const info = await lstat(absolute, { bigint: true });
-      if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
-      if (info.isDirectory()) {
+      if (entry.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
+      if (entry.isDirectory()) {
         await visit(absolute, relative);
         continue;
       }
-      if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
-      if (!hasStableFileIdentity(info)) {
-        throw new Error(`File identity could not be verified: ${relative}`);
-      }
+      if (!entry.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
       if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
-      const handle = await open(absolute, LOCAL_READ_ONLY_FLAGS);
+      const handle = await open(absolute, localReadOnlyFlags());
       let content;
       let mode;
       try {
         const before = await handle.stat({ bigint: true });
-        assertSameFileIdentity(info, before, relative);
         if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+        const pathAfterOpen = await lstat(absolute, { bigint: true });
+        if (pathAfterOpen.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
+        assertSameFileIdentity(pathAfterOpen, before, relative);
+        if (!hasStableFileIdentity(before)) {
+          throw new Error(`File identity could not be verified: ${relative}`);
+        }
         if (before.nlink > 1n) throw new Error(`Hard-linked files are forbidden: ${relative}`);
         const remainingBytes = maxBytes - totalBytes;
         if (before.size > BigInt(remainingBytes)) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
