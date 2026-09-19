@@ -236,12 +236,19 @@ async function localX402Fetch(url, options) {
         if (cachedPayment && isRetryablePaidStatus(response.status)) {
           throw createNetworkError(`Paid retry returned retryable HTTP ${response.status} after payment authorization was prepared`, {
             authorizedPaymentPrepared: true,
+            authorizedPaymentReused: true,
             replayAvailable: true,
             replayHeaders: buildPaymentHeaders(cachedPayment),
             idempotencyKey,
             paymentAttempted: sawPaymentChallenge,
             networkRetriesUsed: networkFailuresAfterAuthorization,
             responseStatus: response.status,
+            paymentState: {
+              authorizationPrepared: Boolean(cachedPayment),
+              hasAuthorizationHeader: Boolean(cachedPayment?.authorizationHeader),
+              hasPaymentSignature: Boolean(cachedPayment?.paymentSignature),
+              retryWithSameIdempotencyKey: true,
+            },
           });
         }
         return markX402Meta(response, {
@@ -268,7 +275,7 @@ async function localX402Fetch(url, options) {
       }
 
       if (cachedPayment) {
-        throw createHttpError("Received a second HTTP 402 after payment authorization; refusing to replay or re-authorize automatically", {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: true,
@@ -276,7 +283,8 @@ async function localX402Fetch(url, options) {
         });
       }
 
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         const payRequest = {
           url,
           method,
@@ -299,6 +307,9 @@ async function localX402Fetch(url, options) {
       continue;
     } catch (error) {
       lastError = error;
+      if (error?.name === "NetworkError") {
+        throw error;
+      }
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -312,6 +323,7 @@ async function localX402Fetch(url, options) {
         throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
           cause: error,
           authorizedPaymentPrepared: true,
+          authorizedPaymentReused: true,
           replayAvailable: true,
           replayHeaders: buildPaymentHeaders(cachedPayment),
           idempotencyKey,
@@ -696,6 +708,57 @@ async function runSelfTest() {
   }
   if (result.x402?.networkRetriesUsed !== 1) {
     throw new Error(`Expected exactly one post-authorization network retry, got ${result.x402?.networkRetriesUsed}`);
+  }
+
+  let exhaustedError = null;
+  let exhaustedAttempts = 0;
+  try {
+    await createThreeWSAgoragenticAdapter({
+      baseUrl: DEFAULT_BASE_URL,
+      fetchImpl: async () => {
+        exhaustedAttempts += 1;
+        if (exhaustedAttempts === 1) {
+          return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+        }
+        throw new Error("simulated persistent network failure");
+      },
+      pay: async () => ({ authorizationHeader: "demo-authorization" }),
+      maxNetworkRetries: 1,
+    }).execute(
+      "threews.generate.preview",
+      { prompt: "retry regression" },
+      { quoteId: "quote_retry_regression", idempotencyKey: "demo-threews-retry-regression" },
+    );
+  } catch (error) {
+    exhaustedError = error;
+  }
+  if (!exhaustedError || exhaustedError.name !== "NetworkError") {
+    throw new Error(`Expected exhausted post-authorization retries to reject with NetworkError; got ${exhaustedError?.name ?? "no error"}: ${exhaustedError?.message ?? "no message"}`);
+  }
+
+  let exhaustedStatusError = null;
+  let exhaustedStatusAttempts = 0;
+  try {
+    await createThreeWSAgoragenticAdapter({
+      baseUrl: DEFAULT_BASE_URL,
+      fetchImpl: async () => {
+        exhaustedStatusAttempts += 1;
+        if (exhaustedStatusAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+        return new SimpleResponse(503, {}, { error: "temporarily_unavailable" });
+      },
+      pay: async () => ({ authorizationHeader: "demo-authorization" }),
+      maxNetworkRetries: 1,
+    }).execute("threews.generate.preview", { prompt: "status retry regression" }, {
+      quoteId: "quote_status_retry_regression",
+      idempotencyKey: "demo-threews-status-retry-regression",
+    });
+  } catch (error) {
+    exhaustedStatusError = error;
+  }
+  if (exhaustedStatusError?.name !== "NetworkError" || exhaustedStatusError.responseStatus !== 503
+      || exhaustedStatusError.authorizedPaymentPrepared !== true || exhaustedStatusError.replayAvailable !== true
+      || exhaustedStatusError.paymentState?.authorizationPrepared !== true) {
+    throw new Error("Expected exhausted paid HTTP retries to reject with reusable-payment NetworkError metadata");
   }
 
   const recoveryExample = classifyExecuteError(
