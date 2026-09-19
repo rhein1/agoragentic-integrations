@@ -70,6 +70,30 @@ test('skill frontmatter is portable and generated bodies are not duplicated', ()
   }
   assert.throws(() => parseSkill('---\nname: Bad Name\n---\nbody'), /frontmatter|name/);
   assert.throws(() => parseSkill('---\nname: valid-name\n---\nbody'), /description/);
+  assert.throws(
+    () => parseSkill('---\nname: valid-name\ndescription: Invalid YAML: colon-space\n---\nbody'),
+    /portable plain YAML scalar/,
+  );
+});
+
+test('host package versions match the skill-pack release', () => {
+  const expectedVersion = JSON.parse(read('skills/skill-pack.v2.json')).version;
+  const hostVersions = [
+    ['gemini-extension.json', JSON.parse(read('gemini-extension.json')).version],
+    ['.cursor-plugin/plugin.json', JSON.parse(read('.cursor-plugin/plugin.json')).version],
+    [
+      'claude-code/plugin/.claude-plugin/plugin.json',
+      JSON.parse(read('claude-code/plugin/.claude-plugin/plugin.json')).version,
+    ],
+  ];
+  const marketplace = JSON.parse(read('.claude-plugin/marketplace.json'));
+  hostVersions.push(
+    ['.claude-plugin/marketplace.json', marketplace.version],
+    ['.claude-plugin/marketplace.json plugins[0]', marketplace.plugins[0].version],
+  );
+  for (const [source, version] of hostVersions) {
+    assert.equal(version, expectedVersion, `${source}: version drift`);
+  }
 });
 
 test('generated artifacts contain no host leakage or secret-like examples', () => {

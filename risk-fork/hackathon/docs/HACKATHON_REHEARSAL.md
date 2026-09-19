@@ -43,6 +43,27 @@ Suggested narration:
 
 The `serve` command prints the loopback URL. Keep the terminal open while presenting and stop it with Ctrl+C.
 
+## Active financial case: synthetic payment proposal
+
+The Risk-Fork-only submission's active consequential case is the separate
+Marketplace-side `scripts/runtime-risk-fork-payment-proof.mjs` run against the
+pinned, verified offline kit. It exercises the reviewed Risk Fork core locally
+with six fixed preparation checks: a synthetic `$50` proposal, rejection of a
+`$60,000` escalation under that binding, a poisoned recipient, a changed chain,
+an expired binding, and a fresh exact `$60,000` preparation positive control,
+followed by lifecycle and cleanup inspection for each outcome.
+
+This is preparation evidence only. It uses DEMOUSDC and a no-send rail; no
+signer, execution, payment, settlement, provider qualification, clean commit or
+production protection is established. Keep the payment-proof report separate
+from the Flight Recorder replay and do not present its receipt-shaped fields as
+a payment receipt.
+
+The older `irreversible-deployment-proposal` scenario may remain in the kit for
+fixtures and regression tests, but it is historical/superseded for the active
+financial presentation. Do not run or narrate it as the current payment proof;
+its local proposal boundary does not authorize deployment or production action.
+
 ## Audience self-service path
 
 Give participants the exact ZIP, `.sha256`, `.spdx.json`, and `.build.json` from one release-candidate artifact. Their shortest path is:
