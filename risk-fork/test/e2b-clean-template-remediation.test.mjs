@@ -6,6 +6,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   realpath,
@@ -1837,36 +1838,49 @@ test('managed cleanup refuses hard links without changing the outside inode', as
   const payloadDirectory = path.join(exportDirectory, 'payload');
   const outside = path.join(value.root, 'outside-hard-link-sentinel.txt');
   const injectedLink = path.join(payloadDirectory, 'injected-hard-link.txt');
-  await writeFile(outside, 'outside hard-link inode remains unchanged\n');
-  const outsideBefore = await lstat(outside);
-  await chmod(exportDirectory, 0o700);
-  await chmod(payloadDirectory, 0o700);
-  await link(outside, injectedLink);
-  await chmod(payloadDirectory, 0o500);
-  await chmod(exportDirectory, 0o500);
+  const sentinel = 'outside hard-link inode remains unchanged\n';
+  await writeFile(outside, sentinel);
+  const outsideHandle = await open(outside, 'r');
+  try {
+    const readSentinel = async () => {
+      const buffer = Buffer.alloc(Buffer.byteLength(sentinel));
+      const { bytesRead } = await outsideHandle.read(buffer, 0, buffer.length, 0);
+      assert.equal(bytesRead, buffer.length);
+      return buffer.toString('utf8');
+    };
+    const outsideBefore = await outsideHandle.stat();
+    assert.equal(await readSentinel(), sentinel);
+    await chmod(exportDirectory, 0o700);
+    await chmod(payloadDirectory, 0o700);
+    await link(outside, injectedLink);
+    await chmod(payloadDirectory, 0o500);
+    await chmod(exportDirectory, 0o500);
 
-  await assert.rejects(
-    destroyImmutableWorkspaceExport({
+    await assert.rejects(
+      destroyImmutableWorkspaceExport({
+        export_root: value.exportsDirectory,
+        export_id: exportId,
+      }),
+      /refuses hard-linked files/i,
+    );
+    const outsideAfter = await outsideHandle.stat();
+    assert.equal(await readSentinel(), sentinel);
+    if (process.platform !== 'win32') {
+      assert.equal(Number(outsideAfter.mode) & 0o777, Number(outsideBefore.mode) & 0o777);
+      assert.equal(Number((await lstat(exportDirectory)).mode) & 0o777, 0o500);
+      assert.equal(Number((await lstat(payloadDirectory)).mode) & 0o777, 0o500);
+    }
+
+    await chmod(exportDirectory, 0o700);
+    await chmod(payloadDirectory, 0o700);
+    await rm(injectedLink, { force: true });
+    await destroyImmutableWorkspaceExport({
       export_root: value.exportsDirectory,
       export_id: exportId,
-    }),
-    /refuses hard-linked files/i,
-  );
-  const outsideAfter = await lstat(outside);
-  assert.equal(await readFile(outside, 'utf8'), 'outside hard-link inode remains unchanged\n');
-  if (process.platform !== 'win32') {
-    assert.equal(Number(outsideAfter.mode) & 0o777, Number(outsideBefore.mode) & 0o777);
-    assert.equal(Number((await lstat(exportDirectory)).mode) & 0o777, 0o500);
-    assert.equal(Number((await lstat(payloadDirectory)).mode) & 0o777, 0o500);
+    });
+  } finally {
+    await outsideHandle.close();
   }
-
-  await chmod(exportDirectory, 0o700);
-  await chmod(payloadDirectory, 0o700);
-  await rm(injectedLink, { force: true });
-  await destroyImmutableWorkspaceExport({
-    export_root: value.exportsDirectory,
-    export_id: exportId,
-  });
 });
 
 test('managed cleanup refuses substituted targets, roots, and escaping export ids', async (t) => {
