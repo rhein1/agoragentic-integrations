@@ -143,6 +143,8 @@ function inlineDestinations(text) {
 function slugBase(heading) {
   return heading
     .replace(/<[^>]*>/g, '')
+    // A malformed nested tag can leave a new angle-bracket pair after removal.
+    .replace(/[<>]/g, '')
     .replace(/!?(?:\[([^\]]*)\])\([^)]*\)/g, '$1')
     .replace(/[`*_~]/g, '')
     .trim()
@@ -181,6 +183,34 @@ function decode(value) {
   try { return decodeURIComponent(value); } catch { return value; }
 }
 
+function anchorDocument(targetFile) {
+  let anchorFile = path.extname(targetFile).toLowerCase() === '.md'
+    ? targetFile
+    : path.join(targetFile, 'README.md');
+  try {
+    return { file: anchorFile, contents: fs.readFileSync(anchorFile, 'utf8') };
+  } catch (error) {
+    if (error.code === 'EISDIR' && anchorFile === targetFile) {
+      anchorFile = path.join(targetFile, 'README.md');
+      try {
+        return { file: anchorFile, contents: fs.readFileSync(anchorFile, 'utf8') };
+      } catch (readmeError) {
+        if (readmeError.code !== 'ENOENT' && readmeError.code !== 'ENOTDIR') throw readmeError;
+      }
+    } else if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') {
+      throw error;
+    }
+    // This check follows a failed read only; no later read depends on it.
+    try {
+      fs.statSync(targetFile);
+      return null;
+    } catch (targetError) {
+      if (targetError.code !== 'ENOENT' && targetError.code !== 'ENOTDIR') throw targetError;
+      return { missing: true };
+    }
+  }
+}
+
 const markdownFiles = walk(root).sort();
 const contents = new Map(markdownFiles.map((file) => [file, fs.readFileSync(file, 'utf8')]));
 const anchorCache = new Map();
@@ -205,17 +235,29 @@ for (const sourceFile of markdownFiles) {
       continue;
     }
 
-    if (!fs.existsSync(targetFile)) {
+    if (!fragment) {
+      try {
+        fs.statSync(targetFile);
+      } catch (error) {
+        if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+        failures.push(`${path.relative(root, sourceFile)} -> missing ${rawTarget}`);
+      }
+      continue;
+    }
+
+    if (!anchorCache.has(targetFile)) {
+      const document = anchorDocument(targetFile);
+      anchorCache.set(targetFile, document?.contents == null
+        ? document
+        : { anchors: anchorsFor(document.contents) });
+    }
+    const target = anchorCache.get(targetFile);
+    if (target?.missing) {
       failures.push(`${path.relative(root, sourceFile)} -> missing ${rawTarget}`);
       continue;
     }
-    if (!fragment) continue;
-
-    let anchorFile = targetFile;
-    if (fs.statSync(anchorFile).isDirectory()) anchorFile = path.join(anchorFile, 'README.md');
-    if (!fs.existsSync(anchorFile) || path.extname(anchorFile).toLowerCase() !== '.md') continue;
-    if (!anchorCache.has(anchorFile)) anchorCache.set(anchorFile, anchorsFor(fs.readFileSync(anchorFile, 'utf8')));
-    if (!anchorCache.get(anchorFile).has(fragment)) {
+    if (!target) continue;
+    if (!target.anchors.has(fragment)) {
       failures.push(`${path.relative(root, sourceFile)} -> missing anchor ${rawTarget}`);
     }
   }
