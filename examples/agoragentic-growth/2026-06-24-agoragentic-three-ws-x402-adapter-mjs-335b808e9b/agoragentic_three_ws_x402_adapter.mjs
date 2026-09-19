@@ -211,6 +211,7 @@ async function localX402Fetch(url, options) {
   let paymentRequiredHeader = null;
   let sawPaymentChallenge = false;
   let networkFailuresAfterAuthorization = 0;
+  let lastError = null;
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
@@ -298,6 +299,7 @@ async function localX402Fetch(url, options) {
 
       continue;
     } catch (error) {
+      lastError = error;
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -323,6 +325,7 @@ async function localX402Fetch(url, options) {
     }
   }
 
+  throw lastError ?? new Error("x402Fetch failed without a response");
 }
 
 async function x402Fetch(url, options) {
@@ -694,6 +697,32 @@ async function runSelfTest() {
   }
   if (result.x402?.networkRetriesUsed !== 1) {
     throw new Error(`Expected exactly one post-authorization network retry, got ${result.x402?.networkRetriesUsed}`);
+  }
+
+  let exhaustedError = null;
+  let exhaustedAttempts = 0;
+  try {
+    await createThreeWSAgoragenticAdapter({
+      baseUrl: DEFAULT_BASE_URL,
+      fetchImpl: async () => {
+        exhaustedAttempts += 1;
+        if (exhaustedAttempts === 1) {
+          return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+        }
+        throw new Error("simulated persistent network failure");
+      },
+      pay: async () => ({ authorizationHeader: "demo-authorization" }),
+      maxNetworkRetries: 1,
+    }).execute(
+      "threews.generate.preview",
+      { prompt: "retry regression" },
+      { quoteId: "quote_retry_regression", idempotencyKey: "demo-threews-retry-regression" },
+    );
+  } catch (error) {
+    exhaustedError = error;
+  }
+  if (!exhaustedError || exhaustedError.name !== "NetworkError") {
+    throw new Error(`Expected exhausted post-authorization retries to reject with NetworkError; got ${exhaustedError?.name ?? "no error"}: ${exhaustedError?.message ?? "no message"}`);
   }
 
   const recoveryExample = classifyExecuteError(
