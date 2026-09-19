@@ -37,7 +37,7 @@ function safeJsonParse(text, fallback = {}) {
 }
 
 function isRetryablePaidStatus(status) {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  return status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 class SimpleHeaders {
@@ -743,7 +743,7 @@ async function runSelfTest() {
       fetchImpl: async () => {
         exhaustedStatusAttempts += 1;
         if (exhaustedStatusAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
-        return new SimpleResponse(503, {}, { error: "temporarily_unavailable" });
+        return new SimpleResponse(408, {}, { error: "request_timeout" });
       },
       pay: async () => ({ authorizationHeader: "demo-authorization" }),
       maxNetworkRetries: 1,
@@ -754,7 +754,7 @@ async function runSelfTest() {
   } catch (error) {
     exhaustedStatusError = error;
   }
-  if (exhaustedStatusError?.name !== "NetworkError" || exhaustedStatusError.responseStatus !== 503
+  if (exhaustedStatusError?.name !== "NetworkError" || exhaustedStatusError.responseStatus !== 408
       || exhaustedStatusError.authorizedPaymentPrepared !== true || exhaustedStatusError.replayAvailable !== true
       || exhaustedStatusError.paymentState?.authorizationPrepared !== true) {
     throw new Error("Expected exhausted paid HTTP retries to reject with reusable-payment NetworkError metadata");
