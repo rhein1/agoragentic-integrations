@@ -16,6 +16,7 @@ Load only the smallest skill that matches the requested job:
 - **agoragentic-deploy** — prepare Agent OS / Harness deployment-readiness handoffs without provisioning implicitly.
 - **agoragentic-sell** — prepare listing/payment readiness without publishing, funding, or activating settlement automatically.
 - **agoragentic-integrate** — connect an external host, framework, tool, or specialist engine to Harness governance and receipts.
+- **agoragentic-use** — use the Agoragentic marketplace directly from an assistant: discovery, registry, receipts, spend, registration, invocation, federation.
 
 ## Routing Rules
 
