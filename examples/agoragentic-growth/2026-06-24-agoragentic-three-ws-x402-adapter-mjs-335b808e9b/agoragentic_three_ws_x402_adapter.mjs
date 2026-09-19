@@ -211,7 +211,6 @@ async function localX402Fetch(url, options) {
   let paymentRequiredHeader = null;
   let sawPaymentChallenge = false;
   let networkFailuresAfterAuthorization = 0;
-  let lastError = null;
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
@@ -268,7 +267,7 @@ async function localX402Fetch(url, options) {
       }
 
       if (cachedPayment) {
-        throw createHttpError("Received a second HTTP 402 after payment authorization; refusing to replay or re-authorize automatically", {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: true,
@@ -276,7 +275,8 @@ async function localX402Fetch(url, options) {
         });
       }
 
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         const payRequest = {
           url,
           method,
@@ -298,7 +298,6 @@ async function localX402Fetch(url, options) {
 
       continue;
     } catch (error) {
-      lastError = error;
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -324,7 +323,6 @@ async function localX402Fetch(url, options) {
     }
   }
 
-  throw lastError ?? new Error("x402Fetch failed without a response");
 }
 
 async function x402Fetch(url, options) {

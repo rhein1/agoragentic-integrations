@@ -152,13 +152,14 @@ async function localX402Fetch(url, options = {}) {
         });
       }
       if (cachedPayment) {
-        throw createHttpError("Received a second HTTP 402 after payment authorization; refusing to replay rejected payment credentials", {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         cachedPayment = normalizePayResult(await pay(paymentRequired, {
           url,
           method,
