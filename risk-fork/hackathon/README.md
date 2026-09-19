@@ -33,6 +33,18 @@ npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
 A verified offline kit already bundles that dependency closure. Do not run
 `npm install` or `npm ci` inside an extracted kit.
 
+From a newly built, manifest-verified kit containing this revision, reviewers
+can run the no-provider-spend integrity, fixture, MCP, and cleanup checks with
+one command:
+
+```powershell
+node risk-fork/hackathon/scripts/reviewer-self-test.mjs
+```
+
+The optional `--docker` flag adds a separate fixed-fixture local-container MCP
+probe when the trusted Linux Node image is already present. It does not wire
+that container into Risk Fork protection or contact E2B.
+
 ## Status and claim boundary
 
 | Claim | Value |
@@ -244,6 +256,10 @@ secret. Do not point the demo at live MCP servers or other remote targets.
 
 Start with the [five-minute quickstart](./docs/QUICKSTART.md). For cleanup and
 recovery, use [CLEANUP_TROUBLESHOOTING.md](./docs/CLEANUP_TROUBLESHOOTING.md).
+For an independently runnable, no-provider-spend reviewer path, use
+[REVIEWER_SELF_TEST.md](./docs/REVIEWER_SELF_TEST.md). The optional local
+[Docker MCP example](./docker-example/README.md) is separate from the default
+fake-E2B simulation and does not qualify hosted protection.
 For the talk track, use [PRESENTER_SCRIPT.md](./docs/PRESENTER_SCRIPT.md).
 The public machine card is
 [risk-fork-capability.json](../discovery/risk-fork-capability.json), and the
