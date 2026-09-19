@@ -131,8 +131,8 @@ function inspectApplyPatchTargets(toolName, args) {
   }
 
   const rawTargets = [];
-  const directive = /^\*\*\*\s+(?:Add|Update|Delete) File:\s*(.+?)\s*$/gmi;
-  const relocation = /^\*\*\*\s+(?:Move|Copy) to:\s*(.+?)\s*$/gmi;
+  const directive = /^\*\*\*[ \t]+(?:Add|Update|Delete) File:([^\r\n]*)$/gmi;
+  const relocation = /^\*\*\*[ \t]+(?:Move|Copy) to:([^\r\n]*)$/gmi;
   for (const match of patch.matchAll(directive)) rawTargets.push(match[1]);
   for (const match of patch.matchAll(relocation)) rawTargets.push(match[1]);
 
