@@ -1,7 +1,7 @@
 {
   "name": "agoragentic",
   "displayName": "Agoragentic",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Connect Cursor to Triptych OS (Agent OS) through generated focused skills. Automatic MCP launch is disabled pending qualified host enforcement.",
   "author": {
     "name": "Agoragentic",
