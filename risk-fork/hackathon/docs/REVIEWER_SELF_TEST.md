@@ -10,22 +10,22 @@ outside this demo's no-spend claim.
 
 ## Public download available now
 
-The [Risk Fork v0.1.0 alpha prerelease](https://github.com/rhein1/agoragentic-integrations/releases/tag/risk-fork-v0.1.0-alpha.1)
-contains a downloadable offline ZIP, SHA-256 sidecar, build manifest, and SPDX
-SBOM. It is an **older preview**, built from `04ea56629e0a...`, not the latest
-source. Its ZIP is
-`risk-fork-hackathon-demo-04ea56629e0a.zip`, with published SHA-256
-`de44c905558af17cfeef1402130e313e835eef54caca4139dd6038b5e4bf21ad`.
-Check the release page and sidecar again before distributing it. A newer GitHub
-Actions artifact is temporary CI evidence, not a durable public download.
+The [dated offline reviewer kit](https://github.com/rhein1/agoragentic-integrations/releases/tag/risk-fork-hackathon-reviewer-kit-20260919)
+contains a downloadable ZIP, SHA-256 sidecar, build manifest, and SPDX SBOM.
+It is built from signed merge commit `d81db2144941aeb0a97833e1fd3b393a8a30d706`.
+Its ZIP is `risk-fork-hackathon-demo-d81db2144941.zip`, with published SHA-256
+`bc66b2cf4c43b510d3e334d0f8907db07dfe21392b7017aa7210a3b367e76cca`.
+Check the release page and sidecar again before distributing it. The older
+[v0.1.0-alpha.1 preview](https://github.com/rhein1/agoragentic-integrations/releases/tag/risk-fork-v0.1.0-alpha.1)
+does not include the one-command reviewer self-test.
 
 On Windows, save the ZIP and sidecar in a reviewer-selected directory, then
 compare the ZIP hash with the sidecar **and** the release asset digest before
 extracting. For example:
 
 ```powershell
-$zip = 'C:\path\chosen\risk-fork-hackathon-demo-04ea56629e0a.zip'
-$expected = 'de44c905558af17cfeef1402130e313e835eef54caca4139dd6038b5e4bf21ad'
+$zip = 'C:\path\chosen\risk-fork-hackathon-demo-d81db2144941.zip'
+$expected = 'bc66b2cf4c43b510d3e334d0f8907db07dfe21392b7017aa7210a3b367e76cca'
 if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) {
   throw 'Risk Fork ZIP checksum mismatch; stop before extraction'
 }
@@ -40,6 +40,15 @@ $destination = 'C:\path\new-risk-fork-review'
 if (Test-Path -LiteralPath $destination) { throw 'Choose a new extraction directory' }
 Expand-Archive -LiteralPath $zip -DestinationPath $destination
 Set-Location -LiteralPath $destination
+node .\risk-fork\hackathon\scripts\reviewer-self-test.mjs
+```
+
+The self-test reports `verified_local_reviewer_self_test` only when the offline
+kit, Risk Fork fixture, MCP conformance, and cleanup all pass. It remains a
+local protocol simulation, not a protected external agent or Docker-backed
+Risk Fork. For a manual walkthrough of individual surfaces, run:
+
+```powershell
 node .\risk-fork\hackathon\bin\risk-fork-demo.mjs verify-offline-kit
 node .\risk-fork\hackathon\scripts\mcp-client-conformance.mjs
 node .\risk-fork\hackathon\bin\risk-fork-demo.mjs plan --scenario e2b-malicious-mcp-containment
@@ -67,30 +76,17 @@ successful sandbox demonstration.
 
 ## Optional local container experiment
 
-In a newly built, manifest-verified kit containing this revision, the entire
-offline integrity, Risk Fork fixture, MCP conformance, and cleanup check is one
-command from the extraction root:
-
-```powershell
-node .\risk-fork\hackathon\scripts\reviewer-self-test.mjs
-```
-
-It reports `verified_local_reviewer_self_test` only when every check passes.
-The linked v0.1.0-alpha.1 ZIP does **not** contain this command; use
-the commands above for that release. The one-command result is still a local
-protocol simulation, not a protected external agent or Docker-backed Risk Fork.
-
 Developers who already have a local Linux Docker engine and a locally present
 Node image can additionally run the separate
-[Docker MCP example](../docker-example/README.md) from a source checkout. It
+[Docker MCP example](../docker-example/README.md) from the reviewer kit. It
 uses a fixed synthetic MCP server with no provider API, image pull, host mount,
-inherited credential, or container egress. It is **not in the older alpha ZIP**
-and is not E2B qualification or proof that arbitrary untrusted code is safe.
+inherited credential, or container egress. It is not E2B qualification or
+proof that arbitrary untrusted code is safe.
 Docker daemon access itself is privileged, so use only a machine you control.
-For a new kit containing this revision, append `--docker` to the one-command
-self-test to also run that independent container probe. It never pulls an
-image, and a missing local image fails closed. Its result explicitly says the
-container probe is **not** integrated with Risk Fork protection.
+Append `--docker` to the one-command self-test to also run that separate
+container probe. It never pulls an image, and a missing local image fails
+closed. Its result explicitly says the container probe is **not** integrated
+with Risk Fork protection.
 
 ## Live E2B boundary
 
