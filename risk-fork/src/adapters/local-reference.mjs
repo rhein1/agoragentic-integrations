@@ -1,15 +1,15 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
 import {
   access,
-  copyFile,
   lstat,
   mkdir,
   mkdtemp,
-  readFile,
+  open,
   readdir,
   rm,
-  stat,
+  writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -46,8 +46,29 @@ import {
 const runnerPath = fileURLToPath(new URL('./local-runner.mjs', import.meta.url));
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
+const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
+const LOCAL_READ_ONLY_FLAGS = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
 // Constructor injection is a trusted test seam, never a production provider boundary.
 const testOperationRunners = new WeakMap();
+const capturedContentByRecord = new WeakMap();
+
+function hasStableFileIdentity(info) {
+  // Windows file serial numbers can exceed Number.MAX_SAFE_INTEGER; use the
+  // bigint Stats form below so identity comparisons do not lose precision.
+  return typeof info?.dev === 'bigint'
+    && info.dev > 0n
+    && typeof info?.ino === 'bigint'
+    && info.ino > 0n;
+}
+
+function assertSameFileIdentity(expected, actual, relative) {
+  if (!hasStableFileIdentity(expected)
+    || !hasStableFileIdentity(actual)
+    || expected.dev !== actual.dev
+    || expected.ino !== actual.ino) {
+    throw new Error(`File identity changed while it was being captured: ${relative}`);
+  }
+}
 
 async function exists(target) {
   try {
@@ -91,29 +112,76 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
       }
       seenCaseFolded.set(folded, relative);
       const absolute = path.join(directory, entry.name);
-      const info = await lstat(absolute);
+      const info = await lstat(absolute, { bigint: true });
       if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
       if (info.isDirectory()) {
         await visit(absolute, relative);
         continue;
       }
       if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
-      if (info.nlink > 1) throw new Error(`Hard-linked files are forbidden: ${relative}`);
-      totalBytes += info.size;
+      if (!hasStableFileIdentity(info)) {
+        throw new Error(`File identity could not be verified: ${relative}`);
+      }
       if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
-      if (totalBytes > maxBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
-      const content = await readFile(absolute);
-      records.push({
+      const handle = await open(absolute, LOCAL_READ_ONLY_FLAGS);
+      let content;
+      let mode;
+      try {
+        const before = await handle.stat({ bigint: true });
+        assertSameFileIdentity(info, before, relative);
+        if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+        if (before.nlink > 1n) throw new Error(`Hard-linked files are forbidden: ${relative}`);
+        const remainingBytes = maxBytes - totalBytes;
+        if (before.size > BigInt(remainingBytes)) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+
+        const chunks = [];
+        let bytesRead = 0;
+        while (bytesRead <= remainingBytes) {
+          const chunkLength = Math.min(
+            LOCAL_SNAPSHOT_READ_CHUNK_BYTES,
+            remainingBytes - bytesRead + 1,
+          );
+          const chunk = Buffer.allocUnsafe(chunkLength);
+          const result = await handle.read(chunk, 0, chunkLength, null);
+          if (result.bytesRead === 0) break;
+          bytesRead += result.bytesRead;
+          chunks.push(chunk.subarray(0, result.bytesRead));
+          if (bytesRead > remainingBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+        }
+
+        const after = await handle.stat({ bigint: true });
+        assertSameFileIdentity(before, after, relative);
+        if (!after.isFile()
+          || after.nlink > 1n
+          || after.size !== before.size
+          || BigInt(bytesRead) !== before.size
+          || after.mtimeMs !== before.mtimeMs
+          || after.ctimeMs !== before.ctimeMs) {
+          throw new Error(`File changed while it was being captured: ${relative}`);
+        }
+        content = Buffer.concat(chunks, bytesRead);
+        mode = Number(before.mode & 0o777n);
+      } finally {
+        await handle.close();
+      }
+      totalBytes += content.byteLength;
+      const record = {
         path: relative,
         bytes: content.byteLength,
         content_hash: sha256Ref(content.toString('base64')),
-        source_path: absolute,
-      });
+        mode,
+      };
+      capturedContentByRecord.set(record, content);
+      records.push(record);
     }
   }
 
   await visit(root);
-  const publicRecords = records.map(({ source_path: _sourcePath, ...record }) => record);
+  const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
+    path: recordPath,
+    bytes,
+    content_hash: contentHash,
+  }));
   return {
     records,
     public_records: publicRecords,
@@ -149,7 +217,9 @@ async function copyRecords(records, destination) {
   for (const record of records) {
     const target = path.join(destination, ...record.path.split('/'));
     await mkdir(path.dirname(target), { recursive: true });
-    await copyFile(record.source_path, target);
+    const content = capturedContentByRecord.get(record);
+    if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${record.path}`);
+    await writeFile(target, content, { flag: 'wx', mode: record.mode });
   }
 }
 
@@ -844,7 +914,8 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         });
         continue;
       }
-      const content = await readFile(newFile.source_path);
+      const content = capturedContentByRecord.get(newFile);
+      if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${relative}`);
       let text;
       try {
         text = utf8Decoder.decode(content);
@@ -925,12 +996,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     }
     if (!record.destroy_promise) {
       record.destroy_reason = input.reason ?? 'unspecified';
-      const attempt = this.#destroyForkRecord(record);
-      record.destroy_promise = attempt;
+      record.destroy_promise = this.#destroyForkRecord(record);
       try {
-        return await attempt;
+        return await record.destroy_promise;
       } catch (error) {
-        if (record.destroy_promise === attempt) record.destroy_promise = null;
+        record.destroy_promise = null;
         throw error;
       }
     }
