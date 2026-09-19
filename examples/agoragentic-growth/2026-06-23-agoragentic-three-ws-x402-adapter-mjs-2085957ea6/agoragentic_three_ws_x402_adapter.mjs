@@ -36,8 +36,8 @@ function safeJsonParse(text, fallback = {}) {
   }
 }
 
-function isRetryableHttpStatus(status) {
-  return status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+function isRetryablePaidStatus(status) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 class SimpleHeaders {
@@ -201,12 +201,7 @@ async function localX402Fetch(url, options) {
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
-    if (usingPayment && cachedPayment?.authorizationHeader) {
-      attemptHeaders.authorization = cachedPayment.authorizationHeader;
-    }
-    if (usingPayment && cachedPayment?.paymentSignature) {
-      attemptHeaders["payment-signature"] = cachedPayment.paymentSignature;
-    }
+    Object.assign(attemptHeaders, usingPayment ? buildPaymentHeaders(cachedPayment) : {});
     return fetchImpl(url, {
       method,
       headers: attemptHeaders,
@@ -220,9 +215,28 @@ async function localX402Fetch(url, options) {
       const response = await dispatch(Boolean(cachedPayment));
 
       if (response.status !== 402) {
-        if (!response.ok && cachedPayment && isRetryableHttpStatus(response.status) && networkFailuresAfterAuthorization < maxNetworkRetries) {
-          networkFailuresAfterAuthorization += 1;
-          continue;
+        if (cachedPayment && isRetryablePaidStatus(response.status)) {
+          if (networkFailuresAfterAuthorization < maxNetworkRetries) {
+            networkFailuresAfterAuthorization += 1;
+            continue;
+          }
+          throw createNetworkError(`Paid retry returned retryable HTTP ${response.status} after payment authorization was prepared`, {
+            cause: response,
+            authorizedPaymentPrepared: true,
+            authorizedPaymentReused: true,
+            replayAvailable: true,
+            replayHeaders: buildPaymentHeaders(cachedPayment),
+            idempotencyKey,
+            paymentAttempted: sawPaymentChallenge,
+            networkRetriesUsed: networkFailuresAfterAuthorization,
+            responseStatus: response.status,
+            paymentState: paymentStateSummary(cachedPayment, paymentRequiredHeader, {
+              url,
+              method,
+              body,
+              idempotencyKey,
+            }),
+          });
         }
         return markX402Meta(response, {
           paymentAttempted: sawPaymentChallenge,
@@ -286,6 +300,9 @@ async function localX402Fetch(url, options) {
       continue;
     } catch (error) {
       lastError = error;
+      if (error?.name === "NetworkError") {
+        throw error;
+      }
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -298,7 +315,10 @@ async function localX402Fetch(url, options) {
       if (networkFailuresAfterAuthorization >= maxNetworkRetries) {
         throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
           cause: error,
+          authorizedPaymentPrepared: true,
           authorizedPaymentReused: true,
+          replayAvailable: true,
+          replayHeaders: buildPaymentHeaders(cachedPayment),
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
           networkRetriesUsed: networkFailuresAfterAuthorization,
@@ -316,6 +336,13 @@ async function localX402Fetch(url, options) {
   }
 
   throw lastError ?? new Error("x402Fetch failed without a response");
+}
+
+function buildPaymentHeaders(cachedPayment) {
+  const headers = {};
+  if (cachedPayment?.authorizationHeader) headers.authorization = cachedPayment.authorizationHeader;
+  if (cachedPayment?.paymentSignature) headers["payment-signature"] = cachedPayment.paymentSignature;
+  return headers;
 }
 
 function normalizePreferredOptions(options = {}) {
@@ -706,6 +733,31 @@ async function runSelfTest() {
   }
   if (!exhaustedError || exhaustedError.name !== "NetworkError") {
     throw new Error(`Expected exhausted post-authorization retries to reject with NetworkError; got ${exhaustedError?.name ?? "no error"}: ${exhaustedError?.message ?? "no message"}`);
+  }
+
+  let exhaustedStatusError = null;
+  let exhaustedStatusAttempts = 0;
+  try {
+    await createThreeWSAgoragenticAdapter({
+      baseUrl: DEFAULT_BASE_URL,
+      fetchImpl: async () => {
+        exhaustedStatusAttempts += 1;
+        if (exhaustedStatusAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+        return new SimpleResponse(503, {}, { error: "temporarily_unavailable" });
+      },
+      pay: async () => ({ authorizationHeader: "demo-authorization" }),
+      maxNetworkRetries: 1,
+    }).execute("threews.generate.preview", { prompt: "status retry regression" }, {
+      quoteId: "quote_status_retry_regression",
+      idempotencyKey: "demo-threews-status-retry-regression",
+    });
+  } catch (error) {
+    exhaustedStatusError = error;
+  }
+  if (exhaustedStatusError?.name !== "NetworkError" || exhaustedStatusError.responseStatus !== 503
+      || exhaustedStatusError.authorizedPaymentPrepared !== true || exhaustedStatusError.replayAvailable !== true
+      || exhaustedStatusError.paymentState?.authorizationPrepared !== true) {
+    throw new Error("Expected exhausted paid HTTP retries to reject with reusable-payment NetworkError metadata");
   }
 
   const recoveryExample = classifyExecuteError(
