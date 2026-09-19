@@ -6,13 +6,13 @@
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
-    "file_count": 184,
-    "occurrence_count": 367,
+    "file_count": 185,
+    "occurrence_count": 369,
     "category_file_counts": {
       "installer_or_clone": 31,
       "machine_discovery": 61,
       "package_registry_metadata": 23,
-      "public_documentation": 91,
+      "public_documentation": 92,
       "raw_content_url": 2,
       "release_or_provenance": 17,
       "reusable_action": 2,
@@ -1691,10 +1691,21 @@
       ]
     },
     {
-      "path": "risk-fork/hackathon/docs/REVIEWER_SELF_TEST.md",
+      "path": "risk-fork/hackathon/docs/QUICKSTART.md",
       "occurrences": 1,
       "line_numbers": [
-        13
+        166
+      ],
+      "categories": [
+        "public_documentation"
+      ]
+    },
+    {
+      "path": "risk-fork/hackathon/docs/REVIEWER_SELF_TEST.md",
+      "occurrences": 2,
+      "line_numbers": [
+        13,
+        19
       ],
       "categories": [
         "public_documentation"
