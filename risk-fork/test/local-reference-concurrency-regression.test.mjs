@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -190,8 +197,36 @@ test('local workspace rejects a FIFO without opening or blocking on it', {
   await execFileAsync('mkfifo', [path.join(source, 'blocking.pipe')]);
   await assert.rejects(
     inspectLocalWorkspace({ source_workspace: source }),
-    /special filesystem entry/,
+    /special filesystem entry/i,
   );
+});
+
+test('local workspace rejects a nested directory symlink before traversing outside', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-link-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  const outside = path.join(temporary, 'outside');
+  await mkdir(source);
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'sentinel.txt'), 'must remain outside\n');
+  try {
+    await symlink(
+      outside,
+      path.join(source, 'linked-directory'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+  } catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error?.code)) {
+      t.skip(`directory link creation unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /symlinks are forbidden/i,
+  );
+  assert.equal(await access(path.join(outside, 'sentinel.txt')).then(() => true), true);
 });
 
 function waitForExactStdoutLine(child, expectedLine, timeoutMs) {

@@ -8,6 +8,7 @@ import {
   mkdtemp,
   open,
   readdir,
+  realpath,
   rm,
   writeFile,
 } from 'node:fs/promises';
@@ -96,13 +97,38 @@ function assertOwnedPath(root, target) {
   return resolvedTarget;
 }
 
+function assertInsideWorkspace(workspaceRoot, target, relative) {
+  const resolvedRoot = path.resolve(workspaceRoot);
+  const resolvedTarget = path.resolve(target);
+  if (resolvedTarget !== resolvedRoot
+    && !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`Workspace path escaped the source root: ${relative}`);
+  }
+  return resolvedTarget;
+}
+
 async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
+  const workspaceRoot = await realpath(root);
   const records = [];
   const seenCaseFolded = new Map();
   let totalBytes = 0;
 
   async function visit(directory, prefix = '') {
+    const directoryBefore = await lstat(directory, { bigint: true });
+    if (!directoryBefore.isDirectory()) {
+      throw new Error(`Workspace directory changed while it was being captured: ${prefix || '.'}`);
+    }
+    const directoryRealPath = assertInsideWorkspace(
+      workspaceRoot,
+      await realpath(directory),
+      prefix || '.',
+    );
     const entries = await readdir(directory, { withFileTypes: true });
+    const directoryAfter = await lstat(directory, { bigint: true });
+    if (directoryAfter.dev !== directoryBefore.dev || directoryAfter.ino !== directoryBefore.ino) {
+      throw new Error(`Workspace directory changed while it was being captured: ${prefix || '.'}`);
+    }
+    assertInsideWorkspace(workspaceRoot, await realpath(directory), prefix || '.');
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const relative = normalizeRelativePath(
@@ -121,6 +147,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
       const absolute = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
       if (entry.isDirectory()) {
+        assertInsideWorkspace(workspaceRoot, path.join(directoryRealPath, entry.name), relative);
         await visit(absolute, relative);
         continue;
       }
@@ -132,6 +159,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
       try {
         const before = await handle.stat({ bigint: true });
         if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+        assertInsideWorkspace(workspaceRoot, await realpath(absolute), relative);
         const pathAfterOpen = await lstat(absolute, { bigint: true });
         if (pathAfterOpen.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
         assertSameFileIdentity(pathAfterOpen, before, relative);
