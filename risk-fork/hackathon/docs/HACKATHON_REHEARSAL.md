@@ -66,7 +66,11 @@ its local proposal boundary does not authorize deployment or production action.
 
 ## Audience self-service path
 
-Give participants the exact ZIP, `.sha256`, `.spdx.json`, and `.build.json` from one release-candidate artifact. Their shortest path is:
+The currently public [v0.1.0 alpha prerelease](https://github.com/rhein1/agoragentic-integrations/releases/tag/risk-fork-v0.1.0-alpha.1)
+is an older, durable download with the ZIP, `.sha256`, `.spdx.json`, and
+`.build.json`. Give participants those four assets from the **same release**,
+not a temporary GitHub Actions artifact or a mixture of source revisions.
+Follow [the reviewer self-test](./REVIEWER_SELF_TEST.md). Their shortest path is:
 
 1. match the ZIP SHA-256 to the sidecar;
 2. extract into a new empty directory;
@@ -75,6 +79,10 @@ Give participants the exact ZIP, `.sha256`, `.spdx.json`, and `.build.json` from
 5. run one fixed scenario and optionally start the local Flight Recorder.
 
 No `npm install`, API key, wallet, cloud account, provider account, or Marketplace account is required for the extracted offline kit.
+Direct Node commands and the included minimal MCP client require no model call;
+connecting a separate agent client may incur that client's model/API usage.
+The optional [local Docker MCP example](../docker-example/README.md) is a
+distinct source/profile and does not turn the fake-E2B fixture into E2B.
 
 ## Framework and GUI-client stations
 
