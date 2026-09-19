@@ -57,7 +57,7 @@
         "prettier": "3.9.6",
         "typescript": "5.9.2",
         "typescript-eslint": "8.69.0",
-        "zod": "3.25.76"
+        "zod": "4.6.4"
     },
     "peerDependencies": {
         "n8n-workflow": "*"

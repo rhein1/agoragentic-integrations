@@ -23,7 +23,7 @@ test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 		prettier: '3.9.6',
 		typescript: '5.9.2',
 		'typescript-eslint': '8.69.0',
-		zod: '3.25.76',
+		zod: '4.6.4',
 	};
 
 	assert.equal(pkg.version, '0.1.4');
