@@ -7,7 +7,7 @@
   "target_repository": null,
   "summary": {
     "file_count": 184,
-    "occurrence_count": 367,
+    "occurrence_count": 368,
     "category_file_counts": {
       "installer_or_clone": 31,
       "machine_discovery": 61,
@@ -1692,9 +1692,10 @@
     },
     {
       "path": "risk-fork/hackathon/docs/REVIEWER_SELF_TEST.md",
-      "occurrences": 1,
+      "occurrences": 2,
       "line_numbers": [
-        13
+        13,
+        19
       ],
       "categories": [
         "public_documentation"
