@@ -5,7 +5,6 @@ import { chmodSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import {
   access,
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readdir,

@@ -10,7 +10,7 @@ const schema={type:'object',additionalProperties:false,required:['provider_id','
 export async function inspectSource(candidate,{runId,scenario}={}) {
   const root=await mkdtemp(path.join(os.tmpdir(),'agora-runtime-'));
   const source=path.join(root,'source'); await mkdir(source);
-  let adapter=null,adapterRoot=null,savepoint=null,fork=null,artifact=null,accepted=false,cleanup='unknown';
+  let adapter=null,adapterRoot=null,savepoint=null,fork=null,artifact=null,accepted=false,cleanup;
   let capsule=null,executionError=null;
   try {
     const inspection=await inspectLocalWorkspace({source_workspace:source});
