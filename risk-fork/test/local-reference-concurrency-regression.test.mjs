@@ -339,6 +339,7 @@ test('fork copy remains tracked when source spool release fails', {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-copy-cleanup-'));
   const source = path.join(root, 'source');
   await mkdir(source);
+  await writeFile(path.join(source, 'input.txt'), 'captured source');
   let cleanupCalls = 0;
   const adapter = new LocalReferenceRiskForkAdapter({
     baseDirectory: path.join(root, 'adapter'),
