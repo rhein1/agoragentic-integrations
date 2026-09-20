@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { chmodSync } from 'node:fs';
 import {
   access,
   chmod,
@@ -332,6 +333,48 @@ test('default adapter initialization reclaims stale capture spools from an aband
   assert.equal(await access(abandoned).then(() => true), true);
 });
 
+test('fork copy remains tracked when source spool release fails', {
+  skip: process.platform === 'win32' ? 'POSIX spool permission boundary' : false,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-copy-cleanup-'));
+  const source = path.join(root, 'source');
+  await mkdir(source);
+  let cleanupCalls = 0;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    baseDirectory: path.join(root, 'adapter'),
+    clock: () => new Date(NOW),
+    removeDirectory: async () => {
+      cleanupCalls += 1;
+      throw new Error('synthetic cleanup failure');
+    },
+  });
+  t.after(() => {
+    chmodSync(adapter.captureRoot, 0o700);
+    return rm(root, { recursive: true, force: true });
+  });
+  await adapter.initialize();
+  const inspected = await inspectLocalWorkspace({ source_workspace: source });
+  const capsule = makeCapsule({
+    workspace: { snapshot_ref: 'workspace:fork-cleanup', digest: inspected.workspace_digest },
+  });
+  const savepoint = await adapter.createSavepoint({ capsule, source_workspace: source });
+  adapter.clock = () => {
+    chmodSync(adapter.captureRoot, 0o500);
+    return new Date(NOW);
+  };
+  await assert.rejects(
+    adapter.createFork({
+      savepoint_ref: savepoint.savepoint_ref,
+      fork_identity: makeForkIdentity(capsule),
+      network_policy: { mode: 'blocked' },
+    }),
+    /EACCES|permission|synthetic cleanup failure/i,
+  );
+  assert.equal(cleanupCalls > 0, true);
+  const pending = [...adapter.forks.values()].find((record) => record.cleanup_pending);
+  assert.ok(pending, 'copied fork must remain tracked when cleanup cannot be confirmed');
+});
+
 test('adapter rejects unsafe explicit private roots', {
   skip: process.platform === 'win32' ? 'POSIX private-root mode boundary' : false,
 }, async (t) => {
@@ -386,7 +429,7 @@ test('capture scavenger rescans a young orphan after the in-flight pass complete
   await assert.rejects(access(orphanDirectory), (error) => error?.code === 'ENOENT');
 });
 
-test('capture scavenger skips a live PID whose process instance does not match', {
+test('capture scavenger reclaims a live PID whose process instance does not match', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
   const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
@@ -405,8 +448,8 @@ test('capture scavenger skips a live PID whose process instance does not match',
   await chmod(directory, 0o700);
   const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
   await utimes(marker, old, old);
-  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
-  assert.equal(await access(directory).then(() => true), true);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 1);
+  await assert.rejects(access(directory), (error) => error?.code === 'ENOENT');
 });
 
 test('capture scavenger lstat-falls back for unknown directory entries', {

@@ -184,14 +184,21 @@ async function ensurePrivateDirectory(directory, { create = true } = {}) {
       if (!ancestorInfo.isDirectory() || ancestorInfo.isSymbolicLink()) {
         throw new Error(`Risk Fork private directory ancestor is not trusted: ${ancestor}`);
       }
+      const ancestorMode = Number(ancestorInfo.mode & 0o1777n);
+      const rootOwnedStickyAncestor = process.platform !== 'win32'
+        && typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === 0n
+        && (ancestorMode & 0o1000) !== 0;
       if (process.platform !== 'win32'
         && (typeof process.getuid !== 'function'
           || typeof ancestorInfo.uid !== 'bigint'
           || ancestorInfo.uid !== BigInt(process.getuid())
-          || Number(ancestorInfo.mode & 0o022n) !== 0)) {
+          || ((ancestorMode & 0o022) !== 0 && !rootOwnedStickyAncestor))) {
         throw new Error(`Risk Fork private directory ancestor is unsafe: ${ancestor}`);
       }
-      break;
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
       const parent = path.dirname(ancestor);
@@ -375,11 +382,19 @@ async function scavengeOrphanCaptureDirectories(captureRoot) {
         // v1 has no process-instance binding. Reclaim only after a strict
         // legacy age window, a dead PID, and no currently readable instance.
         if (liveProcess || processInstance) continue;
-      } else if (!marker.process_instance
-        || typeof marker.process_instance.start_time !== 'string'
-        || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')
-        || (processInstance && !sameProcessInstance(marker.process_instance, processInstance))) continue;
-      if (liveProcess) continue;
+      } else {
+        if (!marker.process_instance
+          || typeof marker.process_instance.start_time !== 'string'
+          || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
+        if (processInstance && sameProcessInstance(marker.process_instance, processInstance)) {
+          // The recorded owner is still this exact process instance.
+          continue;
+        }
+        if (liveProcess && !processInstance) {
+          // A live PID whose identity cannot be read is ambiguous; fail closed.
+          continue;
+        }
+      }
       const children = await readdir(directory, { withFileTypes: true });
       const files = [];
       let safe = true;
@@ -405,7 +420,13 @@ async function scavengeOrphanCaptureDirectories(captureRoot) {
         files.push(childPath);
       }
       if (!safe) continue;
-      if (isLiveProcess(marker.pid) || await readProcessInstanceIdentity(marker.pid)) continue;
+      if (legacyMarker) {
+        if (isLiveProcess(marker.pid) || await readProcessInstanceIdentity(marker.pid)) continue;
+      } else {
+        const currentProcessInstance = await readProcessInstanceIdentity(marker.pid);
+        if ((currentProcessInstance && sameProcessInstance(marker.process_instance, currentProcessInstance))
+          || (!currentProcessInstance && isLiveProcess(marker.pid))) continue;
+      }
       for (const file of files) await unlink(file);
       await unlink(markerPath);
       await rmdir(directory);
@@ -1351,54 +1372,68 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       maxBytes: this.maxBytes,
       captureRoot: this.captureRoot,
     });
+    let record = null;
     try {
       await copyRecords(source.records, directory);
-    } catch (error) {
+      const createdAt = this.clock();
+      const hardDeadlineMs = performance.now() + ttlMs;
+      record = {
+        ref,
+        directory,
+        savepoint_ref: savepoint.ref,
+        baseline_digest: source.workspace_digest,
+        identity_hash: input.fork_identity.identity_hash,
+        network_policy_hash: policy.policy_hash,
+        created_at: createdAt.toISOString(),
+        expires_at: new Date(createdAt.getTime() + ttlMs).toISOString(),
+        hard_deadline_ms: hardDeadlineMs,
+        status: 'ready',
+        last_execution: null,
+        destroyed: false,
+        execution_generation: 0,
+        active_execution: null,
+        destroy_promise: null,
+        destroy_reason: null,
+        ttl_timer: null,
+      };
+      this.forks.set(ref, record);
+      // The copied fork is now tracked before spool release, so a cleanup
+      // failure cannot strand an unowned directory.
       await releaseCapturedContent(source.records);
-      await rm(directory, { recursive: true, force: true });
+      record.ttl_timer = setTimeout(() => {
+        record.ttl_timer = null;
+        this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {});
+      }, Math.max(0, Math.ceil(hardDeadlineMs - performance.now())));
+      record.ttl_timer.unref?.();
+      return {
+        fork_ref: ref,
+        fork_hash: sha256Ref({
+          ref,
+          savepoint_ref: savepoint.ref,
+          identity_hash: record.identity_hash,
+          network_policy_hash: record.network_policy_hash,
+        }),
+        status: 'ready',
+        expires_at: record.expires_at,
+        isolation_class: this.capabilities.isolation_class,
+        network_contract: 'blocked_by_closed_operation_set_not_kernel_firewall',
+      };
+    } catch (error) {
+      if (record) {
+        if (record.ttl_timer) clearTimeout(record.ttl_timer);
+        try {
+          await this.removeDirectory(directory);
+          this.forks.delete(ref);
+        } catch {
+          record.cleanup_pending = true;
+          record.status = 'destroy_failed';
+        }
+      } else {
+        await releaseCapturedContent(source.records).catch(() => {});
+        await this.removeDirectory(directory).catch(() => {});
+      }
       throw error;
     }
-    await releaseCapturedContent(source.records);
-    const createdAt = this.clock();
-    const hardDeadlineMs = performance.now() + ttlMs;
-    const record = {
-      ref,
-      directory,
-      savepoint_ref: savepoint.ref,
-      baseline_digest: source.workspace_digest,
-      identity_hash: input.fork_identity.identity_hash,
-      network_policy_hash: policy.policy_hash,
-      created_at: createdAt.toISOString(),
-      expires_at: new Date(createdAt.getTime() + ttlMs).toISOString(),
-      hard_deadline_ms: hardDeadlineMs,
-      status: 'ready',
-      last_execution: null,
-      destroyed: false,
-      execution_generation: 0,
-      active_execution: null,
-      destroy_promise: null,
-      destroy_reason: null,
-      ttl_timer: null,
-    };
-    this.forks.set(ref, record);
-    record.ttl_timer = setTimeout(() => {
-      record.ttl_timer = null;
-      this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {});
-    }, Math.max(0, Math.ceil(hardDeadlineMs - performance.now())));
-    record.ttl_timer.unref?.();
-    return {
-      fork_ref: ref,
-      fork_hash: sha256Ref({
-        ref,
-        savepoint_ref: savepoint.ref,
-        identity_hash: record.identity_hash,
-        network_policy_hash: record.network_policy_hash,
-      }),
-      status: 'ready',
-      expires_at: record.expires_at,
-      isolation_class: this.capabilities.isolation_class,
-      network_contract: 'blocked_by_closed_operation_set_not_kernel_firewall',
-    };
   }
 
   async getForkStatus(input = {}) {
