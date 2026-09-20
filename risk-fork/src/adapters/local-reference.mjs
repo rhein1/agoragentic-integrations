@@ -203,7 +203,16 @@ async function ensurePrivateDirectory(directory, { create = true } = {}) {
       throw error;
     }
   }
-  if (create) await mkdir(resolved, { recursive: true, mode: 0o700 });
+  if (create) {
+    try {
+      await mkdir(resolved, { recursive: false, mode: 0o700 });
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+    if (process.platform !== 'win32' && await realpath(resolved) !== resolved) {
+      throw new Error(`Risk Fork private directory resolved through an unexpected path: ${resolved}`);
+    }
+  }
   const info = await lstat(resolved, { bigint: true });
   if (!info.isDirectory() || info.isSymbolicLink()) {
     throw new Error(`Risk Fork private directory is not a real directory: ${resolved}`);

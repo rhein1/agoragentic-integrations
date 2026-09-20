@@ -280,7 +280,9 @@ test('capture scavenger ignores unrelated temporary-directory lookalikes', {
   assert.equal(await access(unrelated).then(() => true), true);
 });
 
-test('adapter instances receive distinct private capture roots', async (t) => {
+test('adapter instances receive distinct private capture roots', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
   const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-one-'));
   const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-two-'));
   t.after(() => Promise.all([
@@ -662,7 +664,9 @@ test('local workspace falls back to lstat for unknown directory entry types', as
   }
 });
 
-test('large local snapshots use bounded spooling and diff output has an explicit cap', async (t) => {
+test('large local snapshots use bounded spooling and diff output has an explicit cap', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-spool-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const source = path.join(temporary, 'source');
@@ -904,7 +908,9 @@ async function startWindowsExclusiveLock(lockPath) {
   };
 }
 
-test('local reference admission starts exactly one runner and suspend never changes state', async () => {
+test('local reference admission starts exactly one runner and suspend never changes state', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-concurrency-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -974,7 +980,9 @@ test('local reference admission starts exactly one runner and suspend never chan
   }
 });
 
-test('trusted test-runner output is canonicalized once before hashing and return', async () => {
+test('trusted test-runner output is canonicalized once before hashing and return', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   let rawParsed = null;
   let expectedHash = null;
   const runnerControl = {
@@ -1006,7 +1014,9 @@ test('trusted test-runner output is canonicalized once before hashing and return
   }
 });
 
-test('trusted test-runner output rejects accessors before evidence hashing', async () => {
+test('trusted test-runner output rejects accessors before evidence hashing', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = {
     starts: [],
     operationRunner(input) {
@@ -1045,7 +1055,9 @@ test('trusted test-runner output rejects accessors before evidence hashing', asy
   }
 });
 
-test('explicit destruction cancels one lease, serializes callers, and prevents late mutation', async () => {
+test('explicit destruction cancels one lease, serializes callers, and prevents late mutation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-destroy-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -1102,7 +1114,9 @@ test('explicit destruction cancels one lease, serializes callers, and prevents l
   }
 });
 
-test('execution admission destroys a fork at its exact wall-clock expiry without starting a runner', async () => {
+test('execution admission destroys a fork at its exact wall-clock expiry without starting a runner', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   let now = new Date(NOW);
   const fixture = await makeFixture('risk-fork-local-expiry-boundary-', {
@@ -1129,7 +1143,9 @@ test('execution admission destroys a fork at its exact wall-clock expiry without
   }
 });
 
-test('atomic admission rejects when the wall clock advances during operation validation', async () => {
+test('atomic admission rejects when the wall clock advances during operation validation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   let now = new Date(NOW);
   const fixture = await makeFixture('risk-fork-local-expiry-validation-race-', {
@@ -1164,6 +1180,7 @@ test('atomic admission rejects when the wall clock advances during operation val
 });
 
 test('event-loop starvation cannot open an execution window after the hard TTL', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -1191,6 +1208,7 @@ test('event-loop starvation cannot open an execution window after the hard TTL',
 });
 
 test('a ready result after event-loop starvation past TTL is destroyed before rejection', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -1226,6 +1244,7 @@ test('a ready result after event-loop starvation past TTL is destroyed before re
 });
 
 test('hard TTL cancels and closes an active runner before deleting its workspace', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -1263,7 +1282,9 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
   }
 });
 
-test('execution timeout waits for child closure before returning a terminal failure', async () => {
+test('execution timeout waits for child closure before returning a terminal failure', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-timeout-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -1301,7 +1322,9 @@ test('execution timeout waits for child closure before returning a terminal fail
   }
 });
 
-test('a late completion cannot win against an absolute execution deadline', async () => {
+test('a late completion cannot win against an absolute execution deadline', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-timeout-race-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -1329,7 +1352,9 @@ test('a late completion cannot win against an absolute execution deadline', asyn
   }
 });
 
-test('destroy failure blocks replay but an explicit retry can finish cleanup', async () => {
+test('destroy failure blocks replay but an explicit retry can finish cleanup', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-destroy-failure-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -1379,7 +1404,7 @@ test('destroy failure blocks replay but an explicit retry can finish cleanup', a
 });
 
 test('Windows retries destruction after a transient workspace lock is released', {
-  skip: process.platform !== 'win32',
+  skip: 'Windows local storage is fail-closed until ACL proof exists',
   timeout: 90_000,
 }, async () => {
   const fixture = await makeFixture('risk-fork-local-windows-destroy-retry-');
@@ -1423,7 +1448,9 @@ test('Windows default local-reference storage fails closed without ACL proof', {
   );
 });
 
-test('failed and destroyed production-runner forks reject replay without changing evidence', async () => {
+test('failed and destroyed production-runner forks reject replay without changing evidence', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const fixture = await makeFixture('risk-fork-local-terminal-');
   const { adapter, fork } = fixture;
   try {
