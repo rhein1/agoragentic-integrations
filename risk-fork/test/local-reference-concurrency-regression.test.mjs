@@ -249,6 +249,16 @@ test('large local snapshots use bounded spooling and diff output has an explicit
     fixture.adapter.collectDiff({ fork_ref: fixture.fork.fork_ref }),
     /Local reference diff content exceeds 16777216 bytes/,
   );
+
+  const aggregateFixture = await makeFixture('risk-fork-local-diff-aggregate-');
+  t.after(() => disposeFixture(aggregateFixture));
+  const aggregateDirectory = aggregateFixture.adapter.forks.get(aggregateFixture.fork.fork_ref).directory;
+  await writeFile(path.join(aggregateDirectory, 'first.txt'), Buffer.alloc(9 * 1024 * 1024, 0x63));
+  await writeFile(path.join(aggregateDirectory, 'second.txt'), Buffer.alloc(9 * 1024 * 1024, 0x64));
+  await assert.rejects(
+    aggregateFixture.adapter.collectDiff({ fork_ref: aggregateFixture.fork.fork_ref }),
+    /Local reference diff materialization exceeds 16777216 bytes/,
+  );
 });
 
 test('local workspace rejects a nested directory symlink before traversing outside', async (t) => {

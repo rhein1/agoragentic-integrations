@@ -1076,6 +1076,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       const afterMap = new Map(after.records.map((item) => [item.path, item]));
       const paths = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
       const files = [];
+      let materializedDiffBytes = 0;
       for (const relative of paths) {
         const oldFile = beforeMap.get(relative);
         const newFile = afterMap.get(relative);
@@ -1095,6 +1096,12 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         if (newFile.bytes > MAX_LOCAL_DIFF_CONTENT_BYTES) {
           throw new Error(`Local reference diff content exceeds ${MAX_LOCAL_DIFF_CONTENT_BYTES} bytes: ${relative}`);
         }
+        if (materializedDiffBytes + newFile.bytes > MAX_LOCAL_DIFF_CONTENT_BYTES) {
+          throw new Error(
+            `Local reference diff materialization exceeds ${MAX_LOCAL_DIFF_CONTENT_BYTES} bytes`,
+          );
+        }
+        materializedDiffBytes += newFile.bytes;
         const content = await readFile(capturePath);
         let text;
         try {
