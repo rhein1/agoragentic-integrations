@@ -1321,7 +1321,7 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
       entry.termination_started,
       delay(2_000).then(() => { throw new Error('hard TTL did not request termination'); }),
     ]);
-    assert.equal((await adapter.collectEvidence({ fork_ref: fork.fork_ref })).status, 'destroying');
+    await waitForStatus(adapter, fork.fork_ref, 'destroying', 1_000);
     assert.equal(entry.terminate_calls, 1);
     entry.close();
     assert.equal((await observedExecution)?.code, 'LOCAL_REFERENCE_FORK_EXPIRED');
