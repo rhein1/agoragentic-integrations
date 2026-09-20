@@ -500,7 +500,7 @@ test('fork copy remains tracked when source spool release fails', {
       fork_identity: makeForkIdentity(capsule),
       network_policy: { mode: 'blocked' },
     }),
-    /EACCES|EISDIR|permission|synthetic cleanup failure/i,
+    /EACCES|EISDIR|EPERM|permission|synthetic cleanup failure/i,
   );
   assert.equal(cleanupCalls > 0, true);
   const pending = [...adapter.forks.values()].find((record) => record.cleanup_pending);
@@ -1313,6 +1313,9 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
       timeout_ms: 3_000,
       operation: operation('ttl-race.txt', 'ttl-race'),
     });
+    // Attach the rejection observer immediately. Node 22 reports an unhandled
+    // rejection if hard-TTL cleanup wins before the later assertion attaches.
+    const observedExecution = execution.catch((error) => error);
     const entry = runnerControl.starts[0];
     await Promise.race([
       entry.termination_started,
@@ -1321,10 +1324,7 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
     assert.equal((await adapter.collectEvidence({ fork_ref: fork.fork_ref })).status, 'destroying');
     assert.equal(entry.terminate_calls, 1);
     entry.close();
-    await assert.rejects(
-      execution,
-      (error) => error?.code === 'LOCAL_REFERENCE_FORK_EXPIRED',
-    );
+    assert.equal((await observedExecution)?.code, 'LOCAL_REFERENCE_FORK_EXPIRED');
     const evidence = await waitForStatus(adapter, fork.fork_ref, 'destroyed');
     assert.equal(evidence.last_execution, null);
     assertEvidenceHash(evidence);

@@ -101,15 +101,7 @@ jobs:
           npm --prefix risk-fork test
           npm --prefix risk-fork/hackathon run check
           if [ "$RUNNER_OS" = "Windows" ]; then
-            node --input-type=module <<'NODE'
-            import { LocalReferenceRiskForkAdapter } from './risk-fork/src/adapters/local-reference.mjs';
-            try {
-              await new LocalReferenceRiskForkAdapter().initialize();
-              throw new Error('Windows local-reference adapter unexpectedly initialized without ACL proof');
-            } catch (error) {
-              if (error?.code !== 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED') throw error;
-            }
-            NODE
+            node --input-type=module -e "import { LocalReferenceRiskForkAdapter } from './risk-fork/src/adapters/local-reference.mjs'; try { await new LocalReferenceRiskForkAdapter().initialize(); throw new Error('Windows local-reference adapter unexpectedly initialized without ACL proof'); } catch (error) { if (error?.code !== 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED') throw error; }"
           else
             npm --prefix risk-fork/hackathon test
           fi
