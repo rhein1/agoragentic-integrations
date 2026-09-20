@@ -31,11 +31,19 @@ import {
   resolveOwnedDemoPath,
   sanitizeDemoError,
   scanDemoSecrets,
+  samePath,
   validateDemoOperation,
 } from '../src/security.mjs';
 
 const FIXED_NOW = new Date('2030-01-01T00:00:00.000Z');
 const FIXED_ENTROPY = Buffer.from('00112233445566778899aabbccddeeff', 'hex');
+
+test('macOS /private alias handling is limited to the real /private/var alias', () => {
+  assert.equal(samePath('/private/var', '/var', 'darwin'), true);
+  assert.equal(samePath('/private/var/folders/run', '/var/folders/run', 'darwin'), true);
+  assert.equal(samePath('/private/varfoo/run', '/varfoo/run', 'darwin'), false);
+  assert.equal(samePath('/private/custom/run', '/custom/run', 'darwin'), false);
+});
 
 async function temporaryRoot(prefix = 'risk-fork-hackathon-security-') {
   const parent = await mkdtemp(path.join(os.tmpdir(), prefix));

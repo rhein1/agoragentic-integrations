@@ -155,19 +155,22 @@ function exactKeys(value, keys) {
     && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 }
 
-function samePath(left, right) {
+export function samePath(left, right, platform = process.platform) {
+  const pathModule = platform === 'darwin' ? path.posix : path;
   const normalize = (value) => {
-    const resolved = path.normalize(path.resolve(value));
+    const resolved = pathModule.normalize(pathModule.resolve(value));
     // macOS exposes /var through the /private/var symlink. realpath() returns
-    // the latter while caller-owned paths commonly retain the former.
-    if (process.platform === 'darwin' && resolved.startsWith('/private/')) {
+    // the latter while caller-owned paths commonly retain the former. Keep the
+    // compatibility alias narrowly scoped; /private/custom is not equivalent
+    // to /custom and must remain distinct.
+    if (platform === 'darwin' && (resolved === '/private/var' || resolved.startsWith('/private/var/'))) {
       return resolved.slice('/private'.length);
     }
     return resolved;
   };
   const a = normalize(left);
   const b = normalize(right);
-  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+  return platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 function inside(root, candidate, { allowEqual = false } = {}) {
