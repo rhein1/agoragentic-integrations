@@ -8,6 +8,7 @@ import {
   mkdir,
   mkdtemp,
   readdir,
+  readFile,
   rename,
   rm,
   symlink,
@@ -129,8 +130,9 @@ async function makeFixture(prefix, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   const source = path.join(root, 'source');
   await mkdir(source);
+  if (process.platform !== 'win32') await mkdir(path.join(root, 'adapter'), { mode: 0o700 });
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(root, 'adapter'),
+    ...(process.platform === 'win32' ? {} : { baseDirectory: path.join(root, 'adapter') }),
     clock: options.clock ?? (() => new Date(NOW)),
     ...(options.runnerControl ? { operationRunner: options.runnerControl.operationRunner } : {}),
   });
@@ -167,6 +169,9 @@ async function disposeFixture(fixture, { allowAdapterFailure = false } = {}) {
       maxRetries: 5,
       retryDelay: 25,
     });
+  }
+  if (process.platform === 'win32' && fixture.adapter.baseDirectory) {
+    await rm(fixture.adapter.baseDirectory, { recursive: true, force: true });
   }
   if (disposeError && !allowAdapterFailure) throw disposeError;
 }
@@ -282,13 +287,23 @@ test('adapter instances receive distinct private capture roots', async (t) => {
     rm(firstRoot, { recursive: true, force: true }),
     rm(secondRoot, { recursive: true, force: true }),
   ]));
-  const first = new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(firstRoot, 'adapter') });
-  const second = new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(secondRoot, 'adapter') });
+  await mkdir(path.join(firstRoot, 'adapter'), { mode: 0o700 });
+  await mkdir(path.join(secondRoot, 'adapter'), { mode: 0o700 });
+  const first = new LocalReferenceRiskForkAdapter(
+    process.platform === 'win32' ? {} : { baseDirectory: path.join(firstRoot, 'adapter') },
+  );
+  const second = new LocalReferenceRiskForkAdapter(
+    process.platform === 'win32' ? {} : { baseDirectory: path.join(secondRoot, 'adapter') },
+  );
   await first.initialize();
   await second.initialize();
   assert.notEqual(first.captureRoot, second.captureRoot);
   assert.equal(await access(first.captureRoot).then(() => true), true);
   assert.equal(await access(second.captureRoot).then(() => true), true);
+  t.after(() => Promise.all([
+    process.platform === 'win32' ? rm(first.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
+    process.platform === 'win32' ? rm(second.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
+  ]));
 });
 
 test('default adapter initialization reclaims stale capture spools from an abandoned adapter', {
@@ -307,6 +322,8 @@ test('default adapter initialization reclaims stale capture spools from an aband
   const captureRoot = path.join(abandoned, 'capture-spools');
   const orphan = path.join(captureRoot, 'agoragentic-risk-fork-capture-old');
   await mkdir(orphan, { recursive: true, mode: 0o700 });
+  await mkdir(path.join(abandoned, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(abandoned, 'forks'), { mode: 0o700 });
   await writeFile(path.join(abandoned, '.adapter-owner-v1'), JSON.stringify({
     schema: 'agoragentic.risk-fork.adapter-owner.v1',
     token: '00000000-0000-4000-8000-000000000000',
@@ -326,11 +343,57 @@ test('default adapter initialization reclaims stale capture spools from an aband
   await utimes(path.join(abandoned, '.adapter-owner-v1'), old, old);
   await utimes(path.join(orphan, '.agoragentic-risk-fork-capture-v2'), old, old);
 
+  const liveMismatch = path.join(parent, 'adapter-live-mismatch');
+  await mkdir(path.join(liveMismatch, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(liveMismatch, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(liveMismatch, 'forks'), { mode: 0o700 });
+  await writeFile(path.join(liveMismatch, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000001',
+    pid: process.pid,
+    process_instance: process.platform === 'linux'
+      ? { boot_id: 'wrong-live-boot', start_time: 'wrong-live-start' }
+      : { start_time: 'wrong-live-start' },
+  }), { mode: 0o600 });
+  await chmod(liveMismatch, 0o700);
+  await utimes(path.join(liveMismatch, '.adapter-owner-v1'), old, old);
+
+  const unknown = path.join(parent, 'adapter-unknown');
+  await mkdir(path.join(unknown, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(unknown, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(unknown, 'forks'), { mode: 0o700 });
+  await writeFile(path.join(unknown, '.adapter-owner-v1'), '{"schema":"not-a-real-marker"}', { mode: 0o600 });
+  await chmod(unknown, 0o700);
+
+  const preservedLive = path.join(parent, 'adapter-preserved-live');
+  await mkdir(path.join(preservedLive, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(preservedLive, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(preservedLive, 'forks'), { mode: 0o700 });
+  const currentInstance = process.platform === 'linux'
+    ? await (async () => {
+      const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+      const stat = (await readFile(`/proc/${process.pid}/stat`, 'utf8')).trim();
+      const close = stat.lastIndexOf(')');
+      const fields = stat.slice(close + 2).split(' ');
+      return { boot_id: bootId, start_time: fields[19] };
+    })()
+    : { start_time: 'preserved-live-start' };
+  await writeFile(path.join(preservedLive, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000002',
+    pid: process.pid,
+    process_instance: currentInstance,
+  }), { mode: 0o600 });
+  await chmod(preservedLive, 0o700);
+
   const adapter = new LocalReferenceRiskForkAdapter();
   await adapter.initialize();
   assert.equal(await access(adapter.captureRoot).then(() => true), true);
   await assert.rejects(access(orphan), (error) => error?.code === 'ENOENT');
-  assert.equal(await access(abandoned).then(() => true), true);
+  await assert.rejects(access(abandoned), (error) => error?.code === 'ENOENT');
+  await assert.rejects(access(liveMismatch), (error) => error?.code === 'ENOENT');
+  assert.equal(await access(unknown).then(() => true), true);
+  assert.equal(await access(preservedLive).then(() => true), true);
 });
 
 test('fork copy remains tracked when source spool release fails', {
@@ -339,10 +402,11 @@ test('fork copy remains tracked when source spool release fails', {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-copy-cleanup-'));
   const source = path.join(root, 'source');
   await mkdir(source);
+  await mkdir(path.join(root, 'adapter'), { mode: 0o700 });
   await writeFile(path.join(source, 'input.txt'), 'captured source');
   let cleanupCalls = 0;
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(root, 'adapter'),
+    ...(process.platform === 'win32' ? {} : { baseDirectory: path.join(root, 'adapter') }),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: async (request) => ({
       schema: 'agoragentic.risk-fork.local-authority-free-attestation.v1',
@@ -404,14 +468,19 @@ test('fork copy remains tracked when source spool release fails', {
   assert.ok(pending, 'copied fork must remain tracked when cleanup cannot be confirmed');
 });
 
-test('adapter rejects unsafe explicit private roots', {
-  skip: process.platform === 'win32' ? 'POSIX private-root mode boundary' : false,
-}, async (t) => {
+test('adapter rejects unsafe explicit private roots', async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-root-'));
   const target = path.join(temporary, 'target');
   const linked = path.join(temporary, 'linked');
   const linkedParent = path.join(temporary, 'linked-parent');
   t.after(() => rm(temporary, { recursive: true, force: true }));
+  if (process.platform === 'win32') {
+    assert.throws(
+      () => new LocalReferenceRiskForkAdapter({ baseDirectory: target }),
+      /Explicit baseDirectory is unavailable on Windows/,
+    );
+    return;
+  }
   await mkdir(target, { mode: 0o700 });
   await chmod(target, 0o755);
   await symlink(target, linked);

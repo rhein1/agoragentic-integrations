@@ -787,7 +787,7 @@ test('nonempty local sources require an external verifier and leave no copied .e
   const sourceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-source-'));
   const adapterDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-'));
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: adapterDirectory,
+    ...(process.platform === 'win32' ? {} : { baseDirectory: adapterDirectory }),
     clock: () => NOW,
   });
   try {
@@ -813,11 +813,19 @@ test('nonempty local sources require an external verifier and leave no copied .e
       /Non-empty local snapshots require an external clean-side authority-free verifier/,
     );
 
-    assert.deepEqual(await readdir(path.join(adapterDirectory, 'savepoints')), []);
+    const savepointsDirectory = path.join(adapter.baseDirectory, 'savepoints');
+    const savepoints = await readdir(savepointsDirectory).catch((error) => {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    });
+    assert.deepEqual(savepoints, []);
   } finally {
     await adapter.dispose();
     await rm(sourceDirectory, { recursive: true, force: true });
     await rm(adapterDirectory, { recursive: true, force: true });
+    if (process.platform === 'win32' && adapter.baseDirectory) {
+      await rm(adapter.baseDirectory, { recursive: true, force: true });
+    }
   }
 });
 

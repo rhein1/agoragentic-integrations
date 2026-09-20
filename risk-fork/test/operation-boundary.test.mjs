@@ -186,7 +186,6 @@ test('local adapter rejects non-closed and secret-bearing batches before child m
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });
@@ -245,7 +244,6 @@ test('local savepoint binds captured bytes before clean-side source verification
   const sourceFile = path.join(source, 'safe.txt');
   await writeFile(sourceFile, 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: async (request, context) => {
       const captureName = (await readdir(context.snapshot_directory))

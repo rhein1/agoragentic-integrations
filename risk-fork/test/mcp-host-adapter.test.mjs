@@ -607,7 +607,6 @@ async function fixture(options = {}) {
   await mkdir(source);
   const inspected = await inspectLocalWorkspace({ source_workspace: source });
   const provider = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(root, 'provider'),
     clock: () => new Date(NOW),
   });
   const controller = new RiskForkController({

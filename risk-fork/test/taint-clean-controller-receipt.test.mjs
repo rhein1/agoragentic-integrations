@@ -606,7 +606,6 @@ test('local reference adapter is an explicitly non-isolating disposable-copy sim
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });
@@ -664,7 +663,6 @@ test('local authority-free verification reads the captured snapshot, not mutable
   await writeFile(path.join(source, 'secret.txt'), 'captured-secret', 'utf8');
   let verifierSawCapturedSecret = false;
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: async (request, context) => {
       await writeFile(path.join(source, 'secret.txt'), 'benign-source', 'utf8');
@@ -701,7 +699,6 @@ test('final capture cleanup failure retains an owned savepoint for removal retry
   let captureDirectory;
   let removalAttempts = 0;
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     removeDirectory: async (target) => {
       removalAttempts += 1;
@@ -729,7 +726,7 @@ test('final capture cleanup failure retains an owned savepoint for removal retry
     const savepointRef = [...adapter.savepoints.keys()][0];
     const record = adapter.savepoints.get(savepointRef);
     assert.equal(record.cleanup_pending, true);
-    const savepoints = await readdir(path.join(temporary, 'adapter', 'savepoints'));
+    const savepoints = await readdir(path.join(adapter.baseDirectory, 'savepoints'));
     assert.deepEqual(savepoints, [path.basename(record.directory)]);
     await assert.rejects(
       adapter.createFork({
@@ -753,13 +750,12 @@ test('final capture cleanup failure retains an owned savepoint for removal retry
   }
 });
 
-test('local reference adapter lazily initializes an explicit base directory', async () => {
+test('local reference adapter lazily initializes its private default directory', async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-lazy-test-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });

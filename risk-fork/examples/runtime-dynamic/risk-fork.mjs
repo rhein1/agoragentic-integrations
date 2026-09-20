@@ -10,7 +10,7 @@ const schema={type:'object',additionalProperties:false,required:['provider_id','
 export async function inspectSource(candidate,{runId,scenario}={}) {
   const root=await mkdtemp(path.join(os.tmpdir(),'agora-runtime-'));
   const source=path.join(root,'source'); await mkdir(source);
-  let adapter=null,savepoint=null,fork=null,artifact=null,accepted=false,cleanup='unknown';
+  let adapter=null,adapterRoot=null,savepoint=null,fork=null,artifact=null,accepted=false,cleanup='unknown';
   let capsule=null,executionError=null;
   try {
     const inspection=await inspectLocalWorkspace({source_workspace:source});
@@ -23,7 +23,10 @@ export async function inspectSource(candidate,{runId,scenario}={}) {
       governance:{policy_version:'runtime_demo_v1',policy_hash:sha256Ref('no_child_authority')},receipt_chain_head:sha256Ref('runtime_chain_start'),
       proposed_interaction:{mcp_server_ref:'runtime_fixture',mcp_server_origin:'https://runtime-fixture.invalid/',mcp_method:'tools/call',tool_name:'inspect_source',effective_arguments_hash:sha256Ref({provider_id:candidate.id}),target_ref:'runtime_fixture_target'},
       execution_authorization:{ref:null,hash:null},allowed_commit_types:['TYPED_RESULT'],authorized_result_schema_hash:sha256Ref(schema),runtime_snapshot:{mode:'none'}});
-    adapter=new LocalReferenceRiskForkAdapter({baseDirectory:path.join(root,'state')}); await adapter.initialize();
+    const stateRoot=path.join(root,'state');
+    await mkdir(stateRoot,{mode:0o700});
+    adapter=new LocalReferenceRiskForkAdapter(process.platform==='win32'?{}:{baseDirectory:stateRoot}); await adapter.initialize();
+    adapterRoot=adapter.baseDirectory;
     savepoint=await adapter.createSavepoint({capsule,source_workspace:source});
     const identity=createForkIdentity({parent_agent_id:capsule.parent.agent_id,parent_session_id:capsule.parent.session_id});
     fork=await adapter.createFork({savepoint_ref:savepoint.savepoint_ref,fork_identity:identity,network_policy:networkPolicy({mode:'blocked'}),ttl_ms:10000});
@@ -39,6 +42,7 @@ export async function inspectSource(candidate,{runId,scenario}={}) {
       cleanup=executionError?'unknown':'verified';
     } catch {cleanup='unknown';}
     try {if(adapter)await adapter.dispose();}catch{cleanup='unknown';}
+    try {if(adapterRoot)await rm(adapterRoot,{recursive:true,force:true});}catch{cleanup='unknown';}
     await rm(root,{recursive:true,force:true}); // Only the exact mkdtemp-owned synthetic root.
   }
   return {accepted:accepted&&!executionError,cleanup:scenario==='cleanup-unknown'?'unknown':cleanup,
