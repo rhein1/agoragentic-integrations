@@ -57,9 +57,12 @@ const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
 const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
 const MAX_LOCAL_DIFF_CONTENT_BYTES = 16 * 1024 * 1024;
 const CAPTURE_DIRECTORY_PREFIX = 'agoragentic-risk-fork-capture-';
-const CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v1';
-const CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v1';
+const CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v2';
+const CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v2';
+const LEGACY_CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v1';
+const LEGACY_CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v1';
 const CAPTURE_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+const LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_FILE_NAME = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.bin$/u;
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
@@ -167,12 +170,24 @@ async function scavengeOrphanCaptureDirectories() {
       if (!directoryInfo.isDirectory()
         || !isCurrentOwner(directoryInfo)
         || Number(directoryInfo.mode & 0o777n) !== 0o700) continue;
-      const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
-      const markerInfo = await lstat(markerPath, { bigint: true });
+      let markerName = CAPTURE_MARKER_NAME;
+      let legacyMarker = false;
+      let markerPath = path.join(directory, markerName);
+      let markerInfo;
+      try {
+        markerInfo = await lstat(markerPath, { bigint: true });
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        markerName = LEGACY_CAPTURE_MARKER_NAME;
+        legacyMarker = true;
+        markerPath = path.join(directory, markerName);
+        markerInfo = await lstat(markerPath, { bigint: true });
+      }
       if (!markerInfo.isFile()
         || !isCurrentOwner(markerInfo)
         || Number(markerInfo.mode & 0o777n) !== 0o600
-        || Date.now() - Number(markerInfo.mtimeMs) < CAPTURE_ORPHAN_MIN_AGE_MS) continue;
+        || Date.now() - Number(markerInfo.mtimeMs)
+          < (legacyMarker ? LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS : CAPTURE_ORPHAN_MIN_AGE_MS)) continue;
       // Keep the marker read attached to the object we inspected.  The
       // no-follow/nonblocking open rejects replacement links and special files;
       // the descriptor identity check rejects a path replacement between lstat
@@ -184,30 +199,34 @@ async function scavengeOrphanCaptureDirectories() {
         if (!markerBefore.isFile()
           || !isCurrentOwner(markerBefore)
           || Number(markerBefore.mode & 0o777n) !== 0o600) continue;
-        assertSamePathIdentity(markerInfo, markerBefore, CAPTURE_MARKER_NAME);
+        assertSamePathIdentity(markerInfo, markerBefore, markerName);
         markerContent = await markerHandle.readFile('utf8');
       } finally {
         await markerHandle.close();
       }
       const marker = JSON.parse(markerContent);
-      if (marker?.schema !== CAPTURE_MARKER_SCHEMA
+      if (marker?.schema !== (legacyMarker ? LEGACY_CAPTURE_MARKER_SCHEMA : CAPTURE_MARKER_SCHEMA)
         || typeof marker.token !== 'string'
         || !/^[0-9a-f-]{36}$/u.test(marker.token)
         || typeof marker.pid !== 'number'
         || !Number.isSafeInteger(marker.pid)
-        || marker.pid < 1
-        || !marker.process_instance
-        || typeof marker.process_instance.start_time !== 'string'
-        || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
+        || marker.pid < 1) continue;
       const liveProcess = isLiveProcess(marker.pid);
       const processInstance = await readProcessInstanceIdentity(marker.pid);
-      if (processInstance && !sameProcessInstance(marker.process_instance, processInstance)) continue;
+      if (legacyMarker) {
+        // v1 has no process-instance binding. Reclaim only after a strict
+        // legacy age window, a dead PID, and no currently readable instance.
+        if (liveProcess || processInstance) continue;
+      } else if (!marker.process_instance
+        || typeof marker.process_instance.start_time !== 'string'
+        || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')
+        || (processInstance && !sameProcessInstance(marker.process_instance, processInstance))) continue;
       if (liveProcess) continue;
       const children = await readdir(directory, { withFileTypes: true });
       const files = [];
       let safe = true;
       for (const child of children) {
-        if (child.name === CAPTURE_MARKER_NAME) continue;
+        if (child.name === CAPTURE_MARKER_NAME || child.name === LEGACY_CAPTURE_MARKER_NAME) continue;
         const childPath = path.join(directory, child.name);
         let childIsFile = child.isFile();
         if (!child.isDirectory() && !child.isFile() && !child.isSymbolicLink()) {
@@ -228,6 +247,7 @@ async function scavengeOrphanCaptureDirectories() {
         files.push(childPath);
       }
       if (!safe) continue;
+      if (isLiveProcess(marker.pid) || await readProcessInstanceIdentity(marker.pid)) continue;
       for (const file of files) await unlink(file);
       await unlink(markerPath);
       await rmdir(directory);

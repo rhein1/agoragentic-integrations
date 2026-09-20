@@ -195,7 +195,7 @@ const WINDOWS_LOCK_START_TIMEOUT_MS = 45_000;
 const WINDOWS_LOCK_CLOSE_TIMEOUT_MS = 15_000;
 const execFileAsync = promisify(execFile);
 
-test('capture spool cleanup yields to the event loop and scavenges only stale dead-owner directories', {
+test('capture spool cleanup migrates only aged legacy markers and scavenges stale dead-owner directories', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
   timeout: 30_000,
 }, async (t) => {
@@ -205,11 +205,10 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
     schema: 'agoragentic.risk-fork.capture-directory.v1',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
-    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
   }), { mode: 0o600 });
   await writeFile(path.join(staleDirectory, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
   await chmod(staleDirectory, 0o700);
-  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  const old = new Date(Date.now() - (26 * 60 * 60 * 1000));
   await utimes(marker, old, old);
   await utimes(staleDirectory, old, old);
 
@@ -223,7 +222,6 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
     schema: 'agoragentic.risk-fork.capture-directory.v1',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
-    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
   }), { mode: 0o600 });
   await chmod(protectedDirectory, 0o700);
   await utimes(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), old, old);
@@ -256,11 +254,11 @@ test('capture scavenger rescans a young orphan after the in-flight pass complete
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
   const orphanDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
-  const marker = path.join(orphanDirectory, '.agoragentic-risk-fork-capture-v1');
+  const marker = path.join(orphanDirectory, '.agoragentic-risk-fork-capture-v2');
   const payload = path.join(orphanDirectory, '0-00000000-0000-4000-8000-000000000000.bin');
   t.after(() => rm(orphanDirectory, { recursive: true, force: true }));
   await writeFile(marker, JSON.stringify({
-    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
     process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
@@ -282,10 +280,10 @@ test('capture scavenger skips a live PID whose process instance does not match',
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
-  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v1');
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(marker, JSON.stringify({
-    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
     token: '00000000-0000-4000-8000-000000000000',
     pid: process.pid,
     process_instance: process.platform === 'linux'
@@ -304,14 +302,14 @@ test('capture scavenger lstat-falls back for unknown directory entries', {
 }, async (t) => {
   const unknownTopLevel = path.join(os.tmpdir(), `agoragentic-risk-fork-capture-unknown-${randomUUID()}`);
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
-  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v1');
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
   t.after(() => Promise.all([
     rm(unknownTopLevel, { force: true }),
     rm(directory, { recursive: true, force: true }),
   ]));
   await execFileAsync('mkfifo', [unknownTopLevel]);
   await writeFile(marker, JSON.stringify({
-    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
     process_instance: { boot_id: 'test-boot', start_time: 'test-start' },

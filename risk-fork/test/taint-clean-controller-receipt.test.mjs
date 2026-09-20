@@ -710,7 +710,7 @@ test('final capture cleanup failure retains an owned savepoint for removal retry
     },
     verifyAuthorityFreeSource: async (request, context) => {
       captureDirectory = context.snapshot_directory;
-      const marker = path.join(captureDirectory, '.agoragentic-risk-fork-capture-v1');
+      const marker = path.join(captureDirectory, '.agoragentic-risk-fork-capture-v2');
       await rm(marker, { force: true });
       await mkdir(marker);
       return verifyLocalAuthorityFreeSource(request);
