@@ -180,7 +180,9 @@ test('controller rejects authority-bearing child operations before every provide
   }
 });
 
-test('local adapter rejects non-closed and secret-bearing batches before child mutation', async () => {
+test('local adapter rejects non-closed and secret-bearing batches before child mutation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-operation-boundary-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
@@ -237,7 +239,9 @@ test('local adapter rejects non-closed and secret-bearing batches before child m
   }
 });
 
-test('local savepoint binds captured bytes before clean-side source verification', async () => {
+test('local savepoint binds captured bytes before clean-side source verification', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-snapshot-race-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);

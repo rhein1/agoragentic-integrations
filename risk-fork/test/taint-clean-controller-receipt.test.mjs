@@ -600,7 +600,9 @@ test('authoritative parent transaction allows exactly one concurrent typed-resul
   }
 });
 
-test('local reference adapter is an explicitly non-isolating disposable-copy simulator', async () => {
+test('local reference adapter is an explicitly non-isolating disposable-copy simulator', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-test-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
@@ -656,7 +658,9 @@ test('local reference adapter is an explicitly non-isolating disposable-copy sim
   }
 });
 
-test('local authority-free verification reads the captured snapshot, not mutable source bytes', async () => {
+test('local authority-free verification reads the captured snapshot, not mutable source bytes', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-captured-verifier-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
@@ -691,7 +695,9 @@ test('local authority-free verification reads the captured snapshot, not mutable
   }
 });
 
-test('final capture cleanup failure retains an owned savepoint for removal retry', async () => {
+test('final capture cleanup failure retains an owned savepoint for removal retry', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-rollback-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
@@ -750,7 +756,9 @@ test('final capture cleanup failure retains an owned savepoint for removal retry
   }
 });
 
-test('local reference adapter lazily initializes its private default directory', async () => {
+test('local reference adapter lazily initializes its private default directory', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-lazy-test-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);

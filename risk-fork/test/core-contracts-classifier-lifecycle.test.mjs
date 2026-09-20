@@ -791,6 +791,16 @@ test('nonempty local sources require an external verifier and leave no copied .e
     clock: () => NOW,
   });
   try {
+    if (process.platform === 'win32') {
+      await assert.rejects(
+        adapter.createSavepoint({
+          capsule: makeCapsule({ workspace: { snapshot_ref: 'workspace:windows', digest: sha256Ref([]) } }),
+          source_workspace: sourceDirectory,
+        }),
+        (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+      );
+      return;
+    }
     await writeFile(
       path.join(sourceDirectory, '.env'),
       'API_KEY=synthetic-not-a-real-secret-1234567890\n',
