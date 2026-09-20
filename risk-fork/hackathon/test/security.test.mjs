@@ -482,7 +482,7 @@ test('unmarked roots and marker tampering fail closed', async () => {
     const handle = await initializeOwnedDemoRoot(root);
     await rm(root, { recursive: true, force: true });
     await mkdir(root);
-    await chmod(root, 0o777);
+    await chmod(root, 0o755);
     await assert.rejects(
       initializeOwnedDemoRoot(root),
       (error) => error.code === 'DEMO_ROOT_NOT_OWNED',

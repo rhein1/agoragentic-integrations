@@ -198,7 +198,8 @@ saved to AWS, E2B, Agoragentic, a VM, or a hosted database.
 The default temporary root is created exclusively on first use. An existing
 unmarked directory is never adopted, even when empty; remove it and retry after
 confirming it is safe. On POSIX hosts, an existing marked root must be owned by
-the current user and must not be group- or world-writable. Windows ACL/DACL
+the current user and must use owner-only mode, with no group/other access.
+Windows ACL/DACL
 ownership is not inferred from Node mode bits and remains an explicit limitation;
 this demo does not claim a Windows filesystem isolation boundary.
 

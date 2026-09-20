@@ -607,7 +607,7 @@ async function assertOwnedRootMetadata(target, label) {
   // validation remains a separate prerequisite; do not claim it here.
   if (process.platform !== 'win32') {
     if ((info.mode & 0o077) !== 0) {
-      fail('DEMO_ROOT_NOT_OWNED', `${label} must not be group- or world-writable`);
+      fail('DEMO_ROOT_NOT_OWNED', `${label} must use owner-only mode`);
     }
     if (typeof process.getuid === 'function' && info.uid !== process.getuid()) {
       fail('DEMO_ROOT_NOT_OWNED', `${label} is not owned by the current user`);
