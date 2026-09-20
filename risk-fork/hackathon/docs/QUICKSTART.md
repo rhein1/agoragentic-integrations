@@ -161,3 +161,10 @@ verification false, and exits with code 2.
 Continue with
 [cleanup and troubleshooting](./CLEANUP_TROUBLESHOOTING.md) if any cleanup or
 manifest result is not verified.
+
+Reviewers starting from the current
+[offline reviewer-kit release](https://github.com/rhein1/agoragentic-integrations/releases/tag/risk-fork-hackathon-reviewer-kit-20260919)
+can run `node risk-fork/hackathon/scripts/reviewer-self-test.mjs` from the
+verified extraction root; see [the no-provider-spend self-test](./REVIEWER_SELF_TEST.md).
+Its optional local Docker MCP probe remains separate from the default fake-E2B
+path and does not establish hosted or live protection.

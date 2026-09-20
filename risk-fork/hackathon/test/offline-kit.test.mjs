@@ -48,6 +48,7 @@ const SOURCE_TREES = Object.freeze([
   'risk-fork/hackathon/src',
   'risk-fork/hackathon/scripts',
   'risk-fork/hackathon/docs',
+  'risk-fork/hackathon/docker-example',
   'risk-fork/hackathon/recorder',
   'risk-fork/hackathon/fixtures',
 ]);
@@ -206,6 +207,7 @@ test('offline kit is commit-pinned, deterministic, extractable, and self-verifyi
     [...manifest.files.map((entry) => entry.path)].sort((left, right) => Buffer.compare(Buffer.from(left), Buffer.from(right))),
   );
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/fixtures/catalog.json'));
+  assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/docker-example/runner.mjs'));
   assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/NOTICE'));
   assert.ok(manifest.files.some((entry) => entry.path === 'NOTICE'));
   assert.equal(
