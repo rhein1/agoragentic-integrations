@@ -306,7 +306,7 @@ test('adapter instances receive distinct private capture roots', async (t) => {
   ]));
 });
 
-test('default adapter initialization reclaims stale capture spools from an abandoned adapter', {
+test('default adapter initialization never performs cross-process orphan recovery', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe adapter recovery' : false,
 }, async (t) => {
   const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-state-root-'));
@@ -318,6 +318,7 @@ test('default adapter initialization reclaims stale capture spools from an aband
     return rm(stateRoot, { recursive: true, force: true });
   });
   const parent = path.join(stateRoot, 'agoragentic-risk-fork');
+  await mkdir(parent, { mode: 0o700 });
   const abandoned = path.join(parent, 'adapter-abandoned');
   const captureRoot = path.join(abandoned, 'capture-spools');
   const orphan = path.join(captureRoot, 'agoragentic-risk-fork-capture-old');
@@ -389,9 +390,9 @@ test('default adapter initialization reclaims stale capture spools from an aband
   const adapter = new LocalReferenceRiskForkAdapter();
   await adapter.initialize();
   assert.equal(await access(adapter.captureRoot).then(() => true), true);
-  await assert.rejects(access(orphan), (error) => error?.code === 'ENOENT');
-  await assert.rejects(access(abandoned), (error) => error?.code === 'ENOENT');
-  await assert.rejects(access(liveMismatch), (error) => error?.code === 'ENOENT');
+  assert.equal(await access(orphan).then(() => true), true);
+  assert.equal(await access(abandoned).then(() => true), true);
+  assert.equal(await access(liveMismatch).then(() => true), true);
   assert.equal(await access(unknown).then(() => true), true);
   assert.equal(await access(preservedLive).then(() => true), true);
 });
@@ -1410,6 +1411,16 @@ test('Windows retries destruction after a transient workspace lock is released',
       await disposeFixture(fixture);
     }
   }
+});
+
+test('Windows default local-reference storage fails closed without ACL proof', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const adapter = new LocalReferenceRiskForkAdapter();
+  await assert.rejects(
+    adapter.initialize(),
+    (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+  );
 });
 
 test('failed and destroyed production-runner forks reject replay without changing evidence', async () => {
