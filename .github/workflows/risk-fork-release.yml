@@ -110,14 +110,21 @@ jobs:
           const run = (scenario) => new Promise((resolve) => {
             const child = spawn(process.execPath, [command, 'run', '--scenario', scenario], { env });
             let stdout = '';
+            let stderr = '';
+            let spawnError = null;
             child.stdout.on('data', (chunk) => { stdout += chunk; });
-            child.stderr.resume();
+            child.stderr.on('data', (chunk) => { stderr += chunk; });
+            child.on('error', (error) => { spawnError = error?.code ?? 'SPAWN_ERROR'; });
             child.on('close', (exitCode) => {
               let value = null;
               try { value = JSON.parse(stdout); } catch {}
+              const stderrCodes = [...stderr.matchAll(/\b[A-Z][A-Z0-9_]{3,}\b/g)]
+                .map((match) => match[0]).slice(0, 5);
               resolve({
                 scenario,
                 exit_code: exitCode,
+                spawn_error_code: spawnError,
+                stderr_codes: stderrCodes,
                 status: value?.status ?? null,
                 final_state: value?.final_state ?? null,
                 failure: value?.failure ?? null,
