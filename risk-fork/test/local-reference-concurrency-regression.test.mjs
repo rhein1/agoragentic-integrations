@@ -4,6 +4,7 @@ import {
   access,
   mkdir,
   mkdtemp,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -16,6 +17,7 @@ import { promisify } from 'node:util';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
+  __testEnumerateWorkspace,
   inspectLocalWorkspace,
   LocalReferenceRiskForkAdapter,
 } from '../src/adapters/local-reference.mjs';
@@ -227,6 +229,34 @@ test('local workspace rejects a nested directory symlink before traversing outsi
     /symlinks are forbidden/i,
   );
   assert.equal(await access(path.join(outside, 'sentinel.txt')).then(() => true), true);
+});
+
+test('local workspace rejects a nested directory replacement after parent enumeration', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-swap-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  const nested = path.join(source, 'nested');
+  const replacement = path.join(source, 'replacement');
+  await mkdir(nested, { recursive: true });
+  await mkdir(replacement, { recursive: true });
+  await writeFile(path.join(nested, 'trusted.txt'), 'trusted\n');
+  await writeFile(path.join(replacement, 'unexpected.txt'), 'unexpected\n');
+
+  let swapped = false;
+  await assert.rejects(
+    __testEnumerateWorkspace(source, {
+      afterRead: async ({ directory, prefix }) => {
+        if (swapped || prefix !== '') return;
+        swapped = true;
+        await rename(path.join(directory, 'nested'), path.join(directory, 'nested-original'));
+        await rename(path.join(directory, 'replacement'), path.join(directory, 'nested'));
+      },
+    }),
+    /Filesystem identity changed while it was being captured: nested/,
+  );
+  assert.equal(swapped, true);
+  assert.equal(await access(path.join(source, 'nested-original', 'trusted.txt')).then(() => true), true);
+  assert.equal(await access(path.join(source, 'nested', 'unexpected.txt')).then(() => true), true);
 });
 
 function waitForExactStdoutLine(child, expectedLine, timeoutMs) {

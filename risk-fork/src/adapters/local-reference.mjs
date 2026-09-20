@@ -69,12 +69,12 @@ function hasStableFileIdentity(info) {
     && info.ino > 0n;
 }
 
-function assertSameFileIdentity(expected, actual, relative) {
+function assertSamePathIdentity(expected, actual, relative) {
   if (!hasStableFileIdentity(expected)
     || !hasStableFileIdentity(actual)
     || expected.dev !== actual.dev
     || expected.ino !== actual.ino) {
-    throw new Error(`File identity changed while it was being captured: ${relative}`);
+    throw new Error(`Filesystem identity changed while it was being captured: ${relative}`);
   }
 }
 
@@ -107,28 +107,38 @@ function assertInsideWorkspace(workspaceRoot, target, relative) {
   return resolvedTarget;
 }
 
-async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
+async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = null }) {
   const workspaceRoot = await realpath(root);
   const records = [];
   const seenCaseFolded = new Map();
   let totalBytes = 0;
 
-  async function visit(directory, prefix = '') {
+  async function visit(directory, prefix = '', expectedIdentity = null) {
     const directoryBefore = await lstat(directory, { bigint: true });
     if (!directoryBefore.isDirectory()) {
       throw new Error(`Workspace directory changed while it was being captured: ${prefix || '.'}`);
     }
+    if (expectedIdentity) assertSamePathIdentity(expectedIdentity, directoryBefore, prefix || '.');
     const directoryRealPath = assertInsideWorkspace(
       workspaceRoot,
       await realpath(directory),
       prefix || '.',
     );
-    const entries = await readdir(directory, { withFileTypes: true });
-    const directoryAfter = await lstat(directory, { bigint: true });
-    if (directoryAfter.dev !== directoryBefore.dev || directoryAfter.ino !== directoryBefore.ino) {
-      throw new Error(`Workspace directory changed while it was being captured: ${prefix || '.'}`);
+    const entries = await readdir(directoryRealPath, { withFileTypes: true });
+    const directoryAfter = await lstat(directoryRealPath, { bigint: true });
+    assertSamePathIdentity(directoryBefore, directoryAfter, prefix || '.');
+    assertInsideWorkspace(workspaceRoot, await realpath(directoryRealPath), prefix || '.');
+    const childDirectoryIdentities = new Map();
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const childPath = path.join(directoryRealPath, entry.name);
+      const childIdentity = await lstat(childPath, { bigint: true });
+      if (!childIdentity.isDirectory()) {
+        throw new Error(`Workspace directory changed while it was being captured: ${entry.name}`);
+      }
+      childDirectoryIdentities.set(entry.name, childIdentity);
     }
-    assertInsideWorkspace(workspaceRoot, await realpath(directory), prefix || '.');
+    if (testAfterRead) await testAfterRead({ directory: directoryRealPath, prefix, entries });
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const relative = normalizeRelativePath(
@@ -144,11 +154,11 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
         throw new Error(`Case or Unicode path collision: ${collision} and ${relative}`);
       }
       seenCaseFolded.set(folded, relative);
-      const absolute = path.join(directory, entry.name);
+      const absolute = path.join(directoryRealPath, entry.name);
       if (entry.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
       if (entry.isDirectory()) {
-        assertInsideWorkspace(workspaceRoot, path.join(directoryRealPath, entry.name), relative);
-        await visit(absolute, relative);
+        assertInsideWorkspace(workspaceRoot, absolute, relative);
+        await visit(absolute, relative, childDirectoryIdentities.get(entry.name));
         continue;
       }
       if (!entry.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
@@ -162,7 +172,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
         assertInsideWorkspace(workspaceRoot, await realpath(absolute), relative);
         const pathAfterOpen = await lstat(absolute, { bigint: true });
         if (pathAfterOpen.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
-        assertSameFileIdentity(pathAfterOpen, before, relative);
+        assertSamePathIdentity(pathAfterOpen, before, relative);
         if (!hasStableFileIdentity(before)) {
           throw new Error(`File identity could not be verified: ${relative}`);
         }
@@ -186,7 +196,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
         }
 
         const after = await handle.stat({ bigint: true });
-        assertSameFileIdentity(before, after, relative);
+        assertSamePathIdentity(before, after, relative);
         if (!after.isFile()
           || after.nlink > 1n
           || after.size !== before.size
@@ -212,7 +222,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
     }
   }
 
-  await visit(root);
+  await visit(workspaceRoot);
   const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
     path: recordPath,
     bytes,
@@ -225,6 +235,15 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
     total_bytes: totalBytes,
     workspace_digest: sha256Ref(publicRecords),
   };
+}
+
+// Internal deterministic race-test seam. It is not used by production callers.
+export async function __testEnumerateWorkspace(root, options = {}) {
+  return enumerateWorkspace(path.resolve(requireString(root, 'root')), {
+    maxFiles: options.maxFiles ?? 2_000,
+    maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
+    testAfterRead: options.afterRead,
+  });
 }
 
 export async function inspectLocalWorkspace(input = {}) {
