@@ -179,9 +179,15 @@ async function releaseCapturedContent(records) {
   }
   for (const directory of directories) {
     const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
-    let markerContent = null;
+    const markerContent = Buffer.from(JSON.stringify({
+      schema: CAPTURE_MARKER_SCHEMA,
+      token: randomUUID(),
+      pid: process.pid,
+    }));
+    let markerPresent = false;
     try {
-      markerContent = await readFile(markerPath);
+      await lstat(markerPath);
+      markerPresent = true;
       await unlink(markerPath);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
@@ -189,7 +195,7 @@ async function releaseCapturedContent(records) {
     try {
       await rmdir(directory);
     } catch (error) {
-      if (markerContent && error?.code !== 'ENOENT') {
+      if (markerPresent && error?.code !== 'ENOENT') {
         await writeFile(markerPath, markerContent, { flag: 'wx', mode: 0o600 }).catch(() => {});
       }
       if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
@@ -259,6 +265,11 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
     throw error;
   }
   const records = [];
+  Object.defineProperty(records, 'capture_directory', {
+    value: captureDirectory,
+    enumerable: false,
+    configurable: false,
+  });
   const seenCaseFolded = new Map();
   let totalBytes = 0;
 
@@ -430,11 +441,6 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
     bytes,
     content_hash: contentHash,
   }));
-  Object.defineProperty(records, 'capture_directory', {
-    value: captureDirectory,
-    enumerable: false,
-    configurable: false,
-  });
   return {
     records,
     public_records: publicRecords,

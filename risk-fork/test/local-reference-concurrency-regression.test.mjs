@@ -249,6 +249,25 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
   assert.ok(timerTicks > 0, 'spool cleanup must yield between filesystem operations');
 });
 
+test('first-entry snapshot rejection removes its capture spool directory', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-first-entry-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, '.git'), 'not a repository directory');
+  const before = new Set((await readdir(os.tmpdir(), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('agoragentic-risk-fork-capture-'))
+    .map((entry) => entry.name));
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /exclude \.git metadata/i,
+  );
+  const after = (await readdir(os.tmpdir(), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('agoragentic-risk-fork-capture-'))
+    .map((entry) => entry.name);
+  assert.deepEqual(after.filter((name) => !before.has(name)), []);
+});
+
 test('local workspace rejects a FIFO without opening or blocking on it', {
   skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
 }, async (t) => {
