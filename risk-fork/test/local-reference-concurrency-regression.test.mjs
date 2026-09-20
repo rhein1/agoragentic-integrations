@@ -323,6 +323,30 @@ test('capture scavenger lstat-falls back for unknown directory entries', {
   assert.equal(await access(directory).then(() => true), true);
 });
 
+test('capture scavenger never follows a replacement marker symlink', {
+  skip: process.platform === 'win32' ? 'POSIX no-follow marker boundary' : false,
+}, async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const target = path.join(os.tmpdir(), `risk-fork-marker-target-${randomUUID()}`);
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
+  t.after(() => Promise.all([
+    rm(directory, { recursive: true, force: true }),
+    rm(target, { force: true }),
+  ]));
+  await writeFile(target, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await symlink(target, marker);
+  await chmod(directory, 0o700);
+
+  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await access(directory).then(() => true), true);
+  assert.equal(await access(target).then(() => true), true);
+});
+
 test('first-entry snapshot rejection removes its capture spool directory', async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-first-entry-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));

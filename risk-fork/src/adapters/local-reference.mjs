@@ -170,36 +170,38 @@ async function scavengeOrphanCaptureDirectories() {
       if (!directoryInfo.isDirectory()
         || !isCurrentOwner(directoryInfo)
         || Number(directoryInfo.mode & 0o777n) !== 0o700) continue;
+      // Keep the marker read attached to the object we inspected.  The
+      // no-follow/nonblocking open rejects replacement links and special files;
+      // the descriptor and path identity checks reject replacement without ever
+      // reading attacker-controlled bytes. Windows is explicitly gated above:
+      // its open flags do not provide the POSIX no-follow/nonblocking boundary.
       let markerName = CAPTURE_MARKER_NAME;
       let legacyMarker = false;
       let markerPath = path.join(directory, markerName);
-      let markerInfo;
+      let markerHandle;
       try {
-        markerInfo = await lstat(markerPath, { bigint: true });
+        markerHandle = await open(markerPath, localReadOnlyFlags());
       } catch (error) {
         if (error?.code !== 'ENOENT') throw error;
         markerName = LEGACY_CAPTURE_MARKER_NAME;
         legacyMarker = true;
         markerPath = path.join(directory, markerName);
-        markerInfo = await lstat(markerPath, { bigint: true });
+        markerHandle = await open(markerPath, localReadOnlyFlags());
       }
-      if (!markerInfo.isFile()
-        || !isCurrentOwner(markerInfo)
-        || Number(markerInfo.mode & 0o777n) !== 0o600
-        || Date.now() - Number(markerInfo.mtimeMs)
-          < (legacyMarker ? LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS : CAPTURE_ORPHAN_MIN_AGE_MS)) continue;
-      // Keep the marker read attached to the object we inspected.  The
-      // no-follow/nonblocking open rejects replacement links and special files;
-      // the descriptor identity check rejects a path replacement between lstat
-      // and open without ever reading attacker-controlled bytes.
-      const markerHandle = await open(markerPath, localReadOnlyFlags());
       let markerContent;
       try {
         const markerBefore = await markerHandle.stat({ bigint: true });
         if (!markerBefore.isFile()
           || !isCurrentOwner(markerBefore)
-          || Number(markerBefore.mode & 0o777n) !== 0o600) continue;
-        assertSamePathIdentity(markerInfo, markerBefore, markerName);
+          || Number(markerBefore.mode & 0o777n) !== 0o600
+          || Date.now() - Number(markerBefore.mtimeMs)
+            < (legacyMarker ? LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS : CAPTURE_ORPHAN_MIN_AGE_MS)) continue;
+        const markerPathInfo = await lstat(markerPath, { bigint: true });
+        if (!markerPathInfo.isFile()
+          || !isCurrentOwner(markerPathInfo)
+          || Number(markerPathInfo.mode & 0o777n) !== 0o600) continue;
+        assertSamePathIdentity(markerPathInfo, markerBefore, markerName);
+        if (markerPathInfo.mtimeNs !== markerBefore.mtimeNs) continue;
         markerContent = await markerHandle.readFile('utf8');
       } finally {
         await markerHandle.close();
@@ -296,18 +298,17 @@ async function releaseCapturedContent(records) {
   for (const directory of directories) {
     const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
     const markerContent = Buffer.from(await createCaptureMarkerContent());
-    let markerPresent = false;
+    let markerRemoved = false;
     try {
-      await lstat(markerPath);
-      markerPresent = true;
       await unlink(markerPath);
+      markerRemoved = true;
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
     }
     try {
       await rmdir(directory);
     } catch (error) {
-      if (markerPresent && error?.code !== 'ENOENT') {
+      if (markerRemoved && error?.code !== 'ENOENT') {
         let markerHandle;
         try {
           // O_EXCL makes restoration create-only.  Write through the returned
