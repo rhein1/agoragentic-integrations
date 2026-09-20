@@ -290,7 +290,8 @@ async function recoverAbandonedAdapterSpools(parent) {
         || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
       const liveProcess = isLiveProcess(marker.pid);
       const processInstance = await readProcessInstanceIdentity(marker.pid);
-      if (liveProcess || (processInstance && !sameProcessInstance(marker.process_instance, processInstance))) continue;
+      if (processInstance && sameProcessInstance(marker.process_instance, processInstance)) continue;
+      if (liveProcess && !processInstance) continue;
       const captureRoot = path.join(adapterRoot, CAPTURE_SPOOL_DIRECTORY_NAME);
       await ensurePrivateDirectory(captureRoot, { create: false });
       await scavengeOrphanCaptureDirectories(captureRoot);
