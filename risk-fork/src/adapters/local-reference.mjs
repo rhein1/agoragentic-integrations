@@ -66,6 +66,11 @@ const LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_FILE_NAME = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.bin$/u;
 const PRIVATE_STATE_DIRECTORY_NAME = 'agoragentic-risk-fork';
 const CAPTURE_SPOOL_DIRECTORY_NAME = 'capture-spools';
+const ADAPTER_DIRECTORY_PREFIX = 'adapter-';
+const ADAPTER_MARKER_NAME = '.adapter-owner-v1';
+const ADAPTER_MARKER_SCHEMA = 'agoragentic.risk-fork.adapter-owner.v1';
+const ADAPTER_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+const MAX_ABANDONED_ADAPTER_ROOTS = 64;
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
 // blocking the capture.  Windows does not expose those flags; the descriptor
@@ -151,6 +156,15 @@ async function createCaptureMarkerContent() {
   });
 }
 
+async function createAdapterMarkerContent() {
+  return JSON.stringify({
+    schema: ADAPTER_MARKER_SCHEMA,
+    token: randomUUID(),
+    pid: process.pid,
+    process_instance: await readProcessInstanceIdentity(process.pid),
+  });
+}
+
 function defaultStateRoot() {
   const configured = process.platform === 'win32'
     ? process.env.LOCALAPPDATA
@@ -163,6 +177,28 @@ function defaultStateRoot() {
 
 async function ensurePrivateDirectory(directory, { create = true } = {}) {
   const resolved = path.resolve(directory);
+  let ancestor = path.dirname(resolved);
+  while (ancestor && ancestor !== path.dirname(ancestor)) {
+    try {
+      const ancestorInfo = await lstat(ancestor, { bigint: true });
+      if (!ancestorInfo.isDirectory() || ancestorInfo.isSymbolicLink()) {
+        throw new Error(`Risk Fork private directory ancestor is not trusted: ${ancestor}`);
+      }
+      if (process.platform !== 'win32'
+        && (typeof process.getuid !== 'function'
+          || typeof ancestorInfo.uid !== 'bigint'
+          || ancestorInfo.uid !== BigInt(process.getuid())
+          || Number(ancestorInfo.mode & 0o022n) !== 0)) {
+        throw new Error(`Risk Fork private directory ancestor is unsafe: ${ancestor}`);
+      }
+      break;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
+    }
+  }
   if (create) await mkdir(resolved, { recursive: true, mode: 0o700 });
   const info = await lstat(resolved, { bigint: true });
   if (!info.isDirectory() || info.isSymbolicLink()) {
@@ -183,8 +219,76 @@ async function createDefaultAdapterDirectory() {
   const parent = await ensurePrivateDirectory(
     path.join(defaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME),
   );
+  await recoverAbandonedAdapterSpools(parent);
   const adapter = await mkdtemp(path.join(parent, 'adapter-'));
   return ensurePrivateDirectory(adapter, { create: false });
+}
+
+async function readAdapterMarker(markerPath, markerInfo) {
+  const markerHandle = await open(markerPath, localReadOnlyFlags());
+  try {
+    const descriptorInfo = await markerHandle.stat({ bigint: true });
+    if (!descriptorInfo.isFile()
+      || !isCurrentOwner(descriptorInfo)
+      || Number(descriptorInfo.mode & 0o777n) !== 0o600
+      || Date.now() - Number(descriptorInfo.mtimeMs) < ADAPTER_ORPHAN_MIN_AGE_MS) return null;
+    if (!markerInfo
+      || markerInfo.dev !== descriptorInfo.dev
+      || markerInfo.ino !== descriptorInfo.ino
+      || markerInfo.mtimeNs !== descriptorInfo.mtimeNs) return null;
+    const marker = JSON.parse(await markerHandle.readFile('utf8'));
+    if (!marker || typeof marker !== 'object'
+      || Object.keys(marker).sort().join(',') !== 'pid,process_instance,schema,token') return null;
+    return marker;
+  } finally {
+    await markerHandle.close();
+  }
+}
+
+async function recoverAbandonedAdapterSpools(parent) {
+  if (process.platform === 'win32') return;
+  let entries;
+  try {
+    entries = await readdir(parent, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  let inspected = 0;
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    if (inspected >= MAX_ABANDONED_ADAPTER_ROOTS) break;
+    if (!entry.name.startsWith(ADAPTER_DIRECTORY_PREFIX) || !entry.isDirectory()) continue;
+    inspected += 1;
+    const adapterRoot = path.join(parent, entry.name);
+    try {
+      const adapterInfo = await lstat(adapterRoot, { bigint: true });
+      if (!adapterInfo.isDirectory()
+        || !isCurrentOwner(adapterInfo)
+        || Number(adapterInfo.mode & 0o777n) !== 0o700) continue;
+      const markerPath = path.join(adapterRoot, ADAPTER_MARKER_NAME);
+      const markerInfo = await lstat(markerPath, { bigint: true });
+      if (!markerInfo.isFile()
+        || !isCurrentOwner(markerInfo)
+        || Number(markerInfo.mode & 0o777n) !== 0o600) continue;
+      const marker = await readAdapterMarker(markerPath, markerInfo);
+      if (marker?.schema !== ADAPTER_MARKER_SCHEMA
+        || typeof marker.token !== 'string'
+        || !/^[0-9a-f-]{36}$/u.test(marker.token)
+        || !Number.isSafeInteger(marker.pid)
+        || marker.pid < 1
+        || !marker.process_instance
+        || typeof marker.process_instance.start_time !== 'string'
+        || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
+      const liveProcess = isLiveProcess(marker.pid);
+      const processInstance = await readProcessInstanceIdentity(marker.pid);
+      if (liveProcess || (processInstance && !sameProcessInstance(marker.process_instance, processInstance))) continue;
+      const captureRoot = path.join(adapterRoot, CAPTURE_SPOOL_DIRECTORY_NAME);
+      await ensurePrivateDirectory(captureRoot, { create: false });
+      await scavengeOrphanCaptureDirectories(captureRoot);
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EPERM', 'EACCES', 'EBUSY'].includes(error?.code)) continue;
+    }
+  }
 }
 
 let standaloneCaptureRootPromise = null;
@@ -1089,6 +1193,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     }
     this.captureRoot = await ensurePrivateDirectory(
       path.join(this.baseDirectory, CAPTURE_SPOOL_DIRECTORY_NAME),
+    );
+    await writeFile(
+      path.join(this.baseDirectory, ADAPTER_MARKER_NAME),
+      await createAdapterMarkerContent(),
+      { flag: 'wx', mode: 0o600 },
     );
     await mkdir(path.join(this.baseDirectory, 'savepoints'), { recursive: true });
     await mkdir(path.join(this.baseDirectory, 'forks'), { recursive: true });

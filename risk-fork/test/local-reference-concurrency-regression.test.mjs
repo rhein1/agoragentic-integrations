@@ -290,16 +290,60 @@ test('adapter instances receive distinct private capture roots', async (t) => {
   assert.equal(await access(second.captureRoot).then(() => true), true);
 });
 
+test('default adapter initialization reclaims stale capture spools from an abandoned adapter', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe adapter recovery' : false,
+}, async (t) => {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-state-root-'));
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = stateRoot;
+  t.after(() => {
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    return rm(stateRoot, { recursive: true, force: true });
+  });
+  const parent = path.join(stateRoot, 'agoragentic-risk-fork');
+  const abandoned = path.join(parent, 'adapter-abandoned');
+  const captureRoot = path.join(abandoned, 'capture-spools');
+  const orphan = path.join(captureRoot, 'agoragentic-risk-fork-capture-old');
+  await mkdir(orphan, { recursive: true, mode: 0o700 });
+  await writeFile(path.join(abandoned, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'dead-boot', start_time: 'dead-start' },
+  }), { mode: 0o600 });
+  await writeFile(path.join(orphan, '.agoragentic-risk-fork-capture-v2'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'dead-boot', start_time: 'dead-start' },
+  }), { mode: 0o600 });
+  await writeFile(path.join(orphan, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
+  await chmod(abandoned, 0o700);
+  await chmod(captureRoot, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(path.join(abandoned, '.adapter-owner-v1'), old, old);
+  await utimes(path.join(orphan, '.agoragentic-risk-fork-capture-v2'), old, old);
+
+  const adapter = new LocalReferenceRiskForkAdapter();
+  await adapter.initialize();
+  assert.equal(await access(adapter.captureRoot).then(() => true), true);
+  await assert.rejects(access(orphan), (error) => error?.code === 'ENOENT');
+  assert.equal(await access(abandoned).then(() => true), true);
+});
+
 test('adapter rejects unsafe explicit private roots', {
   skip: process.platform === 'win32' ? 'POSIX private-root mode boundary' : false,
 }, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-root-'));
   const target = path.join(temporary, 'target');
   const linked = path.join(temporary, 'linked');
+  const linkedParent = path.join(temporary, 'linked-parent');
   t.after(() => rm(temporary, { recursive: true, force: true }));
   await mkdir(target, { mode: 0o700 });
   await chmod(target, 0o755);
   await symlink(target, linked);
+  await symlink(target, linkedParent);
   await assert.rejects(
     new LocalReferenceRiskForkAdapter({ baseDirectory: target }).initialize(),
     /ownership or mode is unsafe/i,
@@ -307,6 +351,10 @@ test('adapter rejects unsafe explicit private roots', {
   await assert.rejects(
     new LocalReferenceRiskForkAdapter({ baseDirectory: linked }).initialize(),
     /not a real directory/i,
+  );
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(linkedParent, 'adapter') }).initialize(),
+    /ancestor is not trusted/i,
   );
 });
 
