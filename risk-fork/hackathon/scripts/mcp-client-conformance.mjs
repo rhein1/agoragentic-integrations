@@ -122,9 +122,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
     throw new TypeError('entrypoint must be an explicit absolute path');
   }
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-client-'));
-  const privateStateHome = process.env.XDG_STATE_HOME
-    ?? await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-state-'));
-  const removePrivateStateHome = process.env.XDG_STATE_HOME === undefined;
+  const privateStateHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-state-'));
   const environment = minimalEnvironment(privateStateHome);
   const child = spawn(process.execPath, [entrypoint, 'mcp'], {
     cwd: path.dirname(entrypoint),
@@ -215,7 +213,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
       throw new Error('MCP probe temporary parent contains unexpected entries');
     }
     await rm(temporary, { recursive: true, force: false, maxRetries: 0 });
-    if (removePrivateStateHome) await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 });
+    await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 });
     return Object.freeze({
       schema: 'agoragentic.risk-fork.mcp-client-conformance.v1',
       banner: OFFLINE_KIT_BANNER,
@@ -239,7 +237,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
     client.close();
     await runCleanup(entrypoint, environment).catch(() => {});
     await rm(temporary, { recursive: true, force: false, maxRetries: 0 }).catch(() => {});
-    if (removePrivateStateHome) await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 }).catch(() => {});
+    await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 }).catch(() => {});
     throw error;
   }
 }
