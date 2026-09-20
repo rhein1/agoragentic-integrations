@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  chmod,
   link,
   mkdir,
   mkdtemp,
@@ -465,25 +466,44 @@ test('owned root marker binds child resolution, inventory, quota, and cleanup', 
   }
 });
 
-test('unmarked nonempty roots and marker tampering fail closed', async () => {
+test('unmarked roots and marker tampering fail closed', async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hackathon-unowned-'));
   const root = path.join(parent, 'agoragentic-risk-fork-demo-root');
   try {
     await mkdir(root);
+    await chmod(root, 0o777);
     await writeFile(path.join(root, 'sentinel.txt'), 'keep', 'utf8');
     await assert.rejects(
       initializeOwnedDemoRoot(root),
       (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
     );
     assert.equal(await readFile(path.join(root, 'sentinel.txt'), 'utf8'), 'keep');
-    await rm(path.join(root, 'sentinel.txt'));
+    await rm(root, { recursive: true, force: true });
     const handle = await initializeOwnedDemoRoot(root);
+    await rm(root, { recursive: true, force: true });
+    await mkdir(root);
+    await chmod(root, 0o777);
+    await assert.rejects(
+      initializeOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
+    );
+    await rm(root, { recursive: true, force: true });
+    const recreated = await initializeOwnedDemoRoot(root);
+    if (process.platform !== 'win32') {
+      await chmod(root, 0o777);
+      await assert.rejects(
+        openOwnedDemoRoot(root),
+        (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
+      );
+      await chmod(root, 0o700);
+    }
     const markerPath = path.join(root, RISK_FORK_DEMO_ROOT_MARKER);
     const marker = JSON.parse(await readFile(markerPath, 'utf8'));
     marker.root_path_hash = `sha256:${'0'.repeat(64)}`;
     await writeFile(markerPath, JSON.stringify(marker), 'utf8');
     await assert.rejects(openOwnedDemoRoot(root), (error) => error.code === 'DEMO_ROOT_MARKER_INVALID');
     assert.ok(handle.root_id);
+    assert.ok(recreated.root_id);
   } finally {
     await cleanupTemporary(parent);
   }

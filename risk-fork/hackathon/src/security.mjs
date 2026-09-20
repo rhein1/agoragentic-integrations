@@ -598,6 +598,33 @@ async function assertRealDirectory(target, label) {
   return actual;
 }
 
+async function assertOwnedRootMetadata(target, label) {
+  const info = await statOrNull(target);
+  if (!info || !info.isDirectory() || info.isSymbolicLink()) {
+    fail('DEMO_ROOT_NOT_OWNED', `${label} is no longer a real directory`);
+  }
+  // Windows mode bits do not prove DACL ownership. Exact Windows ACL
+  // validation remains a separate prerequisite; do not claim it here.
+  if (process.platform !== 'win32') {
+    if ((info.mode & 0o077) !== 0) {
+      fail('DEMO_ROOT_NOT_OWNED', `${label} must not be group- or world-writable`);
+    }
+    if (typeof process.getuid === 'function' && info.uid !== process.getuid()) {
+      fail('DEMO_ROOT_NOT_OWNED', `${label} is not owned by the current user`);
+    }
+  }
+  return info;
+}
+
+async function assertSameRootIdentity(target, expected, label) {
+  const actual = await lstat(target, { bigint: true });
+  if (!actual.isDirectory()
+    || actual.dev !== expected.dev
+    || actual.ino !== expected.ino) {
+    fail('DEMO_ROOT_NOT_OWNED', `${label} changed while it was being initialized`);
+  }
+}
+
 function markerHash(marker) {
   return sha256Ref({ ...marker, marker_hash: null });
 }
@@ -644,6 +671,7 @@ function makeHandle(rootPath, rootRealPath, marker) {
 export async function openOwnedDemoRoot(rootPath) {
   const root = normalizeRootPath(rootPath);
   const rootRealPath = await assertRealDirectory(root, 'Demo root');
+  await assertOwnedRootMetadata(root, 'Demo root');
   const marker = await readAndVerifyMarker(root, rootRealPath);
   return makeHandle(root, rootRealPath, marker);
 }
@@ -655,17 +683,22 @@ export async function initializeOwnedDemoRoot(rootPath, options = {}) {
   if (typeof clock !== 'function' || typeof randomBytesFn !== 'function') {
     fail('DEMO_ROOT_INVALID', 'Demo root clock and entropy provider must be functions');
   }
-  const existing = await statOrNull(root);
-  if (!existing) {
+  let created = false;
+  try {
     await assertRealDirectory(path.dirname(root), 'Demo root parent');
     await mkdir(root, { recursive: false, mode: 0o700 });
-  } else {
-    await assertRealDirectory(root, 'Demo root');
+    created = true;
+  } catch (error) {
+    if (error?.code !== 'EEXIST') throw error;
   }
   const rootRealPath = await assertRealDirectory(root, 'Demo root');
+  await assertOwnedRootMetadata(root, 'Demo root');
+  const rootIdentity = await lstat(root, { bigint: true });
   const entries = await readdir(root);
   if (entries.includes(RISK_FORK_DEMO_ROOT_MARKER)) return openOwnedDemoRoot(root);
-  if (entries.length !== 0) fail('DEMO_ROOT_NOT_OWNED', 'Refusing to adopt an unmarked non-empty demo root');
+  if (!created || entries.length !== 0) {
+    fail('DEMO_ROOT_NOT_OWNED', 'Refusing to adopt an unmarked demo root');
+  }
   const entropy = randomBytesFn(16);
   if (!Buffer.isBuffer(entropy) || entropy.byteLength !== 16) {
     fail('DEMO_ROOT_INVALID', 'Demo root entropy provider must return exactly 16 bytes');
@@ -682,11 +715,14 @@ export async function initializeOwnedDemoRoot(rootPath, options = {}) {
     marker_hash: null,
   };
   const marker = { ...base, marker_hash: markerHash(base) };
+  await assertSameRootIdentity(root, rootIdentity, 'Demo root');
+  await assertRealDirectory(root, 'Demo root');
   await writeFile(
     path.join(root, RISK_FORK_DEMO_ROOT_MARKER),
     `${canonicalize(marker)}\n`,
     { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   );
+  await assertSameRootIdentity(root, rootIdentity, 'Demo root');
   return openOwnedDemoRoot(root);
 }
 
