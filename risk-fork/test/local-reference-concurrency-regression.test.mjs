@@ -228,6 +228,29 @@ test('local workspace falls back to lstat for unknown directory entry types', as
   }
 });
 
+test('large local snapshots use bounded spooling and diff output has an explicit cap', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-spool-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  const payload = Buffer.alloc(2 * 1024 * 1024 + 17, 0x61);
+  await writeFile(path.join(source, 'large.txt'), payload);
+  const inspected = await inspectLocalWorkspace({ source_workspace: source });
+  assert.equal(inspected.total_bytes, payload.byteLength);
+  assert.equal(inspected.files[0].bytes, payload.byteLength);
+  const snapshot = await __testEnumerateWorkspace(source, { maxBytes: payload.byteLength + 1 });
+  assert.deepEqual(snapshot.public_records, inspected.files);
+
+  const fixture = await makeFixture('risk-fork-local-diff-bound-');
+  t.after(() => disposeFixture(fixture));
+  const forkDirectory = fixture.adapter.forks.get(fixture.fork.fork_ref).directory;
+  await writeFile(path.join(forkDirectory, 'oversized.txt'), Buffer.alloc(16 * 1024 * 1024 + 1, 0x62));
+  await assert.rejects(
+    fixture.adapter.collectDiff({ fork_ref: fixture.fork.fork_ref }),
+    /Local reference diff content exceeds 16777216 bytes/,
+  );
+});
+
 test('local workspace rejects a nested directory symlink before traversing outside', async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-link-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));

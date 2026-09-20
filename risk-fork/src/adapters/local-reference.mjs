@@ -7,6 +7,8 @@ import {
 } from 'node:fs';
 import {
   access,
+  chmod,
+  copyFile,
   lstat,
   mkdir,
   mkdtemp,
@@ -53,6 +55,7 @@ const runnerPath = fileURLToPath(new URL('./local-runner.mjs', import.meta.url))
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
 const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
+const MAX_LOCAL_DIFF_CONTENT_BYTES = 16 * 1024 * 1024;
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
 // blocking the capture.  Windows does not expose those flags; the descriptor
@@ -233,7 +236,16 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
             if (result.bytesRead === 0) break;
             const bytes = chunk.subarray(0, result.bytesRead);
             bytesRead += result.bytesRead;
-            await captureHandle.write(bytes);
+            let written = 0;
+            while (written < bytes.byteLength) {
+              const writeResult = await captureHandle.write(
+                bytes,
+                written,
+                bytes.byteLength - written,
+              );
+              if (!writeResult?.bytesWritten) throw new Error(`Failed to spool captured bytes for ${relative}`);
+              written += writeResult.bytesWritten;
+            }
             const base64Input = base64Remainder.length > 0
               ? Buffer.concat([base64Remainder, bytes])
               : bytes;
@@ -354,7 +366,8 @@ async function copyRecords(records, destination) {
     await mkdir(path.dirname(target), { recursive: true });
     const capturePath = capturedContentByRecord.get(record);
     if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${record.path}`);
-    await writeFile(target, await readFile(capturePath), { flag: 'wx', mode: record.mode });
+    await copyFile(capturePath, target, fsConstants.COPYFILE_EXCL);
+    await chmod(target, record.mode);
   }
 }
 
@@ -1079,6 +1092,9 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         }
         const capturePath = capturedContentByRecord.get(newFile);
         if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${relative}`);
+        if (newFile.bytes > MAX_LOCAL_DIFF_CONTENT_BYTES) {
+          throw new Error(`Local reference diff content exceeds ${MAX_LOCAL_DIFF_CONTENT_BYTES} bytes: ${relative}`);
+        }
         const content = await readFile(capturePath);
         let text;
         try {
