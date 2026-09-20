@@ -89,6 +89,63 @@ function isLiveProcess(pid) {
   }
 }
 
+async function readProcessInstanceIdentity(pid) {
+  if (process.platform === 'linux') {
+    try {
+      const [bootId, processStat] = await Promise.all([
+        readFile('/proc/sys/kernel/random/boot_id', 'utf8'),
+        readFile(`/proc/${pid}/stat`, 'utf8'),
+      ]);
+      const statFields = processStat.slice(processStat.lastIndexOf(')') + 2).trim().split(/\s+/u);
+      const startTime = statFields[19];
+      if (!startTime) return null;
+      return {
+        boot_id: bootId.trim(),
+        start_time: startTime,
+      };
+    } catch {
+      return null;
+    }
+  }
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      const child = spawn('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let output = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        output += chunk;
+        if (output.length > 256) child.kill();
+      });
+      child.once('error', () => resolve(null));
+      child.once('close', (code) => {
+        const startTime = output.trim();
+        resolve(code === 0 && startTime.length > 0 && startTime.length <= 256
+          ? { start_time: startTime }
+          : null);
+      });
+    });
+  }
+  return null;
+}
+
+function sameProcessInstance(expected, actual) {
+  if (!expected || !actual || typeof expected.start_time !== 'string'
+    || typeof actual.start_time !== 'string') return false;
+  return expected.start_time === actual.start_time
+    && (process.platform !== 'linux' || expected.boot_id === actual.boot_id);
+}
+
+async function createCaptureMarkerContent() {
+  return JSON.stringify({
+    schema: CAPTURE_MARKER_SCHEMA,
+    token: randomUUID(),
+    pid: process.pid,
+    process_instance: await readProcessInstanceIdentity(process.pid),
+  });
+}
+
 async function scavengeOrphanCaptureDirectories() {
   if (process.platform === 'win32') return 0;
   let entries;
@@ -99,9 +156,13 @@ async function scavengeOrphanCaptureDirectories() {
   }
   let removed = 0;
   for (const entry of entries) {
-    if (!entry.isDirectory() || !entry.name.startsWith(CAPTURE_DIRECTORY_PREFIX)) continue;
     const directory = path.join(os.tmpdir(), entry.name);
     try {
+      let topLevelDirectory = entry.isDirectory();
+      if (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink()) {
+        topLevelDirectory = (await lstat(directory, { bigint: true })).isDirectory();
+      }
+      if (!topLevelDirectory || !entry.name.startsWith(CAPTURE_DIRECTORY_PREFIX)) continue;
       const directoryInfo = await lstat(directory, { bigint: true });
       if (!directoryInfo.isDirectory()
         || !isCurrentOwner(directoryInfo)
@@ -135,17 +196,27 @@ async function scavengeOrphanCaptureDirectories() {
         || typeof marker.pid !== 'number'
         || !Number.isSafeInteger(marker.pid)
         || marker.pid < 1
-        || isLiveProcess(marker.pid)) continue;
+        || !marker.process_instance
+        || typeof marker.process_instance.start_time !== 'string'
+        || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
+      const liveProcess = isLiveProcess(marker.pid);
+      const processInstance = await readProcessInstanceIdentity(marker.pid);
+      if (processInstance && !sameProcessInstance(marker.process_instance, processInstance)) continue;
+      if (liveProcess) continue;
       const children = await readdir(directory, { withFileTypes: true });
       const files = [];
       let safe = true;
       for (const child of children) {
         if (child.name === CAPTURE_MARKER_NAME) continue;
-        if (!child.isFile() || !CAPTURE_FILE_NAME.test(child.name)) {
+        const childPath = path.join(directory, child.name);
+        let childIsFile = child.isFile();
+        if (!child.isDirectory() && !child.isFile() && !child.isSymbolicLink()) {
+          childIsFile = (await lstat(childPath, { bigint: true })).isFile();
+        }
+        if (!childIsFile || !CAPTURE_FILE_NAME.test(child.name)) {
           safe = false;
           break;
         }
-        const childPath = path.join(directory, child.name);
         const childInfo = await lstat(childPath, { bigint: true });
         if (!childInfo.isFile()
           || !isCurrentOwner(childInfo)
@@ -170,7 +241,16 @@ async function scavengeOrphanCaptureDirectories() {
 
 let captureScavengerPromise = null;
 async function ensureCaptureScavenged() {
-  captureScavengerPromise ??= scavengeOrphanCaptureDirectories().catch(() => 0);
+  if (!captureScavengerPromise) {
+    const promise = scavengeOrphanCaptureDirectories().catch(() => 0);
+    captureScavengerPromise = promise;
+    try {
+      await promise;
+    } finally {
+      if (captureScavengerPromise === promise) captureScavengerPromise = null;
+    }
+    return;
+  }
   await captureScavengerPromise;
 }
 
@@ -195,11 +275,7 @@ async function releaseCapturedContent(records) {
   }
   for (const directory of directories) {
     const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
-    const markerContent = Buffer.from(JSON.stringify({
-      schema: CAPTURE_MARKER_SCHEMA,
-      token: randomUUID(),
-      pid: process.pid,
-    }));
+    const markerContent = Buffer.from(await createCaptureMarkerContent());
     let markerPresent = false;
     try {
       await lstat(markerPath);
@@ -295,11 +371,11 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
   await ensureCaptureScavenged();
   const captureDirectory = await mkdtemp(path.join(os.tmpdir(), CAPTURE_DIRECTORY_PREFIX));
   try {
-    await writeFile(path.join(captureDirectory, CAPTURE_MARKER_NAME), JSON.stringify({
-      schema: CAPTURE_MARKER_SCHEMA,
-      token: randomUUID(),
-      pid: process.pid,
-    }), { flag: 'wx', mode: 0o600 });
+    await writeFile(
+      path.join(captureDirectory, CAPTURE_MARKER_NAME),
+      await createCaptureMarkerContent(),
+      { flag: 'wx', mode: 0o600 },
+    );
   } catch (error) {
     await rm(captureDirectory, { recursive: true, force: true }).catch(() => {});
     throw error;

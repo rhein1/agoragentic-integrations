@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import {
   access,
   chmod,
@@ -204,6 +205,7 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
     schema: 'agoragentic.risk-fork.capture-directory.v1',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
   }), { mode: 0o600 });
   await writeFile(path.join(staleDirectory, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
   await chmod(staleDirectory, 0o700);
@@ -221,6 +223,7 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
     schema: 'agoragentic.risk-fork.capture-directory.v1',
     token: '00000000-0000-4000-8000-000000000000',
     pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
   }), { mode: 0o600 });
   await chmod(protectedDirectory, 0o700);
   await utimes(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), old, old);
@@ -247,6 +250,79 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
     clearInterval(timer);
   }
   assert.ok(timerTicks > 0, 'spool cleanup must yield between filesystem operations');
+});
+
+test('capture scavenger rescans a young orphan after the in-flight pass completes', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const orphanDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(orphanDirectory, '.agoragentic-risk-fork-capture-v1');
+  const payload = path.join(orphanDirectory, '0-00000000-0000-4000-8000-000000000000.bin');
+  t.after(() => rm(orphanDirectory, { recursive: true, force: true }));
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await writeFile(payload, 'orphan', { mode: 0o600 });
+  await chmod(orphanDirectory, 0o700);
+  const source = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-rescan-'));
+  t.after(() => rm(source, { recursive: true, force: true }));
+  await __testEnumerateWorkspace(source);
+  assert.equal(await access(orphanDirectory).then(() => true), true);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  await utimes(orphanDirectory, old, old);
+  await __testEnumerateWorkspace(source);
+  await assert.rejects(access(orphanDirectory), (error) => error?.code === 'ENOENT');
+});
+
+test('capture scavenger skips a live PID whose process instance does not match', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v1');
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: process.pid,
+    process_instance: process.platform === 'linux'
+      ? { boot_id: 'wrong-boot', start_time: 'wrong-start' }
+      : { start_time: 'wrong-start' },
+  }), { mode: 0o600 });
+  await chmod(directory, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await access(directory).then(() => true), true);
+});
+
+test('capture scavenger lstat-falls back for unknown directory entries', {
+  skip: process.platform === 'win32' ? 'POSIX special filesystem entries' : false,
+}, async (t) => {
+  const unknownTopLevel = path.join(os.tmpdir(), `agoragentic-risk-fork-capture-unknown-${randomUUID()}`);
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v1');
+  t.after(() => Promise.all([
+    rm(unknownTopLevel, { force: true }),
+    rm(directory, { recursive: true, force: true }),
+  ]));
+  await execFileAsync('mkfifo', [unknownTopLevel]);
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await execFileAsync('mkfifo', [path.join(directory, '1-00000000-0000-4000-8000-000000000000.bin')]);
+  await chmod(directory, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await access(unknownTopLevel).then(() => true), true);
+  assert.equal(await access(directory).then(() => true), true);
 });
 
 test('first-entry snapshot rejection removes its capture spool directory', async (t) => {
