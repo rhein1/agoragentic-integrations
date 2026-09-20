@@ -113,13 +113,15 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
     'bin',
     'risk-fork-demo.mjs',
   );
+  const stateHome = path.join(temporary, 'state');
+  await mkdir(stateHome, { recursive: false, mode: 0o700 });
   const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
     cwd: extractionRoot,
     env: minimalEnvironment({
       TEMP: temporary,
       TMP: temporary,
       TMPDIR: temporary,
-      XDG_STATE_HOME: path.join(temporary, 'state'),
+      XDG_STATE_HOME: stateHome,
       RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
     }),
     windowsHide: true,
