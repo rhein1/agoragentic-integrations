@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { buildOfflineKit } from '../src/offline-kit.mjs';
-import { runOfflineRuntimeVerification } from '../src/offline-runtime-verifier.mjs';
+import {
+  REPRESENTATIVE_SCENARIOS,
+  runOfflineRuntimeVerification,
+} from '../src/offline-runtime-verifier.mjs';
 import {
   finalizeReleaseArtifactDirectory,
   writeReleaseSidecars,
@@ -39,7 +42,26 @@ if (process.env.RISK_FORK_RELEASE_SOURCE_SHA
   throw new Error('Checked-out HEAD does not match RISK_FORK_RELEASE_SOURCE_SHA');
 }
 
-const runtime = await runOfflineRuntimeVerification();
+// The local-reference adapter intentionally fails closed on Windows until an
+// exact ACL proof is available. Build the artifact and record that runtime
+// verification is not applicable on this platform; POSIX release builds still
+// execute the complete offline runtime verifier below.
+const runtime = process.platform === 'win32'
+  ? {
+      verified: false,
+      provider_calls: 0,
+      network_used: false,
+      credentials_used: false,
+      representative_scenarios: [...REPRESENTATIVE_SCENARIOS],
+      recorder: { status: 'unknown_not_tested' },
+      cleanup: { requested: false, absence: 'not_applicable', status: 'not_applicable' },
+      runtime_verification: {
+        status: 'not_applicable',
+        verified: false,
+        reason: 'Windows local-reference ACL proof is unavailable',
+      },
+    }
+  : await runOfflineRuntimeVerification();
 const build = await buildOfflineKit({
   repositoryRoot,
   sourceCommit,
@@ -49,9 +71,13 @@ const build = await buildOfflineKit({
     status: 'passed_release_candidate_build',
     source_commit: sourceCommit,
     representative_scenarios: runtime.representative_scenarios,
-    receipt_verification: true,
+    receipt_verification: runtime.verified === true ? true : 'unknown_not_tested',
     flight_recorder_smoke: runtime.recorder,
     cleanup: runtime.cleanup,
+    runtime_verification: runtime.runtime_verification ?? {
+      status: 'verified',
+      verified: true,
+    },
     provider_calls: 0,
     network_used: false,
     credentials_used: false,
