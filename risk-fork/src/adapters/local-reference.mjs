@@ -2,8 +2,6 @@ import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   constants as fsConstants,
-  rmdirSync,
-  unlinkSync,
 } from 'node:fs';
 import {
   access,
@@ -17,6 +15,8 @@ import {
   readdir,
   realpath,
   rm,
+  rmdir,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -56,6 +56,11 @@ const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
 const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
 const MAX_LOCAL_DIFF_CONTENT_BYTES = 16 * 1024 * 1024;
+const CAPTURE_DIRECTORY_PREFIX = 'agoragentic-risk-fork-capture-';
+const CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v1';
+const CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v1';
+const CAPTURE_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+const CAPTURE_FILE_NAME = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.bin$/u;
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
 // blocking the capture.  Windows does not expose those flags; the descriptor
@@ -68,7 +73,96 @@ function localReadOnlyFlags() {
 const testOperationRunners = new WeakMap();
 const capturedContentByRecord = new WeakMap();
 
-function releaseCapturedContent(records) {
+function isCurrentOwner(info) {
+  return process.platform === 'win32'
+    || (typeof process.getuid === 'function' && info?.uid === process.getuid());
+}
+
+function isLiveProcess(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+}
+
+async function scavengeOrphanCaptureDirectories() {
+  if (process.platform === 'win32') return 0;
+  let entries;
+  try {
+    entries = await readdir(os.tmpdir(), { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(CAPTURE_DIRECTORY_PREFIX)) continue;
+    const directory = path.join(os.tmpdir(), entry.name);
+    try {
+      const directoryInfo = await lstat(directory, { bigint: true });
+      if (!directoryInfo.isDirectory()
+        || !isCurrentOwner(directoryInfo)
+        || Number(directoryInfo.mode & 0o777n) !== 0o700) continue;
+      const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
+      const markerInfo = await lstat(markerPath, { bigint: true });
+      if (!markerInfo.isFile()
+        || !isCurrentOwner(markerInfo)
+        || Number(markerInfo.mode & 0o777n) !== 0o600
+        || Date.now() - Number(markerInfo.mtimeMs) < CAPTURE_ORPHAN_MIN_AGE_MS) continue;
+      const marker = JSON.parse(await readFile(markerPath, 'utf8'));
+      if (marker?.schema !== CAPTURE_MARKER_SCHEMA
+        || typeof marker.token !== 'string'
+        || !/^[0-9a-f-]{36}$/u.test(marker.token)
+        || typeof marker.pid !== 'number'
+        || !Number.isSafeInteger(marker.pid)
+        || marker.pid < 1
+        || isLiveProcess(marker.pid)) continue;
+      const children = await readdir(directory, { withFileTypes: true });
+      const files = [];
+      let safe = true;
+      for (const child of children) {
+        if (child.name === CAPTURE_MARKER_NAME) continue;
+        if (!child.isFile() || !CAPTURE_FILE_NAME.test(child.name)) {
+          safe = false;
+          break;
+        }
+        const childPath = path.join(directory, child.name);
+        const childInfo = await lstat(childPath, { bigint: true });
+        if (!childInfo.isFile()
+          || !isCurrentOwner(childInfo)
+          || childInfo.nlink > 1n
+          || Number(childInfo.mode & 0o777n) !== 0o600) {
+          safe = false;
+          break;
+        }
+        files.push(childPath);
+      }
+      if (!safe) continue;
+      for (const file of files) await unlink(file);
+      await unlink(markerPath);
+      await rmdir(directory);
+      removed += 1;
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EPERM', 'EACCES', 'EBUSY'].includes(error?.code)) continue;
+    }
+  }
+  return removed;
+}
+
+let captureScavengerPromise = null;
+async function ensureCaptureScavenged() {
+  captureScavengerPromise ??= scavengeOrphanCaptureDirectories().catch(() => 0);
+  await captureScavengerPromise;
+}
+
+// Internal deterministic cleanup-test seam. It is not used by production callers.
+export async function __testScavengeCaptureDirectories() {
+  captureScavengerPromise = null;
+  return scavengeOrphanCaptureDirectories();
+}
+
+async function releaseCapturedContent(records) {
   const directories = new Set();
   if (typeof records?.capture_directory === 'string') {
     directories.add(records.capture_directory);
@@ -77,12 +171,15 @@ function releaseCapturedContent(records) {
     const capturePath = capturedContentByRecord.get(record);
     if (typeof capturePath === 'string') {
       directories.add(path.dirname(capturePath));
-      try { unlinkSync(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+      try { await unlink(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
     }
     capturedContentByRecord.delete(record);
   }
   for (const directory of directories) {
-    try { rmdirSync(directory); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error; }
+    try { await unlink(path.join(directory, CAPTURE_MARKER_NAME)); } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    try { await rmdir(directory); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error; }
   }
 }
 
@@ -135,7 +232,18 @@ function assertInsideWorkspace(workspaceRoot, target, relative) {
 
 async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = null }) {
   const workspaceRoot = await realpath(root);
-  const captureDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  await ensureCaptureScavenged();
+  const captureDirectory = await mkdtemp(path.join(os.tmpdir(), CAPTURE_DIRECTORY_PREFIX));
+  try {
+    await writeFile(path.join(captureDirectory, CAPTURE_MARKER_NAME), JSON.stringify({
+      schema: CAPTURE_MARKER_SCHEMA,
+      token: randomUUID(),
+      pid: process.pid,
+    }), { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    await rm(captureDirectory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
   const records = [];
   const seenCaseFolded = new Map();
   let totalBytes = 0;
@@ -262,7 +370,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
           contentHash.update('"', 'utf8');
         } catch (error) {
           await captureHandle.close().catch(() => {});
-          try { unlinkSync(capturePath); } catch (unlinkError) { if (unlinkError?.code !== 'ENOENT') throw unlinkError; }
+          try { await unlink(capturePath); } catch (unlinkError) { if (unlinkError?.code !== 'ENOENT') throw unlinkError; }
           throw error;
         }
         await captureHandle.close();
@@ -282,7 +390,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
       } finally {
         await handle.close();
         if (!captureCommitted && capturePath) {
-          try { unlinkSync(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+          try { await unlink(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
         }
       }
       totalBytes += bytesRead;
@@ -300,8 +408,9 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
   try {
     await visit(workspaceRoot);
   } catch (error) {
-    releaseCapturedContent(records);
-    try { rmdirSync(captureDirectory); } catch (cleanupError) { if (!['ENOENT', 'ENOTEMPTY'].includes(cleanupError?.code)) throw cleanupError; }
+    await releaseCapturedContent(records);
+    try { await unlink(path.join(captureDirectory, CAPTURE_MARKER_NAME)); } catch (cleanupError) { if (cleanupError?.code !== 'ENOENT') throw cleanupError; }
+    try { await rmdir(captureDirectory); } catch (cleanupError) { if (!['ENOENT', 'ENOTEMPTY'].includes(cleanupError?.code)) throw cleanupError; }
     throw error;
   }
   const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
@@ -330,7 +439,7 @@ export async function __testEnumerateWorkspace(root, options = {}) {
     maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
     testAfterRead: options.afterRead,
   });
-  releaseCapturedContent(snapshot.records);
+  await releaseCapturedContent(snapshot.records);
   return snapshot;
 }
 
@@ -356,7 +465,7 @@ export async function inspectLocalWorkspace(input = {}) {
       files: cloneJson(snapshot.public_records),
     };
   } finally {
-    releaseCapturedContent(snapshot.records);
+    await releaseCapturedContent(snapshot.records);
   }
 }
 
@@ -774,7 +883,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       maxBytes: this.maxBytes,
     });
     if (!safeEqual(snapshot.workspace_digest, input.capsule.workspace.digest)) {
-      releaseCapturedContent(snapshot.records);
+      await releaseCapturedContent(snapshot.records);
       throw new Error('Source workspace digest does not match the Savepoint Capsule');
     }
     let authorityAttestation;
@@ -786,7 +895,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         snapshotDirectory: sourceWorkspace,
       });
     } catch (error) {
-      releaseCapturedContent(snapshot.records);
+      await releaseCapturedContent(snapshot.records);
       throw error;
     }
     const id = randomUUID();
@@ -798,7 +907,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     try {
       await mkdir(directory, { recursive: false });
     } catch (error) {
-      releaseCapturedContent(snapshot.records);
+      await releaseCapturedContent(snapshot.records);
       throw error;
     }
     try {
@@ -812,7 +921,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
           throw new Error('Local savepoint changed while it was being copied');
         }
       } finally {
-        releaseCapturedContent(copiedSnapshot.records);
+        await releaseCapturedContent(copiedSnapshot.records);
       }
       const record = {
         ref,
@@ -842,11 +951,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         evidence_status: 'verified',
       };
     } catch (error) {
-      releaseCapturedContent(snapshot.records);
+      await releaseCapturedContent(snapshot.records);
       await rm(directory, { recursive: true, force: true });
       throw error;
     } finally {
-      releaseCapturedContent(snapshot.records);
+      await releaseCapturedContent(snapshot.records);
     }
   }
 
@@ -871,11 +980,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     try {
       await copyRecords(source.records, directory);
     } catch (error) {
-      releaseCapturedContent(source.records);
+      await releaseCapturedContent(source.records);
       await rm(directory, { recursive: true, force: true });
       throw error;
     }
-    releaseCapturedContent(source.records);
+    await releaseCapturedContent(source.records);
     const createdAt = this.clock();
     const hardDeadlineMs = performance.now() + ttlMs;
     const record = {
@@ -1068,7 +1177,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         maxBytes: this.maxBytes,
       });
     } catch (error) {
-      releaseCapturedContent(before.records);
+      await releaseCapturedContent(before.records);
       throw error;
     }
     try {
@@ -1123,8 +1232,8 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         test_evidence: [],
       };
     } finally {
-      releaseCapturedContent(before.records);
-      releaseCapturedContent(after.records);
+      await releaseCapturedContent(before.records);
+      await releaseCapturedContent(after.records);
     }
   }
 

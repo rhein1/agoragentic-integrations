@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import {
   access,
+  chmod,
   mkdir,
   mkdtemp,
   readdir,
   rename,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,6 +20,7 @@ import { promisify } from 'node:util';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
+  __testScavengeCaptureDirectories,
   __testEnumerateWorkspace,
   inspectLocalWorkspace,
   LocalReferenceRiskForkAdapter,
@@ -189,6 +192,56 @@ const WINDOWS_LOCK_READY = 'RISK_FORK_TEST_LOCK_READY';
 const WINDOWS_LOCK_START_TIMEOUT_MS = 45_000;
 const WINDOWS_LOCK_CLOSE_TIMEOUT_MS = 15_000;
 const execFileAsync = promisify(execFile);
+
+test('capture spool cleanup yields to the event loop and scavenges only stale dead-owner directories', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+  timeout: 30_000,
+}, async (t) => {
+  const staleDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(staleDirectory, '.agoragentic-risk-fork-capture-v1');
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await writeFile(path.join(staleDirectory, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
+  await chmod(staleDirectory, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  await utimes(staleDirectory, old, old);
+
+  const protectedDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  t.after(() => Promise.all([
+    rm(staleDirectory, { recursive: true, force: true }),
+    rm(protectedDirectory, { recursive: true, force: true }),
+  ]));
+  await writeFile(path.join(protectedDirectory, 'unrelated.txt'), 'must remain', { mode: 0o600 });
+  await writeFile(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await chmod(protectedDirectory, 0o700);
+  await utimes(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), old, old);
+
+  assert.equal(await __testScavengeCaptureDirectories(), 1);
+  await assert.rejects(access(staleDirectory), (error) => error?.code === 'ENOENT');
+  assert.equal(await access(path.join(protectedDirectory, 'unrelated.txt')).then(() => true), true);
+
+  const source = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-'));
+  t.after(() => rm(source, { recursive: true, force: true }));
+  for (let index = 0; index < 5_000; index += 1) {
+    await writeFile(path.join(source, `${index}.txt`), 'x');
+  }
+  let timerTicks = 0;
+  const timer = setInterval(() => { timerTicks += 1; }, 0);
+  try {
+    await inspectLocalWorkspace({ source_workspace: source, max_files: 10_000 });
+  } finally {
+    clearInterval(timer);
+  }
+  assert.ok(timerTicks > 0, 'spool cleanup must yield between filesystem operations');
+});
 
 test('local workspace rejects a FIFO without opening or blocking on it', {
   skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
