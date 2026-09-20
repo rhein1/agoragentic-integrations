@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { chmodSync } from 'node:fs';
+import { chmodSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import {
   access,
   chmod,
@@ -359,7 +359,16 @@ test('fork copy remains tracked when source spool release fails', {
   });
   const savepoint = await adapter.createSavepoint({ capsule, source_workspace: source });
   adapter.clock = () => {
-    chmodSync(adapter.captureRoot, 0o500);
+    for (const entry of readdirSync(adapter.captureRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const captureDirectory = path.join(adapter.captureRoot, entry.name);
+      for (const child of readdirSync(captureDirectory)) {
+        if (!child.endsWith('.bin')) continue;
+        const capturePath = path.join(captureDirectory, child);
+        rmSync(capturePath, { force: true });
+        mkdirSync(capturePath);
+      }
+    }
     return new Date(NOW);
   };
   await assert.rejects(
