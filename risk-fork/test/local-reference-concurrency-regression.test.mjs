@@ -344,6 +344,25 @@ test('fork copy remains tracked when source spool release fails', {
   const adapter = new LocalReferenceRiskForkAdapter({
     baseDirectory: path.join(root, 'adapter'),
     clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request) => ({
+      schema: 'agoragentic.risk-fork.local-authority-free-attestation.v1',
+      status: 'verified',
+      request_hash: request.request_hash,
+      capsule_hash: request.capsule_hash,
+      workspace_digest: request.workspace_digest,
+      evidence_ref: `test-authority-free:${request.request_hash.slice(7, 23)}`,
+      evidence_hash: sha256Ref({
+        request_hash: request.request_hash,
+        capsule_hash: request.capsule_hash,
+        workspace_digest: request.workspace_digest,
+      }),
+      claims: {
+        authority_free: true,
+        credentials_absent: true,
+        wallet_material_absent: true,
+        execution_authority_absent: true,
+      },
+    }),
     removeDirectory: async () => {
       cleanupCalls += 1;
       throw new Error('synthetic cleanup failure');
