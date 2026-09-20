@@ -71,6 +71,7 @@ const ADAPTER_MARKER_NAME = '.adapter-owner-v1';
 const ADAPTER_MARKER_SCHEMA = 'agoragentic.risk-fork.adapter-owner.v1';
 const ADAPTER_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
 const MAX_ABANDONED_ADAPTER_ROOTS = 64;
+const MAX_ABANDONED_ADAPTER_ENTRIES = 4096;
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
 // blocking the capture.  Windows does not expose those flags; the descriptor
@@ -219,6 +220,7 @@ async function ensurePrivateDirectory(directory, { create = true } = {}) {
       throw new Error(`Risk Fork private directory ownership or mode is unsafe: ${resolved}`);
     }
   }
+  if (create) await ensurePrivateDirectory(resolved, { create: false });
   return resolved;
 }
 
@@ -292,10 +294,39 @@ async function recoverAbandonedAdapterSpools(parent) {
       const captureRoot = path.join(adapterRoot, CAPTURE_SPOOL_DIRECTORY_NAME);
       await ensurePrivateDirectory(captureRoot, { create: false });
       await scavengeOrphanCaptureDirectories(captureRoot);
+      if (await isOwnedAdapterTree(adapterRoot)) {
+        await rm(adapterRoot, { recursive: true, force: false });
+      }
     } catch (error) {
       if (!['ENOENT', 'ENOTEMPTY', 'EPERM', 'EACCES', 'EBUSY'].includes(error?.code)) continue;
     }
   }
+}
+
+async function isOwnedAdapterTree(root) {
+  let count = 0;
+  async function visit(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    if (directory === root && entries.some((entry) => ![
+      ADAPTER_MARKER_NAME,
+      CAPTURE_SPOOL_DIRECTORY_NAME,
+      'savepoints',
+      'forks',
+    ].includes(entry.name))) return false;
+    for (const entry of entries) {
+      if (++count > MAX_ABANDONED_ADAPTER_ENTRIES) return false;
+      const target = path.join(directory, entry.name);
+      const info = await lstat(target, { bigint: true });
+      if (!isCurrentOwner(info) || info.isSymbolicLink()) return false;
+      if (info.isDirectory()) {
+        if (Number(info.mode & 0o777n) !== 0o700 || !(await visit(target))) return false;
+      } else if (!info.isFile()
+        || info.nlink > 1n
+        || Number(info.mode & 0o777n) !== 0o600) return false;
+    }
+    return true;
+  }
+  return visit(root);
 }
 
 let standaloneCaptureRootPromise = null;
@@ -1176,6 +1207,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     this.baseDirectory = options.baseDirectory
       ? path.resolve(options.baseDirectory)
       : null;
+    if (process.platform === 'win32' && this.baseDirectory) {
+      throw new Error(
+        'Explicit baseDirectory is unavailable on Windows until private ACL ownership can be proven; omit baseDirectory to use the private default root',
+      );
+    }
     this.captureRoot = null;
     this.maxFiles = boundedInteger(options.maxFiles ?? 2_000, 'maxFiles', { min: 1, max: 100_000 });
     this.maxBytes = boundedInteger(
@@ -1210,7 +1246,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     if (!this.baseDirectory) {
       this.baseDirectory = await createDefaultAdapterDirectory();
     } else {
-      await ensurePrivateDirectory(this.baseDirectory);
+      await ensurePrivateDirectory(this.baseDirectory, { create: false });
     }
     this.captureRoot = await ensurePrivateDirectory(
       path.join(this.baseDirectory, CAPTURE_SPOOL_DIRECTORY_NAME),
