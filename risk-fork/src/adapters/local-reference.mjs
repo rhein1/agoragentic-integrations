@@ -64,6 +64,8 @@ const LEGACY_CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v1
 const CAPTURE_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
 const LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const CAPTURE_FILE_NAME = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.bin$/u;
+const PRIVATE_STATE_DIRECTORY_NAME = 'agoragentic-risk-fork';
+const CAPTURE_SPOOL_DIRECTORY_NAME = 'capture-spools';
 // Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
 // O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
 // blocking the capture.  Windows does not expose those flags; the descriptor
@@ -149,17 +151,67 @@ async function createCaptureMarkerContent() {
   });
 }
 
-async function scavengeOrphanCaptureDirectories() {
+function defaultStateRoot() {
+  const configured = process.platform === 'win32'
+    ? process.env.LOCALAPPDATA
+    : process.env.XDG_STATE_HOME;
+  if (configured && !path.isAbsolute(configured)) {
+    throw new Error('Risk Fork state root must be an absolute path');
+  }
+  return path.resolve(configured || path.join(os.homedir(), '.local', 'state'));
+}
+
+async function ensurePrivateDirectory(directory, { create = true } = {}) {
+  const resolved = path.resolve(directory);
+  if (create) await mkdir(resolved, { recursive: true, mode: 0o700 });
+  const info = await lstat(resolved, { bigint: true });
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error(`Risk Fork private directory is not a real directory: ${resolved}`);
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid !== 'function'
+      || typeof info.uid !== 'bigint'
+      || info.uid !== BigInt(process.getuid())
+      || Number(info.mode & 0o777n) !== 0o700) {
+      throw new Error(`Risk Fork private directory ownership or mode is unsafe: ${resolved}`);
+    }
+  }
+  return resolved;
+}
+
+async function createDefaultAdapterDirectory() {
+  const parent = await ensurePrivateDirectory(
+    path.join(defaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME),
+  );
+  const adapter = await mkdtemp(path.join(parent, 'adapter-'));
+  return ensurePrivateDirectory(adapter, { create: false });
+}
+
+let standaloneCaptureRootPromise = null;
+async function standaloneCaptureRoot() {
+  if (!standaloneCaptureRootPromise) {
+    standaloneCaptureRootPromise = ensurePrivateDirectory(
+      path.join(defaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME, 'standalone', CAPTURE_SPOOL_DIRECTORY_NAME),
+    ).catch((error) => {
+      standaloneCaptureRootPromise = null;
+      throw error;
+    });
+  }
+  return standaloneCaptureRootPromise;
+}
+
+async function scavengeOrphanCaptureDirectories(captureRoot) {
   if (process.platform === 'win32') return 0;
+  const root = await ensurePrivateDirectory(captureRoot, { create: false });
   let entries;
   try {
-    entries = await readdir(os.tmpdir(), { withFileTypes: true });
+    entries = await readdir(root, { withFileTypes: true });
   } catch {
     return 0;
   }
   let removed = 0;
   for (const entry of entries) {
-    const directory = path.join(os.tmpdir(), entry.name);
+    const directory = path.join(root, entry.name);
     try {
       let topLevelDirectory = entry.isDirectory();
       if (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink()) {
@@ -261,25 +313,29 @@ async function scavengeOrphanCaptureDirectories() {
   return removed;
 }
 
-let captureScavengerPromise = null;
-async function ensureCaptureScavenged() {
-  if (!captureScavengerPromise) {
-    const promise = scavengeOrphanCaptureDirectories().catch(() => 0);
-    captureScavengerPromise = promise;
+const captureScavengerPromises = new Map();
+async function ensureCaptureScavenged(captureRoot) {
+  const root = path.resolve(captureRoot);
+  let promise = captureScavengerPromises.get(root);
+  if (!promise) {
+    promise = scavengeOrphanCaptureDirectories(root).catch(() => 0);
+    captureScavengerPromises.set(root, promise);
     try {
       await promise;
     } finally {
-      if (captureScavengerPromise === promise) captureScavengerPromise = null;
+      if (captureScavengerPromises.get(root) === promise) captureScavengerPromises.delete(root);
     }
     return;
   }
-  await captureScavengerPromise;
+  await promise;
 }
 
 // Internal deterministic cleanup-test seam. It is not used by production callers.
-export async function __testScavengeCaptureDirectories() {
-  captureScavengerPromise = null;
-  return scavengeOrphanCaptureDirectories();
+export async function __testScavengeCaptureDirectories(captureRoot = null) {
+  const root = captureRoot ? path.resolve(requireString(captureRoot, 'captureRoot'))
+    : await standaloneCaptureRoot();
+  captureScavengerPromises.delete(root);
+  return scavengeOrphanCaptureDirectories(root);
 }
 
 async function releaseCapturedContent(records) {
@@ -387,10 +443,18 @@ function assertInsideWorkspace(workspaceRoot, target, relative) {
   return resolvedTarget;
 }
 
-async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = null }) {
+async function enumerateWorkspace(root, {
+  maxFiles,
+  maxBytes,
+  testAfterRead = null,
+  captureRoot = null,
+}) {
   const workspaceRoot = await realpath(root);
-  await ensureCaptureScavenged();
-  const captureDirectory = await mkdtemp(path.join(os.tmpdir(), CAPTURE_DIRECTORY_PREFIX));
+  const resolvedCaptureRoot = captureRoot
+    ? await ensurePrivateDirectory(captureRoot, { create: false })
+    : await standaloneCaptureRoot();
+  await ensureCaptureScavenged(resolvedCaptureRoot);
+  const captureDirectory = await mkdtemp(path.join(resolvedCaptureRoot, CAPTURE_DIRECTORY_PREFIX));
   try {
     await writeFile(
       path.join(captureDirectory, CAPTURE_MARKER_NAME),
@@ -594,6 +658,7 @@ export async function __testEnumerateWorkspace(root, options = {}) {
     maxFiles: options.maxFiles ?? 2_000,
     maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
     testAfterRead: options.afterRead,
+    captureRoot: options.captureRoot,
   });
   if (!options.retain) await releaseCapturedContent(snapshot.records);
   return snapshot;
@@ -617,6 +682,7 @@ export async function inspectLocalWorkspace(input = {}) {
       'max_bytes',
       { min: 1, max: 1024 * 1024 * 1024 },
     ),
+    captureRoot: await standaloneCaptureRoot(),
   });
   try {
     return {
@@ -985,6 +1051,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     this.baseDirectory = options.baseDirectory
       ? path.resolve(options.baseDirectory)
       : null;
+    this.captureRoot = null;
     this.maxFiles = boundedInteger(options.maxFiles ?? 2_000, 'maxFiles', { min: 1, max: 100_000 });
     this.maxBytes = boundedInteger(
       options.maxBytes ?? 32 * 1024 * 1024,
@@ -1016,10 +1083,13 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   async initialize() {
     if (this.initialized) return this;
     if (!this.baseDirectory) {
-      this.baseDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-'));
+      this.baseDirectory = await createDefaultAdapterDirectory();
     } else {
-      await mkdir(this.baseDirectory, { recursive: true });
+      await ensurePrivateDirectory(this.baseDirectory);
     }
+    this.captureRoot = await ensurePrivateDirectory(
+      path.join(this.baseDirectory, CAPTURE_SPOOL_DIRECTORY_NAME),
+    );
     await mkdir(path.join(this.baseDirectory, 'savepoints'), { recursive: true });
     await mkdir(path.join(this.baseDirectory, 'forks'), { recursive: true });
     this.initialized = true;
@@ -1049,6 +1119,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const snapshot = await enumerateWorkspace(sourceWorkspace, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
     if (!safeEqual(snapshot.workspace_digest, input.capsule.workspace.digest)) {
       await releaseCapturedContent(snapshot.records);
@@ -1086,6 +1157,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       const copiedSnapshot = await enumerateWorkspace(directory, {
         maxFiles: this.maxFiles,
         maxBytes: this.maxBytes,
+        captureRoot: this.captureRoot,
       });
       try {
         if (!safeEqual(copiedSnapshot.workspace_digest, snapshot.workspace_digest)) {
@@ -1168,6 +1240,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const source = await enumerateWorkspace(savepoint.directory, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
     try {
       await copyRecords(source.records, directory);
@@ -1361,12 +1434,14 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const before = await enumerateWorkspace(savepoint.directory, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
     let after;
     try {
       after = await enumerateWorkspace(record.directory, {
         maxFiles: this.maxFiles,
         maxBytes: this.maxBytes,
+        captureRoot: this.captureRoot,
       });
     } catch (error) {
       await releaseCapturedContent(before.records);

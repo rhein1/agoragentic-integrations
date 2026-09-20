@@ -199,7 +199,9 @@ test('capture spool cleanup migrates only aged legacy markers and scavenges stal
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
   timeout: 30_000,
 }, async (t) => {
-  const staleDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const staleDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   const marker = path.join(staleDirectory, '.agoragentic-risk-fork-capture-v1');
   await writeFile(marker, JSON.stringify({
     schema: 'agoragentic.risk-fork.capture-directory.v1',
@@ -212,7 +214,7 @@ test('capture spool cleanup migrates only aged legacy markers and scavenges stal
   await utimes(marker, old, old);
   await utimes(staleDirectory, old, old);
 
-  const protectedDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const protectedDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   t.after(() => Promise.all([
     rm(staleDirectory, { recursive: true, force: true }),
     rm(protectedDirectory, { recursive: true, force: true }),
@@ -226,7 +228,7 @@ test('capture spool cleanup migrates only aged legacy markers and scavenges stal
   await chmod(protectedDirectory, 0o700);
   await utimes(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), old, old);
 
-  assert.equal(await __testScavengeCaptureDirectories(), 1);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 1);
   await assert.rejects(access(staleDirectory), (error) => error?.code === 'ENOENT');
   assert.equal(await access(path.join(protectedDirectory, 'unrelated.txt')).then(() => true), true);
 
@@ -250,10 +252,70 @@ test('capture spool cleanup migrates only aged legacy markers and scavenges stal
   assert.ok(timerTicks > 0, 'spool cleanup must yield between filesystem operations');
 });
 
+test('capture scavenger ignores unrelated temporary-directory lookalikes', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  const unrelated = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  t.after(() => Promise.all([
+    rm(captureRoot, { recursive: true, force: true }),
+    rm(unrelated, { recursive: true, force: true }),
+  ]));
+  const marker = path.join(unrelated, '.agoragentic-risk-fork-capture-v1');
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await chmod(unrelated, 0o700);
+  const old = new Date(Date.now() - (26 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
+  assert.equal(await access(unrelated).then(() => true), true);
+});
+
+test('adapter instances receive distinct private capture roots', async (t) => {
+  const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-one-'));
+  const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-two-'));
+  t.after(() => Promise.all([
+    rm(firstRoot, { recursive: true, force: true }),
+    rm(secondRoot, { recursive: true, force: true }),
+  ]));
+  const first = new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(firstRoot, 'adapter') });
+  const second = new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(secondRoot, 'adapter') });
+  await first.initialize();
+  await second.initialize();
+  assert.notEqual(first.captureRoot, second.captureRoot);
+  assert.equal(await access(first.captureRoot).then(() => true), true);
+  assert.equal(await access(second.captureRoot).then(() => true), true);
+});
+
+test('adapter rejects unsafe explicit private roots', {
+  skip: process.platform === 'win32' ? 'POSIX private-root mode boundary' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-root-'));
+  const target = path.join(temporary, 'target');
+  const linked = path.join(temporary, 'linked');
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  await mkdir(target, { mode: 0o700 });
+  await chmod(target, 0o755);
+  await symlink(target, linked);
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: target }).initialize(),
+    /ownership or mode is unsafe/i,
+  );
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: linked }).initialize(),
+    /not a real directory/i,
+  );
+});
+
 test('capture scavenger rescans a young orphan after the in-flight pass completes', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
-  const orphanDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const orphanDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   const marker = path.join(orphanDirectory, '.agoragentic-risk-fork-capture-v2');
   const payload = path.join(orphanDirectory, '0-00000000-0000-4000-8000-000000000000.bin');
   t.after(() => rm(orphanDirectory, { recursive: true, force: true }));
@@ -267,19 +329,21 @@ test('capture scavenger rescans a young orphan after the in-flight pass complete
   await chmod(orphanDirectory, 0o700);
   const source = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-rescan-'));
   t.after(() => rm(source, { recursive: true, force: true }));
-  await __testEnumerateWorkspace(source);
+  await __testEnumerateWorkspace(source, { captureRoot });
   assert.equal(await access(orphanDirectory).then(() => true), true);
   const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
   await utimes(marker, old, old);
   await utimes(orphanDirectory, old, old);
-  await __testEnumerateWorkspace(source);
+  await __testEnumerateWorkspace(source, { captureRoot });
   await assert.rejects(access(orphanDirectory), (error) => error?.code === 'ENOENT');
 });
 
 test('capture scavenger skips a live PID whose process instance does not match', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
   t.after(() => rm(directory, { recursive: true, force: true }));
   await writeFile(marker, JSON.stringify({
@@ -293,15 +357,17 @@ test('capture scavenger skips a live PID whose process instance does not match',
   await chmod(directory, 0o700);
   const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
   await utimes(marker, old, old);
-  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
   assert.equal(await access(directory).then(() => true), true);
 });
 
 test('capture scavenger lstat-falls back for unknown directory entries', {
   skip: process.platform === 'win32' ? 'POSIX special filesystem entries' : false,
 }, async (t) => {
-  const unknownTopLevel = path.join(os.tmpdir(), `agoragentic-risk-fork-capture-unknown-${randomUUID()}`);
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const unknownTopLevel = path.join(captureRoot, `agoragentic-risk-fork-capture-unknown-${randomUUID()}`);
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
   t.after(() => Promise.all([
     rm(unknownTopLevel, { force: true }),
@@ -318,7 +384,7 @@ test('capture scavenger lstat-falls back for unknown directory entries', {
   await chmod(directory, 0o700);
   const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
   await utimes(marker, old, old);
-  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
   assert.equal(await access(unknownTopLevel).then(() => true), true);
   assert.equal(await access(directory).then(() => true), true);
 });
@@ -326,7 +392,9 @@ test('capture scavenger lstat-falls back for unknown directory entries', {
 test('capture scavenger never follows a replacement marker symlink', {
   skip: process.platform === 'win32' ? 'POSIX no-follow marker boundary' : false,
 }, async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
   const target = path.join(os.tmpdir(), `risk-fork-marker-target-${randomUUID()}`);
   const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
   t.after(() => Promise.all([
@@ -342,7 +410,7 @@ test('capture scavenger never follows a replacement marker symlink', {
   await symlink(target, marker);
   await chmod(directory, 0o700);
 
-  assert.equal(await __testScavengeCaptureDirectories(), 0);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
   assert.equal(await access(directory).then(() => true), true);
   assert.equal(await access(target).then(() => true), true);
 });
