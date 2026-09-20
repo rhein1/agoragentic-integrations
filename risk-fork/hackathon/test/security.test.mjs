@@ -509,6 +509,30 @@ test('unmarked roots and marker tampering fail closed', async () => {
   }
 });
 
+test('demo roots reject a group/world-writable non-sticky custom parent', {
+  skip: process.platform === 'win32' ? 'Windows DACL boundary is explicit but unverified' : false,
+}, async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hackathon-parent-'));
+  const root = path.join(parent, 'demo-root');
+  try {
+    await chmod(parent, 0o777);
+    await assert.rejects(
+      initializeOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_PARENT_UNTRUSTED',
+    );
+    await chmod(parent, 0o700);
+    const handle = await initializeOwnedDemoRoot(root);
+    await chmod(parent, 0o777);
+    await assert.rejects(
+      openOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_PARENT_UNTRUSTED',
+    );
+    assert.ok(handle.root_id);
+  } finally {
+    await cleanupTemporary(parent);
+  }
+});
+
 test('owned child resolution rejects hard links and symlink or junction traversal', async (t) => {
   const fixture = await temporaryRoot('risk-fork-hackathon-links-');
   const outside = path.join(fixture.parent, 'outside.txt');

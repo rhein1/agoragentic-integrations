@@ -199,6 +199,8 @@ The default temporary root is created exclusively on first use. An existing
 unmarked directory is never adopted, even when empty; remove it and retry after
 confirming it is safe. On POSIX hosts, an existing marked root must be owned by
 the current user and must use owner-only mode, with no group/other access.
+Its parent must also be current-user-owned without group/other write access, or
+the root-owned sticky system temp directory.
 Windows ACL/DACL
 ownership is not inferred from Node mode bits and remains an explicit limitation;
 this demo does not claim a Windows filesystem isolation boundary.

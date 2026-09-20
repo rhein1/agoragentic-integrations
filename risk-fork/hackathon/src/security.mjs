@@ -616,7 +616,33 @@ async function assertOwnedRootMetadata(target, label) {
   return info;
 }
 
-async function assertSameRootIdentity(target, expected, label) {
+async function assertTrustedRootParent(target, label) {
+  const realPath = await assertRealDirectory(target, label);
+  const info = await statOrNull(target);
+  if (!info) fail('DEMO_ROOT_PARENT_UNTRUSTED', `${label} is missing`);
+  if (process.platform !== 'win32') {
+    const mode = info.mode & 0o7777;
+    const currentUid = typeof process.getuid === 'function' ? process.getuid() : null;
+    const currentUserPrivate = currentUid !== null
+      && info.uid === currentUid
+      && (mode & 0o077) === 0;
+    const stickySystemTemp = info.uid === 0
+      && (mode & 0o1000) !== 0
+      && samePath(realPath, path.resolve(os.tmpdir()));
+    if (!currentUserPrivate && !stickySystemTemp) {
+      fail(
+        'DEMO_ROOT_PARENT_UNTRUSTED',
+        `${label} must be current-user-owned and non-writable by group/other, or root-owned sticky temp`,
+      );
+    }
+  }
+  return {
+    realPath,
+    identity: await lstat(target, { bigint: true }),
+  };
+}
+
+async function assertSameDirectoryIdentity(target, expected, label) {
   const actual = await lstat(target, { bigint: true });
   if (!actual.isDirectory()
     || actual.dev !== expected.dev
@@ -670,6 +696,7 @@ function makeHandle(rootPath, rootRealPath, marker) {
 
 export async function openOwnedDemoRoot(rootPath) {
   const root = normalizeRootPath(rootPath);
+  await assertTrustedRootParent(path.dirname(root), 'Demo root parent');
   const rootRealPath = await assertRealDirectory(root, 'Demo root');
   await assertOwnedRootMetadata(root, 'Demo root');
   const marker = await readAndVerifyMarker(root, rootRealPath);
@@ -683,14 +710,16 @@ export async function initializeOwnedDemoRoot(rootPath, options = {}) {
   if (typeof clock !== 'function' || typeof randomBytesFn !== 'function') {
     fail('DEMO_ROOT_INVALID', 'Demo root clock and entropy provider must be functions');
   }
+  const parentPath = path.dirname(root);
+  const parent = await assertTrustedRootParent(parentPath, 'Demo root parent');
   let created = false;
   try {
-    await assertRealDirectory(path.dirname(root), 'Demo root parent');
     await mkdir(root, { recursive: false, mode: 0o700 });
     created = true;
   } catch (error) {
     if (error?.code !== 'EEXIST') throw error;
   }
+  await assertSameDirectoryIdentity(parentPath, parent.identity, 'Demo root parent');
   const rootRealPath = await assertRealDirectory(root, 'Demo root');
   await assertOwnedRootMetadata(root, 'Demo root');
   const rootIdentity = await lstat(root, { bigint: true });
@@ -715,14 +744,17 @@ export async function initializeOwnedDemoRoot(rootPath, options = {}) {
     marker_hash: null,
   };
   const marker = { ...base, marker_hash: markerHash(base) };
-  await assertSameRootIdentity(root, rootIdentity, 'Demo root');
+  await assertTrustedRootParent(parentPath, 'Demo root parent');
+  await assertSameDirectoryIdentity(parentPath, parent.identity, 'Demo root parent');
+  await assertSameDirectoryIdentity(root, rootIdentity, 'Demo root');
   await assertRealDirectory(root, 'Demo root');
   await writeFile(
     path.join(root, RISK_FORK_DEMO_ROOT_MARKER),
     `${canonicalize(marker)}\n`,
     { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   );
-  await assertSameRootIdentity(root, rootIdentity, 'Demo root');
+  await assertSameDirectoryIdentity(parentPath, parent.identity, 'Demo root parent');
+  await assertSameDirectoryIdentity(root, rootIdentity, 'Demo root');
   return openOwnedDemoRoot(root);
 }
 
