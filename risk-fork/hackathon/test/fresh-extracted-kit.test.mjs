@@ -39,6 +39,7 @@ function minimalEnvironment(extra = {}) {
     WINDIR: process.env.WINDIR,
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
     ...extra,
   };
 }
