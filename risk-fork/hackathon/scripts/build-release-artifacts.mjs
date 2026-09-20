@@ -72,6 +72,7 @@ const build = await buildOfflineKit({
     status: 'passed_release_candidate_build',
     source_commit: sourceCommit,
     representative_scenarios: runtime.representative_scenarios,
+    representative_scenarios_not_tested: runtime.representative_scenarios_not_tested ?? [],
     receipt_verification: runtime.verified === true ? true : 'unknown_not_tested',
     flight_recorder_smoke: runtime.recorder,
     cleanup: runtime.cleanup,
