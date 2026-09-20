@@ -52,7 +52,8 @@ const runtime = process.platform === 'win32'
       provider_calls: 0,
       network_used: false,
       credentials_used: false,
-      representative_scenarios: [...REPRESENTATIVE_SCENARIOS],
+      representative_scenarios: [],
+      representative_scenarios_not_tested: [...REPRESENTATIVE_SCENARIOS],
       recorder: { status: 'unknown_not_tested' },
       cleanup: { requested: false, absence: 'not_applicable', status: 'not_applicable' },
       runtime_verification: {
