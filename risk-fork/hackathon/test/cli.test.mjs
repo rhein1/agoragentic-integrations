@@ -65,6 +65,8 @@ function safeCliEvidence(result) {
     cleanup_status: value?.cleanup?.status ?? null,
     recorder_status: value?.recorder?.status ?? null,
     error_code: value?.error_code ?? value?.error?.code ?? value?.failure?.code ?? null,
+    validation_status: value?.validation_status ?? null,
+    failure_message: value?.failure?.message ?? null,
   });
 }
 
