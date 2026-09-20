@@ -55,6 +55,19 @@ async function cli(...args) {
   return cliWithEnvironment({}, ...args);
 }
 
+function safeCliEvidence(result) {
+  const value = result?.value;
+  return JSON.stringify({
+    code: result?.code ?? null,
+    status: value?.status ?? null,
+    final_state: value?.final_state ?? null,
+    core_receipt_verified: value?.core_receipt_verified ?? null,
+    cleanup_status: value?.cleanup?.status ?? null,
+    recorder_status: value?.recorder?.status ?? null,
+    error_code: value?.error_code ?? value?.error?.code ?? value?.failure?.code ?? null,
+  });
+}
+
 function cliActiveLock(handle, {
   runId,
   pid,
@@ -85,8 +98,8 @@ async function writeCliActiveLock(handle, record) {
 test('CLI doctor/plan are read-only and HIGH run plus cleanup are truth-bearing', async () => {
   await cli('cleanup');
   const doctor = await cli('doctor');
-  assert.equal(doctor.code, 0);
-  assert.equal(doctor.value.status, 'ready_for_local_demo');
+  assert.equal(doctor.code, 0, safeCliEvidence(doctor));
+  assert.equal(doctor.value.status, 'ready_for_local_demo', safeCliEvidence(doctor));
   assert.equal(doctor.value.node.supported_range, '>=20');
   assert.equal(doctor.value.owned_root.absolute_path_redacted, true);
   assert.equal(doctor.value.writes_performed, false);
@@ -98,8 +111,8 @@ test('CLI doctor/plan are read-only and HIGH run plus cleanup are truth-bearing'
   assert.equal(plan.value.writes_performed, false);
 
   const run = await cli('run', '--scenario', 'high-filesystem-write');
-  assert.equal(run.code, 0);
-  assert.equal(run.value.final_state, 'prepared_not_committed');
+  assert.equal(run.code, 0, safeCliEvidence(run));
+  assert.equal(run.value.final_state, 'prepared_not_committed', safeCliEvidence(run));
   assert.equal(run.value.core_receipt_verified, true);
   assert.equal(run.value.cleanup.status, 'verified');
   assert.equal(run.value.recorder.status, 'verified_local_record');
