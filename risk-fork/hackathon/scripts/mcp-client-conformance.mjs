@@ -23,7 +23,7 @@ function assertTruth(value, label) {
   }
 }
 
-function minimalEnvironment(temporary) {
+function minimalEnvironment(temporary, stateHome) {
   return Object.fromEntries(Object.entries({
     SystemRoot: process.env.SystemRoot,
     WINDIR: process.env.WINDIR,
@@ -31,7 +31,7 @@ function minimalEnvironment(temporary) {
     TEMP: temporary,
     TMP: temporary,
     TMPDIR: temporary,
-    XDG_STATE_HOME: temporary,
+    XDG_STATE_HOME: stateHome,
     AGORAGENTIC_NO_SPEND: '1',
     AGORAGENTIC_ALLOW_REAL_SPEND: '0',
     AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0',
@@ -123,7 +123,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
   }
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-client-'));
   const privateStateHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-state-'));
-  const environment = minimalEnvironment(privateStateHome);
+  const environment = minimalEnvironment(temporary, privateStateHome);
   const child = spawn(process.execPath, [entrypoint, 'mcp'], {
     cwd: path.dirname(entrypoint),
     env: environment,
