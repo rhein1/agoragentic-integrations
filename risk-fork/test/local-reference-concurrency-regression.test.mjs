@@ -20,6 +20,7 @@ import { promisify } from 'node:util';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
+  __testReleaseCapturedContent,
   __testScavengeCaptureDirectories,
   __testEnumerateWorkspace,
   inspectLocalWorkspace,
@@ -233,10 +234,15 @@ test('capture spool cleanup yields to the event loop and scavenges only stale de
   for (let index = 0; index < 5_000; index += 1) {
     await writeFile(path.join(source, `${index}.txt`), 'x');
   }
+  const snapshot = await __testEnumerateWorkspace(source, {
+    maxFiles: 10_000,
+    maxBytes: 10_000,
+    retain: true,
+  });
   let timerTicks = 0;
   const timer = setInterval(() => { timerTicks += 1; }, 0);
   try {
-    await inspectLocalWorkspace({ source_workspace: source, max_files: 10_000 });
+    await __testReleaseCapturedContent(snapshot.records);
   } finally {
     clearInterval(timer);
   }

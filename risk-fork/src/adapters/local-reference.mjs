@@ -75,7 +75,9 @@ const capturedContentByRecord = new WeakMap();
 
 function isCurrentOwner(info) {
   return process.platform === 'win32'
-    || (typeof process.getuid === 'function' && info?.uid === process.getuid());
+    || (typeof process.getuid === 'function'
+      && typeof info?.uid === 'bigint'
+      && info.uid === BigInt(process.getuid()));
 }
 
 function isLiveProcess(pid) {
@@ -176,10 +178,22 @@ async function releaseCapturedContent(records) {
     capturedContentByRecord.delete(record);
   }
   for (const directory of directories) {
-    try { await unlink(path.join(directory, CAPTURE_MARKER_NAME)); } catch (error) {
+    const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
+    let markerContent = null;
+    try {
+      markerContent = await readFile(markerPath);
+      await unlink(markerPath);
+    } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
     }
-    try { await rmdir(directory); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error; }
+    try {
+      await rmdir(directory);
+    } catch (error) {
+      if (markerContent && error?.code !== 'ENOENT') {
+        await writeFile(markerPath, markerContent, { flag: 'wx', mode: 0o600 }).catch(() => {});
+      }
+      if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
+    }
   }
 }
 
@@ -409,8 +423,6 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
     await visit(workspaceRoot);
   } catch (error) {
     await releaseCapturedContent(records);
-    try { await unlink(path.join(captureDirectory, CAPTURE_MARKER_NAME)); } catch (cleanupError) { if (cleanupError?.code !== 'ENOENT') throw cleanupError; }
-    try { await rmdir(captureDirectory); } catch (cleanupError) { if (!['ENOENT', 'ENOTEMPTY'].includes(cleanupError?.code)) throw cleanupError; }
     throw error;
   }
   const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
@@ -439,8 +451,13 @@ export async function __testEnumerateWorkspace(root, options = {}) {
     maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
     testAfterRead: options.afterRead,
   });
-  await releaseCapturedContent(snapshot.records);
+  if (!options.retain) await releaseCapturedContent(snapshot.records);
   return snapshot;
+}
+
+// Internal deterministic cleanup-test seam. It is not used by production callers.
+export async function __testReleaseCapturedContent(records) {
+  await releaseCapturedContent(records);
 }
 
 export async function inspectLocalWorkspace(input = {}) {
