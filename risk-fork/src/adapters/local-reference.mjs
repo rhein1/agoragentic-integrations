@@ -1,12 +1,17 @@
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  constants as fsConstants,
+  rmdirSync,
+  unlinkSync,
+} from 'node:fs';
 import {
   access,
   lstat,
   mkdir,
   mkdtemp,
   open,
+  readFile,
   readdir,
   realpath,
   rm,
@@ -61,7 +66,21 @@ const testOperationRunners = new WeakMap();
 const capturedContentByRecord = new WeakMap();
 
 function releaseCapturedContent(records) {
-  for (const record of records) capturedContentByRecord.delete(record);
+  const directories = new Set();
+  if (typeof records?.capture_directory === 'string') {
+    directories.add(records.capture_directory);
+  }
+  for (const record of records) {
+    const capturePath = capturedContentByRecord.get(record);
+    if (typeof capturePath === 'string') {
+      directories.add(path.dirname(capturePath));
+      try { unlinkSync(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+    }
+    capturedContentByRecord.delete(record);
+  }
+  for (const directory of directories) {
+    try { rmdirSync(directory); } catch (error) { if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error; }
+  }
 }
 
 function hasStableFileIdentity(info) {
@@ -113,6 +132,7 @@ function assertInsideWorkspace(workspaceRoot, target, relative) {
 
 async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = null }) {
   const workspaceRoot = await realpath(root);
+  const captureDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
   const records = [];
   const seenCaseFolded = new Map();
   let totalBytes = 0;
@@ -179,8 +199,11 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
       if (!isFile) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
       if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
       const handle = await open(absolute, localReadOnlyFlags());
-      let content;
+      let capturePath;
+      let contentHash;
+      let bytesRead = 0;
       let mode;
+      let captureCommitted = false;
       try {
         const before = await handle.stat({ bigint: true });
         if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
@@ -195,20 +218,42 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
         const remainingBytes = maxBytes - totalBytes;
         if (before.size > BigInt(remainingBytes)) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
 
-        const chunks = [];
-        let bytesRead = 0;
-        while (bytesRead <= remainingBytes) {
-          const chunkLength = Math.min(
-            LOCAL_SNAPSHOT_READ_CHUNK_BYTES,
-            remainingBytes - bytesRead + 1,
-          );
-          const chunk = Buffer.allocUnsafe(chunkLength);
-          const result = await handle.read(chunk, 0, chunkLength, null);
-          if (result.bytesRead === 0) break;
-          bytesRead += result.bytesRead;
-          chunks.push(chunk.subarray(0, result.bytesRead));
-          if (bytesRead > remainingBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+        capturePath = path.join(captureDirectory, `${records.length}-${randomUUID()}.bin`);
+        const captureHandle = await open(capturePath, 'wx', 0o600);
+        contentHash = createHash('sha256').update('"', 'utf8');
+        let base64Remainder = Buffer.alloc(0);
+        try {
+          while (bytesRead <= remainingBytes) {
+            const chunkLength = Math.min(
+              LOCAL_SNAPSHOT_READ_CHUNK_BYTES,
+              remainingBytes - bytesRead + 1,
+            );
+            const chunk = Buffer.allocUnsafe(chunkLength);
+            const result = await handle.read(chunk, 0, chunkLength, null);
+            if (result.bytesRead === 0) break;
+            const bytes = chunk.subarray(0, result.bytesRead);
+            bytesRead += result.bytesRead;
+            await captureHandle.write(bytes);
+            const base64Input = base64Remainder.length > 0
+              ? Buffer.concat([base64Remainder, bytes])
+              : bytes;
+            const completeLength = base64Input.length - (base64Input.length % 3);
+            if (completeLength > 0) {
+              contentHash.update(base64Input.subarray(0, completeLength).toString('base64'), 'utf8');
+            }
+            base64Remainder = completeLength === base64Input.length
+              ? Buffer.alloc(0)
+              : Buffer.from(base64Input.subarray(completeLength));
+            if (bytesRead > remainingBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+          }
+          if (base64Remainder.length > 0) contentHash.update(base64Remainder.toString('base64'), 'utf8');
+          contentHash.update('"', 'utf8');
+        } catch (error) {
+          await captureHandle.close().catch(() => {});
+          try { unlinkSync(capturePath); } catch (unlinkError) { if (unlinkError?.code !== 'ENOENT') throw unlinkError; }
+          throw error;
         }
+        await captureHandle.close();
 
         const after = await handle.stat({ bigint: true });
         assertSamePathIdentity(before, after, relative);
@@ -220,29 +265,43 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
           || after.ctimeMs !== before.ctimeMs) {
           throw new Error(`File changed while it was being captured: ${relative}`);
         }
-        content = Buffer.concat(chunks, bytesRead);
         mode = Number(before.mode & 0o777n);
+        captureCommitted = true;
       } finally {
         await handle.close();
+        if (!captureCommitted && capturePath) {
+          try { unlinkSync(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+        }
       }
-      totalBytes += content.byteLength;
+      totalBytes += bytesRead;
       const record = {
         path: relative,
-        bytes: content.byteLength,
-        content_hash: sha256Ref(content.toString('base64')),
+        bytes: bytesRead,
+        content_hash: `sha256:${contentHash.digest('hex')}`,
         mode,
       };
-      capturedContentByRecord.set(record, content);
+      capturedContentByRecord.set(record, capturePath);
       records.push(record);
     }
   }
 
-  await visit(workspaceRoot);
+  try {
+    await visit(workspaceRoot);
+  } catch (error) {
+    releaseCapturedContent(records);
+    try { rmdirSync(captureDirectory); } catch (cleanupError) { if (!['ENOENT', 'ENOTEMPTY'].includes(cleanupError?.code)) throw cleanupError; }
+    throw error;
+  }
   const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
     path: recordPath,
     bytes,
     content_hash: contentHash,
   }));
+  Object.defineProperty(records, 'capture_directory', {
+    value: captureDirectory,
+    enumerable: false,
+    configurable: false,
+  });
   return {
     records,
     public_records: publicRecords,
@@ -291,15 +350,11 @@ export async function inspectLocalWorkspace(input = {}) {
 
 async function copyRecords(records, destination) {
   for (const record of records) {
-    try {
-      const target = path.join(destination, ...record.path.split('/'));
-      await mkdir(path.dirname(target), { recursive: true });
-      const content = capturedContentByRecord.get(record);
-      if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${record.path}`);
-      await writeFile(target, content, { flag: 'wx', mode: record.mode });
-    } finally {
-      capturedContentByRecord.delete(record);
-    }
+    const target = path.join(destination, ...record.path.split('/'));
+    await mkdir(path.dirname(target), { recursive: true });
+    const capturePath = capturedContentByRecord.get(record);
+    if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${record.path}`);
+    await writeFile(target, await readFile(capturePath), { flag: 'wx', mode: record.mode });
   }
 }
 
@@ -774,8 +829,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         evidence_status: 'verified',
       };
     } catch (error) {
+      releaseCapturedContent(snapshot.records);
       await rm(directory, { recursive: true, force: true });
       throw error;
+    } finally {
+      releaseCapturedContent(snapshot.records);
     }
   }
 
@@ -800,9 +858,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     try {
       await copyRecords(source.records, directory);
     } catch (error) {
+      releaseCapturedContent(source.records);
       await rm(directory, { recursive: true, force: true });
       throw error;
     }
+    releaseCapturedContent(source.records);
     const createdAt = this.clock();
     const hardDeadlineMs = performance.now() + ttlMs;
     const record = {
@@ -1017,8 +1077,9 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
           });
           continue;
         }
-        const content = capturedContentByRecord.get(newFile);
-        if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${relative}`);
+        const capturePath = capturedContentByRecord.get(newFile);
+        if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${relative}`);
+        const content = await readFile(capturePath);
         let text;
         try {
           text = utf8Decoder.decode(content);
