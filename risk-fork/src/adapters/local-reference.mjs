@@ -112,7 +112,23 @@ async function scavengeOrphanCaptureDirectories() {
         || !isCurrentOwner(markerInfo)
         || Number(markerInfo.mode & 0o777n) !== 0o600
         || Date.now() - Number(markerInfo.mtimeMs) < CAPTURE_ORPHAN_MIN_AGE_MS) continue;
-      const marker = JSON.parse(await readFile(markerPath, 'utf8'));
+      // Keep the marker read attached to the object we inspected.  The
+      // no-follow/nonblocking open rejects replacement links and special files;
+      // the descriptor identity check rejects a path replacement between lstat
+      // and open without ever reading attacker-controlled bytes.
+      const markerHandle = await open(markerPath, localReadOnlyFlags());
+      let markerContent;
+      try {
+        const markerBefore = await markerHandle.stat({ bigint: true });
+        if (!markerBefore.isFile()
+          || !isCurrentOwner(markerBefore)
+          || Number(markerBefore.mode & 0o777n) !== 0o600) continue;
+        assertSamePathIdentity(markerInfo, markerBefore, CAPTURE_MARKER_NAME);
+        markerContent = await markerHandle.readFile('utf8');
+      } finally {
+        await markerHandle.close();
+      }
+      const marker = JSON.parse(markerContent);
       if (marker?.schema !== CAPTURE_MARKER_SCHEMA
         || typeof marker.token !== 'string'
         || !/^[0-9a-f-]{36}$/u.test(marker.token)
@@ -196,7 +212,31 @@ async function releaseCapturedContent(records) {
       await rmdir(directory);
     } catch (error) {
       if (markerPresent && error?.code !== 'ENOENT') {
-        await writeFile(markerPath, markerContent, { flag: 'wx', mode: 0o600 }).catch(() => {});
+        let markerHandle;
+        try {
+          // O_EXCL makes restoration create-only.  Write through the returned
+          // descriptor so a path replacement cannot redirect the marker bytes.
+          markerHandle = await open(markerPath, 'wx', 0o600);
+          const markerInfo = await markerHandle.stat({ bigint: true });
+          if (!markerInfo.isFile()
+            || !isCurrentOwner(markerInfo)
+            || Number(markerInfo.mode & 0o777n) !== 0o600) continue;
+          let written = 0;
+          while (written < markerContent.byteLength) {
+            const result = await markerHandle.write(
+              markerContent,
+              written,
+              markerContent.byteLength - written,
+            );
+            if (!result?.bytesWritten) break;
+            written += result.bytesWritten;
+          }
+        } catch {
+          // Cleanup is best-effort; an existing or ambiguous marker is left
+          // untouched for the next scavenger pass.
+        } finally {
+          await markerHandle?.close().catch(() => {});
+        }
       }
       if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
     }
