@@ -66,6 +66,7 @@ const environment = Object.fromEntries(Object.entries({
   TEMP: process.env.TEMP,
   TMP: process.env.TMP,
   TMPDIR: process.env.TMPDIR,
+  XDG_STATE_HOME: process.env.XDG_STATE_HOME,
   AGORAGENTIC_NO_SPEND: '1',
   AGORAGENTIC_ALLOW_REAL_SPEND: '0',
   AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0',

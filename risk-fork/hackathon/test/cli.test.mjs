@@ -29,6 +29,7 @@ function minimalEnvironment(extra = {}) {
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
     TMPDIR: process.env.TMPDIR,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
     ...extra,
   };
 }

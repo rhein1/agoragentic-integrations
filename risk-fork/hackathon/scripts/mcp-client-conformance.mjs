@@ -31,6 +31,7 @@ function minimalEnvironment(temporary) {
     TEMP: temporary,
     TMP: temporary,
     TMPDIR: temporary,
+    XDG_STATE_HOME: temporary,
     AGORAGENTIC_NO_SPEND: '1',
     AGORAGENTIC_ALLOW_REAL_SPEND: '0',
     AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0',
