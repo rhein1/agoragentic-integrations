@@ -186,11 +186,19 @@ async function ensurePrivateDirectory(directory, { create = true } = {}) {
         && typeof ancestorInfo.uid === 'bigint'
         && ancestorInfo.uid === 0n
         && (ancestorMode & 0o1000) !== 0;
+      const ancestorOwnedByProcess = typeof process.getuid === 'function'
+        && typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === BigInt(process.getuid());
+      const ancestorRootOwned = typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === 0n;
+      const ancestorWritableByOtherUsers = (ancestorMode & 0o022) !== 0;
+      const ancestorOwnerSafe = ancestorOwnedByProcess || ancestorRootOwned;
+      const ancestorModeSafe = !ancestorWritableByOtherUsers || rootOwnedStickyAncestor;
       if (process.platform !== 'win32'
         && (typeof process.getuid !== 'function'
           || typeof ancestorInfo.uid !== 'bigint'
-          || ancestorInfo.uid !== BigInt(process.getuid())
-          || ((ancestorMode & 0o022) !== 0 && !rootOwnedStickyAncestor))) {
+          || !ancestorOwnerSafe
+          || !ancestorModeSafe)) {
         throw new Error(`Risk Fork private directory ancestor is unsafe: ${ancestor}`);
       }
       const parent = path.dirname(ancestor);
