@@ -978,7 +978,14 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     if (options.operationRunner !== undefined && typeof options.operationRunner !== 'function') {
       throw new TypeError('operationRunner trusted test seam must be a function');
     }
+    if (options.removeDirectory !== undefined && typeof options.removeDirectory !== 'function') {
+      throw new TypeError('removeDirectory trusted test seam must be a function');
+    }
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource ?? null;
+    this.removeDirectory = options.removeDirectory ?? ((target) => rm(target, {
+      recursive: true,
+      force: true,
+    }));
     testOperationRunners.set(this, options.operationRunner ?? startClosedOperation);
     this.savepoints = new Map();
     this.forks = new Map();
@@ -1095,7 +1102,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       };
     } catch (error) {
       if (record) this.savepoints.delete(ref);
-      await rm(directory, { recursive: true, force: true });
+      await this.removeDirectory(directory);
       throw error;
     } finally {
       try {
@@ -1103,8 +1110,18 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       } catch (error) {
         // A final spool-cleanup failure must not leave an apparently usable
         // savepoint whose captured source state could not be released.
-        if (record) this.savepoints.delete(ref);
-        await rm(directory, { recursive: true, force: true }).catch(() => {});
+        if (record) {
+          try {
+            await this.removeDirectory(directory);
+            this.savepoints.delete(ref);
+          } catch {
+            // Retain the owned record for an explicit cleanup retry. It is
+            // marked unusable so no fork can consume an unresolved directory.
+            record.cleanup_pending = true;
+          }
+        } else {
+          await this.removeDirectory(directory).catch(() => {});
+        }
         throw error;
       }
     }
@@ -1114,6 +1131,9 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     if (!this.initialized) await this.initialize();
     const savepoint = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
     if (savepoint.destroyed) throw new Error('Cannot fork a destroyed savepoint');
+    if (savepoint.cleanup_pending) {
+      throw new Error('Cannot fork a savepoint with unresolved cleanup');
+    }
     assertFreshForkIdentity(input.fork_identity);
     const policy = networkPolicy(input.network_policy);
     if (policy.mode !== 'blocked') {
@@ -1509,7 +1529,13 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       });
     }
     if (!record.destroyed) {
-      await rm(assertOwnedPath(this.baseDirectory, record.directory), { recursive: true, force: true });
+      try {
+        await this.removeDirectory(assertOwnedPath(this.baseDirectory, record.directory));
+      } catch (error) {
+        record.cleanup_pending = true;
+        throw error;
+      }
+      record.cleanup_pending = false;
       record.destroyed = true;
     }
     return {

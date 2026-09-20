@@ -693,15 +693,21 @@ test('local authority-free verification reads the captured snapshot, not mutable
   }
 });
 
-test('final capture cleanup failure rolls back the savepoint record and directory', async () => {
+test('final capture cleanup failure retains an owned savepoint for removal retry', async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-rollback-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'safe', 'utf8');
   let captureDirectory;
+  let removalAttempts = 0;
   const adapter = new LocalReferenceRiskForkAdapter({
     baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
+    removeDirectory: async (target) => {
+      removalAttempts += 1;
+      if (removalAttempts === 1) throw new Error('injected destination removal failure');
+      await rm(target, { recursive: true, force: true });
+    },
     verifyAuthorityFreeSource: async (request, context) => {
       captureDirectory = context.snapshot_directory;
       const marker = path.join(captureDirectory, '.agoragentic-risk-fork-capture-v1');
@@ -719,9 +725,28 @@ test('final capture cleanup failure rolls back the savepoint record and director
       adapter.createSavepoint({ capsule, source_workspace: source }),
     );
     assert.equal(typeof captureDirectory, 'string');
-    assert.equal(adapter.savepoints.size, 0);
+    assert.equal(adapter.savepoints.size, 1);
+    const savepointRef = [...adapter.savepoints.keys()][0];
+    const record = adapter.savepoints.get(savepointRef);
+    assert.equal(record.cleanup_pending, true);
     const savepoints = await readdir(path.join(temporary, 'adapter', 'savepoints'));
-    assert.deepEqual(savepoints, []);
+    assert.deepEqual(savepoints, [path.basename(record.directory)]);
+    await assert.rejects(
+      adapter.createFork({
+        savepoint_ref: savepointRef,
+        fork_identity: makeForkIdentity(capsule),
+        network_policy: { mode: 'blocked' },
+        ttl_ms: 60_000,
+      }),
+      /unresolved cleanup/,
+    );
+    await adapter.destroySavepoint({ savepoint_ref: savepointRef });
+    assert.equal(record.destroyed, true);
+    assert.equal(record.cleanup_pending, false);
+    assert.equal(
+      (await adapter.verifySavepointDestroyed({ savepoint_ref: savepointRef })).status,
+      'verified',
+    );
   } finally {
     await adapter.dispose();
     await rm(temporary, { recursive: true, force: true });
