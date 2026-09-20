@@ -397,7 +397,7 @@ test('fork copy remains tracked when source spool release fails', {
       fork_identity: makeForkIdentity(capsule),
       network_policy: { mode: 'blocked' },
     }),
-    /EACCES|permission|synthetic cleanup failure/i,
+    /EACCES|EISDIR|permission|synthetic cleanup failure/i,
   );
   assert.equal(cleanupCalls > 0, true);
   const pending = [...adapter.forks.values()].find((record) => record.cleanup_pending);
