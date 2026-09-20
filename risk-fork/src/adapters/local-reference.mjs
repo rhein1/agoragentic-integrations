@@ -247,9 +247,14 @@ async function createDefaultAdapterDirectory() {
 let standaloneCaptureRootPromise = null;
 async function standaloneCaptureRoot() {
   if (!standaloneCaptureRootPromise) {
-    standaloneCaptureRootPromise = ensurePrivateDirectory(
-      path.join(defaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME, 'standalone', CAPTURE_SPOOL_DIRECTORY_NAME),
-    ).catch((error) => {
+    standaloneCaptureRootPromise = (async () => {
+      const stateRoot = await ensurePrivateDirectory(defaultStateRoot(), { create: false });
+      const privateRoot = await ensurePrivateDirectory(
+        path.join(stateRoot, PRIVATE_STATE_DIRECTORY_NAME),
+      );
+      const standaloneRoot = await ensurePrivateDirectory(path.join(privateRoot, 'standalone'));
+      return ensurePrivateDirectory(path.join(standaloneRoot, CAPTURE_SPOOL_DIRECTORY_NAME));
+    })().catch((error) => {
       standaloneCaptureRootPromise = null;
       throw error;
     });

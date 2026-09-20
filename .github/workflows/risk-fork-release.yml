@@ -52,6 +52,14 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
+      - name: Prepare POSIX Risk Fork state root
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          state_root="$RUNNER_TEMP/risk-fork-state"
+          mkdir -p -- "$state_root"
+          chmod 700 -- "$state_root"
+          printf 'XDG_STATE_HOME=%s\n' "$state_root" >> "$GITHUB_ENV"
       - name: Pin a fresh cache for warmup and every offline consumer
         run: |
           node --input-type=module <<'NODE'

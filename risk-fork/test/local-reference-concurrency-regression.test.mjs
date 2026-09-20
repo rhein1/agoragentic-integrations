@@ -5,6 +5,7 @@ import { chmodSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import {
   access,
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -20,6 +21,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
@@ -306,6 +308,40 @@ test('adapter instances receive distinct private capture roots', {
     process.platform === 'win32' ? rm(first.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
     process.platform === 'win32' ? rm(second.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
   ]));
+});
+
+test('standalone capture storage provisions private descendants under an existing state root', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-standalone-state-root-'));
+  t.after(() => {
+    return rm(stateRoot, { recursive: true, force: true });
+  });
+
+  const sourceModule = pathToFileURL(path.resolve('src/adapters/local-reference.mjs')).href;
+  const child = await execFileAsync(process.execPath, ['--input-type=module', '--eval', `
+    import { lstat } from 'node:fs/promises';
+    import { __testScavengeCaptureDirectories } from ${JSON.stringify(sourceModule)};
+    await __testScavengeCaptureDirectories();
+    const root = process.env.XDG_STATE_HOME;
+    const paths = ['agoragentic-risk-fork', 'agoragentic-risk-fork/standalone', 'agoragentic-risk-fork/standalone/capture-spools'];
+    const records = [];
+    for (const relativePath of paths) {
+      const info = await lstat(new URL(relativePath, 'file://' + root.replaceAll('\\\\', '/') + '/'), { bigint: true });
+      records.push({ relativePath, directory: info.isDirectory(), mode: Number(info.mode & 0o777n) });
+    }
+    process.stdout.write(JSON.stringify(records));
+  `], {
+    cwd: path.resolve('.'),
+    env: { ...process.env, XDG_STATE_HOME: stateRoot, NODE_OPTIONS: '' },
+    encoding: 'utf8',
+  });
+  const records = JSON.parse(child.stdout);
+  assert.deepEqual(records, [
+    { relativePath: 'agoragentic-risk-fork', directory: true, mode: 0o700 },
+    { relativePath: 'agoragentic-risk-fork/standalone', directory: true, mode: 0o700 },
+    { relativePath: 'agoragentic-risk-fork/standalone/capture-spools', directory: true, mode: 0o700 },
+  ]);
 });
 
 test('default adapter initialization never performs cross-process orphan recovery', {

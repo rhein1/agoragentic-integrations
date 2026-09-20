@@ -47,6 +47,14 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
           cache-dependency-path: ${{ matrix.package }}/package-lock.json
+      - name: Prepare POSIX Risk Fork state root
+        if: runner.os != 'Windows' && matrix.package == 'risk-fork'
+        shell: bash
+        run: |
+          state_root="$RUNNER_TEMP/risk-fork-state"
+          mkdir -p -- "$state_root"
+          chmod 700 -- "$state_root"
+          printf 'XDG_STATE_HOME=%s\n' "$state_root" >> "$GITHUB_ENV"
       - name: Install locked test dependencies
         working-directory: ${{ matrix.package }}
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -270,6 +278,13 @@ jobs:
           cache-dependency-path: |
             risk-fork/package-lock.json
             risk-fork/hackathon/package-lock.json
+      - name: Prepare POSIX Risk Fork state root
+        shell: bash
+        run: |
+          state_root="$RUNNER_TEMP/risk-fork-state"
+          mkdir -p -- "$state_root"
+          chmod 700 -- "$state_root"
+          printf 'XDG_STATE_HOME=%s\n' "$state_root" >> "$GITHUB_ENV"
       - name: Install locked source and demo dependencies
         run: |
           npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
