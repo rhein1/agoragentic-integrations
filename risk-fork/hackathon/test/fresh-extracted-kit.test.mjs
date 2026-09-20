@@ -115,7 +115,13 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
   );
   const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
     cwd: extractionRoot,
-    env: minimalEnvironment({ RISK_FORK_DEMO_ALLOW_LOOPBACK: '0' }),
+    env: minimalEnvironment({
+      TEMP: temporary,
+      TMP: temporary,
+      TMPDIR: temporary,
+      XDG_STATE_HOME: path.join(temporary, 'state'),
+      RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
+    }),
     windowsHide: true,
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024,
