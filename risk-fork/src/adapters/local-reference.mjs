@@ -483,6 +483,7 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
   }));
   return {
     records,
+    capture_directory: records.capture_directory,
     public_records: publicRecords,
     file_count: publicRecords.length,
     total_bytes: totalBytes,
@@ -955,7 +956,9 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         verifier: this.verifyAuthorityFreeSource,
         capsule: input.capsule,
         snapshot,
-        snapshotDirectory: sourceWorkspace,
+        // The verifier must inspect the immutable descriptor-backed capture,
+        // not the mutable caller workspace that was used to create it.
+        snapshotDirectory: snapshot.capture_directory,
       });
     } catch (error) {
       await releaseCapturedContent(snapshot.records);
@@ -973,6 +976,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       await releaseCapturedContent(snapshot.records);
       throw error;
     }
+    let record = null;
     try {
       await copyRecords(snapshot.records, directory);
       const copiedSnapshot = await enumerateWorkspace(directory, {
@@ -986,7 +990,7 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       } finally {
         await releaseCapturedContent(copiedSnapshot.records);
       }
-      const record = {
+      record = {
         ref,
         directory,
         capsule_hash: input.capsule.capsule_hash,
@@ -1014,11 +1018,19 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         evidence_status: 'verified',
       };
     } catch (error) {
-      await releaseCapturedContent(snapshot.records);
+      if (record) this.savepoints.delete(ref);
       await rm(directory, { recursive: true, force: true });
       throw error;
     } finally {
-      await releaseCapturedContent(snapshot.records);
+      try {
+        await releaseCapturedContent(snapshot.records);
+      } catch (error) {
+        // A final spool-cleanup failure must not leave an apparently usable
+        // savepoint whose captured source state could not be released.
+        if (record) this.savepoints.delete(ref);
+        await rm(directory, { recursive: true, force: true }).catch(() => {});
+        throw error;
+      }
     }
   }
 

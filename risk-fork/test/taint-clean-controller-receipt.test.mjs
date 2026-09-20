@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -651,6 +651,77 @@ test('local reference adapter is an explicitly non-isolating disposable-copy sim
       (await adapter.verifySavepointDestroyed({ savepoint_ref: savepoint.savepoint_ref })).status,
       'verified',
     );
+  } finally {
+    await adapter.dispose();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('local authority-free verification reads the captured snapshot, not mutable source bytes', async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-captured-verifier-'));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'secret.txt'), 'captured-secret', 'utf8');
+  let verifierSawCapturedSecret = false;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    baseDirectory: path.join(temporary, 'adapter'),
+    clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request, context) => {
+      await writeFile(path.join(source, 'secret.txt'), 'benign-source', 'utf8');
+      const capturedName = (await readdir(context.snapshot_directory))
+        .find((name) => name.endsWith('.bin'));
+      const captured = await readFile(path.join(context.snapshot_directory, capturedName), 'utf8');
+      verifierSawCapturedSecret = captured === 'captured-secret';
+      if (verifierSawCapturedSecret) throw new Error('captured secret rejected');
+      return verifyLocalAuthorityFreeSource(request);
+    },
+  });
+  try {
+    const inspected = await inspectLocalWorkspace({ source_workspace: source });
+    const capsule = makeCapsule({
+      workspace: { snapshot_ref: 'workspace:local', digest: inspected.workspace_digest },
+    });
+    await assert.rejects(
+      adapter.createSavepoint({ capsule, source_workspace: source }),
+      /captured secret rejected/,
+    );
+    assert.equal(verifierSawCapturedSecret, true);
+    assert.equal(await readFile(path.join(source, 'secret.txt'), 'utf8'), 'benign-source');
+  } finally {
+    await adapter.dispose();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('final capture cleanup failure rolls back the savepoint record and directory', async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-rollback-'));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'safe.txt'), 'safe', 'utf8');
+  let captureDirectory;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    baseDirectory: path.join(temporary, 'adapter'),
+    clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request, context) => {
+      captureDirectory = context.snapshot_directory;
+      const marker = path.join(captureDirectory, '.agoragentic-risk-fork-capture-v1');
+      await rm(marker, { force: true });
+      await mkdir(marker);
+      return verifyLocalAuthorityFreeSource(request);
+    },
+  });
+  try {
+    const inspected = await inspectLocalWorkspace({ source_workspace: source });
+    const capsule = makeCapsule({
+      workspace: { snapshot_ref: 'workspace:local', digest: inspected.workspace_digest },
+    });
+    await assert.rejects(
+      adapter.createSavepoint({ capsule, source_workspace: source }),
+    );
+    assert.equal(typeof captureDirectory, 'string');
+    assert.equal(adapter.savepoints.size, 0);
+    const savepoints = await readdir(path.join(temporary, 'adapter', 'savepoints'));
+    assert.deepEqual(savepoints, []);
   } finally {
     await adapter.dispose();
     await rm(temporary, { recursive: true, force: true });

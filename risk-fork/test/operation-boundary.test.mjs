@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -248,8 +248,10 @@ test('local savepoint binds captured bytes before clean-side source verification
     baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: async (request, context) => {
+      const captureName = (await readdir(context.snapshot_directory))
+        .find((name) => name.endsWith('.bin'));
       assert.equal(
-        await readFile(path.join(context.snapshot_directory, 'safe.txt'), 'utf8'),
+        await readFile(path.join(context.snapshot_directory, captureName), 'utf8'),
         'parent-original',
       );
       await writeFile(sourceFile, 'source-mutated-by-verifier', 'utf8');
