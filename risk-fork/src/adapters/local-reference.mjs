@@ -60,6 +60,10 @@ function localReadOnlyFlags() {
 const testOperationRunners = new WeakMap();
 const capturedContentByRecord = new WeakMap();
 
+function releaseCapturedContent(records) {
+  for (const record of records) capturedContentByRecord.delete(record);
+}
+
 function hasStableFileIdentity(info) {
   // Windows file serial numbers can exceed Number.MAX_SAFE_INTEGER; use the
   // bigint Stats form below so identity comparisons do not lose precision.
@@ -128,11 +132,18 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
     const directoryAfter = await lstat(directoryRealPath, { bigint: true });
     assertSamePathIdentity(directoryBefore, directoryAfter, prefix || '.');
     assertInsideWorkspace(workspaceRoot, await realpath(directoryRealPath), prefix || '.');
+    const entryInfoByName = new Map();
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isFile() || entry.isSymbolicLink()) continue;
+      const childPath = path.join(directoryRealPath, entry.name);
+      entryInfoByName.set(entry.name, await lstat(childPath, { bigint: true }));
+    }
     const childDirectoryIdentities = new Map();
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      const entryInfo = entryInfoByName.get(entry.name);
+      if (!entry.isDirectory() && !entryInfo?.isDirectory()) continue;
       const childPath = path.join(directoryRealPath, entry.name);
-      const childIdentity = await lstat(childPath, { bigint: true });
+      const childIdentity = entryInfo ?? await lstat(childPath, { bigint: true });
       if (!childIdentity.isDirectory()) {
         throw new Error(`Workspace directory changed while it was being captured: ${entry.name}`);
       }
@@ -155,13 +166,17 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
       }
       seenCaseFolded.set(folded, relative);
       const absolute = path.join(directoryRealPath, entry.name);
-      if (entry.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
-      if (entry.isDirectory()) {
+      const entryInfo = entryInfoByName.get(entry.name);
+      const isSymbolicLink = entry.isSymbolicLink() || entryInfo?.isSymbolicLink();
+      const isDirectory = entry.isDirectory() || entryInfo?.isDirectory();
+      const isFile = entry.isFile() || entryInfo?.isFile();
+      if (isSymbolicLink) throw new Error(`Symlinks are forbidden: ${relative}`);
+      if (isDirectory) {
         assertInsideWorkspace(workspaceRoot, absolute, relative);
         await visit(absolute, relative, childDirectoryIdentities.get(entry.name));
         continue;
       }
-      if (!entry.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+      if (!isFile) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
       if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
       const handle = await open(absolute, localReadOnlyFlags());
       let content;
@@ -239,11 +254,13 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes, testAfterRead = nu
 
 // Internal deterministic race-test seam. It is not used by production callers.
 export async function __testEnumerateWorkspace(root, options = {}) {
-  return enumerateWorkspace(path.resolve(requireString(root, 'root')), {
+  const snapshot = await enumerateWorkspace(path.resolve(requireString(root, 'root')), {
     maxFiles: options.maxFiles ?? 2_000,
     maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
     testAfterRead: options.afterRead,
   });
+  releaseCapturedContent(snapshot.records);
+  return snapshot;
 }
 
 export async function inspectLocalWorkspace(input = {}) {
@@ -260,21 +277,29 @@ export async function inspectLocalWorkspace(input = {}) {
       { min: 1, max: 1024 * 1024 * 1024 },
     ),
   });
-  return {
-    file_count: snapshot.file_count,
-    total_bytes: snapshot.total_bytes,
-    workspace_digest: snapshot.workspace_digest,
-    files: cloneJson(snapshot.public_records),
-  };
+  try {
+    return {
+      file_count: snapshot.file_count,
+      total_bytes: snapshot.total_bytes,
+      workspace_digest: snapshot.workspace_digest,
+      files: cloneJson(snapshot.public_records),
+    };
+  } finally {
+    releaseCapturedContent(snapshot.records);
+  }
 }
 
 async function copyRecords(records, destination) {
   for (const record of records) {
-    const target = path.join(destination, ...record.path.split('/'));
-    await mkdir(path.dirname(target), { recursive: true });
-    const content = capturedContentByRecord.get(record);
-    if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${record.path}`);
-    await writeFile(target, content, { flag: 'wx', mode: record.mode });
+    try {
+      const target = path.join(destination, ...record.path.split('/'));
+      await mkdir(path.dirname(target), { recursive: true });
+      const content = capturedContentByRecord.get(record);
+      if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${record.path}`);
+      await writeFile(target, content, { flag: 'wx', mode: record.mode });
+    } finally {
+      capturedContentByRecord.delete(record);
+    }
   }
 }
 
@@ -681,29 +706,45 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       maxBytes: this.maxBytes,
     });
     if (!safeEqual(snapshot.workspace_digest, input.capsule.workspace.digest)) {
+      releaseCapturedContent(snapshot.records);
       throw new Error('Source workspace digest does not match the Savepoint Capsule');
     }
-    const authorityAttestation = await verifyLocalAuthorityFreeSnapshot({
-      verifier: this.verifyAuthorityFreeSource,
-      capsule: input.capsule,
-      snapshot,
-      snapshotDirectory: sourceWorkspace,
-    });
+    let authorityAttestation;
+    try {
+      authorityAttestation = await verifyLocalAuthorityFreeSnapshot({
+        verifier: this.verifyAuthorityFreeSource,
+        capsule: input.capsule,
+        snapshot,
+        snapshotDirectory: sourceWorkspace,
+      });
+    } catch (error) {
+      releaseCapturedContent(snapshot.records);
+      throw error;
+    }
     const id = randomUUID();
     const ref = `local-savepoint:${id}`;
     const directory = assertOwnedPath(
       this.baseDirectory,
       path.join(this.baseDirectory, 'savepoints', id),
     );
-    await mkdir(directory, { recursive: false });
+    try {
+      await mkdir(directory, { recursive: false });
+    } catch (error) {
+      releaseCapturedContent(snapshot.records);
+      throw error;
+    }
     try {
       await copyRecords(snapshot.records, directory);
       const copiedSnapshot = await enumerateWorkspace(directory, {
         maxFiles: this.maxFiles,
         maxBytes: this.maxBytes,
       });
-      if (!safeEqual(copiedSnapshot.workspace_digest, snapshot.workspace_digest)) {
-        throw new Error('Local savepoint changed while it was being copied');
+      try {
+        if (!safeEqual(copiedSnapshot.workspace_digest, snapshot.workspace_digest)) {
+          throw new Error('Local savepoint changed while it was being copied');
+        }
+      } finally {
+        releaseCapturedContent(copiedSnapshot.records);
       }
       const record = {
         ref,
@@ -947,49 +988,60 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
     });
-    const after = await enumerateWorkspace(record.directory, {
-      maxFiles: this.maxFiles,
-      maxBytes: this.maxBytes,
-    });
-    const beforeMap = new Map(before.records.map((item) => [item.path, item]));
-    const afterMap = new Map(after.records.map((item) => [item.path, item]));
-    const paths = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
-    const files = [];
-    for (const relative of paths) {
-      const oldFile = beforeMap.get(relative);
-      const newFile = afterMap.get(relative);
-      if (oldFile && newFile && oldFile.content_hash === newFile.content_hash) continue;
-      if (!newFile) {
+    let after;
+    try {
+      after = await enumerateWorkspace(record.directory, {
+        maxFiles: this.maxFiles,
+        maxBytes: this.maxBytes,
+      });
+    } catch (error) {
+      releaseCapturedContent(before.records);
+      throw error;
+    }
+    try {
+      const beforeMap = new Map(before.records.map((item) => [item.path, item]));
+      const afterMap = new Map(after.records.map((item) => [item.path, item]));
+      const paths = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
+      const files = [];
+      for (const relative of paths) {
+        const oldFile = beforeMap.get(relative);
+        const newFile = afterMap.get(relative);
+        if (oldFile && newFile && oldFile.content_hash === newFile.content_hash) continue;
+        if (!newFile) {
+          files.push({
+            path: relative,
+            operation: 'delete',
+            before_hash: oldFile.content_hash,
+            after_hash: null,
+            after_content: null,
+          });
+          continue;
+        }
+        const content = capturedContentByRecord.get(newFile);
+        if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${relative}`);
+        let text;
+        try {
+          text = utf8Decoder.decode(content);
+        } catch {
+          throw new Error(`Local reference diff cannot import binary file: ${relative}`);
+        }
         files.push({
           path: relative,
-          operation: 'delete',
-          before_hash: oldFile.content_hash,
-          after_hash: null,
-          after_content: null,
+          operation: oldFile ? 'modify' : 'create',
+          before_hash: oldFile?.content_hash ?? null,
+          after_hash: sha256Ref(text),
+          after_content: text,
         });
-        continue;
       }
-      const content = capturedContentByRecord.get(newFile);
-      if (!Buffer.isBuffer(content)) throw new Error(`Missing captured bytes for ${relative}`);
-      let text;
-      try {
-        text = utf8Decoder.decode(content);
-      } catch {
-        throw new Error(`Local reference diff cannot import binary file: ${relative}`);
-      }
-      files.push({
-        path: relative,
-        operation: oldFile ? 'modify' : 'create',
-        before_hash: oldFile?.content_hash ?? null,
-        after_hash: sha256Ref(text),
-        after_content: text,
-      });
+      return {
+        type: 'WORKSPACE_DIFF',
+        files,
+        test_evidence: [],
+      };
+    } finally {
+      releaseCapturedContent(before.records);
+      releaseCapturedContent(after.records);
     }
-    return {
-      type: 'WORKSPACE_DIFF',
-      files,
-      test_evidence: [],
-    };
   }
 
   async suspendFork(input = {}) {

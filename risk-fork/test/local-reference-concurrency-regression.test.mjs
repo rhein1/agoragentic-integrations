@@ -4,6 +4,7 @@ import {
   access,
   mkdir,
   mkdtemp,
+  readdir,
   rename,
   rm,
   symlink,
@@ -201,6 +202,30 @@ test('local workspace rejects a FIFO without opening or blocking on it', {
     inspectLocalWorkspace({ source_workspace: source }),
     /special filesystem entry/i,
   );
+});
+
+test('local workspace falls back to lstat for unknown directory entry types', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-unknown-dirent-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'regular.txt'), 'portable\n');
+  const [sample] = await readdir(source, { withFileTypes: true });
+  const direntPrototype = Object.getPrototypeOf(sample);
+  const originalMethods = {
+    isDirectory: direntPrototype.isDirectory,
+    isFile: direntPrototype.isFile,
+    isSymbolicLink: direntPrototype.isSymbolicLink,
+  };
+  direntPrototype.isDirectory = () => false;
+  direntPrototype.isFile = () => false;
+  direntPrototype.isSymbolicLink = () => false;
+  try {
+    const snapshot = await __testEnumerateWorkspace(source);
+    assert.deepEqual(snapshot.public_records.map((record) => record.path), ['regular.txt']);
+  } finally {
+    Object.assign(direntPrototype, originalMethods);
+  }
 });
 
 test('local workspace rejects a nested directory symlink before traversing outside', async (t) => {
