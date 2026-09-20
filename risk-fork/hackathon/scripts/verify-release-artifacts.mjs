@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 import { extractAndVerifyOfflineKit } from '../src/offline-kit.mjs';
 import { runMcpClientConformance } from './mcp-client-conformance.mjs';
@@ -70,22 +71,46 @@ const environment = Object.fromEntries(Object.entries({
   AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0',
   RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
 }).filter(([, value]) => typeof value === 'string' && value.length > 0));
-const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
-  cwd: extractionDirectory,
-  env: environment,
-  windowsHide: true,
-  timeout: 120_000,
-  maxBuffer: 8 * 1024 * 1024,
-});
-if (stderr !== '') throw new Error('Fresh-kit verification emitted stderr');
-const offlineVerification = JSON.parse(stdout);
-if (offlineVerification.verified !== true
+let offlineVerification = null;
+if (process.platform !== 'win32') {
+  const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
+    cwd: extractionDirectory,
+    env: environment,
+    windowsHide: true,
+    timeout: 120_000,
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  if (stderr !== '') throw new Error('Fresh-kit verification emitted stderr');
+  offlineVerification = JSON.parse(stdout);
+}
+if (process.platform === 'win32') {
+  const localReferenceModule = await import(pathToFileURL(path.join(
+    extractionDirectory,
+    'risk-fork',
+    'src',
+    'adapters',
+    'local-reference.mjs',
+  )).href);
+  try {
+    await new localReferenceModule.LocalReferenceRiskForkAdapter().initialize();
+    throw new Error('Windows local-reference adapter unexpectedly initialized without ACL proof');
+  } catch (error) {
+    if (error?.code !== 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED') throw error;
+  }
+} else if (offlineVerification.verified !== true
   || offlineVerification.source_commit !== artifact.source_commit
   || offlineVerification.provider_calls !== 0
   || offlineVerification.network_used !== false) {
   throw new Error('Fresh-kit runtime verification failed its truth boundary');
 }
-const mcp = await runMcpClientConformance({ entrypoint });
+const mcp = process.platform === 'win32'
+  ? {
+      status: 'not_applicable',
+      scenario: null,
+      provider_calls: 0,
+      network_used: false,
+    }
+  : await runMcpClientConformance({ entrypoint });
 const record = {
   schema: 'agoragentic.risk-fork.client-verification-record.v1',
   recorded_at: new Date().toISOString(),
@@ -98,7 +123,7 @@ const record = {
     name: 'minimal_protocol_conformance_probe',
     version: '1',
     transport: 'stdio_json_rpc',
-    status: 'verified',
+    status: process.platform === 'win32' ? 'not_applicable' : 'verified',
   },
   configuration: {
     source: 'not_configured',
@@ -107,12 +132,12 @@ const record = {
     credentials_included: false,
   },
   assertions: {
-    initialize: 'verified',
-    four_tool_inventory: 'verified',
-    plan: 'verified',
-    run: 'verified',
-    receipt: 'verified',
-    cleanup: 'verified',
+    initialize: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
+    four_tool_inventory: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
+    plan: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
+    run: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
+    receipt: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
+    cleanup: process.platform === 'win32' ? 'unknown_not_tested' : 'verified',
   },
   scenario: mcp.scenario,
   gui_clients: {
@@ -124,7 +149,9 @@ const record = {
   network_used: false,
   live_traffic_protected: false,
   absolute_paths_included: false,
-  notes: 'Automated minimal MCP stdio protocol probe; this is not GUI-client verification.',
+  notes: process.platform === 'win32'
+    ? 'Windows local-reference ACL proof is unavailable; adapter fail-closed assertion passed. No client verification or qualification was attempted.'
+    : 'Automated minimal MCP stdio protocol probe; this is not GUI-client verification.',
   artifact: {
     verified: artifact.verified,
     build_manifest_sha256: artifact.build_manifest_sha256,
@@ -138,8 +165,8 @@ const record = {
     source_commit: extraction.verification.source_commit,
   },
   runtime: {
-    verified: offlineVerification.verified,
-    cleanup: offlineVerification.runtime?.cleanup ?? null,
+    verified: process.platform === 'win32' ? false : offlineVerification.verified,
+    cleanup: offlineVerification?.runtime?.cleanup ?? null,
   },
   mcp,
 };

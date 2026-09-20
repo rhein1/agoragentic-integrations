@@ -172,7 +172,19 @@ function defaultStateRoot() {
   return path.resolve(configured || path.join(os.homedir(), '.local', 'state'));
 }
 
-async function ensurePrivateDirectory(directory, { create = true } = {}) {
+async function ensureDefaultStateRoot() {
+  const configured = process.platform === 'win32'
+    ? process.env.LOCALAPPDATA
+    : process.env.XDG_STATE_HOME;
+  if (process.platform === 'win32' || configured) {
+    return ensurePrivateDirectory(defaultStateRoot(), { create: false });
+  }
+  const localRoot = path.dirname(defaultStateRoot());
+  await ensurePrivateDirectory(localRoot, { requirePrivateMode: false });
+  return ensurePrivateDirectory(defaultStateRoot());
+}
+
+async function ensurePrivateDirectory(directory, { create = true, requirePrivateMode = true } = {}) {
   const resolved = path.resolve(directory);
   let ancestor = path.dirname(resolved);
   while (ancestor && ancestor !== path.dirname(ancestor)) {
@@ -229,11 +241,11 @@ async function ensurePrivateDirectory(directory, { create = true } = {}) {
     if (typeof process.getuid !== 'function'
       || typeof info.uid !== 'bigint'
       || info.uid !== BigInt(process.getuid())
-      || Number(info.mode & 0o777n) !== 0o700) {
+      || (requirePrivateMode && Number(info.mode & 0o777n) !== 0o700)) {
       throw new Error(`Risk Fork private directory ownership or mode is unsafe: ${resolved}`);
     }
   }
-  if (create) await ensurePrivateDirectory(resolved, { create: false });
+  if (create) await ensurePrivateDirectory(resolved, { create: false, requirePrivateMode });
   return resolved;
 }
 
@@ -246,7 +258,7 @@ async function createDefaultAdapterDirectory() {
     throw error;
   }
   const parent = await ensurePrivateDirectory(
-    path.join(defaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME),
+    path.join(await ensureDefaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME),
   );
   const adapter = await mkdtemp(path.join(parent, 'adapter-'));
   return ensurePrivateDirectory(adapter, { create: false });
@@ -256,7 +268,7 @@ let standaloneCaptureRootPromise = null;
 async function standaloneCaptureRoot() {
   if (!standaloneCaptureRootPromise) {
     standaloneCaptureRootPromise = (async () => {
-      const stateRoot = await ensurePrivateDirectory(defaultStateRoot(), { create: false });
+      const stateRoot = await ensureDefaultStateRoot();
       const privateRoot = await ensurePrivateDirectory(
         path.join(stateRoot, PRIVATE_STATE_DIRECTORY_NAME),
       );

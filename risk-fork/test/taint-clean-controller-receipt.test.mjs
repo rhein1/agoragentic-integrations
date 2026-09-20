@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -777,6 +777,59 @@ test('local reference adapter lazily initializes its private default directory',
   } finally {
     await adapter.dispose();
     await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('default state bootstrap creates missing ~/.local/state without creating configured roots', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-missing-home-state-'));
+  const source = path.join(temporaryHome, 'source');
+  const previousHome = process.env.HOME;
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.HOME = temporaryHome;
+  delete process.env.XDG_STATE_HOME;
+  await mkdir(source);
+  try {
+    const adapter = new LocalReferenceRiskForkAdapter();
+    await adapter.initialize();
+    const localRoot = path.join(temporaryHome, '.local');
+    const stateRoot = path.join(localRoot, 'state');
+    assert.equal(Number((await lstat(localRoot, { bigint: true })).mode & 0o777n), 0o700);
+    assert.equal(Number((await lstat(stateRoot, { bigint: true })).mode & 0o777n), 0o700);
+    await adapter.dispose();
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    await rm(temporaryHome, { recursive: true, force: true });
+  }
+});
+
+test('default state bootstrap preserves a safe pre-existing ~/.local mode', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-existing-home-state-'));
+  const localRoot = path.join(temporaryHome, '.local');
+  const previousHome = process.env.HOME;
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.HOME = temporaryHome;
+  delete process.env.XDG_STATE_HOME;
+  await mkdir(localRoot, { mode: 0o755 });
+  await chmod(localRoot, 0o755);
+  try {
+    const adapter = new LocalReferenceRiskForkAdapter();
+    await adapter.initialize();
+    assert.equal(Number((await lstat(localRoot, { bigint: true })).mode & 0o777n), 0o755);
+    assert.equal(Number((await lstat(path.join(localRoot, 'state'), { bigint: true })).mode & 0o777n), 0o700);
+    await adapter.dispose();
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    await rm(temporaryHome, { recursive: true, force: true });
   }
 });
 

@@ -57,8 +57,8 @@ jobs:
         shell: bash
         run: |
           state_root="$RUNNER_TEMP/risk-fork-state"
-          mkdir -p -- "$state_root"
-          chmod 700 -- "$state_root"
+          mkdir -p "$state_root"
+          chmod 700 "$state_root"
           printf 'XDG_STATE_HOME=%s\n' "$state_root" >> "$GITHUB_ENV"
       - name: Pin a fresh cache for warmup and every offline consumer
         run: |
@@ -100,7 +100,19 @@ jobs:
           npm --prefix risk-fork run check
           npm --prefix risk-fork test
           npm --prefix risk-fork/hackathon run check
-          npm --prefix risk-fork/hackathon test
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            node --input-type=module <<'NODE'
+            import { LocalReferenceRiskForkAdapter } from './risk-fork/src/adapters/local-reference.mjs';
+            try {
+              await new LocalReferenceRiskForkAdapter().initialize();
+              throw new Error('Windows local-reference adapter unexpectedly initialized without ACL proof');
+            } catch (error) {
+              if (error?.code !== 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED') throw error;
+            }
+            NODE
+          else
+            npm --prefix risk-fork/hackathon test
+          fi
       - name: Build exact-commit dependency-complete release candidate
         env:
           RISK_FORK_RELEASE_OUTPUT_BASE: ${{ runner.temp }}/risk-fork-release-output

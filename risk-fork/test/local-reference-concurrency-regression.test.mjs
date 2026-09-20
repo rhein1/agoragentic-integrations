@@ -538,6 +538,23 @@ test('adapter rejects unsafe explicit private roots', async (t) => {
   );
 });
 
+test('adapter rejects a current-user-owned group/world-writable private ancestor', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-ancestor-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const unsafeAncestor = path.join(temporary, 'unsafe-ancestor');
+  const target = path.join(unsafeAncestor, 'target');
+  await mkdir(unsafeAncestor, { mode: 0o700 });
+  await chmod(unsafeAncestor, 0o770);
+  await mkdir(target, { mode: 0o700 });
+
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: target }).initialize(),
+    /ancestor is unsafe/i,
+  );
+});
+
 test('capture scavenger rescans a young orphan after the in-flight pass completes', {
   skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
 }, async (t) => {
