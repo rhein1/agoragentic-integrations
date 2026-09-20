@@ -156,8 +156,17 @@ function exactKeys(value, keys) {
 }
 
 function samePath(left, right) {
-  const a = path.normalize(path.resolve(left));
-  const b = path.normalize(path.resolve(right));
+  const normalize = (value) => {
+    const resolved = path.normalize(path.resolve(value));
+    // macOS exposes /var through the /private/var symlink. realpath() returns
+    // the latter while caller-owned paths commonly retain the former.
+    if (process.platform === 'darwin' && resolved.startsWith('/private/')) {
+      return resolved.slice('/private'.length);
+    }
+    return resolved;
+  };
+  const a = normalize(left);
+  const b = normalize(right);
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
