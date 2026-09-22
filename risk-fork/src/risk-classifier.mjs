@@ -1,5 +1,6 @@
 import { assertCanonicalJson, canonicalize, sha256Ref } from './canonical.mjs';
 import { MCP_PHASES, RISK_ACTIONS, RISK_LEVELS } from './constants.mjs';
+import { verifySkillSpectorAdmissionEvidence } from './skillspector-admission.mjs';
 import {
   assertAllowedKeys,
   assertPlainObject,
@@ -421,6 +422,7 @@ function classifyRiskInternal(input = {}, options = {}) {
     'tool_annotations',
     'capabilities',
     'prompt_injection_indicators',
+    'skillspector_admission',
     'owner_policy',
   ], 'risk input');
 
@@ -461,6 +463,14 @@ function classifyRiskInternal(input = {}, options = {}) {
       `prompt_injection_indicators[${index}]`,
       { maxLength: 500 },
     )).sort(),
+    ...(input.skillspector_admission === undefined
+      ? {}
+      : {
+        skillspector_admission: verifySkillSpectorAdmissionEvidence(
+          input.skillspector_admission,
+          { requested_at: evaluatedAt },
+        ),
+      }),
     owner_policy: normalizeOwnerPolicy(input.owner_policy),
   };
 
@@ -590,6 +600,22 @@ function classifyRiskInternal(input = {}, options = {}) {
     ));
   }
 
+  if (normalized.skillspector_admission
+    && normalized.skillspector_admission.result.outcome !== 'clear') {
+    level = promote(level, 'HIGH');
+    const outcome = normalized.skillspector_admission.result.outcome;
+    reasons.push(reason(
+      `skillspector_admission_${outcome}`,
+      'HIGH',
+      outcome === 'block' ? 60 : 45,
+      outcome === 'block'
+        ? 'Bound SkillSpector evidence requires admission denial or quarantine'
+        : outcome === 'review'
+          ? 'Bound SkillSpector evidence requires host review and isolation'
+          : 'Bound SkillSpector evidence is incomplete and cannot establish admission safety',
+    ));
+  }
+
   level = promote(level, normalized.owner_policy.minimum_level);
   if (normalized.owner_policy.minimum_level !== 'LOW') {
     reasons.push(reason(
@@ -702,6 +728,9 @@ export function verifyRiskDecision(decision, options = {}) {
     },
     capabilities: normalized.capabilities,
     prompt_injection_indicators: normalized.prompt_injection_indicators,
+    ...(normalized.skillspector_admission === undefined
+      ? {}
+      : { skillspector_admission: normalized.skillspector_admission }),
     owner_policy: normalized.owner_policy,
   };
   const rebuilt = classifyRiskInternal(input, {

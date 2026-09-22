@@ -1,6 +1,6 @@
 {
-  "version": "2.56.0",
-  "updated_at": "2026-09-14",
+  "version": "2.56.1",
+  "updated_at": "2026-09-22",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -1441,7 +1441,7 @@
       "language": "json",
       "status": "beta",
       "path": "skillspector/skillspector.admission.example.json",
-      "install": "pip install git+https://github.com/NVIDIA/SkillSpector.git@dde36f258729b5aec7c835295a9556e64a2def0c",
+      "install": "python -m pip install \"https://github.com/NVIDIA/SkillSpector/releases/download/v2.11.2/skillspector-2.11.2-py3-none-any.whl#sha256=9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec\"",
       "docs": "skillspector/README.md"
     },
     {

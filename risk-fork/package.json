@@ -24,6 +24,7 @@
     "./child-operation": "./src/child-operation.mjs",
     "./contracts": "./src/contracts.mjs",
     "./classifier": "./src/risk-classifier.mjs",
+    "./skillspector-admission": "./src/skillspector-admission.mjs",
     "./lifecycle": "./src/lifecycle.mjs",
     "./provider": "./src/provider.mjs",
     "./taint-gate": "./src/taint-gate.mjs",

@@ -54,6 +54,8 @@ try {
     'CLIENT_ADOPTION.md', 'MCP_2026_07_28_READINESS.md',
     'managed-service/DEPLOYMENT_GATES.md', 'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
+    'src/skillspector-admission.mjs',
+    'schema/skillspector-admission-evidence.v1.json',
     'src/mcp-host-adapter.mjs', 'src/mcp-portable-handle-boundary.mjs',
     'src/mcp-transport-contract.mjs',
     'schema/fixtures/mcp-2026-07-28-structured-content.json',
@@ -175,6 +177,7 @@ try {
     import assert from 'node:assert/strict';
     import * as core from '@agoragentic/risk-fork';
     import * as host from '@agoragentic/risk-fork/host-boundary';
+    import * as skillspector from '@agoragentic/risk-fork/skillspector-admission';
     import * as mcp from '@agoragentic/risk-fork/mcp-host-adapter';
     import * as portableHandles from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
     import * as mcpTransport from '@agoragentic/risk-fork/mcp-transport-contract';
@@ -188,6 +191,30 @@ try {
     assert.equal(typeof core.LocalReferenceRiskForkAdapter, 'function');
     assert.equal(typeof core.verifyPostgresAuthorityAuditPage, 'function');
     assert.equal(typeof host.createRiskForkHostBoundary, 'function');
+    assert.equal(typeof host.createTrustedSkillSpectorAdmissionVerifier, 'function');
+    assert.equal(
+      core.createTrustedSkillSpectorAdmissionVerifier,
+      host.createTrustedSkillSpectorAdmissionVerifier,
+    );
+    assert.equal(typeof skillspector.adaptSkillSpectorReport, 'function');
+    assert.equal(typeof skillspector.hashSkillSpectorComponentManifest, 'function');
+    assert.equal(typeof skillspector.hashSkillSpectorRulesManifest, 'function');
+    assert.equal(typeof skillspector.hashSkillSpectorRuntimeClosure, 'function');
+    assert.equal(typeof skillspector.verifySkillSpectorAdmissionEvidence, 'function');
+    assert.equal(core.adaptSkillSpectorReport, skillspector.adaptSkillSpectorReport);
+    assert.equal(
+      core.hashSkillSpectorComponentManifest,
+      skillspector.hashSkillSpectorComponentManifest,
+    );
+    assert.equal(core.hashSkillSpectorRulesManifest, skillspector.hashSkillSpectorRulesManifest);
+    assert.equal(
+      core.hashSkillSpectorRuntimeClosure,
+      skillspector.hashSkillSpectorRuntimeClosure,
+    );
+    assert.equal(
+      skillspector.SKILLSPECTOR_REVIEWED_VERSION,
+      '2.11.2',
+    );
     assert.equal(typeof mcp.createRiskForkMcpHostAdapter, 'function');
     assert.equal(typeof mcp.createTrustedRiskForkMcpPhasePlanSource, 'function');
     assert.equal(typeof mcpTransport.validateMcpHttpPhaseOperation, 'function');

@@ -112,6 +112,7 @@
           }
         },
         "prompt_injection_indicators": { "type": "array", "maxItems": 50, "uniqueItems": true, "items": { "$ref": "#/$defs/ref500" } },
+        "skillspector_admission": { "$ref": "https://agoragentic.com/schema/risk-fork-skillspector-admission-evidence.v1.json" },
         "owner_policy": {
           "type": "object", "additionalProperties": false,
           "required": ["minimum_level", "force_risk_fork", "deny_irreversible", "trusted_server_refs", "trusted_attestor_refs", "trusted_attestation_hashes", "trust_registry_version", "allowed_egress"],
