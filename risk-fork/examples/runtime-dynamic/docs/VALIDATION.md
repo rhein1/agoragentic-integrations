@@ -22,7 +22,7 @@ The existing `risk-fork/package.json` wildcard `node --test test/*.test.mjs` dis
 
 ## Explicitly unqualified
 
-- Actual Dynamic SDK/native dependencies and reviewed live lockfile.
+- A clean, npm 11-valid install tree for the Dynamic SDK/native dependencies. The checked-in candidate lockfile currently has zero `npm audit` findings, but `npm ls --all` reports `ELSPROBLEMS`; the lock and SDK install are therefore not qualified.
 - Dynamic account, wallet creation, signing, broadcasting or testnet confirmations.
 - Provider policy enforcement or transaction simulation.
 - Production OS isolation, arbitrary untrusted code execution, hosted multi-tenant execution or real customer data.
