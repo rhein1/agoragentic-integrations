@@ -140,11 +140,39 @@ function inlineDestinations(text) {
   return found;
 }
 
+function stripAngleDelimitedTags(heading) {
+  const output = [];
+  let inTag = false;
+  let pendingTag = [];
+  for (const character of heading) {
+    if (!inTag) {
+      if (character === '<') {
+        inTag = true;
+        pendingTag = [];
+      } else if (character !== '>') {
+        output.push(character);
+      }
+      continue;
+    }
+    if (character === '>') {
+      inTag = false;
+      pendingTag = [];
+    } else {
+      pendingTag.push(character);
+    }
+  }
+  // Preserve the old unmatched-angle behavior: discard angle characters but
+  // keep the remaining heading text when an opening bracket has no close.
+  if (inTag) {
+    for (const character of pendingTag) {
+      if (character !== '<') output.push(character);
+    }
+  }
+  return output.join('');
+}
+
 function slugBase(heading) {
-  return heading
-    .replace(/<[^>]*>/g, '')
-    // A malformed nested tag can leave a new angle-bracket pair after removal.
-    .replace(/[<>]/g, '')
+  return stripAngleDelimitedTags(heading)
     .replace(/!?(?:\[([^\]]*)\])\([^)]*\)/g, '$1')
     .replace(/[`*_~]/g, '')
     .trim()
