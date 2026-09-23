@@ -46,3 +46,16 @@ test('still rejects a missing documentation target', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing missing\.md/);
 });
+
+test('checks README anchors in directories whose names end in .md', () => {
+  const result = runFixture('[x](docs.md#inside-anchor)\n', {
+    'docs.md/README.md': '# Different\n',
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /missing anchor docs\.md#inside-anchor/);
+});
+
+test('normalizes malformed nested heading tags without preserving angle brackets', () => {
+  const result = runFixture('# <scr<script>ipt>Safe\n\n[x](#iptsafe)\n');
+  assert.equal(result.status, 0, result.stderr);
+});
