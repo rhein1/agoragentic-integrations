@@ -257,7 +257,6 @@ async function localX402Fetch(url, options) {
   let paymentRequiredHeader = null;
   let sawPaymentChallenge = false;
   let networkFailuresAfterAuthorization = 0;
-  let lastError = null;
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
@@ -336,7 +335,6 @@ async function localX402Fetch(url, options) {
 
       continue;
     } catch (error) {
-      lastError = error;
       if (error?.[INTERNAL_NETWORK_ERROR]) {
         throw error;
       }
@@ -371,8 +369,6 @@ async function localX402Fetch(url, options) {
       networkFailuresAfterAuthorization += 1;
     }
   }
-
-  throw lastError ?? new Error("x402Fetch failed without a response");
 }
 
 async function x402Fetch(url, options) {
