@@ -367,7 +367,11 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
                 result = await commandInvoke(client, parsed.positionals.slice(1), parsed.flags);
                 break;
             case 'x402':
-                result = await commandX402(parsed.positionals.slice(1), parsed.flags, env, { baseUrl, gatewayAgentId });
+                result = await commandX402(parsed.positionals.slice(1), parsed.flags, env, {
+                    baseUrl,
+                    gatewayAgentId,
+                    edgeBaseUrl: runtime.x402BaseUrl,
+                });
                 break;
             case 'arbiter':
                 result = await commandArbiter(parsed.positionals.slice(1), parsed.flags, env, { baseUrl });
@@ -1000,10 +1004,10 @@ async function commandInvoke(client, positionals, flags) {
     }));
 }
 
-async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId }) {
+async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId, edgeBaseUrl = 'https://x402.agoragentic.com' }) {
     const subcommand = positionals[0] || 'info';
     const base = stripTrailingSlashes(baseUrl);
-    const edgeBase = 'https://x402.agoragentic.com';
+    const edgeBase = stripTrailingSlashes(edgeBaseUrl);
     const gatewayHeaders = gatewayAgentId ? { [GATEWAY_AGENT_HEADER]: gatewayAgentId } : undefined;
     const signingKey = resolveSigningKey(flags, env || {});
 
@@ -1354,9 +1358,14 @@ async function fetchJsonRequest(url, options = {}, config = {}) {
         headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
     };
-    if (config.redirect) {
-        fetchOptions.redirect = config.redirect;
-    }
+    const hasCredentialHeader = Object.keys(headers).some((name) => (
+        /^(authorization|x-api-key|x-admin-secret|payment-signature|x-payment-signature)$/i.test(name)
+    ));
+    const requestUrl = new URL(url);
+    const hasSignedClaimProof = requestUrl.pathname === '/api/x402/claim'
+        && typeof options.body?.proof?.signature === 'string'
+        && options.body.proof.signature.length > 0;
+    fetchOptions.redirect = config.redirect || (hasCredentialHeader || hasSignedClaimProof ? 'error' : 'follow');
 
     const res = await fetch(url, fetchOptions);
     const data = await res.json().catch(() => ({}));

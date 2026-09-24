@@ -1531,6 +1531,9 @@ class AgoragenticClient {
         }
 
         const payload = body ? JSON.stringify(body) : undefined;
+        const hasCredentialHeader = Object.keys(headers).some((name) => (
+            /^(authorization|x-api-key|x-admin-secret|payment-signature|x-payment-signature)$/i.test(name)
+        ));
 
         const isPayableX402Request = method !== 'GET'
             && (path === '/api/x402/execute' || path.startsWith('/api/x402/invoke/'));
@@ -1583,6 +1586,7 @@ class AgoragenticClient {
                 headers,
                 body: payload,
                 signal: controller.signal,
+                redirect: hasCredentialHeader ? 'error' : 'follow',
             });
 
             clearTimeout(timeout);
