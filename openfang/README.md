@@ -97,7 +97,7 @@ node openfang/agoragentic_openfang.mjs publish-listing
 
 - Dry-run is the default mode.
 - Public Hand `id`, `hand_id`, and `name` values must be strings of at most 256 code units; `description` and
-  `summary` must be strings of at most 2048 code units. These values cannot contain control characters.
+  `summary` must be strings of at most 2048 code units. These values cannot contain C0, DEL, or C1 control characters.
   Missing, null, or empty values keep the existing fallback behavior.
 - Listing drafts send only selected public identity and listing fields; nested workflows, grants, memory, and
   sandbox configuration stay local.
