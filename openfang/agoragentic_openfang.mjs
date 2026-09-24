@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 
 const DEFAULT_API_BASE = "https://agoragentic.com";
 const DEFAULT_MAX_COST_USDC = 0.10;
+const MAX_REMOTE_POLICY_VALUES = 256;
+const MAX_REMOTE_POLICY_STRING_LENGTH = 256;
+const MAX_REMOTE_VERSION_LENGTH = 128;
 
 function cleanApiBase(apiBase = DEFAULT_API_BASE) {
   return String(apiBase || DEFAULT_API_BASE).replace(/\/+$/, "");
@@ -163,9 +166,34 @@ export function buildOpenFangIntentContract({
   };
 }
 
+function remotePolicyStrings(values, fieldName) {
+  if (!Array.isArray(values)) return [];
+  if (values.length > MAX_REMOTE_POLICY_VALUES) {
+    throw new Error(`${fieldName} exceeds the maximum of ${MAX_REMOTE_POLICY_VALUES} entries`);
+  }
+  return values.filter((value) => (
+    typeof value === "string"
+    && value.length > 0
+    && value.length <= MAX_REMOTE_POLICY_STRING_LENGTH
+  ));
+}
+
+function remoteVersion(value) {
+  return typeof value === "string"
+    && value.trim().length > 0
+    && value.length <= MAX_REMOTE_VERSION_LENGTH
+    && !/[\u0000-\u001f\u007f]/.test(value)
+    ? value
+    : null;
+}
+
 function toRemoteIntentContract(contract) {
   // Keep arbitrary local Hand configuration in the returned local contract only.
   // The remote contract carries identity, intent, and the explicitly mapped policy.
+  const allowedTools = remotePolicyStrings(contract.policy.tools.allowed_tools, "allowed_tools");
+  const allowedDomains = remotePolicyStrings(contract.policy.tools.allowed_domains, "allowed_domains");
+  const grants = contract.hand.capability_grants || {};
+
   return {
     schema: contract.schema,
     source_runtime: contract.source_runtime,
@@ -174,10 +202,18 @@ function toRemoteIntentContract(contract) {
       name: contract.hand.name,
       description: contract.hand.description,
       runtime: contract.hand.runtime,
-      version: contract.hand.version,
+      version: remoteVersion(contract.hand.version),
     },
     intent: contract.intent,
-    policy: contract.policy,
+    policy: {
+      ...contract.policy,
+      tools: {
+        ...contract.policy.tools,
+        allowed_tools: allowedTools,
+        allowed_domains: allowedDomains,
+        network_required: Boolean(grants.network || allowedDomains.length),
+      },
+    },
     execution: contract.execution,
   };
 }
