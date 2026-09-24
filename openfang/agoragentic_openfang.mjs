@@ -163,6 +163,25 @@ export function buildOpenFangIntentContract({
   };
 }
 
+function toRemoteIntentContract(contract) {
+  // Keep arbitrary local Hand configuration in the returned local contract only.
+  // The remote contract carries identity, intent, and the explicitly mapped policy.
+  return {
+    schema: contract.schema,
+    source_runtime: contract.source_runtime,
+    hand: {
+      id: contract.hand.id,
+      name: contract.hand.name,
+      description: contract.hand.description,
+      runtime: contract.hand.runtime,
+      version: contract.hand.version,
+    },
+    intent: contract.intent,
+    policy: contract.policy,
+    execution: contract.execution,
+  };
+}
+
 export function buildListingDraftFromOpenFangHand({
   hand = {},
   endpointUrl,
@@ -255,7 +274,7 @@ export function createOpenFangAgoragenticBridge({
           ...constraints,
           max_cost: constraints.max_cost_usdc ?? constraints.max_cost ?? contract.policy.spend.max_call_cost_usdc,
         },
-        intent_contract: contract,
+        intent_contract: toRemoteIntentContract(contract),
       },
     });
 
