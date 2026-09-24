@@ -771,6 +771,11 @@ export async function __testReleaseCapturedContent(records) {
 }
 
 export async function inspectLocalWorkspace(input = {}) {
+  if (process.platform === 'win32') {
+    const error = new Error('Local workspace enumeration is unavailable on Windows until private storage ACL and reparse-point safety are verified');
+    error.code = 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED';
+    throw error;
+  }
   const sourceWorkspace = path.resolve(requireString(input.source_workspace, 'source_workspace'));
   const info = await lstat(sourceWorkspace);
   if (info.isSymbolicLink() || !info.isDirectory()) {

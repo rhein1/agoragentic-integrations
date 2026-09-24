@@ -1513,14 +1513,23 @@ test('Windows exported workspace inspection fails closed before enumerating entr
 }, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-windows-inspect-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
+  const previousLocalAppData = process.env.LOCALAPPDATA;
+  const untouchedStateRoot = path.join(temporary, 'local-app-data-not-created');
+  process.env.LOCALAPPDATA = untouchedStateRoot;
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'must-not-open.txt'), 'inspection must fail closed\n');
 
-  await assert.rejects(
-    inspectLocalWorkspace({ source_workspace: source }),
-    (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
-  );
+  try {
+    await assert.rejects(
+      inspectLocalWorkspace({ source_workspace: source }),
+      (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+    );
+    await assert.rejects(access(untouchedStateRoot), (error) => error?.code === 'ENOENT');
+  } finally {
+    if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = previousLocalAppData;
+  }
 });
 
 test('failed and destroyed production-runner forks reject replay without changing evidence', {
