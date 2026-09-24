@@ -402,6 +402,7 @@ class X402PaidToolClient {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
+            redirect: 'error',
           },
         );
       } catch (error) {

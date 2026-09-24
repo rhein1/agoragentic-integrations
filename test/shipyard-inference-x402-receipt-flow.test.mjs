@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import http from 'node:http';
 import test from 'node:test';
 
 import {
@@ -28,6 +29,23 @@ function createLegacyFixedKeyAuthorization(challenge, payer = 'legacy-test-buyer
     authorization: signature,
     fingerprint,
   };
+}
+
+function listen(server) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.removeListener('error', reject);
+      resolve(`http://127.0.0.1:${server.address().port}`);
+    });
+  });
+}
+
+function close(server) {
+  if (!server.listening) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
 }
 
 test('legacy fixed-key authorization is rejected; route and idempotency guards remain', async () => {
@@ -146,3 +164,62 @@ test('ephemeral authorization is server-instance scoped and retries keep settlem
     await Promise.all([server.close(), otherServer.close()]);
   }
 });
+
+for (const status of [302, 307]) {
+  test(`paid demo retry rejects ${status} without forwarding its authorization`, async () => {
+    let destinationRequests = 0;
+    const destination = http.createServer((request, response) => {
+      destinationRequests += 1;
+      request.resume();
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end('{}');
+    });
+    const destinationBaseUrl = await listen(destination);
+
+    let paidRequests = 0;
+    const challenge = {
+      protocol: 'x402',
+      challenge_id: `challenge-redirect-${status}`,
+      tool: 'shipyard-inference',
+      asset: 'USDC',
+      network: 'base-sepolia-demo',
+      amount_micro_usdc: 250000,
+      pay_to: 'demo://shipyard-inference-seller',
+      settlement: 'authorization-on-402-retry',
+      idempotency_key: `redirect-${status}`,
+      request_hash: `test-hash-${status}`,
+    };
+    const source = http.createServer((request, response) => {
+      request.resume();
+      if (!request.headers['x-payment-authorization']) {
+        response.writeHead(402, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ challenge }));
+        return;
+      }
+      paidRequests += 1;
+      response.writeHead(status, { location: `${destinationBaseUrl}/redirect-target` });
+      response.end();
+    });
+    const sourceBaseUrl = await listen(source);
+
+    try {
+      const client = new X402PaidToolClient({
+        baseUrl: sourceBaseUrl,
+        maxAttempts: 2,
+        retryDelayMs: 0,
+        pay: async () => ({
+          scheme: 'demo-hmac',
+          authorization: 'synthetic-no-funds',
+        }),
+      });
+      await assert.rejects(
+        client.executeShipyardInference({ prompt: 'redirect guard fixture' }),
+        /fetch failed|redirect/i,
+      );
+      assert.equal(paidRequests, 1);
+      assert.equal(destinationRequests, 0);
+    } finally {
+      await Promise.all([close(source), close(destination)]);
+    }
+  });
+}
