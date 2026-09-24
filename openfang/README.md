@@ -96,6 +96,11 @@ node openfang/agoragentic_openfang.mjs publish-listing
 ## Security boundary
 
 - Dry-run is the default mode.
+- Public Hand `id`, `hand_id`, and `name` values must be strings of at most 256 code units; `description` and
+  `summary` must be strings of at most 2048 code units. These values cannot contain control characters.
+  Missing, null, or empty values keep the existing fallback behavior.
+- Listing drafts send only selected public identity and listing fields; nested workflows, grants, memory, and
+  sandbox configuration stay local.
 - No provider IDs are hardcoded.
 - No wallet custody or private key handling is included.
 - No Full ECF internals are exposed.

@@ -278,6 +278,85 @@ test("published listing payload excludes nested local Hand configuration", async
   assert.equal(calls[0].body.metadata.hand_id, "researcher.hand");
 });
 
+test("listing publication rejects malformed public Hand identity fields before fetching", async () => {
+  const calls = [];
+  const bridge = createOpenFangAgoragenticBridge({
+    apiKey: "amk_test",
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
+      return jsonResponse({ ok: true });
+    },
+  });
+  const cases = [
+    { field: "id", value: ["private-array-marker"], error: /id must be a string/ },
+    { field: "hand_id", value: { value: "private-object-marker" }, error: /hand_id must be a string/ },
+    { field: "name", value: 42, error: /name must be a string/ },
+    { field: "description", value: { value: "private-description-marker" }, error: /description must be a string/ },
+    { field: "summary", value: ["private-summary-marker"], error: /summary must be a string/ },
+    {
+      field: "id",
+      value: `private-oversized-id-${"x".repeat(256)}`,
+      error: /id exceeds the maximum of 256 characters/,
+    },
+    {
+      field: "description",
+      value: `private-oversized-description-${"x".repeat(2048)}`,
+      error: /description exceeds the maximum of 2048 characters/,
+    },
+    { field: "name", value: "private-control-marker\nsecond line", error: /name must not contain control characters/ },
+    { field: "summary", value: "private-control-marker\u007f", error: /summary must not contain control characters/ },
+  ];
+
+  for (const { field, value, error } of cases) {
+    await assert.rejects(
+      bridge.publishListing({
+        hand: { ...hand, [field]: value },
+        endpointUrl: "https://example.com/openfang/researcher",
+        publish: true,
+      }),
+      error,
+      `${field} should be rejected before listing publication`,
+    );
+  }
+
+  assert.deepEqual(calls, []);
+});
+
+test("listing draft retains public identity defaults and allowed manifest strings", () => {
+  const defaultDraft = buildListingDraftFromOpenFangHand({
+    hand: {},
+    endpointUrl: "https://example.com/openfang/default",
+  });
+  assert.equal(defaultDraft.name, "openfang-hand");
+  assert.equal(defaultDraft.description, "OpenFang Hand");
+  assert.equal(defaultDraft.metadata.hand_id, "openfang-hand");
+
+  const manifestDraft = buildListingDraftFromOpenFangHand({
+    hand: { hand_id: "valid-hand", name: "Valid Hand", summary: "A bounded public summary." },
+    endpointUrl: "https://example.com/openfang/valid",
+  });
+  assert.equal(manifestDraft.name, "Valid Hand");
+  assert.equal(manifestDraft.description, "A bounded public summary.");
+  assert.equal(manifestDraft.metadata.hand_id, "valid-hand");
+});
+
+test("listing draft accepts public Hand identity strings at their documented limits", () => {
+  const draft = buildListingDraftFromOpenFangHand({
+    hand: {
+      id: "i".repeat(256),
+      hand_id: "h".repeat(256),
+      name: "n".repeat(256),
+      description: "d".repeat(2048),
+      summary: "s".repeat(2048),
+    },
+    endpointUrl: "https://example.com/openfang/limits",
+  });
+
+  assert.equal(draft.name, "n".repeat(256));
+  assert.equal(draft.description, "d".repeat(2048));
+  assert.equal(draft.metadata.hand_id, "i".repeat(256));
+});
+
 test("listing draft requires an endpoint URL", () => {
   assert.throws(
     () => buildListingDraftFromOpenFangHand({ hand }),

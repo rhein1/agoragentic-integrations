@@ -6,6 +6,10 @@ const DEFAULT_MAX_COST_USDC = 0.10;
 const MAX_REMOTE_POLICY_VALUES = 256;
 const MAX_REMOTE_POLICY_STRING_LENGTH = 256;
 const MAX_REMOTE_VERSION_LENGTH = 128;
+const MAX_PUBLIC_HAND_ID_LENGTH = 256;
+const MAX_PUBLIC_HAND_NAME_LENGTH = 256;
+const MAX_PUBLIC_HAND_DESCRIPTION_LENGTH = 2048;
+const PUBLIC_HAND_CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/;
 
 function cleanApiBase(apiBase = DEFAULT_API_BASE) {
   return String(apiBase || DEFAULT_API_BASE).replace(/\/+$/, "");
@@ -28,6 +32,20 @@ function redactHeaders(headers = {}) {
   if (out.Authorization) out.Authorization = "Bearer amk_...";
   if (out.authorization) out.authorization = "Bearer amk_...";
   return out;
+}
+
+function publicHandText(value, fieldName, maxLength) {
+  if (value == null || value === "") return null;
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.length > maxLength) {
+    throw new Error(`${fieldName} exceeds the maximum of ${maxLength} characters`);
+  }
+  if (PUBLIC_HAND_CONTROL_CHARACTERS.test(value)) {
+    throw new Error(`${fieldName} must not contain control characters`);
+  }
+  return value;
 }
 
 async function httpJson({
@@ -68,14 +86,27 @@ async function httpJson({
 }
 
 export function normalizeOpenFangHand(hand = {}) {
-  const id = hand.id || hand.hand_id || hand.name || "openfang-hand";
+  const manifestId = publicHandText(hand.id, "id", MAX_PUBLIC_HAND_ID_LENGTH);
+  const manifestHandId = publicHandText(hand.hand_id, "hand_id", MAX_PUBLIC_HAND_ID_LENGTH);
+  const manifestName = publicHandText(hand.name, "name", MAX_PUBLIC_HAND_NAME_LENGTH);
+  const manifestDescription = publicHandText(
+    hand.description,
+    "description",
+    MAX_PUBLIC_HAND_DESCRIPTION_LENGTH,
+  );
+  const manifestSummary = publicHandText(
+    hand.summary,
+    "summary",
+    MAX_PUBLIC_HAND_DESCRIPTION_LENGTH,
+  );
+  const id = manifestId || manifestHandId || manifestName || "openfang-hand";
   const grants = hand.capability_grants || hand.grants || hand.permissions || {};
   const workflows = hand.workflows || hand.workflow_policy || {};
 
   return {
-    id: String(id),
-    name: String(hand.name || id),
-    description: String(hand.description || hand.summary || "OpenFang Hand"),
+    id,
+    name: manifestName || id,
+    description: manifestDescription || manifestSummary || "OpenFang Hand",
     runtime: "openfang",
     version: hand.version || null,
     channels: Array.isArray(hand.channels) ? hand.channels : [],
