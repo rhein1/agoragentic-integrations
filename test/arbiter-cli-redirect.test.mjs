@@ -325,3 +325,16 @@ test('credential-free CLI and SDK requests retain fetch redirect behavior', asyn
   assert.equal(sourceRequests.length, 2);
   assert.equal(destinationRequests.length, 2);
 });
+
+test('x402 edge test override rejects non-loopback URLs before making a request', async () => {
+  const captured = captureIo();
+  const code = await runCli(
+    ['x402', 'receipt', 'receipt-redirect-test', '--payment-signature', PAYMENT_SIGNATURE],
+    { AGORAGENTIC_BASE_URL: 'http://127.0.0.1:1' },
+    captured.io,
+    { x402BaseUrl: 'https://example.invalid' }
+  );
+
+  assert.equal(code, 2);
+  assert.match(captured.stderr(), /HTTP loopback URL/i);
+});

@@ -370,7 +370,7 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
                 result = await commandX402(parsed.positionals.slice(1), parsed.flags, env, {
                     baseUrl,
                     gatewayAgentId,
-                    edgeBaseUrl: runtime.x402BaseUrl,
+                    edgeBaseUrl: resolveX402EdgeBaseUrl(runtime.x402BaseUrl),
                 });
                 break;
             case 'arbiter':
@@ -1004,7 +1004,7 @@ async function commandInvoke(client, positionals, flags) {
     }));
 }
 
-async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId, edgeBaseUrl = 'https://x402.agoragentic.com' }) {
+async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId, edgeBaseUrl }) {
     const subcommand = positionals[0] || 'info';
     const base = stripTrailingSlashes(baseUrl);
     const edgeBase = stripTrailingSlashes(edgeBaseUrl);
@@ -1177,6 +1177,28 @@ async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId, e
     }
 
     throw userError(`Unknown x402 subcommand "${subcommand}". Use info, listings, browse, match, quote, test, execute, invoke, receipt, or claim.`);
+}
+
+function resolveX402EdgeBaseUrl(testBaseUrl) {
+    if (!testBaseUrl) {
+        return 'https://x402.agoragentic.com';
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(testBaseUrl);
+    } catch {
+        throw userError('The x402 test base URL must be an HTTP loopback URL.');
+    }
+
+    if (parsed.protocol !== 'http:'
+        || !['127.0.0.1', '[::1]'].includes(parsed.hostname)
+        || parsed.username
+        || parsed.password) {
+        throw userError('The x402 test base URL must be an HTTP loopback URL.');
+    }
+
+    return stripTrailingSlashes(parsed.toString());
 }
 
 async function commandArbiter(positionals, flags, env, { baseUrl }) {
@@ -1365,7 +1387,9 @@ async function fetchJsonRequest(url, options = {}, config = {}) {
     const hasSignedClaimProof = requestUrl.pathname === '/api/x402/claim'
         && typeof options.body?.proof?.signature === 'string'
         && options.body.proof.signature.length > 0;
-    fetchOptions.redirect = config.redirect || (hasCredentialHeader || hasSignedClaimProof ? 'error' : 'follow');
+    fetchOptions.redirect = hasCredentialHeader || hasSignedClaimProof
+        ? 'error'
+        : (config.redirect || 'follow');
 
     const res = await fetch(url, fetchOptions);
     const data = await res.json().catch(() => ({}));
