@@ -98,6 +98,106 @@ test("dry-run execute calls match only and never spends", async () => {
   assert.match(calls[0].url, /\/api\/execute\/match\?/);
 });
 
+test("remote execute sends only Hand identity and mapped policy while retaining the local contract", async () => {
+  const calls = [];
+  const privateMarkers = [
+    "private-grant-marker",
+    "private-workflow-marker",
+    "private-memory-marker",
+    "private-sandbox-marker",
+    "private-version-marker",
+    "private-tool-marker",
+    "private-allowed-domain-marker",
+    "private-network-allowlist-marker",
+  ];
+  const privateHand = {
+    ...hand,
+    version: { private: privateMarkers[4] },
+    capability_grants: {
+      ...hand.capability_grants,
+      internal_note: privateMarkers[0],
+      tools: [...hand.capability_grants.tools, { private: privateMarkers[5] }],
+      allowed_domains: [...hand.capability_grants.allowed_domains, { private: privateMarkers[6] }],
+      network_allowlist: [...hand.capability_grants.network_allowlist, { private: privateMarkers[7] }],
+    },
+    workflows: { prompt: privateMarkers[1] },
+    memory: { entries: [privateMarkers[2]] },
+    sandbox: { local_path: privateMarkers[3] },
+  };
+  const bridge = createOpenFangAgoragenticBridge({
+    apiKey: "amk_test",
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null });
+      return jsonResponse({ invocation_id: "inv_test" });
+    },
+  });
+
+  const result = await bridge.execute({
+    hand: privateHand,
+    task: "summarize this source",
+    input: { text: "hello" },
+    execute: true,
+  });
+
+  const executeCall = calls.find((call) => call.url.endsWith("/api/execute"));
+  assert.ok(executeCall);
+  assert.deepEqual(executeCall.body.intent_contract.hand, {
+    id: "researcher.hand",
+    name: "Researcher Hand",
+    description: "Researches a topic and returns a cited brief.",
+    runtime: "openfang",
+    version: null,
+  });
+  const remoteBody = JSON.stringify(executeCall.body);
+  for (const marker of privateMarkers) assert.equal(remoteBody.includes(marker), false);
+  assert.equal(executeCall.body.intent_contract.policy.spend.max_call_cost_usdc, 0.15);
+  assert.equal(executeCall.body.intent_contract.policy.spend.max_daily_cost_usdc, 1.5);
+  assert.deepEqual(executeCall.body.intent_contract.policy.tools.allowed_tools, ["web_search", "citation_check"]);
+  assert.deepEqual(executeCall.body.intent_contract.policy.tools.allowed_domains.sort(), ["agoragentic.com", "example.com"]);
+  assert.equal(executeCall.body.intent_contract.policy.tools.network_required, true);
+  assert.equal(executeCall.body.intent_contract.policy.data.allow_private_data, false);
+
+  assert.equal(result.contract.hand.capability_grants.internal_note, privateMarkers[0]);
+  assert.equal(result.contract.hand.workflows.prompt, privateMarkers[1]);
+  assert.equal(result.contract.hand.memory.entries[0], privateMarkers[2]);
+  assert.equal(result.contract.hand.sandbox.local_path, privateMarkers[3]);
+  assert.deepEqual(result.contract.hand.version, { private: privateMarkers[4] });
+  assert.deepEqual(result.contract.policy.tools.allowed_tools.at(-1), { private: privateMarkers[5] });
+  assert.deepEqual(result.contract.policy.tools.allowed_domains.at(-1), { private: privateMarkers[7] });
+  assert.deepEqual(result.contract.policy.tools.allowed_domains.at(-3), { private: privateMarkers[6] });
+
+  await bridge.execute({ hand: { ...hand, version: "0.1.0" }, task: "valid version test", execute: true });
+  const validVersionCall = calls.filter((call) => call.url.endsWith("/api/execute")).at(-1);
+  assert.equal(validVersionCall.body.intent_contract.hand.version, "0.1.0");
+});
+
+test("rejects oversized remote policy lists before making an execute request", async () => {
+  const calls = [];
+  const bridge = createOpenFangAgoragenticBridge({
+    apiKey: "amk_test",
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method || "GET" });
+      return jsonResponse({ ok: true });
+    },
+  });
+
+  await assert.rejects(
+    bridge.execute({
+      hand: {
+        ...hand,
+        capability_grants: {
+          ...hand.capability_grants,
+          allowed_domains: Array.from({ length: 257 }, (_, index) => `host-${index}.example`),
+        },
+      },
+      task: "bounded policy test",
+      execute: true,
+    }),
+    /allowed_domains exceeds the maximum of 256 entries/,
+  );
+  assert.deepEqual(calls, []);
+});
+
 test("dry-run match preserves zero max cost for free-only previews", async () => {
   const calls = [];
   const bridge = createOpenFangAgoragenticBridge({
@@ -142,6 +242,40 @@ test("listing draft does not publish unless explicitly requested", async () => {
   assert.equal(calls.length, 0);
   assert.equal(result.draft.metadata.source_runtime, "openfang");
   assert.equal(result.draft.price_per_unit, 0.25);
+});
+
+test("published listing payload excludes nested local Hand configuration", async () => {
+  const calls = [];
+  const privateMarkers = ["private-grant-marker", "private-workflow-marker", "private-memory-marker", "private-sandbox-marker"];
+  const privateHand = {
+    ...hand,
+    capability_grants: { ...hand.capability_grants, internal_note: privateMarkers[0] },
+    workflows: { prompt: privateMarkers[1] },
+    memory: { entries: [privateMarkers[2]] },
+    sandbox: { local_path: privateMarkers[3] },
+  };
+  const bridge = createOpenFangAgoragenticBridge({
+    apiKey: "amk_test",
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null });
+      return jsonResponse({ ok: true });
+    },
+  });
+
+  await bridge.publishListing({
+    hand: privateHand,
+    endpointUrl: "https://example.com/openfang/researcher",
+    pricePerUnit: 0.25,
+    publish: true,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, "POST");
+  assert.match(calls[0].url, /\/api\/capabilities$/);
+  const serializedDraft = JSON.stringify(calls[0].body);
+  for (const marker of privateMarkers) assert.equal(serializedDraft.includes(marker), false);
+  assert.equal(calls[0].body.name, "Researcher Hand");
+  assert.equal(calls[0].body.metadata.hand_id, "researcher.hand");
 });
 
 test("listing draft requires an endpoint URL", () => {
