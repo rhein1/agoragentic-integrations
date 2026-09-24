@@ -176,6 +176,7 @@ for (const status of [302, 307]) {
     });
     const destinationBaseUrl = await listen(destination);
 
+    let sourceRequests = 0;
     let paidRequests = 0;
     const challenge = {
       protocol: 'x402',
@@ -190,6 +191,7 @@ for (const status of [302, 307]) {
       request_hash: `test-hash-${status}`,
     };
     const source = http.createServer((request, response) => {
+      sourceRequests += 1;
       request.resume();
       if (!request.headers['x-payment-authorization']) {
         response.writeHead(402, { 'content-type': 'application/json' });
@@ -205,7 +207,6 @@ for (const status of [302, 307]) {
     try {
       const client = new X402PaidToolClient({
         baseUrl: sourceBaseUrl,
-        maxAttempts: 2,
         retryDelayMs: 0,
         pay: async () => ({
           scheme: 'demo-hmac',
@@ -216,6 +217,7 @@ for (const status of [302, 307]) {
         client.executeShipyardInference({ prompt: 'redirect guard fixture' }),
         /fetch failed|redirect/i,
       );
+      assert.equal(sourceRequests, 2);
       assert.equal(paidRequests, 1);
       assert.equal(destinationRequests, 0);
     } finally {

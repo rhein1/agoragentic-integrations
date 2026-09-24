@@ -402,7 +402,7 @@ class X402PaidToolClient {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
-            redirect: 'error',
+            redirect: 'manual',
           },
         );
       } catch (error) {
@@ -428,6 +428,10 @@ class X402PaidToolClient {
         elapsed_ms: Date.now() - requestStartedAt,
         reused_authorization: Boolean(cachedAuthorizationHeader),
       });
+
+      if (response.status >= 300 && response.status <= 399) {
+        throw new Error(`shipyard-inference rejected redirect ${response.status}`);
+      }
 
       if (response.status === 402) {
         if (cachedAuthorizationHeader) {
