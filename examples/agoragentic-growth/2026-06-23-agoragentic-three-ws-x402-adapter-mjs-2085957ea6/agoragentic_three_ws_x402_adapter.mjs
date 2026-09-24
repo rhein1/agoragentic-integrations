@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_BASE_URL = "https://agoragentic.com";
 const EXECUTE_PATH = "/api/x402/execute";
 const MATCH_PATH = "/api/x402/execute/match";
+const INTERNAL_NETWORK_ERROR = Symbol("internalNetworkError");
 
 function randomId(prefix = "idmp") {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -34,10 +35,6 @@ function safeJsonParse(text, fallback = {}) {
   } catch {
     return fallback;
   }
-}
-
-function isRetryableHttpStatus(status) {
-  return status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
 }
 
 class SimpleHeaders {
@@ -113,10 +110,33 @@ function createHttpError(message, details = {}) {
   return error;
 }
 
+function sanitizeCause(cause) {
+  if (!cause || typeof cause !== "object") return null;
+  const summary = {};
+  if (typeof cause.name === "string") summary.name = cause.name;
+  if (Number.isInteger(cause.status)) summary.status = cause.status;
+  if (typeof cause.code === "string") summary.code = cause.code;
+  return Object.freeze(summary);
+}
+
 function createNetworkError(message, details = {}) {
   const error = new Error(message);
   error.name = "NetworkError";
-  Object.assign(error, details);
+  const { replayHeaders, cause, ...publicDetails } = details;
+  Object.assign(error, publicDetails);
+  if (cause !== undefined) {
+    Object.defineProperty(error, "cause", {
+      value: sanitizeCause(cause),
+      enumerable: false,
+    });
+  }
+  if (replayHeaders) {
+    Object.defineProperty(error, "replayHeaders", {
+      value: Object.freeze({ ...replayHeaders }),
+      enumerable: false,
+    });
+  }
+  Object.defineProperty(error, INTERNAL_NETWORK_ERROR, { value: true });
   return error;
 }
 
@@ -201,12 +221,7 @@ async function localX402Fetch(url, options) {
 
   async function dispatch(usingPayment) {
     const attemptHeaders = { ...baseHeaders };
-    if (usingPayment && cachedPayment?.authorizationHeader) {
-      attemptHeaders.authorization = cachedPayment.authorizationHeader;
-    }
-    if (usingPayment && cachedPayment?.paymentSignature) {
-      attemptHeaders["payment-signature"] = cachedPayment.paymentSignature;
-    }
+    Object.assign(attemptHeaders, usingPayment ? buildPaymentHeaders(cachedPayment) : {});
     return fetchImpl(url, {
       method,
       headers: attemptHeaders,
@@ -220,10 +235,6 @@ async function localX402Fetch(url, options) {
       const response = await dispatch(Boolean(cachedPayment));
 
       if (response.status !== 402) {
-        if (!response.ok && cachedPayment && isRetryableHttpStatus(response.status) && networkFailuresAfterAuthorization < maxNetworkRetries) {
-          networkFailuresAfterAuthorization += 1;
-          continue;
-        }
         return markX402Meta(response, {
           paymentAttempted: sawPaymentChallenge,
           paymentAuthorized: Boolean(cachedPayment),
@@ -241,7 +252,7 @@ async function localX402Fetch(url, options) {
       }
 
       if (cachedPayment) {
-        throw createHttpError("Paid retry was rejected with another HTTP 402", {
+        throw createHttpError("Paid request was rejected with another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: true,
@@ -262,7 +273,8 @@ async function localX402Fetch(url, options) {
         });
       }
 
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         const payRequest = {
           url,
           method,
@@ -285,6 +297,9 @@ async function localX402Fetch(url, options) {
       continue;
     } catch (error) {
       lastError = error;
+      if (error?.[INTERNAL_NETWORK_ERROR]) {
+        throw error;
+      }
       const isHttpLike = typeof error?.status === "number";
       if (isHttpLike) {
         throw error;
@@ -297,7 +312,10 @@ async function localX402Fetch(url, options) {
       if (networkFailuresAfterAuthorization >= maxNetworkRetries) {
         throw createNetworkError(`Network error after payment authorization was prepared: ${error.message}`, {
           cause: error,
+          authorizedPaymentPrepared: true,
           authorizedPaymentReused: true,
+          replayAvailable: true,
+          replayHeaders: buildPaymentHeaders(cachedPayment),
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
           networkRetriesUsed: networkFailuresAfterAuthorization,
@@ -315,6 +333,13 @@ async function localX402Fetch(url, options) {
   }
 
   throw lastError ?? new Error("x402Fetch failed without a response");
+}
+
+function buildPaymentHeaders(cachedPayment) {
+  const headers = {};
+  if (cachedPayment?.authorizationHeader) headers.authorization = cachedPayment.authorizationHeader;
+  if (cachedPayment?.paymentSignature) headers["payment-signature"] = cachedPayment.paymentSignature;
+  return headers;
 }
 
 function normalizePreferredOptions(options = {}) {
@@ -338,9 +363,20 @@ function normalizePreferredOptions(options = {}) {
 async function x402Fetch(url, options) {
   const preferred = await importPreferredX402Fetch();
   if (preferred) {
-    const response = await preferred(url, normalizePreferredOptions(options));
+    let paymentCallbackInvoked = false;
+    const preferredOptions = {
+      ...options,
+      pay: typeof options?.pay === "function"
+        ? (...args) => {
+          paymentCallbackInvoked = true;
+          return options.pay(...args);
+        }
+        : options?.pay,
+    };
+    const response = await preferred(url, normalizePreferredOptions(preferredOptions));
     return markX402Meta(response, {
-      paymentAttempted: Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
+      paymentAttempted: paymentCallbackInvoked
+        || Boolean(readHeader(response, "payment-receipt") || readHeader(response, "payment-response")),
       idempotencyKey: options?.idempotencyKey ?? null,
     });
   }
@@ -416,18 +452,18 @@ export function classifyExecuteError(error) {
   if (error.name === "NetworkError") {
     return {
       kind: "network_after_payment_authorized",
-      retryable: true,
+      retryable: false,
       message: error.message,
       idempotencyKey: error.idempotencyKey ?? null,
       paymentState: error.paymentState ?? null,
-      guidance: "Retry the same execute() call with the same idempotency key and reuse the existing payment authorization if your x402 helper exposes it.",
+      guidance: "Do not retry execute(); reconcile the receipt or provider status before any new attempt.",
     };
   }
 
   if (error.name === "HttpError") {
     return {
       kind: "http_failure",
-      retryable: error.retryable ?? error.status >= 500,
+      retryable: error.retryable ?? (!error.paymentAttempted && error.status >= 500),
       status: error.status ?? null,
       message: error.message,
       idempotencyKey: error.idempotencyKey ?? null,
@@ -452,6 +488,7 @@ export class ThreeWSAgoragenticX402Adapter {
     this.defaultPay = options.pay;
     this.defaultHeaders = lowerCaseHeaders(options.headers || {});
     this.maxNetworkRetries = options.maxNetworkRetries ?? 1;
+    this.reconciliationRequired = false;
 
     if (typeof this.fetchImpl !== "function") {
       throw new Error("fetchImpl is required");
@@ -483,6 +520,15 @@ export class ThreeWSAgoragenticX402Adapter {
       signal,
     } = options;
 
+    if (this.reconciliationRequired) {
+      throw createHttpError("Previous paid execution requires receipt reconciliation before retrying", {
+        code: "PAID_EXECUTION_REQUIRES_RECONCILIATION",
+        idempotencyKey,
+        paymentAttempted: true,
+        retryable: false,
+      });
+    }
+
     let resolvedQuoteId = quoteId;
     let matchPayload = null;
 
@@ -496,30 +542,61 @@ export class ThreeWSAgoragenticX402Adapter {
 
     const body = { quote_id: resolvedQuoteId, input };
     const executeUrl = buildUrl(this.baseUrl, EXECUTE_PATH);
+    let paymentCallbackInvoked = false;
+    const guardedPay = typeof pay === "function"
+      ? (...args) => {
+        paymentCallbackInvoked = true;
+        return pay(...args);
+      }
+      : pay;
 
-    const response = await x402Fetch(executeUrl, {
-      fetchImpl: this.fetchImpl,
-      pay,
-      idempotencyKey,
-      method: "POST",
-      body,
-      signal,
-      headers: this.defaultHeaders,
-      maxNetworkRetries: this.maxNetworkRetries,
-    });
+    let response;
+    try {
+      response = await x402Fetch(executeUrl, {
+        fetchImpl: this.fetchImpl,
+        pay: guardedPay,
+        idempotencyKey,
+        method: "POST",
+        body,
+        signal,
+        headers: this.defaultHeaders,
+        maxNetworkRetries: this.maxNetworkRetries,
+      });
+    } catch (error) {
+      if (paymentCallbackInvoked || error?.paymentAttempted) {
+        this.reconciliationRequired = true;
+      }
+      throw error;
+    }
 
-    const payload = await readJsonResponse(response);
     const paymentAttempted = Boolean(
-      response?.x402Meta?.paymentAttempted
+      paymentCallbackInvoked
+      || response?.x402Meta?.paymentAttempted
       || readHeader(response, "payment-receipt")
       || readHeader(response, "payment-response")
     );
+
+    if (paymentAttempted && !response.ok) {
+      this.reconciliationRequired = true;
+    }
+
+    let payload;
+    try {
+      payload = await readJsonResponse(response);
+    } catch (error) {
+      if (paymentAttempted) {
+        this.reconciliationRequired = true;
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       throw createHttpError(`Execute failed with HTTP ${response.status}`, {
         status: response.status,
         payload: payload.json,
         idempotencyKey,
+        paymentAttempted,
+        retryable: !paymentAttempted && response.status >= 500,
       });
     }
 
@@ -681,12 +758,156 @@ async function runSelfTest() {
     throw new Error(`Expected exactly one post-authorization network retry, got ${result.x402?.networkRetriesUsed}`);
   }
 
+  let namedNetworkAttempts = 0;
+  const namedNetworkResult = await createThreeWSAgoragenticAdapter({
+    baseUrl: DEFAULT_BASE_URL,
+    fetchImpl: async () => {
+      namedNetworkAttempts += 1;
+      if (namedNetworkAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+      if (namedNetworkAttempts === 2) {
+        const error = new Error("named transport failure");
+        error.name = "NetworkError";
+        throw error;
+      }
+      return new SimpleResponse(200, { "Payment-Receipt": "receipt_named-network" }, { success: true });
+    },
+    pay: async () => ({ authorizationHeader: "demo-authorization" }),
+    maxNetworkRetries: 1,
+  }).execute("threews.generate.preview", { prompt: "named network retry regression" }, {
+    quoteId: "quote_named-network",
+    idempotencyKey: "demo-named-network-regression",
+  });
+  if (namedNetworkAttempts !== 3 || namedNetworkResult.x402?.networkRetriesUsed !== 1) {
+    throw new Error("A caller-supplied NetworkError must consume the post-authorization retry and then succeed");
+  }
+
+  const postAuthorizationStatuses = [408, 409, 425, 429, 500, 502, 503, 504];
+  for (const status of postAuthorizationStatuses) {
+    let statusAttempts = 0;
+    let statusPayCalls = 0;
+    let statusError = null;
+    try {
+      await createThreeWSAgoragenticAdapter({
+        baseUrl: DEFAULT_BASE_URL,
+        fetchImpl: async () => {
+          statusAttempts += 1;
+          if (statusAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+          return new SimpleResponse(status, {}, { error: "ambiguous_paid_response" });
+        },
+        pay: async () => {
+          statusPayCalls += 1;
+          return { authorizationHeader: "demo-authorization" };
+        },
+        maxNetworkRetries: 1,
+      }).execute("threews.generate.preview", { prompt: `status ${status} regression` }, {
+        quoteId: `quote-status-${status}`,
+        idempotencyKey: `demo-status-${status}`,
+      });
+    } catch (error) {
+      statusError = error;
+    }
+    if (statusAttempts !== 2 || statusPayCalls !== 1 || statusError?.status !== status
+        || classifyExecuteError(statusError).retryable !== false) {
+      throw new Error(`Post-authorization HTTP ${status} must be terminal without a paid replay`);
+    }
+  }
+
+  let bodyFailureAttempts = 0;
+  let bodyFailurePayCalls = 0;
+  let bodyFailureError = null;
+  const bodyFailureAdapter = createThreeWSAgoragenticAdapter({
+    baseUrl: DEFAULT_BASE_URL,
+    fetchImpl: async () => {
+      bodyFailureAttempts += 1;
+      if (bodyFailureAttempts === 1) return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+      const response = new SimpleResponse(503, {}, { error: "ambiguous_paid_response" });
+      response.text = async () => {
+        throw new Error("ambiguous paid body read");
+      };
+      return response;
+    },
+    pay: async () => {
+      bodyFailurePayCalls += 1;
+      return { authorizationHeader: "demo-authorization" };
+    },
+  });
+  try {
+    await bodyFailureAdapter.execute("threews.generate.preview", { prompt: "body failure lock regression" }, {
+      quoteId: "quote-body-failure-lock",
+      idempotencyKey: "demo-body-failure-a",
+    });
+  } catch (error) {
+    bodyFailureError = error;
+  }
+  const bodyFailureLockErrors = [];
+  for (const retryOptions of [
+    { quoteId: "quote-body-failure-lock", idempotencyKey: "demo-body-failure-a" },
+    { quoteId: "quote-body-failure-lock", idempotencyKey: "demo-body-failure-b" },
+    { quoteId: "quote-body-failure-lock" },
+  ]) {
+    try {
+      await bodyFailureAdapter.execute("threews.generate.preview", { prompt: "body failure lock regression" }, retryOptions);
+    } catch (error) {
+      bodyFailureLockErrors.push(error);
+    }
+  }
+  if (bodyFailureError?.message !== "ambiguous paid body read" || bodyFailureLockErrors.length !== 3
+      || bodyFailureLockErrors.some((error) => error.code !== "PAID_EXECUTION_REQUIRES_RECONCILIATION")
+      || bodyFailureAttempts !== 2 || bodyFailurePayCalls !== 1) {
+    throw new Error("A paid body-read failure must lock every later execute() call until receipt reconciliation");
+  }
+
+  let exhaustedError = null;
+  let exhaustedAttempts = 0;
+  try {
+    await createThreeWSAgoragenticAdapter({
+      baseUrl: DEFAULT_BASE_URL,
+      fetchImpl: async () => {
+        exhaustedAttempts += 1;
+        if (exhaustedAttempts === 1) {
+          return new SimpleResponse(402, { "PAYMENT-REQUIRED": "demo-challenge" });
+        }
+        const error = new Error("simulated persistent network failure");
+        error.name = "NetworkError";
+        error.replayHeaders = {
+          authorization: "secret-authorization",
+          "payment-signature": "secret-payment-signature",
+        };
+        throw error;
+      },
+      pay: async () => ({
+        authorizationHeader: "secret-authorization",
+        paymentSignature: "secret-payment-signature",
+      }),
+      maxNetworkRetries: 1,
+    }).execute(
+      "threews.generate.preview",
+      { prompt: "retry regression" },
+      { quoteId: "quote_retry_regression", idempotencyKey: "demo-threews-retry-regression" },
+    );
+  } catch (error) {
+    exhaustedError = error;
+  }
+  if (!exhaustedError || exhaustedError.name !== "NetworkError") {
+    throw new Error(`Expected exhausted post-authorization retries to reject with NetworkError; got ${exhaustedError?.name ?? "no error"}: ${exhaustedError?.message ?? "no message"}`);
+  }
+  const serializedExhaustedError = JSON.stringify(exhaustedError);
+  if (serializedExhaustedError.includes("secret-authorization")
+      || serializedExhaustedError.includes("secret-payment-signature")
+      || Object.prototype.propertyIsEnumerable.call(exhaustedError, "cause")
+      || Object.prototype.propertyIsEnumerable.call(exhaustedError, "replayHeaders")) {
+    throw new Error("Serialized payment retry errors must not expose nested payment credentials");
+  }
+
   const recoveryExample = classifyExecuteError(
     createNetworkError("simulated retry guidance", {
       idempotencyKey: "demo-threews-idem-001",
       authorizedPaymentReused: true,
     })
   );
+  if (recoveryExample.retryable !== false || !recoveryExample.guidance.includes("reconcile")) {
+    throw new Error("Exhausted paid NetworkError guidance must require reconciliation before retrying");
+  }
 
   return {
     ok: true,
