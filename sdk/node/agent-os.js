@@ -1195,7 +1195,7 @@ async function commandArbiter(positionals, flags, env, { baseUrl }) {
             semantic_blocking: Boolean(flags['semantic-blocking'] || flags.semantic_blocking),
         },
         headers: { 'X-Admin-Secret': adminSecret },
-    });
+    }, { redirect: 'error' });
 }
 
 async function commandCapabilities(client, positionals, flags) {
@@ -1349,11 +1349,16 @@ async function fetchJsonRequest(url, options = {}, config = {}) {
         headers['PAYMENT-SIGNATURE'] = options.paymentSignature;
     }
 
-    const res = await fetch(url, {
+    const fetchOptions = {
         method: options.method || 'GET',
         headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+    };
+    if (config.redirect) {
+        fetchOptions.redirect = config.redirect;
+    }
+
+    const res = await fetch(url, fetchOptions);
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok && !config.allowErrorStatus) {
