@@ -1,12 +1,10 @@
 #!/usr/bin/env node
-// demo — moves no real funds. The bundled server simulates x402 and the default pay() callback signs a demo-only authorization.
+// demo — moves no real funds. The bundled loopback server simulates x402 and uses an instance-scoped demo authorization.
 
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
-
-const DEMO_PAYMENT_SECRET = 'demo-x402-secret-do-not-use-on-chain';
 
 function nowIso() {
   return new Date().toISOString();
@@ -54,10 +52,14 @@ function paymentChallengeFingerprint(challenge) {
   );
 }
 
-function createDemoPaymentAuthorization({ challenge, payer = 'demo-buyer' }) {
+function createDemoPaymentAuthorization({ challenge, payer = 'demo-buyer', secret }) {
+  if (!Buffer.isBuffer(secret) || secret.length < 32) {
+    throw new Error('A per-server demo authorization key is required');
+  }
+
   const fingerprint = paymentChallengeFingerprint(challenge);
   const signature = crypto
-    .createHmac('sha256', DEMO_PAYMENT_SECRET)
+    .createHmac('sha256', secret)
     .update(`${fingerprint}:${payer}`)
     .digest('hex');
 
@@ -122,6 +124,7 @@ function decodePaymentRequiredHeader(value) {
 }
 
 async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
+  const demoPaymentSecret = crypto.randomBytes(32);
   const executionCache = new Map();
   const paidAttemptCount = new Map();
   const observedAuthorizations = new Map();
@@ -180,6 +183,7 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
       const expected = createDemoPaymentAuthorization({
         challenge,
         payer: authorizationEnvelope.payer,
+        secret: demoPaymentSecret,
       });
 
       if (
@@ -296,6 +300,8 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
 
   return {
     baseUrl,
+    createPaymentAuthorization: ({ challenge, payer = 'demo-buyer' }) =>
+      createDemoPaymentAuthorization({ challenge, payer, secret: demoPaymentSecret }),
     close: () =>
       new Promise((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
@@ -396,6 +402,7 @@ class X402PaidToolClient {
             method: 'POST',
             headers,
             body: JSON.stringify(requestBody),
+            redirect: 'manual',
           },
         );
       } catch (error) {
@@ -421,6 +428,10 @@ class X402PaidToolClient {
         elapsed_ms: Date.now() - requestStartedAt,
         reused_authorization: Boolean(cachedAuthorizationHeader),
       });
+
+      if (response.status >= 300 && response.status <= 399) {
+        throw new Error(`shipyard-inference rejected redirect ${response.status}`);
+      }
 
       if (response.status === 402) {
         if (cachedAuthorizationHeader) {
@@ -518,7 +529,7 @@ async function selfTestAndDemo() {
       baseUrl: demoServer.baseUrl,
       pay: async ({ challenge }) => {
         payCalls += 1;
-        return createDemoPaymentAuthorization({
+        return demoServer.createPaymentAuthorization({
           challenge,
           payer: 'maintainer-demo-buyer',
         });
@@ -568,7 +579,6 @@ async function selfTestAndDemo() {
 
 export {
   X402PaidToolClient,
-  createDemoPaymentAuthorization,
   createDemoShipyardServer,
   paymentChallengeFingerprint,
 };
