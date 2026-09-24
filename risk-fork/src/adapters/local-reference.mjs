@@ -545,6 +545,11 @@ async function enumerateWorkspace(root, {
   testAfterRead = null,
   captureRoot = null,
 }) {
+  if (process.platform === 'win32') {
+    const error = new Error('Local workspace enumeration is unavailable on Windows until private storage ACL and reparse-point safety are verified');
+    error.code = 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED';
+    throw error;
+  }
   const workspaceRoot = await realpath(root);
   const resolvedCaptureRoot = captureRoot
     ? await ensurePrivateDirectory(captureRoot, { create: false })

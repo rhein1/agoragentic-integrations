@@ -659,7 +659,9 @@ test('capture scavenger never follows a replacement marker symlink', {
   assert.equal(await access(target).then(() => true), true);
 });
 
-test('first-entry snapshot rejection removes its capture spool directory', async (t) => {
+test('first-entry snapshot rejection removes its capture spool directory', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-first-entry-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const source = path.join(temporary, 'source');
@@ -692,7 +694,9 @@ test('local workspace rejects a FIFO without opening or blocking on it', {
   );
 });
 
-test('local workspace falls back to lstat for unknown directory entry types', async (t) => {
+test('local workspace falls back to lstat for unknown directory entry types', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-unknown-dirent-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const source = path.join(temporary, 'source');
@@ -751,7 +755,9 @@ test('large local snapshots use bounded spooling and diff output has an explicit
   );
 });
 
-test('local workspace rejects a nested directory symlink before traversing outside', async (t) => {
+test('local workspace rejects a nested directory symlink before traversing outside', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-link-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const source = path.join(temporary, 'source');
@@ -779,7 +785,9 @@ test('local workspace rejects a nested directory symlink before traversing outsi
   assert.equal(await access(path.join(outside, 'sentinel.txt')).then(() => true), true);
 });
 
-test('local workspace rejects a nested directory replacement after parent enumeration', async (t) => {
+test('local workspace rejects a nested directory replacement after parent enumeration', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-swap-'));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const source = path.join(temporary, 'source');
@@ -1496,6 +1504,21 @@ test('Windows default local-reference storage fails closed without ACL proof', {
   const adapter = new LocalReferenceRiskForkAdapter();
   await assert.rejects(
     adapter.initialize(),
+    (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+  );
+});
+
+test('Windows exported workspace inspection fails closed before enumerating entries', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-windows-inspect-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'must-not-open.txt'), 'inspection must fail closed\n');
+
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
     (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
   );
 });
