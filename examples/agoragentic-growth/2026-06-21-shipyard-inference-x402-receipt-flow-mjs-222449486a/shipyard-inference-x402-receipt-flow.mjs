@@ -282,10 +282,10 @@ async function createDemoShipyardServer({ failPaidAttemptOnce = true } = {}) {
 
       executionCache.set(idempotencyKey, responsePayload);
       sendJson(res, 200, responsePayload);
-    } catch (error) {
+    } catch {
       sendJson(res, 500, {
         error: 'server_error',
-        message: error instanceof Error ? error.message : String(error),
+        message: 'internal error',
       });
     }
   });
@@ -424,21 +424,19 @@ class X402PaidToolClient {
 
       if (response.status === 402) {
         if (cachedAuthorizationHeader) {
-          throw new Error('server rejected the existing payment authorization with a second 402');
+          throw new Error('Paid request received another HTTP 402 challenge; refusing to re-authorize payment');
         }
 
         const challenge = this._challengeFromResponse(response, parsedBody);
 
         if (!challenge) {
-          throw new Error('402 response did not include a usable x402 challenge');
+          throw new Error('HTTP 402 response missing payment-required challenge');
         }
 
         const challengeFingerprint = paymentChallengeFingerprint(challenge);
 
-        if (
-          !cachedAuthorizationHeader ||
-          cachedChallengeFingerprint !== challengeFingerprint
-        ) {
+        // The prior guard rejects a second 402 after payment; this is the first authorization.
+        {
           const authorizationEnvelope = await this.pay({
             challenge,
             idempotencyKey,
@@ -576,8 +574,8 @@ export {
 };
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  selfTestAndDemo().catch((error) => {
-    console.error(error.stack || String(error));
+  selfTestAndDemo().catch(() => {
+    console.error('shipyard-inference demo failed');
     process.exitCode = 1;
   });
 }

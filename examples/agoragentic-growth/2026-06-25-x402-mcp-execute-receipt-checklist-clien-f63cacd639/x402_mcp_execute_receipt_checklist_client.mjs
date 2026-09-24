@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* demo — moves no real funds */
 
+import { randomUUID } from 'node:crypto';
+
 const DEFAULT_BASE_URL = 'https://agoragentic.com';
 const DEFAULT_MAX_ATTEMPTS = 4;
 const DEFAULT_RECEIPT_POLL_ATTEMPTS = 4;
@@ -479,7 +481,7 @@ function createFallbackX402Fetch() {
       const responseBody = await safeJson(response.clone());
       if (response.status === 402) {
         if (authorization) {
-          const terminal = new Error('server returned HTTP 402 again after payment authorization was already provided');
+          const terminal = new Error('Paid request received another HTTP 402 challenge; refusing to re-authorize payment');
           terminal.response = response;
           terminal.responseBody = responseBody;
           terminal.attempts = attemptNumber;
@@ -552,7 +554,7 @@ function createState(input) {
     quote_id: input.quoteId,
     server: input.server,
     tool: input.tool,
-    idempotency_key: input.idempotencyKey || `${input.quoteId}:${Date.now()}`,
+    idempotency_key: input.idempotencyKey || `${input.quoteId}:${generateIdempotencyKey()}`,
     attempt_count: 0,
     phase: 'created',
     last_http_status: null,
@@ -735,17 +737,11 @@ function denormalizeHeaders(headersLike) {
 }
 
 function generateSessionId() {
-  if (globalThis.crypto?.randomUUID) {
-    return `x402_${globalThis.crypto.randomUUID()}`;
-  }
-  return `x402_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return `x402_${randomUUID()}`;
 }
 
 function generateIdempotencyKey() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-  return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return randomUUID();
 }
 
 function sleep(ms) {
