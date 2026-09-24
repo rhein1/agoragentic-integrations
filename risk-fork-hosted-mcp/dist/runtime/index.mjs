@@ -62359,6 +62359,787 @@ function requireProviderCapability(provider, capability) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
 import { randomUUID as randomUUID4 } from "node:crypto";
 import { types as utilTypes2 } from "node:util";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/skillspector-admission.mjs
+var SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA = "agoragentic.risk-fork.skillspector-admission-evidence.v1";
+var SKILLSPECTOR_REVIEWED_VERSION = "2.11.2";
+var SKILLSPECTOR_REVIEWED_SOURCE_REVISION = "git:69dcdfb74487d361ba4c811d088cfdea2ff3a9dc";
+var SKILLSPECTOR_REVIEWED_ARTIFACT_HASH = "sha256:9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec";
+var SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES = Object.freeze({
+  INVALID_INPUT: "RISK_FORK_SKILLSPECTOR_INVALID_INPUT",
+  REPORT_CONTRACT_INVALID: "RISK_FORK_SKILLSPECTOR_REPORT_CONTRACT_INVALID",
+  SCANNER_BINDING_MISMATCH: "RISK_FORK_SKILLSPECTOR_SCANNER_BINDING_MISMATCH",
+  EVIDENCE_HASH_MISMATCH: "RISK_FORK_SKILLSPECTOR_EVIDENCE_HASH_MISMATCH",
+  EXPECTED_BINDING_MISMATCH: "RISK_FORK_SKILLSPECTOR_EXPECTED_BINDING_MISMATCH"
+});
+var REPORT_TOP_LEVEL_KEYS = Object.freeze([
+  "skill",
+  "risk_assessment",
+  "components",
+  "structured_summaries",
+  "issues",
+  "suppressed_count",
+  "suppressed",
+  "metadata",
+  "execution_successful",
+  "analysis_completeness"
+]);
+var METADATA_KEYS = Object.freeze([
+  "has_executable_scripts",
+  "skillspector_version",
+  "llm_requested",
+  "llm_available",
+  "meta_analysis_applied",
+  "inference_usage",
+  "filtering_mode",
+  "llm_calls_attempted",
+  "llm_calls_succeeded",
+  "llm_degraded",
+  "llm_error",
+  "transitive_targets_scanned",
+  "transitive_bytes_scanned",
+  "transitive_truncated",
+  "transitive_truncation_reasons"
+]);
+var COMPLETENESS_KEYS = Object.freeze([
+  "total_components",
+  "scanned_components",
+  "coverage_percent",
+  "is_complete",
+  "status",
+  "execution_successful",
+  "fully_inspected_files",
+  "partially_inspected_files",
+  "entirely_uninspected_files",
+  "ledger_exceptions",
+  "scope_exclusions",
+  "analyzer_statuses",
+  "references",
+  "limitations",
+  "findings_before_filtering",
+  "findings_after_filtering"
+]);
+var ISSUE_KEYS = Object.freeze([
+  "id",
+  "finding_id",
+  "category",
+  "pattern",
+  "severity",
+  "confidence",
+  "location",
+  "finding",
+  "explanation",
+  "remediation",
+  "code_snippet",
+  "intent",
+  "tags",
+  "evidence",
+  "match_fingerprint",
+  "occurrences",
+  "transitive_depth",
+  "source_url",
+  "source_identity",
+  "source_digest"
+]);
+var COMPONENT_KEYS = Object.freeze([
+  "path",
+  "type",
+  "lines",
+  "executable",
+  "size_bytes",
+  "source_url",
+  "source_identity",
+  "source_digest"
+]);
+var INVOCATION_KEYS = Object.freeze([
+  "input_mode",
+  "format",
+  "no_llm",
+  "fail_on_incomplete",
+  "recursive",
+  "baseline",
+  "use_shipped_baseline",
+  "show_suppressed",
+  "transitive",
+  "custom_rules"
+]);
+var EVIDENCE_KEYS = Object.freeze([
+  "schema",
+  "subject",
+  "binding",
+  "scanner",
+  "invocation",
+  "network_enforcement",
+  "report",
+  "coverage",
+  "result",
+  "authority_flags",
+  "evidence_hash"
+]);
+var REASON_CODES = Object.freeze([
+  "skillspector_caution",
+  "skillspector_clear",
+  "skillspector_do_not_install",
+  "skillspector_analyzer_incomplete",
+  "skillspector_empty_scope",
+  "skillspector_execution_failed",
+  "skillspector_filtered_findings",
+  "skillspector_findings_present",
+  "skillspector_high_severity_finding",
+  "skillspector_incomplete_coverage",
+  "skillspector_ledger_exception",
+  "skillspector_limitations_present",
+  "skillspector_network_unverified",
+  "skillspector_output_truncated",
+  "skillspector_scope_exclusion",
+  "skillspector_suppression_detected"
+]);
+var MAX_REPORT_BYTES = 8 * 1024 * 1024;
+var MAX_REPORT_ITEMS = 2e4;
+var SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT = 1e4;
+var MAX_VALIDITY_MS = 24 * 60 * 60 * 1e3;
+var SEVERITIES = Object.freeze(["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]);
+var RECOMMENDATIONS = Object.freeze(["SAFE", "CAUTION", "DO_NOT_INSTALL"]);
+var OUTCOMES = Object.freeze(["clear", "review", "block", "incomplete"]);
+var ANALYZER_STATUS_KEYS = Object.freeze([
+  "analyzer_id",
+  "status",
+  "planned_work",
+  "completed",
+  "partial",
+  "skipped",
+  "failed",
+  "unaccounted",
+  "reason_code",
+  "message"
+]);
+var ANALYZER_STATUS_REQUIRED_KEYS = Object.freeze([
+  "analyzer_id",
+  "status",
+  "planned_work",
+  "completed",
+  "partial",
+  "skipped",
+  "failed",
+  "unaccounted"
+]);
+var SkillSpectorAdmissionError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "SkillSpectorAdmissionError";
+    this.code = code;
+  }
+};
+function admissionError(code, message) {
+  return new SkillSpectorAdmissionError(code, message);
+}
+function requireFields(value, fields, label) {
+  for (const field of fields) {
+    if (!Object.hasOwn(value, field)) {
+      throw admissionError(
+        SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+        `${label} is incomplete`
+      );
+    }
+  }
+}
+function requireBoolean2(value, field) {
+  if (typeof value !== "boolean") throw new TypeError(`${field} must be a boolean`);
+  return value;
+}
+function requireArray(value, field, { maxItems = MAX_REPORT_ITEMS } = {}) {
+  if (!Array.isArray(value) || value.length > maxItems) {
+    throw new TypeError(`${field} must be an array of at most ${maxItems} items`);
+  }
+  return value;
+}
+function requireBoundedNumber(value, field, { min = 0, max = 100 } = {}) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+    throw new TypeError(`${field} must be a number between ${min} and ${max}`);
+  }
+  return value;
+}
+function normalizeInvocation(value) {
+  assertAllowedKeys(value, INVOCATION_KEYS, "SkillSpector invocation");
+  requireFields(value, INVOCATION_KEYS, "SkillSpector invocation");
+  const normalized = {
+    input_mode: requireEnum(
+      value.input_mode,
+      ["local_snapshot"],
+      "SkillSpector invocation.input_mode"
+    ),
+    format: requireEnum(value.format, ["json"], "SkillSpector invocation.format"),
+    no_llm: requireBoolean2(value.no_llm, "SkillSpector invocation.no_llm"),
+    fail_on_incomplete: requireBoolean2(
+      value.fail_on_incomplete,
+      "SkillSpector invocation.fail_on_incomplete"
+    ),
+    recursive: requireBoolean2(value.recursive, "SkillSpector invocation.recursive"),
+    baseline: requireBoolean2(value.baseline, "SkillSpector invocation.baseline"),
+    use_shipped_baseline: requireBoolean2(
+      value.use_shipped_baseline,
+      "SkillSpector invocation.use_shipped_baseline"
+    ),
+    show_suppressed: requireBoolean2(
+      value.show_suppressed,
+      "SkillSpector invocation.show_suppressed"
+    ),
+    transitive: requireBoolean2(value.transitive, "SkillSpector invocation.transitive"),
+    custom_rules: requireBoolean2(value.custom_rules, "SkillSpector invocation.custom_rules")
+  };
+  if (!normalized.no_llm || !normalized.fail_on_incomplete || normalized.recursive || normalized.baseline || normalized.use_shipped_baseline || normalized.show_suppressed || normalized.transitive || normalized.custom_rules) {
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+      "SkillSpector admission requires the reviewed static, single-skill, no-suppression invocation"
+    );
+  }
+  return normalized;
+}
+function normalizeNetworkEnforcement(value) {
+  assertAllowedKeys(value, [
+    "mode",
+    "osv_mode",
+    "evidence_ref",
+    "evidence_hash"
+  ], "SkillSpector network enforcement");
+  requireFields(value, [
+    "mode",
+    "osv_mode",
+    "evidence_ref",
+    "evidence_hash"
+  ], "SkillSpector network enforcement");
+  const mode = requireEnum(
+    value.mode,
+    ["deny_all", "unknown"],
+    "SkillSpector network enforcement.mode"
+  );
+  const osvMode = requireEnum(
+    value.osv_mode,
+    ["bundled_fallback_only", "unknown"],
+    "SkillSpector network enforcement.osv_mode"
+  );
+  const evidenceRef = value.evidence_ref === null ? null : requireOpaqueRef(value.evidence_ref, "SkillSpector network enforcement.evidence_ref");
+  const evidenceHash = value.evidence_hash === null ? null : requireSha256Ref(value.evidence_hash, "SkillSpector network enforcement.evidence_hash");
+  if (mode === "deny_all" !== (evidenceRef !== null && evidenceHash !== null) || mode === "deny_all" !== (osvMode === "bundled_fallback_only")) {
+    throw new TypeError("SkillSpector network enforcement evidence is inconsistent");
+  }
+  return {
+    mode,
+    osv_mode: osvMode,
+    evidence_ref: evidenceRef,
+    evidence_hash: evidenceHash
+  };
+}
+function deriveResult({
+  riskAssessment,
+  coverage,
+  reportExecutionSuccessful,
+  suppressedCount,
+  findingCount,
+  networkEnforcement
+}) {
+  const reasons = /* @__PURE__ */ new Set();
+  const strictComplete = reportExecutionSuccessful && coverage.execution_successful && coverage.is_complete && coverage.status === "complete" && coverage.coverage_percent === 100 && coverage.total_components > 0 && coverage.analyzer_status_count > 0 && coverage.analyzer_incomplete_count === 0 && coverage.applicable_static_analyzer_count > 0 && coverage.static_completed_work > 0 && !coverage.output_limit_reached && coverage.findings_before_filtering === coverage.findings_after_filtering && coverage.findings_after_filtering === findingCount + suppressedCount && coverage.partially_inspected_files === 0 && coverage.entirely_uninspected_files === 0 && coverage.ledger_exception_count === 0 && coverage.scope_exclusion_count === 0 && coverage.limitation_count === 0 && networkEnforcement.mode === "deny_all" && networkEnforcement.osv_mode === "bundled_fallback_only";
+  if (!reportExecutionSuccessful || !coverage.execution_successful) {
+    reasons.add("skillspector_execution_failed");
+  }
+  if (!coverage.is_complete || coverage.status !== "complete" || coverage.coverage_percent !== 100 || coverage.partially_inspected_files > 0 || coverage.entirely_uninspected_files > 0) {
+    reasons.add("skillspector_incomplete_coverage");
+  }
+  if (coverage.total_components === 0 || coverage.analyzer_status_count === 0 || coverage.applicable_static_analyzer_count === 0 || coverage.static_completed_work === 0) {
+    reasons.add("skillspector_empty_scope");
+  }
+  if (coverage.analyzer_incomplete_count > 0) {
+    reasons.add("skillspector_analyzer_incomplete");
+  }
+  if (coverage.findings_before_filtering !== coverage.findings_after_filtering) {
+    reasons.add("skillspector_filtered_findings");
+  }
+  if (coverage.output_limit_reached || coverage.findings_after_filtering > findingCount + suppressedCount) {
+    reasons.add("skillspector_output_truncated");
+  }
+  if (coverage.ledger_exception_count > 0) reasons.add("skillspector_ledger_exception");
+  if (coverage.scope_exclusion_count > 0) reasons.add("skillspector_scope_exclusion");
+  if (coverage.limitation_count > 0) reasons.add("skillspector_limitations_present");
+  if (networkEnforcement.mode !== "deny_all") reasons.add("skillspector_network_unverified");
+  if (suppressedCount > 0) reasons.add("skillspector_suppression_detected");
+  if (findingCount > 0) reasons.add("skillspector_findings_present");
+  if (riskAssessment.recommendation === "CAUTION") reasons.add("skillspector_caution");
+  if (riskAssessment.recommendation === "DO_NOT_INSTALL") {
+    reasons.add("skillspector_do_not_install");
+  }
+  if (["HIGH", "CRITICAL"].includes(riskAssessment.max_issue_severity)) {
+    reasons.add("skillspector_high_severity_finding");
+  }
+  let outcome = "clear";
+  if (!strictComplete) outcome = "incomplete";
+  if (riskAssessment.recommendation === "CAUTION" || riskAssessment.severity === "MEDIUM" || riskAssessment.max_issue_severity === "MEDIUM" || findingCount > 0) {
+    outcome = outcome === "clear" ? "review" : outcome;
+  }
+  if (suppressedCount > 0 || riskAssessment.recommendation === "DO_NOT_INSTALL" || ["HIGH", "CRITICAL"].includes(riskAssessment.severity) || ["HIGH", "CRITICAL"].includes(riskAssessment.max_issue_severity)) {
+    outcome = "block";
+  }
+  if (reasons.size === 0) reasons.add("skillspector_clear");
+  return {
+    outcome,
+    reason_codes: [...reasons].sort()
+  };
+}
+function normalizedReportProjection({ riskAssessment, coverage, executionSuccessful, result }) {
+  return {
+    scanner_version: SKILLSPECTOR_REVIEWED_VERSION,
+    risk_assessment: {
+      score: riskAssessment.score,
+      severity: riskAssessment.severity,
+      recommendation: riskAssessment.recommendation,
+      max_issue_severity: riskAssessment.max_issue_severity,
+      severity_counts: riskAssessment.severity_counts
+    },
+    execution_successful: executionSuccessful,
+    coverage,
+    finding_count: result.finding_count,
+    suppressed_count: result.suppressed_count
+  };
+}
+function normalizeEvidence2(value) {
+  assertCanonicalJson(value);
+  assertAllowedKeys(value, EVIDENCE_KEYS, "SkillSpector admission evidence");
+  requireFields(value, EVIDENCE_KEYS, "SkillSpector admission evidence");
+  if (value.schema !== SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA) {
+    throw new TypeError("SkillSpector admission evidence schema is invalid");
+  }
+  assertAllowedKeys(value.subject, [
+    "package_ref",
+    "package_hash",
+    "source_revision",
+    "prepared_artifact_hash"
+  ], "SkillSpector admission evidence.subject");
+  requireFields(value.subject, [
+    "package_ref",
+    "package_hash",
+    "source_revision",
+    "prepared_artifact_hash"
+  ], "SkillSpector admission evidence.subject");
+  const subject = {
+    package_ref: requireOpaqueRef(value.subject.package_ref, "SkillSpector subject.package_ref"),
+    package_hash: requireSha256Ref(value.subject.package_hash, "SkillSpector subject.package_hash"),
+    source_revision: requireOpaqueRef(
+      value.subject.source_revision,
+      "SkillSpector subject.source_revision",
+      { maxLength: 200 }
+    ),
+    prepared_artifact_hash: requireSha256Ref(
+      value.subject.prepared_artifact_hash,
+      "SkillSpector subject.prepared_artifact_hash"
+    )
+  };
+  if (!safeEqual(subject.package_hash, subject.prepared_artifact_hash)) {
+    throw new TypeError("SkillSpector evidence is not bound to the resulting package bytes");
+  }
+  assertAllowedKeys(value.binding, [
+    "descriptor_request_hash",
+    "operation_hash",
+    "configuration_hash"
+  ], "SkillSpector admission evidence.binding");
+  requireFields(value.binding, [
+    "descriptor_request_hash",
+    "operation_hash",
+    "configuration_hash"
+  ], "SkillSpector admission evidence.binding");
+  const binding = {
+    descriptor_request_hash: requireSha256Ref(
+      value.binding.descriptor_request_hash,
+      "SkillSpector binding.descriptor_request_hash"
+    ),
+    operation_hash: requireSha256Ref(
+      value.binding.operation_hash,
+      "SkillSpector binding.operation_hash"
+    ),
+    configuration_hash: requireSha256Ref(
+      value.binding.configuration_hash,
+      "SkillSpector binding.configuration_hash"
+    )
+  };
+  assertAllowedKeys(value.scanner, [
+    "id",
+    "version",
+    "source_revision",
+    "artifact_hash",
+    "runtime_closure_hash",
+    "rules_hash"
+  ], "SkillSpector admission evidence.scanner");
+  requireFields(value.scanner, [
+    "id",
+    "version",
+    "source_revision",
+    "artifact_hash",
+    "runtime_closure_hash",
+    "rules_hash"
+  ], "SkillSpector admission evidence.scanner");
+  const scanner = {
+    id: requireEnum(value.scanner.id, ["skillspector"], "SkillSpector scanner.id"),
+    version: requireEnum(
+      value.scanner.version,
+      [SKILLSPECTOR_REVIEWED_VERSION],
+      "SkillSpector scanner.version"
+    ),
+    source_revision: requireEnum(
+      value.scanner.source_revision,
+      [SKILLSPECTOR_REVIEWED_SOURCE_REVISION],
+      "SkillSpector scanner.source_revision"
+    ),
+    artifact_hash: requireEnum(
+      value.scanner.artifact_hash,
+      [SKILLSPECTOR_REVIEWED_ARTIFACT_HASH],
+      "SkillSpector scanner.artifact_hash"
+    ),
+    runtime_closure_hash: requireSha256Ref(
+      value.scanner.runtime_closure_hash,
+      "SkillSpector scanner.runtime_closure_hash"
+    ),
+    rules_hash: requireSha256Ref(value.scanner.rules_hash, "SkillSpector scanner.rules_hash")
+  };
+  const invocation = normalizeInvocation(value.invocation);
+  const networkEnforcement = normalizeNetworkEnforcement(value.network_enforcement);
+  assertAllowedKeys(value.report, [
+    "ref",
+    "raw_hash",
+    "normalized_hash",
+    "scanned_at",
+    "valid_until"
+  ], "SkillSpector admission evidence.report");
+  requireFields(value.report, [
+    "ref",
+    "raw_hash",
+    "normalized_hash",
+    "scanned_at",
+    "valid_until"
+  ], "SkillSpector admission evidence.report");
+  const report = {
+    ref: requireOpaqueRef(value.report.ref, "SkillSpector report.ref"),
+    raw_hash: requireSha256Ref(value.report.raw_hash, "SkillSpector report.raw_hash"),
+    normalized_hash: requireSha256Ref(
+      value.report.normalized_hash,
+      "SkillSpector report.normalized_hash"
+    ),
+    scanned_at: requireIsoDate(value.report.scanned_at, "SkillSpector report.scanned_at"),
+    valid_until: requireIsoDate(value.report.valid_until, "SkillSpector report.valid_until")
+  };
+  const scannedAt = Date.parse(report.scanned_at);
+  const validUntil = Date.parse(report.valid_until);
+  if (validUntil <= scannedAt || validUntil - scannedAt > MAX_VALIDITY_MS) {
+    throw new TypeError("SkillSpector evidence validity window is invalid");
+  }
+  assertAllowedKeys(value.coverage, [
+    "status",
+    "is_complete",
+    "execution_successful",
+    "total_components",
+    "scanned_components",
+    "coverage_percent",
+    "fully_inspected_files",
+    "partially_inspected_files",
+    "entirely_uninspected_files",
+    "ledger_exception_count",
+    "scope_exclusion_count",
+    "limitation_count",
+    "analyzer_status_count",
+    "analyzer_incomplete_count",
+    "applicable_static_analyzer_count",
+    "static_completed_work",
+    "emitted_output_records",
+    "output_limit_reached",
+    "component_manifest_hash",
+    "findings_before_filtering",
+    "findings_after_filtering"
+  ], "SkillSpector admission evidence.coverage");
+  requireFields(value.coverage, [
+    "status",
+    "is_complete",
+    "execution_successful",
+    "total_components",
+    "scanned_components",
+    "coverage_percent",
+    "fully_inspected_files",
+    "partially_inspected_files",
+    "entirely_uninspected_files",
+    "ledger_exception_count",
+    "scope_exclusion_count",
+    "limitation_count",
+    "analyzer_status_count",
+    "analyzer_incomplete_count",
+    "applicable_static_analyzer_count",
+    "static_completed_work",
+    "emitted_output_records",
+    "output_limit_reached",
+    "component_manifest_hash",
+    "findings_before_filtering",
+    "findings_after_filtering"
+  ], "SkillSpector admission evidence.coverage");
+  const coverage = {
+    status: requireEnum(value.coverage.status, ["complete", "partial", "failed"], "coverage.status"),
+    is_complete: requireBoolean2(value.coverage.is_complete, "coverage.is_complete"),
+    execution_successful: requireBoolean2(
+      value.coverage.execution_successful,
+      "coverage.execution_successful"
+    ),
+    total_components: boundedInteger(value.coverage.total_components, "coverage.total_components", { max: MAX_REPORT_ITEMS }),
+    scanned_components: boundedInteger(value.coverage.scanned_components, "coverage.scanned_components", { max: MAX_REPORT_ITEMS }),
+    coverage_percent: requireBoundedNumber(value.coverage.coverage_percent, "coverage.coverage_percent"),
+    fully_inspected_files: boundedInteger(value.coverage.fully_inspected_files, "coverage.fully_inspected_files", { max: MAX_REPORT_ITEMS }),
+    partially_inspected_files: boundedInteger(value.coverage.partially_inspected_files, "coverage.partially_inspected_files", { max: MAX_REPORT_ITEMS }),
+    entirely_uninspected_files: boundedInteger(value.coverage.entirely_uninspected_files, "coverage.entirely_uninspected_files", { max: MAX_REPORT_ITEMS }),
+    ledger_exception_count: boundedInteger(value.coverage.ledger_exception_count, "coverage.ledger_exception_count", { max: MAX_REPORT_ITEMS }),
+    scope_exclusion_count: boundedInteger(value.coverage.scope_exclusion_count, "coverage.scope_exclusion_count", { max: MAX_REPORT_ITEMS }),
+    limitation_count: boundedInteger(value.coverage.limitation_count, "coverage.limitation_count", { max: MAX_REPORT_ITEMS }),
+    analyzer_status_count: boundedInteger(value.coverage.analyzer_status_count, "coverage.analyzer_status_count", { max: MAX_REPORT_ITEMS }),
+    analyzer_incomplete_count: boundedInteger(value.coverage.analyzer_incomplete_count, "coverage.analyzer_incomplete_count", { max: MAX_REPORT_ITEMS }),
+    applicable_static_analyzer_count: boundedInteger(value.coverage.applicable_static_analyzer_count, "coverage.applicable_static_analyzer_count", { max: MAX_REPORT_ITEMS }),
+    static_completed_work: boundedInteger(value.coverage.static_completed_work, "coverage.static_completed_work", { max: MAX_REPORT_ITEMS }),
+    emitted_output_records: boundedInteger(value.coverage.emitted_output_records, "coverage.emitted_output_records", { max: SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT }),
+    output_limit_reached: requireBoolean2(value.coverage.output_limit_reached, "coverage.output_limit_reached"),
+    component_manifest_hash: requireSha256Ref(
+      value.coverage.component_manifest_hash,
+      "coverage.component_manifest_hash"
+    ),
+    findings_before_filtering: boundedInteger(value.coverage.findings_before_filtering, "coverage.findings_before_filtering", { max: MAX_REPORT_ITEMS }),
+    findings_after_filtering: boundedInteger(value.coverage.findings_after_filtering, "coverage.findings_after_filtering", { max: MAX_REPORT_ITEMS })
+  };
+  const expectedCoverage = coverage.total_components === 0 ? 100 : Math.round(coverage.fully_inspected_files / coverage.total_components * 1e3) / 10;
+  if (coverage.total_components !== coverage.fully_inspected_files + coverage.partially_inspected_files + coverage.entirely_uninspected_files || coverage.scanned_components !== coverage.fully_inspected_files || coverage.analyzer_incomplete_count > coverage.analyzer_status_count || coverage.applicable_static_analyzer_count > coverage.analyzer_status_count || coverage.output_limit_reached !== (coverage.emitted_output_records === SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT) || coverage.findings_after_filtering > coverage.findings_before_filtering || Math.abs(coverage.coverage_percent - expectedCoverage) > 0.05 || coverage.is_complete !== (coverage.status === "complete")) {
+    throw new TypeError("SkillSpector evidence coverage accounting is inconsistent");
+  }
+  assertAllowedKeys(value.result, [
+    "execution_successful",
+    "score",
+    "severity",
+    "recommendation",
+    "max_issue_severity",
+    "severity_counts",
+    "finding_count",
+    "suppressed_count",
+    "outcome",
+    "reason_codes"
+  ], "SkillSpector admission evidence.result");
+  requireFields(value.result, [
+    "execution_successful",
+    "score",
+    "severity",
+    "recommendation",
+    "max_issue_severity",
+    "severity_counts",
+    "finding_count",
+    "suppressed_count",
+    "outcome",
+    "reason_codes"
+  ], "SkillSpector admission evidence.result");
+  assertAllowedKeys(value.result.severity_counts, SEVERITIES, "SkillSpector severity_counts");
+  requireFields(value.result.severity_counts, SEVERITIES, "SkillSpector severity_counts");
+  const severityCounts = Object.fromEntries(SEVERITIES.map((severity) => [
+    severity,
+    boundedInteger(
+      value.result.severity_counts[severity],
+      `SkillSpector severity_counts.${severity}`,
+      { max: MAX_REPORT_ITEMS }
+    )
+  ]));
+  const result = {
+    execution_successful: requireBoolean2(
+      value.result.execution_successful,
+      "SkillSpector result.execution_successful"
+    ),
+    score: boundedInteger(value.result.score, "SkillSpector result.score", { max: 100 }),
+    severity: requireEnum(
+      value.result.severity,
+      SEVERITIES.filter((item) => item !== "NONE"),
+      "SkillSpector result.severity"
+    ),
+    recommendation: requireEnum(
+      value.result.recommendation,
+      RECOMMENDATIONS,
+      "SkillSpector result.recommendation"
+    ),
+    max_issue_severity: requireEnum(
+      value.result.max_issue_severity,
+      SEVERITIES,
+      "SkillSpector result.max_issue_severity"
+    ),
+    severity_counts: severityCounts,
+    finding_count: boundedInteger(value.result.finding_count, "SkillSpector result.finding_count", { max: MAX_REPORT_ITEMS }),
+    suppressed_count: boundedInteger(value.result.suppressed_count, "SkillSpector result.suppressed_count", { max: MAX_REPORT_ITEMS }),
+    outcome: requireEnum(value.result.outcome, OUTCOMES, "SkillSpector result.outcome"),
+    reason_codes: requireArray(value.result.reason_codes, "SkillSpector result.reason_codes", { maxItems: REASON_CODES.length }).map((code, index) => requireEnum(code, REASON_CODES, `SkillSpector result.reason_codes[${index}]`))
+  };
+  if (new Set(result.reason_codes).size !== result.reason_codes.length || canonicalize(result.reason_codes) !== canonicalize([...result.reason_codes].sort()) || Object.values(severityCounts).reduce((total, count) => total + count, 0) !== result.finding_count) {
+    throw new TypeError("SkillSpector result accounting is inconsistent");
+  }
+  if (result.finding_count + result.suppressed_count > coverage.findings_after_filtering) {
+    throw new TypeError("SkillSpector finding coverage accounting is inconsistent");
+  }
+  assertAllowedKeys(value.authority_flags, [
+    "advisory_only",
+    "grants_trust",
+    "grants_execution",
+    "grants_commit",
+    "grants_spend",
+    "grants_settlement"
+  ], "SkillSpector admission evidence.authority_flags");
+  requireFields(value.authority_flags, [
+    "advisory_only",
+    "grants_trust",
+    "grants_execution",
+    "grants_commit",
+    "grants_spend",
+    "grants_settlement"
+  ], "SkillSpector admission evidence.authority_flags");
+  const authorityFlags = {
+    advisory_only: requireBoolean2(value.authority_flags.advisory_only, "authority_flags.advisory_only"),
+    grants_trust: requireBoolean2(value.authority_flags.grants_trust, "authority_flags.grants_trust"),
+    grants_execution: requireBoolean2(value.authority_flags.grants_execution, "authority_flags.grants_execution"),
+    grants_commit: requireBoolean2(value.authority_flags.grants_commit, "authority_flags.grants_commit"),
+    grants_spend: requireBoolean2(value.authority_flags.grants_spend, "authority_flags.grants_spend"),
+    grants_settlement: requireBoolean2(value.authority_flags.grants_settlement, "authority_flags.grants_settlement")
+  };
+  if (!authorityFlags.advisory_only || authorityFlags.grants_trust || authorityFlags.grants_execution || authorityFlags.grants_commit || authorityFlags.grants_spend || authorityFlags.grants_settlement) {
+    throw new TypeError("SkillSpector evidence cannot grant authority");
+  }
+  const derived = deriveResult({
+    riskAssessment: {
+      score: result.score,
+      severity: result.severity,
+      recommendation: result.recommendation,
+      max_issue_severity: result.max_issue_severity,
+      severity_counts: result.severity_counts
+    },
+    coverage,
+    reportExecutionSuccessful: result.execution_successful,
+    suppressedCount: result.suppressed_count,
+    findingCount: result.finding_count,
+    networkEnforcement
+  });
+  if (derived.outcome !== result.outcome || canonicalize(derived.reason_codes) !== canonicalize(result.reason_codes)) {
+    throw new TypeError("SkillSpector outcome is not derived from the report evidence");
+  }
+  const normalized = {
+    schema: SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA,
+    subject,
+    binding,
+    scanner,
+    invocation,
+    network_enforcement: networkEnforcement,
+    report,
+    coverage,
+    result,
+    authority_flags: authorityFlags,
+    evidence_hash: requireSha256Ref(value.evidence_hash, "SkillSpector evidence_hash")
+  };
+  const configurationHash = sha256Ref({
+    invocation,
+    network_enforcement: networkEnforcement,
+    runtime_closure_hash: scanner.runtime_closure_hash,
+    rules_hash: scanner.rules_hash
+  });
+  if (!safeEqual(binding.configuration_hash, configurationHash)) {
+    throw new TypeError("SkillSpector configuration hash mismatch");
+  }
+  const expectedNormalizedReportHash = sha256Ref(normalizedReportProjection({
+    riskAssessment: {
+      score: result.score,
+      severity: result.severity,
+      recommendation: result.recommendation,
+      max_issue_severity: result.max_issue_severity,
+      severity_counts: result.severity_counts
+    },
+    coverage,
+    executionSuccessful: result.execution_successful,
+    result
+  }));
+  if (!safeEqual(report.normalized_hash, expectedNormalizedReportHash)) {
+    throw new TypeError("SkillSpector normalized report hash mismatch");
+  }
+  const expectedEvidenceHash = sha256Ref({ ...normalized, evidence_hash: null });
+  if (!safeEqual(normalized.evidence_hash, expectedEvidenceHash)) {
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EVIDENCE_HASH_MISMATCH,
+      "SkillSpector admission evidence hash mismatch"
+    );
+  }
+  return deepFreeze(JSON.parse(canonicalize(normalized)));
+}
+function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
+  try {
+    assertAllowedKeys(expected, [
+      "descriptor_request_hash",
+      "operation_hash",
+      "configuration_hash",
+      "package_ref",
+      "package_hash",
+      "prepared_artifact_hash",
+      "source_revision",
+      "rules_hash",
+      "runtime_closure_hash",
+      "component_manifest_hash",
+      "report_ref",
+      "report_hash",
+      "network_enforcement",
+      "requested_at"
+    ], "SkillSpector expected binding");
+    const normalized = normalizeEvidence2(value);
+    const comparisons = [
+      ["descriptor_request_hash", normalized.binding.descriptor_request_hash, requireSha256Ref],
+      ["operation_hash", normalized.binding.operation_hash, requireSha256Ref],
+      ["configuration_hash", normalized.binding.configuration_hash, requireSha256Ref],
+      ["package_ref", normalized.subject.package_ref, requireOpaqueRef],
+      ["package_hash", normalized.subject.package_hash, requireSha256Ref],
+      ["prepared_artifact_hash", normalized.subject.prepared_artifact_hash, requireSha256Ref],
+      ["source_revision", normalized.subject.source_revision, requireOpaqueRef],
+      ["rules_hash", normalized.scanner.rules_hash, requireSha256Ref],
+      ["runtime_closure_hash", normalized.scanner.runtime_closure_hash, requireSha256Ref],
+      ["component_manifest_hash", normalized.coverage.component_manifest_hash, requireSha256Ref],
+      ["report_ref", normalized.report.ref, requireOpaqueRef],
+      ["report_hash", normalized.report.raw_hash, requireSha256Ref]
+    ];
+    for (const [key, actual, normalize] of comparisons) {
+      if (expected[key] === void 0) continue;
+      const required = normalize(expected[key], `SkillSpector expected.${key}`);
+      if (!safeEqual(actual, required)) {
+        throw admissionError(
+          SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH,
+          "SkillSpector evidence does not bind the expected operation or package"
+        );
+      }
+    }
+    if (expected.network_enforcement !== void 0) {
+      const requiredNetworkEnforcement = normalizeNetworkEnforcement(
+        expected.network_enforcement
+      );
+      if (canonicalize(normalized.network_enforcement) !== canonicalize(requiredNetworkEnforcement)) {
+        throw admissionError(
+          SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH,
+          "SkillSpector evidence does not bind the expected network enforcement proof"
+        );
+      }
+    }
+    if (expected.requested_at !== void 0) {
+      const requestedAt = requireIsoDate(expected.requested_at, "SkillSpector expected.requested_at");
+      if (Date.parse(requestedAt) < Date.parse(normalized.report.scanned_at) || Date.parse(requestedAt) >= Date.parse(normalized.report.valid_until)) {
+        throw admissionError(
+          SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH,
+          "SkillSpector evidence is not valid at the host request time"
+        );
+      }
+    }
+    return normalized;
+  } catch (error) {
+    if (error instanceof SkillSpectorAdmissionError) throw error;
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+      "SkillSpector admission evidence is invalid"
+    );
+  }
+}
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/host-boundary.mjs
 var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boundary.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
@@ -62366,12 +63147,18 @@ var RISK_FORK_IMPORT_ENVELOPE_SCHEMA = "agoragentic.risk-fork.import-envelope.v1
 var RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_BOUNDARY_INPUT: "RISK_FORK_HOST_BOUNDARY_INVALID_INPUT",
   CALLER_RISK_LABEL_REJECTED: "RISK_FORK_CALLER_RISK_LABEL_REJECTED",
+  CALLER_ADMISSION_EVIDENCE_REJECTED: "RISK_FORK_CALLER_ADMISSION_EVIDENCE_REJECTED",
   OPERATION_TOO_LARGE: "RISK_FORK_HOST_OPERATION_TOO_LARGE",
   DESCRIPTOR_SOURCE_UNTRUSTED: "RISK_FORK_HOST_DESCRIPTOR_SOURCE_UNTRUSTED",
   DESCRIPTOR_RESOLUTION_FAILED: "RISK_FORK_HOST_DESCRIPTOR_RESOLUTION_FAILED",
   DESCRIPTOR_INVALID: "RISK_FORK_HOST_DESCRIPTOR_INVALID",
   DESCRIPTOR_REQUEST_MISMATCH: "RISK_FORK_HOST_DESCRIPTOR_REQUEST_MISMATCH",
   DESCRIPTOR_HASH_MISMATCH: "RISK_FORK_HOST_DESCRIPTOR_HASH_MISMATCH",
+  SKILLSPECTOR_EVIDENCE_DISABLED: "RISK_FORK_SKILLSPECTOR_EVIDENCE_DISABLED",
+  SKILLSPECTOR_EVIDENCE_REQUIRED: "RISK_FORK_SKILLSPECTOR_EVIDENCE_REQUIRED",
+  SKILLSPECTOR_EVIDENCE_INVALID: "RISK_FORK_SKILLSPECTOR_EVIDENCE_INVALID",
+  SKILLSPECTOR_VERIFIER_UNTRUSTED: "RISK_FORK_SKILLSPECTOR_VERIFIER_UNTRUSTED",
+  SKILLSPECTOR_VERIFICATION_FAILED: "RISK_FORK_SKILLSPECTOR_VERIFICATION_FAILED",
   UNKNOWN_METADATA: "RISK_FORK_HOST_METADATA_UNKNOWN",
   PRE_EFFECT_REJECTED: "RISK_FORK_HOST_PRE_EFFECT_REJECTED",
   IMPORT_INVALID: "RISK_FORK_IMPORT_ENVELOPE_INVALID",
@@ -62442,6 +63229,7 @@ var TEST_EVIDENCE_KEYS = Object.freeze([
   "duration_ms"
 ]);
 var trustedDescriptorSourceCallbacks = /* @__PURE__ */ new WeakMap();
+var trustedSkillSpectorVerifierCallbacks = /* @__PURE__ */ new WeakMap();
 var hostBoundaryRecords = /* @__PURE__ */ new WeakMap();
 var hostPreparedRecords = /* @__PURE__ */ new WeakMap();
 var DANGEROUS_KEY_FINGERPRINTS = /* @__PURE__ */ new Set(["proto", "constructor", "prototype"]);
@@ -62500,6 +63288,35 @@ var CALLER_RISK_LABEL_FINGERPRINTS = /* @__PURE__ */ new Set([
   "requiresfork",
   "forceoptionalfork"
 ]);
+var CALLER_ADMISSION_EVIDENCE_FINGERPRINTS = /* @__PURE__ */ new Set([
+  "skillspector",
+  "skillspectorevidence",
+  "skillspectoradmission",
+  "admissionevidence",
+  "scannerreport",
+  "scanreport",
+  "scanevidence",
+  "baseline",
+  "baselines",
+  "suppression",
+  "suppressions",
+  "suppressed",
+  "waive",
+  "waiver"
+]);
+var SKILLSPECTOR_EXPECTED_BINDING_KEYS = Object.freeze([
+  "package_ref",
+  "package_hash",
+  "prepared_artifact_hash",
+  "source_revision",
+  "configuration_hash",
+  "rules_hash",
+  "runtime_closure_hash",
+  "component_manifest_hash",
+  "report_ref",
+  "report_hash",
+  "network_enforcement"
+]);
 var SENSITIVE_IMPORT_KEY_PATTERN = /(?:^|_)(?:api_?key|access_?token|refresh_?token|id_?token|session_?token|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_?secret|private_?key|signing_?key|seed_?phrase|mnemonic|wallet_?(?:key|secret)|capability_?(?:grant|token))(?:$|_)/i;
 var SENSITIVE_IMPORT_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
@@ -62527,7 +63344,7 @@ function normalizedKeys2(value) {
 function keyFingerprints(value) {
   return normalizedKeys2(value).map((normalized) => normalized.replaceAll("_", ""));
 }
-function assertNoCallerRiskLabels(value, field = "operation") {
+function assertNoCallerRiskLabels(value, field = "operation", { rejectAdmissionEvidence = false } = {}) {
   function walk(current) {
     if (!current || typeof current !== "object") return;
     if (utilTypes2.isProxy(current)) {
@@ -62542,6 +63359,14 @@ function assertNoCallerRiskLabels(value, field = "operation") {
         throw boundaryError(
           RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_RISK_LABEL_REJECTED,
           "Caller/model risk labels are not accepted by the host boundary"
+        );
+      }
+      if (rejectAdmissionEvidence && fingerprints.some(
+        (fingerprint) => CALLER_ADMISSION_EVIDENCE_FINGERPRINTS.has(fingerprint)
+      )) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_ADMISSION_EVIDENCE_REJECTED,
+          "Caller/model scanner evidence, baselines, suppressions, and waivers are not accepted"
         );
       }
       walk(child);
@@ -63009,6 +63834,7 @@ function normalizeTrustedDescriptor(value, request) {
     "tool_annotations",
     "capabilities",
     "prompt_injection_indicators",
+    "skillspector_admission",
     "owner_policy",
     "descriptor_hash"
   ], "trusted descriptor");
@@ -63093,6 +63919,16 @@ function normalizeTrustedDescriptor(value, request) {
       "trusted descriptor.prompt_injection_indicators",
       { maxItems: 50, maxLength: 500 }
     ),
+    ...clone.skillspector_admission === void 0 ? {} : {
+      skillspector_admission: verifySkillSpectorAdmissionEvidence(
+        clone.skillspector_admission,
+        {
+          descriptor_request_hash: request.request_hash,
+          operation_hash: request.operation_hash,
+          requested_at: request.requested_at
+        }
+      )
+    },
     owner_policy: clone.owner_policy,
     descriptor_hash: requireSha256Ref(clone.descriptor_hash, "trusted descriptor.descriptor_hash")
   };
@@ -63122,6 +63958,7 @@ function createTrustedRiskDescriptor(requestValue, input = {}) {
       "tool_annotations",
       "capabilities",
       "prompt_injection_indicators",
+      "skillspector_admission",
       "owner_policy"
     ], "trusted descriptor input");
     const phase = requireEnum(input.mcp_phase, MCP_PHASES, "trusted descriptor.mcp_phase");
@@ -63177,6 +64014,11 @@ function createTrustedRiskDescriptor(requestValue, input = {}) {
     if (attestation !== null) {
       assertPlainObject(attestation, "trusted descriptor.mcp_server_attestation");
     }
+    const skillspectorAdmission = input.skillspector_admission === void 0 ? null : verifySkillSpectorAdmissionEvidence(input.skillspector_admission, {
+      descriptor_request_hash: request.request_hash,
+      operation_hash: request.operation_hash,
+      requested_at: request.requested_at
+    });
     const descriptor = {
       schema: RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
       request_hash: request.request_hash,
@@ -63205,6 +64047,7 @@ function createTrustedRiskDescriptor(requestValue, input = {}) {
         "trusted descriptor.prompt_injection_indicators",
         { maxItems: 50, maxLength: 500 }
       ),
+      ...skillspectorAdmission === null ? {} : { skillspector_admission: skillspectorAdmission },
       owner_policy: ownerPolicy,
       descriptor_hash: null
     };
@@ -63229,13 +64072,58 @@ function createTrustedRiskDescriptorSource(resolveDescriptor) {
   trustedDescriptorSourceCallbacks.set(source, resolveDescriptor);
   return source;
 }
-function normalizePrepareInput(value) {
+function normalizeSkillSpectorExpectedBindings(value) {
+  assertCanonicalJson(value);
+  assertPlainObject(value, "trusted SkillSpector expected bindings");
+  assertAllowedKeys(
+    value,
+    SKILLSPECTOR_EXPECTED_BINDING_KEYS,
+    "trusted SkillSpector expected bindings"
+  );
+  for (const key of SKILLSPECTOR_EXPECTED_BINDING_KEYS) {
+    if (!Object.hasOwn(value, key)) {
+      throw new TypeError("Trusted SkillSpector expected bindings are incomplete");
+    }
+  }
+  return deepFreeze({
+    package_ref: requireOpaqueRef(value.package_ref, "expected SkillSpector package_ref"),
+    package_hash: requireSha256Ref(value.package_hash, "expected SkillSpector package_hash"),
+    prepared_artifact_hash: requireSha256Ref(
+      value.prepared_artifact_hash,
+      "expected SkillSpector prepared_artifact_hash"
+    ),
+    source_revision: requireOpaqueRef(
+      value.source_revision,
+      "expected SkillSpector source_revision",
+      { maxLength: 200 }
+    ),
+    configuration_hash: requireSha256Ref(
+      value.configuration_hash,
+      "expected SkillSpector configuration_hash"
+    ),
+    rules_hash: requireSha256Ref(value.rules_hash, "expected SkillSpector rules_hash"),
+    runtime_closure_hash: requireSha256Ref(
+      value.runtime_closure_hash,
+      "expected SkillSpector runtime_closure_hash"
+    ),
+    component_manifest_hash: requireSha256Ref(
+      value.component_manifest_hash,
+      "expected SkillSpector component_manifest_hash"
+    ),
+    report_ref: requireOpaqueRef(value.report_ref, "expected SkillSpector report_ref"),
+    report_hash: requireSha256Ref(value.report_hash, "expected SkillSpector report_hash"),
+    network_enforcement: value.network_enforcement
+  });
+}
+function normalizePrepareInput(value, { skillspectorAdmissionEnabled = false } = {}) {
   const clone = assertBoundedCanonicalJson(value, {
     field: "Risk Fork host operation input",
     maxBytes: MAX_OPERATION_BYTES2
   });
   assertAllowedKeys(clone, PREPARE_INPUT_KEYS, "Risk Fork host operation input");
-  assertNoCallerRiskLabels(clone.operation, "Risk Fork child operation");
+  assertNoCallerRiskLabels(clone.operation, "Risk Fork child operation", {
+    rejectAdmissionEvidence: skillspectorAdmissionEnabled
+  });
   clone.operation = validateChildOperation(clone.operation, "Risk Fork child operation");
   clone.expected_commit_type = requireEnum(
     clone.expected_commit_type,
@@ -63257,6 +64145,7 @@ function riskInputFromDescriptor(descriptor, requestId) {
     tool_annotations: descriptor.tool_annotations,
     capabilities: descriptor.capabilities,
     prompt_injection_indicators: descriptor.prompt_injection_indicators,
+    ...descriptor.skillspector_admission === void 0 ? {} : { skillspector_admission: descriptor.skillspector_admission },
     owner_policy: descriptor.owner_policy
   });
 }
@@ -63266,6 +64155,8 @@ function createRiskForkHostBoundary(input = {}) {
     "trusted_descriptor_source",
     "create_execution_binding",
     "fork_elevated",
+    "skillspector_admission_enabled",
+    "trusted_skillspector_admission_verifier",
     "trusted_limits",
     "clock"
   ], "Risk Fork host boundary factory input");
@@ -63284,6 +64175,19 @@ function createRiskForkHostBoundary(input = {}) {
   }
   if (input.fork_elevated !== void 0 && typeof input.fork_elevated !== "boolean") {
     throw new TypeError("fork_elevated must be a boolean");
+  }
+  if (input.skillspector_admission_enabled !== void 0 && typeof input.skillspector_admission_enabled !== "boolean") {
+    throw new TypeError("skillspector_admission_enabled must be a boolean");
+  }
+  const skillspectorAdmissionEnabled = input.skillspector_admission_enabled === true;
+  const verifySkillSpectorBindings = trustedSkillSpectorVerifierCallbacks.get(
+    input.trusted_skillspector_admission_verifier
+  );
+  if (skillspectorAdmissionEnabled && !verifySkillSpectorBindings) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFIER_UNTRUSTED,
+      "Enabled SkillSpector admission requires the exact host-owned verifier capability"
+    );
   }
   const clock = input.clock ?? (() => /* @__PURE__ */ new Date());
   if (typeof clock !== "function") throw new TypeError("Risk Fork host boundary clock is invalid");
@@ -63320,7 +64224,9 @@ function createRiskForkHostBoundary(input = {}) {
           request.descriptor_ref,
           "Risk Fork host descriptor_ref"
         );
-        const operationInput = normalizePrepareInput(request.operation_input);
+        const operationInput = normalizePrepareInput(request.operation_input, {
+          skillspectorAdmissionEnabled: record.skillspectorAdmissionEnabled
+        });
         const requestedAt = requireIsoDate(record.clock(), "Risk Fork host boundary clock result");
         const descriptorRequest = {
           schema: RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
@@ -63347,10 +64253,53 @@ function createRiskForkHostBoundary(input = {}) {
           descriptor = normalizeTrustedDescriptor(resolved, frozenRequest);
         } catch (error) {
           if (error instanceof RiskForkHostBoundaryError) throw error;
+          if (error instanceof SkillSpectorAdmissionError) {
+            throw boundaryError(
+              RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_INVALID,
+              "Trusted descriptor contains invalid SkillSpector admission evidence"
+            );
+          }
           throw boundaryError(
             RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_INVALID,
             "Trusted descriptor source returned an invalid descriptor"
           );
+        }
+        const hasSkillSpectorEvidence = descriptor.skillspector_admission !== void 0;
+        if (!record.skillspectorAdmissionEnabled && hasSkillSpectorEvidence) {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_DISABLED,
+            "SkillSpector admission evidence is present while the host integration is disabled"
+          );
+        }
+        if (record.skillspectorAdmissionEnabled && !hasSkillSpectorEvidence) {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_REQUIRED,
+            "The enabled SkillSpector admission boundary requires exact scan evidence"
+          );
+        }
+        if (record.skillspectorAdmissionEnabled) {
+          try {
+            const expectedBindings = normalizeSkillSpectorExpectedBindings(
+              await record.verifySkillSpectorBindings(deepFreeze({
+                schema: "agoragentic.risk-fork.skillspector-admission-verification-request.v1",
+                descriptor_request_hash: frozenRequest.request_hash,
+                operation_hash: frozenRequest.operation_hash,
+                requested_at: frozenRequest.requested_at,
+                evidence: descriptor.skillspector_admission
+              }))
+            );
+            verifySkillSpectorAdmissionEvidence(descriptor.skillspector_admission, {
+              ...expectedBindings,
+              descriptor_request_hash: frozenRequest.request_hash,
+              operation_hash: frozenRequest.operation_hash,
+              requested_at: frozenRequest.requested_at
+            });
+          } catch {
+            throw boundaryError(
+              RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED,
+              "Host-owned SkillSpector package, report, configuration, or network binding failed"
+            );
+          }
         }
         const riskInput = riskInputFromDescriptor(descriptor, frozenRequest.request_id);
         let prepared;
@@ -63409,6 +64358,8 @@ function createRiskForkHostBoundary(input = {}) {
     resolveDescriptor,
     createExecutionBinding: input.create_execution_binding ?? null,
     forkElevated: input.fork_elevated !== false,
+    skillspectorAdmissionEnabled,
+    verifySkillSpectorBindings: verifySkillSpectorBindings ?? null,
     clock,
     trustedLimits: deepFreeze({ ...trustedLimits })
   }));
@@ -63796,6 +64747,7 @@ function classifyRiskInternal(input = {}, options = {}) {
     "tool_annotations",
     "capabilities",
     "prompt_injection_indicators",
+    "skillspector_admission",
     "owner_policy"
   ], "risk input");
   const normalized = {
@@ -63823,6 +64775,12 @@ function classifyRiskInternal(input = {}, options = {}) {
       `prompt_injection_indicators[${index}]`,
       { maxLength: 500 }
     )).sort(),
+    ...input.skillspector_admission === void 0 ? {} : {
+      skillspector_admission: verifySkillSpectorAdmissionEvidence(
+        input.skillspector_admission,
+        { requested_at: evaluatedAt }
+      )
+    },
     owner_policy: normalizeOwnerPolicy(input.owner_policy)
   };
   if (normalized.mcp_phase === "UNKNOWN" && normalized.raw_method === null) {
@@ -63936,6 +64894,16 @@ function classifyRiskInternal(input = {}, options = {}) {
       `${normalized.prompt_injection_indicators.length} prompt-injection indicator(s) were supplied`
     ));
   }
+  if (normalized.skillspector_admission && normalized.skillspector_admission.result.outcome !== "clear") {
+    level = promote(level, "HIGH");
+    const outcome = normalized.skillspector_admission.result.outcome;
+    reasons.push(reason(
+      `skillspector_admission_${outcome}`,
+      "HIGH",
+      outcome === "block" ? 60 : 45,
+      outcome === "block" ? "Bound SkillSpector evidence requires admission denial or quarantine" : outcome === "review" ? "Bound SkillSpector evidence requires host review and isolation" : "Bound SkillSpector evidence is incomplete and cannot establish admission safety"
+    ));
+  }
   level = promote(level, normalized.owner_policy.minimum_level);
   if (normalized.owner_policy.minimum_level !== "LOW") {
     reasons.push(reason(
@@ -64029,6 +64997,7 @@ function verifyRiskDecision(decision, options = {}) {
     },
     capabilities: normalized.capabilities,
     prompt_injection_indicators: normalized.prompt_injection_indicators,
+    ...normalized.skillspector_admission === void 0 ? {} : { skillspector_admission: normalized.skillspector_admission },
     owner_policy: normalized.owner_policy
   };
   const rebuilt = classifyRiskInternal(input, {
@@ -67029,7 +67998,7 @@ function deriveStatus(controls, cleanup) {
   if (values.every((status) => status === "verified")) return "verified";
   return "unknown";
 }
-function normalizeEvidence2(value, { includeComputedFields }) {
+function normalizeEvidence3(value, { includeComputedFields }) {
   assertPlainObject(value, "E2B qualification evidence");
   assertAllowedKeys(
     value,
@@ -67381,7 +68350,7 @@ function assertDistinctQualificationTrustKey(evidence, verifierKeyHash) {
     );
   }
 }
-function requireBoolean2(value, field) {
+function requireBoolean3(value, field) {
   if (typeof value !== "boolean") throw new TypeError(`${field} must be boolean`);
   return value;
 }
@@ -67591,8 +68560,8 @@ function normalizeExternalObserverBoundary(value) {
     ),
     status: requireEnum(value.status, CONTROL_STATUSES, `${field}.status`),
     evidence_hash: nullableSha256Ref(value.evidence_hash, `${field}.evidence_hash`),
-    child_write_access: requireBoolean2(value.child_write_access, `${field}.child_write_access`),
-    reusable_signing_authority_in_child: requireBoolean2(
+    child_write_access: requireBoolean3(value.child_write_access, `${field}.child_write_access`),
+    reusable_signing_authority_in_child: requireBoolean3(
       value.reusable_signing_authority_in_child,
       `${field}.reusable_signing_authority_in_child`
     )
@@ -67726,11 +68695,11 @@ function normalizeExternalNetwork(value) {
     "ipv6_provider_denial"
   ], field);
   return {
-    first_instruction_ipv4_egress_denied: requireBoolean2(
+    first_instruction_ipv4_egress_denied: requireBoolean3(
       value.first_instruction_ipv4_egress_denied,
       `${field}.first_instruction_ipv4_egress_denied`
     ),
-    first_instruction_ipv6_egress_denied: requireBoolean2(
+    first_instruction_ipv6_egress_denied: requireBoolean3(
       value.first_instruction_ipv6_egress_denied,
       `${field}.first_instruction_ipv6_egress_denied`
     ),
@@ -67778,11 +68747,11 @@ function externalObservationPayload(evidence, input, observer, policy) {
     requested_limits: { ...evidence.limits },
     birth_controls: normalizeExternalBirthControls(input.birth_controls, observerBoundary),
     network: {
-      first_instruction_ipv4_egress_denied: requireBoolean2(
+      first_instruction_ipv4_egress_denied: requireBoolean3(
         input.first_instruction_ipv4_egress_denied,
         "E2B external qualification observation IPv4 claim"
       ),
-      first_instruction_ipv6_egress_denied: requireBoolean2(
+      first_instruction_ipv6_egress_denied: requireBoolean3(
         input.first_instruction_ipv6_egress_denied,
         "E2B external qualification observation IPv6 claim"
       ),
@@ -68577,7 +69546,7 @@ function applyE2BExternalQualificationObservation(value, observation, verifier) 
   return finalizeE2BQualificationEvidence(evidence, verified);
 }
 function computedEvidence(input) {
-  const evidence = normalizeEvidence2(input, { includeComputedFields: false });
+  const evidence = normalizeEvidence3(input, { includeComputedFields: false });
   evidence.evidence_hash = sha256Ref({ ...evidence, evidence_hash: null });
   return deepFreeze(evidence);
 }
@@ -68752,7 +69721,7 @@ function createE2BQualificationEvidence(input = {}) {
   return evidence;
 }
 function validateE2BQualificationEvidence(value, expected = {}, externalObservationVerifier = null) {
-  const normalized = normalizeEvidence2(value, { includeComputedFields: true });
+  const normalized = normalizeEvidence3(value, { includeComputedFields: true });
   const expectedHash = sha256Ref({ ...normalized, evidence_hash: null });
   if (!safeEqual(normalized.evidence_hash, expectedHash)) {
     throw new Error("E2B qualification evidence hash mismatch");
@@ -74494,7 +75463,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:de230473ee659a9df4e509335e28062b2cfa77ce95bebc9a9f3bd90c6ebba9db" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:f6d315481ac14c0acc502335dc826d3e2e1147e8ff8907d9067ffd060cb674d0" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

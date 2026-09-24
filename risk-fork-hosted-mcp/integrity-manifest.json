@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 66,
-    "sha256": "sha256:de230473ee659a9df4e509335e28062b2cfa77ce95bebc9a9f3bd90c6ebba9db"
+    "files": 67,
+    "sha256": "sha256:f6d315481ac14c0acc502335dc826d3e2e1147e8ff8907d9067ffd060cb674d0"
   },
   "reviewed_sources": [
     {
@@ -84,8 +84,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 4677,
-      "sha256": "sha256:162af5f164145d6f8876d372a79e76b2fd15d5c73c5b25c2e294c15ca8c45960"
+      "bytes": 4745,
+      "sha256": "sha256:3526ff8afcc34d581e4fad6068222750a60f0e3656e7032cd2225768eba79d28"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -204,13 +204,13 @@
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
-      "bytes": 42928,
-      "sha256": "sha256:eb56b12bfcdfaecba3906c6fb114c0831b01f82aac54ef4de233275161b13b3d"
+      "bytes": 51154,
+      "sha256": "sha256:7c0c5e712894d7c73b0692d247313d779963edeade960edc6de1c3be5ba4b62d"
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 5302,
-      "sha256": "sha256:574d648276e0b70c2df7e1c07efa2394248e720323b014b5021e1123a966b6e4"
+      "bytes": 5913,
+      "sha256": "sha256:5e779a280acce4e5662a3942b9f0b4576e475b1f42a461ff628d8726c5a24209"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -249,8 +249,13 @@
     },
     {
       "path": "risk-fork/src/risk-classifier.mjs",
-      "bytes": 23785,
-      "sha256": "sha256:8a4aa23de66584afc2a334f3b52401042dec1f2b458281a9a2b4859bb5941969"
+      "bytes": 24939,
+      "sha256": "sha256:9599d97708ef7bb52fdc8640d6098edf07d2ed0395213983eca30e6ac68ebb71"
+    },
+    {
+      "path": "risk-fork/src/skillspector-admission.mjs",
+      "bytes": 61920,
+      "sha256": "sha256:719f39b3341802186c48ce553ba7211f3df67ff9bb241d7bfe2c926a04baf828"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -2319,8 +2324,8 @@
     {
       "path": "risk-fork/src/host-boundary.mjs",
       "source": "reviewed_source",
-      "bytes": 42928,
-      "sha256": "sha256:eb56b12bfcdfaecba3906c6fb114c0831b01f82aac54ef4de233275161b13b3d"
+      "bytes": 51154,
+      "sha256": "sha256:7c0c5e712894d7c73b0692d247313d779963edeade960edc6de1c3be5ba4b62d"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -2355,8 +2360,14 @@
     {
       "path": "risk-fork/src/risk-classifier.mjs",
       "source": "reviewed_source",
-      "bytes": 23785,
-      "sha256": "sha256:8a4aa23de66584afc2a334f3b52401042dec1f2b458281a9a2b4859bb5941969"
+      "bytes": 24939,
+      "sha256": "sha256:9599d97708ef7bb52fdc8640d6098edf07d2ed0395213983eca30e6ac68ebb71"
+    },
+    {
+      "path": "risk-fork/src/skillspector-admission.mjs",
+      "source": "reviewed_source",
+      "bytes": 61920,
+      "sha256": "sha256:719f39b3341802186c48ce553ba7211f3df67ff9bb241d7bfe2c926a04baf828"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -2628,8 +2639,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3111081,
-    "sha256": "sha256:0cf10848110d7855d45065517720b286cf712080716534154d54ea059eab55ff"
+    "bytes": 3151671,
+    "sha256": "sha256:d2f4789113f6aded8fe072048bf354df4d6e4aac8bed64080b5889d607983f48"
   },
   "packaged_assets": [
     {

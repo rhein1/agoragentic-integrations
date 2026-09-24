@@ -1,28 +1,99 @@
 {
+  "authority_flags": {
+    "advisory_only": true,
+    "grants_commit": false,
+    "grants_execution": false,
+    "grants_settlement": false,
+    "grants_spend": false,
+    "grants_trust": false
+  },
+  "binding": {
+    "configuration_hash": "sha256:2b8741f10334a8951ba2f4a0e7f2dc9570475876ce5215f8489bb37da5a85b77",
+    "descriptor_request_hash": "sha256:5992d814d082991cc9c2faf9cf2a814efe14575a30c3206d3b6ee095177d19c6",
+    "operation_hash": "sha256:063bd51742f1ca8f53066539d5ff51551e71684917181d906c49789759c4bfff"
+  },
+  "coverage": {
+    "analyzer_incomplete_count": 0,
+    "analyzer_status_count": 1,
+    "component_manifest_hash": "sha256:38855bbf38d652f7769629716cc11f8d6da9c6981806b0cf64a9349ab27fc7f5",
+    "coverage_percent": 100,
+    "entirely_uninspected_files": 0,
+    "execution_successful": true,
+    "findings_after_filtering": 0,
+    "findings_before_filtering": 0,
+    "fully_inspected_files": 1,
+    "is_complete": true,
+    "ledger_exception_count": 0,
+    "limitation_count": 0,
+    "partially_inspected_files": 0,
+    "scanned_components": 1,
+    "scope_exclusion_count": 0,
+    "status": "complete",
+    "total_components": 1,
+    "applicable_static_analyzer_count": 1,
+    "static_completed_work": 1,
+    "emitted_output_records": 0,
+    "output_limit_reached": false
+  },
+  "evidence_hash": "sha256:5fdf4d8461a7cce23064aeee5ec0ad20a7f9d88519c422abda736c0bbe5ce346",
+  "invocation": {
+    "baseline": false,
+    "custom_rules": false,
+    "fail_on_incomplete": true,
+    "format": "json",
+    "input_mode": "local_snapshot",
+    "no_llm": true,
+    "recursive": false,
+    "show_suppressed": false,
+    "transitive": false,
+    "use_shipped_baseline": false
+  },
+  "network_enforcement": {
+    "evidence_hash": "sha256:caedad5e1f26adcf2286ec81809b0039a3066f4de48cfb32a70184c5e1b4ae0c",
+    "evidence_ref": "network-proof:skillspector:example",
+    "mode": "deny_all",
+    "osv_mode": "bundled_fallback_only"
+  },
+  "report": {
+    "normalized_hash": "sha256:cbd67cdffa1ac75b7f393d0fced5ec130420840b252fc27ba0b54c92ff339f72",
+    "raw_hash": "sha256:508df573222e5f18d29ec7767e26f9a3e72f5f5c4208d730e74f003c3aeaae43",
+    "ref": "evidence:skillspector-report:example",
+    "scanned_at": "2026-09-22T15:00:00.000Z",
+    "valid_until": "2026-09-22T16:00:00.000Z"
+  },
+  "result": {
+    "execution_successful": true,
+    "finding_count": 0,
+    "max_issue_severity": "NONE",
+    "outcome": "clear",
+    "reason_codes": [
+      "skillspector_clear"
+    ],
+    "recommendation": "SAFE",
+    "score": 0,
+    "severity": "LOW",
+    "severity_counts": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "LOW": 0,
+      "MEDIUM": 0,
+      "NONE": 0
+    },
+    "suppressed_count": 0
+  },
   "scanner": {
+    "artifact_hash": "sha256:9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec",
     "id": "skillspector",
-    "name": "SkillSpector",
-    "upstream": "https://github.com/NVIDIA/SkillSpector",
-    "commit": "dde36f258729b5aec7c835295a9556e64a2def0c",
-    "license": "Apache-2.0"
+    "rules_hash": "sha256:7e0ca5516b11fdfb1049c7bd70eaf39dbee4095be99291f86142ffcf63607c41",
+    "runtime_closure_hash": "sha256:d3cbc7058d0b5e3ff5030d69d2866f1b150fe042ce0dbdd6184e56151138a264",
+    "source_revision": "git:69dcdfb74487d361ba4c811d088cfdea2ff3a9dc",
+    "version": "2.11.2"
   },
-  "skill_ref": {
-    "type": "local_path",
-    "value": "./skills/example"
-  },
-  "risk_score": 37,
-  "risk_level": "medium",
-  "findings": [
-    {
-      "id": "example.network.egress",
-      "severity": "medium",
-      "summary": "Skill declares network-capable behavior; require owner approval before install."
-    }
-  ],
-  "scorecard_target": {
-    "target_type": "agent_template",
-    "target_id": "skill:example",
-    "evidence_state": "insufficient_evidence"
-  },
-  "admission_recommendation": "review_required"
+  "schema": "agoragentic.risk-fork.skillspector-admission-evidence.v1",
+  "subject": {
+    "package_hash": "sha256:023389ce0bff50d79755fe9fdca39f9ed9d7539a323bb731936e0d8d7b28f9f9",
+    "package_ref": "skill-package:example",
+    "prepared_artifact_hash": "sha256:023389ce0bff50d79755fe9fdca39f9ed9d7539a323bb731936e0d8d7b28f9f9",
+    "source_revision": "git:1111111111111111111111111111111111111111"
+  }
 }

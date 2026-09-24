@@ -59,6 +59,7 @@ const EXPECTED_SCHEMA_FILES = Object.freeze([
   'receipt.v1.json',
   'risk-decision.v1.json',
   'savepoint-capsule.v1.json',
+  'skillspector-admission-evidence.v1.json',
 ]);
 const SECRET_FILTERED_REF_SCHEMA_FILES = Object.freeze([
   'clean-commit-result.v1.json',
@@ -69,6 +70,7 @@ const SECRET_FILTERED_REF_SCHEMA_FILES = Object.freeze([
   'receipt.v1.json',
   'risk-decision.v1.json',
   'savepoint-capsule.v1.json',
+  'skillspector-admission-evidence.v1.json',
 ]);
 const SYNTHETIC_GENERATED_AMK = `amk_${'a'.repeat(64)}`;
 const EMBEDDED_SYNTHETIC_GENERATED_AMK = `prefix${SYNTHETIC_GENERATED_AMK}suffix`;

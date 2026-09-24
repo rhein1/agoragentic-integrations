@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add a default-off SkillSpector `2.11.2` admission adapter and closed evidence
+  schema. Pinned scanner wheel and runtime closure, source and reconstructed
+  package, operation, owner rule/configuration, coverage, network-control, and
+  time bindings can only preserve or raise Risk Fork risk. Enabled hosts require
+  a branded callback that independently recomputes every expected binding before
+  controller preparation. Canonical helpers bind the full component inventory,
+  owner rule files, Python runtime, and resolved distribution artifacts; raw
+  report text, candidate baselines, suppressions, waivers, and authority claims
+  are excluded. Component totals and analyzer work must reconcile exactly,
+  output truncation is explicit and incomplete, and Python distribution names
+  use PEP 503 normalization before runtime-closure hashing.
+
 - Add pinned repository CodeQL analysis and deterministic MCP 2026-07-28
   adversarial coverage for metadata evidence, capability downgrades, portable
   handles, cleanup races, and Unicode-disguised active content.
