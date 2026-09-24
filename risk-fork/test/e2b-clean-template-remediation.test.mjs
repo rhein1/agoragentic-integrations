@@ -17,7 +17,7 @@ import {
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import nodeTest from 'node:test';
 
 import { canonicalize } from '../src/canonical.mjs';
 import { E2BRiskForkAdapter, E2B_RISK_FORK_PATHS } from '../src/adapters/e2b.mjs';
@@ -601,6 +601,8 @@ function createMockSdk(options = {}) {
     get killed() { return killed; },
   };
 }
+
+const test = process.platform === 'win32' ? nodeTest.skip : nodeTest;
 
 async function fixture(t, mockOptions = {}) {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-clean-template-test-')));

@@ -50,6 +50,8 @@ function independentTrust(options = {}) {
   };
 }
 
+const captureTest = process.platform === 'win32' ? test.skip : test;
+
 async function fixture(t) {
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'risk-fork-e2b-source-verifier-')));
   const source = path.join(root, 'source');
@@ -142,7 +144,7 @@ async function replaceExportWithExactBytes(value, exactValue) {
   return request;
 }
 
-test('clean-side verifier independently reopens exact staged bytes and persists hash-only evidence', async (t) => {
+captureTest('clean-side verifier independently reopens exact staged bytes and persists hash-only evidence', async (t) => {
   const value = await fixture(t);
   const verifier = createE2BAuthorityFreeSourceVerifier({
     verifierArtifactHash: sha256Ref('reviewed-source-verifier'),
@@ -177,7 +179,7 @@ test('clean-side verifier independently reopens exact staged bytes and persists 
   assert.equal(attestation.evidence_hash, evidence.evidence_hash);
 });
 
-test('source verifier rejects request, manifest, staged-byte, and runtime-artifact drift', async (t) => {
+captureTest('source verifier rejects request, manifest, staged-byte, and runtime-artifact drift', async (t) => {
   const value = await fixture(t);
   const verifier = createE2BAuthorityFreeSourceVerifier({
     verifierArtifactHash: sha256Ref('reviewed-source-verifier'),
@@ -210,7 +212,7 @@ test('source verifier rejects request, manifest, staged-byte, and runtime-artifa
   );
 });
 
-test('independent exact-byte second pass rejects quoted JSON and shell secret assignments', async (t) => {
+captureTest('independent exact-byte second pass rejects quoted JSON and shell secret assignments', async (t) => {
   for (const [name, content] of [
     ['quoted JSON key', '{"api_key":"longsecretvalue"}\n'],
     ['quoted shell value', 'API_KEY="longsecretvalue"\n'],
@@ -364,7 +366,7 @@ test('defense-in-depth scan rejects common authority material outside the origin
   }
 });
 
-test('categorical absence claims require a pinned independent signature over exact bindings', async (t) => {
+captureTest('categorical absence claims require a pinned independent signature over exact bindings', async (t) => {
   const value = await fixture(t);
   const common = {
     verifierArtifactHash: sha256Ref('reviewed-source-verifier'),

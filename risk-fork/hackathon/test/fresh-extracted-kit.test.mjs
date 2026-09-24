@@ -40,6 +40,8 @@ function minimalEnvironment(extra = {}) {
     WINDIR: process.env.WINDIR,
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
     ...extra,
   };
 }
@@ -112,9 +114,18 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
     'bin',
     'risk-fork-demo.mjs',
   );
+  const stateHome = path.join(temporary, 'state');
+  await mkdir(stateHome, { recursive: false, mode: 0o700 });
+  const isolatedEnvironment = minimalEnvironment({
+    TEMP: temporary,
+    TMP: temporary,
+    TMPDIR: temporary,
+    XDG_STATE_HOME: stateHome,
+    RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
+  });
   const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
     cwd: extractionRoot,
-    env: minimalEnvironment({ RISK_FORK_DEMO_ALLOW_LOOPBACK: '0' }),
+    env: isolatedEnvironment,
     windowsHide: true,
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024,
@@ -134,7 +145,7 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
   const reviewerScript = path.join(extractionRoot, 'risk-fork', 'hackathon', 'scripts', 'reviewer-self-test.mjs');
   const reviewer = await execFileAsync(process.execPath, [reviewerScript], {
     cwd: extractionRoot,
-    env: minimalEnvironment({ RISK_FORK_DEMO_ALLOW_LOOPBACK: '0' }),
+    env: isolatedEnvironment,
     windowsHide: true,
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024,
