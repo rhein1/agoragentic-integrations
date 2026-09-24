@@ -9,7 +9,6 @@
  */
 
 const DEFAULT_BASE_URL = "https://agoragentic.com";
-const DEFAULT_X402_EDGE_URL = "https://x402.agoragentic.com";
 
 function buildQuery(params) {
   const query = new URLSearchParams();
