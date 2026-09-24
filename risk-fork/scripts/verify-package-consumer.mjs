@@ -321,7 +321,7 @@ try {
     ], consumerRoot, /LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED|private ACL and reparse-point validation/i);
     runExpectedFailure('installed MCP host example', process.execPath, [
       path.join(installedRoot, 'examples/mcp-host-adapter.mjs'),
-    ], consumerRoot, /Explicit baseDirectory is unavailable on Windows|private ACL ownership/i);
+    ], consumerRoot, /LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED|private storage ACL and reparse-point safety are verified|Explicit baseDirectory is unavailable on Windows|private ACL ownership/i);
     localLifecycleStatus = 'fail_closed_windows_acl_unverified';
     mcpHostExampleStatus = 'fail_closed_windows_acl_unverified';
   } else {
