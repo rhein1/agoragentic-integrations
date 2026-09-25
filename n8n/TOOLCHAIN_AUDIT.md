@@ -1,6 +1,11 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-09-25 (supersedes 2026-09-13)
+Original toolchain audit: 2026-09-13 (supersedes 2026-09-01)
+
+Dependency-fixture refresh: 2026-09-25. Rechecked the manifest and lockfile,
+peer ranges, clean install, tests, lint, build, dependency audits, and package
+contents. Historical CLI compatibility and Creator Portal acceptance were not
+revalidated.
 
 ## Candidate
 
