@@ -13,6 +13,7 @@ if (!npmCli || !path.isAbsolute(npmCli)) {
 }
 const tempRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-packed-consumer-'));
 const consumerRoot = path.join(tempRoot, 'consumer');
+const windowsLocalReferenceFailClosed = process.platform === 'win32';
 const environment = { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' };
 const explicitCache = process.env.RISK_FORK_NPM_CACHE;
 if (explicitCache !== undefined && !path.isAbsolute(explicitCache)) {
@@ -37,6 +38,15 @@ function run(label, executable, args, cwd) {
     throw new Error(`${label} failed (exit ${result.status ?? 'unknown'}; ${result.error?.code ?? npmCode ?? 'process_error'})`);
   }
   return result.stdout;
+}
+
+function runExpectedFailure(label, executable, args, cwd, expectedError) {
+  const result = spawnSync(executable, args, {
+    cwd, env: environment, encoding: 'utf8', timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+    windowsHide: true,
+  });
+  assert.notEqual(result.status, 0, `${label} unexpectedly succeeded`);
+  assert.match(`${result.stderr}\n${result.stdout}`, expectedError, `${label} did not fail closed as expected`);
 }
 
 try {
@@ -303,28 +313,41 @@ try {
       true,
     );
   `], consumerRoot);
-  const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
-    path.join(installedRoot, 'examples/local-reference.mjs'),
-  ], consumerRoot));
-  assert.equal(lifecycle.status, 'prepared_not_committed');
-  assert.equal(lifecycle.fork_destruction_status, 'verified');
-  assert.equal(lifecycle.savepoint_destruction_status, 'verified');
-  assert.equal(lifecycle.network_used, false);
-  assert.equal(lifecycle.credentials_used, false);
-  assert.equal(lifecycle.clean_commit_performed, false);
-  const mcpExample = JSON.parse(run('installed MCP host example', process.execPath, [
-    path.join(installedRoot, 'examples/mcp-host-adapter.mjs'),
-  ], consumerRoot));
-  assert.equal(mcpExample.status, 'passed');
-  assert.equal(mcpExample.demo_only, true);
-  assert.equal(mcpExample.isolation_boundary, false);
-  assert.equal(mcpExample.live_protection, false);
-  assert.equal(mcpExample.direct_transport_exposed, false);
-  assert.equal(mcpExample.fallback_execution_permitted, false);
-  assert.equal(mcpExample.authority_granted, false);
-  assert.equal(mcpExample.cleanup_verified, true);
-  assert.deepEqual(mcpExample.observed_phases, ['server/discover', 'tools/list']);
-  assert.ok(mcpExample.fork_count >= 2 && mcpExample.savepoint_count >= 2);
+  let localLifecycleStatus = 'verified';
+  let mcpHostExampleStatus = 'passed';
+  if (windowsLocalReferenceFailClosed) {
+    runExpectedFailure('installed local lifecycle', process.execPath, [
+      path.join(installedRoot, 'examples/local-reference.mjs'),
+    ], consumerRoot, /LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED|private ACL and reparse-point validation/i);
+    runExpectedFailure('installed MCP host example', process.execPath, [
+      path.join(installedRoot, 'examples/mcp-host-adapter.mjs'),
+    ], consumerRoot, /LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED|private storage ACL and reparse-point safety are verified|Explicit baseDirectory is unavailable on Windows|private ACL ownership/i);
+    localLifecycleStatus = 'fail_closed_windows_acl_unverified';
+    mcpHostExampleStatus = 'fail_closed_windows_acl_unverified';
+  } else {
+    const lifecycle = JSON.parse(run('installed local lifecycle', process.execPath, [
+      path.join(installedRoot, 'examples/local-reference.mjs'),
+    ], consumerRoot));
+    assert.equal(lifecycle.status, 'prepared_not_committed');
+    assert.equal(lifecycle.fork_destruction_status, 'verified');
+    assert.equal(lifecycle.savepoint_destruction_status, 'verified');
+    assert.equal(lifecycle.network_used, false);
+    assert.equal(lifecycle.credentials_used, false);
+    assert.equal(lifecycle.clean_commit_performed, false);
+    const mcpExample = JSON.parse(run('installed MCP host example', process.execPath, [
+      path.join(installedRoot, 'examples/mcp-host-adapter.mjs'),
+    ], consumerRoot));
+    assert.equal(mcpExample.status, 'passed');
+    assert.equal(mcpExample.demo_only, true);
+    assert.equal(mcpExample.isolation_boundary, false);
+    assert.equal(mcpExample.live_protection, false);
+    assert.equal(mcpExample.direct_transport_exposed, false);
+    assert.equal(mcpExample.fallback_execution_permitted, false);
+    assert.equal(mcpExample.authority_granted, false);
+    assert.equal(mcpExample.cleanup_verified, true);
+    assert.deepEqual(mcpExample.observed_phases, ['server/discover', 'tools/list']);
+    assert.ok(mcpExample.fork_count >= 2 && mcpExample.savepoint_count >= 2);
+  }
   const frameworkExample = JSON.parse(run('installed framework adapter example', process.execPath, [
     path.join(installedRoot, 'examples/framework-adapters.mjs'),
   ], consumerRoot));
@@ -351,8 +374,8 @@ try {
     packed_files: included.size, packed_bytes: entry.size,
     offline_install: true, dependency_resolution: 'exact_source_lock',
     verified_dependency_count: verifiedDependencyCount,
-    installed_exports: true, mcp_http_phase_exports: 'verified', local_lifecycle: 'verified',
-    mcp_host_example: 'passed', framework_adapter_example: 'passed',
+    installed_exports: true, mcp_http_phase_exports: 'verified', local_lifecycle: localLifecycleStatus,
+    mcp_host_example: mcpHostExampleStatus, framework_adapter_example: 'passed',
     installed_client_plan: 'passed',
     registry_publication_verified: false,
     live_traffic_protected: false, provider_calls: 0,

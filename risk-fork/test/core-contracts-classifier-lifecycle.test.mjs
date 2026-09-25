@@ -787,10 +787,20 @@ test('nonempty local sources require an external verifier and leave no copied .e
   const sourceDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-source-'));
   const adapterDirectory = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-'));
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: adapterDirectory,
+    ...(process.platform === 'win32' ? {} : { baseDirectory: adapterDirectory }),
     clock: () => NOW,
   });
   try {
+    if (process.platform === 'win32') {
+      await assert.rejects(
+        adapter.createSavepoint({
+          capsule: makeCapsule({ workspace: { snapshot_ref: 'workspace:windows', digest: sha256Ref([]) } }),
+          source_workspace: sourceDirectory,
+        }),
+        (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+      );
+      return;
+    }
     await writeFile(
       path.join(sourceDirectory, '.env'),
       'API_KEY=synthetic-not-a-real-secret-1234567890\n',
@@ -813,11 +823,19 @@ test('nonempty local sources require an external verifier and leave no copied .e
       /Non-empty local snapshots require an external clean-side authority-free verifier/,
     );
 
-    assert.deepEqual(await readdir(path.join(adapterDirectory, 'savepoints')), []);
+    const savepointsDirectory = path.join(adapter.baseDirectory, 'savepoints');
+    const savepoints = await readdir(savepointsDirectory).catch((error) => {
+      if (error?.code === 'ENOENT') return [];
+      throw error;
+    });
+    assert.deepEqual(savepoints, []);
   } finally {
     await adapter.dispose();
     await rm(sourceDirectory, { recursive: true, force: true });
     await rm(adapterDirectory, { recursive: true, force: true });
+    if (process.platform === 'win32' && adapter.baseDirectory) {
+      await rm(adapter.baseDirectory, { recursive: true, force: true });
+    }
   }
 });
 

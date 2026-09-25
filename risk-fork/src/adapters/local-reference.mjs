@@ -1,15 +1,23 @@
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  constants as fsConstants,
+} from 'node:fs';
 import {
   access,
+  chmod,
   copyFile,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
+  realpath,
   rm,
-  stat,
+  rmdir,
+  unlink,
+  writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -46,8 +54,461 @@ import {
 const runnerPath = fileURLToPath(new URL('./local-runner.mjs', import.meta.url));
 const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_LOCAL_RUNNER_STDOUT_BYTES = 2 * 1024 * 1024;
+const LOCAL_SNAPSHOT_READ_CHUNK_BYTES = 64 * 1024;
+const MAX_LOCAL_DIFF_CONTENT_BYTES = 16 * 1024 * 1024;
+const CAPTURE_DIRECTORY_PREFIX = 'agoragentic-risk-fork-capture-';
+const CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v2';
+const CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v2';
+const LEGACY_CAPTURE_MARKER_NAME = '.agoragentic-risk-fork-capture-v1';
+const LEGACY_CAPTURE_MARKER_SCHEMA = 'agoragentic.risk-fork.capture-directory.v1';
+const CAPTURE_ORPHAN_MIN_AGE_MS = 60 * 60 * 1000;
+const LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+const CAPTURE_FILE_NAME = /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.bin$/u;
+const PRIVATE_STATE_DIRECTORY_NAME = 'agoragentic-risk-fork';
+const CAPTURE_SPOOL_DIRECTORY_NAME = 'capture-spools';
+const ADAPTER_MARKER_NAME = '.adapter-owner-v1';
+const ADAPTER_MARKER_SCHEMA = 'agoragentic.risk-fork.adapter-owner.v1';
+// Open the path before inspecting its metadata.  On POSIX, O_NOFOLLOW and
+// O_NONBLOCK prevent a replacement symlink/FIFO from being followed or
+// blocking the capture.  Windows does not expose those flags; the descriptor
+// is still checked against a post-open lstat before any bytes are read.
+function localReadOnlyFlags() {
+  if (process.platform === 'win32') return fsConstants.O_RDONLY;
+  return fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
+}
 // Constructor injection is a trusted test seam, never a production provider boundary.
 const testOperationRunners = new WeakMap();
+const capturedContentByRecord = new WeakMap();
+
+function isCurrentOwner(info) {
+  return process.platform === 'win32'
+    || (typeof process.getuid === 'function'
+      && typeof info?.uid === 'bigint'
+      && info.uid === BigInt(process.getuid()));
+}
+
+function isLiveProcess(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== 'ESRCH';
+  }
+}
+
+async function readProcessInstanceIdentity(pid) {
+  if (process.platform === 'linux') {
+    try {
+      const [bootId, processStat] = await Promise.all([
+        readFile('/proc/sys/kernel/random/boot_id', 'utf8'),
+        readFile(`/proc/${pid}/stat`, 'utf8'),
+      ]);
+      const statFields = processStat.slice(processStat.lastIndexOf(')') + 2).trim().split(/\s+/u);
+      const startTime = statFields[19];
+      if (!startTime) return null;
+      return {
+        boot_id: bootId.trim(),
+        start_time: startTime,
+      };
+    } catch {
+      return null;
+    }
+  }
+  if (process.platform === 'darwin') {
+    return new Promise((resolve) => {
+      const child = spawn('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let output = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => {
+        output += chunk;
+        if (output.length > 256) child.kill();
+      });
+      child.once('error', () => resolve(null));
+      child.once('close', (code) => {
+        const startTime = output.trim();
+        resolve(code === 0 && startTime.length > 0 && startTime.length <= 256
+          ? { start_time: startTime }
+          : null);
+      });
+    });
+  }
+  return null;
+}
+
+function sameProcessInstance(expected, actual) {
+  if (!expected || !actual || typeof expected.start_time !== 'string'
+    || typeof actual.start_time !== 'string') return false;
+  return expected.start_time === actual.start_time
+    && (process.platform !== 'linux' || expected.boot_id === actual.boot_id);
+}
+
+async function createCaptureMarkerContent() {
+  return JSON.stringify({
+    schema: CAPTURE_MARKER_SCHEMA,
+    token: randomUUID(),
+    pid: process.pid,
+    process_instance: await readProcessInstanceIdentity(process.pid),
+  });
+}
+
+async function createAdapterMarkerContent() {
+  return JSON.stringify({
+    schema: ADAPTER_MARKER_SCHEMA,
+    token: randomUUID(),
+    pid: process.pid,
+    process_instance: await readProcessInstanceIdentity(process.pid),
+  });
+}
+
+function defaultStateRoot() {
+  const configured = process.platform === 'win32'
+    ? process.env.LOCALAPPDATA
+    : process.env.XDG_STATE_HOME;
+  if (configured && !path.isAbsolute(configured)) {
+    throw new Error('Risk Fork state root must be an absolute path');
+  }
+  return path.resolve(configured || path.join(os.homedir(), '.local', 'state'));
+}
+
+async function ensureDefaultStateRoot() {
+  const configured = process.platform === 'win32'
+    ? process.env.LOCALAPPDATA
+    : process.env.XDG_STATE_HOME;
+  if (process.platform === 'win32' || configured) {
+    return ensurePrivateDirectory(defaultStateRoot(), { create: false });
+  }
+  const localRoot = path.dirname(defaultStateRoot());
+  await ensurePrivateDirectory(localRoot, { requirePrivateMode: false });
+  return ensurePrivateDirectory(defaultStateRoot());
+}
+
+async function ensurePrivateDirectory(directory, { create = true, requirePrivateMode = true } = {}) {
+  const resolved = path.resolve(directory);
+  let ancestor = path.dirname(resolved);
+  while (ancestor && ancestor !== path.dirname(ancestor)) {
+    try {
+      const ancestorInfo = await lstat(ancestor, { bigint: true });
+      if (!ancestorInfo.isDirectory() || ancestorInfo.isSymbolicLink()) {
+        throw new Error(`Risk Fork private directory ancestor is not trusted: ${ancestor}`);
+      }
+      const ancestorMode = Number(ancestorInfo.mode & 0o1777n);
+      const rootOwnedStickyAncestor = process.platform !== 'win32'
+        && typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === 0n
+        && (ancestorMode & 0o1000) !== 0;
+      const ancestorOwnedByProcess = typeof process.getuid === 'function'
+        && typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === BigInt(process.getuid());
+      const ancestorRootOwned = typeof ancestorInfo.uid === 'bigint'
+        && ancestorInfo.uid === 0n;
+      const ancestorWritableByOtherUsers = (ancestorMode & 0o022) !== 0;
+      const ancestorOwnerSafe = ancestorOwnedByProcess || ancestorRootOwned;
+      const ancestorModeSafe = !ancestorWritableByOtherUsers || rootOwnedStickyAncestor;
+      if (process.platform !== 'win32'
+        && (typeof process.getuid !== 'function'
+          || typeof ancestorInfo.uid !== 'bigint'
+          || !ancestorOwnerSafe
+          || !ancestorModeSafe)) {
+        throw new Error(`Risk Fork private directory ancestor is unsafe: ${ancestor}`);
+      }
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) break;
+      ancestor = parent;
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        throw new Error(`Risk Fork private directory ancestor must already exist: ${ancestor}`);
+      }
+      throw error;
+    }
+  }
+  if (create) {
+    try {
+      await mkdir(resolved, { recursive: false, mode: 0o700 });
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+    if (process.platform !== 'win32' && await realpath(resolved) !== resolved) {
+      throw new Error(`Risk Fork private directory resolved through an unexpected path: ${resolved}`);
+    }
+  }
+  const info = await lstat(resolved, { bigint: true });
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error(`Risk Fork private directory is not a real directory: ${resolved}`);
+  }
+  if (process.platform !== 'win32') {
+    if (typeof process.getuid !== 'function'
+      || typeof info.uid !== 'bigint'
+      || info.uid !== BigInt(process.getuid())
+      || (requirePrivateMode && Number(info.mode & 0o777n) !== 0o700)) {
+      throw new Error(`Risk Fork private directory ownership or mode is unsafe: ${resolved}`);
+    }
+  }
+  if (create) await ensurePrivateDirectory(resolved, { create: false, requirePrivateMode });
+  return resolved;
+}
+
+async function createDefaultAdapterDirectory() {
+  if (process.platform === 'win32') {
+    const error = new Error(
+      'Risk Fork local reference storage is unavailable on Windows until exact private ACL and reparse-point validation is implemented',
+    );
+    error.code = 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED';
+    throw error;
+  }
+  const parent = await ensurePrivateDirectory(
+    path.join(await ensureDefaultStateRoot(), PRIVATE_STATE_DIRECTORY_NAME),
+  );
+  const adapter = await mkdtemp(path.join(parent, 'adapter-'));
+  return ensurePrivateDirectory(adapter, { create: false });
+}
+
+let standaloneCaptureRootPromise = null;
+async function standaloneCaptureRoot() {
+  if (!standaloneCaptureRootPromise) {
+    standaloneCaptureRootPromise = (async () => {
+      const stateRoot = await ensureDefaultStateRoot();
+      const privateRoot = await ensurePrivateDirectory(
+        path.join(stateRoot, PRIVATE_STATE_DIRECTORY_NAME),
+      );
+      const standaloneRoot = await ensurePrivateDirectory(path.join(privateRoot, 'standalone'));
+      return ensurePrivateDirectory(path.join(standaloneRoot, CAPTURE_SPOOL_DIRECTORY_NAME));
+    })().catch((error) => {
+      standaloneCaptureRootPromise = null;
+      throw error;
+    });
+  }
+  return standaloneCaptureRootPromise;
+}
+
+async function scavengeOrphanCaptureDirectories(captureRoot) {
+  if (process.platform === 'win32') return 0;
+  const root = await ensurePrivateDirectory(captureRoot, { create: false });
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const entry of entries) {
+    const directory = path.join(root, entry.name);
+    try {
+      let topLevelDirectory = entry.isDirectory();
+      if (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink()) {
+        topLevelDirectory = (await lstat(directory, { bigint: true })).isDirectory();
+      }
+      if (!topLevelDirectory || !entry.name.startsWith(CAPTURE_DIRECTORY_PREFIX)) continue;
+      const directoryInfo = await lstat(directory, { bigint: true });
+      if (!directoryInfo.isDirectory()
+        || !isCurrentOwner(directoryInfo)
+        || Number(directoryInfo.mode & 0o777n) !== 0o700) continue;
+      // Keep the marker read attached to the object we inspected.  The
+      // no-follow/nonblocking open rejects replacement links and special files;
+      // the descriptor and path identity checks reject replacement without ever
+      // reading attacker-controlled bytes. Windows is explicitly gated above:
+      // its open flags do not provide the POSIX no-follow/nonblocking boundary.
+      let markerName = CAPTURE_MARKER_NAME;
+      let legacyMarker = false;
+      let markerPath = path.join(directory, markerName);
+      let markerHandle;
+      try {
+        markerHandle = await open(markerPath, localReadOnlyFlags());
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+        markerName = LEGACY_CAPTURE_MARKER_NAME;
+        legacyMarker = true;
+        markerPath = path.join(directory, markerName);
+        markerHandle = await open(markerPath, localReadOnlyFlags());
+      }
+      let markerContent;
+      try {
+        const markerBefore = await markerHandle.stat({ bigint: true });
+        if (!markerBefore.isFile()
+          || !isCurrentOwner(markerBefore)
+          || Number(markerBefore.mode & 0o777n) !== 0o600
+          || Date.now() - Number(markerBefore.mtimeMs)
+            < (legacyMarker ? LEGACY_CAPTURE_ORPHAN_MIN_AGE_MS : CAPTURE_ORPHAN_MIN_AGE_MS)) continue;
+        const markerPathInfo = await lstat(markerPath, { bigint: true });
+        if (!markerPathInfo.isFile()
+          || !isCurrentOwner(markerPathInfo)
+          || Number(markerPathInfo.mode & 0o777n) !== 0o600) continue;
+        assertSamePathIdentity(markerPathInfo, markerBefore, markerName);
+        if (markerPathInfo.mtimeNs !== markerBefore.mtimeNs) continue;
+        markerContent = await markerHandle.readFile('utf8');
+      } finally {
+        await markerHandle.close();
+      }
+      const marker = JSON.parse(markerContent);
+      if (marker?.schema !== (legacyMarker ? LEGACY_CAPTURE_MARKER_SCHEMA : CAPTURE_MARKER_SCHEMA)
+        || typeof marker.token !== 'string'
+        || !/^[0-9a-f-]{36}$/u.test(marker.token)
+        || typeof marker.pid !== 'number'
+        || !Number.isSafeInteger(marker.pid)
+        || marker.pid < 1) continue;
+      const liveProcess = isLiveProcess(marker.pid);
+      const processInstance = await readProcessInstanceIdentity(marker.pid);
+      if (legacyMarker) {
+        // v1 has no process-instance binding. Reclaim only after a strict
+        // legacy age window, a dead PID, and no currently readable instance.
+        if (liveProcess || processInstance) continue;
+      } else {
+        if (!marker.process_instance
+          || typeof marker.process_instance.start_time !== 'string'
+          || (process.platform === 'linux' && typeof marker.process_instance.boot_id !== 'string')) continue;
+        if (processInstance && sameProcessInstance(marker.process_instance, processInstance)) {
+          // The recorded owner is still this exact process instance.
+          continue;
+        }
+        if (liveProcess && !processInstance) {
+          // A live PID whose identity cannot be read is ambiguous; fail closed.
+          continue;
+        }
+      }
+      const children = await readdir(directory, { withFileTypes: true });
+      const files = [];
+      let safe = true;
+      for (const child of children) {
+        if (child.name === CAPTURE_MARKER_NAME || child.name === LEGACY_CAPTURE_MARKER_NAME) continue;
+        const childPath = path.join(directory, child.name);
+        let childIsFile = child.isFile();
+        if (!child.isDirectory() && !child.isFile() && !child.isSymbolicLink()) {
+          childIsFile = (await lstat(childPath, { bigint: true })).isFile();
+        }
+        if (!childIsFile || !CAPTURE_FILE_NAME.test(child.name)) {
+          safe = false;
+          break;
+        }
+        const childInfo = await lstat(childPath, { bigint: true });
+        if (!childInfo.isFile()
+          || !isCurrentOwner(childInfo)
+          || childInfo.nlink > 1n
+          || Number(childInfo.mode & 0o777n) !== 0o600) {
+          safe = false;
+          break;
+        }
+        files.push(childPath);
+      }
+      if (!safe) continue;
+      if (legacyMarker) {
+        if (isLiveProcess(marker.pid) || await readProcessInstanceIdentity(marker.pid)) continue;
+      } else {
+        const currentProcessInstance = await readProcessInstanceIdentity(marker.pid);
+        if ((currentProcessInstance && sameProcessInstance(marker.process_instance, currentProcessInstance))
+          || (!currentProcessInstance && isLiveProcess(marker.pid))) continue;
+      }
+      for (const file of files) await unlink(file);
+      await unlink(markerPath);
+      await rmdir(directory);
+      removed += 1;
+    } catch (error) {
+      if (!['ENOENT', 'ENOTEMPTY', 'EPERM', 'EACCES', 'EBUSY'].includes(error?.code)) continue;
+    }
+  }
+  return removed;
+}
+
+const captureScavengerPromises = new Map();
+async function ensureCaptureScavenged(captureRoot) {
+  const root = path.resolve(captureRoot);
+  let promise = captureScavengerPromises.get(root);
+  if (!promise) {
+    promise = scavengeOrphanCaptureDirectories(root).catch(() => 0);
+    captureScavengerPromises.set(root, promise);
+    try {
+      await promise;
+    } finally {
+      if (captureScavengerPromises.get(root) === promise) captureScavengerPromises.delete(root);
+    }
+    return;
+  }
+  await promise;
+}
+
+// Internal deterministic cleanup-test seam. It is not used by production callers.
+export async function __testScavengeCaptureDirectories(captureRoot = null) {
+  const root = captureRoot ? path.resolve(requireString(captureRoot, 'captureRoot'))
+    : await standaloneCaptureRoot();
+  captureScavengerPromises.delete(root);
+  return scavengeOrphanCaptureDirectories(root);
+}
+
+async function releaseCapturedContent(records) {
+  const directories = new Set();
+  if (typeof records?.capture_directory === 'string') {
+    directories.add(records.capture_directory);
+  }
+  for (const record of records) {
+    const capturePath = capturedContentByRecord.get(record);
+    if (typeof capturePath === 'string') {
+      directories.add(path.dirname(capturePath));
+      try { await unlink(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+    }
+    capturedContentByRecord.delete(record);
+  }
+  for (const directory of directories) {
+    const markerPath = path.join(directory, CAPTURE_MARKER_NAME);
+    const markerContent = Buffer.from(await createCaptureMarkerContent());
+    let markerRemoved = false;
+    try {
+      await unlink(markerPath);
+      markerRemoved = true;
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    try {
+      await rmdir(directory);
+    } catch (error) {
+      if (markerRemoved && error?.code !== 'ENOENT') {
+        let markerHandle;
+        try {
+          // O_EXCL makes restoration create-only.  Write through the returned
+          // descriptor so a path replacement cannot redirect the marker bytes.
+          markerHandle = await open(markerPath, 'wx', 0o600);
+          const markerInfo = await markerHandle.stat({ bigint: true });
+          if (!markerInfo.isFile()
+            || !isCurrentOwner(markerInfo)
+            || Number(markerInfo.mode & 0o777n) !== 0o600) continue;
+          let written = 0;
+          while (written < markerContent.byteLength) {
+            const result = await markerHandle.write(
+              markerContent,
+              written,
+              markerContent.byteLength - written,
+            );
+            if (!result?.bytesWritten) break;
+            written += result.bytesWritten;
+          }
+        } catch {
+          // Cleanup is best-effort; an existing or ambiguous marker is left
+          // untouched for the next scavenger pass.
+        } finally {
+          await markerHandle?.close().catch(() => {});
+        }
+      }
+      if (!['ENOENT', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) throw error;
+    }
+  }
+}
+
+function hasStableFileIdentity(info) {
+  // Windows file serial numbers can exceed Number.MAX_SAFE_INTEGER; use the
+  // bigint Stats form below so identity comparisons do not lose precision.
+  return typeof info?.dev === 'bigint'
+    && info.dev > 0n
+    && typeof info?.ino === 'bigint'
+    && info.ino > 0n;
+}
+
+function assertSamePathIdentity(expected, actual, relative) {
+  if (!hasStableFileIdentity(expected)
+    || !hasStableFileIdentity(actual)
+    || expected.dev !== actual.dev
+    || expected.ino !== actual.ino) {
+    throw new Error(`Filesystem identity changed while it was being captured: ${relative}`);
+  }
+}
 
 async function exists(target) {
   try {
@@ -68,13 +529,85 @@ function assertOwnedPath(root, target) {
   return resolvedTarget;
 }
 
-async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
+function assertInsideWorkspace(workspaceRoot, target, relative) {
+  const resolvedRoot = path.resolve(workspaceRoot);
+  const resolvedTarget = path.resolve(target);
+  if (resolvedTarget !== resolvedRoot
+    && !resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new Error(`Workspace path escaped the source root: ${relative}`);
+  }
+  return resolvedTarget;
+}
+
+async function enumerateWorkspace(root, {
+  maxFiles,
+  maxBytes,
+  testAfterRead = null,
+  captureRoot = null,
+}) {
+  if (process.platform === 'win32') {
+    const error = new Error('Local workspace enumeration is unavailable on Windows until private storage ACL and reparse-point safety are verified');
+    error.code = 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED';
+    throw error;
+  }
+  const workspaceRoot = await realpath(root);
+  const resolvedCaptureRoot = captureRoot
+    ? await ensurePrivateDirectory(captureRoot, { create: false })
+    : await standaloneCaptureRoot();
+  await ensureCaptureScavenged(resolvedCaptureRoot);
+  const captureDirectory = await mkdtemp(path.join(resolvedCaptureRoot, CAPTURE_DIRECTORY_PREFIX));
+  try {
+    await writeFile(
+      path.join(captureDirectory, CAPTURE_MARKER_NAME),
+      await createCaptureMarkerContent(),
+      { flag: 'wx', mode: 0o600 },
+    );
+  } catch (error) {
+    await rm(captureDirectory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
   const records = [];
+  Object.defineProperty(records, 'capture_directory', {
+    value: captureDirectory,
+    enumerable: false,
+    configurable: false,
+  });
   const seenCaseFolded = new Map();
   let totalBytes = 0;
 
-  async function visit(directory, prefix = '') {
-    const entries = await readdir(directory, { withFileTypes: true });
+  async function visit(directory, prefix = '', expectedIdentity = null) {
+    const directoryBefore = await lstat(directory, { bigint: true });
+    if (!directoryBefore.isDirectory()) {
+      throw new Error(`Workspace directory changed while it was being captured: ${prefix || '.'}`);
+    }
+    if (expectedIdentity) assertSamePathIdentity(expectedIdentity, directoryBefore, prefix || '.');
+    const directoryRealPath = assertInsideWorkspace(
+      workspaceRoot,
+      await realpath(directory),
+      prefix || '.',
+    );
+    const entries = await readdir(directoryRealPath, { withFileTypes: true });
+    const directoryAfter = await lstat(directoryRealPath, { bigint: true });
+    assertSamePathIdentity(directoryBefore, directoryAfter, prefix || '.');
+    assertInsideWorkspace(workspaceRoot, await realpath(directoryRealPath), prefix || '.');
+    const entryInfoByName = new Map();
+    for (const entry of entries) {
+      if (entry.isDirectory() || entry.isFile() || entry.isSymbolicLink()) continue;
+      const childPath = path.join(directoryRealPath, entry.name);
+      entryInfoByName.set(entry.name, await lstat(childPath, { bigint: true }));
+    }
+    const childDirectoryIdentities = new Map();
+    for (const entry of entries) {
+      const entryInfo = entryInfoByName.get(entry.name);
+      if (!entry.isDirectory() && !entryInfo?.isDirectory()) continue;
+      const childPath = path.join(directoryRealPath, entry.name);
+      const childIdentity = entryInfo ?? await lstat(childPath, { bigint: true });
+      if (!childIdentity.isDirectory()) {
+        throw new Error(`Workspace directory changed while it was being captured: ${entry.name}`);
+      }
+      childDirectoryIdentities.set(entry.name, childIdentity);
+    }
+    if (testAfterRead) await testAfterRead({ directory: directoryRealPath, prefix, entries });
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const relative = normalizeRelativePath(
@@ -90,32 +623,129 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
         throw new Error(`Case or Unicode path collision: ${collision} and ${relative}`);
       }
       seenCaseFolded.set(folded, relative);
-      const absolute = path.join(directory, entry.name);
-      const info = await lstat(absolute);
-      if (info.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
-      if (info.isDirectory()) {
-        await visit(absolute, relative);
+      const absolute = path.join(directoryRealPath, entry.name);
+      const entryInfo = entryInfoByName.get(entry.name);
+      const isSymbolicLink = entry.isSymbolicLink() || entryInfo?.isSymbolicLink();
+      const isDirectory = entry.isDirectory() || entryInfo?.isDirectory();
+      const isFile = entry.isFile() || entryInfo?.isFile();
+      if (isSymbolicLink) throw new Error(`Symlinks are forbidden: ${relative}`);
+      if (isDirectory) {
+        assertInsideWorkspace(workspaceRoot, absolute, relative);
+        await visit(absolute, relative, childDirectoryIdentities.get(entry.name));
         continue;
       }
-      if (!info.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
-      if (info.nlink > 1) throw new Error(`Hard-linked files are forbidden: ${relative}`);
-      totalBytes += info.size;
+      if (!isFile) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
       if (records.length + 1 > maxFiles) throw new Error(`Workspace exceeds ${maxFiles} files`);
-      if (totalBytes > maxBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
-      const content = await readFile(absolute);
-      records.push({
+      const handle = await open(absolute, localReadOnlyFlags());
+      let capturePath;
+      let contentHash;
+      let bytesRead = 0;
+      let mode;
+      let captureCommitted = false;
+      try {
+        const before = await handle.stat({ bigint: true });
+        if (!before.isFile()) throw new Error(`Special filesystem entry is forbidden: ${relative}`);
+        assertInsideWorkspace(workspaceRoot, await realpath(absolute), relative);
+        const pathAfterOpen = await lstat(absolute, { bigint: true });
+        if (pathAfterOpen.isSymbolicLink()) throw new Error(`Symlinks are forbidden: ${relative}`);
+        assertSamePathIdentity(pathAfterOpen, before, relative);
+        if (!hasStableFileIdentity(before)) {
+          throw new Error(`File identity could not be verified: ${relative}`);
+        }
+        if (before.nlink > 1n) throw new Error(`Hard-linked files are forbidden: ${relative}`);
+        const remainingBytes = maxBytes - totalBytes;
+        if (before.size > BigInt(remainingBytes)) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+
+        capturePath = path.join(captureDirectory, `${records.length}-${randomUUID()}.bin`);
+        const captureHandle = await open(capturePath, 'wx', 0o600);
+        contentHash = createHash('sha256').update('"', 'utf8');
+        let base64Remainder = Buffer.alloc(0);
+        try {
+          while (bytesRead <= remainingBytes) {
+            const chunkLength = Math.min(
+              LOCAL_SNAPSHOT_READ_CHUNK_BYTES,
+              remainingBytes - bytesRead + 1,
+            );
+            const chunk = Buffer.allocUnsafe(chunkLength);
+            const result = await handle.read(chunk, 0, chunkLength, null);
+            if (result.bytesRead === 0) break;
+            const bytes = chunk.subarray(0, result.bytesRead);
+            bytesRead += result.bytesRead;
+            let written = 0;
+            while (written < bytes.byteLength) {
+              const writeResult = await captureHandle.write(
+                bytes,
+                written,
+                bytes.byteLength - written,
+              );
+              if (!writeResult?.bytesWritten) throw new Error(`Failed to spool captured bytes for ${relative}`);
+              written += writeResult.bytesWritten;
+            }
+            const base64Input = base64Remainder.length > 0
+              ? Buffer.concat([base64Remainder, bytes])
+              : bytes;
+            const completeLength = base64Input.length - (base64Input.length % 3);
+            if (completeLength > 0) {
+              contentHash.update(base64Input.subarray(0, completeLength).toString('base64'), 'utf8');
+            }
+            base64Remainder = completeLength === base64Input.length
+              ? Buffer.alloc(0)
+              : Buffer.from(base64Input.subarray(completeLength));
+            if (bytesRead > remainingBytes) throw new Error(`Workspace exceeds ${maxBytes} bytes`);
+          }
+          if (base64Remainder.length > 0) contentHash.update(base64Remainder.toString('base64'), 'utf8');
+          contentHash.update('"', 'utf8');
+        } catch (error) {
+          await captureHandle.close().catch(() => {});
+          try { await unlink(capturePath); } catch (unlinkError) { if (unlinkError?.code !== 'ENOENT') throw unlinkError; }
+          throw error;
+        }
+        await captureHandle.close();
+
+        const after = await handle.stat({ bigint: true });
+        assertSamePathIdentity(before, after, relative);
+        if (!after.isFile()
+          || after.nlink > 1n
+          || after.size !== before.size
+          || BigInt(bytesRead) !== before.size
+          || after.mtimeMs !== before.mtimeMs
+          || after.ctimeMs !== before.ctimeMs) {
+          throw new Error(`File changed while it was being captured: ${relative}`);
+        }
+        mode = Number(before.mode & 0o777n);
+        captureCommitted = true;
+      } finally {
+        await handle.close();
+        if (!captureCommitted && capturePath) {
+          try { await unlink(capturePath); } catch (error) { if (error?.code !== 'ENOENT') throw error; }
+        }
+      }
+      totalBytes += bytesRead;
+      const record = {
         path: relative,
-        bytes: content.byteLength,
-        content_hash: sha256Ref(content.toString('base64')),
-        source_path: absolute,
-      });
+        bytes: bytesRead,
+        content_hash: `sha256:${contentHash.digest('hex')}`,
+        mode,
+      };
+      capturedContentByRecord.set(record, capturePath);
+      records.push(record);
     }
   }
 
-  await visit(root);
-  const publicRecords = records.map(({ source_path: _sourcePath, ...record }) => record);
+  try {
+    await visit(workspaceRoot);
+  } catch (error) {
+    await releaseCapturedContent(records);
+    throw error;
+  }
+  const publicRecords = records.map(({ path: recordPath, bytes, content_hash: contentHash }) => ({
+    path: recordPath,
+    bytes,
+    content_hash: contentHash,
+  }));
   return {
     records,
+    capture_directory: records.capture_directory,
     public_records: publicRecords,
     file_count: publicRecords.length,
     total_bytes: totalBytes,
@@ -123,7 +753,29 @@ async function enumerateWorkspace(root, { maxFiles, maxBytes }) {
   };
 }
 
+// Internal deterministic race-test seam. It is not used by production callers.
+export async function __testEnumerateWorkspace(root, options = {}) {
+  const snapshot = await enumerateWorkspace(path.resolve(requireString(root, 'root')), {
+    maxFiles: options.maxFiles ?? 2_000,
+    maxBytes: options.maxBytes ?? 32 * 1024 * 1024,
+    testAfterRead: options.afterRead,
+    captureRoot: options.captureRoot,
+  });
+  if (!options.retain) await releaseCapturedContent(snapshot.records);
+  return snapshot;
+}
+
+// Internal deterministic cleanup-test seam. It is not used by production callers.
+export async function __testReleaseCapturedContent(records) {
+  await releaseCapturedContent(records);
+}
+
 export async function inspectLocalWorkspace(input = {}) {
+  if (process.platform === 'win32') {
+    const error = new Error('Local workspace enumeration is unavailable on Windows until private storage ACL and reparse-point safety are verified');
+    error.code = 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED';
+    throw error;
+  }
   const sourceWorkspace = path.resolve(requireString(input.source_workspace, 'source_workspace'));
   const info = await lstat(sourceWorkspace);
   if (info.isSymbolicLink() || !info.isDirectory()) {
@@ -136,20 +788,28 @@ export async function inspectLocalWorkspace(input = {}) {
       'max_bytes',
       { min: 1, max: 1024 * 1024 * 1024 },
     ),
+    captureRoot: await standaloneCaptureRoot(),
   });
-  return {
-    file_count: snapshot.file_count,
-    total_bytes: snapshot.total_bytes,
-    workspace_digest: snapshot.workspace_digest,
-    files: cloneJson(snapshot.public_records),
-  };
+  try {
+    return {
+      file_count: snapshot.file_count,
+      total_bytes: snapshot.total_bytes,
+      workspace_digest: snapshot.workspace_digest,
+      files: cloneJson(snapshot.public_records),
+    };
+  } finally {
+    await releaseCapturedContent(snapshot.records);
+  }
 }
 
 async function copyRecords(records, destination) {
   for (const record of records) {
     const target = path.join(destination, ...record.path.split('/'));
     await mkdir(path.dirname(target), { recursive: true });
-    await copyFile(record.source_path, target);
+    const capturePath = capturedContentByRecord.get(record);
+    if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${record.path}`);
+    await copyFile(capturePath, target, fsConstants.COPYFILE_EXCL);
+    await chmod(target, record.mode);
   }
 }
 
@@ -497,6 +1157,12 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     this.baseDirectory = options.baseDirectory
       ? path.resolve(options.baseDirectory)
       : null;
+    if (process.platform === 'win32' && this.baseDirectory) {
+      throw new Error(
+        'Explicit baseDirectory is unavailable on Windows until private ACL ownership can be proven; omit baseDirectory to use the private default root',
+      );
+    }
+    this.captureRoot = null;
     this.maxFiles = boundedInteger(options.maxFiles ?? 2_000, 'maxFiles', { min: 1, max: 100_000 });
     this.maxBytes = boundedInteger(
       options.maxBytes ?? 32 * 1024 * 1024,
@@ -511,7 +1177,14 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     if (options.operationRunner !== undefined && typeof options.operationRunner !== 'function') {
       throw new TypeError('operationRunner trusted test seam must be a function');
     }
+    if (options.removeDirectory !== undefined && typeof options.removeDirectory !== 'function') {
+      throw new TypeError('removeDirectory trusted test seam must be a function');
+    }
     this.verifyAuthorityFreeSource = options.verifyAuthorityFreeSource ?? null;
+    this.removeDirectory = options.removeDirectory ?? ((target) => rm(target, {
+      recursive: true,
+      force: true,
+    }));
     testOperationRunners.set(this, options.operationRunner ?? startClosedOperation);
     this.savepoints = new Map();
     this.forks = new Map();
@@ -521,10 +1194,18 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
   async initialize() {
     if (this.initialized) return this;
     if (!this.baseDirectory) {
-      this.baseDirectory = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-'));
+      this.baseDirectory = await createDefaultAdapterDirectory();
     } else {
-      await mkdir(this.baseDirectory, { recursive: true });
+      await ensurePrivateDirectory(this.baseDirectory, { create: false });
     }
+    this.captureRoot = await ensurePrivateDirectory(
+      path.join(this.baseDirectory, CAPTURE_SPOOL_DIRECTORY_NAME),
+    );
+    await writeFile(
+      path.join(this.baseDirectory, ADAPTER_MARKER_NAME),
+      await createAdapterMarkerContent(),
+      { flag: 'wx', mode: 0o600 },
+    );
     await mkdir(path.join(this.baseDirectory, 'savepoints'), { recursive: true });
     await mkdir(path.join(this.baseDirectory, 'forks'), { recursive: true });
     this.initialized = true;
@@ -554,33 +1235,55 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const snapshot = await enumerateWorkspace(sourceWorkspace, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
     if (!safeEqual(snapshot.workspace_digest, input.capsule.workspace.digest)) {
+      await releaseCapturedContent(snapshot.records);
       throw new Error('Source workspace digest does not match the Savepoint Capsule');
     }
-    const authorityAttestation = await verifyLocalAuthorityFreeSnapshot({
-      verifier: this.verifyAuthorityFreeSource,
-      capsule: input.capsule,
-      snapshot,
-      snapshotDirectory: sourceWorkspace,
-    });
+    let authorityAttestation;
+    try {
+      authorityAttestation = await verifyLocalAuthorityFreeSnapshot({
+        verifier: this.verifyAuthorityFreeSource,
+        capsule: input.capsule,
+        snapshot,
+        // The verifier must inspect the immutable descriptor-backed capture,
+        // not the mutable caller workspace that was used to create it.
+        snapshotDirectory: snapshot.capture_directory,
+      });
+    } catch (error) {
+      await releaseCapturedContent(snapshot.records);
+      throw error;
+    }
     const id = randomUUID();
     const ref = `local-savepoint:${id}`;
     const directory = assertOwnedPath(
       this.baseDirectory,
       path.join(this.baseDirectory, 'savepoints', id),
     );
-    await mkdir(directory, { recursive: false });
+    try {
+      await mkdir(directory, { recursive: false });
+    } catch (error) {
+      await releaseCapturedContent(snapshot.records);
+      throw error;
+    }
+    let record = null;
+    let primaryError = null;
     try {
       await copyRecords(snapshot.records, directory);
       const copiedSnapshot = await enumerateWorkspace(directory, {
         maxFiles: this.maxFiles,
         maxBytes: this.maxBytes,
+        captureRoot: this.captureRoot,
       });
-      if (!safeEqual(copiedSnapshot.workspace_digest, snapshot.workspace_digest)) {
-        throw new Error('Local savepoint changed while it was being copied');
+      try {
+        if (!safeEqual(copiedSnapshot.workspace_digest, snapshot.workspace_digest)) {
+          throw new Error('Local savepoint changed while it was being copied');
+        }
+      } finally {
+        await releaseCapturedContent(copiedSnapshot.records);
       }
-      const record = {
+      record = {
         ref,
         directory,
         capsule_hash: input.capsule.capsule_hash,
@@ -608,8 +1311,32 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
         evidence_status: 'verified',
       };
     } catch (error) {
-      await rm(directory, { recursive: true, force: true });
+      primaryError = error;
+      if (record) this.savepoints.delete(ref);
+      // Cleanup is best-effort here; never replace the operation's primary
+      // failure with a secondary filesystem cleanup error.
+      await this.removeDirectory(directory).catch(() => {});
       throw error;
+    } finally {
+      try {
+        await releaseCapturedContent(snapshot.records);
+      } catch (error) {
+        // A final spool-cleanup failure must not leave an apparently usable
+        // savepoint whose captured source state could not be released.
+        if (record) {
+          try {
+            await this.removeDirectory(directory);
+            this.savepoints.delete(ref);
+          } catch {
+            // Retain the owned record for an explicit cleanup retry. It is
+            // marked unusable so no fork can consume an unresolved directory.
+            record.cleanup_pending = true;
+          }
+        } else {
+          await this.removeDirectory(directory).catch(() => {});
+        }
+        if (!primaryError) throw error;
+      }
     }
   }
 
@@ -617,6 +1344,9 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     if (!this.initialized) await this.initialize();
     const savepoint = this.#savepointRecord(requireString(input.savepoint_ref, 'savepoint_ref'));
     if (savepoint.destroyed) throw new Error('Cannot fork a destroyed savepoint');
+    if (savepoint.cleanup_pending) {
+      throw new Error('Cannot fork a savepoint with unresolved cleanup');
+    }
     assertFreshForkIdentity(input.fork_identity);
     const policy = networkPolicy(input.network_policy);
     if (policy.mode !== 'blocked') {
@@ -630,53 +1360,70 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const source = await enumerateWorkspace(savepoint.directory, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
+    let record = null;
     try {
       await copyRecords(source.records, directory);
+      const createdAt = this.clock();
+      const hardDeadlineMs = performance.now() + ttlMs;
+      record = {
+        ref,
+        directory,
+        savepoint_ref: savepoint.ref,
+        baseline_digest: source.workspace_digest,
+        identity_hash: input.fork_identity.identity_hash,
+        network_policy_hash: policy.policy_hash,
+        created_at: createdAt.toISOString(),
+        expires_at: new Date(createdAt.getTime() + ttlMs).toISOString(),
+        hard_deadline_ms: hardDeadlineMs,
+        status: 'ready',
+        last_execution: null,
+        destroyed: false,
+        execution_generation: 0,
+        active_execution: null,
+        destroy_promise: null,
+        destroy_reason: null,
+        ttl_timer: null,
+      };
+      this.forks.set(ref, record);
+      // The copied fork is now tracked before spool release, so a cleanup
+      // failure cannot strand an unowned directory.
+      await releaseCapturedContent(source.records);
+      record.ttl_timer = setTimeout(() => {
+        record.ttl_timer = null;
+        this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {});
+      }, Math.max(0, Math.ceil(hardDeadlineMs - performance.now())));
+      record.ttl_timer.unref?.();
+      return {
+        fork_ref: ref,
+        fork_hash: sha256Ref({
+          ref,
+          savepoint_ref: savepoint.ref,
+          identity_hash: record.identity_hash,
+          network_policy_hash: record.network_policy_hash,
+        }),
+        status: 'ready',
+        expires_at: record.expires_at,
+        isolation_class: this.capabilities.isolation_class,
+        network_contract: 'blocked_by_closed_operation_set_not_kernel_firewall',
+      };
     } catch (error) {
-      await rm(directory, { recursive: true, force: true });
+      if (record) {
+        if (record.ttl_timer) clearTimeout(record.ttl_timer);
+        try {
+          await this.removeDirectory(directory);
+          this.forks.delete(ref);
+        } catch {
+          record.cleanup_pending = true;
+          record.status = 'destroy_failed';
+        }
+      } else {
+        await releaseCapturedContent(source.records).catch(() => {});
+        await this.removeDirectory(directory).catch(() => {});
+      }
       throw error;
     }
-    const createdAt = this.clock();
-    const hardDeadlineMs = performance.now() + ttlMs;
-    const record = {
-      ref,
-      directory,
-      savepoint_ref: savepoint.ref,
-      baseline_digest: source.workspace_digest,
-      identity_hash: input.fork_identity.identity_hash,
-      network_policy_hash: policy.policy_hash,
-      created_at: createdAt.toISOString(),
-      expires_at: new Date(createdAt.getTime() + ttlMs).toISOString(),
-      hard_deadline_ms: hardDeadlineMs,
-      status: 'ready',
-      last_execution: null,
-      destroyed: false,
-      execution_generation: 0,
-      active_execution: null,
-      destroy_promise: null,
-      destroy_reason: null,
-      ttl_timer: null,
-    };
-    this.forks.set(ref, record);
-    record.ttl_timer = setTimeout(() => {
-      record.ttl_timer = null;
-      this.destroyFork({ fork_ref: ref, reason: 'provider_ttl_expired' }).catch(() => {});
-    }, Math.max(0, Math.ceil(hardDeadlineMs - performance.now())));
-    record.ttl_timer.unref?.();
-    return {
-      fork_ref: ref,
-      fork_hash: sha256Ref({
-        ref,
-        savepoint_ref: savepoint.ref,
-        identity_hash: record.identity_hash,
-        network_policy_hash: record.network_policy_hash,
-      }),
-      status: 'ready',
-      expires_at: record.expires_at,
-      isolation_class: this.capabilities.isolation_class,
-      network_contract: 'blocked_by_closed_operation_set_not_kernel_firewall',
-    };
   }
 
   async getForkStatus(input = {}) {
@@ -821,49 +1568,74 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     const before = await enumerateWorkspace(savepoint.directory, {
       maxFiles: this.maxFiles,
       maxBytes: this.maxBytes,
+      captureRoot: this.captureRoot,
     });
-    const after = await enumerateWorkspace(record.directory, {
-      maxFiles: this.maxFiles,
-      maxBytes: this.maxBytes,
-    });
-    const beforeMap = new Map(before.records.map((item) => [item.path, item]));
-    const afterMap = new Map(after.records.map((item) => [item.path, item]));
-    const paths = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
-    const files = [];
-    for (const relative of paths) {
-      const oldFile = beforeMap.get(relative);
-      const newFile = afterMap.get(relative);
-      if (oldFile && newFile && oldFile.content_hash === newFile.content_hash) continue;
-      if (!newFile) {
+    let after;
+    try {
+      after = await enumerateWorkspace(record.directory, {
+        maxFiles: this.maxFiles,
+        maxBytes: this.maxBytes,
+        captureRoot: this.captureRoot,
+      });
+    } catch (error) {
+      await releaseCapturedContent(before.records);
+      throw error;
+    }
+    try {
+      const beforeMap = new Map(before.records.map((item) => [item.path, item]));
+      const afterMap = new Map(after.records.map((item) => [item.path, item]));
+      const paths = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
+      const files = [];
+      let materializedDiffBytes = 0;
+      for (const relative of paths) {
+        const oldFile = beforeMap.get(relative);
+        const newFile = afterMap.get(relative);
+        if (oldFile && newFile && oldFile.content_hash === newFile.content_hash) continue;
+        if (!newFile) {
+          files.push({
+            path: relative,
+            operation: 'delete',
+            before_hash: oldFile.content_hash,
+            after_hash: null,
+            after_content: null,
+          });
+          continue;
+        }
+        const capturePath = capturedContentByRecord.get(newFile);
+        if (typeof capturePath !== 'string') throw new Error(`Missing captured bytes for ${relative}`);
+        if (newFile.bytes > MAX_LOCAL_DIFF_CONTENT_BYTES) {
+          throw new Error(`Local reference diff content exceeds ${MAX_LOCAL_DIFF_CONTENT_BYTES} bytes: ${relative}`);
+        }
+        if (materializedDiffBytes + newFile.bytes > MAX_LOCAL_DIFF_CONTENT_BYTES) {
+          throw new Error(
+            `Local reference diff materialization exceeds ${MAX_LOCAL_DIFF_CONTENT_BYTES} bytes`,
+          );
+        }
+        materializedDiffBytes += newFile.bytes;
+        const content = await readFile(capturePath);
+        let text;
+        try {
+          text = utf8Decoder.decode(content);
+        } catch {
+          throw new Error(`Local reference diff cannot import binary file: ${relative}`);
+        }
         files.push({
           path: relative,
-          operation: 'delete',
-          before_hash: oldFile.content_hash,
-          after_hash: null,
-          after_content: null,
+          operation: oldFile ? 'modify' : 'create',
+          before_hash: oldFile?.content_hash ?? null,
+          after_hash: sha256Ref(text),
+          after_content: text,
         });
-        continue;
       }
-      const content = await readFile(newFile.source_path);
-      let text;
-      try {
-        text = utf8Decoder.decode(content);
-      } catch {
-        throw new Error(`Local reference diff cannot import binary file: ${relative}`);
-      }
-      files.push({
-        path: relative,
-        operation: oldFile ? 'modify' : 'create',
-        before_hash: oldFile?.content_hash ?? null,
-        after_hash: sha256Ref(text),
-        after_content: text,
-      });
+      return {
+        type: 'WORKSPACE_DIFF',
+        files,
+        test_evidence: [],
+      };
+    } finally {
+      await releaseCapturedContent(before.records);
+      await releaseCapturedContent(after.records);
     }
-    return {
-      type: 'WORKSPACE_DIFF',
-      files,
-      test_evidence: [],
-    };
   }
 
   async suspendFork(input = {}) {
@@ -925,12 +1697,11 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
     }
     if (!record.destroy_promise) {
       record.destroy_reason = input.reason ?? 'unspecified';
-      const attempt = this.#destroyForkRecord(record);
-      record.destroy_promise = attempt;
+      record.destroy_promise = this.#destroyForkRecord(record);
       try {
-        return await attempt;
+        return await record.destroy_promise;
       } catch (error) {
-        if (record.destroy_promise === attempt) record.destroy_promise = null;
+        record.destroy_promise = null;
         throw error;
       }
     }
@@ -988,7 +1759,13 @@ export class LocalReferenceRiskForkAdapter extends RiskForkProvider {
       });
     }
     if (!record.destroyed) {
-      await rm(assertOwnedPath(this.baseDirectory, record.directory), { recursive: true, force: true });
+      try {
+        await this.removeDirectory(assertOwnedPath(this.baseDirectory, record.directory));
+      } catch (error) {
+        record.cleanup_pending = true;
+        throw error;
+      }
+      record.cleanup_pending = false;
       record.destroyed = true;
     }
     return {

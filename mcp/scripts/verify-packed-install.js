@@ -18,27 +18,14 @@ const { Client, StreamableHTTPClientTransport } = require('@modelcontextprotocol
 const MCP_V2_PROTOCOL_VERSION = '2026-07-28';
 const PACKED_FIXTURE_API_KEY = 'amk_packed_fixture_key';
 
-const npmCli = process.env.npm_execpath;
-function resolveNpmCommand() {
-    if (npmCli) return process.execPath;
-    if (process.platform !== 'win32') return 'npm';
-    const comSpec = process.env.ComSpec || 'cmd.exe';
-    // Allowlist: the interpreter must be the Windows command processor itself,
-    // never an attacker-influenced executable from the environment.
-    if (!/(?:^|\\)cmd\.exe$/i.test(comSpec)) {
-        throw new Error(`Refusing to run npm with unexpected ComSpec: ${comSpec}`);
-    }
-    return comSpec;
-}
-const npmCommand = resolveNpmCommand();
+// Resolve npm from the same Node installation, not an environment-supplied
+// script or command processor that could execute arbitrary code.
+const npmCli = process.platform === 'win32'
+    ? path.resolve(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
+    : path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
 
 function runNpm(args, options = {}) {
-    const commandArgs = npmCli
-        ? [npmCli, ...args]
-        : process.platform === 'win32'
-            ? ['/d', '/s', '/c', 'npm.cmd', ...args]
-            : args;
-    return execFileSync(npmCommand, commandArgs, {
+    return execFileSync(process.execPath, [npmCli, ...args], {
         encoding: 'utf8',
         stdio: options.capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
         ...options,
