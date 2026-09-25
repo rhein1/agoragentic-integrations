@@ -1,18 +1,18 @@
 # n8n Toolchain Audit
 
-Audit date: 2026-09-13 (supersedes 2026-09-01)
+Audit date: 2026-09-25 (supersedes 2026-09-13)
 
 ## Candidate
 
 - Package: `n8n-nodes-agoragentic@0.1.4`
 - Builder: repository-local `scripts/build.mjs`
-- Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.31.0`
+- Community lint plugin: `@n8n/eslint-plugin-community-nodes@0.32.0`
 - Base lint rules: `eslint-plugin-n8n-nodes-base@2.0.0`
-- Type-aware lint stack: `typescript-eslint@8.69.0`
+- Type-aware lint stack: `typescript-eslint@8.70.0`
 - Linter: `eslint@9.29.0`
 - Formatter: `prettier@3.9.6`
 - Compiler: `typescript@5.9.2`
-- Development host fixture: `n8n-workflow@2.36.4`
+- Development host fixture: `n8n-workflow@2.39.1`
 - Exact workflow peer fixture: `zod@3.25.76`
 - Minimum consumer Node.js: 20.19
 - Locked development and publishing Node.js: 24
@@ -44,7 +44,7 @@ The replacement keeps the CLI 0.44.4 validation behavior used by this package:
   version change must repeat the clean-install, lint, build, audit, and package
   checks below before merge.
 
-The community plugin at 0.31.0 retains the exact `eslint@9.29.0` peer and the
+The community plugin at 0.32.0 retains the exact `eslint@9.29.0` peer and the
 `n8n-workflow@>=2` peer used by this candidate. This update therefore does not
 broaden the rejected ESLint 10 boundary or the published runtime peer.
 
@@ -52,7 +52,7 @@ The base lint-rules plugin at 2.0.0 accepts ESLint 8.40 and newer. Its ESLint
 10 support does not require this candidate to move past the community plugin's
 exact ESLint 9.29.0 peer.
 
-The TypeScript ESLint stack at 8.69.0 accepts ESLint 9 and TypeScript versions
+The TypeScript ESLint stack at 8.70.0 accepts ESLint 9 and TypeScript versions
 from 4.8.4 through the 5.x line. The candidate's exact ESLint 9.29.0 and
 TypeScript 5.9.2 pins remain inside those peer ranges.
 
@@ -79,13 +79,13 @@ The rejected dependency majors remain incoherent with this source candidate:
 The release-contract test pins the complete supported set so a future isolated
 major bump cannot look valid after changing only one manifest line.
 
-`n8n-workflow@2.36.4` is the npm `stable` development fixture, not a runtime
+`n8n-workflow@2.39.1` is the pinned development fixture, not a runtime
 constraint. Its exact peer is satisfied by `zod@3.25.76`. The published peer
 remains `n8n-workflow: "*"`, so host n8n versions are not narrowed. These
 fixtures keep clean-install build tests deterministic and are not shipped in
 the package tarball.
 
-The stable workflow fixture's development graph includes `isolated-vm@7`,
+The pinned workflow fixture's development graph includes `isolated-vm@7`,
 whose declared engine is Node.js 24 or newer. The published community node does
 not ship that fixture, so the consumer floor remains Node.js 20.19; repository
 validation and trusted publishing use Node.js 24 to satisfy the complete locked
@@ -104,11 +104,11 @@ found 0 vulnerabilities
 ```
 
 The CLI/AI/LangChain branch and `uuid@10.0.0` are absent from the lockfile. The
-only resolved `uuid` is patched `uuid@11.1.1` beneath the stable workflow
-fixture. Updating that fixture from 2.35.3 to 2.36.4 also moves
-`@n8n/utils` to 1.44.0 and `nanoid` to patched 3.3.18, removing the two prior
-high-severity nanoid exceptions. `npm run audit:dev` now rejects any advisory at
-any severity; there is no development allowlist.
+only resolved `uuid` is patched `uuid@11.1.1` beneath the pinned workflow
+fixture. The 2.39.1 development graph resolves `@n8n/utils@1.47.0` and patched
+`nanoid@3.3.18`, and adds `quickjs-emscripten@0.32.0` with its `@jitl` QuickJS
+WASM packages. These lock entries are development-only. `npm run audit:dev`
+rejects any advisory at any severity; there is no development allowlist.
 
 The prior `brace-expansion`, `ip-address`, and `undici` findings remain resolved
 in this lockfile. None of the development dependencies are included in the
