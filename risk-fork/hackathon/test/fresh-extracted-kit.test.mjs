@@ -20,6 +20,7 @@ const REQUIRED_TREES = Object.freeze([
   'risk-fork/hackathon/src',
   'risk-fork/hackathon/scripts',
   'risk-fork/hackathon/docs',
+  'risk-fork/hackathon/docker-example',
   'risk-fork/hackathon/recorder',
   'risk-fork/hackathon/fixtures',
 ]);
@@ -39,6 +40,8 @@ function minimalEnvironment(extra = {}) {
     WINDIR: process.env.WINDIR,
     TEMP: process.env.TEMP,
     TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
     ...extra,
   };
 }
@@ -111,9 +114,18 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
     'bin',
     'risk-fork-demo.mjs',
   );
+  const stateHome = path.join(temporary, 'state');
+  await mkdir(stateHome, { recursive: false, mode: 0o700 });
+  const isolatedEnvironment = minimalEnvironment({
+    TEMP: temporary,
+    TMP: temporary,
+    TMPDIR: temporary,
+    XDG_STATE_HOME: stateHome,
+    RISK_FORK_DEMO_ALLOW_LOOPBACK: '0',
+  });
   const { stdout, stderr } = await execFileAsync(process.execPath, [entrypoint, 'verify-offline-kit'], {
     cwd: extractionRoot,
-    env: minimalEnvironment({ RISK_FORK_DEMO_ALLOW_LOOPBACK: '0' }),
+    env: isolatedEnvironment,
     windowsHide: true,
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024,
@@ -130,8 +142,27 @@ test('fresh deterministic kit extraction verifies offline with only command-scop
   assert.equal(result.runtime.network_used, false);
   assert.equal(result.source_commit, sourceCommit);
 
+  const reviewerScript = path.join(extractionRoot, 'risk-fork', 'hackathon', 'scripts', 'reviewer-self-test.mjs');
+  const reviewer = await execFileAsync(process.execPath, [reviewerScript], {
+    cwd: extractionRoot,
+    env: isolatedEnvironment,
+    windowsHide: true,
+    timeout: 30_000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(reviewer.stderr, '');
+  const reviewerResult = JSON.parse(reviewer.stdout);
+  assert.equal(reviewerResult.status, 'verified_local_reviewer_self_test');
+  assert.equal(reviewerResult.source_commit, sourceCommit);
+  assert.equal(reviewerResult.mcp_conformance_verified, true);
+  assert.equal(reviewerResult.docker_probe.status, 'not_requested');
+  assert.equal(reviewerResult.integrated_container_protection, false);
+  assert.equal(reviewerResult.live_traffic_protected, false);
+  assert.equal(reviewerResult.provider_calls, 0);
+
   const manifest = JSON.parse(await readFile(path.join(extractionRoot, 'MANIFEST.json'), 'utf8'));
   assert.equal(manifest.source_commit, sourceCommit);
+  assert.ok(manifest.files.some((entry) => entry.path === 'risk-fork/hackathon/docker-example/runner.mjs'));
   assert.equal(manifest.provider_calls, 0);
   assert.equal(manifest.network_used, false);
 });

@@ -33,6 +33,18 @@ npm --prefix risk-fork ci --ignore-scripts --no-audit --no-fund
 A verified offline kit already bundles that dependency closure. Do not run
 `npm install` or `npm ci` inside an extracted kit.
 
+From a newly built, manifest-verified kit containing this revision, reviewers
+can run the no-provider-spend integrity, fixture, MCP, and cleanup checks with
+one command:
+
+```powershell
+node risk-fork/hackathon/scripts/reviewer-self-test.mjs
+```
+
+The optional `--docker` flag adds a separate fixed-fixture local-container MCP
+probe when the trusted Linux Node image is already present. It does not wire
+that container into Risk Fork protection or contact E2B.
+
 ## Status and claim boundary
 
 | Claim | Value |
@@ -195,6 +207,16 @@ on the participant's machine beneath the marker-bound demo root identified by
 the redacted reference from `doctor`. It is not uploaded by the workflow or
 saved to AWS, E2B, Agoragentic, a VM, or a hosted database.
 
+The default temporary root is created exclusively on first use. An existing
+unmarked directory is never adopted, even when empty; remove it and retry after
+confirming it is safe. On POSIX hosts, an existing marked root must be owned by
+the current user and must use owner-only mode, with no group/other access.
+Its parent must also be current-user-owned without group/other write access, or
+the root-owned sticky system temp directory.
+Windows ACL/DACL
+ownership is not inferred from Node mode bits and remains an explicit limitation;
+this demo does not claim a Windows filesystem isolation boundary.
+
 Automatic cleanup is bounded to owned fixture paths. It never recursively
 deletes a home directory, repository root, broad temporary directory,
 participant workspace, unresolved path, or path without the expected ownership
@@ -244,6 +266,10 @@ secret. Do not point the demo at live MCP servers or other remote targets.
 
 Start with the [five-minute quickstart](./docs/QUICKSTART.md). For cleanup and
 recovery, use [CLEANUP_TROUBLESHOOTING.md](./docs/CLEANUP_TROUBLESHOOTING.md).
+For an independently runnable, no-provider-spend reviewer path, use
+[REVIEWER_SELF_TEST.md](./docs/REVIEWER_SELF_TEST.md). The optional local
+[Docker MCP example](./docker-example/README.md) is separate from the default
+fake-E2B simulation and does not qualify hosted protection.
 For the talk track, use [PRESENTER_SCRIPT.md](./docs/PRESENTER_SCRIPT.md).
 The public machine card is
 [risk-fork-capability.json](../discovery/risk-fork-capability.json), and the
