@@ -19,7 +19,7 @@ test('0.1.4 release metadata is locked to the audited direct toolchain', () => {
 		'eslint-import-resolver-typescript': '4.4.5',
 		'eslint-plugin-import-x': '4.17.1',
 		'eslint-plugin-n8n-nodes-base': '2.0.0',
-		'n8n-workflow': '2.36.4',
+		'n8n-workflow': '2.39.1',
 		prettier: '3.9.6',
 		typescript: '5.9.2',
 		'typescript-eslint': '8.70.0',
