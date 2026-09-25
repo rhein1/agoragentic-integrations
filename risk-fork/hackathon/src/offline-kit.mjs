@@ -103,6 +103,7 @@ const REQUIRED_TREES = Object.freeze([
   ['risk-fork/hackathon/src', 'risk-fork/hackathon/src'],
   ['risk-fork/hackathon/scripts', 'risk-fork/hackathon/scripts'],
   ['risk-fork/hackathon/docs', 'risk-fork/hackathon/docs'],
+  ['risk-fork/hackathon/docker-example', 'risk-fork/hackathon/docker-example'],
   ['risk-fork/hackathon/recorder', 'risk-fork/hackathon/recorder'],
   ['risk-fork/hackathon/fixtures', 'risk-fork/hackathon/fixtures'],
 ]);
@@ -1726,6 +1727,7 @@ function rootReadme(sourceCommit) {
     'From this extracted directory:',
     '',
     '```text',
+    'node ./risk-fork/hackathon/scripts/reviewer-self-test.mjs',
     'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs doctor',
     'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs run --scenario e2b-malicious-mcp-containment',
     'node ./risk-fork/hackathon/bin/risk-fork-demo.mjs serve',

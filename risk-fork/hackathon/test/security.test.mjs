@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  chmod,
   link,
   mkdir,
   mkdtemp,
@@ -30,11 +31,19 @@ import {
   resolveOwnedDemoPath,
   sanitizeDemoError,
   scanDemoSecrets,
+  samePath,
   validateDemoOperation,
 } from '../src/security.mjs';
 
 const FIXED_NOW = new Date('2030-01-01T00:00:00.000Z');
 const FIXED_ENTROPY = Buffer.from('00112233445566778899aabbccddeeff', 'hex');
+
+test('macOS /private alias handling is limited to the real /private/var alias', () => {
+  assert.equal(samePath('/private/var', '/var', 'darwin'), true);
+  assert.equal(samePath('/private/var/folders/run', '/var/folders/run', 'darwin'), true);
+  assert.equal(samePath('/private/varfoo/run', '/varfoo/run', 'darwin'), false);
+  assert.equal(samePath('/private/custom/run', '/custom/run', 'darwin'), false);
+});
 
 async function temporaryRoot(prefix = 'risk-fork-hackathon-security-') {
   const parent = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -465,24 +474,67 @@ test('owned root marker binds child resolution, inventory, quota, and cleanup', 
   }
 });
 
-test('unmarked nonempty roots and marker tampering fail closed', async () => {
+test('unmarked roots and marker tampering fail closed', async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hackathon-unowned-'));
   const root = path.join(parent, 'agoragentic-risk-fork-demo-root');
   try {
     await mkdir(root);
+    await chmod(root, 0o777);
     await writeFile(path.join(root, 'sentinel.txt'), 'keep', 'utf8');
     await assert.rejects(
       initializeOwnedDemoRoot(root),
       (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
     );
     assert.equal(await readFile(path.join(root, 'sentinel.txt'), 'utf8'), 'keep');
-    await rm(path.join(root, 'sentinel.txt'));
+    await rm(root, { recursive: true, force: true });
     const handle = await initializeOwnedDemoRoot(root);
+    await rm(root, { recursive: true, force: true });
+    await mkdir(root);
+    await chmod(root, 0o755);
+    await assert.rejects(
+      initializeOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
+    );
+    await rm(root, { recursive: true, force: true });
+    const recreated = await initializeOwnedDemoRoot(root);
+    if (process.platform !== 'win32') {
+      await chmod(root, 0o777);
+      await assert.rejects(
+        openOwnedDemoRoot(root),
+        (error) => error.code === 'DEMO_ROOT_NOT_OWNED',
+      );
+      await chmod(root, 0o700);
+    }
     const markerPath = path.join(root, RISK_FORK_DEMO_ROOT_MARKER);
     const marker = JSON.parse(await readFile(markerPath, 'utf8'));
     marker.root_path_hash = `sha256:${'0'.repeat(64)}`;
     await writeFile(markerPath, JSON.stringify(marker), 'utf8');
     await assert.rejects(openOwnedDemoRoot(root), (error) => error.code === 'DEMO_ROOT_MARKER_INVALID');
+    assert.ok(handle.root_id);
+    assert.ok(recreated.root_id);
+  } finally {
+    await cleanupTemporary(parent);
+  }
+});
+
+test('demo roots reject a group/world-writable non-sticky custom parent', {
+  skip: process.platform === 'win32' ? 'Windows DACL boundary is explicit but unverified' : false,
+}, async () => {
+  const parent = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-hackathon-parent-'));
+  const root = path.join(parent, 'demo-root');
+  try {
+    await chmod(parent, 0o777);
+    await assert.rejects(
+      initializeOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_PARENT_UNTRUSTED',
+    );
+    await chmod(parent, 0o700);
+    const handle = await initializeOwnedDemoRoot(root);
+    await chmod(parent, 0o777);
+    await assert.rejects(
+      openOwnedDemoRoot(root),
+      (error) => error.code === 'DEMO_ROOT_PARENT_UNTRUSTED',
+    );
     assert.ok(handle.root_id);
   } finally {
     await cleanupTemporary(parent);
