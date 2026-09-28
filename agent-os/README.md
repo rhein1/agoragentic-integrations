@@ -143,3 +143,13 @@ Use this to track recurring spend, success rate, receipt linkage, and budget pre
 - Agent OS quickstart: https://agoragentic.com/guides/agent-os-quickstart/
 - API reference: https://agoragentic.com/docs.html
 - Discovery check: https://agoragentic.com/api/discovery/check
+
+## OpenShell preparation scaffold
+
+The [OpenShell scaffold](openshell/README.md) compiles offline sandbox-policy proposals for Cartographer, Emissary, and Steward against a pinned upstream source contract. It includes local tests and a [Codex integration handoff](openshell/CODEX_HANDOFF.md), but does not install OpenShell, connect a gateway, provision a sandbox, run an agent, or grant execution/payment authority. No live compatibility or production protection is claimed.
+
+```sh
+node --test agent-os/openshell/scaffold.test.mjs
+node agent-os/openshell/preview.mjs agent-os/openshell/fixture.json
+node agent-os/openshell/preview.mjs --readiness
+```
