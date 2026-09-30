@@ -1,6 +1,6 @@
 # RRSI preparation for Fable-5 / Codex
 
-**Implemented: offline experiment packets, synthetic evidence replay, an inert RRSI Domain adapter, and a Codex implementation work order. Not implemented: live search, model execution, isolation, authenticated evidence ingestion, or promotion.** No package installation or credentials are needed for the local preview. Nothing here enables agents to modify their own authority.
+**Implemented: offline experiment packets, synthetic evidence replay, an inert RRSI Domain adapter, source-only host gate and budget simulations, and a quarantined Memory review importer. Not implemented: authenticated host authority, live search, model execution, isolation, authenticated evidence ingestion, or promotion.** No package installation or credentials are needed for the local preview. Nothing here enables agents to modify their own authority.
 
 RRSI is an optimizer of harnesses, not another agent runtime. The initial optimization target is **Fable-5/Codex**. The reusable bridge belongs here; Fable owns its six workflows and evaluator; Memory owns durable evidence-linked continuity; existing ECF/Risk Fork and host controls own permission checks; a separately qualified OpenShell host can later supply isolation. Production Interchange roles come after the Fable experiment, not before it.
 
@@ -30,7 +30,52 @@ The fixture's commits, digests, trials, rewards, costs, task families and identi
 3. **A Domain adapter is not the whole host boundary.** The upstream loop can call its analyst and write files before `Domain.run`; even its round-level `dry_run` happens after analysis. Never use the upstream CLI's dry-run as a no-spend guarantee. Gate the entire orchestrator before constructing `Run`, not just candidate evaluation.
 4. **Git worktrees are not isolation.** The core assumes `domains/<name>/<harness_path>` and an `evolve/<name>` branch. Overriding `Domain.harness_dir` alone does not remove the loop's hard-coded relative path. Stage a sanitized harness export in a disposable experiment repository; never run this against the live Fable checkout, user plugin directory, Memory database, or platform repo.
 5. **Fable's existing lexical benchmark is smoke evidence, not the objective.** Reuse its isolation/provenance patterns where appropriate, but build blind correctness/evidence tasks and separate family-disjoint held-out/OOD evaluation. Optimizing known headings or regex keywords would recreate the overfitting problem.
-6. **Reuse Memory's staged-review boundary.** A reviewed SkillOpt task remains staged, not active; it does not authorize RRSI, a model call, or publication. Write a review-aware importer later rather than reinterpret its existing receipt as execution permission.
+6. **Reuse Memory's staged-review boundary.** A reviewed SkillOpt task remains staged, not active; it does not authorize RRSI, a model call, or publication. The review-aware importer validates a supplied artifact chain and still quarantines it without execution permission.
+
+## Source-only host and Memory implementation
+
+`domain/host.py` keeps `HostOrchestrator.start`, resume, revoke and invoke hard-off
+before upstream construction, authority callbacks, filesystem, model or budget
+effects. The actual host authorization adapter is not implemented. An arbitrary
+callback or caller `approved`/`authenticated` field cannot replace that adapter.
+
+`SyntheticHostSession` is an executable offline state machine for an illustrative
+candidate cycle: analysis, worktree, proposal, critic, training evaluation,
+selection and sealed evaluation. It records no real work in those phases. Each
+advance checks a synthetic scope/grant observation and reserves all-in estimates
+before recording a step. Failures retain settled costs; unknown results suspend
+the shared budget until explicit reconciliation. Resume binds the exact state
+checkpoint and scope and rejects expired/revoked grants, changed grant identity,
+or regressed revisions. Same-session transitions are serialized. Its completion
+state is simulation completion, never permission or a measured improvement.
+
+`BudgetStore` is a process-local test double. Reservations are atomic and exposed
+as immutable snapshots; settled consumption accumulates across phases, retries,
+and sessions. Overruns suspend new reservations and reconciliation records the
+full consumption even when it exceeds the campaign cap. Release is only for
+known unused reservations. A real host needs durable transactional storage,
+trusted metering, authenticated grants and crash recovery; this module supplies
+none of those production claims.
+
+`domain/memory_bridge.py` validates the supplied Memory stage, reviewed task,
+finalization claim, review, receipt, and current stage-view projection against
+the public SkillOpt shapes pinned to Memory commit
+`3c2f17d82476d22996377ea7c07cb601ed625483`. It checks artifact digests, scope,
+baseline/rollback linkage, redaction and review freshness. The caller must obtain
+the current artifacts from the owning Memory host; self-consistent JSON does not
+authenticate them. Results remain quarantined with `evaluation_allowed: false`,
+`promotion_allowed: false` and no Memory write. Live host attestation and policy
+checks remain necessary, including retention and review state at dispatch time.
+
+The checked-in Memory fixture was generated by the pinned public bridge's real
+`createStage`, `reviewStage`, `inspectStage`, and `stageView` functions in a
+disposable synthetic directory. Its digests are the original Node-produced
+values; only unbound absolute path projections were replaced with synthetic
+paths. Tests validate that packet rather than relying solely on hashes computed
+by this Python importer. No user Memory records were involved. The importer
+supports bounded JSON with safe integer numbers and ASCII object keys; it rejects
+unsupported numeric/key forms rather than silently applying different Python
+and JavaScript canonicalization rules.
 
 ## Source contract, not a live integration
 
@@ -50,7 +95,7 @@ Replay uses uniform per-trial weights and rewards in `[0,1]`. It is not a comple
 |---|---|
 | Reusable offline boundary and RRSI ABI | This directory in `agoragentic-integrations` |
 | Frozen base workflows, evaluation runner, candidate composition | `rhein1/fable5-codex`; main inspected at `154bf0b220566d91d1a4aaf4390d9c3a54926c3a` |
-| Memory review-aware history bridge | Existing `agoragentic-memory` SkillOpt staging; no RRSI consumer is claimed |
+| Memory review-aware history bridge | Offline artifact-chain validator in `domain/memory_bridge.py`; no live consumer or Memory write |
 | Local execution/evidence contracts | Standalone Harness Core and ECF/Risk Fork; inspect actual contracts before importing |
 | Optional isolation | OpenShell PR #435 is draft/unmerged. Its targeted four-job suite and CodeQL passed, but Validate Machine Surfaces failed in the MCP package step; later validation steps were skipped. No live OpenShell host is qualified |
 
