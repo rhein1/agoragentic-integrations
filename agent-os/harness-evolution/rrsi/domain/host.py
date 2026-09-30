@@ -115,7 +115,8 @@ class AuthoritySnapshot:
 class AuthorityPort(Protocol):
     """Fixture-only observation port; never an authorization implementation."""
 
-    def read(self, grant_id: str, scope_digest: str) -> Mapping[str, object]: ...
+    def read(self, grant_id: str, scope_digest: str) -> Mapping[str, object]:
+        raise NotImplementedError("authority_port_not_implemented")
 
 
 class UnavailableAuthority:

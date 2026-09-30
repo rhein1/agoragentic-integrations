@@ -1,5 +1,4 @@
 import copy
-import hashlib
 import importlib.util
 import json
 import os
@@ -13,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from domain.contract import ContractError, compile_packet, data, digest, history_proposal, replay
+from domain.contract import ContractError, compile_packet, data, history_proposal, replay
 from verify_contract import verify_contract_sources
 
 FIXTURE = json.loads((ROOT / "fixture.json").read_text(encoding="utf-8"))
