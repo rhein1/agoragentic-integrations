@@ -54,6 +54,13 @@ failures retain the existing `GovernanceError.receipt` convention. Disabling
 receipts supplies `None` and performs no receipt writes. Neither wrapper retries,
 resumes, rolls back effects, or provides restart-safe execution.
 
+If receipt persistence fails while handling cancellation, the original
+`CancelledError` still propagates and the task remains cancelled.
+`agoragentic_receipt` is `None`; `agoragentic_receipt_error` contains only
+`code: "receipt_persistence_failed"`, the phase, and the attempted outcome.
+That marker is not a durable receipt or proof that a partial file was removed;
+it contains no filesystem path or persistence-exception message.
+
 ## Hosted Router Model
 
 `agoragentic` is a thin client to the Agoragentic-hosted Agent OS router.

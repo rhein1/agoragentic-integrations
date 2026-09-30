@@ -261,7 +261,8 @@ def _govern_async(
                     approval_result = await approval_result
                 resolved_approval = approval_result is True
             except asyncio.CancelledError as exc:
-                exc.agoragentic_receipt = _write_pre_execution_failure(context, request, "CancelledError")
+                _record_cancellation(context, context["initial"], request, exc,
+                                     phase="approval", outcome="approval_failed")
                 raise
             except Exception as exc:
                 error = GovernanceError("approval_failed", "Approval callback failed.")
@@ -274,10 +275,8 @@ def _govern_async(
         try:
             result = await tool(*args, **kwargs)
         except asyncio.CancelledError as exc:
-            exc.agoragentic_receipt = _write_receipt(
-                context, decision, outcome="cancelled_effect_uncertain",
-                evidence=dict(request, error_code="CancelledError"),
-            )
+            _record_cancellation(context, decision, request, exc,
+                                 phase="tool", outcome="cancelled_effect_uncertain")
             raise
         except Exception as exc:
             receipt = _write_failed_receipt(context, decision, request, exc)
@@ -292,7 +291,8 @@ def _govern_async(
                 evidence_result = await evidence_result
             summary = _summarize_evidence(evidence_result)
         except asyncio.CancelledError as exc:
-            exc.agoragentic_receipt = _write_evidence_failure(context, decision, request, exc)
+            _record_cancellation(context, decision, request, exc,
+                                 phase="evidence", outcome="completed_evidence_failed")
             raise
         except Exception as exc:
             error = GovernanceError(
@@ -324,6 +324,29 @@ def _govern_async(
         return result
 
     return wrapped
+
+
+def _record_cancellation(
+    context: Dict[str, Any],
+    decision: Dict[str, Any],
+    request: Dict[str, Any],
+    cancellation: asyncio.CancelledError,
+    *,
+    phase: str,
+    outcome: str,
+) -> None:
+    # Persistence must never replace cancellation or imply a durable receipt
+    # when the write fails (including a partially written file).
+    cancellation.agoragentic_receipt = None
+    try:
+        cancellation.agoragentic_receipt = _write_receipt(
+            context, decision, outcome=outcome,
+            evidence=dict(request, error_code="CancelledError"),
+        )
+    except Exception:
+        cancellation.agoragentic_receipt_error = {
+            "code": "receipt_persistence_failed", "phase": phase, "outcome": outcome,
+        }
 
 
 def _prepare_invocation(options: Dict[str, Any]) -> Dict[str, Any]:

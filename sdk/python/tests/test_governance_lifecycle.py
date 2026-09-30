@@ -8,6 +8,59 @@ from agoragentic.governance import GovernanceError, create_default_policy, gover
 
 
 class CancellationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_survives_receipt_persistence_failure_in_each_phase(self):
+        for phase in ("approval", "tool", "evidence"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
+                policy = create_default_policy()
+                entered = asyncio.Event()
+                cancellations = []
+
+                async def pause(at):
+                    if at == phase:
+                        entered.set()
+                        try:
+                            await asyncio.Future()
+                        except asyncio.CancelledError as exc:
+                            cancellations.append(exc)
+                            raise
+
+                async def approve(request):
+                    await pause("approval")
+                    return True
+
+                async def tool():
+                    Path(root, "effect.txt").write_text("one bounded write")
+                    await pause("tool")
+                    return "private-result"
+
+                async def evidence(result):
+                    await pause("evidence")
+                    return result
+
+                task = asyncio.create_task(govern(tool, action="file.write", policy=policy,
+                    cwd=root, approve=approve, evidence=evidence)())
+                await asyncio.wait_for(entered.wait(), 2)
+                directory = Path(root, ".agoragentic", "receipts")
+                directory.rmdir()  # Verified empty fixture directory, inside TemporaryDirectory.
+                directory.write_text("private-obstruction")
+                task.cancel("private-cancellation")
+                with self.assertRaises(asyncio.CancelledError) as raised:
+                    await task
+                self.assertTrue(task.cancelled())
+                self.assertIs(raised.exception, cancellations[0])
+                self.assertIsNone(raised.exception.agoragentic_receipt)
+                self.assertEqual(raised.exception.agoragentic_receipt_error, {
+                    "code": "receipt_persistence_failed", "phase": phase,
+                    "outcome": {"approval": "approval_failed", "tool": "cancelled_effect_uncertain",
+                                "evidence": "completed_evidence_failed"}[phase],
+                })
+                self.assertEqual(Path(root, "effect.txt").exists(), phase != "approval")
+                self.assertEqual(directory.read_text(), "private-obstruction")
+                self.assertEqual(list(Path(root).rglob("*.json")), [])
+                marker = json.dumps(raised.exception.agoragentic_receipt_error)
+                self.assertNotIn("private-", marker)
+                self.assertNotIn(root, marker)
+
     async def test_async_callback_failures_and_disabled_receipts(self):
         for enabled in (True, False):
             for phase in ("approval", "evidence", "notification"):
