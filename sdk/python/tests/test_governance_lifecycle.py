@@ -8,6 +8,58 @@ from agoragentic.governance import GovernanceError, create_default_policy, gover
 
 
 class CancellationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_outer_persistence_failure_retains_inner_notification_receipt(self):
+        with tempfile.TemporaryDirectory() as root:
+            policy = create_default_policy()
+            policy["default_decision"] = "allow"
+            inner_root = Path(root, "inner")
+            inner_root.mkdir()
+            outer_root = Path(root, "outer")
+            outer_root.mkdir()
+            entered = asyncio.Event()
+            delivered = []
+            cancellations = []
+
+            async def inner_tool():
+                Path(inner_root, "effect.txt").write_text("one bounded write")
+
+            async def notify(receipt):
+                delivered.append(receipt)
+                entered.set()
+                try:
+                    await asyncio.Future()
+                except asyncio.CancelledError as exc:
+                    cancellations.append(exc)
+                    raise
+
+            inner = govern(inner_tool, action="inner.write", policy=policy,
+                           cwd=inner_root, on_receipt=notify)
+
+            async def outer_tool():
+                await inner()
+
+            task = asyncio.create_task(govern(outer_tool, action="outer.run", policy=policy,
+                                             cwd=outer_root)())
+            await asyncio.wait_for(entered.wait(), 2)
+            directory = outer_root / ".agoragentic" / "receipts"
+            directory.rmdir()
+            directory.write_text("obstruction")
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError) as raised:
+                await task
+            self.assertTrue(task.cancelled())
+            self.assertIs(raised.exception, cancellations[0])
+            self.assertIs(raised.exception.agoragentic_receipt, delivered[0])
+            self.assertEqual(delivered[0]["action"], "inner.write")
+            persisted = json.loads((inner_root / delivered[0]["path"]).read_text())
+            self.assertEqual(persisted["receipt_id"], delivered[0]["receipt_id"])
+            self.assertEqual(persisted["outcome"], "completed")
+            self.assertEqual(raised.exception.agoragentic_receipt_error, {
+                "code": "receipt_persistence_failed", "phase": "tool",
+                "action": "outer.run", "outcome": "cancelled_effect_uncertain",
+            })
+            self.assertEqual(len(list(Path(root).rglob("*.json"))), 1)
+
     async def test_cancellation_survives_receipt_persistence_failure_in_each_phase(self):
         for phase in ("approval", "tool", "evidence"):
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as root:
@@ -50,7 +102,7 @@ class CancellationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIs(raised.exception, cancellations[0])
                 self.assertIsNone(raised.exception.agoragentic_receipt)
                 self.assertEqual(raised.exception.agoragentic_receipt_error, {
-                    "code": "receipt_persistence_failed", "phase": phase,
+                    "code": "receipt_persistence_failed", "phase": phase, "action": "file.write",
                     "outcome": {"approval": "approval_failed", "tool": "cancelled_effect_uncertain",
                                 "evidence": "completed_evidence_failed"}[phase],
                 })

@@ -337,7 +337,10 @@ def _record_cancellation(
 ) -> None:
     # Persistence must never replace cancellation or imply a durable receipt
     # when the write fails (including a partially written file).
-    cancellation.agoragentic_receipt = None
+    # A nested governed call may already have attached a durable receipt for
+    # its own action. Keep that receipt if this outer persistence attempt fails.
+    if not hasattr(cancellation, "agoragentic_receipt"):
+        cancellation.agoragentic_receipt = None
     try:
         cancellation.agoragentic_receipt = _write_receipt(
             context, decision, outcome=outcome,
@@ -345,7 +348,8 @@ def _record_cancellation(
         )
     except Exception:
         cancellation.agoragentic_receipt_error = {
-            "code": "receipt_persistence_failed", "phase": phase, "outcome": outcome,
+            "code": "receipt_persistence_failed", "phase": phase,
+            "action": context["action"], "outcome": outcome,
         }
 
 
