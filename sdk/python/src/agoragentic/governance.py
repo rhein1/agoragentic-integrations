@@ -7,6 +7,7 @@ proof.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import inspect
 import json
@@ -259,6 +260,9 @@ def _govern_async(
                 if inspect.isawaitable(approval_result):
                     approval_result = await approval_result
                 resolved_approval = approval_result is True
+            except asyncio.CancelledError as exc:
+                exc.agoragentic_receipt = _write_pre_execution_failure(context, request, "CancelledError")
+                raise
             except Exception as exc:
                 error = GovernanceError("approval_failed", "Approval callback failed.")
                 receipt = _write_pre_execution_failure(context, request, error.code)
@@ -269,6 +273,12 @@ def _govern_async(
         _raise_if_blocked(context, decision, request)
         try:
             result = await tool(*args, **kwargs)
+        except asyncio.CancelledError as exc:
+            exc.agoragentic_receipt = _write_receipt(
+                context, decision, outcome="cancelled_effect_uncertain",
+                evidence=dict(request, error_code="CancelledError"),
+            )
+            raise
         except Exception as exc:
             receipt = _write_failed_receipt(context, decision, request, exc)
             try:
@@ -280,6 +290,10 @@ def _govern_async(
             evidence_result = options["evidence"](result) if options["evidence"] else result
             if inspect.isawaitable(evidence_result):
                 evidence_result = await evidence_result
+            summary = _summarize_evidence(evidence_result)
+        except asyncio.CancelledError as exc:
+            exc.agoragentic_receipt = _write_evidence_failure(context, decision, request, exc)
+            raise
         except Exception as exc:
             error = GovernanceError(
                 "evidence_failed",
@@ -291,13 +305,16 @@ def _govern_async(
             context,
             decision,
             outcome="completed",
-            evidence=dict(request, result=_summarize_evidence(evidence_result)),
+            evidence=dict(request, result=summary),
         )
         if options["on_receipt"]:
             try:
                 callback_result = options["on_receipt"](receipt)
                 if inspect.isawaitable(callback_result):
                     await callback_result
+            except asyncio.CancelledError as exc:
+                exc.agoragentic_receipt = receipt
+                raise
             except Exception as exc:
                 raise GovernanceError(
                     "receipt_callback_failed",
@@ -364,7 +381,7 @@ def _write_evidence_failure(
     context: Dict[str, Any],
     decision: Dict[str, Any],
     request: Dict[str, Any],
-    error: Exception,
+    error: BaseException,
 ) -> Optional[Dict[str, Any]]:
     return _write_receipt(
         context,

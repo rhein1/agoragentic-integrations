@@ -44,6 +44,16 @@ result = safe_tool(recipient="owner@example.com", body="review requested")
 
 The approval callback receives only the normalized action, argument count, and keyword names. Local receipts persist result shape rather than raw inputs or outputs, keep spend and retry authority owner-only, and cannot escape the project through configured paths. A receipt proves only the wrapped local call. It is not host, provider, deployment, payment, settlement, or on-chain proof.
 
+Async cancellation propagates `asyncio.CancelledError` with the phase receipt in
+`error.agoragentic_receipt`. Cancellation during approval records `approval_failed`
+without dispatch; during the tool it records `cancelled_effect_uncertain`, which
+does not mean rollback or safe retry. After tool success, cancellation during
+evidence capture records `completed_evidence_failed`. Cancellation during receipt
+notification retains the original completed receipt and its ID. Ordinary callback
+failures retain the existing `GovernanceError.receipt` convention. Disabling
+receipts supplies `None` and performs no receipt writes. Neither wrapper retries,
+resumes, rolls back effects, or provides restart-safe execution.
+
 ## Hosted Router Model
 
 `agoragentic` is a thin client to the Agoragentic-hosted Agent OS router.

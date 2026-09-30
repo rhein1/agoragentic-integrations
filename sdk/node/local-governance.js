@@ -229,11 +229,22 @@ function govern(tool, options = {}) {
         prepareReceiptDirectory(policy, cwd);
         let approved = options.approved === true;
         const initial = evaluatePolicy(policy, action, { approved });
+        const startedAt = nowIso(options);
+        const record = (decision, outcome, evidence) => writeReceipt(policy, cwd, buildReceipt({
+            options, action, classification: 'local_tool_evidence', decision,
+            startedAt, finishedAt: nowIso(options), outcome,
+            evidence: { argument_count: args.length, ...evidence },
+        }));
         if (initial.decision === 'ask' && !approved && typeof options.approve === 'function') {
-            approved = await options.approve({ action, argument_count: args.length }) === true;
+            try {
+                approved = await options.approve({ action, argument_count: args.length }) === true;
+            } catch (err) {
+                const receipt = record(initial, 'approval_failed', { error_code: safeErrorCode(err) });
+                attachReceipt(err, receipt);
+                throw err;
+            }
         }
         const decision = evaluatePolicy(policy, action, { approved });
-        const startedAt = nowIso(options);
         if (!decision.execute) {
             const receipt = writeReceipt(policy, cwd, buildReceipt({
                 options,
@@ -248,40 +259,42 @@ function govern(tool, options = {}) {
             throw governanceError(decision.reason, `Action ${action} was not executed: ${decision.reason}.`, 3, { receipt });
         }
 
+        let result;
         try {
-            const result = await tool(...args);
-            const finishedAt = nowIso(options);
-            const evidence = typeof options.evidence === 'function'
-                ? summarizeEvidence(await options.evidence(result))
-                : summarizeEvidence(result);
-            const receipt = writeReceipt(policy, cwd, buildReceipt({
-                options,
-                action,
-                classification: 'local_tool_evidence',
-                decision,
-                startedAt,
-                finishedAt,
-                outcome: 'completed',
-                evidence: { argument_count: args.length, result: evidence },
-            }));
-            if (typeof options.onReceipt === 'function') await options.onReceipt(receipt);
-            return result;
+            result = await tool(...args);
         } catch (err) {
-            const finishedAt = nowIso(options);
-            const receipt = writeReceipt(policy, cwd, buildReceipt({
-                options,
-                action,
-                classification: 'local_tool_evidence',
-                decision,
-                startedAt,
-                finishedAt,
-                outcome: 'failed',
-                evidence: { argument_count: args.length, error_code: safeErrorCode(err) },
-            }));
-            err.agoragenticReceipt = receipt;
+            const receipt = record(decision, 'failed', { error_code: safeErrorCode(err) });
+            attachReceipt(err, receipt);
             throw err;
         }
+        let evidence;
+        try {
+            evidence = typeof options.evidence === 'function'
+                ? summarizeEvidence(await options.evidence(result))
+                : summarizeEvidence(result);
+        } catch (err) {
+            const receipt = record(decision, 'completed_evidence_failed', { error_code: safeErrorCode(err) });
+            attachReceipt(err, receipt);
+            throw err;
+        }
+        const receipt = record(decision, 'completed', { result: evidence });
+        if (typeof options.onReceipt === 'function') {
+            try {
+                await options.onReceipt(receipt);
+            } catch (err) {
+                const error = governanceError('receipt_callback_failed', 'Receipt callback failed after the tool completed.', 1, { receipt });
+                error.agoragenticReceipt = receipt;
+                error.cause = err;
+                throw error;
+            }
+        }
+        return result;
     };
+}
+
+function attachReceipt(error, receipt) {
+    // JavaScript permits primitive and frozen throws; preserve the original failure.
+    try { error.agoragenticReceipt = receipt; } catch { /* receipt remains on disk */ }
 }
 
 async function runGovernedCommand(executable, args = [], options = {}) {
