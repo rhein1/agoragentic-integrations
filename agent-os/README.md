@@ -146,10 +146,11 @@ Use this to track recurring spend, success rate, receipt linkage, and budget pre
 
 ## OpenShell preparation scaffold
 
-The [OpenShell scaffold](openshell/README.md) compiles offline sandbox-policy proposals for Cartographer, Emissary, and Steward against a pinned upstream source contract. It includes local tests and a [Codex integration handoff](openshell/CODEX_HANDOFF.md), but does not install OpenShell, connect a gateway, provision a sandbox, run an agent, or grant execution/payment authority. No live compatibility or production protection is claimed.
+The [OpenShell scaffold](openshell/README.md) compiles offline sandbox-policy proposals for Cartographer, Emissary, and Steward against a pinned upstream source contract. It includes lifecycle observation reconciliation, hard-off live invocation, synthetic failure tests, and a [Codex integration handoff](openshell/CODEX_HANDOFF.md), but does not install OpenShell, connect a gateway, provision a sandbox, run an agent, or grant execution/payment authority. No live compatibility or production protection is claimed.
 
 ```sh
 node --test agent-os/openshell/scaffold.test.mjs
+node --test agent-os/openshell/host-adapter.test.mjs
 node agent-os/openshell/preview.mjs agent-os/openshell/fixture.json
 node agent-os/openshell/preview.mjs --readiness
 ```

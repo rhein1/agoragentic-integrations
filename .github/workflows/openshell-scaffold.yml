@@ -34,6 +34,8 @@ jobs:
         run: |
           node --check agent-os/openshell/scaffold.mjs
           node --check agent-os/openshell/preview.mjs
+          node --check agent-os/openshell/host-adapter.mjs
           node --test agent-os/openshell/scaffold.test.mjs
+          node --test agent-os/openshell/host-adapter.test.mjs
           node agent-os/openshell/preview.mjs agent-os/openshell/fixture.json
           node agent-os/openshell/preview.mjs --readiness

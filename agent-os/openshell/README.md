@@ -10,6 +10,7 @@ Node.js 20+; no package installation or credentials required. From the repositor
 
 ```sh
 node --test agent-os/openshell/scaffold.test.mjs
+node --test agent-os/openshell/host-adapter.test.mjs
 node agent-os/openshell/preview.mjs agent-os/openshell/fixture.json
 node agent-os/openshell/preview.mjs --readiness
 ```
@@ -22,6 +23,8 @@ The fixture uses a **fictional image digest and example hostname**. It demonstra
 - Separate Cartographer, Emissary, and Steward profiles. Cartographer can propose exact-host/exact-path HTTPS GET/HEAD egress. Emissary and Steward remain network-denied. All profiles are proposal-only.
 - A TypeScript SDK `createSpec` candidate with create-time filesystem, process, hard-required Landlock, explicit L7 enforcement, no provider attachment, no environment injection, and no exposed service ports.
 - An adapter preparation interface whose invocation path always refuses activation.
+- Offline lifecycle reconciliation with strict event ordering, plan and immutable sandbox identity binding, late identity capture after ambiguous creation, terminal exit-code requirements, and unresolved cleanup tracking. Cancellation, deadlines, and revocation do not imply worker termination. No event initiates an operation or authorizes a retry.
+- Hard-off live invocation and readiness surfaces that identify the missing real Agent OS authority boundary. Journal output remains caller-reported and does not prove gateway health, policy enforcement, or runtime containment.
 - Offline observation shaping that requires a terminal integer exit code, binds an expected sandbox ID, distinguishes pending deletion, and never upgrades caller reports to verified receipts.
 - A pinned upstream source record and a staged integration/qualification handoff.
 
@@ -31,6 +34,25 @@ const adapter = new OpenShellScaffoldAdapter();
 const plan = adapter.prepare(request); // pure local compilation
 // await adapter.invoke(...);          // always refuses; no live driver is bound
 ```
+
+The lifecycle reconciler accepts a bounded JSON journal, with contiguous `seq` numbers starting at 1. It has no authorization callback or provider client injection point. The existing Agent OS control plane must supply and authenticate any future authority boundary. No worker starts and no success is synthesized from an empty journal.
+
+```js
+import { reconcileOpenShellLifecycle } from './host-adapter.mjs';
+const result = reconcileOpenShellLifecycle(plan, JSON.stringify({
+  schema: 'agoragentic.openshell.lifecycle-journal.v1',
+  planDigest: plan.planDigest,
+  events: [
+    { seq: 1, type: 'create_requested' },
+    { seq: 2, type: 'create_unknown' },
+  ],
+}));
+// result.reconciliationRequired === true; result.repeatCreateAllowed === false
+```
+
+Events cover `create_requested`, `create_unknown`, `create_rejected`, `created`, `ready`, `config_observed`, `exec_started`, `exec_unknown`, `exec_terminal`, `cancelled`, `timed_out`, `revoked`, `delete_requested`, and `deletion_observed`. Identity-bearing events require the original `sandboxId`. Config observations carry `image` and the local `policyDigest`; matching those fields is only a reported local projection match, never verification of the effective protobuf policy. Terminal observations carry `exitCode`; deletion observations carry the existing observation shaper's `outcome`. Unknown fields and invalid sequences fail closed. See the tests for complete and interrupted journal examples.
+
+The journal digest binds local content, not its author or provenance. Even a completed reported deletion leaves `cleanupVerified` and `terminationVerified` false. `reconciliationRequired: false` means this journal reports no outstanding resource, not that independent cleanup has been proved. Durable journal storage, authenticated host observations, effective-policy verification, real timers, and RPC handling remain the future host's responsibilities.
 
 ## Role boundaries
 

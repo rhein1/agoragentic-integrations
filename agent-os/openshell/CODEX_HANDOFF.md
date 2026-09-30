@@ -2,7 +2,7 @@
 
 ## Goal and present state
 
-Integrate OpenShell below Agoragentic's existing control plane, preserving the agent-operated Interchange and all owner, financial, identity, trust, and evidence boundaries. The compiler, offline CLI, observation shaper, tests, and source pin are implemented. A live provider adapter is **not** implemented or qualified. No production migration is authorized by this document.
+Integrate OpenShell below Agoragentic's existing control plane, preserving the agent-operated Interchange and all owner, financial, identity, trust, and evidence boundaries. The compiler, offline CLI, observation shaper, offline lifecycle reconciler, synthetic failure tests, and source pin are implemented. A live provider adapter is **not** implemented or qualified. No production migration is authorized by this document.
 
 ## Work sequence
 
@@ -16,13 +16,13 @@ Acceptance: recorded package/image/gateway integrity, generated type/schema chec
 
 ### 2. Trusted host adapter
 
-Implement the adapter in the existing platform provider abstraction, not in an agent-importable SDK shim. Keep source activation default-off. Use explicit workspace-scoped OpenShell operations. `OpenShellClient.connect()` is lazy: a successful construction is not a health check. Require a real `health()` result and verified gateway identity/auth configuration.
+The integrations repository contains offline lifecycle reconciliation in `host-adapter.mjs`; it is not a live provider, SDK shim, or authority boundary. It validates bounded journal events and preserves unresolved identity, execution, and cleanup states without provider, process, or network effects. A future implementation in the existing platform provider abstraction must first bind to the real server-owned mandate, consent, identity, budget, and provisioning approval boundary; no caller-supplied object may stand in for that authority. `OpenShellClient.connect()` is lazy: a successful construction is not a health check. Require a real `health()` result and verified gateway identity/auth configuration.
 
 Bind authorization outside the sandbox to the exact owner, tenant/workspace, run, immutable sandbox ID, compiled plan/policy digest, image digest, command, quota, and expiry. Recheck the financial freeze and relevant mandate/consent controls. A caller-supplied `approved: true`, environment flag, self-hash, fake SDK client, or policy advisor proposal is not authorization. Do not accept agent-supplied method names, deployment contracts, policy overrides, `rawSpec`, provider lists, or arbitrary environment variables.
 
 Use the pinned SDK's `sandbox.create`, `waitReady`, `getConfig`, `exec`/`execStream`, `delete`, and identity-aware `waitDeleted` interfaces only after rechecking their actual types. Confirm effective static and network policy before any worker executes. Keep request data and authority/control-plane clients in separate trust domains.
 
-Acceptance: local tests show every provider side effect is preceded by the real host gate; denial results in zero provider calls. Runtime status is never inferred from generated plans or mocks.
+Acceptance for this source tranche: local tests exercise complete and interrupted journals, ambiguous create and late identity, cancellation/revocation/timeouts, missing terminal codes, wrong sandbox identity, config mismatch, pending/unknown deletion, invalid ordering, replay, and bounded strict input. Reconciliation never synthesizes success, authorizes retries, or converts caller observations into verified evidence. Live invocation remains hard-off. This does not establish a real host gate, gateway health, or runtime containment.
 
 ### 3. Bounded lab canary and failure cleanup
 
