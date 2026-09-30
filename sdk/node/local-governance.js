@@ -464,7 +464,14 @@ function nowIso(options) {
 }
 
 function safeErrorCode(err) {
-    return typeof err?.code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(err.code) ? err.code : 'error';
+    try {
+        // Inspect only the own data property: error accessors are untrusted
+        // executable code, and even descriptor inspection can throw on a Proxy.
+        const descriptor = Object.getOwnPropertyDescriptor(err, 'code');
+        const code = descriptor?.value;
+        if (typeof code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(code)) return code;
+    } catch { /* primitive/revoked/hostile values retain a generic bounded code */ }
+    return 'error';
 }
 
 function governanceError(code, message, exitCode = 1, response) {
