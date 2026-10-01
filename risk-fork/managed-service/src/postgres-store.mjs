@@ -415,6 +415,14 @@ export class PostgresManagedServiceStore {
     }
     // Hold the credential row through the enclosing mutation transaction.
     // Revocation/scope edits must serialize with the final authority decision.
+    // Lock by identity first: WHERE predicates can run before a row-lock wait,
+    // so validity must be checked again with the clock after acquiring the lock.
+    const locked = await client.query(
+      `SELECT 1 FROM ${this.#schema}.managed_api_keys
+        WHERE key_id = $2 AND tenant_id = $1 FOR SHARE`,
+      [tenantId, claimantKeyId],
+    );
+    if (locked.rowCount !== 1) return false;
     const result = await client.query(
       `SELECT EXISTS (
          SELECT 1 FROM ${this.#schema}.managed_api_keys AS claimant
@@ -423,7 +431,6 @@ export class PostgresManagedServiceStore {
             AND claimant.not_before <= clock_timestamp()
             AND claimant.expires_at > clock_timestamp()
             AND claimant.scopes ? $3
-          FOR SHARE
        ) AS active`,
       [tenantId, claimantKeyId, requiredScope],
     );
@@ -857,8 +864,10 @@ export class PostgresManagedServiceStore {
         : purpose === 'cleanup'
           ? 'cleanup_pending'
           : 'recovery_required';
-      const now = await this.#databaseNow(client);
       await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, 'worker:claim');
+      // A credential lock may have waited past the lease expiry. Replays need
+      // the same fresh database clock as new claims before returning authority.
+      const now = await this.#databaseNow(client);
       const leaseMs = requireInteger(input.lease_ms, 'lease_ms', {
         min: MANAGED_SERVICE_PROTOCOL_LIMITS.min_lease_ms,
         max: MANAGED_SERVICE_PROTOCOL_LIMITS.max_lease_ms,

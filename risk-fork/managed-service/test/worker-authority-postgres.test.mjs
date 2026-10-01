@@ -219,3 +219,57 @@ test('PostgreSQL serializes credential changes behind the final lease decision',
   await assert.rejects(store.claimLease({ ...claim, now: new Date().toISOString() }), denied);
   assert.equal((await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref)).events.length, 2);
 });
+
+for (const expiry of ['lease', 'credential']) {
+  test(`PostgreSQL rejects claim replay when ${expiry} expires while waiting for a credential lock`,
+    { skip, timeout: 15_000 }, async (t) => {
+      const f = await fixture(t);
+      await f.control.claimExecution(f.principal, f.claimRequest);
+      const table = expiry === 'lease' ? 'managed_invocations' : 'managed_api_keys';
+      const column = expiry === 'lease' ? 'lease_expires_at' : 'expires_at';
+      const updated = await f.pool.query(
+        `UPDATE ${f.schema}.${table} SET ${column} = clock_timestamp() + interval '2 seconds'
+         RETURNING ${column} AS expires_at`,
+      );
+      const expiresAt = updated.rows[0].expires_at;
+      const before = await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref);
+      const blocker = await f.pool.connect();
+      let pending;
+      let settled = false;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query(`SELECT key_id FROM ${f.schema}.managed_api_keys
+          WHERE key_id = 'key_alpha' FOR UPDATE`);
+        const pid = (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+        pending = f.store.claimLease({ ...f.base, purpose: 'execution', worker_id: 'worker_scope_test',
+          lease_ms: 120_000, min_lease_ms: 5_000, max_lease_ms: 120_000,
+          max_invocation_age_ms: 900_000, now: new Date().toISOString() })
+          .then((value) => { settled = true; return { value }; },
+            (error) => { settled = true; return { error }; });
+        let waiting = false;
+        const deadline = Date.now() + 1_500;
+        while (!settled && Date.now() < deadline) {
+          const observed = await f.pool.query(
+            'SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))) AS waiting',
+            [pid],
+          );
+          if (observed.rows[0].waiting) { waiting = true; break; }
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        t.diagnostic(`credential lock wait observed: ${waiting}; replay completed before release: ${settled}`);
+        assert.equal(waiting, true, 'replay must reach the held credential lock before expiry');
+        // Wait only until the database-authoritative expiry, bounded by the two-second fixture.
+        await blocker.query(`SELECT pg_sleep(LEAST(2.1,
+          GREATEST(0, EXTRACT(EPOCH FROM ($1::timestamptz - clock_timestamp()))) + 0.05))`, [expiresAt]);
+        const clock = await blocker.query('SELECT clock_timestamp() > $1::timestamptz AS expired', [expiresAt]);
+        assert.equal(clock.rows[0].expired, true);
+      } finally {
+        await blocker.query('ROLLBACK');
+        blocker.release();
+        if (pending) await pending;
+      }
+      const result = await pending;
+      assert.equal(result.error?.code, expiry === 'lease' ? 'LEASE_EXPIRED' : 'AUTHENTICATION_FAILED');
+      assert.deepEqual(await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref), before);
+    });
+}

@@ -612,6 +612,10 @@ test('PostgreSQL validates caller clock before locks and refreshes DB time after
             order.push('invocation-lock');
             return { rowCount: 1, rows: [initialRow] };
           }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            order.push('credential-lock');
+            return { rowCount: 1, rows: [{}] };
+          }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
           }
@@ -660,7 +664,7 @@ test('PostgreSQL validates caller clock before locks and refreshes DB time after
   assert.equal(claimed.claim_replayed, false);
   assert.equal(claimed.invocation.state, 'execution_leased');
   assert.equal(claimed.invocation.lease_owner, 'key_alpha');
-  assert.deepEqual(order, ['clock:1', 'tenant-lock', 'invocation-lock', 'clock:2']);
+  assert.deepEqual(order, ['clock:1', 'tenant-lock', 'invocation-lock', 'credential-lock', 'clock:2']);
   assert.match(auditInsertSql, /prior\.sequence = \$3 - 1/);
   assert.match(auditInsertSql, /prior\.event_hash = \$8/);
   assert.match(auditInsertSql, /prior\.occurred_at <= \$6::timestamptz/);
@@ -699,6 +703,9 @@ test('PostgreSQL exact claim retry returns stored work without any mutation', as
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [activeRow] };
+          }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -758,6 +765,9 @@ test('PostgreSQL rejects a tenant-wide historical lease token before lease mutat
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
+          }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -874,6 +884,9 @@ test('PostgreSQL resource journal transition recheck returns its exact durable r
               }],
             };
           }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
+          }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
           }
@@ -951,6 +964,9 @@ test('PostgreSQL rolls back a mutation when audit time regresses at append', asy
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [initialRow] };
           }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
+          }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
           }
@@ -1027,6 +1043,9 @@ test('PostgreSQL renewal fails when the lease expires at its decisive update', a
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
           }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
+          }
           if (/SELECT EXISTS .*managed_api_keys AS claimant/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
           }
@@ -1083,6 +1102,9 @@ test('PostgreSQL execution claim rechecks admission age at its decisive update',
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
+          }
+          if (/^SELECT 1 FROM .*managed_api_keys\s+WHERE key_id = \$2 AND tenant_id = \$1 FOR SHARE$/s.test(sql)) {
+            return { rowCount: 1, rows: [{}] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
