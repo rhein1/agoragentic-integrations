@@ -115,6 +115,7 @@ export async function createFixture(options = {}) {
       revoked_at: null,
     },
   ];
+  if (options.credentialScopes) credentials[0].scopes = [...options.credentialScopes];
   const store = new MemoryManagedServiceStore({
     tenants: [tenant, otherTenant],
     credentials,
