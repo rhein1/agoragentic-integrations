@@ -1191,8 +1191,8 @@
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/index.js",
       "source": "workspace_dependency",
-      "bytes": 22061,
-      "sha256": "sha256:e82d3e55d954483e4927f9740bc3113a24d19ef5a73c7962d8a93c499fc982ff"
+      "bytes": 22264,
+      "sha256": "sha256:62876e5094b43ba2ba90374613dab4576fd337063dad20b4b07cc5e3a7e2303b"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/lib/schemes.js",
@@ -1210,7 +1210,7 @@
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/package.json",
       "source": "workspace_dependency",
       "bytes": 1983,
-      "sha256": "sha256:e634f3848a2c6c7e1cdc28b119b16e072e10dada8a3ca3f175a2372d0dd83360"
+      "sha256": "sha256:30cad05aad3d3596513706451dbfc7e0422f9c1d00f2903ecc34580327d54bc7"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/json-schema-traverse/LICENSE",
@@ -2380,7 +2380,7 @@
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
     "bytes": 56885,
-    "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd",
+    "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855",
     "sources": [
       {
         "package": "@modelcontextprotocol/core",
@@ -2439,7 +2439,7 @@
       },
       {
         "package": "fast-uri",
-        "version": "3.1.7",
+        "version": "3.1.8",
         "declared_license": "BSD-3-Clause",
         "method": "standalone_license_file",
         "path": "risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE",
@@ -2628,8 +2628,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3111081,
-    "sha256": "sha256:c5e9814e13b84d5489527adeaac27e4d47363acec706cef3bcbe17f53e06dcc6"
+    "bytes": 3111138,
+    "sha256": "sha256:db99484dfa89944be8edaf8e5e52c0b0ce6ca620fc5455c509d245ae2ffd3a09"
   },
   "packaged_assets": [
     {
@@ -2653,7 +2653,7 @@
     {
       "path": "THIRD_PARTY_NOTICES.txt",
       "bytes": 56885,
-      "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd"
+      "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
