@@ -250,12 +250,20 @@ async function assertGeneratedHostedOutputsUnchanged(expectedSnapshot) {
   }
 }
 
-async function assertHostedFastUriClosure(root) {
+async function assertHostedDependencyClosure(root) {
   const hostedRoot = path.join(root, 'risk-fork-hosted-mcp');
   const lock = JSON.parse(await readFile(path.join(hostedRoot, 'package-lock.json'), 'utf8'));
+  const hostedPackage = JSON.parse(await readFile(path.join(hostedRoot, 'package.json'), 'utf8'));
   const mcpPackage = JSON.parse(await readFile(path.join(root, 'mcp', 'package.json'), 'utf8'));
   const advertisedVersion = mcpPackage.overrides?.['fast-uri'];
   assert.equal(typeof advertisedVersion, 'string');
+  const sdkVersion = mcpPackage.devDependencies?.['@modelcontextprotocol/sdk'];
+  assert.equal(typeof sdkVersion, 'string');
+  assert.equal(
+    hostedPackage.devDependencies?.['@modelcontextprotocol/sdk'],
+    sdkVersion,
+    'hosted package metadata must match the MCP SDK version',
+  );
 
   const lockRecord = lock.packages?.['node_modules/fast-uri'];
   assert.equal(lockRecord?.version, advertisedVersion, 'hosted lock must satisfy the MCP fast-uri override');
@@ -263,6 +271,27 @@ async function assertHostedFastUriClosure(root) {
   const installedPackageBytes = await readFile(installedPackagePath);
   const installedPackage = JSON.parse(installedPackageBytes);
   assert.equal(installedPackage.version, lockRecord.version, 'installed fast-uri must satisfy the hosted lock');
+
+  const sdkLockRecord = lock.packages?.['node_modules/@modelcontextprotocol/sdk'];
+  assert.equal(
+    sdkLockRecord?.version,
+    sdkVersion,
+    'hosted lock must satisfy the MCP SDK version',
+  );
+  const installedSdkPackagePath = path.join(
+    hostedRoot,
+    'node_modules',
+    '@modelcontextprotocol',
+    'sdk',
+    'package.json',
+  );
+  const installedSdkPackageBytes = await readFile(installedSdkPackagePath);
+  const installedSdkPackage = JSON.parse(installedSdkPackageBytes);
+  assert.equal(
+    installedSdkPackage.version,
+    sdkLockRecord.version,
+    'installed MCP SDK must satisfy the hosted lock',
+  );
 
   const manifest = JSON.parse(await readFile(path.join(hostedRoot, 'integrity-manifest.json'), 'utf8'));
   const notice = manifest.third_party_notices.sources.find((source) => source.package === 'fast-uri');
@@ -276,6 +305,8 @@ async function assertHostedFastUriClosure(root) {
   const bundle = (await readFile(path.join(hostedRoot, 'dist', 'runtime', 'index.mjs'))).toString('utf8');
   const advertisedEntry = `${JSON.stringify('fast-uri')}: ${JSON.stringify(advertisedVersion)}`;
   assert.ok(bundle.includes(advertisedEntry), 'bundle must retain the MCP fast-uri advertisement');
+  const sdkAdvertisedEntry = `${JSON.stringify('@modelcontextprotocol/sdk')}: ${JSON.stringify(sdkVersion)}`;
+  assert.ok(bundle.includes(sdkAdvertisedEntry), 'bundle must retain the MCP SDK advertisement');
 }
 
 const committedGeneratedOutputSnapshot = await snapshotGeneratedHostedOutputs(packageRoot);
@@ -568,11 +599,11 @@ test('build is deterministic and records exact source and artifact integrity', a
   run(process.execPath, ['scripts/verify-integrity.mjs', '--source']);
 });
 
-test('hosted lock, bundle advertisement, and attested fast-uri records stay aligned', async () => {
+test('hosted lock, bundle advertisement, and attested dependency records stay aligned', async () => {
   const fixture = await createHostedFixture('risk-fork-hosted-dependency-closure-');
   try {
     run(process.execPath, ['scripts/build.mjs'], { cwd: fixture.packageRoot });
-    await assertHostedFastUriClosure(fixture.repositoryRoot);
+    await assertHostedDependencyClosure(fixture.repositoryRoot);
 
     const lockPath = path.join(fixture.packageRoot, 'package-lock.json');
     const staleLock = JSON.parse(await readFile(lockPath, 'utf8'));
@@ -581,8 +612,21 @@ test('hosted lock, bundle advertisement, and attested fast-uri records stay alig
     staleLock.packages['node_modules/fast-uri'].integrity = 'sha512-dOvZVzjdZdz7phd9v6jCbwxrBW3fK6n8Rc0CtdmM4bumzMnxywBYhuph6J819RRw/ku+rLbelwfMunktuzVVHg==';
     await writeFile(lockPath, `${JSON.stringify(staleLock, null, 2)}\n`, 'utf8');
     await assert.rejects(
-      assertHostedFastUriClosure(fixture.repositoryRoot),
+      assertHostedDependencyClosure(fixture.repositoryRoot),
       /hosted lock must satisfy the MCP fast-uri override/,
+    );
+
+    const repairedLock = JSON.parse(await readFile(lockPath, 'utf8'));
+    repairedLock.packages['node_modules/fast-uri'].version = '3.1.8';
+    repairedLock.packages['node_modules/fast-uri'].resolved = 'https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz';
+    repairedLock.packages['node_modules/fast-uri'].integrity = 'sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==';
+    repairedLock.packages['node_modules/@modelcontextprotocol/sdk'].version = '1.30.0';
+    repairedLock.packages['node_modules/@modelcontextprotocol/sdk'].resolved = 'https://registry.npmjs.org/@modelcontextprotocol/sdk/-/sdk-1.30.0.tgz';
+    repairedLock.packages['node_modules/@modelcontextprotocol/sdk'].integrity = 'sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==';
+    await writeFile(lockPath, `${JSON.stringify(repairedLock, null, 2)}\n`, 'utf8');
+    await assert.rejects(
+      assertHostedDependencyClosure(fixture.repositoryRoot),
+      /hosted lock must satisfy the MCP SDK version/,
     );
   } finally {
     await cleanupTemporary(fixture.temporary);

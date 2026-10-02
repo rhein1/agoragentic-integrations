@@ -76,7 +76,7 @@ const EXPECTED_PACKAGE_JSON = Object.freeze({
   devDependencies: {
     '@modelcontextprotocol/client': '2.0.0',
     '@modelcontextprotocol/node': '2.0.0',
-    '@modelcontextprotocol/sdk': '1.30.0',
+    '@modelcontextprotocol/sdk': '1.30.1',
     '@modelcontextprotocol/server': '2.0.0',
     ajv: '8.20.0',
     'ajv-formats': '3.0.1',
