@@ -8,6 +8,7 @@ proof.
 from __future__ import annotations
 
 import asyncio
+import copy
 import functools
 import inspect
 import json
@@ -193,8 +194,8 @@ def _govern_sync(
                     error = exc
                 else:
                     error = GovernanceError("approval_failed", "Approval callback failed.")
-                receipt = _write_pre_execution_failure(context, request, error.code)
-                error.receipt = receipt
+                _record_failure(error, context, "approval", "approval_failed",
+                                lambda: _write_pre_execution_failure(context, request, error.code))
                 raise error from exc
 
         decision = evaluate_policy(context["policy"], context["action"], approved=resolved_approval)
@@ -202,11 +203,8 @@ def _govern_sync(
         try:
             result = tool(*args, **kwargs)
         except Exception as exc:
-            receipt = _write_failed_receipt(context, decision, request, exc)
-            try:
-                setattr(exc, "agoragentic_receipt", receipt)
-            except (AttributeError, TypeError):
-                pass
+            _record_failure(exc, context, "tool", "failed",
+                            lambda: _write_failed_receipt(context, decision, request, exc))
             raise
         if inspect.isawaitable(result):
             if hasattr(result, "close"):
@@ -215,7 +213,8 @@ def _govern_sync(
                 "tool_result_async",
                 "A synchronous governed tool returned an awaitable; declare the tool with async def.",
             )
-            error.receipt = _write_evidence_failure(context, decision, request, error)
+            _record_failure(error, context, "evidence", "completed_evidence_failed",
+                            lambda: _write_evidence_failure(context, decision, request, error))
             raise error
         try:
             evidence_result = options["evidence"](result) if options["evidence"] else result
@@ -231,7 +230,8 @@ def _govern_sync(
                 "evidence_failed",
                 "Post-action evidence capture failed after the tool completed.",
             )
-            error.receipt = _write_evidence_failure(context, decision, request, error)
+            _record_failure(error, context, "evidence", "completed_evidence_failed",
+                            lambda: _write_evidence_failure(context, decision, request, error))
             raise error from exc
         receipt = _write_receipt(
             context,
@@ -266,8 +266,8 @@ def _govern_async(
                 raise
             except Exception as exc:
                 error = GovernanceError("approval_failed", "Approval callback failed.")
-                receipt = _write_pre_execution_failure(context, request, error.code)
-                error.receipt = receipt
+                _record_failure(error, context, "approval", "approval_failed",
+                                lambda: _write_pre_execution_failure(context, request, error.code))
                 raise error from exc
 
         decision = evaluate_policy(context["policy"], context["action"], approved=resolved_approval)
@@ -279,11 +279,8 @@ def _govern_async(
                                  phase="tool", outcome="cancelled_effect_uncertain")
             raise
         except Exception as exc:
-            receipt = _write_failed_receipt(context, decision, request, exc)
-            try:
-                setattr(exc, "agoragentic_receipt", receipt)
-            except (AttributeError, TypeError):
-                pass
+            _record_failure(exc, context, "tool", "failed",
+                            lambda: _write_failed_receipt(context, decision, request, exc))
             raise
         try:
             evidence_result = options["evidence"](result) if options["evidence"] else result
@@ -299,7 +296,8 @@ def _govern_async(
                 "evidence_failed",
                 "Post-action evidence capture failed after the tool completed.",
             )
-            error.receipt = _write_evidence_failure(context, decision, request, exc)
+            _record_failure(error, context, "evidence", "completed_evidence_failed",
+                            lambda: _write_evidence_failure(context, decision, request, exc))
             raise error from exc
         receipt = _write_receipt(
             context,
@@ -309,11 +307,11 @@ def _govern_async(
         )
         if options["on_receipt"]:
             try:
-                callback_result = options["on_receipt"](receipt)
+                callback_result = options["on_receipt"](copy.deepcopy(receipt))
                 if inspect.isawaitable(callback_result):
                     await callback_result
             except asyncio.CancelledError as exc:
-                exc.agoragentic_receipt = receipt
+                _attach_receipt(exc, receipt)
                 raise
             except Exception as exc:
                 raise GovernanceError(
@@ -335,22 +333,54 @@ def _record_cancellation(
     phase: str,
     outcome: str,
 ) -> None:
-    # Persistence must never replace cancellation or imply a durable receipt
-    # when the write fails (including a partially written file).
-    # A nested governed call may already have attached a durable receipt for
-    # its own action. Keep that receipt if this outer persistence attempt fails.
-    if not hasattr(cancellation, "agoragentic_receipt"):
-        cancellation.agoragentic_receipt = None
-    try:
-        cancellation.agoragentic_receipt = _write_receipt(
+    _record_failure(cancellation, context, phase, outcome,
+        lambda: _write_receipt(
             context, decision, outcome=outcome,
             evidence=dict(request, error_code="CancelledError"),
         )
+    )
+
+
+def _attach_metadata(error: BaseException, name: str, value: Any) -> None:
+    try:
+        setattr(error, name, value)
+    except BaseException:
+        # User exception subclasses may reject metadata with any exception.
+        # Only this diagnostic operation is guarded, never the governed work.
+        pass
+
+
+def _attach_receipt(error: BaseException, receipt: Optional[Dict[str, Any]]) -> None:
+    try:
+        metadata = object.__getattribute__(error, "__dict__")
+        existing = metadata.get("agoragentic_receipt")
+        if existing is None and isinstance(error, GovernanceError):
+            existing = metadata.get("receipt")
+        if existing is None:
+            _attach_metadata(error, "agoragentic_receipt", receipt)
+            if isinstance(error, GovernanceError):
+                _attach_metadata(error, "receipt", receipt)
+        else:
+            _attach_metadata(error, "agoragentic_receipt", existing)
+            if receipt is not None:
+                enclosing = metadata.get("agoragentic_enclosing_receipts", [])
+                _attach_metadata(error, "agoragentic_enclosing_receipts", [*enclosing, receipt])
+    except BaseException:
+        pass  # Preserve hostile cancellation/error subclasses and durable disk evidence.
+
+
+def _record_failure(error: BaseException, context: Dict[str, Any], phase: str,
+                    outcome: str, write: Callable[[], Optional[Dict[str, Any]]]) -> None:
+    try:
+        receipt = write()
     except Exception:
-        cancellation.agoragentic_receipt_error = {
+        _attach_receipt(error, None)
+        _attach_metadata(error, "agoragentic_receipt_error", {
             "code": "receipt_persistence_failed", "phase": phase,
             "action": context["action"], "outcome": outcome,
-        }
+        })
+    else:
+        _attach_receipt(error, receipt)
 
 
 def _prepare_invocation(options: Dict[str, Any]) -> Dict[str, Any]:
@@ -548,7 +578,7 @@ def _notify_sync(
     if callback is None:
         return
     try:
-        result = callback(receipt)
+        result = callback(copy.deepcopy(receipt))
         if inspect.isawaitable(result):
             if hasattr(result, "close"):
                 result.close()

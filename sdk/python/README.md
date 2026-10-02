@@ -58,11 +58,23 @@ If receipt persistence fails while handling cancellation, the original
 `CancelledError` still propagates and the task remains cancelled.
 `agoragentic_receipt` is `None` unless a nested governed call already attached
 its own durable receipt, which is retained on outer persistence failure.
+It is also retained when outer persistence succeeds: enclosing action receipts
+are listed separately in `agoragentic_enclosing_receipts`, from inner to outer.
+Nested ordinary failures preserve `GovernanceError.receipt` and its
+`agoragentic_receipt` alias in the same way. Receipt callbacks receive deep copies,
+so callback mutation cannot change the canonical receipt retained on errors.
 `agoragentic_receipt_error` contains only `code: "receipt_persistence_failed"`,
 the failed action identity, the phase, and the attempted outcome. An inner
 action's retained receipt does not prove persistence for the failed outer action.
 That marker is not a durable receipt or proof that a partial file was removed;
 it contains no filesystem path or persistence-exception message.
+The same bounded marker accompanies ordinary failure-recording errors while
+preserving tool exceptions and existing callback `GovernanceError` cause chains.
+All exception metadata is best-effort: a subclass that rejects attribute writes
+still propagates unchanged, and successfully persisted receipts remain on disk.
+These identity guarantees apply at the governed coroutine boundary. Python 3.8
+may replace `CancelledError` when it crosses a cancelled `Task` boundary; catch
+inside that task to inspect metadata, or reconcile the persisted receipts.
 
 ## Hosted Router Model
 

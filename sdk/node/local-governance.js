@@ -235,12 +235,21 @@ function govern(tool, options = {}) {
             startedAt, finishedAt: nowIso(options), outcome,
             evidence: { argument_count: args.length, ...evidence },
         }));
+        const recordFailure = (error, decision, phase, outcome) => {
+            try {
+                attachReceipt(error, record(decision, outcome, { error_code: safeErrorCode(error) }));
+            } catch {
+                // The original failure takes precedence; do not claim a durable receipt.
+                attachMetadata(error, 'agoragenticReceiptError', {
+                    code: 'receipt_persistence_failed', phase, action, outcome,
+                });
+            }
+        };
         if (initial.decision === 'ask' && !approved && typeof options.approve === 'function') {
             try {
                 approved = await options.approve({ action, argument_count: args.length }) === true;
             } catch (err) {
-                const receipt = record(initial, 'approval_failed', { error_code: safeErrorCode(err) });
-                attachReceipt(err, receipt);
+                recordFailure(err, initial, 'approval', 'approval_failed');
                 throw err;
             }
         }
@@ -263,8 +272,7 @@ function govern(tool, options = {}) {
         try {
             result = await tool(...args);
         } catch (err) {
-            const receipt = record(decision, 'failed', { error_code: safeErrorCode(err) });
-            attachReceipt(err, receipt);
+            recordFailure(err, decision, 'tool', 'failed');
             throw err;
         }
         let evidence;
@@ -273,14 +281,14 @@ function govern(tool, options = {}) {
                 ? summarizeEvidence(await options.evidence(result))
                 : summarizeEvidence(result);
         } catch (err) {
-            const receipt = record(decision, 'completed_evidence_failed', { error_code: safeErrorCode(err) });
-            attachReceipt(err, receipt);
+            recordFailure(err, decision, 'evidence', 'completed_evidence_failed');
             throw err;
         }
         const receipt = record(decision, 'completed', { result: evidence });
         if (typeof options.onReceipt === 'function') {
             try {
-                await options.onReceipt(receipt);
+                // Callback-owned copy: retained evidence must match the persisted JSON.
+                await options.onReceipt(receipt === null ? null : JSON.parse(JSON.stringify(receipt)));
             } catch (err) {
                 const error = governanceError('receipt_callback_failed', 'Receipt callback failed after the tool completed.', 1, { receipt });
                 error.agoragenticReceipt = receipt;
@@ -293,8 +301,21 @@ function govern(tool, options = {}) {
 }
 
 function attachReceipt(error, receipt) {
-    // JavaScript permits primitive and frozen throws; preserve the original failure.
-    try { error.agoragenticReceipt = receipt; } catch { /* receipt remains on disk */ }
+    try {
+        const existing = Object.getOwnPropertyDescriptor(error, 'agoragenticReceipt');
+        if (!existing || existing.value == null) {
+            attachMetadata(error, 'agoragenticReceipt', receipt);
+        } else if (receipt !== null) {
+            const enclosing = Object.getOwnPropertyDescriptor(error, 'agoragenticEnclosingReceipts')?.value;
+            attachMetadata(error, 'agoragenticEnclosingReceipts', [...(Array.isArray(enclosing) ? enclosing : []), receipt]);
+        }
+    } catch { /* hostile/primitive/frozen errors retain identity; receipts remain on disk */ }
+}
+
+function attachMetadata(error, key, value) {
+    try {
+        Object.defineProperty(error, key, { value, writable: true, configurable: true, enumerable: true });
+    } catch { /* diagnostic metadata must never replace the original failure */ }
 }
 
 async function runGovernedCommand(executable, args = [], options = {}) {
