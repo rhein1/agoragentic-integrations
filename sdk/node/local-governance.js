@@ -229,11 +229,31 @@ function govern(tool, options = {}) {
         prepareReceiptDirectory(policy, cwd);
         let approved = options.approved === true;
         const initial = evaluatePolicy(policy, action, { approved });
+        const startedAt = nowIso(options);
+        const record = (decision, outcome, evidence) => writeReceipt(policy, cwd, buildReceipt({
+            options, action, classification: 'local_tool_evidence', decision,
+            startedAt, finishedAt: nowIso(options), outcome,
+            evidence: { argument_count: args.length, ...evidence },
+        }));
+        const recordFailure = (error, decision, phase, outcome) => {
+            try {
+                attachReceipt(error, record(decision, outcome, { error_code: safeErrorCode(error) }));
+            } catch {
+                // The original failure takes precedence; do not claim a durable receipt.
+                attachMetadata(error, 'agoragenticReceiptError', {
+                    code: 'receipt_persistence_failed', phase, action, outcome,
+                });
+            }
+        };
         if (initial.decision === 'ask' && !approved && typeof options.approve === 'function') {
-            approved = await options.approve({ action, argument_count: args.length }) === true;
+            try {
+                approved = await options.approve({ action, argument_count: args.length }) === true;
+            } catch (err) {
+                recordFailure(err, initial, 'approval', 'approval_failed');
+                throw err;
+            }
         }
         const decision = evaluatePolicy(policy, action, { approved });
-        const startedAt = nowIso(options);
         if (!decision.execute) {
             const receipt = writeReceipt(policy, cwd, buildReceipt({
                 options,
@@ -248,40 +268,54 @@ function govern(tool, options = {}) {
             throw governanceError(decision.reason, `Action ${action} was not executed: ${decision.reason}.`, 3, { receipt });
         }
 
+        let result;
         try {
-            const result = await tool(...args);
-            const finishedAt = nowIso(options);
-            const evidence = typeof options.evidence === 'function'
-                ? summarizeEvidence(await options.evidence(result))
-                : summarizeEvidence(result);
-            const receipt = writeReceipt(policy, cwd, buildReceipt({
-                options,
-                action,
-                classification: 'local_tool_evidence',
-                decision,
-                startedAt,
-                finishedAt,
-                outcome: 'completed',
-                evidence: { argument_count: args.length, result: evidence },
-            }));
-            if (typeof options.onReceipt === 'function') await options.onReceipt(receipt);
-            return result;
+            result = await tool(...args);
         } catch (err) {
-            const finishedAt = nowIso(options);
-            const receipt = writeReceipt(policy, cwd, buildReceipt({
-                options,
-                action,
-                classification: 'local_tool_evidence',
-                decision,
-                startedAt,
-                finishedAt,
-                outcome: 'failed',
-                evidence: { argument_count: args.length, error_code: safeErrorCode(err) },
-            }));
-            err.agoragenticReceipt = receipt;
+            recordFailure(err, decision, 'tool', 'failed');
             throw err;
         }
+        let evidence;
+        try {
+            evidence = typeof options.evidence === 'function'
+                ? summarizeEvidence(await options.evidence(result))
+                : summarizeEvidence(result);
+        } catch (err) {
+            recordFailure(err, decision, 'evidence', 'completed_evidence_failed');
+            throw err;
+        }
+        const receipt = record(decision, 'completed', { result: evidence });
+        if (typeof options.onReceipt === 'function') {
+            try {
+                // Callback-owned copy: retained evidence must match the persisted JSON.
+                await options.onReceipt(receipt === null ? null : JSON.parse(JSON.stringify(receipt)));
+            } catch (err) {
+                const error = governanceError('receipt_callback_failed', 'Receipt callback failed after the tool completed.', 1, { receipt });
+                error.agoragenticReceipt = receipt;
+                error.cause = err;
+                throw error;
+            }
+        }
+        return result;
     };
+}
+
+function attachReceipt(error, receipt) {
+    try {
+        const existing = Object.getOwnPropertyDescriptor(error, 'agoragenticReceipt');
+        if (!existing || existing.value == null) {
+            attachMetadata(error, 'agoragenticReceipt', receipt);
+        } else if (receipt !== null) {
+            const enclosing = Object.getOwnPropertyDescriptor(error, 'agoragenticEnclosingReceipts')?.value;
+            attachMetadata(error, 'agoragenticEnclosingReceipts', [...(Array.isArray(enclosing) ? enclosing : []), receipt]);
+        }
+    } catch { /* hostile/primitive/frozen errors retain identity; receipts remain on disk */ }
+}
+
+function attachMetadata(error, key, value) {
+    try {
+        Object.defineProperty(error, key, { value, writable: true, configurable: true, enumerable: true });
+    } catch { /* diagnostic metadata must never replace the original failure */ }
 }
 
 async function runGovernedCommand(executable, args = [], options = {}) {
@@ -451,7 +485,14 @@ function nowIso(options) {
 }
 
 function safeErrorCode(err) {
-    return typeof err?.code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(err.code) ? err.code : 'error';
+    try {
+        // Inspect only the own data property: error accessors are untrusted
+        // executable code, and even descriptor inspection can throw on a Proxy.
+        const descriptor = Object.getOwnPropertyDescriptor(err, 'code');
+        const code = descriptor?.value;
+        if (typeof code === 'string' && /^[A-Za-z0-9_.-]{1,64}$/.test(code)) return code;
+    } catch { /* primitive/revoked/hostile values retain a generic bounded code */ }
+    return 'error';
 }
 
 function governanceError(code, message, exitCode = 1, response) {
