@@ -2,7 +2,7 @@
 
 Original toolchain audit: 2026-09-13 (supersedes 2026-09-01)
 
-Dependency-fixture refresh: 2026-09-25. Rechecked the manifest and lockfile,
+Dependency-fixture refresh: 2026-09-30. Rechecked the manifest and lockfile,
 peer ranges, clean install, tests, lint, build, dependency audits, and package
 contents. Historical CLI compatibility and Creator Portal acceptance were not
 revalidated.
@@ -17,8 +17,8 @@ revalidated.
 - Linter: `eslint@9.29.0`
 - Formatter: `prettier@3.9.6`
 - Compiler: `typescript@5.9.2`
-- Development host fixture: `n8n-workflow@2.39.1`
-- Exact workflow peer fixture: `zod@3.25.76`
+- Development host fixture: `n8n-workflow@2.28.4`
+- Exact workflow peer fixture: `zod@3.25.67`
 - Minimum consumer Node.js: 20.19
 - Locked development and publishing Node.js: 24
 - Install mode: committed lockfile plus `npm ci`
@@ -29,6 +29,17 @@ reviewed and merged before the exact `n8n-v0.1.4` tag can invoke the trusted
 publishing workflow.
 
 ## Coordinated compatibility decision
+
+The 2.39.1 fixture and available 2.41.1 stable / 2.42.1 beta releases pin
+`axios@1.18.0` exactly. Seven newly reported Axios advisories require 1.20.0;
+substituting a lock entry cannot satisfy that pin, and overrides remain prohibited.
+Use the latest pre-Axios 2.28 patch fixture, 2.28.4, with its exact Zod peer
+3.25.67. Its complete development graph audits clean. Clean installation, tests,
+lint, build, runtime imports and the offline error boundary pass. All eleven
+generated code, declaration and static-asset files are byte-identical to the
+2.39.1 build. This changes the development fixture only: package version,
+runtime peer, Node consumer floor, node source and audit policy are unchanged.
+Requalify a newer fixture once its published dependency graph is patched.
 
 Every available `@n8n/node-cli` line checked from 0.40.0 through the current
 stable and beta releases pulls an AI/template-only dependency branch through
@@ -84,17 +95,16 @@ The rejected dependency majors remain incoherent with this source candidate:
 The release-contract test pins the complete supported set so a future isolated
 major bump cannot look valid after changing only one manifest line.
 
-`n8n-workflow@2.39.1` is the pinned development fixture, not a runtime
-constraint. Its exact peer is satisfied by `zod@3.25.76`. The published peer
+`n8n-workflow@2.28.4` is the pinned development fixture, not a runtime
+constraint. Its exact peer is satisfied by `zod@3.25.67`. The published peer
 remains `n8n-workflow: "*"`, so host n8n versions are not narrowed. These
 fixtures keep clean-install build tests deterministic and are not shipped in
 the package tarball.
 
-The pinned workflow fixture's development graph includes `isolated-vm@7`,
-whose declared engine is Node.js 24 or newer. The published community node does
-not ship that fixture, so the consumer floor remains Node.js 20.19; repository
-validation and trusted publishing use Node.js 24 to satisfy the complete locked
-development graph without ignoring engine metadata.
+The pinned workflow fixture's development graph includes `isolated-vm@6.2.0`.
+The published community node does not ship that fixture, so the consumer floor
+remains Node.js 20.19; repository validation and trusted publishing continue to
+use Node.js 24 without ignoring engine metadata.
 
 ## Security boundary
 
@@ -110,9 +120,8 @@ found 0 vulnerabilities
 
 The CLI/AI/LangChain branch and `uuid@10.0.0` are absent from the lockfile. The
 only resolved `uuid` is patched `uuid@11.1.1` beneath the pinned workflow
-fixture. The 2.39.1 development graph resolves `@n8n/utils@1.47.0` and patched
-`nanoid@3.3.18`, and adds `quickjs-emscripten@0.32.0` with its `@jitl` QuickJS
-WASM packages. These lock entries are development-only. `npm run audit:dev`
+fixture. The vulnerable Axios dependency branch is absent from this fixture.
+These lock entries are development-only. `npm run audit:dev`
 rejects any advisory at any severity; there is no development allowlist.
 
 The prior `brace-expansion`, `ip-address`, and `undici` findings remain resolved
