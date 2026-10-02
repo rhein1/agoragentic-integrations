@@ -148,6 +148,7 @@ jobs:
           node --test test/sdk-public-source.test.mjs
           node --test test/local-governance-cli.test.mjs
           node --test test/governance-lifecycle.test.mjs
+          node --test test/governance-receipt-identity.test.mjs
           node --check sdk/node/index.js
           node --check sdk/node/index.mjs
           node --check sdk/agent-os-cli/cli.js
