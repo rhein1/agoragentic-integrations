@@ -1,0 +1,48 @@
+name: RRSI offline contracts
+
+on:
+  pull_request:
+    paths:
+      - 'agent-os/harness-evolution/**'
+      - '.github/workflows/rrsi-offline-contract.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agent-os/harness-evolution/**'
+      - '.github/workflows/rrsi-offline-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-contract:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.13']
+    steps:
+      - name: Preserve pinned source bytes on the disposable runner
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Fetch pinned upstream sources for contract verification only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: google-research/rrsi
+          ref: be50316e1db05914068a973f322770ef08ed7ba1
+          path: .rrsi-upstream-contract
+          persist-credentials: false
+      - name: Test contracts without installing or running RRSI
+        env:
+          RRSI_CONTRACT_ROOT: ${{ github.workspace }}/.rrsi-upstream-contract
+        run: |
+          python --version
+          python -m unittest discover -s agent-os/harness-evolution/rrsi/tests -v
+          python agent-os/harness-evolution/rrsi/preview.py agent-os/harness-evolution/rrsi/fixture.json

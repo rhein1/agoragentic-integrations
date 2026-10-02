@@ -1,0 +1,63 @@
+{
+  "schema": "agoragentic.rrsi.upstream-lock.v1",
+  "reviewed_at": "2026-09-29",
+  "repository": "https://github.com/google-research/rrsi",
+  "commit": "be50316e1db05914068a973f322770ef08ed7ba1",
+  "paper": "https://arxiv.org/abs/2609.24972",
+  "license": "Apache-2.0; third_party code has separate licenses",
+  "runtime_qualified": false,
+  "full_upstream_audited": false,
+  "files": [
+    {
+      "path": "rrsi/domain.py",
+      "git_blob": "faf56eb66581fd0c7655abfd05daca96d4a180dd",
+      "review": "complete",
+      "abi_tested": true
+    },
+    {
+      "path": "rrsi/evaluate.py",
+      "git_blob": "78cac3848c44d9c0827d60b91211964f6576f348",
+      "review": "complete",
+      "abi_tested": true
+    },
+    {
+      "path": "rrsi/selection.py",
+      "git_blob": "a7d71da94b97b148a5d80d3878e5a89818bc06f9",
+      "review": "complete",
+      "abi_tested": false
+    },
+    {
+      "path": "rrsi/components.py",
+      "git_blob": "6ac87f0e8f06def0db0a21a86ccb6a1f19503ec1",
+      "review": "complete",
+      "abi_tested": false
+    },
+    {
+      "path": "rrsi/config.py",
+      "git_blob": "457fed78e016a6f100fa37f2f15877d411d1e6e9",
+      "review": "complete",
+      "abi_tested": false
+    },
+    {
+      "path": "rrsi/loop.py",
+      "git_blob": "dc9e54ab4de9354bba44e2ad360fb28c1f8cd27d",
+      "review": "lines 1-200 and visible portion of 200-490; final response truncated",
+      "abi_tested": false
+    }
+  ],
+  "targets": {
+    "fable_baseline_inspected": "154bf0b220566d91d1a4aaf4390d9c3a54926c3a",
+    "memory_docs_inspected": "3c2f17d82476d22996377ea7c07cb601ed625483",
+    "integrations_base": "b30a3ded3b191e2d4d13c5d13f19092f841f0fa9"
+  },
+  "optional_openshell": {
+    "pr": 435,
+    "head": "8be37db95e824da1c00e6028010d26b3c52f7794",
+    "draft": true,
+    "merged": false,
+    "targeted_ci": "passed",
+    "codeql": "passed",
+    "machine_surfaces": "failed at Validate MCP package; later steps skipped",
+    "runtime_qualified": false
+  }
+}

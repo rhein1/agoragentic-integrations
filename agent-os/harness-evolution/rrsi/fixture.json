@@ -1,0 +1,173 @@
+{
+  "request": {
+    "schema": "agoragentic.rrsi.request.v1",
+    "run_id": "synthetic-demo",
+    "target": {
+      "repository": "rhein1/fable5-codex",
+      "baseline_commit": "1111111111111111111111111111111111111111",
+      "candidate_commit": "2222222222222222222222222222222222222222",
+      "policy_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "evaluator_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "model_config_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "edits": [
+      {
+        "path": "harness/prompts/strategy.md",
+        "component": "prompt",
+        "hypothesis_id": "fixture-hypothesis",
+        "diff_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "evolve-a",
+        "family": "family-a",
+        "split": "evolve"
+      },
+      {
+        "id": "evolve-b",
+        "family": "family-b",
+        "split": "evolve"
+      },
+      {
+        "id": "heldout-check",
+        "family": "family-c",
+        "split": "heldout"
+      },
+      {
+        "id": "ood-check",
+        "family": "family-d",
+        "split": "ood"
+      }
+    ],
+    "limits": {
+      "max_edits": 2,
+      "trials_per_task": 2,
+      "max_policy_tokens": 10000,
+      "max_cost_microusd": 1000000,
+      "max_trial_seconds": 60
+    }
+  },
+  "observations": [
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "baseline",
+      "task_id": "evolve-a",
+      "trial": 0,
+      "commit": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "reward": 0.5,
+      "policy_tokens": 100,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:25a81034aa7508678ca3e96147091c369f721d240b7a03be200d339c22afcc65"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "baseline",
+      "task_id": "evolve-a",
+      "trial": 1,
+      "commit": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "reward": 0.5,
+      "policy_tokens": 100,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:b5d66e07cbf4b84694b70927fabc1dac55144c99c195d9c64481bbe552aa69a6"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "baseline",
+      "task_id": "evolve-b",
+      "trial": 0,
+      "commit": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "reward": 0.5,
+      "policy_tokens": 100,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:01b9f36bfd8507e555f48ff707eb2a042e08ec6a3b2d6f8fb489d78036bbf6dd"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "baseline",
+      "task_id": "evolve-b",
+      "trial": 1,
+      "commit": "1111111111111111111111111111111111111111",
+      "status": "completed",
+      "reward": 0.5,
+      "policy_tokens": 100,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:301828bedc35c9851fe663bdc8d0835a2fcb7c5dc5e2bd166eaff6d410dbf18b"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "candidate",
+      "task_id": "evolve-a",
+      "trial": 0,
+      "commit": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "reward": 0.75,
+      "policy_tokens": 80,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:746bc0d67cdc9648b4480de2c5b4ff47a0c761b8cc322b8d7d93263bd93aad4a"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "candidate",
+      "task_id": "evolve-a",
+      "trial": 1,
+      "commit": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "reward": 0.75,
+      "policy_tokens": 80,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:4dfff51a791d24f3dbd8d2f26cd9e4d7b3c69f5a87e7a350af76cbf8e2b8b896"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "candidate",
+      "task_id": "evolve-b",
+      "trial": 0,
+      "commit": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "reward": 0.75,
+      "policy_tokens": 80,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:c1b9987eab6335f81fa01ad9f8e66c764e92824c241c22461c1d667de4d353e4"
+    },
+    {
+      "source_class": "synthetic_fixture",
+      "request_digest": "sha256:06bcf997d1f420460b0eaf906af9d16640414f7eb98d309e28b3e779bcffe43d",
+      "arm": "candidate",
+      "task_id": "evolve-b",
+      "trial": 1,
+      "commit": "2222222222222222222222222222222222222222",
+      "status": "completed",
+      "reward": 0.75,
+      "policy_tokens": 80,
+      "cost_microusd": 1000,
+      "duration_ms": 1000,
+      "violations": [],
+      "evidence_digest": "sha256:c07f094214406bc959e52dfc90e6816cf5e21c4446f6c792a5c7f1e6bb2b1aa0"
+    }
+  ]
+}
