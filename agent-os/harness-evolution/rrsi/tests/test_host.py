@@ -152,7 +152,8 @@ class HostTests(unittest.TestCase):
     def test_request_replay_conflicting_scope_and_mutable_snapshots_cannot_expand_budget(self):
         s = scope(); budget = BudgetStore(max_cost=2, max_tokens=2)
         row = budget.reserve("r1", s.digest, 2, 2)
-        self.assertEqual(budget.reserve("r1", s.digest, 2, 2), row)
+        with self.assertRaisesRegex(HostContractError, "reservation_not_available"):
+            budget.reserve("r1", s.digest, 2, 2)
         self.assertEqual(budget.snapshot()["reserved"], (2, 2))
         from dataclasses import FrozenInstanceError
         with self.assertRaises(FrozenInstanceError): row.cost = 0
@@ -165,6 +166,72 @@ class HostTests(unittest.TestCase):
             budget.reserve("r1", s.digest, 2, 2)
         with self.assertRaisesRegex(HostContractError, "budget_exhausted"):
             budget.reserve("r2", s.digest, 1, 1)
+
+    def test_observed_overrun_is_a_reconciliation_lower_bound(self):
+        s = scope(); budget = BudgetStore(max_cost=10, max_tokens=10)
+        budget.reserve("overrun", s.digest, 2, 2)
+        with self.assertRaisesRegex(HostContractError, "settlement_exceeds_reservation"):
+            budget.settle("overrun", 5, 4)
+        self.assertEqual(budget.snapshot()["observed_lower_bounds"], (5, 4))
+        for cost, tokens in ((0, 0), (4, 4), (5, 3)):
+            with self.subTest(cost=cost, tokens=tokens):
+                with self.assertRaisesRegex(HostContractError, "reconciliation_below_observed_usage"):
+                    budget.reconcile_unknown("overrun", cost, tokens)
+                self.assertEqual(budget.snapshot()["reserved"], (2, 2))
+                self.assertTrue(budget.snapshot()["unknown"])
+        budget.reconcile_unknown("overrun", 5, 4)
+        self.assertEqual(budget.snapshot()["spent"], (5, 4))
+        self.assertEqual(budget.snapshot()["observed_lower_bounds"], (0, 0))
+        with self.assertRaisesRegex(HostContractError, "budget_exhausted"):
+            budget.reserve("too-much", s.digest, 6, 1)
+
+    def test_partial_observation_on_unknown_outcome_is_retained(self):
+        s = scope(); budget = BudgetStore(max_cost=10, max_tokens=10)
+        session = SyntheticHostSession(request_id="partial", scope=s, budget=budget)
+        before = session.snapshot()
+        with self.assertRaisesRegex(HostContractError, "invalid_synthetic_observation"):
+            session.advance("analysis", observation=authority(s), now=NOW,
+                            estimated_cost=2, estimated_tokens=2, outcome="unknown",
+                            actual_cost=True)
+        self.assertEqual(session.snapshot(), before)
+        session.advance("analysis", observation=authority(s), now=NOW,
+                        estimated_cost=2, estimated_tokens=2, outcome="unknown",
+                        actual_cost=3)
+        self.assertEqual(budget.snapshot()["observed_lower_bounds"], (3, 0))
+        with self.assertRaisesRegex(HostContractError, "reconciliation_below_observed_usage"):
+            session.reconcile_unknown(actual_cost=0, actual_tokens=0)
+        self.assertTrue(budget.snapshot()["unknown"])
+        session.reconcile_unknown(actual_cost=3, actual_tokens=1)
+        self.assertEqual(budget.snapshot()["spent"], (3, 1))
+
+    def test_duplicate_sessions_cannot_share_one_reservation(self):
+        s = scope(); budget = BudgetStore(max_cost=1, max_tokens=1)
+        sessions = [SyntheticHostSession(request_id="same", scope=s, budget=budget) for _ in range(2)]
+        barrier = threading.Barrier(2); both_reserved = threading.Barrier(2); results = []
+        original_reserve = budget.reserve
+        def synchronized_reserve(*args):
+            try:
+                return original_reserve(*args)
+            finally:
+                # Make both sessions try to acquire before either settles.
+                both_reserved.wait(timeout=5)
+        budget.reserve = synchronized_reserve
+        def advance(session):
+            barrier.wait(timeout=5)
+            try:
+                session.advance("analysis", observation=authority(s), now=NOW,
+                                estimated_cost=1, estimated_tokens=1, outcome="completed",
+                                actual_cost=1, actual_tokens=1)
+                results.append("completed")
+            except HostContractError as error:
+                results.append(str(error))
+        workers = [threading.Thread(target=advance, args=(session,)) for session in sessions]
+        for worker in workers: worker.start()
+        for worker in workers: worker.join(timeout=5)
+        self.assertCountEqual(results, ["completed", "reservation_not_available"])
+        self.assertEqual(budget.snapshot()["spent"], (1, 1))
+        self.assertFalse(budget.snapshot()["unknown"])
+        self.assertEqual(sum(len(session.snapshot()["events"]) for session in sessions), 1)
 
     def test_scope_and_revision_are_not_caller_approved_flags(self):
         s = scope(); raw = authority(s); raw["approved"] = True

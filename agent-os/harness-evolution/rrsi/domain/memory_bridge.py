@@ -88,6 +88,33 @@ def _scope(value):
         _fail("invalid_memory_scope")
 
 
+def _reviewed_task_rows(stage: Mapping[str, object], candidate: Mapping[str, object]) -> list[dict[str, object]]:
+    """Reconstruct the bounded task rows emitted by the pinned Memory bridge."""
+    claims = candidate.get("source_claim_ids")
+    if (type(claims) is not list or not 2 <= len(claims) <= 64
+            or any(type(claim) is not str or re.fullmatch(r"mem_[a-f0-9]{32}", claim) is None for claim in claims)
+            or len(set(claims)) != len(claims)):
+        _fail("memory_task_collection_source")
+    if type(stage.get("stage_id")) is not str or type(stage.get("skillopt_project")) is not str or type(candidate.get("slug")) is not str:
+        _fail("memory_task_collection_source")
+    rows = []
+    for index, claim in enumerate(claims):
+        split = "test" if index == len(claims) - 1 else "val" if len(claims) >= 3 and index == len(claims) - 2 else "train"
+        rows.append({
+            "id": "memory-" + claim[4:],
+            "project": stage["skillopt_project"],
+            "intent": f"Refine the owner-reviewed procedure represented by {stage['stage_id']}.",
+            "context_excerpt": "A redacted, evidence-linked Memory candidate was selected. This task intentionally excludes transcripts, tool output, repository contents, and credentials.",
+            "system": "", "attempted_solution": "", "outcome": "unknown",
+            "reference_kind": "none", "reference": "", "judge": {},
+            "tags": ["agoragentic-memory", "reviewed-candidate"],
+            "source_sessions": [], "split": split,
+            "origin": "redacted_memory_candidate", "derived_from": "",
+            "skill_hint": candidate["slug"],
+        })
+    return rows
+
+
 def validate_reviewed_memory(
     *, task: Mapping[str, object],
     stage: Mapping[str, object],
@@ -183,6 +210,8 @@ def validate_reviewed_memory(
         _same(provenance[key], candidate.get(key), "memory_provenance_mismatch")
     if scope["repo_id"] not in provenance["repo_ids"]:
         _fail("memory_candidate_repo_scope_mismatch")
+    task_rows = _reviewed_task_rows(stage, candidate)
+    _same(task.get("tasks"), task_rows, "memory_task_collection_mismatch")
 
     _same(review_claim.get("schema"), "agoragentic.memory.skillopt-finalization-claim.v1", "memory_claim_schema")
     for key, expected in (("operation", "review"), ("confirmation", "REVIEWED"),
@@ -213,12 +242,23 @@ def validate_reviewed_memory(
     receipt_candidate = _mapping(receipt.get("candidate"), "memory_receipt_candidate")
     _same(receipt_candidate.get("task_hash"), _digest(task), "memory_receipt_task_digest_mismatch")
     _same(receipt_candidate.get("stage_hash"), _digest(stage), "memory_receipt_stage_digest_mismatch")
-    if _mapping(receipt.get("provider"), "memory_receipt_provider").get("state") != "not_invoked":
-        _fail("memory_receipt_provider_invoked")
-    if _mapping(receipt.get("spend"), "memory_receipt_spend").get("state") != "not_incurred":
+    provider = _mapping(receipt.get("provider"), "memory_receipt_provider")
+    _same(provider, {"state": "not_invoked", "name": None, "model": None}, "memory_receipt_provider_state")
+    spend = _mapping(receipt.get("spend"), "memory_receipt_spend")
+    if type(spend.get("amount")) is not int:
         _fail("memory_receipt_spend_state")
+    _same(spend, {"state": "not_incurred", "amount": 0, "currency": None}, "memory_receipt_spend_state")
+    validation = _mapping(receipt.get("validation"), "memory_receipt_validation")
+    if validation.get("held_out_split_present") is not True:
+        _fail("memory_receipt_validation_state")
+    _same(validation, {"state": "not_run", "harness_core": "not_invoked",
+                       "held_out_split_present": any(row["split"] in {"val", "test"} for row in task_rows)},
+          "memory_receipt_validation_state")
     approval = _mapping(receipt.get("approval"), "memory_receipt_approval")
-    if approval.get("adoption_approved") is not False or approval.get("publication_approved") is not False or approval.get("active") is not False:
+    if (approval.get("owner_reviewed_for_external_evaluation") is not True
+            or approval.get("adoption_approved") is not False
+            or approval.get("publication_approved") is not False or approval.get("active") is not False
+            or set(approval) != {"owner_reviewed_for_external_evaluation", "adoption_approved", "publication_approved", "active"}):
         _fail("memory_receipt_authority_state")
 
     rollback = _mapping(stage.get("rollback"), "memory_rollback_missing")
@@ -236,6 +276,34 @@ def validate_reviewed_memory(
     _same(task_rollback, rollback, "memory_task_rollback_mismatch")
     if rollback.get("ref") != baseline.get("ref") or rollback.get("hash") != baseline.get("hash"):
         _fail("memory_rollback_binding")
+
+    view_candidate = _mapping(stage_view.get("candidate"), "memory_stage_view_candidate_missing")
+    _same(view_candidate, {key: candidate.get(key) for key in (
+        "candidate_id", "candidate_hash", "trigger_terms", "source_claim_ids", "evidence_ids", "repo_ids")},
+        "memory_stage_view_candidate_mismatch")
+    for field, source in (("created_at", stage.get("created_at")), ("redaction", redaction),
+                          ("baseline", baseline), ("rollback", rollback), ("authority", authority)):
+        _same(stage_view.get(field), source, "memory_stage_view_" + field + "_mismatch")
+    for field, source in (("owner_review_id", review.get("owner_review_id")),
+                          ("reviewed_at", review.get("reviewed_at")),
+                          ("task_digest", _digest(task)),
+                          ("evaluation_receipt_digest", _digest(receipt))):
+        _same(view_review.get(field), source, "memory_stage_view_review_binding")
+    if stage_view.get("rollback_record") is not None:
+        _fail("memory_stage_view_rollback_state")
+    view_receipt = _mapping(stage_view.get("evaluation_receipt"), "memory_stage_view_receipt_missing")
+    if (view_receipt.get("adoption_approved") is not False
+            or view_receipt.get("eligible_for_external_evaluation") is not True):
+        _fail("memory_stage_view_receipt_mismatch")
+    _same(view_receipt, {"evaluation_state": receipt.get("evaluation_state"),
+                         "provider_state": provider.get("state"), "validation_state": validation.get("state"),
+                         "spend_state": spend.get("state"), "adoption_approved": False,
+                         "eligible_for_external_evaluation": True}, "memory_stage_view_receipt_mismatch")
+    view_eligibility = _mapping(stage_view.get("eligibility"), "memory_stage_view_eligibility_missing")
+    if (view_eligibility.get("external_evaluation") is not True
+            or view_eligibility.get("active") is not False or view_eligibility.get("reason") is not None
+            or set(view_eligibility) != {"external_evaluation", "active", "reason"}):
+        _fail("memory_stage_view_eligibility_state")
     return {
         "schema": "agoragentic.rrsi.memory-envelope.v1",
         "stage_id": task.get("stage_id"),

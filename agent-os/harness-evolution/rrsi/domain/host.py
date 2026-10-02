@@ -174,10 +174,9 @@ class BudgetStore:
             if old:
                 if old.scope_digest != scope_digest or (old.cost, old.tokens) != (cost, tokens):
                     _fail("reservation_conflict")
-                if old.status != "reserved":
-                    _fail("reservation_not_available")
-                return ReservationSnapshot(old.key, old.scope_digest, old.cost, old.tokens, old.status,
-                                           old.actual_cost, old.actual_tokens)
+                # A reservation admits one session only. Idempotent reuse lets
+                # two sessions with the same request ID spend one allocation.
+                _fail("reservation_not_available")
             if (self._spent[0] + self._reserved[0] + cost > self._capacity[0]
                     or self._spent[1] + self._reserved[1] + tokens > self._capacity[1]):
                 _fail("budget_exhausted")
@@ -200,13 +199,19 @@ class BudgetStore:
             self._reserved[0] -= row.cost
             self._reserved[1] -= row.tokens
 
-    def mark_unknown(self, key: str) -> None:
-        """Hold the full reservation; uncertainty is never treated as free."""
+    def mark_unknown(self, key: str, observed_cost: int | None = None,
+                     observed_tokens: int | None = None) -> None:
+        """Hold the reservation and retain any partial consumption observed."""
         with self._lock:
             row = self._rows.get(key)
             if row is None or row.status != "reserved":
                 _fail("reservation_not_unknownable")
+            if any(value is not None and (type(value) is not int or value < 0)
+                   for value in (observed_cost, observed_tokens)):
+                _fail("invalid_settlement")
             row.status = "unknown"
+            row.actual_cost = observed_cost
+            row.actual_tokens = observed_tokens
             self._unknown = True
 
     def settle(self, key: str, actual_cost: int, actual_tokens: int) -> None:
@@ -218,6 +223,8 @@ class BudgetStore:
                 _fail("invalid_settlement")
             if actual_cost > row.cost or actual_tokens > row.tokens:
                 row.status = "unknown"
+                row.actual_cost = actual_cost
+                row.actual_tokens = actual_tokens
                 self._unknown = True
                 _fail("settlement_exceeds_reservation")
             row.status = "settled"
@@ -235,6 +242,9 @@ class BudgetStore:
                 _fail("unknown_reconciliation_required")
             if any(not isinstance(x, int) or isinstance(x, bool) or x < 0 for x in (actual_cost, actual_tokens)):
                 _fail("invalid_settlement")
+            if ((row.actual_cost is not None and actual_cost < row.actual_cost)
+                    or (row.actual_tokens is not None and actual_tokens < row.actual_tokens)):
+                _fail("reconciliation_below_observed_usage")
             # Reconciliation records overruns rather than discarding real
             # consumption. An over-capacity campaign then admits no new work.
             row.status = "settled"
@@ -249,7 +259,11 @@ class BudgetStore:
     def snapshot(self) -> Mapping[str, object]:
         with self._lock:
             return {"capacity": tuple(self._capacity), "reserved": tuple(self._reserved),
-                    "spent": tuple(self._spent), "unknown": self._unknown}
+                    "spent": tuple(self._spent), "unknown": self._unknown,
+                    "observed_lower_bounds": (
+                        sum(row.actual_cost or 0 for row in self._rows.values() if row.status == "unknown"),
+                        sum(row.actual_tokens or 0 for row in self._rows.values() if row.status == "unknown"),
+                    )}
 
 
 @dataclass(frozen=True)
@@ -351,12 +365,15 @@ class SyntheticHostSession:
             _fail("positive_all_in_estimate_required")
         if outcome != "unknown" and any(type(x) is not int or x < 0 for x in (actual_cost, actual_tokens)):
             _fail("known_all_in_observation_required")
+        if outcome == "unknown" and any(x is not None and (type(x) is not int or x < 0)
+                                        for x in (actual_cost, actual_tokens)):
+            _fail("invalid_synthetic_observation")
         # The checks intentionally precede recording even a simulated step.
         self._gate(observation, now)
         key = f"{self.request_id}:{len(self._events)}"
         self.budget.reserve(key, self.scope.digest, estimated_cost, estimated_tokens)
         if outcome == "unknown":
-            self.budget.mark_unknown(key)
+            self.budget.mark_unknown(key, actual_cost, actual_tokens)
             self._unknown_key = key
             self._state = "paused"
         else:

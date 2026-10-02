@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from domain.memory_bridge import MemoryBridgeError, validate_reviewed_memory
+from domain.memory_bridge import _digest
 
 
 NOW = "2026-09-30T12:00:00Z"
@@ -13,6 +14,19 @@ def packet():
     import json
     value = json.loads((Path(__file__).parent / "fixtures/memory-reviewed-packet.json").read_text(encoding="utf-8"))
     return tuple(value[key] for key in ("task", "stage", "review_claim", "review", "receipt", "stage_view"))
+
+
+def rebind_artifacts(values):
+    task, stage, claim, review, receipt, view = values
+    claim["task_digest"] = _digest(task)
+    claim["stage_digest"] = _digest(stage)
+    review["task_digest"] = _digest(task)
+    review["review_claim_digest"] = _digest(claim)
+    receipt["candidate"]["task_hash"] = _digest(task)
+    receipt["candidate"]["stage_hash"] = _digest(stage)
+    review["evaluation_receipt_digest"] = _digest(receipt)
+    view["review"]["task_digest"] = _digest(task)
+    view["review"]["evaluation_receipt_digest"] = _digest(receipt)
 
 
 class MemoryBridgeTests(unittest.TestCase):
@@ -74,6 +88,53 @@ class MemoryBridgeTests(unittest.TestCase):
             self.call(values)
         values = packet(); values[2]["stage_digest"] = "sha256:" + "f" * 64
         with self.assertRaisesRegex(MemoryBridgeError, "memory_stage_digest_mismatch"):
+            self.call(values)
+
+    def test_stage_view_must_project_the_bound_artifacts(self):
+        changes = (
+            ("candidate", "candidate_id", "skill_other"),
+            ("candidate", "candidate_hash", "sha256:" + "f" * 64),
+            ("candidate", "source_claim_ids", []),
+            ("review", "owner_review_id", "other-review"),
+            ("review", "reviewed_at", "2026-09-30T11:30:00Z"),
+            ("review", "task_digest", "sha256:" + "f" * 64),
+            ("review", "evaluation_receipt_digest", "sha256:" + "f" * 64),
+        )
+        for section, key, value in changes:
+            with self.subTest(section=section, key=key):
+                values = packet(); values[5][section][key] = value
+                with self.assertRaisesRegex(MemoryBridgeError, "memory_stage_view_"):
+                    self.call(values)
+
+    def test_receipt_no_call_and_no_spend_shapes_are_complete(self):
+        changes = (
+            ("provider", "name", "provider-x"),
+            ("provider", "model", "model-x"),
+            ("spend", "amount", 1),
+            ("spend", "amount", False),
+            ("spend", "currency", "USD"),
+        )
+        for section, key, value in changes:
+            with self.subTest(section=section, key=key):
+                values = packet(); values[4][section][key] = value
+                rebind_artifacts(values)
+                with self.assertRaisesRegex(MemoryBridgeError, "memory_receipt_"):
+                    self.call(values)
+
+    def test_reviewed_tasks_match_the_source_claims_and_split(self):
+        changes = (
+            lambda rows: rows.clear(),
+            lambda rows: rows.pop(),
+            lambda rows: rows[0].__setitem__("split", "test"),
+        )
+        for change in changes:
+            values = packet(); change(values[0]["tasks"])
+            rebind_artifacts(values)
+            with self.assertRaisesRegex(MemoryBridgeError, "memory_task_collection_"):
+                self.call(values)
+        values = packet(); values[4]["validation"]["held_out_split_present"] = False
+        rebind_artifacts(values)
+        with self.assertRaisesRegex(MemoryBridgeError, "memory_receipt_validation_"):
             self.call(values)
 
 
