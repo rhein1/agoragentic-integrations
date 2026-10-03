@@ -18,6 +18,7 @@ The package is deliberately marked `private: true`. No listener, deployment mani
 - hash-chained, append-only control-plane audit receipts that are clearly labeled self-attested;
 - a memory store for deterministic local tests and a PostgreSQL store/migration source path;
 - host-neutral JSON request handling for health, readiness, tenant, worker, and audit routes.
+- a host-owned local-test worker driver that wraps the actual controller, journals each created resource, rechecks leases before and after provider callbacks, and reconciles verified cleanup before returning the original process-local prepared receipt.
 
 ## Architecture
 
@@ -46,7 +47,15 @@ HTTP adapter -> authenticator -> tenant-bound control plane
                   terminal completion or failed-closed state
 ```
 
-The host-owned worker bridge in the diagram is an explicit remaining integration boundary. A qualified implementation must wrap the existing `RiskForkController` and `RiskForkProvider` calls, pass `provider_recovery_key` as an immutable provider idempotency/tagging identity, journal each savepoint/fork reference independently as soon as it exists, renew its lease, and submit the existing cleanup-verification evidence. The scaffold never creates, executes, destroys, or searches for provider resources by itself.
+The local-test worker bridge is now implemented in `src/worker.mjs`; its
+construction and failure contracts are in [WORKER.md](./WORKER.md). It invokes
+only trusted host callbacks and constructs no SDK, listener, or credentials.
+The provider broker remains an explicit qualification boundary: it must enforce
+the absolute lease fence at the effect, attach `provider_recovery_key` at birth,
+and independently attest resource lookup and absence. This driver is restricted
+to enabled `local_test`; it cannot activate a production provider. Durable
+worker-side claim delivery retention/retry and operational qualification remain
+open. Existing prepared-object provenance is intentionally process-local.
 
 Each provider binding supplies exact adapter and qualification hashes plus three server-owned verifier callbacks: `verify_resource_binding`, `verify_cleanup_evidence`, and `verify_recovery_absence`. Registration descriptor-screens and snapshots the provider capability surface and method identities, exposes an immutable provider facade, and fails readiness or later use if the source adapter drifts from that binding. The callbacks receive the normalized tenant and must verify provider-authenticated evidence for the exact tenant, adapter binding, immutable recovery key, resource kinds, and resource references. They are invoked only after an active lease preflight and must fail closed. Verifiers are observational checks, not mutation hooks: they must be read-only, retry-safe, and free of provider effects because two genuinely simultaneous resource-journal deliveries can both reach verification before one serializable store transaction wins. Historical disabled bindings and their original tenant mapping remain cleanup/recovery-only and must stay registered until all exact-bound nonterminal invocations drain. Readiness requires an enabled exact binding for `admitted`, `execution_leased`, and `running` work, while `cleanup_pending` and `recovery_required` may drain through the disabled historical binding. The local fixtures use in-process allowlists only; they are not production proof.
 
@@ -95,7 +104,10 @@ An admitted item that is never claimed expires to `failed_closed` after the conf
 
 The store repeats `worker:claim` authorization for every lease claim and claim replay, and `worker:write` authorization for lease preflight, renewal, resource journaling/replay, execution settlement, and cleanup/recovery completion. An authenticated principal or retained lease token cannot preserve a removed scope. PostgreSQL checks scope alongside credential identity, tenant, revocation, and database-clock validity; it holds a shared credential-row lock through the mutation transaction so credential edits serialize with the authority decision. Final write statements also recheck scope and expiry. Credential validity is evaluated after the row lock is acquired, and claim replays sample the database clock after that check so lock waits cannot extend credential or lease lifetime. Journal receipt lookup uses a transaction and current authority rather than treating a historical receipt as permission. Rejected writes leave invocation state, budget, receipts, and audit history unchanged.
 
-These checks preserve the existing two worker scopes. Separate execution, cleanup, and recovery credential roles remain a Gate 5 requirement; this repair does not implement or qualify those roles or a provider worker.
+These checks preserve the existing two worker scopes. Separate execution,
+cleanup, and recovery route scopes remain a Gate 5 requirement. The local-test
+worker accepts distinct principal slots but does not qualify those roles or a
+live provider broker.
 
 The current source scopes separate tenant APIs, worker mutation, and audit reads:
 

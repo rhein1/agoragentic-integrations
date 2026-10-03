@@ -40070,7 +40070,7 @@ var require_utils_webcrypto = __commonJS({
     var nodeCrypto = __require("crypto");
     module.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes3,
+      randomBytes: randomBytes4,
       deriveKey,
       sha256,
       hashByName,
@@ -40080,7 +40080,7 @@ var require_utils_webcrypto = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder = new TextEncoder();
-    function randomBytes3(length) {
+    function randomBytes4(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string) {
@@ -53429,9 +53429,101 @@ var SECRET_SHAPED_TEXT = Object.freeze(detachArray2([
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i
 ]));
+var AUTHORIZATION_VALUE_PATTERN = /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+var URL_USERINFO_PATTERN = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+var PATH_USERINFO_PATTERN = /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
 function containsSecretShapedText(value) {
   if (typeof value !== "string") return false;
   return securityPatternsMatch(SECRET_SHAPED_TEXT, value);
+}
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+function isAsciiAlphanumericCharacterCode(code) {
+  return code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122;
+}
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 45 || code === 46 || code === 95;
+}
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
+}
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 32) === 98 && (value.charCodeAt(index + 1) | 32) === 97 && (value.charCodeAt(index + 2) | 32) === 115 && (value.charCodeAt(index + 3) | 32) === 105 && (value.charCodeAt(index + 4) | 32) === 99;
+}
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length ? cursor : -1;
+}
+function basicBase64Value(code) {
+  if (code >= 65 && code <= 90) return code - 65;
+  if (code >= 97 && code <= 122) return code - 97 + 26;
+  if (code >= 48 && code <= 57) return code - 48 + 52;
+  if (code === 43 || code === 45) return 62;
+  if (code === 47 || code === 95) return 63;
+  return -1;
+}
+function advanceBasicDecoder(state, code) {
+  const activeOffsets = state & 15;
+  if (activeOffsets === 0 || code === 61) return code === 61 ? 0 : state;
+  const decoded = basicBase64Value(code);
+  if (decoded === -1) return state;
+  const previous = state >> 4;
+  if ((activeOffsets & 2) !== 0 && (previous << 2 | decoded >> 4) === 58) {
+    return -1;
+  }
+  if ((activeOffsets & 4) !== 0 && ((previous & 15) << 4 | decoded >> 2) === 58) {
+    return -1;
+  }
+  if ((activeOffsets & 8) !== 0 && ((previous & 3) << 6 | decoded) === 58) {
+    return -1;
+  }
+  const nextOffsets = activeOffsets << 1 & 14 | activeOffsets >> 3;
+  return decoded << 4 | nextOffsets;
+}
+function containsBasicAuthorization(value) {
+  let pendingStart = -1;
+  let nodeDecoderState = 0;
+  let whitespaceFoldDecoderState = 0;
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    if (cursor === pendingStart) {
+      nodeDecoderState |= 1;
+      whitespaceFoldDecoderState |= 1;
+      pendingStart = -1;
+    }
+    const tokenStart = basicTokenStartAt(value, cursor);
+    if (tokenStart !== -1) pendingStart = tokenStart;
+    const code = value.charCodeAt(cursor) & 255;
+    nodeDecoderState = advanceBasicDecoder(nodeDecoderState, code);
+    if (nodeDecoderState === -1) return true;
+    if (!isWhitespaceCharacter(value[cursor])) {
+      whitespaceFoldDecoderState = advanceBasicDecoder(whitespaceFoldDecoderState, code);
+      if (whitespaceFoldDecoderState === -1) return true;
+    }
+  }
+  return false;
+}
+function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== "string") return false;
+  if (containsSecretShapedText(value)) return true;
+  const variants = securityTextVariants(value);
+  for (let index = 0; index < variants.length; index += 1) {
+    const candidate = variants[index];
+    if (containsBasicAuthorization(candidate) || testSecurityPattern(AUTHORIZATION_VALUE_PATTERN, candidate) || testSecurityPattern(URL_USERINFO_PATTERN, candidate) || testSecurityPattern(PATH_USERINFO_PATTERN, candidate)) {
+      return true;
+    }
+  }
+  return false;
 }
 function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
@@ -64967,7 +65059,886 @@ var RiskForkMcpBoundary = class {
 };
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-host-adapter.mjs
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-portable-handle-boundary.mjs
+import { createHmac, randomBytes as randomBytes3, randomUUID as randomUUID6 } from "node:crypto";
+var RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-registry.v1";
+var RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-binding.v1";
+var RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-authorization.v1";
+var DEFAULT_MAX_ENTRIES = 1e4;
+var DEFAULT_MAX_TTL_MS = 5 * 60 * 1e3;
+var HARD_MAX_TTL_MS = 5 * 60 * 1e3;
+var HARD_MAX_CONSUMPTIONS = 1e3;
+var registryRecords = /* @__PURE__ */ new WeakMap();
+var REGISTRATION_KEYS = Object.freeze([
+  "handle_value",
+  "principal_ref",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "allowed_consuming_methods",
+  "ttl_ms",
+  "single_use",
+  "max_consumptions"
+]);
+var AUTHORIZATION_KEYS = Object.freeze([
+  "handle_value",
+  "binding",
+  "principal_ref",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "consuming_method",
+  "consuming_request_hash"
+]);
+var BINDING_KEYS = Object.freeze([
+  "schema",
+  "binding_id",
+  "handle_hash",
+  "principal_hash",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "allowed_consuming_methods",
+  "issued_at",
+  "expires_at",
+  "single_use",
+  "max_consumptions",
+  "binding_hash"
+]);
+var RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES = Object.freeze({
+  INVALID_CONFIGURATION: "RISK_FORK_MCP_PORTABLE_HANDLE_INVALID_CONFIGURATION",
+  INVALID_INPUT: "RISK_FORK_MCP_PORTABLE_HANDLE_INVALID_INPUT",
+  RAW_CREDENTIAL_REJECTED: "RISK_FORK_MCP_PORTABLE_HANDLE_RAW_CREDENTIAL_REJECTED",
+  CAPACITY_EXCEEDED: "RISK_FORK_MCP_PORTABLE_HANDLE_CAPACITY_EXCEEDED",
+  ALREADY_REGISTERED: "RISK_FORK_MCP_PORTABLE_HANDLE_ALREADY_REGISTERED",
+  UNKNOWN_HANDLE: "RISK_FORK_MCP_PORTABLE_HANDLE_UNKNOWN",
+  BINDING_MISMATCH: "RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_MISMATCH",
+  CONTEXT_MISMATCH: "RISK_FORK_MCP_PORTABLE_HANDLE_CONTEXT_MISMATCH",
+  EXPIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_EXPIRED",
+  REPLAY: "RISK_FORK_MCP_PORTABLE_HANDLE_REPLAY",
+  USE_LIMIT: "RISK_FORK_MCP_PORTABLE_HANDLE_USE_LIMIT",
+  CLOSED: "RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_CLOSED",
+  CLOCK_ROLLBACK: "RISK_FORK_MCP_PORTABLE_HANDLE_CLOCK_ROLLBACK",
+  REVOKED: "RISK_FORK_MCP_PORTABLE_HANDLE_REVOKED",
+  AUTHENTICATION_REQUIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_AUTHENTICATION_REQUIRED",
+  CONTRACT_REQUIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_CONTRACT_REQUIRED"
+});
+var RiskForkMcpPortableHandleError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "RiskForkMcpPortableHandleError";
+    this.code = code;
+  }
+};
+function handleError(code, message) {
+  return new RiskForkMcpPortableHandleError(code, message);
+}
+function exactCanonicalInput(value, keys, field) {
+  let clone;
+  try {
+    clone = JSON.parse(canonicalize(value));
+    assertPlainObject(clone, field);
+    assertAllowedKeys(clone, keys, field);
+    if (keys.some((key) => !Object.hasOwn(clone, key))) {
+      throw new TypeError(`${field} is missing required fields`);
+    }
+    return clone;
+  } catch (error) {
+    if (error instanceof RiskForkMcpPortableHandleError) throw error;
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+      `${field} is invalid`
+    );
+  }
+}
+function canonicalHttpsUrl(value, field, { originOnly = false } = {}) {
+  if (typeof value === "string" && containsSerializedCredentialMaterial(value)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain serialized credential material`
+    );
+  }
+  const exact = requireString(value, field, { maxLength: 4096 });
+  if (exact !== value || exact !== exact.normalize("NFC")) {
+    throw new TypeError(`${field} must already be canonical`);
+  }
+  let parsed;
+  try {
+    parsed = new URL(exact);
+  } catch {
+    throw new TypeError(`${field} must be an absolute HTTPS URL`);
+  }
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    throw new TypeError(`${field} contains invalid percent encoding`);
+  }
+  if (containsSerializedCredentialMaterial(decodedPathname)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain percent-encoded credential material`
+    );
+  }
+  if (/%[a-f0-9]{2}/i.test(decodedPathname)) {
+    throw new TypeError(`${field} contains ambiguous nested percent encoding`);
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash || (originOnly ? parsed.origin !== exact : parsed.href !== exact)) {
+    throw new TypeError(`${field} must be an exact credential-free HTTPS ${originOnly ? "origin" : "URL"}`);
+  }
+  return exact;
+}
+function normalizeMethod(value, field) {
+  const method = requireString(value, field, {
+    maxLength: 300,
+    pattern: /^[A-Za-z0-9][A-Za-z0-9._/-]{0,299}$/
+  });
+  if (containsSerializedCredentialMaterial(method)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain serialized credential material`
+    );
+  }
+  return method;
+}
+function normalizeHandleValue(value) {
+  if (typeof value === "string" && containsSerializedCredentialMaterial(value)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      "Portable handle_value must not contain serialized credential material"
+    );
+  }
+  const handle = requireOpaqueRef(value, "portable handle_value", { maxLength: 4096 });
+  if (handle !== value || !handle.isWellFormed()) {
+    throw new TypeError(
+      "Portable handle_value must be an exact, unpadded, well-formed Unicode string"
+    );
+  }
+  if (handle.length < 16) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      "Portable handles must be opaque non-credential values of at least 16 characters"
+    );
+  }
+  return handle;
+}
+function normalizeBindingContext(value, field) {
+  const principalRef = requireSha256Ref(value.principal_ref, `${field}.principal_ref`);
+  const issuer = canonicalHttpsUrl(value.issuer, `${field}.issuer`);
+  const audience = canonicalHttpsUrl(value.audience, `${field}.audience`);
+  const mcpServerOrigin = canonicalHttpsUrl(
+    value.mcp_server_origin,
+    `${field}.mcp_server_origin`,
+    { originOnly: true }
+  );
+  if (new URL(audience).origin !== mcpServerOrigin) {
+    throw new TypeError(`${field}.audience must belong to the exact MCP server origin`);
+  }
+  return Object.freeze({
+    principalRef,
+    issuer,
+    audience,
+    mcpServerOrigin,
+    originatingMethod: normalizeMethod(value.originating_method, `${field}.originating_method`),
+    originatingRequestHash: requireSha256Ref(
+      value.originating_request_hash,
+      `${field}.originating_request_hash`
+    )
+  });
+}
+function normalizeAllowedConsumingMethods(value, field) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+    throw new TypeError(`${field} must be a nonempty array of at most 32 methods`);
+  }
+  const normalized = value.map((method, index) => normalizeMethod(method, `${field}[${index}]`));
+  const canonical = [...new Set(normalized)].sort();
+  if (canonical.length !== normalized.length || canonicalize(canonical) !== canonicalize(normalized)) {
+    throw new TypeError(`${field} must be unique and canonically sorted`);
+  }
+  return Object.freeze(canonical);
+}
+function keyedRef(key, domain, value) {
+  return `sha256:${createHmac("sha256", key).update(domain, "utf8").update("\0", "utf8").update(canonicalize(value), "utf8").digest("hex")}`;
+}
+function currentTime(record) {
+  let iso;
+  try {
+    iso = requireIsoDate(record.clock(), "portable-handle registry clock");
+  } catch {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle registry clock did not return a valid time"
+    );
+  }
+  const milliseconds = Date.parse(iso);
+  if (record.lastObservedTime !== null && milliseconds < record.lastObservedTime) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CLOCK_ROLLBACK,
+      "Portable-handle registry clock moved backwards"
+    );
+  }
+  record.lastObservedTime = milliseconds;
+  return Object.freeze({ iso, milliseconds });
+}
+function normalizePresentedBinding(value) {
+  const binding = exactCanonicalInput(value, BINDING_KEYS, "portable-handle binding");
+  if (binding.schema !== RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding schema is invalid"
+    );
+  }
+  requireOpaqueRef(binding.binding_id, "portable-handle binding.binding_id", { maxLength: 256 });
+  requireSha256Ref(binding.handle_hash, "portable-handle binding.handle_hash");
+  requireSha256Ref(binding.principal_hash, "portable-handle binding.principal_hash");
+  canonicalHttpsUrl(binding.issuer, "portable-handle binding.issuer");
+  const audience = canonicalHttpsUrl(binding.audience, "portable-handle binding.audience");
+  const origin = canonicalHttpsUrl(
+    binding.mcp_server_origin,
+    "portable-handle binding.mcp_server_origin",
+    { originOnly: true }
+  );
+  if (new URL(audience).origin !== origin) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding audience and origin disagree"
+    );
+  }
+  normalizeMethod(binding.originating_method, "portable-handle binding.originating_method");
+  requireSha256Ref(
+    binding.originating_request_hash,
+    "portable-handle binding.originating_request_hash"
+  );
+  normalizeAllowedConsumingMethods(
+    binding.allowed_consuming_methods,
+    "portable-handle binding.allowed_consuming_methods"
+  );
+  const issuedAt = requireIsoDate(binding.issued_at, "portable-handle binding.issued_at");
+  const expiresAt = requireIsoDate(binding.expires_at, "portable-handle binding.expires_at");
+  if (issuedAt !== binding.issued_at || expiresAt !== binding.expires_at || Date.parse(expiresAt) <= Date.parse(issuedAt) || Date.parse(expiresAt) - Date.parse(issuedAt) > HARD_MAX_TTL_MS || typeof binding.single_use !== "boolean" || !Number.isSafeInteger(binding.max_consumptions) || binding.max_consumptions < 1 || binding.max_consumptions > HARD_MAX_CONSUMPTIONS || binding.single_use !== (binding.max_consumptions === 1)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding lifetime or use policy is invalid"
+    );
+  }
+  requireSha256Ref(binding.binding_hash, "portable-handle binding.binding_hash");
+  if (!safeEqual(
+    binding.binding_hash,
+    sha256Ref({ ...binding, binding_hash: null })
+  )) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding hash mismatch"
+    );
+  }
+  return deepFreeze(binding);
+}
+function assertRegistryOpen(record) {
+  if (record.closed) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CLOSED,
+      "Portable-handle registry is closed"
+    );
+  }
+}
+function createMcpPortableHandleRegistry(options = {}) {
+  assertAllowedKeys(options, ["clock", "max_entries", "max_ttl_ms"], "portable-handle registry options");
+  const clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle registry clock must be a function"
+    );
+  }
+  const maxEntries = boundedInteger(
+    options.max_entries ?? DEFAULT_MAX_ENTRIES,
+    "portable-handle registry max_entries",
+    { min: 1, max: 1e5 }
+  );
+  const maxTtlMs = boundedInteger(
+    options.max_ttl_ms ?? DEFAULT_MAX_TTL_MS,
+    "portable-handle registry max_ttl_ms",
+    { min: 1e3, max: HARD_MAX_TTL_MS }
+  );
+  const record = {
+    clock,
+    maxEntries,
+    maxTtlMs,
+    key: randomBytes3(32),
+    bindings: /* @__PURE__ */ new Map(),
+    closed: false,
+    lastObservedTime: null
+  };
+  function register(input) {
+    assertRegistryOpen(record);
+    let normalized;
+    let handleValue;
+    let context;
+    let allowedConsumingMethods;
+    let ttlMs;
+    let maxConsumptions;
+    try {
+      normalized = exactCanonicalInput(input, REGISTRATION_KEYS, "portable-handle registration");
+      handleValue = normalizeHandleValue(normalized.handle_value);
+      context = normalizeBindingContext(normalized, "portable-handle registration");
+      allowedConsumingMethods = normalizeAllowedConsumingMethods(
+        normalized.allowed_consuming_methods,
+        "portable-handle registration.allowed_consuming_methods"
+      );
+      ttlMs = boundedInteger(normalized.ttl_ms, "portable-handle registration.ttl_ms", {
+        min: 1e3,
+        max: record.maxTtlMs
+      });
+      if (typeof normalized.single_use !== "boolean") {
+        throw new TypeError("portable-handle registration.single_use must be boolean");
+      }
+      maxConsumptions = boundedInteger(
+        normalized.max_consumptions,
+        "portable-handle registration.max_consumptions",
+        { min: 1, max: HARD_MAX_CONSUMPTIONS }
+      );
+      if (normalized.single_use !== (maxConsumptions === 1)) {
+        throw new TypeError(
+          "portable-handle registration single_use and max_consumptions disagree"
+        );
+      }
+    } catch (error) {
+      if (error instanceof RiskForkMcpPortableHandleError) throw error;
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle registration is invalid"
+      );
+    }
+    const now = currentTime(record);
+    assertRegistryOpen(record);
+    for (const [handleHash2, entry] of record.bindings) {
+      if (Date.parse(entry.binding.expires_at) <= now.milliseconds) {
+        record.bindings.delete(handleHash2);
+      }
+    }
+    const handleHash = keyedRef(record.key, "portable-handle", handleValue);
+    if (record.bindings.has(handleHash)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.ALREADY_REGISTERED,
+        "Portable handle is already registered"
+      );
+    }
+    if (record.bindings.size >= record.maxEntries) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CAPACITY_EXCEEDED,
+        "Portable-handle registry capacity is exhausted"
+      );
+    }
+    const expiresAt = new Date(now.milliseconds + ttlMs).toISOString();
+    const binding = {
+      schema: RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA,
+      binding_id: `mcp-portable-handle:${randomUUID6()}`,
+      handle_hash: handleHash,
+      principal_hash: keyedRef(record.key, "principal-ref", context.principalRef),
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash,
+      allowed_consuming_methods: allowedConsumingMethods,
+      issued_at: now.iso,
+      expires_at: expiresAt,
+      single_use: normalized.single_use,
+      max_consumptions: maxConsumptions,
+      binding_hash: null
+    };
+    binding.binding_hash = sha256Ref(binding);
+    const frozenBinding = deepFreeze(binding);
+    record.bindings.set(handleHash, {
+      binding: frozenBinding,
+      consumed: false,
+      consumingRequestHashes: /* @__PURE__ */ new Set()
+    });
+    return frozenBinding;
+  }
+  function authorize(input) {
+    assertRegistryOpen(record);
+    let normalized;
+    let handleValue;
+    let context;
+    let consumingMethod;
+    let consumingRequestHash;
+    let presentedBinding;
+    try {
+      normalized = exactCanonicalInput(input, AUTHORIZATION_KEYS, "portable-handle authorization");
+      handleValue = normalizeHandleValue(normalized.handle_value);
+      context = normalizeBindingContext(normalized, "portable-handle authorization");
+      consumingMethod = normalizeMethod(
+        normalized.consuming_method,
+        "portable-handle authorization.consuming_method"
+      );
+      consumingRequestHash = requireSha256Ref(
+        normalized.consuming_request_hash,
+        "portable-handle authorization.consuming_request_hash"
+      );
+      presentedBinding = normalizePresentedBinding(normalized.binding);
+    } catch (error) {
+      if (error instanceof RiskForkMcpPortableHandleError) throw error;
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle authorization is invalid"
+      );
+    }
+    const handleHash = keyedRef(record.key, "portable-handle", handleValue);
+    const entry = record.bindings.get(handleHash);
+    if (!entry) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.UNKNOWN_HANDLE,
+        "Portable handle is not registered in this host registry"
+      );
+    }
+    if (!safeEqual(entry.binding.binding_hash, presentedBinding.binding_hash)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Portable-handle binding does not match the host registry"
+      );
+    }
+    const principalHash = keyedRef(record.key, "principal-ref", context.principalRef);
+    const expectedContext = {
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash
+    };
+    if (Object.entries(expectedContext).some(([key, expected]) => key.endsWith("_hash") ? !safeEqual(entry.binding[key], expected) : entry.binding[key] !== expected)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+        "Portable handle is not bound to this principal, issuer, audience, origin, or originating request"
+      );
+    }
+    const now = currentTime(record);
+    assertRegistryOpen(record);
+    if (now.milliseconds >= Date.parse(entry.binding.expires_at)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.EXPIRED,
+        "Portable-handle binding has expired"
+      );
+    }
+    if (!entry.binding.allowed_consuming_methods.includes(consumingMethod)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+        "Portable handle is not authorized for this consuming method"
+      );
+    }
+    if (entry.consumingRequestHashes.has(consumingRequestHash) || entry.binding.single_use && entry.consumed) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.REPLAY,
+        "Portable-handle consumption was already used"
+      );
+    }
+    if (entry.consumingRequestHashes.size >= entry.binding.max_consumptions) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.USE_LIMIT,
+        "Portable-handle consumption limit is exhausted"
+      );
+    }
+    entry.consumingRequestHashes.add(consumingRequestHash);
+    if (entry.binding.single_use) entry.consumed = true;
+    const authorization = {
+      schema: RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA,
+      binding_hash: entry.binding.binding_hash,
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash,
+      allowed_consuming_methods: entry.binding.allowed_consuming_methods,
+      consuming_method: consumingMethod,
+      consuming_request_hash: consumingRequestHash,
+      authorized_at: now.iso,
+      expires_at: entry.binding.expires_at,
+      single_use: entry.binding.single_use,
+      max_consumptions: entry.binding.max_consumptions,
+      transferable: false,
+      raw_handle_exposed: false,
+      raw_principal_exposed: false,
+      authorization_hash: null
+    };
+    authorization.authorization_hash = sha256Ref(authorization);
+    return deepFreeze(authorization);
+  }
+  function close() {
+    if (record.closed) return;
+    record.closed = true;
+    record.bindings.clear();
+    record.key.fill(0);
+  }
+  const registry = Object.freeze({
+    schema: RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
+    register,
+    authorize,
+    close
+  });
+  registryRecords.set(registry, record);
+  return registry;
+}
+function isMcpPortableHandleRegistry(value) {
+  return registryRecords.has(value);
+}
+function createDurableMcpPortableHandleRegistry(options = {}) {
+  assertAllowedKeys(options, [
+    "store",
+    "tenant_ref",
+    "key_id",
+    "hash_key",
+    "max_entries",
+    "max_ttl_ms"
+  ], "durable portable-handle registry options");
+  const tenantRef = requireOpaqueRef(options.tenant_ref, "portable-handle tenant_ref");
+  const keyId = requireOpaqueRef(options.key_id, "portable-handle key_id");
+  if (containsSerializedCredentialMaterial(tenantRef) || containsSerializedCredentialMaterial(keyId) || !Buffer.isBuffer(options.hash_key) || options.hash_key.length !== 32) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Durable registry requires a credential-free namespace and a host-owned 32-byte key"
+    );
+  }
+  const store = options.store;
+  if (!store || !["register", "consume", "revoke"].every((name) => typeof store[name] === "function")) {
+    throw new TypeError("Durable registry requires transactional register/consume/revoke storage");
+  }
+  const storage = Object.freeze(Object.fromEntries(["register", "consume", "revoke"].map((name) => [name, store[name].bind(store)])));
+  const record = {
+    key: Buffer.from(options.hash_key),
+    closed: false,
+    maxEntries: boundedInteger(
+      options.max_entries ?? DEFAULT_MAX_ENTRIES,
+      "max_entries",
+      { min: 1, max: 1e5 }
+    ),
+    maxTtlMs: boundedInteger(
+      options.max_ttl_ms ?? DEFAULT_MAX_TTL_MS,
+      "max_ttl_ms",
+      { min: 1e3, max: HARD_MAX_TTL_MS }
+    )
+  };
+  const scopedRef = (domain, value) => keyedRef(record.key, domain, { tenantRef, keyId, value });
+  const scope = Object.freeze({
+    tenant_ref: tenantRef,
+    key_id: keyId,
+    key_fingerprint: scopedRef("portable-handle-key-namespace", null)
+  });
+  async function register(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, REGISTRATION_KEYS, "portable-handle registration");
+    const handleValue = normalizeHandleValue(normalized.handle_value);
+    const context = normalizeBindingContext(normalized, "portable-handle registration");
+    const methods = normalizeAllowedConsumingMethods(
+      normalized.allowed_consuming_methods,
+      "portable-handle registration.allowed_consuming_methods"
+    );
+    const ttlMs = boundedInteger(normalized.ttl_ms, "ttl_ms", { min: 1e3, max: record.maxTtlMs });
+    const maxConsumptions = boundedInteger(
+      normalized.max_consumptions,
+      "max_consumptions",
+      { min: 1, max: HARD_MAX_CONSUMPTIONS }
+    );
+    if (typeof normalized.single_use !== "boolean" || normalized.single_use !== (maxConsumptions === 1)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle registration use policy is invalid"
+      );
+    }
+    const handleHash = scopedRef("portable-handle", handleValue);
+    const principalHash = scopedRef("principal-ref", context.principalRef);
+    let expectedBinding;
+    const result = await storage.register(scope, {
+      handle_hash: handleHash,
+      max_entries: record.maxEntries,
+      ttl_ms: ttlMs
+    }, (nowValue) => {
+      assertRegistryOpen(record);
+      const now = requireIsoDate(nowValue, "portable-handle database time");
+      const binding2 = {
+        schema: RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA,
+        binding_id: `mcp-portable-handle:${randomUUID6()}`,
+        handle_hash: handleHash,
+        principal_hash: principalHash,
+        issuer: context.issuer,
+        audience: context.audience,
+        mcp_server_origin: context.mcpServerOrigin,
+        originating_method: context.originatingMethod,
+        originating_request_hash: context.originatingRequestHash,
+        allowed_consuming_methods: methods,
+        issued_at: now,
+        expires_at: new Date(Date.parse(now) + ttlMs).toISOString(),
+        single_use: normalized.single_use,
+        max_consumptions: maxConsumptions,
+        binding_hash: null
+      };
+      binding2.binding_hash = sha256Ref(binding2);
+      expectedBinding = normalizePresentedBinding(binding2);
+      return expectedBinding;
+    });
+    assertRegistryOpen(record);
+    const binding = normalizePresentedBinding(result);
+    if (!expectedBinding || canonicalize(binding) !== canonicalize(expectedBinding)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Storage returned a different portable-handle binding"
+      );
+    }
+    return binding;
+  }
+  async function authorize(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, AUTHORIZATION_KEYS, "portable-handle authorization");
+    const handleValue = normalizeHandleValue(normalized.handle_value);
+    const context = normalizeBindingContext(normalized, "portable-handle authorization");
+    const presented = normalizePresentedBinding(normalized.binding);
+    const method = normalizeMethod(normalized.consuming_method, "consuming_method");
+    const requestHash = requireSha256Ref(normalized.consuming_request_hash, "consuming_request_hash");
+    const handleHash = scopedRef("portable-handle", handleValue);
+    const principalHash = scopedRef("principal-ref", context.principalRef);
+    const expected = {
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash
+    };
+    let expectedReceipt;
+    const result = await storage.consume(scope, {
+      handle_hash: handleHash,
+      consuming_request_hash: requestHash
+    }, (storedValue, nowValue) => {
+      assertRegistryOpen(record);
+      const stored = normalizePresentedBinding(storedValue);
+      const now = requireIsoDate(nowValue, "portable-handle database time");
+      if (!safeEqual(stored.binding_hash, presented.binding_hash)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+          "Portable-handle binding differs from durable storage"
+        );
+      }
+      if (Object.entries(expected).some(([key, value]) => stored[key] !== value) || !stored.allowed_consuming_methods.includes(method)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+          "Portable handle does not belong to this authenticated context or method"
+        );
+      }
+      if (Date.parse(now) < Date.parse(stored.issued_at) || Date.parse(now) >= Date.parse(stored.expires_at)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.EXPIRED,
+          "Portable-handle binding is outside its validity window"
+        );
+      }
+      const receipt = {
+        schema: RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA,
+        binding_hash: stored.binding_hash,
+        ...expected,
+        allowed_consuming_methods: stored.allowed_consuming_methods,
+        consuming_method: method,
+        consuming_request_hash: requestHash,
+        authorized_at: now,
+        expires_at: stored.expires_at,
+        single_use: stored.single_use,
+        max_consumptions: stored.max_consumptions,
+        transferable: false,
+        raw_handle_exposed: false,
+        raw_principal_exposed: false,
+        authorization_hash: null
+      };
+      receipt.authorization_hash = sha256Ref(receipt);
+      expectedReceipt = deepFreeze(receipt);
+      return expectedReceipt;
+    });
+    assertRegistryOpen(record);
+    if (!expectedReceipt || canonicalize(result) !== canonicalize(expectedReceipt)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Storage returned an invalid portable-handle consumption receipt"
+      );
+    }
+    return expectedReceipt;
+  }
+  async function revoke(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, ["handle_value"], "portable-handle revocation");
+    const handleHash = scopedRef("portable-handle", normalizeHandleValue(normalized.handle_value));
+    await storage.revoke(scope, { handle_hash: handleHash });
+    assertRegistryOpen(record);
+  }
+  function close() {
+    record.closed = true;
+    record.key.fill(0);
+  }
+  const registry = Object.freeze({
+    schema: RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
+    durability: "transactional",
+    tenant_ref: tenantRef,
+    register,
+    authorize,
+    revoke,
+    close
+  });
+  registryRecords.set(registry, record);
+  return registry;
+}
+var preEffectBoundaries = /* @__PURE__ */ new WeakSet();
+var HANDLE_PHASES = ["tools/call", "resources/read", "prompts/get"];
+function fieldPath(value, label) {
+  if (value === null) return null;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16 || value.some((key) => typeof key !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(key) || ["__proto__", "constructor", "prototype"].includes(key))) {
+    throw new TypeError(`${label} must be an explicit bounded own-property path`);
+  }
+  return Object.freeze([...value]);
+}
+function ownPath(value, path8) {
+  let current = value;
+  for (const key of path8) {
+    const descriptor = current && typeof current === "object" ? Object.getOwnPropertyDescriptor(current, key) : null;
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTRACT_REQUIRED,
+        "The configured portable-handle field is missing"
+      );
+    }
+    current = descriptor.value;
+  }
+  return current;
+}
+function createMcpPortableHandlePreEffectBoundary(options = {}) {
+  assertAllowedKeys(
+    options,
+    ["authenticate", "registry_for_context", "contracts", "clock"],
+    "portable-handle pre-effect boundary options"
+  );
+  if (typeof options.authenticate !== "function" || typeof options.registry_for_context !== "function") {
+    throw new TypeError("Portable-handle boundary requires clean host authentication and registry resolvers");
+  }
+  const authenticate = options.authenticate;
+  const registryForContext = options.registry_for_context;
+  const clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") throw new TypeError("Portable-handle boundary clock must be a function");
+  const raw = JSON.parse(canonicalize(options.contracts));
+  if (!Array.isArray(raw) || raw.length > 1e3) throw new TypeError("Portable-handle contracts must be a bounded array");
+  const contracts = raw.map((value) => {
+    const contract = exactCanonicalInput(value, [
+      "phase",
+      "tool_name",
+      "tool_descriptor_hash",
+      "mcp_server_origin",
+      "handle_path",
+      "binding_path"
+    ], "portable-handle field contract");
+    if (!HANDLE_PHASES.includes(contract.phase) || (contract.phase === "tools/call" ? typeof contract.tool_name !== "string" : contract.tool_name !== null || contract.tool_descriptor_hash !== null)) {
+      throw new TypeError("Portable-handle contract phase/tool is invalid");
+    }
+    if (contract.phase === "tools/call") {
+      normalizeMethod(contract.tool_name, "contract.tool_name");
+      requireSha256Ref(contract.tool_descriptor_hash, "contract.tool_descriptor_hash");
+    }
+    canonicalHttpsUrl(contract.mcp_server_origin, "contract.mcp_server_origin", { originOnly: true });
+    contract.handle_path = fieldPath(contract.handle_path, "handle_path");
+    contract.binding_path = fieldPath(contract.binding_path, "binding_path");
+    if (contract.handle_path === null !== (contract.binding_path === null)) {
+      throw new TypeError("A portable-handle contract requires both field paths or neither");
+    }
+    return deepFreeze(contract);
+  });
+  const contractKey = (item) => canonicalize([item.phase, item.tool_name, item.mcp_server_origin]);
+  if (new Set(contracts.map(contractKey)).size !== contracts.length) {
+    throw new TypeError("Portable-handle contracts must not overlap");
+  }
+  async function currentIdentity(request, context) {
+    let identity;
+    try {
+      identity = exactCanonicalInput(await authenticate(request, context), [
+        "tenant_ref",
+        "principal_ref",
+        "issuer",
+        "audience",
+        "mcp_server_origin",
+        "expires_at"
+      ], "authenticated MCP identity");
+      requireOpaqueRef(identity.tenant_ref, "authenticated tenant_ref");
+      const normalized = normalizeBindingContext(
+        {
+          ...identity,
+          originating_method: request.phase,
+          originating_request_hash: request.request_hash
+        },
+        "authenticated MCP identity"
+      );
+      const expires = requireIsoDate(identity.expires_at, "authenticated expires_at");
+      const now = requireIsoDate(clock(), "authenticated host clock");
+      if (Date.parse(now) >= Date.parse(expires) || normalized.mcpServerOrigin !== request.mcp_server_origin || context?.signal?.aborted) throw new Error("Expired or mismatched identity");
+    } catch {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.AUTHENTICATION_REQUIRED,
+        "Current MCP request authentication is unavailable, expired or mismatched"
+      );
+    }
+    return deepFreeze(identity);
+  }
+  async function authorize(request, context) {
+    const identity = await currentIdentity(request, context);
+    if (!HANDLE_PHASES.includes(request.phase)) return null;
+    const contract = contracts.find((item) => contractKey(item) === contractKey(request));
+    if (!contract || contract.tool_descriptor_hash !== request.tool_descriptor_hash) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTRACT_REQUIRED,
+        "This MCP operation has no exact host-owned portable-handle field contract"
+      );
+    }
+    let receipt = null;
+    if (contract.handle_path !== null) {
+      const registry = await registryForContext(identity);
+      if (!isMcpPortableHandleRegistry(registry) || registry.durability !== "transactional" || registry.tenant_ref !== identity.tenant_ref) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+          "Authenticated MCP tenant has no durable portable-handle registry"
+        );
+      }
+      const binding = normalizePresentedBinding(ownPath(request.params, contract.binding_path));
+      receipt = await registry.authorize({
+        handle_value: ownPath(request.params, contract.handle_path),
+        binding,
+        principal_ref: identity.principal_ref,
+        issuer: identity.issuer,
+        audience: identity.audience,
+        mcp_server_origin: identity.mcp_server_origin,
+        originating_method: binding.originating_method,
+        originating_request_hash: binding.originating_request_hash,
+        consuming_method: request.phase,
+        consuming_request_hash: request.request_hash
+      });
+    }
+    if (canonicalize(await currentIdentity(request, context)) !== canonicalize(identity)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.AUTHENTICATION_REQUIRED,
+        "Authenticated MCP identity changed during authorization"
+      );
+    }
+    return receipt;
+  }
+  const boundary = Object.freeze({ authorize });
+  preEffectBoundaries.add(boundary);
+  return boundary;
+}
+function isMcpPortableHandlePreEffectBoundary(value) {
+  return preEffectBoundaries.has(value);
+}
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-transport-contract.mjs
 import { BlockList, isIP } from "node:net";
@@ -66096,7 +67067,7 @@ function normalizeEnforcementRequest(value, {
 function createPlanRequest(request, clock) {
   const value = {
     schema: RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
-    plan_request_id: `risk-fork-mcp-plan:${randomUUID6()}`,
+    plan_request_id: `risk-fork-mcp-plan:${randomUUID7()}`,
     mcp_request_hash: request.request_hash,
     phase: request.phase,
     mcp_server_ref: request.mcp_server_ref,
@@ -66514,6 +67485,10 @@ async function executePhase(record, request, context) {
     record.syntheticDemoMode
   );
   let preparedResult;
+  if (record.portableHandleBoundary) {
+    await record.portableHandleBoundary.authorize(request, context);
+    throwIfAborted(context);
+  }
   try {
     preparedResult = await record.preEffect({
       descriptor_ref: validatedPlan.plan.descriptor_ref,
@@ -66565,7 +67540,8 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     signal: controller.signal,
     timeout_ms: timeoutMs,
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
-    operation: context?.operation ?? request.phase
+    operation: context?.operation ?? request.phase,
+    authentication: context?.authentication
   });
   const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
   const cleanup = () => {
@@ -66598,7 +67574,8 @@ function createRiskForkMcpHostAdapter(input = {}) {
     "max_sessions",
     "max_requests_per_session",
     "max_request_bytes",
-    "synthetic_demo_mode"
+    "synthetic_demo_mode",
+    "portable_handle_boundary"
   ], "Risk Fork MCP host adapter input");
   if (!isRiskForkHostBoundary(input.host_boundary)) {
     throw adapterError(
@@ -66631,6 +67608,12 @@ function createRiskForkMcpHostAdapter(input = {}) {
     throw new TypeError("synthetic_demo_mode must be a boolean");
   }
   const syntheticDemoMode = input.synthetic_demo_mode === true;
+  if (input.portable_handle_boundary != null && !isMcpPortableHandlePreEffectBoundary(input.portable_handle_boundary)) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle admission requires a factory-created clean host boundary"
+    );
+  }
   const sessions = /* @__PURE__ */ new Set();
   const runtime = { pendingOpens: 0 };
   const preEffect = input.host_boundary.preEffect.bind(input.host_boundary);
@@ -66813,7 +67796,8 @@ function createRiskForkMcpHostAdapter(input = {}) {
     maxRequestBytes,
     preEffect,
     resolvePlan,
-    syntheticDemoMode
+    syntheticDemoMode,
+    portableHandleBoundary: input.portable_handle_boundary ?? null
   }));
   return adapter;
 }
@@ -68800,7 +69784,7 @@ async function sha256FileRef(file) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
@@ -69310,7 +70294,7 @@ function validateE2BBirthAttestation(value, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 import {
   mkdir as mkdir2,
   open as open3,
@@ -69473,7 +70457,7 @@ var E2BCleanupJournal = class {
     await this.initialize();
     const normalized = normalizeRecord(record);
     const target = this.#path(normalized.record_id);
-    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID7()}.tmp`);
+    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID8()}.tmp`);
     let handle;
     try {
       handle = await open3(temp, "wx", 384);
@@ -71635,7 +72619,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     expires_at: new Date(
       allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
     ).toISOString(),
-    birth_nonce: randomUUID8()
+    birth_nonce: randomUUID9()
   });
   const paths = e2bBirthRequestPaths(request.request_hash);
   for (const target of [
@@ -72644,9 +73628,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
-    const recordId = `e2b_cleanup_${randomUUID8()}`;
-    const cleanupRef = `e2b_cleanup_ref_${randomUUID8()}`;
-    const exportId = `e2b_export_${randomUUID8()}`;
+    const recordId = `e2b_cleanup_${randomUUID9()}`;
+    const cleanupRef = `e2b_cleanup_ref_${randomUUID9()}`;
+    const exportId = `e2b_export_${randomUUID9()}`;
     const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
@@ -72902,7 +73886,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           ...commonBootstrap,
           phase,
           expected_workspace_digest: workspaceDigest,
-          bootstrap_nonce: randomUUID8(),
+          bootstrap_nonce: randomUUID9(),
           request_hash: null
         };
         payload.request_hash = sha256Ref({ ...payload, request_hash: null });
@@ -73156,7 +74140,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     });
     const remainingMs = Date.parse(record.expires_at) - this.clock().getTime();
     if (timeoutMs > remainingMs) throw new Error("Execution timeout exceeds the child hard deadline");
-    const jobId = `rfj_${randomUUID8().replaceAll("-", "")}`;
+    const jobId = `rfj_${randomUUID9().replaceAll("-", "")}`;
     const jobPath = `${JOB_PATH}.${jobId}.json`;
     const resultPath = `${RESULT_PATH}.${jobId}.json`;
     const job = {
@@ -73477,7 +74461,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "fork",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID8()
+      request_nonce: randomUUID9()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
@@ -73575,7 +74559,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "savepoint",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID8()
+      request_nonce: randomUUID9()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
@@ -74495,7 +75479,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:7cf5b428998d43726f192359130d6c5d250507ab0cace2cc63fff273955b6739" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:6d5f9ae4aca5af085e13cc2682ee8f7d9c7a757197d7990d0988299f55656ec4" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
@@ -74575,6 +75559,7 @@ export {
   computeMcpCleanImportEvidenceHash,
   connectRemoteClient,
   createCleanupVerificationRequest,
+  createDurableMcpPortableHandleRegistry,
   createE2BAuthorityFreeSourceVerifier,
   createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
@@ -74583,6 +75568,8 @@ export {
   createForkIdentity,
   createMcpEnforcementBoundary,
   createMcpInterceptionPlan,
+  createMcpPortableHandlePreEffectBoundary,
+  createMcpPortableHandleRegistry,
   createPostgresAuthorityPool,
   createRemoteToolDirectory,
   createRiskForkHostBoundary,
@@ -74600,6 +75587,8 @@ export {
   importRiskForkProviderResult,
   isE2BQualificationEvidenceCanonical,
   isE2BRuntimeSdkIntegrityVerifier,
+  isMcpPortableHandlePreEffectBoundary,
+  isMcpPortableHandleRegistry,
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
   isRiskForkHostBoundary,

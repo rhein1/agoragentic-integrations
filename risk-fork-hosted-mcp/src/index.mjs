@@ -27,6 +27,13 @@ export {
   isRiskForkMcpHostAdapter,
 } from '../../risk-fork/src/mcp-host-adapter.mjs';
 export {
+  createMcpPortableHandleRegistry,
+  createDurableMcpPortableHandleRegistry,
+  createMcpPortableHandlePreEffectBoundary,
+  isMcpPortableHandleRegistry,
+  isMcpPortableHandlePreEffectBoundary,
+} from '../../risk-fork/src/mcp-portable-handle-boundary.mjs';
+export {
   REQUIRED_PROVIDER_METHODS,
   RiskForkProvider,
   assertRiskForkProvider,

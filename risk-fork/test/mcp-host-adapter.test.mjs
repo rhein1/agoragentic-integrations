@@ -14,6 +14,10 @@ import { sha256Ref } from '../src/canonical.mjs';
 import { createSavepointCapsule } from '../src/contracts.mjs';
 import { RiskForkController } from '../src/controller.mjs';
 import {
+  createMcpPortableHandlePreEffectBoundary,
+  RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES as HANDLE_CODES,
+} from '../src/mcp-portable-handle-boundary.mjs';
+import {
   createRiskForkHostBoundary,
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
@@ -535,7 +539,7 @@ class DynamicMcpTestProvider extends RiskForkProvider {
   }
 }
 
-function dynamicFixture(resultFactory, transportEvidenceMutator) {
+function dynamicFixture(resultFactory, transportEvidenceMutator, portableHandleBoundary = null) {
   const provider = new DynamicMcpTestProvider(resultFactory, transportEvidenceMutator);
   const controller = new RiskForkController({
     provider,
@@ -596,10 +600,55 @@ function dynamicFixture(resultFactory, transportEvidenceMutator) {
   const adapter = createRiskForkMcpHostAdapter({
     host_boundary: hostBoundary,
     trusted_phase_plan_source: planSource,
+    ...(portableHandleBoundary ? { portable_handle_boundary: portableHandleBoundary } : {}),
     clock: () => new Date(NOW),
   });
   return { adapter, hostBoundary, planSource, provider };
 }
+
+test('host portable-handle admission rejects unauthenticated discovery before allocation', async () => {
+  const capability = Object.freeze({ hostOwned: true });
+  let observedContext;
+  const portableBoundary = createMcpPortableHandlePreEffectBoundary({
+    authenticate: (_request, context) => { observedContext = context.authentication; throw new Error('revoked'); },
+    registry_for_context: () => null, contracts: [], clock: () => NOW,
+  });
+  const current = dynamicFixture(undefined, undefined, portableBoundary);
+  await assert.rejects(current.adapter.openSession(enforcementRequest({
+    schema: 'agoragentic.mcp.enforced-session-open-request.v1', phase: 'server/discover',
+    params: { protocol_version: '2026-07-28', stateless_required: true },
+  }), { authentication: capability }), (error) => error.code === HANDLE_CODES.AUTHENTICATION_REQUIRED);
+  assert.equal(observedContext, capability);
+  assert.equal(current.provider.sequence, 0);
+  assert.equal(current.provider.operations.length, 0);
+});
+
+test('host portable-handle admission reauthenticates every phase and rejects a consuming operation without its contract', async () => {
+  let authenticationCalls = 0;
+  const portableBoundary = createMcpPortableHandlePreEffectBoundary({
+    authenticate: () => { authenticationCalls += 1; return {
+      tenant_ref: 'tenant:test', principal_ref: sha256Ref('alice'),
+      issuer: 'https://identity.example.com/', audience: 'https://mcp.agoragentic.com/rpc',
+      mcp_server_origin: 'https://mcp.agoragentic.com', expires_at: LATER,
+    }; },
+    registry_for_context: () => null, contracts: [], clock: () => NOW,
+  });
+  const current = dynamicFixture(undefined, undefined, portableBoundary);
+  const opened = await openDirect(current.adapter);
+  const capabilities = completeCapabilities();
+  const annotations = completeAnnotations();
+  await assert.rejects(opened.session.request(enforcementRequest({
+    schema: 'agoragentic.mcp.enforced-phase-request.v1', phase: 'tools/call',
+    sessionBindingHash: opened.binding, params: { name: 'local_echo', arguments: { message: 'bounded' } },
+    toolDescriptor: { name: 'local_echo', inputSchema: { type: 'object', properties: { message: { type: 'string' } } }, annotations, capabilities },
+    toolAnnotations: annotations, toolCapabilities: capabilities, toolEffectStatus: 'explicit_read_only',
+  })), (error) => error.code === HANDLE_CODES.CONTRACT_REQUIRED);
+  assert.equal(authenticationCalls, 2);
+  assert.equal(current.provider.sequence, 2, 'only the discovery savepoint and fork were allocated');
+  assert.equal(current.provider.operations.length, 1);
+  assert.equal(JSON.stringify(current.provider.operations).includes('tenant:test'), false);
+  await opened.session.close();
+});
 
 async function fixture(options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-host-adapter-'));
