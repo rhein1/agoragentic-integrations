@@ -9,6 +9,8 @@ import { createManagedRequestPolicy } from '../src/request-policy.mjs';
 import { migratePostgresManagedRequestPolicy } from '../src/postgres-request-policy-migrator.mjs';
 import { createPostgresManagedRequestPolicyStore, PostgresManagedRequestPolicyStore } from '../src/postgres-request-policy-store.mjs';
 import { normalizeRequestQuotas, policyDbInteger, policySubjectHash, POLICY_ROUTES, requestPolicyMigration, requestQuotaWindow } from '../src/postgres-request-policy-config.mjs';
+import { verifyPostgresRequestPolicyAttestation } from '../src/postgres-request-policy-attestation.mjs';
+import { policyCatalogQuery } from './helpers/request-policy-catalog-fixture.mjs';
 
 const quotas = Object.fromEntries(POLICY_ROUTES.map((route) => [route, { windowMs: 3_600_000, perKey: 3, perTenant: 5, maxSubjects: 20 }]));
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL;
@@ -36,6 +38,8 @@ test('durable policy rejects malformed quotas, unsafe integer data and productio
   assert.throws(() => requestQuotaWindow(Number.MAX_SAFE_INTEGER, 1000));
   const pool = { connect: async () => { throw new Error('private DSN/credential'); } };
   assert.throws(() => new PostgresManagedRequestPolicyStore({ pool, quotas }), /disposable non-TLS/);
+  for (const expectedOwner of ['', null, 'Invalid-Owner']) assert.throws(() => new PostgresManagedRequestPolicyStore({ pool, quotas,
+    requireTls: false, disposableDb: true, expectedOwner }));
   await assert.rejects(createPostgresManagedRequestPolicyStore({ pool, quotas, deploymentMode: 'production' }), { code: 'POLICY_NOT_QUALIFIED' });
   const store = new PostgresManagedRequestPolicyStore({ pool, quotas, requireTls: false, disposableDb: true });
   await assert.rejects(store.readControl(), (e) => e.code === 'POLICY_UNAVAILABLE' && !e.message.includes('private'));
@@ -53,8 +57,9 @@ test('abort waits for in-flight SQL rollback; late/unknown commit never returns 
     const gate = new Promise((resolve) => { releaseWrite = resolve; });
     const atWrite = new Promise((resolve) => { entered = resolve; });
     const client = {
-      async query(sql) {
+      async query(sql, values) {
         events.push(sql);
+        const catalog = policyCatalogQuery(sql, values); if (catalog) return catalog;
         if (sql.startsWith('SELECT last_seen_ms')) return { rowCount: 1, rows: [{ last_seen_ms: '0' }] };
         if (sql.includes("current_setting('server_version_num')")) return { rowCount: 1, rows: [{ version: 160015, fsync: 'on', sync: 'on', triggers: 'origin' }] };
         if (sql.startsWith('SELECT version, migration_hash')) return { rowCount: 1, rows: [{ version: 1, migration_hash: hash }] };
@@ -89,7 +94,7 @@ test('abort waits for in-flight SQL rollback; late/unknown commit never returns 
 test('durable policy real PostgreSQL multi-instance, restart, quotas, disable and failures', { skip, timeout: 90_000 }, async (t) => {
   const schemaName = `policy_test_${randomUUID().replaceAll('-', '')}`, s = qid(schemaName);
   const pool = new pg.Pool({ connectionString, max: 8 });
-  const options = { pool, schemaName, quotas, requireTls: false, disposableDb: true, statementTimeoutMs: 200 };
+  const options = { pool, schemaName, quotas, requireTls: false, disposableDb: true, statementTimeoutMs: 5_000 };
   const stores = [];
   try {
     const migrated = await migratePostgresManagedRequestPolicy(options);
@@ -99,7 +104,7 @@ test('durable policy real PostgreSQL multi-instance, restart, quotas, disable an
     stores.push(a, b);
     assert.deepEqual(await a.readControl(), { enabled: false, epoch: 0 });
     const report = await a.initialize();
-    assert.equal(report.exact_catalog_verified, false); assert.equal(report.runtime_privileges_verified, false);
+    assert.equal(report.exact_catalog_verified, true); assert.equal(report.runtime_privileges_verified, false);
     const input = { tenant_id: 'tenant_alpha', key_id: 'key_alpha', route_class: 'admission' };
     const maintain = async (run) => {
       const client = await pool.connect();
@@ -208,12 +213,13 @@ test('durable policy real PostgreSQL multi-instance, restart, quotas, disable an
       await maintain((client) => client.query(`UPDATE ${s}.request_policy_clock SET last_seen_ms=$1`, [before]));
     });
     await t.test('lock timeout, abort and backend loss never allow or partially charge', async () => {
+      const bounded = await createPostgresManagedRequestPolicyStore({ ...options, statementTimeoutMs: 200 }); stores.push(bounded);
       const blocker = await pool.connect();
       const before = JSON.stringify((await pool.query(`SELECT * FROM ${s}.request_policy_subjects ORDER BY route_class,subject_kind,subject_hash`)).rows);
       try {
         await blocker.query('BEGIN'); await blocker.query(`SELECT last_seen_ms FROM ${s}.request_policy_clock FOR UPDATE`);
-        await assert.rejects(b.consumeRateLimit({ ...input, route_class: 'execution' }), { code: 'POLICY_UNAVAILABLE' });
-        const abort = new AbortController(); const pending = b.consumeRateLimit({ ...input, route_class: 'execution', signal: abort.signal });
+        await assert.rejects(bounded.consumeRateLimit({ ...input, route_class: 'execution' }), { code: 'POLICY_UNAVAILABLE' });
+        const abort = new AbortController(); const pending = bounded.consumeRateLimit({ ...input, route_class: 'execution', signal: abort.signal });
         const rejected = assert.rejects(pending, { code: 'REQUEST_TIMEOUT' }); abort.abort();
         await blocker.query('ROLLBACK'); await rejected;
       } finally { await blocker.query('ROLLBACK'); blocker.release(); }
@@ -221,17 +227,26 @@ test('durable policy real PostgreSQL multi-instance, restart, quotas, disable an
       const lost = new pg.Pool({ connectionString });
       const lostStore = await createPostgresManagedRequestPolicyStore({ ...options, pool: lost });
       await lost.end(); await assert.rejects(lostStore.readControl(), { code: 'POLICY_UNAVAILABLE' }); await lostStore.close();
-      // Fault-inject an error on the second INSERT: the first (tenant) write
-      // must roll back, not leave a torn per-tenant/per-key charge.
-      await maintain((client) => client.query(`CREATE FUNCTION ${s}.policy_test_fail_key() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN IF NEW.subject_kind='key' THEN RAISE EXCEPTION 'synthetic key write loss'; END IF; RETURN NEW; END $$;
-        CREATE TRIGGER policy_test_fail_key BEFORE INSERT ON ${s}.request_policy_subjects FOR EACH ROW EXECUTE FUNCTION ${s}.policy_test_fail_key()`));
+      // A disposable driver wrapper injects an SQL error on the second INSERT
+      // AFTER exact attestation, without altering the source-owned catalog.
+      let writes = 0;
+      const failedPool = { async connect() {
+        const client = await pool.connect();
+        return { release: () => client.release(), async query(sql, values) {
+          if (sql.startsWith(`INSERT INTO ${s}.request_policy_subjects`) && ++writes === 2) {
+            return client.query('SELECT 1/0');
+          }
+          return client.query(sql, values);
+        } };
+      } };
+      const failedStore = await createPostgresManagedRequestPolicyStore({ ...options, pool: failedPool });
       try {
-        await assert.rejects(b.consumeRateLimit({ tenant_id: 'tenant_torn', key_id: 'key_torn', route_class: 'recovery' }), { code: 'POLICY_UNAVAILABLE' });
+        await assert.rejects(failedStore.consumeRateLimit({ tenant_id: 'tenant_torn', key_id: 'key_torn', route_class: 'recovery' }), { code: 'POLICY_UNAVAILABLE' });
+        assert.equal(writes, 2);
         assert.equal((await pool.query(`SELECT 1 FROM ${s}.request_policy_subjects WHERE subject_hash=ANY($1::text[])`,
           [[policySubjectHash('tenant', 'tenant_torn'), policySubjectHash('key', 'tenant_torn', 'key_torn')]])).rowCount, 0);
       } finally {
-        await maintain((client) => client.query(`DROP TRIGGER policy_test_fail_key ON ${s}.request_policy_subjects; DROP FUNCTION ${s}.policy_test_fail_key()`));
+        await failedStore.close();
       }
     });
     await t.test('migration/config/counter drift rejects without automatic repair', async () => {
@@ -245,6 +260,34 @@ test('durable policy real PostgreSQL multi-instance, restart, quotas, disable an
       await assert.rejects(b.consumeRateLimit({ ...input, route_class: 'cleanup' }), { code: 'POLICY_UNAVAILABLE' });
       assert.equal((await pool.query(`SELECT min(used) AS n FROM ${s}.request_policy_subjects WHERE route_class='cleanup'`)).rows[0].n, 1_000_000);
     });
+    await t.test('every transaction rejects exact catalog drift before clock or quota writes', async () => {
+      const before = JSON.stringify((await pool.query(`SELECT * FROM ${s}.request_policy_subjects ORDER BY route_class,subject_kind,subject_hash`)).rows);
+      for (const [change, restore] of [
+        [`ALTER TABLE ${s}.request_policy_control ALTER enabled SET DEFAULT true`, `ALTER TABLE ${s}.request_policy_control ALTER enabled SET DEFAULT false`],
+        [`CREATE INDEX policy_extra_idx ON ${s}.request_policy_subjects (used)`, `DROP INDEX ${s}.policy_extra_idx`],
+        [`ALTER TABLE ${s}.request_policy_control DISABLE TRIGGER request_policy_control_epoch`, `ALTER TABLE ${s}.request_policy_control ENABLE TRIGGER request_policy_control_epoch`],
+        [`ALTER TABLE ${s}.request_policy_subjects DISABLE TRIGGER ALL`, `ALTER TABLE ${s}.request_policy_subjects ENABLE TRIGGER ALL`],
+        [`ALTER FUNCTION ${s}.guard_request_policy_control() SECURITY DEFINER`, `ALTER FUNCTION ${s}.guard_request_policy_control() SECURITY INVOKER`],
+        [`ALTER FUNCTION ${s}.guard_request_policy_control() SET search_path TO public`, `ALTER FUNCTION ${s}.guard_request_policy_control() SET search_path TO pg_catalog`],
+        [`ALTER TABLE ${s}.request_policy_subjects DROP CONSTRAINT request_policy_subjects_used_check;
+          ALTER TABLE ${s}.request_policy_subjects ADD CONSTRAINT request_policy_subjects_used_check CHECK (used BETWEEN 1 AND 1000001)`,
+        `ALTER TABLE ${s}.request_policy_subjects DROP CONSTRAINT request_policy_subjects_used_check;
+          ALTER TABLE ${s}.request_policy_subjects ADD CONSTRAINT request_policy_subjects_used_check CHECK (used BETWEEN 1 AND 1000000)`],
+        [`CREATE DOMAIN ${s}.policy_extra_type AS text`, `DROP DOMAIN ${s}.policy_extra_type`],
+        [`ALTER TABLE ${s}.request_policy_control ENABLE ROW LEVEL SECURITY`, `ALTER TABLE ${s}.request_policy_control DISABLE ROW LEVEL SECURITY`],
+      ]) {
+        const clock = (await pool.query(`SELECT last_seen_ms FROM ${s}.request_policy_clock`)).rows[0].last_seen_ms;
+        await maintain((client) => client.query(change));
+        try {
+          await assert.rejects(b.readControl(), { code: 'POLICY_UNAVAILABLE' }, change);
+          await assert.rejects(b.consumeRateLimit({ tenant_id: 'tenant_drift', key_id: 'key_drift', route_class: 'recovery' }), { code: 'POLICY_UNAVAILABLE' }, change);
+          await assert.rejects(createPostgresManagedRequestPolicyStore(options), { code: 'POLICY_UNAVAILABLE' }, change);
+          assert.equal((await pool.query(`SELECT last_seen_ms FROM ${s}.request_policy_clock`)).rows[0].last_seen_ms, clock);
+          assert.equal(JSON.stringify((await pool.query(`SELECT * FROM ${s}.request_policy_subjects ORDER BY route_class,subject_kind,subject_hash`)).rows), before);
+        } finally { await maintain((client) => client.query(restore)); }
+      }
+      await b.initialize();
+    });
   } finally {
     for (const store of stores) await store.close();
     await pool.query(`DROP SCHEMA IF EXISTS ${s} CASCADE`);
@@ -253,7 +296,7 @@ test('durable policy real PostgreSQL multi-instance, restart, quotas, disable an
   }
 });
 
-test('dedicated policy runtime grants consume quotas but cannot change control/configuration', { skip, timeout: 90_000 }, async () => {
+test('dedicated policy runtime attests exact grants and rejects privilege/ownership drift', { skip, timeout: 90_000 }, async () => {
   const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
   const db = `policy_role_${suffix}`, owner = `policy_owner_${suffix}`, runtime = `policy_runtime_${suffix}`, schemaName = `policy_${suffix}`;
   const root = new pg.Pool({ connectionString }), child = new URL(connectionString); child.pathname = `/${db}`;
@@ -273,15 +316,56 @@ test('dedicated policy runtime grants consume quotas but cannot change control/c
     ownerPool = new pg.Pool({ connectionString: url.toString() });
     const options = { schemaName, quotas, requireTls: false, disposableDb: true };
     await migratePostgresManagedRequestPolicy({ ...options, pool: ownerPool });
+    await ownerPool.query(`GRANT UPDATE (enabled) ON ${qid(schemaName)}.request_policy_control TO ${qid(runtime)}`);
     await ownerPool.query(grants);
     url.username = runtime; runtimePool = new pg.Pool({ connectionString: url.toString() });
-    const store = await createPostgresManagedRequestPolicyStore({ ...options, pool: runtimePool });
+    const store = await createPostgresManagedRequestPolicyStore({ ...options, pool: runtimePool, expectedOwner: owner });
+    assert.equal((await store.initialize()).runtime_privileges_verified, true);
+    assert.equal((await store.initialize()).exact_catalog_verified, true);
     assert.equal((await store.consumeRateLimit({ tenant_id: 'tenant_role', key_id: 'key_role', route_class: 'cleanup' })).allowed, true);
     for (const sql of [`UPDATE ${qid(schemaName)}.request_policy_control SET enabled=true,epoch=epoch+1`,
       `UPDATE ${qid(schemaName)}.request_policy_routes SET per_key=100`,
       `DELETE FROM ${qid(schemaName)}.request_policy_schema_migrations`,
       `TRUNCATE ${qid(schemaName)}.request_policy_subjects`,
       `CREATE TABLE ${qid(schemaName)}.forbidden (id integer)`]) await assert.rejects(runtimePool.query(sql), { code: '42501' });
+    const s = qid(schemaName), r = qid(runtime), o = qid(owner);
+    const unrelated = qid((await admin.query('SELECT current_user AS name')).rows[0].name);
+    const attest = async (expectedOwner = owner) => {
+      const client = await runtimePool.connect();
+      try { return await verifyPostgresRequestPolicyAttestation(client, { schemaName, expectedOwner }); }
+      finally { client.release(); }
+    };
+    await assert.rejects(attest(runtime), { code: 'POLICY_POSTGRES_ATTESTATION_FAILED' });
+    await assert.rejects(attest('missing_policy_owner'), { code: 'POLICY_POSTGRES_ATTESTATION_FAILED' });
+    for (const [change, restore] of [
+      [`GRANT SELECT ON ${s}.request_policy_control TO PUBLIC`, `REVOKE SELECT ON ${s}.request_policy_control FROM PUBLIC`],
+      [`GRANT SELECT ON ${s}.request_policy_control TO ${unrelated}`, `REVOKE SELECT ON ${s}.request_policy_control FROM ${unrelated}`],
+      [`REVOKE SELECT ON ${s}.request_policy_control FROM ${r}`, `GRANT SELECT ON ${s}.request_policy_control TO ${r}`],
+      [`GRANT UPDATE (enabled) ON ${s}.request_policy_control TO ${r}`, `REVOKE UPDATE (enabled) ON ${s}.request_policy_control FROM ${r}`],
+      [`GRANT SELECT (enabled) ON ${s}.request_policy_control TO PUBLIC`, `REVOKE SELECT (enabled) ON ${s}.request_policy_control FROM PUBLIC`],
+      [`GRANT INSERT ON ${s}.request_policy_schema_migrations TO ${r}`, `REVOKE INSERT ON ${s}.request_policy_schema_migrations FROM ${r}`],
+      [`GRANT UPDATE ON ${s}.request_policy_subjects TO ${r}`, `REVOKE UPDATE ON ${s}.request_policy_subjects FROM ${r}`],
+      [`GRANT SELECT ON ${s}.request_policy_control TO ${r} WITH GRANT OPTION`, `REVOKE GRANT OPTION FOR SELECT ON ${s}.request_policy_control FROM ${r}`],
+      [`GRANT CREATE ON SCHEMA ${s} TO ${r}`, `REVOKE CREATE ON SCHEMA ${s} FROM ${r}`],
+      [`GRANT TEMPORARY ON DATABASE ${qid(db)} TO ${r}`, `REVOKE TEMPORARY ON DATABASE ${qid(db)} FROM ${r}`],
+      [`GRANT CONNECT ON DATABASE ${qid(db)} TO PUBLIC`, `REVOKE CONNECT ON DATABASE ${qid(db)} FROM PUBLIC`],
+      [`GRANT EXECUTE ON FUNCTION ${s}.guard_request_policy_control() TO ${r}`, `REVOKE EXECUTE ON FUNCTION ${s}.guard_request_policy_control() FROM ${r}`],
+      [`ALTER DEFAULT PRIVILEGES FOR ROLE ${o} GRANT EXECUTE ON FUNCTIONS TO PUBLIC`, `ALTER DEFAULT PRIVILEGES FOR ROLE ${o} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`],
+      [`ALTER DEFAULT PRIVILEGES FOR ROLE ${o} IN SCHEMA ${s} GRANT SELECT ON TABLES TO ${r}`, `ALTER DEFAULT PRIVILEGES FOR ROLE ${o} IN SCHEMA ${s} REVOKE SELECT ON TABLES FROM ${r}`],
+      [`GRANT ${o} TO ${r}`, `REVOKE ${o} FROM ${r}`],
+      [`ALTER ROLE ${r} INHERIT`, `ALTER ROLE ${r} NOINHERIT`],
+      [`ALTER SCHEMA ${s} OWNER TO ${r}`, `ALTER SCHEMA ${s} OWNER TO ${o}`],
+      [`GRANT USAGE ON TYPE ${s}.request_policy_control TO ${r} WITH GRANT OPTION`, `REVOKE USAGE ON TYPE ${s}.request_policy_control FROM ${r}`],
+    ]) {
+      const before = JSON.stringify((await ownerPool.query(`SELECT * FROM ${s}.request_policy_subjects ORDER BY route_class,subject_kind,subject_hash`)).rows);
+      await admin.query(change);
+      try {
+        await assert.rejects(attest(), { code: 'POLICY_POSTGRES_ATTESTATION_FAILED' }, change);
+        await assert.rejects(store.consumeRateLimit({ tenant_id: 'tenant_acl_drift', key_id: 'key_acl_drift', route_class: 'cleanup' }), { code: 'POLICY_UNAVAILABLE' }, change);
+        assert.equal(JSON.stringify((await admin.query(`SELECT * FROM ${s}.request_policy_subjects ORDER BY route_class,subject_kind,subject_hash`)).rows), before);
+      } finally { await admin.query(restore); await ownerPool.query(grants); }
+      await attest();
+    }
     await store.close();
   } finally {
     if (runtimePool) await runtimePool.end(); if (ownerPool) await ownerPool.end(); await admin.end();

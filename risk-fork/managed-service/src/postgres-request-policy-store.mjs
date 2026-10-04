@@ -1,19 +1,20 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { assertAllowedKeys, assertPlainRecord, managedError, requireEnum, requireOpaqueRef, requireTenantId } from './validation.mjs';
 import { checkPolicySignal, normalizePolicyOptions, POLICY_ROUTES, policyDbInteger, policySubjectHash, requestPolicyMigration, requestQuotaWindow, verifyRequestPolicy } from './postgres-request-policy-config.mjs';
+import { verifyPostgresRequestPolicyAttestation } from './postgres-request-policy-attestation.mjs';
 
 // These callbacks are trusted-host seams, not authenticator capabilities. Bind
 // them through createManagedRequestPolicy, never expose them as public routes.
 export class PostgresManagedRequestPolicyStore {
   #pool; #config; #migration; #ownsPool; #closed = false;
   constructor(options = {}) {
-    this.#config = normalizePolicyOptions(options, ['ownsPool']);
+    this.#config = normalizePolicyOptions(options, ['ownsPool', 'expectedOwner']);
     if (!options.pool) throw new TypeError('Direct store requires a disposable injected pool; use the factory for TLS');
     if (options.ownsPool !== undefined && typeof options.ownsPool !== 'boolean') throw new TypeError('ownsPool must be boolean');
     this.#pool = options.pool; this.#ownsPool = options.ownsPool === true;
   }
   static async create(options = {}) {
-    const config = normalizePolicyOptions(options);
+    const config = normalizePolicyOptions(options, ['expectedOwner']);
     const owned = options.pool == null;
     const pool = options.pool ?? await createPostgresAuthorityPool({ connectionString: options.connectionString,
       requireTls: config.requireTls, tls: options.tls, maxConnections: options.maxConnections ?? 4,
@@ -48,6 +49,7 @@ export class PostgresManagedRequestPolicyStore {
         // roll a quota window backward on a different route or after restart.
         const lockedClock = await client.query(`SELECT last_seen_ms FROM ${s}.request_policy_clock WHERE singleton = true FOR UPDATE`);
         if (lockedClock.rowCount !== 1) throw new TypeError('Missing policy clock');
+        await verifyPostgresRequestPolicyAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner });
         const control = await verifyRequestPolicy(client, this.#config, migration.hash);
         const sampled = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');
         const now = policyDbInteger(sampled.rows[0]?.now_ms), prior = policyDbInteger(lockedClock.rows[0].last_seen_ms);
@@ -68,7 +70,7 @@ export class PostgresManagedRequestPolicyStore {
   async initialize() {
     await this.#transaction(undefined, async () => undefined);
     return Object.freeze({ production_qualified: false, live_traffic_protected: false, configuration_verified: true,
-      exact_catalog_verified: false, runtime_privileges_verified: false });
+      exact_catalog_verified: true, runtime_privileges_verified: this.#config.expectedOwner !== undefined });
   }
   async readControl(signal) { return this.#transaction(signal, async (_client, control) => control); }
   async consumeRateLimit(input) {

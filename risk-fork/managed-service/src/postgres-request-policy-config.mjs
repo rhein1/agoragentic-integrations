@@ -46,8 +46,9 @@ export function normalizePolicyOptions(options, extraKeys = []) {
   }
   const schemaName = options.schemaName ?? 'risk_fork_request_policy';
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
+  if (options.expectedOwner !== undefined) quotePostgresAuthorityIdentifier(options.expectedOwner);
   const quotas = normalizeRequestQuotas(options.quotas);
-  return Object.freeze({ schemaName, quotedSchema, quotas, policyHash: sha256Ref(quotas), requireTls,
+  return Object.freeze({ schemaName, quotedSchema, quotas, policyHash: sha256Ref(quotas), requireTls, expectedOwner: options.expectedOwner,
     statementTimeoutMs: requireInteger(options.statementTimeoutMs ?? 5_000, 'statementTimeoutMs', { min: 100, max: 30_000 }) });
 }
 

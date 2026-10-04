@@ -110,8 +110,11 @@ An optional [durable request-policy source backend](./REQUEST_POLICY.md) now
 implements shared atomic per-key/per-tenant fixed-window quotas, route-specific
 capacity, owner-only disable epochs, clock high-water checks and expired-window
 reclamation. Disposable two-instance/restart/role tests are local evidence;
-the backend remains `local_test` only, without exact catalog/ACL attestation or
-hosted qualification. No public TLS/JWKS gateway, production token broker,
+the backend now repeats exact source-owned PostgreSQL 16 catalog attestation and
+optional `expectedOwner` runtime identity/ownership/ACL checks before clock/quota
+writes. Its independent version-1 migration remains frozen. These close source
+checks only; the backend remains `local_test` without hosted qualification.
+No public TLS/JWKS gateway, production token broker,
 durable alerts or hosted service is provisioned. Effect-time fencing
 and in-flight cancellation are still separate host/broker requirements.
 

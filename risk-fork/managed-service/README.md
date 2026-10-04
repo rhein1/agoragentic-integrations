@@ -177,8 +177,10 @@ these two callbacks with shared transactional per-key/per-tenant fixed-window
 quotas, independent route capacity, a durable disable epoch and database-clock
 rollback rejection. It uses its own migration ledger and dedicated database,
 not the execution or worker-delivery schemas. The source is restricted to
-`local_test`; configuration/migration hashes are checked, but exact catalog and
-runtime ACL attestation remain unqualified. Hosts still own authenticated
+`local_test`; configuration/migration hashes and the exact source-owned PG16
+catalog are checked every transaction. Optional `expectedOwner` also verifies
+distinct runtime identity, ownership, exact ACLs and privilege defaults. These
+are local source checks, not hosted-role qualification. Hosts still own authenticated
 identity, edge protection, durable alerts and deployed qualification.
 Omitting the optional policy preserves local-test behavior, not production
 qualification. A policy decision is not

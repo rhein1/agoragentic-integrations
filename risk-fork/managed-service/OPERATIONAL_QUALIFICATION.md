@@ -62,8 +62,12 @@ Back `consumeRateLimit` and `readControl` with an atomic durable service shared
 by every instance. The optional [PostgreSQL backend](./REQUEST_POLICY.md) supplies
 source/local-test evidence only. Use a dedicated policy database and roles;
 never add its tables or grants to an already-attested control-plane or delivery
-database. Its exact catalog/ACL attestation, hosted TLS/rotation/HA, capacity,
-retention and load qualification remain open. Fixed windows permit up to two
+database. Construct its runtime with `expectedOwner`; source verifies its
+independent frozen migration, exact PG16 catalog (including internal FK triggers)
+and dedicated least-privilege runtime on every transaction. Retain current
+deployed-role/catalog evidence; the local pass is not hosted qualification.
+Drain the backend before owner DDL/ACL maintenance. Hosted TLS/rotation/HA,
+capacity, retention and load qualification remain open. Fixed windows permit up to two
 window quotas across a boundary; choose/review limits for that burst model.
 Test combined per-key/per-tenant burst exhaustion across two
 instances, fail-closed backend loss, bounded 429 retry, deadlines and retry

@@ -41,6 +41,7 @@ const store = await createPostgresManagedRequestPolicyStore({
   connectionString: hostPolicyConnectionString,
   tls: { ca: hostPolicyCa },
   schemaName: 'risk_fork_request_policy',
+  expectedOwner: hostDedicatedPolicyMigratorRole,
   quotas,
 });
 const requestPolicy = createManagedRequestPolicy({
@@ -58,7 +59,20 @@ accepted only for explicit `requireTls: false, disposableDb: true` local tests.
 `deploymentMode: 'production'` is rejected regardless of transport. The factory
 preserves its TLS requirement at later client checkout and closes only its own
 pool. PostgreSQL 16, fsync, synchronous commits and normal trigger mode are
-required. Each transaction rechecks the exact migration and quota binding.
+required. Each transaction rechecks the exact migration, catalog and quota
+binding before clock/quota writes; `expectedOwner` additionally rechecks the
+separate runtime identity and privileges. A direct store does the same on its
+first operation; the factory verifies before returning it. Omitting
+`expectedOwner` is catalog-only local testing, not runtime-role qualification.
+
+`verifyPostgresRequestPolicyAttestation` compares the complete relation, column,
+constraint, index, user/internal-FK trigger, function, type, policy, rule,
+inheritance and auxiliary-object inventory against the independent source-owned
+PostgreSQL 16 manifest. Its hash binds the frozen version-1 policy migration;
+this does not extend the control-plane ledger. Disabled internal FK triggers,
+extra objects and altered function bodies/search paths fail closed. A host cannot
+supply or capture an expected manifest at runtime. Other PostgreSQL majors are
+rejected pending separate review.
 
 ## Atomicity, clock and capacity
 
@@ -101,7 +115,16 @@ trusted runtime SELECT, clock-column UPDATE and quota-table INSERT/UPDATE/DELETE
 DELETE is needed only for expired-window reclamation. Runtime control/config/
 ledger changes, TRUNCATE and DDL are denied in disposable separate-role tests.
 This trusts the host runtime: a stolen runtime DB credential can alter quota
-usage. It is not protection against a compromised host or a privilege attestation.
+usage. It is not protection against a compromised host. Strict `expectedOwner`
+attestation checks distinct LOGIN/NOINHERIT identity, no memberships/elevated role
+attributes, exact schema/object ownership and table/column ACLs, no PUBLIC or
+unrelated data/function grants, no grant options, and database CONNECT/schema
+USAGE without CREATE/TEMPORARY authority. Generated row/array types retain the
+inert PostgreSQL PUBLIC USAGE baseline, never schema/table access; extra or
+grantable type ACLs are rejected. Global/scoped relation, sequence and function
+defaults must not leak privileges. The template removes stale column grants
+separately and revokes the dedicated migrator's global PUBLIC function-EXECUTE
+default in this database. Do not apply it using a shared migrator.
 
 Only the owner performs a prepared disable/enable update with the expected epoch:
 `SET enabled=$1, epoch=epoch+1 WHERE singleton=true AND epoch=$2 RETURNING ...`.
@@ -109,15 +132,18 @@ Require exactly one result. A trigger requires each control update to advance
 the epoch once and forbids changing its singleton/configuration hash. Changing
 quota configuration requires draining the backend and a separately reviewed new
 schema/binding; no live limit migration, admin endpoint or auto-repair is supplied.
-Owner fixture/maintenance changes must acquire the clock lock first. Disable
+Owner fixture/maintenance changes must acquire the clock lock first. Schema,
+owner and ACL maintenance requires draining the backend; attestation is not an
+atomic fence against concurrent administrative DDL/GRANT or owner compromise.
+Disable
 blocks admission/execution through the wrapper but leaves bounded cleanup,
 recovery and reads available. It does **not** terminate in-flight provider work.
 
 `initialize()` explicitly reports `configuration_verified: true`,
-`exact_catalog_verified: false`, `runtime_privileges_verified: false`,
-`production_qualified: false`, and `live_traffic_protected: false`. A migration
-hash/configuration check does not attest every SQL constraint, trigger or ACL.
-Exact policy catalog/role attestation, hosted TLS/key custody/rotation, restore/
+`exact_catalog_verified: true`, `runtime_privileges_verified: true` only when
+`expectedOwner` is supplied and passes (otherwise false), `production_qualified:
+false`, and `live_traffic_protected: false`. These are source/local-test checks,
+not deployed-role qualification. Hosted TLS/key custody/rotation, restore/
 HA/failover, durable alert delivery, overload SLOs and an atomic effect-time
 broker fence/cancellation remain separate qualification work. This backend is
 not coupled atomically to an execution ledger or provider call.
@@ -127,7 +153,12 @@ not coupled atomically to an execution ledger or provider call.
 `test/postgres-request-policy.test.mjs` includes deterministic config/error/
 late-commit tests plus guarded real PostgreSQL two-instance, restart, all-or-none
 quota, capacity reclamation, disable/epoch, clock rollback, lock timeout/abort,
-backend loss, configuration drift and separate-runtime role tests. The existing
+backend loss, catalog/configuration drift and separate-runtime role/ACL/default/
+membership/ownership drift tests. A disposable driver injects a real SQL error
+on the second quota INSERT after catalog verification to prove both writes roll
+back; no extra trigger is mislabeled as that failure. The independent
+`test/postgres-request-policy-attestation.test.mjs` pins every catalog family and
+closed/redacted failure behavior. The existing
 mandatory managed PostgreSQL CI job runs it on Node 20/22/24. A supplied local
 lab CA additionally exercises the factory's real TLS success/wrong-CA rejection;
 ordinary CI PostgreSQL without that CA is not TLS evidence for this backend.
