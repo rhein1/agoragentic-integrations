@@ -2,6 +2,15 @@ import { createServer } from 'node:http';
 import { TextDecoder } from 'node:util';
 import { requireInteger } from '../src/validation.mjs';
 
+function normalizedRetryAfter(headers) {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return {};
+  const descriptor = Object.getOwnPropertyDescriptor(headers, 'retry-after');
+  if (!descriptor || !descriptor.enumerable || descriptor.get || descriptor.set || typeof descriptor.value !== 'string') return {};
+  if (!/^(?:0|[1-9]\d{0,3})$/.test(descriptor.value)) return {};
+  const seconds = Number(descriptor.value);
+  return seconds <= 3600 ? { 'retry-after': String(seconds) } : {};
+}
+
 // Default-off loopback test ingress. This is NOT a production listener, public
 // edge, reverse proxy, TLS terminator, OAuth issuer, or provider executor.
 export function createManagedLoopbackServer({ enabled = false, handler,
@@ -54,8 +63,9 @@ export function createManagedLoopbackServer({ enabled = false, handler,
         const result = await handler({ method: request.method, path: request.url, headers, body, signal: abort.signal });
         if (!result || !Number.isInteger(result.status) || result.status < 100 || result.status > 599) throw new Error('invalid response');
         if (Buffer.byteLength(JSON.stringify(result.body), 'utf8') > 1048576) throw new Error('response too large');
-        // Never forward arbitrary handler headers such as Location/cookies.
-        send(result.status, result.body);
+        // Only the bounded rate-limit hint is transport-safe; never forward
+        // arbitrary handler headers such as Location, cookies, or auth data.
+        send(result.status, result.body, normalizedRetryAfter(result.headers));
       } catch { send(500, { error: { code: 'REQUEST_FAILED_CLOSED' } }); }
     });
   });

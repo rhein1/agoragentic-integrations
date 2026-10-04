@@ -82,9 +82,11 @@ test('managed control-plane runtime role uses owner lock helpers without credent
     await root.query(`CREATE DATABASE ${qid(database)}`); childCreated = true;
     await admin.query(`CREATE ROLE ${qid(migrator)} LOGIN NOINHERIT PASSWORD '${migratorPassword}'`);
     await admin.query(`CREATE ROLE ${qid(runtime)} LOGIN NOINHERIT PASSWORD '${runtimePassword}'`);
-    await admin.query(`REVOKE CONNECT, CREATE, TEMPORARY ON DATABASE ${qid(database)} FROM PUBLIC`);
-    await admin.query(`GRANT CONNECT, CREATE ON DATABASE ${qid(database)} TO ${qid(migrator)}`);
-    await admin.query(`GRANT CONNECT ON DATABASE ${qid(database)} TO ${qid(runtime)}`);
+    const ownerBootstrap = (await readFile(new URL('../ops/postgres/control-plane-owner-bootstrap.sql.template', import.meta.url), 'utf8'))
+      .replaceAll('__RISK_FORK_MANAGED_DATABASE__', database)
+      .replaceAll('__RISK_FORK_MANAGED_MIGRATOR_ROLE__', migrator)
+      .replaceAll('__RISK_FORK_MANAGED_RUNTIME_ROLE__', runtime);
+    await admin.query(ownerBootstrap);
     await migrateManagedServicePostgres({ connectionString: migratorConnection, schemaName, requireTls: false });
     const migrationClient = await admin.connect();
     try {

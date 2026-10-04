@@ -130,7 +130,8 @@ Payload minimization ensures cleanup and recovery claims do not return the origi
 
 `createOfflineOAuthVerifier({ issuer, audience, jwks })` supplies a concrete
 offline verification callback for that seam. It snapshots host-provisioned
-public JWKs (RSA RS256, 2048–8192 bits; EC ES256, P-256), accepts only
+public JWKs (RSA RS256, 2048–8192 bits with public exponent 65537; EC ES256,
+P-256), accepts only
 `typ: at+jwt`, checks signatures, exact issuer/single audience and bounded
 `iat`/`nbf`/`exp`, and rejects duplicate JSON members, noncanonical encoding,
 unknown headers/claims and ambiguous scopes. This is a **dedicated Risk Fork
@@ -139,6 +140,9 @@ implementation. Required custom identity claims are `key_id`, `key_hash` and
 `tenant_id`, with `sub === key_id`; scopes use either `scope` or `scopes`, never
 both. Always wrap it in `createTrustedOAuthAuthenticator` so the current
 persisted credential is the authority for identity, scope and revocation.
+Token and persisted-credential validity windows are strict; no clock-skew
+option is supported. Synchronize issuer/host clocks rather than extending
+expired or not-yet-valid authority.
 Keys are static: the host must supply a separately reviewed issuer/token
 broker, key rotation and public TLS. The verifier performs no discovery or
 JWKS fetch, and cannot mint tokens.
@@ -234,7 +238,11 @@ from an invocation's current lease or patch the frozen initial migration.
 
 Explicit migration `003_control_plane_lock_helpers` adds three bounded
 `SECURITY DEFINER` helpers with `search_path=pg_catalog`, schema-qualified
-tables, and PUBLIC EXECUTE revoked. Apply the separate
+tables, and PUBLIC EXECUTE revoked. Before migration `001`, run the dedicated
+[control-plane owner bootstrap](./ops/postgres/control-plane-owner-bootstrap.sql.template)
+as the database owner for separately provisioned migrator/runtime roles. It
+revokes PUBLIC database CONNECT/CREATE/TEMPORARY, grants migrator CONNECT/CREATE,
+and grants runtime CONNECT only. Apply the separate
 [control-plane grants](./ops/postgres/control-plane-roles.sql.template) using
 the dedicated migration owner after all three control-plane migrations.
 It is not the worker-delivery schema/template. Runtime SELECT covers all eight
@@ -267,8 +275,8 @@ tombstones count toward capacity. This local-test store is not a replacement for
 the managed control-plane or portable-handle ledger. Supply host-owned key custody,
 retention and cleanup policy; managed-role/HA/restore qualification remains open.
 
-The delivery factory now verifies the exact reviewed catalog and version-1
-migration hash before returning a store; every operation repeats that check
+The delivery factory accepts only PostgreSQL 16 and verifies the exact reviewed
+catalog and version-1 migration hash before returning a store; every operation repeats that check
 inside its transaction. Constraints, indexes, trigger definitions and function
 bodies are checked, not only names. `initialize()` exposes the same check for a
 directly constructed store. Catalog or migration drift fails closed without DDL

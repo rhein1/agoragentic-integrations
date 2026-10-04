@@ -71,15 +71,17 @@ explicit production mode, which requires verified TLS. A reviewed role template
 and disposable separate-owner/runtime tests exist. The managed control plane and
 independent ciphertext delivery store still need deployed role/catalog
 qualification; local tests cannot substitute for it. The delivery source now
-verifies its exact catalog and migration hash before factory return and every
-transaction, with opt-in `expectedOwner` least-privilege runtime attestation,
+requires PostgreSQL 16 and verifies its exact catalog and migration hash before
+factory return and every transaction, with opt-in `expectedOwner` least-privilege runtime attestation,
 separate-role templates and disposable role/drift tests. Catalog-only mode does
 not verify privileges, and neither mode enables production. The control-plane
 source now adds versioned owner-executed credential/tenant lock helpers
 (migration 003), a PostgreSQL 16 exact source-owned catalog manifest, opt-in
 distinct runtime-role attestation via `expectedOwner`, and disposable
 separate-LOGIN-role drift/lock tests. No API-key/tenant UPDATE is granted to the
-runtime. These close source gaps, not deployed-role qualification. Managed migration
+runtime. A dedicated control-plane owner bootstrap removes PUBLIC database
+grants before migrations and is exercised by the disposable runtime-role test.
+These close source gaps, not deployed-role qualification. Managed migration
 `002_journal_purpose` upgrades immutable `001` using each receipt's exact audit
 event and aborts ambiguous legacy evidence.
 
@@ -99,7 +101,8 @@ and recovery. `createTrustedOAuthAuthenticator` delegates actual signature/JWKS
 and OAuth verification to a trusted host callback per request and binds its
 identity to the current credential record. An offline pinned-key verifier now
 checks actual RS256/ES256 signatures for the dedicated Risk Fork JWT profile,
-not generic OAuth brokering. Optional host-owned `requestPolicy` checks
+with RSA exponent 65537 and strict token/credential validity windows, not
+generic OAuth brokering. Optional host-owned `requestPolicy` checks
 rate/control before authenticated route access and local host worker starts;
 it rechecks control after rate await and keeps cleanup/recovery available when
 execution is disabled. Redacted policy telemetry is bounded and best-effort.

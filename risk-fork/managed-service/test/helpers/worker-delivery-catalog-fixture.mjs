@@ -54,6 +54,7 @@ export async function createWorkerDeliveryCatalogFixture({
   schemaName = 'risk_fork_worker_delivery',
   runtimeRole = 'worker_runtime',
   migrationOwner = 'worker_migrator',
+  postgresMajor = 16,
 } = {}) {
   const source = await MIGRATION_SOURCE;
   const migrationHash = sha256Ref(source);
@@ -68,6 +69,7 @@ export async function createWorkerDeliveryCatalogFixture({
       const client = {
         async query(sql, params = []) {
           if (/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL|SELECT pg_advisory)/.test(sql)) return { rowCount: 0, rows: [] };
+          if (sql.includes("current_setting('server_version_num')")) return { rowCount: 1, rows: [{ version: `${postgresMajor}0000` }] };
           if (sql.includes('pg_stat_ssl')) return { rowCount: 1, rows: [{ ssl: true, version: 'TLS', cipher: 'fixture' }] };
           if (sql.includes('FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace') && sql.includes('relkind NOT IN')) {
             if (state.mutations.has('relations')) return { rowCount: 1, rows: [{ ...relationRows[0], kind: 'v' }] };

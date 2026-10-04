@@ -100,6 +100,7 @@ function normalizeJwks(jwks) {
       const key = createPublicKey({ key: jwk, format: 'jwk' });
       const details = key.asymmetricKeyDetails ?? {};
       if (alg === 'RS256' && ((details.modulusLength ?? 0) < 2048 || details.modulusLength > 8192)) fail('RSA key size is invalid');
+      if (alg === 'RS256' && details.publicExponent !== 65537n) fail('RSA public exponent is invalid');
       if (alg === 'ES256' && details.namedCurve !== 'prime256v1') fail('EC curve is invalid');
       keys.set(kid, Object.freeze({ alg, key }));
     }
@@ -115,12 +116,12 @@ function claimTime(value, name) {
 
 export function createOfflineOAuthVerifier(options = {}) {
   assertPlainRecord(options, 'OAuth verifier options');
-  assertAllowedKeys(options, ['issuer', 'audience', 'jwks', 'clock', 'clockSkewSeconds', 'maxTokenBytes', 'maxLifetimeSeconds'], 'OAuth verifier options');
+  assertAllowedKeys(options, ['issuer', 'audience', 'jwks', 'clock', 'maxTokenBytes', 'maxLifetimeSeconds'], 'OAuth verifier options');
   const { issuer, audience, jwks, clock = () => new Date(),
-    clockSkewSeconds = 0, maxTokenBytes = 8192, maxLifetimeSeconds = 3600 } = options;
+    maxTokenBytes = 8192, maxLifetimeSeconds = 3600 } = options;
   if (typeof issuer !== 'string' || issuer.length < 1 || issuer.length > 512) fail('issuer is invalid');
   if (typeof audience !== 'string' || audience.length < 1 || audience.length > 512) fail('audience is invalid');
-  if (typeof clock !== 'function' || !Number.isInteger(clockSkewSeconds) || clockSkewSeconds < 0 || clockSkewSeconds > 300
+  if (typeof clock !== 'function'
     || !Number.isInteger(maxTokenBytes) || maxTokenBytes < 256 || maxTokenBytes > 16384
     || !Number.isInteger(maxLifetimeSeconds) || maxLifetimeSeconds < 1 || maxLifetimeSeconds > 86400) fail('OAuth verifier bounds are invalid');
   const keys = normalizeJwks(jwks);
@@ -157,8 +158,8 @@ export function createOfflineOAuthVerifier(options = {}) {
     const now = currentEpochSeconds();
     const exp = claimTime(claims.exp, 'exp'); const nbf = claimTime(claims.nbf, 'nbf');
     const iat = claimTime(claims.iat, 'iat');
-    if (exp <= nbf || iat > nbf || exp - iat > maxLifetimeSeconds || exp - nbf > maxLifetimeSeconds || iat > exp || now >= exp + clockSkewSeconds || now < nbf - clockSkewSeconds
-      || iat > now + clockSkewSeconds || claims.iss !== issuer) fail('OAuth claims are invalid');
+    if (exp <= nbf || iat > nbf || exp - iat > maxLifetimeSeconds || exp - nbf > maxLifetimeSeconds || iat > exp || now >= exp || now < nbf
+      || iat > now || claims.iss !== issuer) fail('OAuth claims are invalid');
     const aud = claims.aud;
     if (!(typeof aud === 'string' && aud === audience) && !(Array.isArray(aud) && aud.length === 1 && aud[0] === audience)) fail('OAuth audience is invalid');
     if (claims.scope !== undefined && claims.scopes !== undefined) fail('OAuth scope claims are ambiguous');

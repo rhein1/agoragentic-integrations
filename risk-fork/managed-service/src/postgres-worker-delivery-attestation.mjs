@@ -106,6 +106,9 @@ function tableRef(schemaName, tableName) {
 }
 
 async function verifyCatalog(client, schemaName, migrationSource, migrationHash) {
+  const version = await client.query("SELECT pg_catalog.current_setting('server_version_num') AS version");
+  expect(version.rowCount === 1 && Number(version.rows[0].version) >= 160000
+    && Number(version.rows[0].version) < 170000, 'postgres_version');
   const relations = await client.query(
     `SELECT c.relname AS name,c.relkind AS kind,c.relpersistence AS persistence,
             c.relrowsecurity AS row_security,c.relforcerowsecurity AS force_row_security,

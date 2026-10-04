@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createPublicKey, createSign, generateKeyPairSync } from 'node:crypto';
+import { createHash, createPublicKey, createSign, createVerify, generateKeyPairSync } from 'node:crypto';
 import test from 'node:test';
 import { createOfflineOAuthVerifier } from '../src/oauth-verifier.mjs';
 import { createTrustedOAuthAuthenticator, hashManagedApiKey } from '../src/auth.mjs';
@@ -81,6 +81,71 @@ test('rejects weak RSA and non-P256 EC keys at construction', () => {
   assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [{ ...jwk, kid: 'dup' }, { ...jwk, kid: 'dup' }] }), /kid/);
   assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [{ ...jwk, d: 'private' }] }), /private|material/);
   assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [{ ...jwk, alg: 'ES256' }] }), /type|material|unknown/);
+});
+
+test('rejects exponent-one RSA keys that otherwise accept a forged access token', async () => {
+  const exponentOne = { ...jwk, e: 'AQ', kid: 'exponent-one' };
+  const imported = createPublicKey({ key: exponentOne, format: 'jwk' });
+  assert.equal(imported.asymmetricKeyDetails.modulusLength, 2048);
+  assert.equal(imported.asymmetricKeyDetails.publicExponent, 1n);
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'exponent-one', typ: 'at+jwt' })).toString('base64url');
+  const claims = Buffer.from(JSON.stringify({
+    iss: issuer, aud: audience, sub: 'attacker_key', key_id: 'attacker_key',
+    key_hash: `sha256:${'a'.repeat(64)}`, tenant_id: 'attacker_tenant',
+    scopes: ['invocations:write'], iat: NOW, nbf: NOW, exp: NOW + 30,
+  })).toString('base64url');
+  const signedBytes = `${header}.${claims}`;
+  const digestInfo = Buffer.concat([
+    Buffer.from('3031300d060960864801650304020105000420', 'hex'),
+    createHash('sha256').update(signedBytes).digest(),
+  ]);
+  // For e=1 the padded digest itself verifies: no private key is required.
+  const forgedSignature = Buffer.concat([
+    Buffer.from([0, 1]), Buffer.alloc(256 - digestInfo.length - 3, 0xff),
+    Buffer.from([0]), digestInfo,
+  ]);
+  const unsafeVerifier = createVerify('RSA-SHA256');
+  unsafeVerifier.update(signedBytes); unsafeVerifier.end();
+  assert.equal(unsafeVerifier.verify(imported, forgedSignature), true);
+  await assert.rejects(async () => verifier([exponentOne])({
+    authorization: `Bearer ${signedBytes}.${forgedSignature.toString('base64url')}`, issuer, audience,
+  }), /exponent|material/);
+  assert.throws(() => verifier([exponentOne]), /exponent|material/);
+});
+
+test('accepts only the reviewed RSA public exponent', () => {
+  assert.equal(createPublicKey({ key: jwk, format: 'jwk' }).asymmetricKeyDetails.publicExponent, 65537n);
+  for (const exponent of ['AA', 'Ag', 'Aw', 'AQABAA']) {
+    assert.throws(() => verifier([{ ...jwk, e: exponent }]), /exponent|material/);
+  }
+});
+
+test('the wrapped verifier uses strict token and persisted-credential validity with no skew option', async () => {
+  for (const clockSkewSeconds of [0, 1, 30, 301]) {
+    assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [jwk], clockSkewSeconds }), /unsupported field/);
+  }
+  let now = NOW;
+  const keyHash = hashManagedApiKey('x'.repeat(32));
+  const credential = {
+    schema: 'agoragentic.risk-fork.managed-api-key.v1', key_id: 'key_1', tenant_id: 'tenant_1',
+    key_hash: keyHash, scopes: ['invocations:write'], not_before: new Date((NOW - 100) * 1000).toISOString(),
+    expires_at: new Date((NOW + 60) * 1000).toISOString(), revoked_at: null,
+  };
+  const clock = () => new Date(now * 1000);
+  const verify = createOfflineOAuthVerifier({ issuer, audience, jwks: [jwk], clock });
+  const auth = createTrustedOAuthAuthenticator({ store: { async resolveCredential() { return credential; } }, issuer, audience, clock, verify });
+  const authorization = `Bearer ${token({ key_hash: keyHash, iat: NOW - 10, nbf: NOW, exp: NOW + 30 })}`;
+  await auth.authenticate(authorization, 'invocations:write');
+  now = NOW - 1;
+  await assert.rejects(auth.authenticate(authorization, 'invocations:write'), { code: 'AUTHENTICATION_FAILED' });
+  now = NOW + 29;
+  await auth.authenticate(authorization, 'invocations:write');
+  now = NOW + 30;
+  await assert.rejects(auth.authenticate(authorization, 'invocations:write'), { code: 'AUTHENTICATION_FAILED' });
+  now = NOW + 11;
+  credential.expires_at = new Date((NOW + 10) * 1000).toISOString();
+  await verify({ authorization, issuer, audience });
+  await assert.rejects(auth.authenticate(authorization, 'invocations:write'), { code: 'AUTHENTICATION_FAILED' });
 });
 
 test('fits the createTrustedOAuthAuthenticator verify callback contract', async () => {

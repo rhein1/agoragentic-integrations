@@ -67,6 +67,17 @@ test('worker delivery expectedOwner rejects invalid identifiers', async () => {
   }
 });
 
+test('worker delivery attestation requires PostgreSQL 16', async () => {
+  for (const postgresMajor of [15, 17]) {
+    const fixture = await createWorkerDeliveryCatalogFixture({ postgresMajor });
+    await assert.rejects(
+      createPostgresWorkerDeliveryStore({ pool: fixture.pool, requireTls: false, disposableDb: true,
+        controlPlane: { config: { environment: 'local_test', enabled: true } } }),
+      (error) => error.code === 'WORKER_DELIVERY_POSTGRES_ATTESTATION_FAILED',
+    );
+  }
+});
+
 test('worker delivery strict expectedOwner fixture covers privilege and role drift', async () => {
   const fixture = await createWorkerDeliveryCatalogFixture();
   const client = await fixture.pool.connect();

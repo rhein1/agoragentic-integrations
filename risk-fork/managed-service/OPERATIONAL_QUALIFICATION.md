@@ -21,14 +21,19 @@ success summary.
 Run both package checks/tests, the mandatory disposable PostgreSQL tests,
 packed-consumer tests, documentation checks and scoped secret/private-material
 inspection. Review the exact tested commit. Respect repository approval/status
-requirements; a second owner account is not independent review. Record the
+requirements and retain the actual eligible review evidence. Record the
 merge SHA separately from candidate/source proof. This gate enables no service.
 
 ## 2. Managed PostgreSQL roles and locking
 
 Use a dedicated non-production PostgreSQL 16 database and separately provisioned
 owner/migrator/runtime identities with validated TLS and secret-manager custody.
-Apply immutable control-plane migrations 001–003 as the migration owner, then
+As database owner, apply the dedicated
+[control-plane database bootstrap](./ops/postgres/control-plane-owner-bootstrap.sql.template)
+before migration 001. It removes PUBLIC database CONNECT/CREATE/TEMPORARY,
+grants CONNECT/CREATE to the migrator and CONNECT only to the runtime. The
+disposable runtime-role test exercises this exact artifact. Then apply
+immutable control-plane migrations 001–003 as the migration owner, then
 the dedicated control-plane role template. Worker delivery uses its own schema,
 ledger and role template; never combine their migration numbering. Both grant
 templates remove the dedicated migrator's global PUBLIC function-EXECUTE default
@@ -46,7 +51,9 @@ automatic repair. A catalog-only `initialize()` is not role qualification.
 Provision a real issuer and pinned public keys through an approved secret/key
 rotation workflow. The offline verifier supports the dedicated Risk Fork JWT
 profile only; bind it through `createTrustedOAuthAuthenticator` to persisted
-credential truth. Test valid signatures and wrong signature/kid/algorithm,
+credential truth. RSA keys must use public exponent 65537; token and persisted
+credential windows are strict with no skew allowance. Test valid signatures,
+exponent-one forgery rejection and wrong signature/kid/algorithm,
 issuer/audience substitution, malformed/duplicate claims, expiration, withdrawn
 scope, key revocation and cross-tenant identity. Require public TLS; keep worker
 routes on a distinct authenticated network surface.
