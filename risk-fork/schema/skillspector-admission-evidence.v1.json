@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoragentic.com/schema/risk-fork-skillspector-admission-evidence.v1.json",
+  "title": "Agoragentic Risk Fork SkillSpector Admission Evidence V1",
+  "description": "Closed, advisory-only evidence derived from a pinned SkillSpector JSON report. Raw report text and skill content are excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "subject",
+    "binding",
+    "scanner",
+    "invocation",
+    "network_enforcement",
+    "report",
+    "coverage",
+    "result",
+    "authority_flags",
+    "evidence_hash"
+  ],
+  "properties": {
+    "schema": { "const": "agoragentic.risk-fork.skillspector-admission-evidence.v1" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package_ref", "package_hash", "source_revision", "prepared_artifact_hash"],
+      "properties": {
+        "package_ref": { "$ref": "#/$defs/ref" },
+        "package_hash": { "$ref": "#/$defs/sha256" },
+        "source_revision": { "$ref": "#/$defs/ref200" },
+        "prepared_artifact_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["descriptor_request_hash", "operation_hash", "configuration_hash"],
+      "properties": {
+        "descriptor_request_hash": { "$ref": "#/$defs/sha256" },
+        "operation_hash": { "$ref": "#/$defs/sha256" },
+        "configuration_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "scanner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "source_revision", "artifact_hash", "runtime_closure_hash", "rules_hash"],
+      "properties": {
+        "id": { "const": "skillspector" },
+        "version": { "const": "2.11.2" },
+        "source_revision": { "const": "git:69dcdfb74487d361ba4c811d088cfdea2ff3a9dc" },
+        "artifact_hash": { "const": "sha256:9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec" },
+        "runtime_closure_hash": { "$ref": "#/$defs/sha256" },
+        "rules_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_mode", "format", "no_llm", "fail_on_incomplete", "recursive", "baseline", "use_shipped_baseline", "show_suppressed", "transitive", "custom_rules"],
+      "properties": {
+        "input_mode": { "const": "local_snapshot" },
+        "format": { "const": "json" },
+        "no_llm": { "const": true },
+        "fail_on_incomplete": { "const": true },
+        "recursive": { "const": false },
+        "baseline": { "const": false },
+        "use_shipped_baseline": { "const": false },
+        "show_suppressed": { "const": false },
+        "transitive": { "const": false },
+        "custom_rules": { "const": false }
+      }
+    },
+    "network_enforcement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "osv_mode", "evidence_ref", "evidence_hash"],
+          "properties": {
+            "mode": { "const": "deny_all" },
+            "osv_mode": { "const": "bundled_fallback_only" },
+            "evidence_ref": { "$ref": "#/$defs/ref" },
+            "evidence_hash": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "osv_mode", "evidence_ref", "evidence_hash"],
+          "properties": {
+            "mode": { "const": "unknown" },
+            "osv_mode": { "const": "unknown" },
+            "evidence_ref": { "type": "null" },
+            "evidence_hash": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "raw_hash", "normalized_hash", "scanned_at", "valid_until"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "raw_hash": { "$ref": "#/$defs/sha256" },
+        "normalized_hash": { "$ref": "#/$defs/sha256" },
+        "scanned_at": { "$ref": "#/$defs/date" },
+        "valid_until": { "$ref": "#/$defs/date" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "is_complete", "execution_successful", "total_components", "scanned_components", "coverage_percent", "fully_inspected_files", "partially_inspected_files", "entirely_uninspected_files", "ledger_exception_count", "scope_exclusion_count", "limitation_count", "analyzer_status_count", "analyzer_incomplete_count", "applicable_static_analyzer_count", "static_completed_work", "emitted_output_records", "output_limit_reached", "component_manifest_hash", "findings_before_filtering", "findings_after_filtering"],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "failed"] },
+        "is_complete": { "type": "boolean" },
+        "execution_successful": { "type": "boolean" },
+        "total_components": { "$ref": "#/$defs/count" },
+        "scanned_components": { "$ref": "#/$defs/count" },
+        "coverage_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "fully_inspected_files": { "$ref": "#/$defs/count" },
+        "partially_inspected_files": { "$ref": "#/$defs/count" },
+        "entirely_uninspected_files": { "$ref": "#/$defs/count" },
+        "ledger_exception_count": { "$ref": "#/$defs/count" },
+        "scope_exclusion_count": { "$ref": "#/$defs/count" },
+        "limitation_count": { "$ref": "#/$defs/count" },
+        "analyzer_status_count": { "$ref": "#/$defs/count" },
+        "analyzer_incomplete_count": { "$ref": "#/$defs/count" },
+        "applicable_static_analyzer_count": { "$ref": "#/$defs/count" },
+        "static_completed_work": { "$ref": "#/$defs/count" },
+        "emitted_output_records": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "output_limit_reached": { "type": "boolean" },
+        "component_manifest_hash": { "$ref": "#/$defs/sha256" },
+        "findings_before_filtering": { "$ref": "#/$defs/count" },
+        "findings_after_filtering": { "$ref": "#/$defs/count" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_successful", "score", "severity", "recommendation", "max_issue_severity", "severity_counts", "finding_count", "suppressed_count", "outcome", "reason_codes"],
+      "properties": {
+        "execution_successful": { "type": "boolean" },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "severity": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "recommendation": { "enum": ["SAFE", "CAUTION", "DO_NOT_INSTALL"] },
+        "max_issue_severity": { "enum": ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "severity_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"],
+          "properties": {
+            "NONE": { "$ref": "#/$defs/count" },
+            "LOW": { "$ref": "#/$defs/count" },
+            "MEDIUM": { "$ref": "#/$defs/count" },
+            "HIGH": { "$ref": "#/$defs/count" },
+            "CRITICAL": { "$ref": "#/$defs/count" }
+          }
+        },
+        "finding_count": { "$ref": "#/$defs/count" },
+        "suppressed_count": { "$ref": "#/$defs/count" },
+        "outcome": { "enum": ["clear", "review", "block", "incomplete"] },
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "skillspector_caution",
+              "skillspector_clear",
+              "skillspector_do_not_install",
+              "skillspector_analyzer_incomplete",
+              "skillspector_empty_scope",
+              "skillspector_execution_failed",
+              "skillspector_filtered_findings",
+              "skillspector_findings_present",
+              "skillspector_high_severity_finding",
+              "skillspector_incomplete_coverage",
+              "skillspector_ledger_exception",
+              "skillspector_limitations_present",
+              "skillspector_network_unverified",
+              "skillspector_output_truncated",
+              "skillspector_scope_exclusion",
+              "skillspector_suppression_detected"
+            ]
+          }
+        }
+      }
+    },
+    "authority_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["advisory_only", "grants_trust", "grants_execution", "grants_commit", "grants_spend", "grants_settlement"],
+      "properties": {
+        "advisory_only": { "const": true },
+        "grants_trust": { "const": false },
+        "grants_execution": { "const": false },
+        "grants_commit": { "const": false },
+        "grants_spend": { "const": false },
+        "grants_settlement": { "const": false }
+      }
+    },
+    "evidence_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+    "date": { "type": "string", "format": "date-time", "maxLength": 64 },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?![\\\\/~])(?![Ff][Ii][Ll][Ee]:)(?!.*\\s).+$",
+      "allOf": [
+        { "not": { "type": "string", "pattern": "amk_[a-f0-9]{64}" } },
+        { "not": { "type": "string", "pattern": "(?:(?:gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}|AKIA[A-Z0-9]{16}|sk-(?:(?:proj|svcacct|ant)-[A-Za-z0-9_-]{12,}|[A-Za-z0-9]{32,}))" } },
+        { "not": { "type": "string", "pattern": "\\b(?:sk|gh[pousr]|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\\b" } },
+        { "not": { "type": "string", "pattern": "\\bAKIA[A-Z0-9]{16}\\b" } },
+        { "not": { "type": "string", "pattern": "(?:[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Cc][Cc][Ee][Ss][Ss][_-]?[Tt][Oo][Kk][Ee][Nn]|[Rr][Ee][Ff][Rr][Ee][Ss][Hh][_-]?[Tt][Oo][Kk][Ee][Nn]|[Pp][Rr][Ii][Vv][Aa][Tt][Ee][_-]?[Kk][Ee][Yy]|[Mm][Nn][Ee][Mm][Oo][Nn][Ii][Cc])\\s*[=:]\\s*[^&\\s]{8,}" } }
+      ]
+    },
+    "ref200": { "allOf": [{ "$ref": "#/$defs/ref" }, { "type": "string", "maxLength": 200 }] }
+  }
+}

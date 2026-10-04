@@ -48,6 +48,21 @@ export {
   verifyRiskDecision,
 } from './risk-classifier.mjs';
 export {
+  SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES,
+  SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA,
+  SKILLSPECTOR_REVIEWED_ARTIFACT_HASH,
+  SKILLSPECTOR_REVIEWED_SOURCE_REVISION,
+  SKILLSPECTOR_REVIEWED_VERSION,
+  SKILLSPECTOR_RULES_MANIFEST_SCHEMA,
+  SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA,
+  SkillSpectorAdmissionError,
+  adaptSkillSpectorReport,
+  hashSkillSpectorComponentManifest,
+  hashSkillSpectorRulesManifest,
+  hashSkillSpectorRuntimeClosure,
+  verifySkillSpectorAdmissionEvidence,
+} from './skillspector-admission.mjs';
+export {
   allowedTransitions,
   createLifecycle,
   recordResourceState,
@@ -101,6 +116,7 @@ export {
   RISK_FORK_HOST_BOUNDARY_SCHEMA,
   RISK_FORK_HOST_DIAGNOSTIC_CODES,
   RISK_FORK_IMPORT_ENVELOPE_SCHEMA,
+  RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
   RiskForkHostBoundaryError,
@@ -108,6 +124,7 @@ export {
   createRiskForkImportEnvelope,
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
+  createTrustedSkillSpectorAdmissionVerifier,
   importRiskForkProviderResult,
   isRiskForkHostBoundary,
   verifyRiskForkImportEnvelope,
