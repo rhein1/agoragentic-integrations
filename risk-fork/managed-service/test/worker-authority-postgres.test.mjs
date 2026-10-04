@@ -285,7 +285,10 @@ for (const corrupt of [false, true]) {
       await f.control.recordResources(f.principal, f.resources);
       // Owner-only disposable fixture simulates the unchanged v1 layout.
       await f.pool.query(`ALTER TABLE ${f.schema}.managed_resource_journal_receipts DROP COLUMN lease_kind`);
-      await f.pool.query(`DELETE FROM ${f.schema}.managed_schema_migrations WHERE version = 2`);
+      await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_tenant_share(text)`);
+      await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_api_key_share(text,text)`);
+      await f.pool.query(`DROP FUNCTION ${f.schema}.lock_managed_tenant_update(text)`);
+      await f.pool.query(`DELETE FROM ${f.schema}.managed_schema_migrations WHERE version IN (2,3)`);
       if (corrupt) await f.pool.query(
         `UPDATE ${f.schema}.managed_resource_journal_receipts
           SET response_json = jsonb_set(response_json, '{audit_head_hash}', to_jsonb($1::text))`,
@@ -296,7 +299,7 @@ for (const corrupt of [false, true]) {
         await assert.rejects(migrate(), (error) => error.code === '55000');
         assert.equal((await f.pool.query(`SELECT count(*)::int AS n FROM ${f.schema}.managed_schema_migrations`)).rows[0].n, 1);
       } else {
-        assert.equal((await migrate()).migration_version, 2);
+        assert.equal((await migrate()).migration_version, 3);
         assert.equal((await f.pool.query(`SELECT lease_kind FROM ${f.schema}.managed_resource_journal_receipts`)).rows[0].lease_kind, 'execution');
         assert.equal((await f.store.health()).ready, true);
         await migrate(); // exact rerun applies no DDL

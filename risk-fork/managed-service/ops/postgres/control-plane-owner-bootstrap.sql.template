@@ -1,0 +1,21 @@
+-- Database-owner bootstrap for the managed control-plane disposable database.
+-- Run as the database owner before migration 001; contains no credentials.
+-- Dedicated non-production database only, never a shared database. Replace all
+-- placeholders with validated lowercase PostgreSQL identifiers. Migrator and
+-- runtime must already be distinct, separately provisioned NOINHERIT LOGIN roles.
+
+BEGIN;
+
+REVOKE CONNECT, CREATE, TEMPORARY
+  ON DATABASE __RISK_FORK_MANAGED_DATABASE__ FROM PUBLIC;
+GRANT CONNECT, CREATE
+  ON DATABASE __RISK_FORK_MANAGED_DATABASE__
+  TO __RISK_FORK_MANAGED_MIGRATOR_ROLE__;
+GRANT CONNECT
+  ON DATABASE __RISK_FORK_MANAGED_DATABASE__
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE CREATE, TEMPORARY
+  ON DATABASE __RISK_FORK_MANAGED_DATABASE__
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+COMMIT;

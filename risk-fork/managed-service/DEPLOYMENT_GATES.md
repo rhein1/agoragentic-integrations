@@ -69,8 +69,19 @@ Portable-handle source now attests the exact reviewed relation/column/constraint
 index/trigger/function catalog and least-privilege runtime ownership/grants in
 explicit production mode, which requires verified TLS. A reviewed role template
 and disposable separate-owner/runtime tests exist. The managed control plane and
-independent ciphertext delivery store still need equivalent deployed role/catalog
-qualification; their owner-role tests cannot substitute for it. Managed migration
+independent ciphertext delivery store still need deployed role/catalog
+qualification; local tests cannot substitute for it. The delivery source now
+requires PostgreSQL 16 and verifies its exact catalog and migration hash before
+factory return and every transaction, with opt-in `expectedOwner` least-privilege runtime attestation,
+separate-role templates and disposable role/drift tests. Catalog-only mode does
+not verify privileges, and neither mode enables production. The control-plane
+source now adds versioned owner-executed credential/tenant lock helpers
+(migration 003), a PostgreSQL 16 exact source-owned catalog manifest, opt-in
+distinct runtime-role attestation via `expectedOwner`, and disposable
+separate-LOGIN-role drift/lock tests. No API-key/tenant UPDATE is granted to the
+runtime. A dedicated control-plane owner bootstrap removes PUBLIC database
+grants before migrations and is exercised by the disposable runtime-role test.
+These close source gaps, not deployed-role qualification. Managed migration
 `002_journal_purpose` upgrades immutable `001` using each receipt's exact audit
 event and aborts ambiguous legacy evidence.
 
@@ -88,8 +99,16 @@ isolates public and worker routes on separate loopback listeners, and shuts
 ingress before capabilities. Worker permissions are split by execution, cleanup,
 and recovery. `createTrustedOAuthAuthenticator` delegates actual signature/JWKS
 and OAuth verification to a trusted host callback per request and binds its
-identity to the current credential record. None of this provisions a public
-TLS/JWKS gateway, production token broker, rate limiter, or hosted service.
+identity to the current credential record. An offline pinned-key verifier now
+checks actual RS256/ES256 signatures for the dedicated Risk Fork JWT profile,
+with RSA exponent 65537 and strict token/credential validity windows, not
+generic OAuth brokering. Optional host-owned `requestPolicy` checks
+rate/control before authenticated route access and local host worker starts;
+it rechecks control after rate await and keeps cleanup/recovery available when
+execution is disabled. Redacted policy telemetry is bounded and best-effort.
+No distributed rate/control backend, public TLS/JWKS gateway, production token
+broker, durable alerts or hosted service is provisioned. Effect-time fencing
+and in-flight cancellation are still separate host/broker requirements.
 
 - build a real HTTP runtime around the handler with bounded headers, body streaming, deadlines, connection limits, structured redacted logs that cannot emit bearer or lease tokens, and graceful shutdown;
 - keep internal worker routes on a separate authenticated network surface;
@@ -121,6 +140,10 @@ TLS/JWKS gateway, production token broker, rate limiter, or hosted service.
 - expand traffic only after error, latency, cost, abuse, and cleanup objectives hold.
 
 ## Required truth labels until all gates pass
+
+Use [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md) to assemble
+exact-source evidence for restore/failover/rotation, E2B isolation/final cost,
+and multi-instance staging. A source merge or green CI cannot close those gates.
 
 ```text
 source scaffold:                  true

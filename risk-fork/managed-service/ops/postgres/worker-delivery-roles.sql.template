@@ -1,0 +1,87 @@
+-- Migrator-applied post-migration grants for the Risk Fork managed
+-- worker-delivery PostgreSQL store.
+-- Dedicated local disposable database only; do not apply to a shared database.
+-- Replace every placeholder with a separately provisioned, validated lowercase
+-- PostgreSQL identifier. Run as __RISK_FORK_MANAGED_MIGRATOR_ROLE__ after
+-- migration 002. No passwords, keys, or service provisioning belong here.
+
+BEGIN;
+
+-- Start from a deny-by-default ACL, including any stale column grants.
+REVOKE ALL ON ALL TABLES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+-- Table-level REVOKE does not clear separately granted column ACLs. Remove
+-- those ACLs before installing the reviewed runtime grant set.
+DO $revoke_worker_delivery_column_acl$
+DECLARE
+  target record;
+BEGIN
+  FOR target IN
+    SELECT table_name,
+           string_agg(format('%I', column_name), ', ' ORDER BY ordinal_position)
+             AS column_names
+      FROM information_schema.columns
+     WHERE table_schema = '__RISK_FORK_MANAGED_SCHEMA__'
+     GROUP BY table_name
+  LOOP
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES (%s) ON TABLE %I.%I FROM PUBLIC, %I',
+      target.column_names,
+      '__RISK_FORK_MANAGED_SCHEMA__',
+      target.table_name,
+      '__RISK_FORK_MANAGED_RUNTIME_ROLE__'
+    );
+  END LOOP;
+END
+$revoke_worker_delivery_column_acl$;
+
+-- The runtime reads the migration ledger and namespace policy, appends
+-- delivery rows, and acknowledges an existing row through three columns only.
+GRANT SELECT ON TABLE
+  __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_schema_migrations,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_namespaces,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_attempts
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+GRANT INSERT ON TABLE
+  __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_namespaces,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_attempts
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+GRANT UPDATE (acknowledged, response_hash, acknowledged_at)
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_attempts
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+-- Defense in depth: no destructive, relationship, trigger, or ledger-write
+-- privileges; UPDATE remains column-only on the attempts table.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_schema_migrations
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_namespaces
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_worker_delivery_attempts
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+-- Future migration objects inherit the same boundary for objects created by
+-- the migrator. The schema owner remains the distinct migrator role.
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON TABLES FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON SEQUENCES FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON FUNCTIONS FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+-- Function EXECUTE is granted to PUBLIC by PostgreSQL's global default ACL;
+-- remove that default for this separately scoped migrator role as well.
+ALTER DEFAULT PRIVILEGES
+  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE EXECUTE ON FUNCTIONS FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+COMMIT;

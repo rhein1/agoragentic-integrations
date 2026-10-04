@@ -1,0 +1,97 @@
+-- Migrator-applied runtime grants for the Risk Fork managed control plane.
+-- Dedicated database only; replace placeholders with validated identifiers.
+-- Execute as the distinct migrator that owns migration-created objects.
+
+BEGIN;
+
+REVOKE ALL ON ALL TABLES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON SCHEMA __RISK_FORK_MANAGED_SCHEMA__ FROM PUBLIC;
+GRANT USAGE ON SCHEMA __RISK_FORK_MANAGED_SCHEMA__ TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE CREATE ON SCHEMA __RISK_FORK_MANAGED_SCHEMA__ FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+DO $revoke_control_plane_column_acl$
+DECLARE
+  target record;
+BEGIN
+  FOR target IN
+    SELECT table_name,
+           string_agg(format('%I', column_name), ', ' ORDER BY ordinal_position)
+             AS column_names
+      FROM information_schema.columns
+     WHERE table_schema = '__RISK_FORK_MANAGED_SCHEMA__'
+     GROUP BY table_name
+  LOOP
+    EXECUTE format(
+      'REVOKE ALL PRIVILEGES (%s) ON TABLE %I.%I FROM PUBLIC, %I',
+      target.column_names,
+      '__RISK_FORK_MANAGED_SCHEMA__', target.table_name,
+      '__RISK_FORK_MANAGED_RUNTIME_ROLE__'
+    );
+  END LOOP;
+END
+$revoke_control_plane_column_acl$;
+
+GRANT SELECT ON TABLE
+  __RISK_FORK_MANAGED_SCHEMA__.managed_schema_migrations,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_tenants,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_api_keys,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_usage_buckets,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_invocations,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_lease_token_uses,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_resource_journal_receipts,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_audit_events
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+GRANT INSERT ON TABLE
+  __RISK_FORK_MANAGED_SCHEMA__.managed_usage_buckets,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_invocations,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_lease_token_uses,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_resource_journal_receipts,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_audit_events
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+GRANT UPDATE ON TABLE
+  __RISK_FORK_MANAGED_SCHEMA__.managed_usage_buckets,
+  __RISK_FORK_MANAGED_SCHEMA__.managed_invocations
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+GRANT EXECUTE ON FUNCTION
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_tenant_share(text),
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_api_key_share(text, text),
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_tenant_update(text)
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_schema_migrations,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_tenants,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_api_keys
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON TABLE __RISK_FORK_MANAGED_SCHEMA__.managed_usage_buckets,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_invocations,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_lease_token_uses,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_resource_journal_receipts,
+             __RISK_FORK_MANAGED_SCHEMA__.managed_audit_events
+  FROM __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+GRANT EXECUTE ON FUNCTION
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_tenant_share(text),
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_api_key_share(text, text),
+  __RISK_FORK_MANAGED_SCHEMA__.lock_managed_tenant_update(text)
+  TO __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON TABLES FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON SEQUENCES FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __RISK_FORK_MANAGED_SCHEMA__
+  REVOKE ALL ON FUNCTIONS FROM PUBLIC, __RISK_FORK_MANAGED_RUNTIME_ROLE__;
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+COMMIT;

@@ -95,6 +95,15 @@ serialization conflicts are not implicit retry authority. Stable host key custod
 reviewed retention, rotation, restore, and runtime roles require qualification.
 Closing the journal zeroes its key copy, not the caller's key or database rows.
 
+The PostgreSQL delivery factory now attests the exact catalog/migration before
+returning; operations reattest inside each transaction. An explicit
+`expectedOwner` also checks separate runtime identity, ownership and the exact
+least-privilege grant set. Only acknowledgement columns are updateable; namespace
+policy and migration evidence are runtime-read-only. Without `expectedOwner`,
+the local test checks catalog only. Neither mode qualifies managed hosting or
+turns on production. See the dedicated role templates and Gate 4 in
+[DEPLOYMENT_GATES.md](./DEPLOYMENT_GATES.md).
+
 After the control plane reaps an unfinished lease, `recover(ref)` takes a fresh
 recovery claim and does provider lookup, not execution. Both-resource and partial
 found/attested-absent recovery journal the known references then enter cleanup.

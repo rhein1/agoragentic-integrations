@@ -154,8 +154,9 @@ export function createManagedAuthenticator({ store, clock = () => new Date() } =
 }
 
 // The host owns OAuth/JWT/JWKS verification. This callback is intentionally a
-// trusted boundary: this package never parses tokens, performs network calls,
-// or implements signature crypto. The persisted API-key record remains the
+// trusted boundary: this authenticator delegates token parsing and signature
+// crypto and performs no network calls. The optional offline verifier is a
+// separate pinned-key implementation. The persisted API-key record remains the
 // source of key/tenant/scope/expiry/revocation truth; subject must equal key_id.
 export function createTrustedOAuthAuthenticator({
   store, verify, issuer, audience, clock = () => new Date(),

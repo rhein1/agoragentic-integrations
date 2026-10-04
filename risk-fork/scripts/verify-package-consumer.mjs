@@ -62,7 +62,12 @@ try {
   for (const expected of [
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
     'CLIENT_ADOPTION.md', 'MCP_2026_07_28_READINESS.md',
-    'managed-service/DEPLOYMENT_GATES.md', 'clients/one-tool-stdio-gate.mjs',
+    'managed-service/DEPLOYMENT_GATES.md', 'managed-service/OPERATIONAL_QUALIFICATION.md',
+    'managed-service/ops/postgres/owner-bootstrap.sql.template',
+    'managed-service/ops/postgres/control-plane-owner-bootstrap.sql.template',
+    'managed-service/ops/postgres/control-plane-roles.sql.template',
+    'managed-service/ops/postgres/worker-delivery-roles.sql.template',
+    'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/skillspector-admission.mjs',
     'schema/skillspector-admission-evidence.v1.json',
