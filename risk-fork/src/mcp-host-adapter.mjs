@@ -922,7 +922,7 @@ function throwIfAborted(context) {
   }
 }
 
-async function executePhase(record, request, context) {
+async function executePhase(record, request, context, authentication) {
   throwIfAborted(context);
   if (request.risk_profile.minimum_level === 'IRREVERSIBLE'
     || request.risk_profile.prepare_only === true) {
@@ -951,7 +951,7 @@ async function executePhase(record, request, context) {
   );
   let preparedResult;
   if (record.portableHandleBoundary) {
-    await record.portableHandleBoundary.authorize(request, context);
+    await record.portableHandleBoundary.authorize(request, Object.freeze({ ...context, authentication }));
     throwIfAborted(context);
   }
   try {
@@ -1005,9 +1005,10 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     timeout_ms: timeoutMs,
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
     operation: context?.operation ?? request.phase,
-    authentication: context?.authentication,
   });
-  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
+  // Only admission receives the host capability; planning uses bounded context alone.
+  const authentication = context?.authentication;
+  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext, authentication));
   const cleanup = () => {
     settled = true;
     clearTimeout(timer);

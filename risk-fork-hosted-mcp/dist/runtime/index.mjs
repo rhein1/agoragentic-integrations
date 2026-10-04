@@ -62610,6 +62610,7 @@ var REASON_CODES = Object.freeze([
 ]);
 var MAX_REPORT_BYTES = 8 * 1024 * 1024;
 var MAX_REPORT_ITEMS = 2e4;
+var MAX_STATIC_COMPLETED_WORK = MAX_REPORT_ITEMS * REVIEWED_STATIC_ANALYZER_IDS.size;
 var SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT = 1e4;
 var MAX_VALIDITY_MS = 24 * 60 * 60 * 1e3;
 var SEVERITIES = Object.freeze(["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]);
@@ -63089,11 +63090,22 @@ function normalizeCoverage(value, { componentCount, findingCount, suppressedCoun
     limitation_count: limitations.length,
     analyzer_status_count: analyzerStatuses.length,
     analyzer_incomplete_count: analyzerIncompleteCount,
+    missing_static_analyzer_ids: [...REVIEWED_STATIC_ANALYZER_IDS].filter((analyzerId) => !analyzerIds.has(analyzerId)).sort(),
     applicable_static_analyzer_count: applicableStaticAnalyzerCount,
     static_completed_work: staticCompletedWork,
     findings_before_filtering: findingsBeforeFiltering,
     findings_after_filtering: findingsAfterFiltering
   };
+}
+function validateRiskBand({ score, severity, recommendation }) {
+  const expectedSeverity = score >= 81 ? "CRITICAL" : score >= 51 ? "HIGH" : score >= 21 ? "MEDIUM" : "LOW";
+  if (severity !== expectedSeverity) {
+    throw new TypeError("SkillSpector severity does not match the reviewed score band");
+  }
+  const minimumRecommendation = severity === "LOW" ? "SAFE" : severity === "MEDIUM" ? "CAUTION" : "DO_NOT_INSTALL";
+  if (RECOMMENDATIONS.indexOf(recommendation) < RECOMMENDATIONS.indexOf(minimumRecommendation)) {
+    throw new TypeError("SkillSpector recommendation is less restrictive than severity");
+  }
 }
 function normalizeRiskAssessment(value, issues) {
   assertAllowedKeys(value, [
@@ -63160,10 +63172,7 @@ function normalizeRiskAssessment(value, issues) {
   if (derivedMax !== maxIssueSeverity) {
     throw new TypeError("SkillSpector max_issue_severity does not match issues");
   }
-  const minimumRecommendation = severity === "LOW" ? "SAFE" : severity === "MEDIUM" ? "CAUTION" : "DO_NOT_INSTALL";
-  if (RECOMMENDATIONS.indexOf(recommendation) < RECOMMENDATIONS.indexOf(minimumRecommendation)) {
-    throw new TypeError("SkillSpector recommendation is less restrictive than severity");
-  }
+  validateRiskBand({ score, severity, recommendation });
   return {
     score,
     severity,
@@ -63182,7 +63191,7 @@ function deriveResult({
   networkEnforcement
 }) {
   const reasons = /* @__PURE__ */ new Set();
-  const strictComplete = reportExecutionSuccessful && coverage.execution_successful && coverage.is_complete && coverage.status === "complete" && coverage.coverage_percent === 100 && coverage.total_components > 0 && coverage.analyzer_status_count > 0 && coverage.analyzer_incomplete_count === 0 && coverage.applicable_static_analyzer_count > 0 && coverage.static_completed_work > 0 && !coverage.output_limit_reached && coverage.findings_before_filtering === coverage.findings_after_filtering && coverage.findings_after_filtering === findingCount + suppressedCount && coverage.partially_inspected_files === 0 && coverage.entirely_uninspected_files === 0 && coverage.ledger_exception_count === 0 && coverage.scope_exclusion_count === 0 && coverage.limitation_count === 0 && networkEnforcement.mode === "deny_all" && networkEnforcement.osv_mode === "bundled_fallback_only";
+  const strictComplete = reportExecutionSuccessful && coverage.execution_successful && coverage.is_complete && coverage.status === "complete" && coverage.coverage_percent === 100 && coverage.total_components > 0 && coverage.analyzer_status_count > 0 && coverage.analyzer_incomplete_count === 0 && coverage.missing_static_analyzer_ids.length === 0 && coverage.applicable_static_analyzer_count > 0 && coverage.static_completed_work > 0 && !coverage.output_limit_reached && coverage.findings_before_filtering === coverage.findings_after_filtering && coverage.findings_after_filtering === findingCount + suppressedCount && coverage.partially_inspected_files === 0 && coverage.entirely_uninspected_files === 0 && coverage.ledger_exception_count === 0 && coverage.scope_exclusion_count === 0 && coverage.limitation_count === 0 && networkEnforcement.mode === "deny_all" && networkEnforcement.osv_mode === "bundled_fallback_only";
   if (!reportExecutionSuccessful || !coverage.execution_successful) {
     reasons.add("skillspector_execution_failed");
   }
@@ -63192,7 +63201,7 @@ function deriveResult({
   if (coverage.total_components === 0 || coverage.analyzer_status_count === 0 || coverage.applicable_static_analyzer_count === 0 || coverage.static_completed_work === 0) {
     reasons.add("skillspector_empty_scope");
   }
-  if (coverage.analyzer_incomplete_count > 0) {
+  if (coverage.analyzer_incomplete_count > 0 || coverage.missing_static_analyzer_ids.length > 0) {
     reasons.add("skillspector_analyzer_incomplete");
   }
   if (coverage.findings_before_filtering !== coverage.findings_after_filtering) {
@@ -63388,6 +63397,7 @@ function normalizeEvidence2(value) {
     "limitation_count",
     "analyzer_status_count",
     "analyzer_incomplete_count",
+    "missing_static_analyzer_ids",
     "applicable_static_analyzer_count",
     "static_completed_work",
     "emitted_output_records",
@@ -63411,6 +63421,7 @@ function normalizeEvidence2(value) {
     "limitation_count",
     "analyzer_status_count",
     "analyzer_incomplete_count",
+    "missing_static_analyzer_ids",
     "applicable_static_analyzer_count",
     "static_completed_work",
     "emitted_output_records",
@@ -63437,8 +63448,17 @@ function normalizeEvidence2(value) {
     limitation_count: boundedInteger(value.coverage.limitation_count, "coverage.limitation_count", { max: MAX_REPORT_ITEMS }),
     analyzer_status_count: boundedInteger(value.coverage.analyzer_status_count, "coverage.analyzer_status_count", { max: MAX_REPORT_ITEMS }),
     analyzer_incomplete_count: boundedInteger(value.coverage.analyzer_incomplete_count, "coverage.analyzer_incomplete_count", { max: MAX_REPORT_ITEMS }),
-    applicable_static_analyzer_count: boundedInteger(value.coverage.applicable_static_analyzer_count, "coverage.applicable_static_analyzer_count", { max: MAX_REPORT_ITEMS }),
-    static_completed_work: boundedInteger(value.coverage.static_completed_work, "coverage.static_completed_work", { max: MAX_REPORT_ITEMS }),
+    missing_static_analyzer_ids: requireArray(
+      value.coverage.missing_static_analyzer_ids,
+      "coverage.missing_static_analyzer_ids",
+      { maxItems: REVIEWED_STATIC_ANALYZER_IDS.size }
+    ).map((analyzerId) => requireEnum(
+      analyzerId,
+      [...REVIEWED_STATIC_ANALYZER_IDS],
+      "coverage.missing_static_analyzer_ids"
+    )),
+    applicable_static_analyzer_count: boundedInteger(value.coverage.applicable_static_analyzer_count, "coverage.applicable_static_analyzer_count", { max: REVIEWED_STATIC_ANALYZER_IDS.size }),
+    static_completed_work: boundedInteger(value.coverage.static_completed_work, "coverage.static_completed_work", { max: MAX_STATIC_COMPLETED_WORK }),
     emitted_output_records: boundedInteger(value.coverage.emitted_output_records, "coverage.emitted_output_records", { max: SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT }),
     output_limit_reached: requireBoolean2(value.coverage.output_limit_reached, "coverage.output_limit_reached"),
     component_manifest_hash: requireSha256Ref(
@@ -63449,7 +63469,7 @@ function normalizeEvidence2(value) {
     findings_after_filtering: boundedInteger(value.coverage.findings_after_filtering, "coverage.findings_after_filtering", { max: MAX_REPORT_ITEMS })
   };
   const expectedCoverage = coverage.total_components === 0 ? 100 : Math.round(coverage.fully_inspected_files / coverage.total_components * 1e3) / 10;
-  if (coverage.total_components !== coverage.fully_inspected_files + coverage.partially_inspected_files + coverage.entirely_uninspected_files || coverage.scanned_components !== coverage.fully_inspected_files || coverage.analyzer_incomplete_count > coverage.analyzer_status_count || coverage.applicable_static_analyzer_count > coverage.analyzer_status_count || coverage.output_limit_reached !== (coverage.emitted_output_records === SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT) || coverage.findings_after_filtering > coverage.findings_before_filtering || Math.abs(coverage.coverage_percent - expectedCoverage) > 0.05 || coverage.is_complete !== (coverage.status === "complete")) {
+  if (coverage.total_components !== coverage.fully_inspected_files + coverage.partially_inspected_files + coverage.entirely_uninspected_files || coverage.scanned_components !== coverage.fully_inspected_files || new Set(coverage.missing_static_analyzer_ids).size !== coverage.missing_static_analyzer_ids.length || canonicalize(coverage.missing_static_analyzer_ids) !== canonicalize([...coverage.missing_static_analyzer_ids].sort()) || coverage.analyzer_status_count < REVIEWED_STATIC_ANALYZER_IDS.size - coverage.missing_static_analyzer_ids.length || coverage.analyzer_incomplete_count + coverage.applicable_static_analyzer_count > coverage.analyzer_status_count || coverage.applicable_static_analyzer_count > REVIEWED_STATIC_ANALYZER_IDS.size - coverage.missing_static_analyzer_ids.length || coverage.static_completed_work < coverage.applicable_static_analyzer_count || coverage.static_completed_work > coverage.applicable_static_analyzer_count * MAX_REPORT_ITEMS || coverage.output_limit_reached !== (coverage.emitted_output_records === SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT) || coverage.findings_after_filtering > coverage.findings_before_filtering || Math.abs(coverage.coverage_percent - expectedCoverage) > 0.05 || coverage.is_complete !== (coverage.status === "complete")) {
     throw new TypeError("SkillSpector evidence coverage accounting is inconsistent");
   }
   assertAllowedKeys(value.result, [
@@ -63513,7 +63533,9 @@ function normalizeEvidence2(value) {
     outcome: requireEnum(value.result.outcome, OUTCOMES, "SkillSpector result.outcome"),
     reason_codes: requireArray(value.result.reason_codes, "SkillSpector result.reason_codes", { maxItems: REASON_CODES.length }).map((code, index) => requireEnum(code, REASON_CODES, `SkillSpector result.reason_codes[${index}]`))
   };
-  if (new Set(result.reason_codes).size !== result.reason_codes.length || canonicalize(result.reason_codes) !== canonicalize([...result.reason_codes].sort()) || Object.values(severityCounts).reduce((total, count) => total + count, 0) !== result.finding_count) {
+  validateRiskBand(result);
+  const derivedMaxIssueSeverity = [...SEVERITIES].reverse().find((severity) => severityCounts[severity] > 0) ?? "NONE";
+  if (new Set(result.reason_codes).size !== result.reason_codes.length || canonicalize(result.reason_codes) !== canonicalize([...result.reason_codes].sort()) || Object.values(severityCounts).reduce((total, count) => total + count, 0) !== result.finding_count || result.max_issue_severity !== derivedMaxIssueSeverity) {
     throw new TypeError("SkillSpector result accounting is inconsistent");
   }
   if (result.finding_count + result.suppressed_count > coverage.findings_after_filtering) {
@@ -69137,7 +69159,7 @@ function throwIfAborted(context) {
     );
   }
 }
-async function executePhase(record, request, context) {
+async function executePhase(record, request, context, authentication) {
   throwIfAborted(context);
   if (request.risk_profile.minimum_level === "IRREVERSIBLE" || request.risk_profile.prepare_only === true) {
     throw adapterError(
@@ -69165,7 +69187,7 @@ async function executePhase(record, request, context) {
   );
   let preparedResult;
   if (record.portableHandleBoundary) {
-    await record.portableHandleBoundary.authorize(request, context);
+    await record.portableHandleBoundary.authorize(request, Object.freeze({ ...context, authentication }));
     throwIfAborted(context);
   }
   try {
@@ -69219,10 +69241,10 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     signal: controller.signal,
     timeout_ms: timeoutMs,
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
-    operation: context?.operation ?? request.phase,
-    authentication: context?.authentication
+    operation: context?.operation ?? request.phase
   });
-  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
+  const authentication = context?.authentication;
+  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext, authentication));
   const cleanup = () => {
     settled = true;
     clearTimeout(timer);
@@ -77158,7 +77180,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:9ea6ebe999c52552fb64f884c3cfdf844151ce64136b9c5bcae166d30c6e8d95" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:c7a7dc423dc1f5de3fb7e8cec248e382894f3786c98dbc9d88105c6a0cf3cc27" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

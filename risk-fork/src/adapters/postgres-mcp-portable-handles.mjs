@@ -11,6 +11,7 @@ import {
   acquirePostgresAuthorityClient, createPostgresAuthorityPool,
   quotePostgresAuthorityIdentifier,
 } from './postgres-authority-migrator.mjs';
+import { verifyPostgresMcpPortableHandleAttestation } from './postgres-portable-handle-attestation.mjs';
 
 const MIGRATION_URL = new URL('../../migrations/mcp-portable-handles/001_registry.pg.sql', import.meta.url);
 const stores = new WeakSet();
@@ -30,9 +31,14 @@ async function migrationSource() {
 async function connection(options) {
   assertAllowedKeys(options, [
     'pool', 'connectionString', 'schemaName', 'requireTls', 'tls',
-    'maxConnections', 'connectionTimeoutMs', 'statementTimeoutMs',
+    'maxConnections', 'connectionTimeoutMs', 'statementTimeoutMs', 'deploymentMode', 'expectedOwner',
   ], 'PostgreSQL portable-handle options');
   const schemaName = options.schemaName ?? 'risk_fork_mcp_handles';
+  const deploymentMode = options.deploymentMode ?? 'local_test';
+  if (!['local_test', 'production'].includes(deploymentMode)) throw new TypeError('Invalid deploymentMode');
+  if (deploymentMode === 'production' && (options.requireTls ?? true) !== true) {
+    throw failure(CODES.INVALID_CONFIGURATION, 'Production portable-handle storage requires CA-validated TLS');
+  }
   const schema = quotePostgresAuthorityIdentifier(schemaName);
   const requireTls = options.requireTls ?? true;
   if (typeof requireTls !== 'boolean') throw new TypeError('requireTls must be boolean');
@@ -49,7 +55,8 @@ async function connection(options) {
     applicationName: 'risk-fork-mcp-portable-handles',
   });
   if (typeof pool.connect !== 'function') throw new TypeError('PostgreSQL pool must provide connect');
-  return { schemaName, schema, requireTls, timeout, pool, ownsPool: !options.pool,
+  return { schemaName, schema, deploymentMode, expectedOwner: options.expectedOwner ?? null,
+    requireTls, timeout, pool, ownsPool: !options.pool,
     verifiedClients: new WeakSet() };
 }
 
@@ -100,6 +107,10 @@ async function verifySchema(client, config, expectedHash) {
     || triggers.rows.some((row) => row.tgenabled !== 'O')) {
     throw failure(CODES.INVALID_CONFIGURATION, 'Portable-handle integrity triggers are unavailable');
   }
+  await verifyPostgresMcpPortableHandleAttestation(client, {
+    schemaName: config.schemaName, deploymentMode: config.deploymentMode,
+    expectedOwner: config.expectedOwner,
+  });
 }
 
 // Explicit migration-owner operation. Runtime initialization never runs DDL.
