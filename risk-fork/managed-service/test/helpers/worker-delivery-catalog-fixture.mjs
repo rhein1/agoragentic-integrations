@@ -46,7 +46,6 @@ function hasMutation(state, prefix) {
   return [...state.mutations].some((scope) => scope.startsWith(prefix));
 }
 
-function tableRef(schema, table) { return `"${schema}"."${table}"`; }
 function bodyFor(source, name) {
   return source.split(`CREATE FUNCTION __RISK_FORK_MANAGED_SCHEMA__.${name}()`)[1]?.split('AS $$')[1]?.split('$$;')[0];
 }

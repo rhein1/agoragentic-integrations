@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createSign, generateKeyPairSync } from 'node:crypto';
+import { createPublicKey, createSign, generateKeyPairSync } from 'node:crypto';
 import test from 'node:test';
 import { createOfflineOAuthVerifier } from '../src/oauth-verifier.mjs';
 import { createTrustedOAuthAuthenticator, hashManagedApiKey } from '../src/auth.mjs';
@@ -72,7 +72,9 @@ test('rejects dangerous duplicate members, noncanonical base64url, and invalid U
 });
 
 test('rejects weak RSA and non-P256 EC keys at construction', () => {
-  const weak = generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey.export({ format: 'jwk' });
+  // Public-only undersized modulus: no weak private key is generated or used.
+  const weak = { kty: 'RSA', n: Buffer.alloc(128, 0xa5).toString('base64url'), e: 'AQAB' };
+  assert.equal(createPublicKey({ key: weak, format: 'jwk' }).asymmetricKeyDetails.modulusLength, 1024);
   assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [{ ...weak, kid: 'weak', alg: 'RS256' }] }), /weak|material/);
   const ec = generateKeyPairSync('ec', { namedCurve: 'P-384' }).publicKey.export({ format: 'jwk' });
   assert.throws(() => createOfflineOAuthVerifier({ issuer, audience, jwks: [{ ...ec, kid: 'ec', alg: 'ES256' }] }), /curve|material/);
