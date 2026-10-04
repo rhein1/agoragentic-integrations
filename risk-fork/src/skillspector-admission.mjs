@@ -177,7 +177,9 @@ const REASON_CODES = Object.freeze([
 ]);
 const MAX_REPORT_BYTES = 8 * 1024 * 1024;
 const MAX_REPORT_ITEMS = 20_000;
-const MAX_STATIC_COMPLETED_WORK = MAX_REPORT_ITEMS * REVIEWED_STATIC_ANALYZER_IDS.size;
+// The pinned scanner caps its entire workflow ledger, not each analyzer's
+// contribution. Completed static work cannot exceed that shared event budget.
+const MAX_STATIC_COMPLETED_WORK = 10_000;
 const SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT = 10_000;
 const MAX_VALIDITY_MS = 24 * 60 * 60 * 1000;
 const SEVERITIES = Object.freeze(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
@@ -1605,6 +1607,7 @@ export function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
       'component_manifest_hash',
       'report_ref',
       'report_hash',
+      'normalized_report_hash',
       'network_enforcement',
       'requested_at',
     ], 'SkillSpector expected binding');
@@ -1622,6 +1625,7 @@ export function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
       ['component_manifest_hash', normalized.coverage.component_manifest_hash, requireSha256Ref],
       ['report_ref', normalized.report.ref, requireOpaqueRef],
       ['report_hash', normalized.report.raw_hash, requireSha256Ref],
+      ['normalized_report_hash', normalized.report.normalized_hash, requireSha256Ref],
     ];
     for (const [key, actual, normalize] of comparisons) {
       if (expected[key] === undefined) continue;

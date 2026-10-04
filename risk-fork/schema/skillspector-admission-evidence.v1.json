@@ -112,6 +112,25 @@
     "coverage": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 0 } } }, "then": { "properties": { "static_completed_work": { "const": 0 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 1 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 1 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 2 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 2 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 3 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 3 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 4 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 4 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 5 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 5 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 6 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 6 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 7 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 7 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 8 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 8 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 9 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 9 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 10 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 10 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 11 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 11 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 12 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 12 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 13 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 13 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 14 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 14 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 15 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 15 } } } },
+        { "if": { "properties": { "applicable_static_analyzer_count": { "const": 16 } } }, "then": { "properties": { "static_completed_work": { "type": "integer", "minimum": 16 } } } }
+      ],
       "required": ["status", "is_complete", "execution_successful", "total_components", "scanned_components", "coverage_percent", "fully_inspected_files", "partially_inspected_files", "entirely_uninspected_files", "ledger_exception_count", "scope_exclusion_count", "limitation_count", "analyzer_status_count", "analyzer_incomplete_count", "missing_static_analyzer_ids", "applicable_static_analyzer_count", "static_completed_work", "emitted_output_records", "output_limit_reached", "component_manifest_hash", "findings_before_filtering", "findings_after_filtering"],
       "properties": {
         "status": { "enum": ["complete", "partial", "failed"] },
@@ -135,7 +154,7 @@
           "items": { "$ref": "#/$defs/reviewedStaticAnalyzerId" }
         },
         "applicable_static_analyzer_count": { "type": "integer", "minimum": 0, "maximum": 16 },
-        "static_completed_work": { "type": "integer", "minimum": 0, "maximum": 320000 },
+        "static_completed_work": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "emitted_output_records": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "output_limit_reached": { "type": "boolean" },
         "component_manifest_hash": { "$ref": "#/$defs/sha256" },

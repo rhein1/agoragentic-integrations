@@ -62610,7 +62610,7 @@ var REASON_CODES = Object.freeze([
 ]);
 var MAX_REPORT_BYTES = 8 * 1024 * 1024;
 var MAX_REPORT_ITEMS = 2e4;
-var MAX_STATIC_COMPLETED_WORK = MAX_REPORT_ITEMS * REVIEWED_STATIC_ANALYZER_IDS.size;
+var MAX_STATIC_COMPLETED_WORK = 1e4;
 var SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT = 1e4;
 var MAX_VALIDITY_MS = 24 * 60 * 60 * 1e3;
 var SEVERITIES = Object.freeze(["NONE", "LOW", "MEDIUM", "HIGH", "CRITICAL"]);
@@ -63894,6 +63894,7 @@ function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
       "component_manifest_hash",
       "report_ref",
       "report_hash",
+      "normalized_report_hash",
       "network_enforcement",
       "requested_at"
     ], "SkillSpector expected binding");
@@ -63910,7 +63911,8 @@ function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
       ["runtime_closure_hash", normalized.scanner.runtime_closure_hash, requireSha256Ref],
       ["component_manifest_hash", normalized.coverage.component_manifest_hash, requireSha256Ref],
       ["report_ref", normalized.report.ref, requireOpaqueRef],
-      ["report_hash", normalized.report.raw_hash, requireSha256Ref]
+      ["report_hash", normalized.report.raw_hash, requireSha256Ref],
+      ["normalized_report_hash", normalized.report.normalized_hash, requireSha256Ref]
     ];
     for (const [key, actual, normalize] of comparisons) {
       if (expected[key] === void 0) continue;
@@ -63957,7 +63959,7 @@ var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boun
 var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
 var RISK_FORK_IMPORT_ENVELOPE_SCHEMA = "agoragentic.risk-fork.import-envelope.v1";
-var RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA = "agoragentic.risk-fork.skillspector-admission-verifier.v1";
+var RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA = "agoragentic.risk-fork.skillspector-admission-verifier.v2";
 var RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_BOUNDARY_INPUT: "RISK_FORK_HOST_BOUNDARY_INVALID_INPUT",
   CALLER_RISK_LABEL_REJECTED: "RISK_FORK_CALLER_RISK_LABEL_REJECTED",
@@ -64118,18 +64120,19 @@ var CALLER_ADMISSION_EVIDENCE_FINGERPRINTS = /* @__PURE__ */ new Set([
   "waive",
   "waiver"
 ]);
-var SKILLSPECTOR_EXPECTED_BINDING_KEYS = Object.freeze([
+var SKILLSPECTOR_HOST_REPORT_KEYS = Object.freeze([
+  "report_bytes",
   "package_ref",
   "package_hash",
   "prepared_artifact_hash",
   "source_revision",
-  "configuration_hash",
   "rules_hash",
   "runtime_closure_hash",
   "component_manifest_hash",
   "report_ref",
-  "report_hash",
-  "network_enforcement"
+  "invocation",
+  "network_enforcement",
+  "valid_until"
 ]);
 var SENSITIVE_IMPORT_KEY_PATTERN = /(?:^|_)(?:api_?key|access_?token|refresh_?token|id_?token|session_?token|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_?secret|private_?key|signing_?key|seed_?phrase|mnemonic|wallet_?(?:key|secret)|capability_?(?:grant|token))(?:$|_)/i;
 var SENSITIVE_IMPORT_VALUE_PATTERNS = Object.freeze([
@@ -64886,58 +64889,37 @@ function createTrustedRiskDescriptorSource(resolveDescriptor) {
   trustedDescriptorSourceCallbacks.set(source, resolveDescriptor);
   return source;
 }
-function createTrustedSkillSpectorAdmissionVerifier(verifyBindings) {
-  if (typeof verifyBindings !== "function") {
+function createTrustedSkillSpectorAdmissionVerifier(resolveHostReport) {
+  if (typeof resolveHostReport !== "function") {
     throw new TypeError("Trusted SkillSpector admission verifier requires a host callback");
   }
   const verifier = Object.freeze({
     schema: RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
     trust_mode: "host_callback_identity"
   });
-  trustedSkillSpectorVerifierCallbacks.set(verifier, verifyBindings);
+  trustedSkillSpectorVerifierCallbacks.set(verifier, resolveHostReport);
   return verifier;
 }
-function normalizeSkillSpectorExpectedBindings(value) {
+function normalizeSkillSpectorHostReport(value, request) {
   assertCanonicalJson(value);
-  assertPlainObject(value, "trusted SkillSpector expected bindings");
+  assertPlainObject(value, "trusted SkillSpector host report");
   assertAllowedKeys(
     value,
-    SKILLSPECTOR_EXPECTED_BINDING_KEYS,
-    "trusted SkillSpector expected bindings"
+    SKILLSPECTOR_HOST_REPORT_KEYS,
+    "trusted SkillSpector host report"
   );
-  for (const key of SKILLSPECTOR_EXPECTED_BINDING_KEYS) {
+  for (const key of SKILLSPECTOR_HOST_REPORT_KEYS) {
     if (!Object.hasOwn(value, key)) {
-      throw new TypeError("Trusted SkillSpector expected bindings are incomplete");
+      throw new TypeError("Trusted SkillSpector host report is incomplete");
     }
   }
-  return deepFreeze({
-    package_ref: requireOpaqueRef(value.package_ref, "expected SkillSpector package_ref"),
-    package_hash: requireSha256Ref(value.package_hash, "expected SkillSpector package_hash"),
-    prepared_artifact_hash: requireSha256Ref(
-      value.prepared_artifact_hash,
-      "expected SkillSpector prepared_artifact_hash"
-    ),
-    source_revision: requireOpaqueRef(
-      value.source_revision,
-      "expected SkillSpector source_revision",
-      { maxLength: 200 }
-    ),
-    configuration_hash: requireSha256Ref(
-      value.configuration_hash,
-      "expected SkillSpector configuration_hash"
-    ),
-    rules_hash: requireSha256Ref(value.rules_hash, "expected SkillSpector rules_hash"),
-    runtime_closure_hash: requireSha256Ref(
-      value.runtime_closure_hash,
-      "expected SkillSpector runtime_closure_hash"
-    ),
-    component_manifest_hash: requireSha256Ref(
-      value.component_manifest_hash,
-      "expected SkillSpector component_manifest_hash"
-    ),
-    report_ref: requireOpaqueRef(value.report_ref, "expected SkillSpector report_ref"),
-    report_hash: requireSha256Ref(value.report_hash, "expected SkillSpector report_hash"),
-    network_enforcement: value.network_enforcement
+  const evidence = adaptSkillSpectorReport({
+    ...value,
+    descriptor_request_hash: request.request_hash,
+    operation_hash: request.operation_hash
+  });
+  return verifySkillSpectorAdmissionEvidence(evidence, {
+    requested_at: request.requested_at
   });
 }
 function normalizePrepareInput(value, { skillspectorAdmissionEnabled = false } = {}) {
@@ -65104,21 +65086,19 @@ function createRiskForkHostBoundary(input = {}) {
         }
         if (record.skillspectorAdmissionEnabled) {
           try {
-            const expectedBindings = normalizeSkillSpectorExpectedBindings(
+            const hostEvidence = normalizeSkillSpectorHostReport(
               await record.verifySkillSpectorBindings(deepFreeze({
-                schema: "agoragentic.risk-fork.skillspector-admission-verification-request.v1",
+                schema: "agoragentic.risk-fork.skillspector-admission-verification-request.v2",
                 descriptor_request_hash: frozenRequest.request_hash,
                 operation_hash: frozenRequest.operation_hash,
                 requested_at: frozenRequest.requested_at,
                 evidence: descriptor.skillspector_admission
-              }))
+              })),
+              frozenRequest
             );
-            verifySkillSpectorAdmissionEvidence(descriptor.skillspector_admission, {
-              ...expectedBindings,
-              descriptor_request_hash: frozenRequest.request_hash,
-              operation_hash: frozenRequest.operation_hash,
-              requested_at: frozenRequest.requested_at
-            });
+            if (canonicalize(descriptor.skillspector_admission) !== canonicalize(hostEvidence)) {
+              throw new TypeError("SkillSpector evidence differs from the host-derived raw report");
+            }
           } catch {
             throw boundaryError(
               RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED,
@@ -77180,7 +77160,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:c7a7dc423dc1f5de3fb7e8cec248e382894f3786c98dbc9d88105c6a0cf3cc27" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:faf13f4015a848ffcb1235213bbd6b361a3f2446e0ebf854434b6e9df52b8ff2" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Correct SkillSpector aggregate completed work to the pinned scanner's 10,000
+  workflow-ledger ceiling and align schema/verifier bounds for every applicable
+  analyzer count. Version the opaque trusted-verifier callback/request to v2:
+  require exact host-owned raw report bytes and independently computed adapter
+  inputs, then re-adapt and compare the complete evidence before preparation.
+  Reject legacy hash-only callbacks and coordinated self-rehashed projections.
+  The source-only alpha evidence packet remains v1; no provider qualification,
+  production activation, or automatic migration is claimed.
+
 - Require all 16 reviewed SkillSpector static analyzer IDs to be accounted for,
   bind missing IDs into evidence, enforce score bands/recommendation floors, and
   allow bounded aggregate work across analyzers. Earlier source-only alpha v1
@@ -26,8 +35,9 @@
   schema. Pinned scanner wheel and runtime closure, source and reconstructed
   package, operation, owner rule/configuration, coverage, network-control, and
   time bindings can only preserve or raise Risk Fork risk. Enabled hosts require
-  a branded callback that independently recomputes every expected binding before
-  controller preparation. Canonical helpers bind the full component inventory,
+  a branded callback supplying host-owned report bytes and independently derived
+  bindings for full boundary re-adaptation before controller preparation.
+  Canonical helpers bind the full component inventory,
   owner rule files, Python runtime, and resolved distribution artifacts; raw
   report text, candidate baselines, suppressions, waivers, and authority claims
   are excluded. Component totals and analyzer work must reconcile exactly,
