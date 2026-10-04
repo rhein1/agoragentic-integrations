@@ -116,7 +116,7 @@ var require_package = __commonJS({
       },
       overrides: {
         "@hono/node-server": "2.0.11",
-        "fast-uri": "3.1.7",
+        "fast-uri": "3.1.8",
         qs: "6.16.0"
       },
       engines: {
@@ -40070,7 +40070,7 @@ var require_utils_webcrypto = __commonJS({
     var nodeCrypto = __require("crypto");
     module.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes3,
+      randomBytes: randomBytes4,
       deriveKey,
       sha256,
       hashByName,
@@ -40080,7 +40080,7 @@ var require_utils_webcrypto = __commonJS({
     var webCrypto = nodeCrypto.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder = new TextEncoder();
-    function randomBytes3(length) {
+    function randomBytes4(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string) {
@@ -48050,13 +48050,14 @@ var require_fast_uri = __commonJS({
         if (!malformedIPLiteral) {
           malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP2);
         }
-        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
-          if (uri.indexOf("%") !== -1) {
-            if (parsed.host !== void 0 && !malformedIPLiteral) {
-              const host = isIP2 ? parsed.host : normalizePercentEncoding(parsed.host, true);
-              parsed.host = reescapeHostDelimiters(host, isIP2);
-            }
+        if (uri.indexOf("%") !== -1 && parsed.host !== void 0 && !malformedIPLiteral) {
+          let host = isIP2 ? parsed.host : normalizePercentEncoding(parsed.host, true);
+          if (!isIP2) {
+            host = normalizePercentEncoding(host.toLowerCase());
           }
+          parsed.host = reescapeHostDelimiters(host, isIP2);
+        }
+        if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (parsed.path) {
             parsed.path = normalizePathEncoding(parsed.path);
           }
@@ -53428,9 +53429,101 @@ var SECRET_SHAPED_TEXT = Object.freeze(detachArray2([
   /\bAKIA[A-Z0-9]{16}\b/,
   /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|private[_-]?key|mnemonic)\s*[=:]\s*[^&\s]{8,}/i
 ]));
+var AUTHORIZATION_VALUE_PATTERN = /\b(?:proxy-)?authorization\s*:\s*[A-Za-z][A-Za-z0-9_-]*(?:\s+[A-Za-z0-9._~+/=-]+)?/i;
+var URL_USERINFO_PATTERN = /(?:^|[^A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\s@]+@/;
+var PATH_USERINFO_PATTERN = /(?:^|[\\/])[^\\/?#\s:@]+:[^\\/?#\s@]+@[^\\/?#\s]+(?=$|[\\/])/;
 function containsSecretShapedText(value) {
   if (typeof value !== "string") return false;
   return securityPatternsMatch(SECRET_SHAPED_TEXT, value);
+}
+function isWhitespaceCharacter(value) {
+  return /\s/u.test(value);
+}
+function isAsciiAlphanumericCharacterCode(code) {
+  return code >= 48 && code <= 57 || code >= 65 && code <= 90 || code >= 97 && code <= 122;
+}
+function isBasicIdentifierPunctuationCode(code) {
+  return code === 45 || code === 46 || code === 95;
+}
+function isBasicBoundary(value, index) {
+  if (index === 0) return true;
+  const previous = value.charCodeAt(index - 1);
+  if (isAsciiAlphanumericCharacterCode(previous)) return false;
+  if (!isBasicIdentifierPunctuationCode(previous)) return true;
+  let cursor = index - 1;
+  while (cursor >= 0 && isBasicIdentifierPunctuationCode(value.charCodeAt(cursor))) cursor -= 1;
+  return cursor < 0 || !isAsciiAlphanumericCharacterCode(value.charCodeAt(cursor));
+}
+function hasCaseInsensitiveBasicAt(value, index) {
+  if (index + 5 > value.length) return false;
+  return (value.charCodeAt(index) | 32) === 98 && (value.charCodeAt(index + 1) | 32) === 97 && (value.charCodeAt(index + 2) | 32) === 115 && (value.charCodeAt(index + 3) | 32) === 105 && (value.charCodeAt(index + 4) | 32) === 99;
+}
+function basicTokenStartAt(value, index) {
+  if (!hasCaseInsensitiveBasicAt(value, index) || !isBasicBoundary(value, index)) return -1;
+  let cursor = index + 5;
+  if (cursor >= value.length || !isWhitespaceCharacter(value[cursor])) return -1;
+  while (cursor < value.length && isWhitespaceCharacter(value[cursor])) cursor += 1;
+  return cursor < value.length ? cursor : -1;
+}
+function basicBase64Value(code) {
+  if (code >= 65 && code <= 90) return code - 65;
+  if (code >= 97 && code <= 122) return code - 97 + 26;
+  if (code >= 48 && code <= 57) return code - 48 + 52;
+  if (code === 43 || code === 45) return 62;
+  if (code === 47 || code === 95) return 63;
+  return -1;
+}
+function advanceBasicDecoder(state, code) {
+  const activeOffsets = state & 15;
+  if (activeOffsets === 0 || code === 61) return code === 61 ? 0 : state;
+  const decoded = basicBase64Value(code);
+  if (decoded === -1) return state;
+  const previous = state >> 4;
+  if ((activeOffsets & 2) !== 0 && (previous << 2 | decoded >> 4) === 58) {
+    return -1;
+  }
+  if ((activeOffsets & 4) !== 0 && ((previous & 15) << 4 | decoded >> 2) === 58) {
+    return -1;
+  }
+  if ((activeOffsets & 8) !== 0 && ((previous & 3) << 6 | decoded) === 58) {
+    return -1;
+  }
+  const nextOffsets = activeOffsets << 1 & 14 | activeOffsets >> 3;
+  return decoded << 4 | nextOffsets;
+}
+function containsBasicAuthorization(value) {
+  let pendingStart = -1;
+  let nodeDecoderState = 0;
+  let whitespaceFoldDecoderState = 0;
+  for (let cursor = 0; cursor < value.length; cursor += 1) {
+    if (cursor === pendingStart) {
+      nodeDecoderState |= 1;
+      whitespaceFoldDecoderState |= 1;
+      pendingStart = -1;
+    }
+    const tokenStart = basicTokenStartAt(value, cursor);
+    if (tokenStart !== -1) pendingStart = tokenStart;
+    const code = value.charCodeAt(cursor) & 255;
+    nodeDecoderState = advanceBasicDecoder(nodeDecoderState, code);
+    if (nodeDecoderState === -1) return true;
+    if (!isWhitespaceCharacter(value[cursor])) {
+      whitespaceFoldDecoderState = advanceBasicDecoder(whitespaceFoldDecoderState, code);
+      if (whitespaceFoldDecoderState === -1) return true;
+    }
+  }
+  return false;
+}
+function containsSerializedCredentialMaterial(value) {
+  if (typeof value !== "string") return false;
+  if (containsSecretShapedText(value)) return true;
+  const variants = securityTextVariants(value);
+  for (let index = 0; index < variants.length; index += 1) {
+    const candidate = variants[index];
+    if (containsBasicAuthorization(candidate) || testSecurityPattern(AUTHORIZATION_VALUE_PATTERN, candidate) || testSecurityPattern(URL_USERINFO_PATTERN, candidate) || testSecurityPattern(PATH_USERINFO_PATTERN, candidate)) {
+      return true;
+    }
+  }
+  return false;
 }
 function assertNoSecretShapedText(value, field) {
   const normalized = requireString(value, field);
@@ -62361,10 +62454,31 @@ import { randomUUID as randomUUID4 } from "node:crypto";
 import { types as utilTypes2 } from "node:util";
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/skillspector-admission.mjs
+import { createHash as createHash3 } from "node:crypto";
 var SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA = "agoragentic.risk-fork.skillspector-admission-evidence.v1";
 var SKILLSPECTOR_REVIEWED_VERSION = "2.11.2";
 var SKILLSPECTOR_REVIEWED_SOURCE_REVISION = "git:69dcdfb74487d361ba4c811d088cfdea2ff3a9dc";
 var SKILLSPECTOR_REVIEWED_ARTIFACT_HASH = "sha256:9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec";
+var SKILLSPECTOR_RULES_MANIFEST_SCHEMA = "agoragentic.risk-fork.skillspector-rules-manifest.v1";
+var SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA = "agoragentic.risk-fork.skillspector-runtime-closure.v1";
+var REVIEWED_STATIC_ANALYZER_IDS = /* @__PURE__ */ new Set([
+  "static_patterns_prompt_injection",
+  "static_patterns_data_exfiltration",
+  "static_patterns_privilege_escalation",
+  "static_patterns_supply_chain",
+  "static_patterns_harmful_content",
+  "static_patterns_excessive_agency",
+  "static_patterns_output_handling",
+  "static_patterns_system_prompt_leakage",
+  "static_patterns_memory_poisoning",
+  "static_patterns_tool_misuse",
+  "static_patterns_rogue_agent",
+  "static_patterns_agent_snooping",
+  "static_patterns_anti_refusal",
+  "static_patterns_ssrf",
+  "static_patterns_deserialization",
+  "static_yara"
+]);
 var SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_INPUT: "RISK_FORK_SKILLSPECTOR_INVALID_INPUT",
   REPORT_CONTRACT_INVALID: "RISK_FORK_SKILLSPECTOR_REPORT_CONTRACT_INVALID",
@@ -62523,6 +62637,12 @@ var ANALYZER_STATUS_REQUIRED_KEYS = Object.freeze([
   "failed",
   "unaccounted"
 ]);
+var NO_LLM_DISABLED_ANALYZERS = /* @__PURE__ */ new Set([
+  "meta_analyzer",
+  "semantic_security_discovery",
+  "semantic_developer_intent",
+  "semantic_quality_policy"
+]);
 var SkillSpectorAdmissionError = class extends Error {
   constructor(code, message) {
     super(message);
@@ -62558,6 +62678,9 @@ function requireBoundedNumber(value, field, { min = 0, max = 100 } = {}) {
     throw new TypeError(`${field} must be a number between ${min} and ${max}`);
   }
   return value;
+}
+function rawSha256Ref2(value) {
+  return `sha256:${createHash3("sha256").update(value, "utf8").digest("hex")}`;
 }
 function normalizeInvocation(value) {
   assertAllowedKeys(value, INVOCATION_KEYS, "SkillSpector invocation");
@@ -62628,6 +62751,426 @@ function normalizeNetworkEnforcement(value) {
     osv_mode: osvMode,
     evidence_ref: evidenceRef,
     evidence_hash: evidenceHash
+  };
+}
+function normalizeComponentManifest(value) {
+  const components = requireArray(value, "SkillSpector component manifest");
+  const normalized = components.map((component, index) => {
+    const field = `SkillSpector components[${index}]`;
+    assertPlainObject(component, field);
+    assertAllowedKeys(component, COMPONENT_KEYS, field);
+    requireFields(component, COMPONENT_KEYS, field);
+    const nullableString = (child, childField, maxLength = 4096) => child === null ? null : requireString(child, childField, { maxLength });
+    return {
+      path: requireString(component.path, `${field}.path`, { maxLength: 4096 }),
+      type: requireString(component.type, `${field}.type`, { maxLength: 200 }),
+      lines: boundedInteger(component.lines, `${field}.lines`),
+      executable: requireBoolean2(component.executable, `${field}.executable`),
+      size_bytes: boundedInteger(component.size_bytes, `${field}.size_bytes`),
+      source_url: nullableString(component.source_url, `${field}.source_url`),
+      source_identity: nullableString(
+        component.source_identity,
+        `${field}.source_identity`,
+        500
+      ),
+      source_digest: component.source_digest === null ? null : requireSha256Ref(component.source_digest, `${field}.source_digest`)
+    };
+  });
+  normalized.sort((left, right) => {
+    const leftCanonical = canonicalize(left);
+    const rightCanonical = canonicalize(right);
+    if (leftCanonical < rightCanonical) return -1;
+    if (leftCanonical > rightCanonical) return 1;
+    return 0;
+  });
+  const rows = normalized.map((component) => canonicalize(component));
+  if (new Set(rows).size !== rows.length) {
+    throw new TypeError("SkillSpector component manifest contains duplicate rows");
+  }
+  return normalized;
+}
+function hashSkillSpectorComponentManifest(value) {
+  try {
+    assertCanonicalJson(value);
+    return sha256Ref(normalizeComponentManifest(value));
+  } catch (error) {
+    if (error instanceof SkillSpectorAdmissionError) throw error;
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+      "SkillSpector component manifest is invalid"
+    );
+  }
+}
+function hashSkillSpectorRulesManifest(value) {
+  try {
+    assertCanonicalJson(value);
+    assertAllowedKeys(value, ["schema", "root_artifact_hash", "files"], "SkillSpector rules manifest");
+    requireFields(value, ["schema", "root_artifact_hash", "files"], "SkillSpector rules manifest");
+    if (value.schema !== SKILLSPECTOR_RULES_MANIFEST_SCHEMA) {
+      throw new TypeError("SkillSpector rules manifest schema is invalid");
+    }
+    const rootArtifactHash = requireEnum(
+      value.root_artifact_hash,
+      [SKILLSPECTOR_REVIEWED_ARTIFACT_HASH],
+      "SkillSpector rules manifest.root_artifact_hash"
+    );
+    const files = requireArray(value.files, "SkillSpector rules manifest.files").map((entry, index) => {
+      const field = `SkillSpector rules manifest.files[${index}]`;
+      assertPlainObject(entry, field);
+      assertAllowedKeys(entry, ["path", "hash"], field);
+      requireFields(entry, ["path", "hash"], field);
+      const path8 = requireString(entry.path, `${field}.path`, { maxLength: 500 });
+      if (!/^skillspector\/(?:nodes\/analyzers\/static_[A-Za-z0-9_.-]+\.py|yara_rules\/[A-Za-z0-9_.-]+)$/.test(path8)) {
+        throw new TypeError("SkillSpector rules manifest path is outside the reviewed rule surfaces");
+      }
+      return {
+        path: path8,
+        hash: requireSha256Ref(entry.hash, `${field}.hash`)
+      };
+    }).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+    if (files.length === 0 || new Set(files.map((entry) => entry.path)).size !== files.length) {
+      throw new TypeError("SkillSpector rules manifest must contain unique rule files");
+    }
+    return sha256Ref({
+      schema: SKILLSPECTOR_RULES_MANIFEST_SCHEMA,
+      root_artifact_hash: rootArtifactHash,
+      files
+    });
+  } catch (error) {
+    if (error instanceof SkillSpectorAdmissionError) throw error;
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+      "SkillSpector rules manifest is invalid"
+    );
+  }
+}
+function hashSkillSpectorRuntimeClosure(value) {
+  try {
+    assertCanonicalJson(value);
+    assertAllowedKeys(value, [
+      "schema",
+      "python_implementation",
+      "python_version",
+      "platform_tag",
+      "packages"
+    ], "SkillSpector runtime closure");
+    requireFields(value, [
+      "schema",
+      "python_implementation",
+      "python_version",
+      "platform_tag",
+      "packages"
+    ], "SkillSpector runtime closure");
+    if (value.schema !== SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA) {
+      throw new TypeError("SkillSpector runtime closure schema is invalid");
+    }
+    const packages = requireArray(value.packages, "SkillSpector runtime closure.packages").map((entry, index) => {
+      const field = `SkillSpector runtime closure.packages[${index}]`;
+      assertPlainObject(entry, field);
+      assertAllowedKeys(entry, ["name", "version", "artifact_hash"], field);
+      requireFields(entry, ["name", "version", "artifact_hash"], field);
+      const rawName = requireString(entry.name, `${field}.name`, {
+        maxLength: 200,
+        pattern: /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,198}[A-Za-z0-9])?$/
+      });
+      const name = rawName.toLowerCase().replace(/[-_.]+/g, "-");
+      return {
+        name,
+        version: requireString(entry.version, `${field}.version`, { maxLength: 200 }),
+        artifact_hash: requireSha256Ref(entry.artifact_hash, `${field}.artifact_hash`)
+      };
+    }).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+    if (packages.length === 0 || new Set(packages.map((entry) => entry.name)).size !== packages.length) {
+      throw new TypeError("SkillSpector runtime closure must contain unique distributions");
+    }
+    const scanner = packages.find((entry) => entry.name === "skillspector");
+    if (!scanner || scanner.version !== SKILLSPECTOR_REVIEWED_VERSION || !safeEqual(scanner.artifact_hash, SKILLSPECTOR_REVIEWED_ARTIFACT_HASH)) {
+      throw new TypeError("SkillSpector runtime closure does not contain the reviewed scanner wheel");
+    }
+    return sha256Ref({
+      schema: SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA,
+      python_implementation: requireString(
+        value.python_implementation,
+        "SkillSpector runtime closure.python_implementation",
+        { maxLength: 100, pattern: /^[a-z0-9_-]+$/ }
+      ),
+      python_version: requireString(
+        value.python_version,
+        "SkillSpector runtime closure.python_version",
+        { maxLength: 100, pattern: /^\d+\.\d+\.\d+(?:[A-Za-z0-9.+-]*)?$/ }
+      ),
+      platform_tag: requireString(
+        value.platform_tag,
+        "SkillSpector runtime closure.platform_tag",
+        { maxLength: 300, pattern: /^\S+$/ }
+      ),
+      packages
+    });
+  } catch (error) {
+    if (error instanceof SkillSpectorAdmissionError) throw error;
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.INVALID_INPUT,
+      "SkillSpector runtime closure is invalid"
+    );
+  }
+}
+function normalizeCoverage(value, { componentCount, findingCount, suppressedCount }) {
+  assertAllowedKeys(value, COMPLETENESS_KEYS, "SkillSpector analysis_completeness");
+  requireFields(value, [
+    "total_components",
+    "scanned_components",
+    "coverage_percent",
+    "is_complete",
+    "status",
+    "execution_successful",
+    "fully_inspected_files",
+    "partially_inspected_files",
+    "entirely_uninspected_files",
+    "ledger_exceptions",
+    "scope_exclusions",
+    "analyzer_statuses",
+    "limitations",
+    "findings_before_filtering",
+    "findings_after_filtering"
+  ], "SkillSpector analysis_completeness");
+  const totalComponents = boundedInteger(
+    value.total_components,
+    "SkillSpector coverage.total_components",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const scannedComponents = boundedInteger(
+    value.scanned_components,
+    "SkillSpector coverage.scanned_components",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const fullyInspected = boundedInteger(
+    value.fully_inspected_files,
+    "SkillSpector coverage.fully_inspected_files",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const partiallyInspected = boundedInteger(
+    value.partially_inspected_files,
+    "SkillSpector coverage.partially_inspected_files",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const entirelyUninspected = boundedInteger(
+    value.entirely_uninspected_files,
+    "SkillSpector coverage.entirely_uninspected_files",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const coveragePercent = requireBoundedNumber(
+    value.coverage_percent,
+    "SkillSpector coverage.coverage_percent"
+  );
+  const status = requireEnum(
+    value.status,
+    ["complete", "partial", "failed"],
+    "SkillSpector coverage.status"
+  );
+  const isComplete = requireBoolean2(value.is_complete, "SkillSpector coverage.is_complete");
+  const executionSuccessful = requireBoolean2(
+    value.execution_successful,
+    "SkillSpector coverage.execution_successful"
+  );
+  const ledgerExceptions = requireArray(
+    value.ledger_exceptions,
+    "SkillSpector coverage.ledger_exceptions"
+  );
+  const scopeExclusions = requireArray(
+    value.scope_exclusions,
+    "SkillSpector coverage.scope_exclusions"
+  );
+  const analyzerStatuses = requireArray(
+    value.analyzer_statuses,
+    "SkillSpector coverage.analyzer_statuses"
+  );
+  let analyzerIncompleteCount = 0;
+  let applicableStaticAnalyzerCount = 0;
+  let staticCompletedWork = 0;
+  const analyzerIds = /* @__PURE__ */ new Set();
+  for (let index = 0; index < analyzerStatuses.length; index += 1) {
+    const status2 = analyzerStatuses[index];
+    assertPlainObject(status2, `SkillSpector coverage.analyzer_statuses[${index}]`);
+    assertAllowedKeys(
+      status2,
+      ANALYZER_STATUS_KEYS,
+      `SkillSpector coverage.analyzer_statuses[${index}]`
+    );
+    requireFields(
+      status2,
+      ANALYZER_STATUS_REQUIRED_KEYS,
+      `SkillSpector coverage.analyzer_statuses[${index}]`
+    );
+    const analyzerId = requireString(
+      status2.analyzer_id,
+      `SkillSpector coverage.analyzer_statuses[${index}].analyzer_id`,
+      { maxLength: 200 }
+    );
+    if (analyzerIds.has(analyzerId)) {
+      throw new TypeError("SkillSpector analyzer status identifiers must be unique");
+    }
+    analyzerIds.add(analyzerId);
+    const statusName = requireEnum(
+      status2.status,
+      ["completed", "not_applicable", "disabled", "unavailable", "degraded", "failed"],
+      `SkillSpector coverage.analyzer_statuses[${index}].status`
+    );
+    const counts = ["planned_work", "completed", "partial", "skipped", "failed", "unaccounted"].map((key) => boundedInteger(
+      status2[key],
+      `SkillSpector coverage.analyzer_statuses[${index}].${key}`,
+      { max: MAX_REPORT_ITEMS }
+    ));
+    if (counts[0] !== counts.slice(1).reduce((sum, count) => sum + count, 0)) {
+      throw new TypeError("SkillSpector analyzer status accounting is inconsistent");
+    }
+    const [plannedWork, completedWork, partialWork, skippedWork, failedWork, unaccountedWork] = counts;
+    if (status2.reason_code !== void 0) {
+      requireString(
+        status2.reason_code,
+        `SkillSpector coverage.analyzer_statuses[${index}].reason_code`,
+        { maxLength: 200 }
+      );
+    }
+    if (status2.message !== void 0) {
+      requireString(
+        status2.message,
+        `SkillSpector coverage.analyzer_statuses[${index}].message`,
+        { maxLength: 2e3 }
+      );
+    }
+    const allowedNoLlmDisable = statusName === "disabled" && NO_LLM_DISABLED_ANALYZERS.has(analyzerId);
+    if (statusName === "completed" && (plannedWork === 0 || completedWork !== plannedWork || partialWork > 0 || skippedWork > 0 || failedWork > 0 || unaccountedWork > 0)) {
+      throw new TypeError("SkillSpector completed analyzer has no fully completed work");
+    }
+    if (statusName === "not_applicable" && plannedWork !== 0) {
+      throw new TypeError("SkillSpector not-applicable analyzer cannot carry planned work");
+    }
+    if (allowedNoLlmDisable && plannedWork !== 0) {
+      throw new TypeError("SkillSpector no-LLM disabled analyzer cannot carry planned work");
+    }
+    if (REVIEWED_STATIC_ANALYZER_IDS.has(analyzerId) && statusName === "completed") {
+      applicableStaticAnalyzerCount += 1;
+      staticCompletedWork += completedWork;
+    }
+    if (!["completed", "not_applicable"].includes(statusName) && !allowedNoLlmDisable) {
+      analyzerIncompleteCount += 1;
+    }
+  }
+  const limitations = requireArray(value.limitations, "SkillSpector coverage.limitations");
+  if (value.references !== void 0) {
+    requireArray(value.references, "SkillSpector coverage.references");
+  }
+  const findingsBeforeFiltering = boundedInteger(
+    value.findings_before_filtering,
+    "SkillSpector coverage.findings_before_filtering",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const findingsAfterFiltering = boundedInteger(
+    value.findings_after_filtering,
+    "SkillSpector coverage.findings_after_filtering",
+    { max: MAX_REPORT_ITEMS }
+  );
+  const expectedCoverage = totalComponents === 0 ? 100 : Math.round(fullyInspected / totalComponents * 1e3) / 10;
+  if (totalComponents !== fullyInspected + partiallyInspected + entirelyUninspected || scannedComponents !== fullyInspected || componentCount !== totalComponents || findingsAfterFiltering > findingsBeforeFiltering || findingCount + suppressedCount > findingsAfterFiltering || Math.abs(coveragePercent - expectedCoverage) > 0.05 || isComplete !== (status === "complete")) {
+    throw new TypeError("SkillSpector coverage accounting is inconsistent");
+  }
+  return {
+    status,
+    is_complete: isComplete,
+    execution_successful: executionSuccessful,
+    total_components: totalComponents,
+    scanned_components: scannedComponents,
+    coverage_percent: coveragePercent,
+    fully_inspected_files: fullyInspected,
+    partially_inspected_files: partiallyInspected,
+    entirely_uninspected_files: entirelyUninspected,
+    ledger_exception_count: ledgerExceptions.length,
+    scope_exclusion_count: scopeExclusions.length,
+    limitation_count: limitations.length,
+    analyzer_status_count: analyzerStatuses.length,
+    analyzer_incomplete_count: analyzerIncompleteCount,
+    applicable_static_analyzer_count: applicableStaticAnalyzerCount,
+    static_completed_work: staticCompletedWork,
+    findings_before_filtering: findingsBeforeFiltering,
+    findings_after_filtering: findingsAfterFiltering
+  };
+}
+function normalizeRiskAssessment(value, issues) {
+  assertAllowedKeys(value, [
+    "score",
+    "severity",
+    "recommendation",
+    "max_issue_severity"
+  ], "SkillSpector risk_assessment");
+  requireFields(value, [
+    "score",
+    "severity",
+    "recommendation",
+    "max_issue_severity"
+  ], "SkillSpector risk_assessment");
+  const score = boundedInteger(value.score, "SkillSpector risk_assessment.score", { max: 100 });
+  const severity = requireEnum(
+    value.severity,
+    SEVERITIES.filter((item) => item !== "NONE"),
+    "SkillSpector risk_assessment.severity"
+  );
+  const recommendation = requireEnum(
+    value.recommendation,
+    RECOMMENDATIONS,
+    "SkillSpector risk_assessment.recommendation"
+  );
+  const maxIssueSeverity = requireEnum(
+    value.max_issue_severity,
+    SEVERITIES,
+    "SkillSpector risk_assessment.max_issue_severity"
+  );
+  const counts = Object.fromEntries(SEVERITIES.map((item) => [item, 0]));
+  const findingSeverities = /* @__PURE__ */ new Map();
+  for (let index = 0; index < issues.length; index += 1) {
+    const issue = issues[index];
+    assertAllowedKeys(issue, ISSUE_KEYS, `SkillSpector issues[${index}]`);
+    requireString(issue.id, `SkillSpector issues[${index}].id`, { maxLength: 200 });
+    const findingId = requireString(
+      issue.finding_id,
+      `SkillSpector issues[${index}].finding_id`,
+      { maxLength: 500 }
+    );
+    const issueSeverity = requireEnum(
+      issue.severity,
+      SEVERITIES.filter((item) => item !== "NONE"),
+      `SkillSpector issues[${index}].severity`
+    );
+    const occurrences = requireArray(
+      issue.occurrences,
+      `SkillSpector issues[${index}].occurrences`
+    );
+    if (occurrences.length !== 1) {
+      throw new TypeError("SkillSpector JSON issues must be expanded to one occurrence each");
+    }
+    const existingSeverity = findingSeverities.get(findingId);
+    if (existingSeverity !== void 0 && existingSeverity !== issueSeverity) {
+      throw new TypeError("SkillSpector occurrence severity is inconsistent for one finding");
+    }
+    findingSeverities.set(findingId, issueSeverity);
+  }
+  for (const issueSeverity of findingSeverities.values()) {
+    counts[issueSeverity] += 1;
+  }
+  const derivedMax = [...SEVERITIES].reverse().find((item) => counts[item] > 0) ?? "NONE";
+  if (derivedMax !== maxIssueSeverity) {
+    throw new TypeError("SkillSpector max_issue_severity does not match issues");
+  }
+  const minimumRecommendation = severity === "LOW" ? "SAFE" : severity === "MEDIUM" ? "CAUTION" : "DO_NOT_INSTALL";
+  if (RECOMMENDATIONS.indexOf(recommendation) < RECOMMENDATIONS.indexOf(minimumRecommendation)) {
+    throw new TypeError("SkillSpector recommendation is less restrictive than severity");
+  }
+  return {
+    score,
+    severity,
+    recommendation,
+    max_issue_severity: maxIssueSeverity,
+    severity_counts: counts,
+    finding_count: findingSeverities.size
   };
 }
 function deriveResult({
@@ -63066,6 +63609,254 @@ function normalizeEvidence2(value) {
   }
   return deepFreeze(JSON.parse(canonicalize(normalized)));
 }
+function adaptSkillSpectorReport(input = {}) {
+  try {
+    assertCanonicalJson(input);
+    assertAllowedKeys(input, [
+      "report_bytes",
+      "report_ref",
+      "package_ref",
+      "package_hash",
+      "source_revision",
+      "prepared_artifact_hash",
+      "descriptor_request_hash",
+      "operation_hash",
+      "rules_hash",
+      "runtime_closure_hash",
+      "component_manifest_hash",
+      "invocation",
+      "network_enforcement",
+      "valid_until"
+    ], "SkillSpector adapter input");
+    requireFields(input, [
+      "report_bytes",
+      "report_ref",
+      "package_ref",
+      "package_hash",
+      "source_revision",
+      "prepared_artifact_hash",
+      "descriptor_request_hash",
+      "operation_hash",
+      "rules_hash",
+      "runtime_closure_hash",
+      "component_manifest_hash",
+      "invocation",
+      "network_enforcement",
+      "valid_until"
+    ], "SkillSpector adapter input");
+    if (typeof input.report_bytes !== "string" || Buffer.byteLength(input.report_bytes, "utf8") > MAX_REPORT_BYTES) {
+      throw new TypeError(`SkillSpector report_bytes exceeds ${MAX_REPORT_BYTES} bytes`);
+    }
+    let rawReport;
+    try {
+      rawReport = JSON.parse(input.report_bytes);
+    } catch {
+      throw admissionError(
+        SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.REPORT_CONTRACT_INVALID,
+        "SkillSpector report is not valid JSON"
+      );
+    }
+    assertCanonicalJson(rawReport);
+    assertAllowedKeys(rawReport, REPORT_TOP_LEVEL_KEYS, "SkillSpector JSON report");
+    requireFields(rawReport, REPORT_TOP_LEVEL_KEYS, "SkillSpector JSON report");
+    assertAllowedKeys(rawReport.skill, ["name", "source", "scanned_at"], "SkillSpector report.skill");
+    requireFields(rawReport.skill, ["name", "source", "scanned_at"], "SkillSpector report.skill");
+    requireString(rawReport.skill.name, "SkillSpector report.skill.name", { maxLength: 500 });
+    if (typeof rawReport.skill.source !== "string" || rawReport.skill.source.length > 4096) {
+      throw new TypeError("SkillSpector report.skill.source is invalid");
+    }
+    const scannedAt = requireIsoDate(rawReport.skill.scanned_at, "SkillSpector report.skill.scanned_at");
+    const validUntil = requireIsoDate(input.valid_until, "SkillSpector adapter valid_until");
+    if (Date.parse(validUntil) <= Date.parse(scannedAt) || Date.parse(validUntil) - Date.parse(scannedAt) > MAX_VALIDITY_MS) {
+      throw new TypeError("SkillSpector adapter validity window is invalid");
+    }
+    const components = normalizeComponentManifest(rawReport.components);
+    const componentManifestHash = sha256Ref(components);
+    const expectedComponentManifestHash = requireSha256Ref(
+      input.component_manifest_hash,
+      "SkillSpector component_manifest_hash"
+    );
+    if (!safeEqual(componentManifestHash, expectedComponentManifestHash)) {
+      throw admissionError(
+        SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH,
+        "SkillSpector report does not bind the expected package component manifest"
+      );
+    }
+    requireArray(rawReport.structured_summaries, "SkillSpector report.structured_summaries");
+    const issues = requireArray(rawReport.issues, "SkillSpector report.issues");
+    const suppressed = requireArray(rawReport.suppressed, "SkillSpector report.suppressed");
+    const suppressedCount = boundedInteger(
+      rawReport.suppressed_count,
+      "SkillSpector report.suppressed_count",
+      { max: MAX_REPORT_ITEMS }
+    );
+    if (suppressedCount !== suppressed.length) {
+      throw new TypeError("SkillSpector suppressed finding count is inconsistent");
+    }
+    let emittedOutputRecords = issues.length;
+    for (let index = 0; index < suppressed.length; index += 1) {
+      const finding = suppressed[index];
+      assertPlainObject(finding, `SkillSpector report.suppressed[${index}]`);
+      const occurrences = requireArray(
+        finding.occurrences,
+        `SkillSpector report.suppressed[${index}].occurrences`
+      );
+      if (occurrences.length === 0) {
+        throw new TypeError("SkillSpector suppressed findings require an occurrence");
+      }
+      emittedOutputRecords += occurrences.length;
+    }
+    if (emittedOutputRecords > SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT) {
+      throw new TypeError("SkillSpector report exceeds the reviewed output-record limit");
+    }
+    assertAllowedKeys(rawReport.metadata, METADATA_KEYS, "SkillSpector report.metadata");
+    requireFields(rawReport.metadata, [
+      "has_executable_scripts",
+      "skillspector_version",
+      "llm_requested",
+      "llm_available",
+      "meta_analysis_applied",
+      "inference_usage",
+      "filtering_mode"
+    ], "SkillSpector report.metadata");
+    requireBoolean2(
+      rawReport.metadata.has_executable_scripts,
+      "SkillSpector metadata.has_executable_scripts"
+    );
+    if (rawReport.metadata.skillspector_version !== SKILLSPECTOR_REVIEWED_VERSION) {
+      throw admissionError(
+        SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.SCANNER_BINDING_MISMATCH,
+        "SkillSpector report version does not match the reviewed scanner"
+      );
+    }
+    if (rawReport.metadata.llm_requested !== false || rawReport.metadata.meta_analysis_applied !== false || rawReport.metadata.filtering_mode !== "heuristic" || requireArray(rawReport.metadata.inference_usage, "SkillSpector metadata.inference_usage").length > 0) {
+      throw new TypeError("SkillSpector admission accepts static-only no-LLM reports");
+    }
+    requireBoolean2(rawReport.metadata.llm_available, "SkillSpector metadata.llm_available");
+    const reportExecutionSuccessful = requireBoolean2(
+      rawReport.execution_successful,
+      "SkillSpector report.execution_successful"
+    );
+    const riskAssessment = normalizeRiskAssessment(rawReport.risk_assessment, issues);
+    const coverage = {
+      ...normalizeCoverage(rawReport.analysis_completeness, {
+        componentCount: components.length,
+        findingCount: riskAssessment.finding_count,
+        suppressedCount
+      }),
+      emitted_output_records: emittedOutputRecords,
+      output_limit_reached: emittedOutputRecords === SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT,
+      component_manifest_hash: componentManifestHash
+    };
+    if (coverage.execution_successful !== reportExecutionSuccessful) {
+      throw new TypeError("SkillSpector report and coverage execution status disagree");
+    }
+    const invocation = normalizeInvocation(input.invocation);
+    const networkEnforcement = normalizeNetworkEnforcement(input.network_enforcement);
+    const derived = deriveResult({
+      riskAssessment,
+      coverage,
+      reportExecutionSuccessful,
+      suppressedCount,
+      findingCount: riskAssessment.finding_count,
+      networkEnforcement
+    });
+    const result = {
+      execution_successful: reportExecutionSuccessful,
+      score: riskAssessment.score,
+      severity: riskAssessment.severity,
+      recommendation: riskAssessment.recommendation,
+      max_issue_severity: riskAssessment.max_issue_severity,
+      severity_counts: riskAssessment.severity_counts,
+      finding_count: riskAssessment.finding_count,
+      suppressed_count: suppressedCount,
+      outcome: derived.outcome,
+      reason_codes: derived.reason_codes
+    };
+    const rulesHash = requireSha256Ref(input.rules_hash, "SkillSpector rules_hash");
+    const runtimeClosureHash = requireSha256Ref(
+      input.runtime_closure_hash,
+      "SkillSpector runtime_closure_hash"
+    );
+    const configurationHash = sha256Ref({
+      invocation,
+      network_enforcement: networkEnforcement,
+      runtime_closure_hash: runtimeClosureHash,
+      rules_hash: rulesHash
+    });
+    const evidence = {
+      schema: SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA,
+      subject: {
+        package_ref: requireOpaqueRef(input.package_ref, "SkillSpector package_ref"),
+        package_hash: requireSha256Ref(input.package_hash, "SkillSpector package_hash"),
+        source_revision: requireOpaqueRef(
+          input.source_revision,
+          "SkillSpector source_revision",
+          { maxLength: 200 }
+        ),
+        prepared_artifact_hash: requireSha256Ref(
+          input.prepared_artifact_hash,
+          "SkillSpector prepared_artifact_hash"
+        )
+      },
+      binding: {
+        descriptor_request_hash: requireSha256Ref(
+          input.descriptor_request_hash,
+          "SkillSpector descriptor_request_hash"
+        ),
+        operation_hash: requireSha256Ref(input.operation_hash, "SkillSpector operation_hash"),
+        configuration_hash: configurationHash
+      },
+      scanner: {
+        id: "skillspector",
+        version: SKILLSPECTOR_REVIEWED_VERSION,
+        source_revision: SKILLSPECTOR_REVIEWED_SOURCE_REVISION,
+        artifact_hash: SKILLSPECTOR_REVIEWED_ARTIFACT_HASH,
+        runtime_closure_hash: runtimeClosureHash,
+        rules_hash: rulesHash
+      },
+      invocation,
+      network_enforcement: networkEnforcement,
+      report: {
+        ref: requireOpaqueRef(input.report_ref, "SkillSpector report_ref"),
+        raw_hash: rawSha256Ref2(input.report_bytes),
+        normalized_hash: sha256Ref(normalizedReportProjection({
+          riskAssessment,
+          coverage,
+          executionSuccessful: reportExecutionSuccessful,
+          result
+        })),
+        scanned_at: scannedAt,
+        valid_until: validUntil
+      },
+      coverage,
+      result,
+      authority_flags: {
+        advisory_only: true,
+        grants_trust: false,
+        grants_execution: false,
+        grants_commit: false,
+        grants_spend: false,
+        grants_settlement: false
+      },
+      evidence_hash: null
+    };
+    if (!safeEqual(evidence.subject.package_hash, evidence.subject.prepared_artifact_hash)) {
+      throw admissionError(
+        SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH,
+        "SkillSpector scan does not bind the resulting package bytes"
+      );
+    }
+    evidence.evidence_hash = sha256Ref(evidence);
+    return normalizeEvidence2(evidence);
+  } catch (error) {
+    if (error instanceof SkillSpectorAdmissionError) throw error;
+    throw admissionError(
+      SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.REPORT_CONTRACT_INVALID,
+      "SkillSpector report or binding does not satisfy the reviewed admission contract"
+    );
+  }
+}
 function verifySkillSpectorAdmissionEvidence(value, expected = {}) {
   try {
     assertAllowedKeys(expected, [
@@ -63144,6 +63935,7 @@ var RISK_FORK_HOST_BOUNDARY_SCHEMA = "agoragentic.risk-fork.host-pre-effect-boun
 var RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA = "agoragentic.risk-fork.trusted-descriptor-request.v1";
 var RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA = "agoragentic.risk-fork.trusted-descriptor.v1";
 var RISK_FORK_IMPORT_ENVELOPE_SCHEMA = "agoragentic.risk-fork.import-envelope.v1";
+var RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA = "agoragentic.risk-fork.skillspector-admission-verifier.v1";
 var RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_BOUNDARY_INPUT: "RISK_FORK_HOST_BOUNDARY_INVALID_INPUT",
   CALLER_RISK_LABEL_REJECTED: "RISK_FORK_CALLER_RISK_LABEL_REJECTED",
@@ -64071,6 +64863,17 @@ function createTrustedRiskDescriptorSource(resolveDescriptor) {
   });
   trustedDescriptorSourceCallbacks.set(source, resolveDescriptor);
   return source;
+}
+function createTrustedSkillSpectorAdmissionVerifier(verifyBindings) {
+  if (typeof verifyBindings !== "function") {
+    throw new TypeError("Trusted SkillSpector admission verifier requires a host callback");
+  }
+  const verifier = Object.freeze({
+    schema: RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
+    trust_mode: "host_callback_identity"
+  });
+  trustedSkillSpectorVerifierCallbacks.set(verifier, verifyBindings);
+  return verifier;
 }
 function normalizeSkillSpectorExpectedBindings(value) {
   assertCanonicalJson(value);
@@ -65935,7 +66738,886 @@ var RiskForkMcpBoundary = class {
 };
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-host-adapter.mjs
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID7 } from "node:crypto";
+
+// risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-portable-handle-boundary.mjs
+import { createHmac, randomBytes as randomBytes3, randomUUID as randomUUID6 } from "node:crypto";
+var RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-registry.v1";
+var RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-binding.v1";
+var RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA = "agoragentic.risk-fork.mcp-portable-handle-authorization.v1";
+var DEFAULT_MAX_ENTRIES = 1e4;
+var DEFAULT_MAX_TTL_MS = 5 * 60 * 1e3;
+var HARD_MAX_TTL_MS = 5 * 60 * 1e3;
+var HARD_MAX_CONSUMPTIONS = 1e3;
+var registryRecords = /* @__PURE__ */ new WeakMap();
+var REGISTRATION_KEYS = Object.freeze([
+  "handle_value",
+  "principal_ref",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "allowed_consuming_methods",
+  "ttl_ms",
+  "single_use",
+  "max_consumptions"
+]);
+var AUTHORIZATION_KEYS = Object.freeze([
+  "handle_value",
+  "binding",
+  "principal_ref",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "consuming_method",
+  "consuming_request_hash"
+]);
+var BINDING_KEYS = Object.freeze([
+  "schema",
+  "binding_id",
+  "handle_hash",
+  "principal_hash",
+  "issuer",
+  "audience",
+  "mcp_server_origin",
+  "originating_method",
+  "originating_request_hash",
+  "allowed_consuming_methods",
+  "issued_at",
+  "expires_at",
+  "single_use",
+  "max_consumptions",
+  "binding_hash"
+]);
+var RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES = Object.freeze({
+  INVALID_CONFIGURATION: "RISK_FORK_MCP_PORTABLE_HANDLE_INVALID_CONFIGURATION",
+  INVALID_INPUT: "RISK_FORK_MCP_PORTABLE_HANDLE_INVALID_INPUT",
+  RAW_CREDENTIAL_REJECTED: "RISK_FORK_MCP_PORTABLE_HANDLE_RAW_CREDENTIAL_REJECTED",
+  CAPACITY_EXCEEDED: "RISK_FORK_MCP_PORTABLE_HANDLE_CAPACITY_EXCEEDED",
+  ALREADY_REGISTERED: "RISK_FORK_MCP_PORTABLE_HANDLE_ALREADY_REGISTERED",
+  UNKNOWN_HANDLE: "RISK_FORK_MCP_PORTABLE_HANDLE_UNKNOWN",
+  BINDING_MISMATCH: "RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_MISMATCH",
+  CONTEXT_MISMATCH: "RISK_FORK_MCP_PORTABLE_HANDLE_CONTEXT_MISMATCH",
+  EXPIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_EXPIRED",
+  REPLAY: "RISK_FORK_MCP_PORTABLE_HANDLE_REPLAY",
+  USE_LIMIT: "RISK_FORK_MCP_PORTABLE_HANDLE_USE_LIMIT",
+  CLOSED: "RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_CLOSED",
+  CLOCK_ROLLBACK: "RISK_FORK_MCP_PORTABLE_HANDLE_CLOCK_ROLLBACK",
+  REVOKED: "RISK_FORK_MCP_PORTABLE_HANDLE_REVOKED",
+  AUTHENTICATION_REQUIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_AUTHENTICATION_REQUIRED",
+  CONTRACT_REQUIRED: "RISK_FORK_MCP_PORTABLE_HANDLE_CONTRACT_REQUIRED"
+});
+var RiskForkMcpPortableHandleError = class extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "RiskForkMcpPortableHandleError";
+    this.code = code;
+  }
+};
+function handleError(code, message) {
+  return new RiskForkMcpPortableHandleError(code, message);
+}
+function exactCanonicalInput(value, keys, field) {
+  let clone;
+  try {
+    clone = JSON.parse(canonicalize(value));
+    assertPlainObject(clone, field);
+    assertAllowedKeys(clone, keys, field);
+    if (keys.some((key) => !Object.hasOwn(clone, key))) {
+      throw new TypeError(`${field} is missing required fields`);
+    }
+    return clone;
+  } catch (error) {
+    if (error instanceof RiskForkMcpPortableHandleError) throw error;
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+      `${field} is invalid`
+    );
+  }
+}
+function canonicalHttpsUrl(value, field, { originOnly = false } = {}) {
+  if (typeof value === "string" && containsSerializedCredentialMaterial(value)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain serialized credential material`
+    );
+  }
+  const exact = requireString(value, field, { maxLength: 4096 });
+  if (exact !== value || exact !== exact.normalize("NFC")) {
+    throw new TypeError(`${field} must already be canonical`);
+  }
+  let parsed;
+  try {
+    parsed = new URL(exact);
+  } catch {
+    throw new TypeError(`${field} must be an absolute HTTPS URL`);
+  }
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    throw new TypeError(`${field} contains invalid percent encoding`);
+  }
+  if (containsSerializedCredentialMaterial(decodedPathname)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain percent-encoded credential material`
+    );
+  }
+  if (/%[a-f0-9]{2}/i.test(decodedPathname)) {
+    throw new TypeError(`${field} contains ambiguous nested percent encoding`);
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash || (originOnly ? parsed.origin !== exact : parsed.href !== exact)) {
+    throw new TypeError(`${field} must be an exact credential-free HTTPS ${originOnly ? "origin" : "URL"}`);
+  }
+  return exact;
+}
+function normalizeMethod(value, field) {
+  const method = requireString(value, field, {
+    maxLength: 300,
+    pattern: /^[A-Za-z0-9][A-Za-z0-9._/-]{0,299}$/
+  });
+  if (containsSerializedCredentialMaterial(method)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      `${field} must not contain serialized credential material`
+    );
+  }
+  return method;
+}
+function normalizeHandleValue(value) {
+  if (typeof value === "string" && containsSerializedCredentialMaterial(value)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      "Portable handle_value must not contain serialized credential material"
+    );
+  }
+  const handle = requireOpaqueRef(value, "portable handle_value", { maxLength: 4096 });
+  if (handle !== value || !handle.isWellFormed()) {
+    throw new TypeError(
+      "Portable handle_value must be an exact, unpadded, well-formed Unicode string"
+    );
+  }
+  if (handle.length < 16) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.RAW_CREDENTIAL_REJECTED,
+      "Portable handles must be opaque non-credential values of at least 16 characters"
+    );
+  }
+  return handle;
+}
+function normalizeBindingContext(value, field) {
+  const principalRef = requireSha256Ref(value.principal_ref, `${field}.principal_ref`);
+  const issuer = canonicalHttpsUrl(value.issuer, `${field}.issuer`);
+  const audience = canonicalHttpsUrl(value.audience, `${field}.audience`);
+  const mcpServerOrigin = canonicalHttpsUrl(
+    value.mcp_server_origin,
+    `${field}.mcp_server_origin`,
+    { originOnly: true }
+  );
+  if (new URL(audience).origin !== mcpServerOrigin) {
+    throw new TypeError(`${field}.audience must belong to the exact MCP server origin`);
+  }
+  return Object.freeze({
+    principalRef,
+    issuer,
+    audience,
+    mcpServerOrigin,
+    originatingMethod: normalizeMethod(value.originating_method, `${field}.originating_method`),
+    originatingRequestHash: requireSha256Ref(
+      value.originating_request_hash,
+      `${field}.originating_request_hash`
+    )
+  });
+}
+function normalizeAllowedConsumingMethods(value, field) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+    throw new TypeError(`${field} must be a nonempty array of at most 32 methods`);
+  }
+  const normalized = value.map((method, index) => normalizeMethod(method, `${field}[${index}]`));
+  const canonical = [...new Set(normalized)].sort();
+  if (canonical.length !== normalized.length || canonicalize(canonical) !== canonicalize(normalized)) {
+    throw new TypeError(`${field} must be unique and canonically sorted`);
+  }
+  return Object.freeze(canonical);
+}
+function keyedRef(key, domain, value) {
+  return `sha256:${createHmac("sha256", key).update(domain, "utf8").update("\0", "utf8").update(canonicalize(value), "utf8").digest("hex")}`;
+}
+function currentTime(record) {
+  let iso;
+  try {
+    iso = requireIsoDate(record.clock(), "portable-handle registry clock");
+  } catch {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle registry clock did not return a valid time"
+    );
+  }
+  const milliseconds = Date.parse(iso);
+  if (record.lastObservedTime !== null && milliseconds < record.lastObservedTime) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CLOCK_ROLLBACK,
+      "Portable-handle registry clock moved backwards"
+    );
+  }
+  record.lastObservedTime = milliseconds;
+  return Object.freeze({ iso, milliseconds });
+}
+function normalizePresentedBinding(value) {
+  const binding = exactCanonicalInput(value, BINDING_KEYS, "portable-handle binding");
+  if (binding.schema !== RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding schema is invalid"
+    );
+  }
+  requireOpaqueRef(binding.binding_id, "portable-handle binding.binding_id", { maxLength: 256 });
+  requireSha256Ref(binding.handle_hash, "portable-handle binding.handle_hash");
+  requireSha256Ref(binding.principal_hash, "portable-handle binding.principal_hash");
+  canonicalHttpsUrl(binding.issuer, "portable-handle binding.issuer");
+  const audience = canonicalHttpsUrl(binding.audience, "portable-handle binding.audience");
+  const origin = canonicalHttpsUrl(
+    binding.mcp_server_origin,
+    "portable-handle binding.mcp_server_origin",
+    { originOnly: true }
+  );
+  if (new URL(audience).origin !== origin) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding audience and origin disagree"
+    );
+  }
+  normalizeMethod(binding.originating_method, "portable-handle binding.originating_method");
+  requireSha256Ref(
+    binding.originating_request_hash,
+    "portable-handle binding.originating_request_hash"
+  );
+  normalizeAllowedConsumingMethods(
+    binding.allowed_consuming_methods,
+    "portable-handle binding.allowed_consuming_methods"
+  );
+  const issuedAt = requireIsoDate(binding.issued_at, "portable-handle binding.issued_at");
+  const expiresAt = requireIsoDate(binding.expires_at, "portable-handle binding.expires_at");
+  if (issuedAt !== binding.issued_at || expiresAt !== binding.expires_at || Date.parse(expiresAt) <= Date.parse(issuedAt) || Date.parse(expiresAt) - Date.parse(issuedAt) > HARD_MAX_TTL_MS || typeof binding.single_use !== "boolean" || !Number.isSafeInteger(binding.max_consumptions) || binding.max_consumptions < 1 || binding.max_consumptions > HARD_MAX_CONSUMPTIONS || binding.single_use !== (binding.max_consumptions === 1)) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding lifetime or use policy is invalid"
+    );
+  }
+  requireSha256Ref(binding.binding_hash, "portable-handle binding.binding_hash");
+  if (!safeEqual(
+    binding.binding_hash,
+    sha256Ref({ ...binding, binding_hash: null })
+  )) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+      "Portable-handle binding hash mismatch"
+    );
+  }
+  return deepFreeze(binding);
+}
+function assertRegistryOpen(record) {
+  if (record.closed) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CLOSED,
+      "Portable-handle registry is closed"
+    );
+  }
+}
+function createMcpPortableHandleRegistry(options = {}) {
+  assertAllowedKeys(options, ["clock", "max_entries", "max_ttl_ms"], "portable-handle registry options");
+  const clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle registry clock must be a function"
+    );
+  }
+  const maxEntries = boundedInteger(
+    options.max_entries ?? DEFAULT_MAX_ENTRIES,
+    "portable-handle registry max_entries",
+    { min: 1, max: 1e5 }
+  );
+  const maxTtlMs = boundedInteger(
+    options.max_ttl_ms ?? DEFAULT_MAX_TTL_MS,
+    "portable-handle registry max_ttl_ms",
+    { min: 1e3, max: HARD_MAX_TTL_MS }
+  );
+  const record = {
+    clock,
+    maxEntries,
+    maxTtlMs,
+    key: randomBytes3(32),
+    bindings: /* @__PURE__ */ new Map(),
+    closed: false,
+    lastObservedTime: null
+  };
+  function register(input) {
+    assertRegistryOpen(record);
+    let normalized;
+    let handleValue;
+    let context;
+    let allowedConsumingMethods;
+    let ttlMs;
+    let maxConsumptions;
+    try {
+      normalized = exactCanonicalInput(input, REGISTRATION_KEYS, "portable-handle registration");
+      handleValue = normalizeHandleValue(normalized.handle_value);
+      context = normalizeBindingContext(normalized, "portable-handle registration");
+      allowedConsumingMethods = normalizeAllowedConsumingMethods(
+        normalized.allowed_consuming_methods,
+        "portable-handle registration.allowed_consuming_methods"
+      );
+      ttlMs = boundedInteger(normalized.ttl_ms, "portable-handle registration.ttl_ms", {
+        min: 1e3,
+        max: record.maxTtlMs
+      });
+      if (typeof normalized.single_use !== "boolean") {
+        throw new TypeError("portable-handle registration.single_use must be boolean");
+      }
+      maxConsumptions = boundedInteger(
+        normalized.max_consumptions,
+        "portable-handle registration.max_consumptions",
+        { min: 1, max: HARD_MAX_CONSUMPTIONS }
+      );
+      if (normalized.single_use !== (maxConsumptions === 1)) {
+        throw new TypeError(
+          "portable-handle registration single_use and max_consumptions disagree"
+        );
+      }
+    } catch (error) {
+      if (error instanceof RiskForkMcpPortableHandleError) throw error;
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle registration is invalid"
+      );
+    }
+    const now = currentTime(record);
+    assertRegistryOpen(record);
+    for (const [handleHash2, entry] of record.bindings) {
+      if (Date.parse(entry.binding.expires_at) <= now.milliseconds) {
+        record.bindings.delete(handleHash2);
+      }
+    }
+    const handleHash = keyedRef(record.key, "portable-handle", handleValue);
+    if (record.bindings.has(handleHash)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.ALREADY_REGISTERED,
+        "Portable handle is already registered"
+      );
+    }
+    if (record.bindings.size >= record.maxEntries) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CAPACITY_EXCEEDED,
+        "Portable-handle registry capacity is exhausted"
+      );
+    }
+    const expiresAt = new Date(now.milliseconds + ttlMs).toISOString();
+    const binding = {
+      schema: RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA,
+      binding_id: `mcp-portable-handle:${randomUUID6()}`,
+      handle_hash: handleHash,
+      principal_hash: keyedRef(record.key, "principal-ref", context.principalRef),
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash,
+      allowed_consuming_methods: allowedConsumingMethods,
+      issued_at: now.iso,
+      expires_at: expiresAt,
+      single_use: normalized.single_use,
+      max_consumptions: maxConsumptions,
+      binding_hash: null
+    };
+    binding.binding_hash = sha256Ref(binding);
+    const frozenBinding = deepFreeze(binding);
+    record.bindings.set(handleHash, {
+      binding: frozenBinding,
+      consumed: false,
+      consumingRequestHashes: /* @__PURE__ */ new Set()
+    });
+    return frozenBinding;
+  }
+  function authorize(input) {
+    assertRegistryOpen(record);
+    let normalized;
+    let handleValue;
+    let context;
+    let consumingMethod;
+    let consumingRequestHash;
+    let presentedBinding;
+    try {
+      normalized = exactCanonicalInput(input, AUTHORIZATION_KEYS, "portable-handle authorization");
+      handleValue = normalizeHandleValue(normalized.handle_value);
+      context = normalizeBindingContext(normalized, "portable-handle authorization");
+      consumingMethod = normalizeMethod(
+        normalized.consuming_method,
+        "portable-handle authorization.consuming_method"
+      );
+      consumingRequestHash = requireSha256Ref(
+        normalized.consuming_request_hash,
+        "portable-handle authorization.consuming_request_hash"
+      );
+      presentedBinding = normalizePresentedBinding(normalized.binding);
+    } catch (error) {
+      if (error instanceof RiskForkMcpPortableHandleError) throw error;
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle authorization is invalid"
+      );
+    }
+    const handleHash = keyedRef(record.key, "portable-handle", handleValue);
+    const entry = record.bindings.get(handleHash);
+    if (!entry) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.UNKNOWN_HANDLE,
+        "Portable handle is not registered in this host registry"
+      );
+    }
+    if (!safeEqual(entry.binding.binding_hash, presentedBinding.binding_hash)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Portable-handle binding does not match the host registry"
+      );
+    }
+    const principalHash = keyedRef(record.key, "principal-ref", context.principalRef);
+    const expectedContext = {
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash
+    };
+    if (Object.entries(expectedContext).some(([key, expected]) => key.endsWith("_hash") ? !safeEqual(entry.binding[key], expected) : entry.binding[key] !== expected)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+        "Portable handle is not bound to this principal, issuer, audience, origin, or originating request"
+      );
+    }
+    const now = currentTime(record);
+    assertRegistryOpen(record);
+    if (now.milliseconds >= Date.parse(entry.binding.expires_at)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.EXPIRED,
+        "Portable-handle binding has expired"
+      );
+    }
+    if (!entry.binding.allowed_consuming_methods.includes(consumingMethod)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+        "Portable handle is not authorized for this consuming method"
+      );
+    }
+    if (entry.consumingRequestHashes.has(consumingRequestHash) || entry.binding.single_use && entry.consumed) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.REPLAY,
+        "Portable-handle consumption was already used"
+      );
+    }
+    if (entry.consumingRequestHashes.size >= entry.binding.max_consumptions) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.USE_LIMIT,
+        "Portable-handle consumption limit is exhausted"
+      );
+    }
+    entry.consumingRequestHashes.add(consumingRequestHash);
+    if (entry.binding.single_use) entry.consumed = true;
+    const authorization = {
+      schema: RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA,
+      binding_hash: entry.binding.binding_hash,
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash,
+      allowed_consuming_methods: entry.binding.allowed_consuming_methods,
+      consuming_method: consumingMethod,
+      consuming_request_hash: consumingRequestHash,
+      authorized_at: now.iso,
+      expires_at: entry.binding.expires_at,
+      single_use: entry.binding.single_use,
+      max_consumptions: entry.binding.max_consumptions,
+      transferable: false,
+      raw_handle_exposed: false,
+      raw_principal_exposed: false,
+      authorization_hash: null
+    };
+    authorization.authorization_hash = sha256Ref(authorization);
+    return deepFreeze(authorization);
+  }
+  function close() {
+    if (record.closed) return;
+    record.closed = true;
+    record.bindings.clear();
+    record.key.fill(0);
+  }
+  const registry = Object.freeze({
+    schema: RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
+    register,
+    authorize,
+    close
+  });
+  registryRecords.set(registry, record);
+  return registry;
+}
+function isMcpPortableHandleRegistry(value) {
+  return registryRecords.has(value);
+}
+function createDurableMcpPortableHandleRegistry(options = {}) {
+  assertAllowedKeys(options, [
+    "store",
+    "tenant_ref",
+    "key_id",
+    "hash_key",
+    "max_entries",
+    "max_ttl_ms"
+  ], "durable portable-handle registry options");
+  const tenantRef = requireOpaqueRef(options.tenant_ref, "portable-handle tenant_ref");
+  const keyId = requireOpaqueRef(options.key_id, "portable-handle key_id");
+  if (containsSerializedCredentialMaterial(tenantRef) || containsSerializedCredentialMaterial(keyId) || !Buffer.isBuffer(options.hash_key) || options.hash_key.length !== 32) {
+    throw handleError(
+      RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Durable registry requires a credential-free namespace and a host-owned 32-byte key"
+    );
+  }
+  const store = options.store;
+  if (!store || !["register", "consume", "revoke"].every((name) => typeof store[name] === "function")) {
+    throw new TypeError("Durable registry requires transactional register/consume/revoke storage");
+  }
+  const storage = Object.freeze(Object.fromEntries(["register", "consume", "revoke"].map((name) => [name, store[name].bind(store)])));
+  const record = {
+    key: Buffer.from(options.hash_key),
+    closed: false,
+    maxEntries: boundedInteger(
+      options.max_entries ?? DEFAULT_MAX_ENTRIES,
+      "max_entries",
+      { min: 1, max: 1e5 }
+    ),
+    maxTtlMs: boundedInteger(
+      options.max_ttl_ms ?? DEFAULT_MAX_TTL_MS,
+      "max_ttl_ms",
+      { min: 1e3, max: HARD_MAX_TTL_MS }
+    )
+  };
+  const scopedRef = (domain, value) => keyedRef(record.key, domain, { tenantRef, keyId, value });
+  const scope = Object.freeze({
+    tenant_ref: tenantRef,
+    key_id: keyId,
+    key_fingerprint: scopedRef("portable-handle-key-namespace", null)
+  });
+  async function register(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, REGISTRATION_KEYS, "portable-handle registration");
+    const handleValue = normalizeHandleValue(normalized.handle_value);
+    const context = normalizeBindingContext(normalized, "portable-handle registration");
+    const methods = normalizeAllowedConsumingMethods(
+      normalized.allowed_consuming_methods,
+      "portable-handle registration.allowed_consuming_methods"
+    );
+    const ttlMs = boundedInteger(normalized.ttl_ms, "ttl_ms", { min: 1e3, max: record.maxTtlMs });
+    const maxConsumptions = boundedInteger(
+      normalized.max_consumptions,
+      "max_consumptions",
+      { min: 1, max: HARD_MAX_CONSUMPTIONS }
+    );
+    if (typeof normalized.single_use !== "boolean" || normalized.single_use !== (maxConsumptions === 1)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_INPUT,
+        "Portable-handle registration use policy is invalid"
+      );
+    }
+    const handleHash = scopedRef("portable-handle", handleValue);
+    const principalHash = scopedRef("principal-ref", context.principalRef);
+    let expectedBinding;
+    const result = await storage.register(scope, {
+      handle_hash: handleHash,
+      max_entries: record.maxEntries,
+      ttl_ms: ttlMs
+    }, (nowValue) => {
+      assertRegistryOpen(record);
+      const now = requireIsoDate(nowValue, "portable-handle database time");
+      const binding2 = {
+        schema: RISK_FORK_MCP_PORTABLE_HANDLE_BINDING_SCHEMA,
+        binding_id: `mcp-portable-handle:${randomUUID6()}`,
+        handle_hash: handleHash,
+        principal_hash: principalHash,
+        issuer: context.issuer,
+        audience: context.audience,
+        mcp_server_origin: context.mcpServerOrigin,
+        originating_method: context.originatingMethod,
+        originating_request_hash: context.originatingRequestHash,
+        allowed_consuming_methods: methods,
+        issued_at: now,
+        expires_at: new Date(Date.parse(now) + ttlMs).toISOString(),
+        single_use: normalized.single_use,
+        max_consumptions: maxConsumptions,
+        binding_hash: null
+      };
+      binding2.binding_hash = sha256Ref(binding2);
+      expectedBinding = normalizePresentedBinding(binding2);
+      return expectedBinding;
+    });
+    assertRegistryOpen(record);
+    const binding = normalizePresentedBinding(result);
+    if (!expectedBinding || canonicalize(binding) !== canonicalize(expectedBinding)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Storage returned a different portable-handle binding"
+      );
+    }
+    return binding;
+  }
+  async function authorize(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, AUTHORIZATION_KEYS, "portable-handle authorization");
+    const handleValue = normalizeHandleValue(normalized.handle_value);
+    const context = normalizeBindingContext(normalized, "portable-handle authorization");
+    const presented = normalizePresentedBinding(normalized.binding);
+    const method = normalizeMethod(normalized.consuming_method, "consuming_method");
+    const requestHash = requireSha256Ref(normalized.consuming_request_hash, "consuming_request_hash");
+    const handleHash = scopedRef("portable-handle", handleValue);
+    const principalHash = scopedRef("principal-ref", context.principalRef);
+    const expected = {
+      handle_hash: handleHash,
+      principal_hash: principalHash,
+      issuer: context.issuer,
+      audience: context.audience,
+      mcp_server_origin: context.mcpServerOrigin,
+      originating_method: context.originatingMethod,
+      originating_request_hash: context.originatingRequestHash
+    };
+    let expectedReceipt;
+    const result = await storage.consume(scope, {
+      handle_hash: handleHash,
+      consuming_request_hash: requestHash
+    }, (storedValue, nowValue) => {
+      assertRegistryOpen(record);
+      const stored = normalizePresentedBinding(storedValue);
+      const now = requireIsoDate(nowValue, "portable-handle database time");
+      if (!safeEqual(stored.binding_hash, presented.binding_hash)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+          "Portable-handle binding differs from durable storage"
+        );
+      }
+      if (Object.entries(expected).some(([key, value]) => stored[key] !== value) || !stored.allowed_consuming_methods.includes(method)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTEXT_MISMATCH,
+          "Portable handle does not belong to this authenticated context or method"
+        );
+      }
+      if (Date.parse(now) < Date.parse(stored.issued_at) || Date.parse(now) >= Date.parse(stored.expires_at)) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.EXPIRED,
+          "Portable-handle binding is outside its validity window"
+        );
+      }
+      const receipt = {
+        schema: RISK_FORK_MCP_PORTABLE_HANDLE_AUTHORIZATION_SCHEMA,
+        binding_hash: stored.binding_hash,
+        ...expected,
+        allowed_consuming_methods: stored.allowed_consuming_methods,
+        consuming_method: method,
+        consuming_request_hash: requestHash,
+        authorized_at: now,
+        expires_at: stored.expires_at,
+        single_use: stored.single_use,
+        max_consumptions: stored.max_consumptions,
+        transferable: false,
+        raw_handle_exposed: false,
+        raw_principal_exposed: false,
+        authorization_hash: null
+      };
+      receipt.authorization_hash = sha256Ref(receipt);
+      expectedReceipt = deepFreeze(receipt);
+      return expectedReceipt;
+    });
+    assertRegistryOpen(record);
+    if (!expectedReceipt || canonicalize(result) !== canonicalize(expectedReceipt)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.BINDING_MISMATCH,
+        "Storage returned an invalid portable-handle consumption receipt"
+      );
+    }
+    return expectedReceipt;
+  }
+  async function revoke(input) {
+    assertRegistryOpen(record);
+    const normalized = exactCanonicalInput(input, ["handle_value"], "portable-handle revocation");
+    const handleHash = scopedRef("portable-handle", normalizeHandleValue(normalized.handle_value));
+    await storage.revoke(scope, { handle_hash: handleHash });
+    assertRegistryOpen(record);
+  }
+  function close() {
+    record.closed = true;
+    record.key.fill(0);
+  }
+  const registry = Object.freeze({
+    schema: RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
+    durability: "transactional",
+    tenant_ref: tenantRef,
+    register,
+    authorize,
+    revoke,
+    close
+  });
+  registryRecords.set(registry, record);
+  return registry;
+}
+var preEffectBoundaries = /* @__PURE__ */ new WeakSet();
+var HANDLE_PHASES = ["tools/call", "resources/read", "prompts/get"];
+function fieldPath(value, label) {
+  if (value === null) return null;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 16 || value.some((key) => typeof key !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(key) || ["__proto__", "constructor", "prototype"].includes(key))) {
+    throw new TypeError(`${label} must be an explicit bounded own-property path`);
+  }
+  return Object.freeze([...value]);
+}
+function ownPath(value, path8) {
+  let current = value;
+  for (const key of path8) {
+    const descriptor = current && typeof current === "object" ? Object.getOwnPropertyDescriptor(current, key) : null;
+    if (!descriptor || !Object.hasOwn(descriptor, "value")) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTRACT_REQUIRED,
+        "The configured portable-handle field is missing"
+      );
+    }
+    current = descriptor.value;
+  }
+  return current;
+}
+function createMcpPortableHandlePreEffectBoundary(options = {}) {
+  assertAllowedKeys(
+    options,
+    ["authenticate", "registry_for_context", "contracts", "clock"],
+    "portable-handle pre-effect boundary options"
+  );
+  if (typeof options.authenticate !== "function" || typeof options.registry_for_context !== "function") {
+    throw new TypeError("Portable-handle boundary requires clean host authentication and registry resolvers");
+  }
+  const authenticate = options.authenticate;
+  const registryForContext = options.registry_for_context;
+  const clock = options.clock ?? (() => /* @__PURE__ */ new Date());
+  if (typeof clock !== "function") throw new TypeError("Portable-handle boundary clock must be a function");
+  const raw = JSON.parse(canonicalize(options.contracts));
+  if (!Array.isArray(raw) || raw.length > 1e3) throw new TypeError("Portable-handle contracts must be a bounded array");
+  const contracts = raw.map((value) => {
+    const contract = exactCanonicalInput(value, [
+      "phase",
+      "tool_name",
+      "tool_descriptor_hash",
+      "mcp_server_origin",
+      "handle_path",
+      "binding_path"
+    ], "portable-handle field contract");
+    if (!HANDLE_PHASES.includes(contract.phase) || (contract.phase === "tools/call" ? typeof contract.tool_name !== "string" : contract.tool_name !== null || contract.tool_descriptor_hash !== null)) {
+      throw new TypeError("Portable-handle contract phase/tool is invalid");
+    }
+    if (contract.phase === "tools/call") {
+      normalizeMethod(contract.tool_name, "contract.tool_name");
+      requireSha256Ref(contract.tool_descriptor_hash, "contract.tool_descriptor_hash");
+    }
+    canonicalHttpsUrl(contract.mcp_server_origin, "contract.mcp_server_origin", { originOnly: true });
+    contract.handle_path = fieldPath(contract.handle_path, "handle_path");
+    contract.binding_path = fieldPath(contract.binding_path, "binding_path");
+    if (contract.handle_path === null !== (contract.binding_path === null)) {
+      throw new TypeError("A portable-handle contract requires both field paths or neither");
+    }
+    return deepFreeze(contract);
+  });
+  const contractKey = (item) => canonicalize([item.phase, item.tool_name, item.mcp_server_origin]);
+  if (new Set(contracts.map(contractKey)).size !== contracts.length) {
+    throw new TypeError("Portable-handle contracts must not overlap");
+  }
+  async function currentIdentity(request, context) {
+    let identity;
+    try {
+      identity = exactCanonicalInput(await authenticate(request, context), [
+        "tenant_ref",
+        "principal_ref",
+        "issuer",
+        "audience",
+        "mcp_server_origin",
+        "expires_at"
+      ], "authenticated MCP identity");
+      requireOpaqueRef(identity.tenant_ref, "authenticated tenant_ref");
+      const normalized = normalizeBindingContext(
+        {
+          ...identity,
+          originating_method: request.phase,
+          originating_request_hash: request.request_hash
+        },
+        "authenticated MCP identity"
+      );
+      const expires = requireIsoDate(identity.expires_at, "authenticated expires_at");
+      const now = requireIsoDate(clock(), "authenticated host clock");
+      if (Date.parse(now) >= Date.parse(expires) || normalized.mcpServerOrigin !== request.mcp_server_origin || context?.signal?.aborted) throw new Error("Expired or mismatched identity");
+    } catch {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.AUTHENTICATION_REQUIRED,
+        "Current MCP request authentication is unavailable, expired or mismatched"
+      );
+    }
+    return deepFreeze(identity);
+  }
+  async function authorize(request, context) {
+    const identity = await currentIdentity(request, context);
+    if (!HANDLE_PHASES.includes(request.phase)) return null;
+    const contract = contracts.find((item) => contractKey(item) === contractKey(request));
+    if (!contract || contract.tool_descriptor_hash !== request.tool_descriptor_hash) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.CONTRACT_REQUIRED,
+        "This MCP operation has no exact host-owned portable-handle field contract"
+      );
+    }
+    let receipt = null;
+    if (contract.handle_path !== null) {
+      const registry = await registryForContext(identity);
+      if (!isMcpPortableHandleRegistry(registry) || registry.durability !== "transactional" || registry.tenant_ref !== identity.tenant_ref) {
+        throw handleError(
+          RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+          "Authenticated MCP tenant has no durable portable-handle registry"
+        );
+      }
+      const binding = normalizePresentedBinding(ownPath(request.params, contract.binding_path));
+      receipt = await registry.authorize({
+        handle_value: ownPath(request.params, contract.handle_path),
+        binding,
+        principal_ref: identity.principal_ref,
+        issuer: identity.issuer,
+        audience: identity.audience,
+        mcp_server_origin: identity.mcp_server_origin,
+        originating_method: binding.originating_method,
+        originating_request_hash: binding.originating_request_hash,
+        consuming_method: request.phase,
+        consuming_request_hash: request.request_hash
+      });
+    }
+    if (canonicalize(await currentIdentity(request, context)) !== canonicalize(identity)) {
+      throw handleError(
+        RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES.AUTHENTICATION_REQUIRED,
+        "Authenticated MCP identity changed during authorization"
+      );
+    }
+    return receipt;
+  }
+  const boundary = Object.freeze({ authorize });
+  preEffectBoundaries.add(boundary);
+  return boundary;
+}
+function isMcpPortableHandlePreEffectBoundary(value) {
+  return preEffectBoundaries.has(value);
+}
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/mcp-transport-contract.mjs
 import { BlockList, isIP } from "node:net";
@@ -67064,7 +68746,7 @@ function normalizeEnforcementRequest(value, {
 function createPlanRequest(request, clock) {
   const value = {
     schema: RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
-    plan_request_id: `risk-fork-mcp-plan:${randomUUID6()}`,
+    plan_request_id: `risk-fork-mcp-plan:${randomUUID7()}`,
     mcp_request_hash: request.request_hash,
     phase: request.phase,
     mcp_server_ref: request.mcp_server_ref,
@@ -67482,6 +69164,10 @@ async function executePhase(record, request, context) {
     record.syntheticDemoMode
   );
   let preparedResult;
+  if (record.portableHandleBoundary) {
+    await record.portableHandleBoundary.authorize(request, context);
+    throwIfAborted(context);
+  }
   try {
     preparedResult = await record.preEffect({
       descriptor_ref: validatedPlan.plan.descriptor_ref,
@@ -67533,7 +69219,8 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     signal: controller.signal,
     timeout_ms: timeoutMs,
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
-    operation: context?.operation ?? request.phase
+    operation: context?.operation ?? request.phase,
+    authentication: context?.authentication
   });
   const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
   const cleanup = () => {
@@ -67566,7 +69253,8 @@ function createRiskForkMcpHostAdapter(input = {}) {
     "max_sessions",
     "max_requests_per_session",
     "max_request_bytes",
-    "synthetic_demo_mode"
+    "synthetic_demo_mode",
+    "portable_handle_boundary"
   ], "Risk Fork MCP host adapter input");
   if (!isRiskForkHostBoundary(input.host_boundary)) {
     throw adapterError(
@@ -67599,6 +69287,12 @@ function createRiskForkMcpHostAdapter(input = {}) {
     throw new TypeError("synthetic_demo_mode must be a boolean");
   }
   const syntheticDemoMode = input.synthetic_demo_mode === true;
+  if (input.portable_handle_boundary != null && !isMcpPortableHandlePreEffectBoundary(input.portable_handle_boundary)) {
+    throw adapterError(
+      RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      "Portable-handle admission requires a factory-created clean host boundary"
+    );
+  }
   const sessions = /* @__PURE__ */ new Set();
   const runtime = { pendingOpens: 0 };
   const preEffect = input.host_boundary.preEffect.bind(input.host_boundary);
@@ -67781,7 +69475,8 @@ function createRiskForkMcpHostAdapter(input = {}) {
     maxRequestBytes,
     preEffect,
     resolvePlan,
-    syntheticDemoMode
+    syntheticDemoMode,
+    portableHandleBoundary: input.portable_handle_boundary ?? null
   }));
   return adapter;
 }
@@ -67792,7 +69487,7 @@ function isRiskForkMcpHostAdapter(value) {
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/e2b-qualification.mjs
 import {
   KeyObject,
-  createHash as createHash3,
+  createHash as createHash4,
   createPublicKey,
   verify as verifySignature
 } from "node:crypto";
@@ -69745,7 +71440,7 @@ function isE2BQualificationEvidenceCanonical(value, expected = {}, externalObser
 }
 function sha256BytesRef(value) {
   const bytes = value instanceof Uint8Array ? value : Buffer.from(value);
-  return `sha256:${createHash3("sha256").update(bytes).digest("hex")}`;
+  return `sha256:${createHash4("sha256").update(bytes).digest("hex")}`;
 }
 async function sha256FileRef(file) {
   const nonBlock = Number.isInteger(constants.O_NONBLOCK) ? constants.O_NONBLOCK : 0;
@@ -69768,7 +71463,7 @@ async function sha256FileRef(file) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b.mjs
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 import { readFile as readFile6 } from "node:fs/promises";
 import path6 from "node:path";
 import { performance as performance2 } from "node:perf_hooks";
@@ -70278,7 +71973,7 @@ function validateE2BBirthAttestation(value, options = {}) {
 }
 
 // risk-fork-hosted-mcp/.build/upstream/risk-fork/src/adapters/e2b-cleanup-journal.mjs
-import { randomUUID as randomUUID7 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 import {
   mkdir as mkdir2,
   open as open3,
@@ -70441,7 +72136,7 @@ var E2BCleanupJournal = class {
     await this.initialize();
     const normalized = normalizeRecord(record);
     const target = this.#path(normalized.record_id);
-    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID7()}.tmp`);
+    const temp = path4.join(this.directory, `.${path4.basename(target)}.${randomUUID8()}.tmp`);
     let handle;
     try {
       handle = await open3(temp, "wx", 384);
@@ -72603,7 +74298,7 @@ async function performE2BSandboxBirthHandshake(options = {}) {
     expires_at: new Date(
       allocationStartedAt.getTime() + E2B_BIRTH_MAX_VALIDITY_MS
     ).toISOString(),
-    birth_nonce: randomUUID8()
+    birth_nonce: randomUUID9()
   });
   const paths = e2bBirthRequestPaths(request.request_hash);
   for (const target of [
@@ -73612,9 +75307,9 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     assertAllowedKeys(input, ["capsule", "source_workspace"], "E2B createSavepoint input");
     verifySavepointCapsule(input.capsule, { now: this.clock() });
     await this.#initialize();
-    const recordId = `e2b_cleanup_${randomUUID8()}`;
-    const cleanupRef = `e2b_cleanup_ref_${randomUUID8()}`;
-    const exportId = `e2b_export_${randomUUID8()}`;
+    const recordId = `e2b_cleanup_${randomUUID9()}`;
+    const cleanupRef = `e2b_cleanup_ref_${randomUUID9()}`;
+    const exportId = `e2b_export_${randomUUID9()}`;
     const metadataCoreHash = sha256Ref({
       profile: PROFILE_METADATA_SCHEMA,
       cleanup_ref: cleanupRef,
@@ -73870,7 +75565,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
           ...commonBootstrap,
           phase,
           expected_workspace_digest: workspaceDigest,
-          bootstrap_nonce: randomUUID8(),
+          bootstrap_nonce: randomUUID9(),
           request_hash: null
         };
         payload.request_hash = sha256Ref({ ...payload, request_hash: null });
@@ -74124,7 +75819,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
     });
     const remainingMs = Date.parse(record.expires_at) - this.clock().getTime();
     if (timeoutMs > remainingMs) throw new Error("Execution timeout exceeds the child hard deadline");
-    const jobId = `rfj_${randomUUID8().replaceAll("-", "")}`;
+    const jobId = `rfj_${randomUUID9().replaceAll("-", "")}`;
     const jobPath = `${JOB_PATH}.${jobId}.json`;
     const resultPath = `${RESULT_PATH}.${jobId}.json`;
     const job = {
@@ -74445,7 +76140,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "fork",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID8()
+      request_nonce: randomUUID9()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     const Sandbox = await this.#sandboxClass();
@@ -74543,7 +76238,7 @@ var E2BRiskForkAdapter = class extends RiskForkProvider {
       resource_kind: "savepoint",
       resource_ref: record.ref,
       requested_at: this.clock(),
-      request_nonce: randomUUID8()
+      request_nonce: randomUUID9()
     });
     this.#poisonAllocationUntilReconciled(record.record_id);
     let absent;
@@ -75463,7 +77158,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:f6d315481ac14c0acc502335dc826d3e2e1147e8ff8907d9067ffd060cb674d0" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:9ea6ebe999c52552fb64f884c3cfdf844151ce64136b9c5bcae166d30c6e8d95" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",
@@ -75520,6 +77215,7 @@ export {
   RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA,
   RISK_FORK_MCP_PHASE_PLAN_SCHEMA,
   RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA,
+  RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
   RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
   RiskForkCommitError,
@@ -75529,7 +77225,16 @@ export {
   RiskForkMcpHostAdapterError,
   RiskForkPreparationError,
   RiskForkProvider,
+  SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES,
+  SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA,
+  SKILLSPECTOR_REVIEWED_ARTIFACT_HASH,
+  SKILLSPECTOR_REVIEWED_SOURCE_REVISION,
+  SKILLSPECTOR_REVIEWED_VERSION,
+  SKILLSPECTOR_RULES_MANIFEST_SCHEMA,
+  SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA,
+  SkillSpectorAdmissionError,
   acquirePostgresAuthorityClient,
+  adaptSkillSpectorReport,
   applyE2BExternalQualificationObservation,
   assertHostCanEnforce,
   assertPreparedForCleanCommit,
@@ -75543,6 +77248,7 @@ export {
   computeMcpCleanImportEvidenceHash,
   connectRemoteClient,
   createCleanupVerificationRequest,
+  createDurableMcpPortableHandleRegistry,
   createE2BAuthorityFreeSourceVerifier,
   createE2BExternalQualificationObservationVerifier,
   createE2BQualificationEvidence,
@@ -75551,6 +77257,8 @@ export {
   createForkIdentity,
   createMcpEnforcementBoundary,
   createMcpInterceptionPlan,
+  createMcpPortableHandlePreEffectBoundary,
+  createMcpPortableHandleRegistry,
   createPostgresAuthorityPool,
   createRemoteToolDirectory,
   createRiskForkHostBoundary,
@@ -75563,11 +77271,17 @@ export {
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
   createTrustedRiskForkMcpPhasePlanSource,
+  createTrustedSkillSpectorAdmissionVerifier,
   deriveParentAuthorityRef,
   executeFallbackTool,
+  hashSkillSpectorComponentManifest,
+  hashSkillSpectorRulesManifest,
+  hashSkillSpectorRuntimeClosure,
   importRiskForkProviderResult,
   isE2BQualificationEvidenceCanonical,
   isE2BRuntimeSdkIntegrityVerifier,
+  isMcpPortableHandlePreEffectBoundary,
+  isMcpPortableHandleRegistry,
   isPostgresDistributedCommitAuthority,
   isProductionPostgresDistributedCommitAuthority,
   isRiskForkHostBoundary,
@@ -75595,7 +77309,8 @@ export {
   verifyPostgresDistributedAuthoritySchema,
   verifyRiskDecision,
   verifyRiskForkImportEnvelope,
-  verifySavepointCapsule
+  verifySavepointCapsule,
+  verifySkillSpectorAdmissionEvidence
 };
 /*! Bundled license information:
 

@@ -215,7 +215,7 @@ async function x402FetchFallback(url, options = {}) {
       if (response.status === 402) {
         saw402 = true;
         if (paymentAuthorization) {
-          const err = new Error("server returned a second HTTP 402 after payment authorization");
+          const err = new Error("Paid request received another HTTP 402 challenge; refusing to re-authorize payment");
           err.code = "X402_PAYMENT_REJECTED_AFTER_AUTHORIZATION";
           throw err;
         }
@@ -228,7 +228,8 @@ async function x402FetchFallback(url, options = {}) {
           throw err;
         }
 
-        if (!paymentAuthorization) {
+        // The prior guard rejects a second 402 after payment; this is the first authorization.
+        {
           let payResult;
           try {
             payResult = await pay({

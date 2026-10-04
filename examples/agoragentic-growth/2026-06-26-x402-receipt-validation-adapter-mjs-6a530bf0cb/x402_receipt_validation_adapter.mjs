@@ -216,7 +216,7 @@ async function localX402Fetch(url, options = {}) {
 
       sawPaymentChallenge = true;
       if (cachedPayment) {
-        throw createHttpError("Paid retry was rejected with HTTP 402; refusing to reuse rejected payment authorization", {
+        throw createHttpError("Paid request was rejected with another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: true,
@@ -231,7 +231,8 @@ async function localX402Fetch(url, options = {}) {
         throw createHttpError("Paid call requires a caller-supplied pay callback", { status: 402, idempotencyKey });
       }
 
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         const payRequest = {
           url,
           method,
@@ -699,7 +700,7 @@ export async function runSelfTest() {
         return { paymentSignature: "sig:reject-on-paid-retry" };
       },
     }),
-    /Paid retry was rejected/
+    /Paid request was rejected with another HTTP 402/
   );
   if (paid402PayCalls !== 1 || paid402Attempts !== 2) {
     throw new Error("Second paid 402 must stop after one pay callback and one paid retry");

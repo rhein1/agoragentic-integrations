@@ -23,7 +23,7 @@ function assertTruth(value, label) {
   }
 }
 
-function minimalEnvironment(temporary) {
+function minimalEnvironment(temporary, stateHome) {
   return Object.fromEntries(Object.entries({
     SystemRoot: process.env.SystemRoot,
     WINDIR: process.env.WINDIR,
@@ -31,6 +31,7 @@ function minimalEnvironment(temporary) {
     TEMP: temporary,
     TMP: temporary,
     TMPDIR: temporary,
+    XDG_STATE_HOME: stateHome,
     AGORAGENTIC_NO_SPEND: '1',
     AGORAGENTIC_ALLOW_REAL_SPEND: '0',
     AGORAGENTIC_ALLOW_NETWORK_CANARIES: '0',
@@ -121,7 +122,8 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
     throw new TypeError('entrypoint must be an explicit absolute path');
   }
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-client-'));
-  const environment = minimalEnvironment(temporary);
+  const privateStateHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-state-'));
+  const environment = minimalEnvironment(temporary, privateStateHome);
   const child = spawn(process.execPath, [entrypoint, 'mcp'], {
     cwd: path.dirname(entrypoint),
     env: environment,
@@ -211,6 +213,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
       throw new Error('MCP probe temporary parent contains unexpected entries');
     }
     await rm(temporary, { recursive: true, force: false, maxRetries: 0 });
+    await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 });
     return Object.freeze({
       schema: 'agoragentic.risk-fork.mcp-client-conformance.v1',
       banner: OFFLINE_KIT_BANNER,
@@ -234,6 +237,7 @@ export async function runMcpClientConformance({ entrypoint } = {}) {
     client.close();
     await runCleanup(entrypoint, environment).catch(() => {});
     await rm(temporary, { recursive: true, force: false, maxRetries: 0 }).catch(() => {});
+    await rm(privateStateHome, { recursive: true, force: false, maxRetries: 0 }).catch(() => {});
     throw error;
   }
 }

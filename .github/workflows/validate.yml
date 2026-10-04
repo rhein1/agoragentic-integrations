@@ -412,6 +412,8 @@ jobs:
         run: |
           node --test x402/buyer-demo.test.mjs
           node --test test/x402-buyer-demo-preflight.test.mjs
+      - name: Test Shipyard no-funds x402 demo contracts
+        run: node --test test/shipyard-inference-x402-receipt-flow.test.mjs
 
   adapter-conformance:
     runs-on: ubuntu-latest

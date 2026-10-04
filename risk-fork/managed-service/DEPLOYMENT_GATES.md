@@ -16,6 +16,14 @@ This checklist separates source completion from a real hosted protection service
 
 ## 2. Worker/enforcement bridge
 
+Source progress: [WORKER.md](./WORKER.md) now describes a `local_test` controller
+driver with immediate resource journaling, current-authority lease fences,
+partial-resource recovery, and verified cleanup. It deliberately does not retry
+unknown delivery or durably retain raw worker tokens. The
+[stateless host runbook](../STATELESS_HOST_RUNBOOK.md) describes the new
+transactional PostgreSQL handle store and explicit pre-effect authentication
+boundary. Neither source implementation completes this production gate.
+
 - implement a host-owned worker that generates and durably retains a fresh 32–512-byte URL-safe CSPRNG `lease_token` before each logical claim, retries that exact token only after an unknown delivery result, and renews the resulting lease;
 - make one token map to one local logical work attempt so concurrent, delayed, or `claim_replayed: true` responses cannot start duplicate execution, cleanup, recovery lookup, or provider effects;
 - prohibit worker logs, traces, metrics, crash reports, and audit submissions from containing raw bearer or lease tokens;
@@ -27,8 +35,9 @@ This checklist separates source completion from a real hosted protection service
 - prove result validation and clean commit happen only after verified destruction.
 - integrate explicit portable-handle registration and authorization into the
   pre-effect bridge using the currently authenticated principal; replace the
-  process-local reference registry with durable, transactional, tenant-scoped
-  state for multi-instance, restart, MRTR, or Task workflows;
+  process-local reference registry with the reviewed durable, transactional,
+  tenant-scoped source adapter for multi-instance/restart operation; qualify
+  the exact deployment before use. MRTR and Tasks remain disabled;
 - never infer a handle from arbitrary argument names, conversation content, or
   model output; each supported tool contract must identify its exact handle
   field and allowed consuming methods.

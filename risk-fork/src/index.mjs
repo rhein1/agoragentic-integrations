@@ -150,7 +150,10 @@ export {
   RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES,
   RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_SCHEMA,
   RiskForkMcpPortableHandleError,
+  createDurableMcpPortableHandleRegistry,
+  createMcpPortableHandlePreEffectBoundary,
   createMcpPortableHandleRegistry,
+  isMcpPortableHandlePreEffectBoundary,
   isMcpPortableHandleRegistry,
 } from './mcp-portable-handle-boundary.mjs';
 export {
@@ -194,3 +197,8 @@ export {
   verifyPostgresAuthorityClientTransport,
   verifyPostgresDistributedAuthoritySchema,
 } from './adapters/postgres-authority-migrator.mjs';
+export {
+  createPostgresMcpPortableHandleStore,
+  isPostgresMcpPortableHandleStore,
+  migrateMcpPortableHandlesPostgres,
+} from './adapters/postgres-mcp-portable-handles.mjs';

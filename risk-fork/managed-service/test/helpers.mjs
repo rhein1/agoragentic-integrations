@@ -115,12 +115,13 @@ export async function createFixture(options = {}) {
       revoked_at: null,
     },
   ];
+  if (options.credentialScopes) credentials[0].scopes = [...options.credentialScopes];
   const store = new MemoryManagedServiceStore({
     tenants: [tenant, otherTenant],
     credentials,
     eventRef: options.eventRef ?? (() => `evt_${String(++eventCounter).padStart(4, '0')}`),
   });
-  const provider = new TestProvider();
+  const provider = options.provider ?? new TestProvider();
   const attestedResourceBindings = new Set();
   const attestedCleanupEvidence = new Set();
   const attestedRecoveryAbsence = new Set();

@@ -42,3 +42,4 @@ export {
 export { migrateManagedServicePostgres } from './postgres-migrator.mjs';
 export { createManagedRiskForkControlPlane } from './control-plane.mjs';
 export { createManagedServiceHttpHandler } from './http-handler.mjs';
+export { createManagedRiskForkWorker } from './worker.mjs';

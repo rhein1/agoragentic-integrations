@@ -338,6 +338,24 @@ test('apply_patch inspects every target and fails closed when targets cannot be 
   assert.ok(malformed.reasons.some((reason) => reason.code === 'apply_patch_targets_unparseable'));
 });
 
+test('apply_patch target extraction remains bounded and fails closed on long malformed lines', () => {
+  for (const directive of ['Add File:', 'Move to:', 'Copy to:']) {
+    const malformed = `*** ${directive}` + ' '.repeat(100_000) + '\n';
+    const decision = decideOpenCodeToolCall(
+      {},
+      hookInput('apply_patch', 'session-long-patch', 'call-long-patch'),
+      { args: { patch: malformed } },
+    );
+    assert.equal(decision.decision, 'deny');
+    assert.ok(decision.reasons.some((reason) => reason.code === 'apply_patch_targets_invalid'));
+  }
+  const spaced = mapOpenCodeToolCall(
+    hookInput('apply_patch', 'session-spaced-patch', 'call-spaced-patch'),
+    { args: { patch: '***  Add File: safe.md\n***\tMove to: moved.md' } },
+  );
+  assert.deepEqual(spaced.targets, ['safe.md', 'moved.md']);
+});
+
 test('Windows matches every parsed apply_patch target case-insensitively without widening POSIX matching', () => {
   const patch = [
     '*** Begin Patch',

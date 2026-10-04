@@ -763,9 +763,12 @@ test('client adoption planning rejects a paused same-size partial version by rev
       );
     }
 
-    await writeFile(gateway, secondVersion);
+    const completeVersionDirectory = path.join(temporaryRoot, 'complete-version');
+    await mkdir(completeVersionDirectory);
+    const completeGateway = path.join(completeVersionDirectory, 'risk-forkd.js');
+    await writeFile(completeGateway, secondVersion);
     const mismatchedFullVersion = runCli([
-      'plan', '--client', 'all', '--gateway', gateway,
+      'plan', '--client', 'all', '--gateway', completeGateway,
       '--gateway-sha256', firstHash,
     ]);
     assert.equal(mismatchedFullVersion.status, 64);
@@ -774,7 +777,7 @@ test('client adoption planning rejects a paused same-size partial version by rev
       /exact bytes do not match the reviewed SHA-256/,
     );
     const planned = runCli([
-      'plan', '--client', 'all', '--gateway', gateway,
+      'plan', '--client', 'all', '--gateway', completeGateway,
       '--gateway-sha256', secondHash,
     ]);
     assert.equal(planned.status, 0, planned.stderr);

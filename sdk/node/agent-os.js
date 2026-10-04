@@ -367,7 +367,11 @@ async function runCli(argv = process.argv.slice(2), env = process.env, io = defa
                 result = await commandInvoke(client, parsed.positionals.slice(1), parsed.flags);
                 break;
             case 'x402':
-                result = await commandX402(parsed.positionals.slice(1), parsed.flags, env, { baseUrl, gatewayAgentId });
+                result = await commandX402(parsed.positionals.slice(1), parsed.flags, env, {
+                    baseUrl,
+                    gatewayAgentId,
+                    edgeBaseUrl: resolveX402EdgeBaseUrl(runtime.x402BaseUrl),
+                });
                 break;
             case 'arbiter':
                 result = await commandArbiter(parsed.positionals.slice(1), parsed.flags, env, { baseUrl });
@@ -1000,10 +1004,10 @@ async function commandInvoke(client, positionals, flags) {
     }));
 }
 
-async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId }) {
+async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId, edgeBaseUrl }) {
     const subcommand = positionals[0] || 'info';
     const base = stripTrailingSlashes(baseUrl);
-    const edgeBase = 'https://x402.agoragentic.com';
+    const edgeBase = stripTrailingSlashes(edgeBaseUrl);
     const gatewayHeaders = gatewayAgentId ? { [GATEWAY_AGENT_HEADER]: gatewayAgentId } : undefined;
     const signingKey = resolveSigningKey(flags, env || {});
 
@@ -1175,6 +1179,28 @@ async function commandX402(positionals, flags, env, { baseUrl, gatewayAgentId })
     throw userError(`Unknown x402 subcommand "${subcommand}". Use info, listings, browse, match, quote, test, execute, invoke, receipt, or claim.`);
 }
 
+function resolveX402EdgeBaseUrl(testBaseUrl) {
+    if (!testBaseUrl) {
+        return 'https://x402.agoragentic.com';
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(testBaseUrl);
+    } catch {
+        throw userError('The x402 test base URL must be an HTTP loopback URL.');
+    }
+
+    if (parsed.protocol !== 'http:'
+        || !['127.0.0.1', '[::1]'].includes(parsed.hostname)
+        || parsed.username
+        || parsed.password) {
+        throw userError('The x402 test base URL must be an HTTP loopback URL.');
+    }
+
+    return stripTrailingSlashes(parsed.toString());
+}
+
 async function commandArbiter(positionals, flags, env, { baseUrl }) {
     const subcommand = positionals[0] || 'review';
     if (subcommand !== 'review') {
@@ -1195,7 +1221,7 @@ async function commandArbiter(positionals, flags, env, { baseUrl }) {
             semantic_blocking: Boolean(flags['semantic-blocking'] || flags.semantic_blocking),
         },
         headers: { 'X-Admin-Secret': adminSecret },
-    });
+    }, { redirect: 'error' });
 }
 
 async function commandCapabilities(client, positionals, flags) {
@@ -1349,11 +1375,23 @@ async function fetchJsonRequest(url, options = {}, config = {}) {
         headers['PAYMENT-SIGNATURE'] = options.paymentSignature;
     }
 
-    const res = await fetch(url, {
+    const fetchOptions = {
         method: options.method || 'GET',
         headers,
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+    };
+    const hasCredentialHeader = Object.keys(headers).some((name) => (
+        /^(authorization|x-api-key|x-admin-secret|payment-signature|x-payment-signature)$/i.test(name)
+    ));
+    const requestUrl = new URL(url);
+    const hasSignedClaimProof = requestUrl.pathname === '/api/x402/claim'
+        && typeof options.body?.proof?.signature === 'string'
+        && options.body.proof.signature.length > 0;
+    fetchOptions.redirect = hasCredentialHeader || hasSignedClaimProof
+        ? 'error'
+        : (config.redirect || 'follow');
+
+    const res = await fetch(url, fetchOptions);
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok && !config.allowErrorStatus) {

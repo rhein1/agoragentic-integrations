@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.56.0",
-  "as_of": "2026-09-14",
+  "source_manifest_version": "2.56.1",
+  "as_of": "2026-09-22",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
@@ -1737,8 +1737,8 @@
       "occurrences": 3,
       "line_numbers": [
         12,
-        125,
-        129
+        135,
+        139
       ],
       "categories": [
         "installer_or_clone",
@@ -1762,7 +1762,7 @@
       "occurrences": 4,
       "line_numbers": [
         11,
-        73
+        74
       ],
       "categories": [
         "public_documentation"

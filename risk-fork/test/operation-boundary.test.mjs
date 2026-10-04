@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -180,13 +180,14 @@ test('controller rejects authority-bearing child operations before every provide
   }
 });
 
-test('local adapter rejects non-closed and secret-bearing batches before child mutation', async () => {
+test('local adapter rejects non-closed and secret-bearing batches before child mutation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-operation-boundary-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });
@@ -232,6 +233,45 @@ test('local adapter rejects non-closed and secret-bearing batches before child m
     assert.equal((await adapter.getForkStatus({ fork_ref: fork.fork_ref })).status, 'ready');
     assert.deepEqual((await adapter.collectDiff({ fork_ref: fork.fork_ref })).files, []);
     assert.equal(await readFile(path.join(source, 'safe.txt'), 'utf8'), 'parent-original');
+  } finally {
+    await adapter.dispose();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('local savepoint binds captured bytes before clean-side source verification', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-snapshot-race-'));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  const sourceFile = path.join(source, 'safe.txt');
+  await writeFile(sourceFile, 'parent-original', 'utf8');
+  const adapter = new LocalReferenceRiskForkAdapter({
+    clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request, context) => {
+      const captureName = (await readdir(context.snapshot_directory))
+        .find((name) => name.endsWith('.bin'));
+      assert.equal(
+        await readFile(path.join(context.snapshot_directory, captureName), 'utf8'),
+        'parent-original',
+      );
+      await writeFile(sourceFile, 'source-mutated-by-verifier', 'utf8');
+      return verifyLocalAuthorityFreeSource(request);
+    },
+  });
+  try {
+    const inspected = await inspectLocalWorkspace({ source_workspace: source });
+    const capsule = makeCapsule({
+      workspace: { snapshot_ref: 'workspace:local', digest: inspected.workspace_digest },
+    });
+    const savepoint = await adapter.createSavepoint({ capsule, source_workspace: source });
+    const record = adapter.savepoints.get(savepoint.savepoint_ref);
+    assert.equal(
+      await readFile(path.join(record.directory, 'safe.txt'), 'utf8'),
+      'parent-original',
+    );
+    assert.equal(await readFile(sourceFile, 'utf8'), 'source-mutated-by-verifier');
   } finally {
     await adapter.dispose();
     await rm(temporary, { recursive: true, force: true });

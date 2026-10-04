@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   normalizeRunpayRecord as normalize, normalizeRunpayBatch as normalizeBatch,
   RUNPAY_PROFILE_ID, RUNPAY_PROFILE_DIGEST,
-  RunpayImportError, parseRunpayJson as parse, canonicalPrice,
+  parseRunpayJson as parse, canonicalPrice,
   validateRunpaySettlementRef, requireFullRunpaySettlementReference,
 } from '../src/adapters/runpay-catalog.mjs';
 
