@@ -253,9 +253,17 @@ function expectedBindings(overrides = {}) {
     component_manifest_hash: hashSkillSpectorComponentManifest(completeReport().components),
     report_ref: 'evidence:skillspector-report:example',
     report_hash: rawHash(JSON.stringify(completeReport(), null, 2)),
+    normalized_report_hash: adaptSkillSpectorReport(adapterInput(completeReport())).report.normalized_hash,
     network_enforcement: networkEnforcement,
     ...overrides,
   };
+}
+
+function hostReportInput(report, overrides = {}) {
+  const input = adapterInput(report, overrides);
+  delete input.descriptor_request_hash;
+  delete input.operation_hash;
+  return input;
 }
 
 const admissionSchema = JSON.parse(await readFile(
@@ -273,6 +281,7 @@ function roundTrip(report) {
   assert.deepEqual(verifySkillSpectorAdmissionEvidence(evidence, {
     ...expectedBindings({
       report_hash: rawHash(input.report_bytes),
+      normalized_report_hash: adaptSkillSpectorReport(input).report.normalized_hash,
       component_manifest_hash: input.component_manifest_hash,
     }),
     descriptor_request_hash: input.descriptor_request_hash,
@@ -420,32 +429,71 @@ test('raw and rehashed evidence enforce every score-band boundary and recommenda
   }))), SkillSpectorAdmissionError);
 });
 
-test('multi-analyzer aggregate work exceeds 20000 and stays bounded per analyzer', () => {
-  for (const work of [1250, 1251, 1500, 20000]) {
+test('pinned upstream reducer/finalizer clears 10000 events and rejects authentic overflow', async () => {
+  const fixture = JSON.parse(await readFile(new URL(
+    './fixtures/skillspector-ledger-boundary.json', import.meta.url,
+  ), 'utf8'));
+  assert.equal(`git:${fixture.commit}`, SKILLSPECTOR_REVIEWED_SOURCE_REVISION);
+  assert.match(fixture.description, /synthetic events; not a full scan report/);
+  assert.deepEqual(fixture.sha256, {
+    'src/skillspector/inspection_ledger.py':
+      'sha256:4234c7bf9177108f69c4fabc4d711949268b0ae72757e171657931db0828c024',
+    'src/skillspector/state.py':
+      'sha256:fde886a73f3003ec0e8bb13de32f296c59405de9808446c3ee8efbf0178654cf',
+  });
+  const [atLimit, overflow] = fixture.results;
+  assert.equal(atLimit.requested_events, 10000);
+  assert.equal(atLimit.merged_events, 10000);
+  assert.equal(atLimit.overflow_marker, null);
+  const evidence = roundTrip(completeReport({
+    analysis_completeness: atLimit.analysis_completeness,
+  }));
+  assert.equal(evidence.coverage.static_completed_work, 10000);
+  assert.equal(evidence.result.outcome, 'clear');
+  assert.equal(overflow.requested_events, 10001);
+  assert.equal(overflow.merged_events, 10000);
+  assert.deepEqual(overflow.overflow_marker, {
+    phase: 'ledger_output', outcome: 'partial', reason_code: 'output_limit',
+    observed_records: 10001, limit_records: 10000,
+  });
+  assert.equal(overflow.analysis_completeness.is_complete, false);
+  assert.equal(overflow.analysis_completeness.status, 'partial');
+  assert.equal(overflow.analysis_completeness.analyzer_statuses.reduce(
+    (sum, entry) => sum + entry.completed, 0,
+  ), 9999);
+  // Upstream retains status=completed alongside partial counts at overflow.
+  // Reject that contradictory shape rather than invent clear coverage or
+  // claim this synthetic reducer probe was an actual skill scan.
+  assert.throws(() => adaptSkillSpectorReport(adapterInput(completeReport({
+    analysis_completeness: overflow.analysis_completeness,
+  }))), SkillSpectorAdmissionError);
+});
+
+test('static work respects the pinned workflow-wide 10000-event ceiling', () => {
+  for (const work of [1, 624, 625]) {
     const report = completeReport();
     report.analysis_completeness.analyzer_statuses = REVIEWED_ANALYZERS.map((id) => (
       analyzerStatus(id, { planned_work: work, completed: work })
     ));
-    // Reproduce the 1500-component real report shape as well as the aggregate
-    // boundaries. Larger component inventories retain canonical JSON limits.
-    if (work === 1500) {
-      report.components = Array.from({ length: work }, (_, index) => ({
-        ...report.components[0], path: `docs/part-${index}.md`,
-      }));
-      Object.assign(report.analysis_completeness, {
-        total_components: work, scanned_components: work, fully_inspected_files: work,
-      });
-    }
     const evidence = roundTrip(report);
     assert.equal(evidence.result.outcome, 'clear');
     assert.equal(evidence.coverage.static_completed_work, 16 * work);
-    for (const invalid of [320001, -1, 1.5]) {
+    for (const invalid of [10001, 20001, 320000, -1, 1.5]) {
       const forged = structuredClone(evidence);
       forged.coverage.static_completed_work = invalid;
       assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
         SkillSpectorAdmissionError);
       assert.equal(validateAdmissionSchema(forged), false);
     }
+  }
+  // These were previously accepted synthetic clear reports, but the pinned
+  // scanner's shared ledger cannot retain this much complete static work.
+  for (const work of [626, 1500, 20000]) {
+    const report = completeReport();
+    report.analysis_completeness.analyzer_statuses = REVIEWED_ANALYZERS.map((id) => (
+      analyzerStatus(id, { planned_work: work, completed: work })
+    ));
+    assert.throws(() => adaptSkillSpectorReport(adapterInput(report)), SkillSpectorAdmissionError);
   }
   const tooMuchWork = completeReport();
   tooMuchWork.analysis_completeness.analyzer_statuses[0] = analyzerStatus(REVIEWED_ANALYZERS[0], {
@@ -466,6 +514,47 @@ test('multi-analyzer aggregate work exceeds 20000 and stays bounded per analyzer
     assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
       SkillSpectorAdmissionError);
   }
+});
+
+test('schema and verifier agree on aggregate work for every applicable analyzer count', () => {
+  for (let count = 0; count <= REVIEWED_ANALYZERS.length; count += 1) {
+    const report = completeReport({
+      analysis_completeness: {
+        analyzer_statuses: REVIEWED_ANALYZERS.map((id, index) => analyzerStatus(id,
+          index < count ? {} : { status: 'not_applicable', planned_work: 0, completed: 0 })),
+      },
+    });
+    const evidence = roundTrip(report);
+    for (const work of [count === 0 ? 1 : count - 1, 10001, 20001, 320000]) {
+      const forged = structuredClone(evidence);
+      forged.coverage.static_completed_work = work;
+      rehashEvidence(forged);
+      assert.equal(validateAdmissionSchema(forged), false, `count=${count}, work=${work}`);
+      assert.throws(() => verifySkillSpectorAdmissionEvidence(forged), SkillSpectorAdmissionError);
+    }
+  }
+});
+
+test('coordinated coverage forgery cannot retain the trusted normalized raw-report projection', () => {
+  const report = completeReport();
+  report.analysis_completeness.analyzer_statuses.pop();
+  const input = adapterInput(report);
+  const original = adaptSkillSpectorReport(input);
+  const forged = structuredClone(original);
+  forged.coverage.missing_static_analyzer_ids = [];
+  forged.coverage.analyzer_status_count = 16;
+  forged.coverage.applicable_static_analyzer_count = 16;
+  forged.coverage.static_completed_work = 16;
+  forged.result.outcome = 'clear';
+  forged.result.reason_codes = ['skillspector_clear'];
+  rehashEvidence(forged);
+  assert.equal(forged.report.raw_hash, original.report.raw_hash);
+  // Structure/self-hashes alone deliberately do not establish producer provenance.
+  assert.equal(verifySkillSpectorAdmissionEvidence(forged).result.outcome, 'clear');
+  assert.throws(() => verifySkillSpectorAdmissionEvidence(forged, {
+    report_hash: rawHash(input.report_bytes),
+    normalized_report_hash: original.report.normalized_hash,
+  }), (error) => error.code === SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES.EXPECTED_BINDING_MISMATCH);
 });
 
 test('missing inventory cannot be removed or reordered in rehashed evidence', () => {
@@ -1173,7 +1262,11 @@ test('host integration is default-off and enabled mode requires exact evidence',
         ? {
           trusted_skillspector_admission_verifier:
             createTrustedSkillSpectorAdmissionVerifier(
-              () => expectedBindings(expectedOverrides),
+              (request) => {
+                assert.equal(request.schema,
+                  'agoragentic.risk-fork.skillspector-admission-verification-request.v2');
+                return hostReportInput(completeReport(), expectedOverrides);
+              },
             ),
         }
         : {}),
@@ -1248,6 +1341,76 @@ test('host integration is default-off and enabled mode requires exact evidence',
       && error.code === RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED,
   );
   assert.equal(forgedNetwork.calls.length, 0);
+});
+
+test('enabled host rejects coordinated evidence forgery against exact host-owned raw bytes', async () => {
+  const rawReport = completeReport();
+  rawReport.analysis_completeness.analyzer_statuses.pop();
+  let controllerCalls = 0;
+  const source = createTrustedRiskDescriptorSource((request) => {
+    const original = adaptSkillSpectorReport(adapterInput(rawReport, {
+      descriptor_request_hash: request.request_hash,
+      operation_hash: request.operation_hash,
+    }));
+    const forged = structuredClone(original);
+    forged.coverage.missing_static_analyzer_ids = [];
+    forged.coverage.analyzer_status_count = 16;
+    forged.coverage.applicable_static_analyzer_count = 16;
+    forged.coverage.static_completed_work = 16;
+    forged.result.outcome = 'clear';
+    forged.result.reason_codes = ['skillspector_clear'];
+    rehashEvidence(forged);
+    assert.equal(forged.report.raw_hash, original.report.raw_hash);
+    return createTrustedRiskDescriptor(request, descriptorInput(forged));
+  });
+  const boundary = createRiskForkHostBoundary({
+    controller: { async prepare() { controllerCalls += 1; return {}; } },
+    trusted_descriptor_source: source,
+    trusted_skillspector_admission_verifier: createTrustedSkillSpectorAdmissionVerifier(
+      () => hostReportInput(rawReport),
+    ),
+    skillspector_admission_enabled: true,
+    clock: () => REQUESTED_AT,
+  });
+  await assert.rejects(boundary.preEffect({
+    descriptor_ref: 'descriptor:forged-complete-coverage',
+    operation_input: {
+      operation: { kind: 'bounded_file_batch', actions: [] },
+      expected_commit_type: 'TYPED_RESULT',
+    },
+  }), (error) => error.code === RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED);
+  assert.equal(controllerCalls, 0);
+});
+
+test('enabled host fails closed on legacy hash-only callbacks and raw report substitutions', async () => {
+  for (const resolveHostReport of [
+    () => expectedBindings(),
+    () => hostReportInput(completeReport({ skill: { name: 'different-exact-raw-report' } })),
+  ]) {
+    let controllerCalls = 0;
+    const source = createTrustedRiskDescriptorSource((request) => createTrustedRiskDescriptor(
+      request, descriptorInput(adaptSkillSpectorReport(adapterInput(completeReport(), {
+        descriptor_request_hash: request.request_hash,
+        operation_hash: request.operation_hash,
+      }))),
+    ));
+    const boundary = createRiskForkHostBoundary({
+      controller: { async prepare() { controllerCalls += 1; return {}; } },
+      trusted_descriptor_source: source,
+      trusted_skillspector_admission_verifier:
+        createTrustedSkillSpectorAdmissionVerifier(resolveHostReport),
+      skillspector_admission_enabled: true,
+      clock: () => REQUESTED_AT,
+    });
+    await assert.rejects(boundary.preEffect({
+      descriptor_ref: 'descriptor:legacy-or-substituted-report',
+      operation_input: {
+        operation: { kind: 'bounded_file_batch', actions: [] },
+        expected_commit_type: 'TYPED_RESULT',
+      },
+    }), (error) => error.code === RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED);
+    assert.equal(controllerCalls, 0);
+  }
 });
 
 test('enabled admission rejects an unbranded verifier capability', () => {

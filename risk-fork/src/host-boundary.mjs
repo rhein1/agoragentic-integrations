@@ -12,6 +12,7 @@ import {
 import { COMMIT_TYPES, MCP_PHASES } from './constants.mjs';
 import {
   SkillSpectorAdmissionError,
+  adaptSkillSpectorReport,
   verifySkillSpectorAdmissionEvidence,
 } from './skillspector-admission.mjs';
 import {
@@ -41,7 +42,7 @@ export const RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA =
 export const RISK_FORK_IMPORT_ENVELOPE_SCHEMA =
   'agoragentic.risk-fork.import-envelope.v1';
 export const RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA =
-  'agoragentic.risk-fork.skillspector-admission-verifier.v1';
+  'agoragentic.risk-fork.skillspector-admission-verifier.v2';
 
 export const RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_BOUNDARY_INPUT: 'RISK_FORK_HOST_BOUNDARY_INVALID_INPUT',
@@ -206,18 +207,19 @@ const CALLER_ADMISSION_EVIDENCE_FINGERPRINTS = new Set([
   'waive',
   'waiver',
 ]);
-const SKILLSPECTOR_EXPECTED_BINDING_KEYS = Object.freeze([
+const SKILLSPECTOR_HOST_REPORT_KEYS = Object.freeze([
+  'report_bytes',
   'package_ref',
   'package_hash',
   'prepared_artifact_hash',
   'source_revision',
-  'configuration_hash',
   'rules_hash',
   'runtime_closure_hash',
   'component_manifest_hash',
   'report_ref',
-  'report_hash',
+  'invocation',
   'network_enforcement',
+  'valid_until',
 ]);
 const SENSITIVE_IMPORT_KEY_PATTERN = /(?:^|_)(?:api_?key|access_?token|refresh_?token|id_?token|session_?token|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_?secret|private_?key|signing_?key|seed_?phrase|mnemonic|wallet_?(?:key|secret)|capability_?(?:grant|token))(?:$|_)/i;
 const SENSITIVE_IMPORT_VALUE_PATTERNS = Object.freeze([
@@ -1058,59 +1060,40 @@ export function createTrustedRiskDescriptorSource(resolveDescriptor) {
   return source;
 }
 
-export function createTrustedSkillSpectorAdmissionVerifier(verifyBindings) {
-  if (typeof verifyBindings !== 'function') {
+export function createTrustedSkillSpectorAdmissionVerifier(resolveHostReport) {
+  if (typeof resolveHostReport !== 'function') {
     throw new TypeError('Trusted SkillSpector admission verifier requires a host callback');
   }
   const verifier = Object.freeze({
     schema: RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
     trust_mode: 'host_callback_identity',
   });
-  trustedSkillSpectorVerifierCallbacks.set(verifier, verifyBindings);
+  trustedSkillSpectorVerifierCallbacks.set(verifier, resolveHostReport);
   return verifier;
 }
 
-function normalizeSkillSpectorExpectedBindings(value) {
+function normalizeSkillSpectorHostReport(value, request) {
   assertCanonicalJson(value);
-  assertPlainObject(value, 'trusted SkillSpector expected bindings');
+  assertPlainObject(value, 'trusted SkillSpector host report');
   assertAllowedKeys(
     value,
-    SKILLSPECTOR_EXPECTED_BINDING_KEYS,
-    'trusted SkillSpector expected bindings',
+    SKILLSPECTOR_HOST_REPORT_KEYS,
+    'trusted SkillSpector host report',
   );
-  for (const key of SKILLSPECTOR_EXPECTED_BINDING_KEYS) {
+  for (const key of SKILLSPECTOR_HOST_REPORT_KEYS) {
     if (!Object.hasOwn(value, key)) {
-      throw new TypeError('Trusted SkillSpector expected bindings are incomplete');
+      throw new TypeError('Trusted SkillSpector host report is incomplete');
     }
   }
-  return deepFreeze({
-    package_ref: requireOpaqueRef(value.package_ref, 'expected SkillSpector package_ref'),
-    package_hash: requireSha256Ref(value.package_hash, 'expected SkillSpector package_hash'),
-    prepared_artifact_hash: requireSha256Ref(
-      value.prepared_artifact_hash,
-      'expected SkillSpector prepared_artifact_hash',
-    ),
-    source_revision: requireOpaqueRef(
-      value.source_revision,
-      'expected SkillSpector source_revision',
-      { maxLength: 200 },
-    ),
-    configuration_hash: requireSha256Ref(
-      value.configuration_hash,
-      'expected SkillSpector configuration_hash',
-    ),
-    rules_hash: requireSha256Ref(value.rules_hash, 'expected SkillSpector rules_hash'),
-    runtime_closure_hash: requireSha256Ref(
-      value.runtime_closure_hash,
-      'expected SkillSpector runtime_closure_hash',
-    ),
-    component_manifest_hash: requireSha256Ref(
-      value.component_manifest_hash,
-      'expected SkillSpector component_manifest_hash',
-    ),
-    report_ref: requireOpaqueRef(value.report_ref, 'expected SkillSpector report_ref'),
-    report_hash: requireSha256Ref(value.report_hash, 'expected SkillSpector report_hash'),
-    network_enforcement: value.network_enforcement,
+  // Re-derive coverage and both report hashes from host-owned exact raw bytes.
+  // A producer's recomputed self-hashes cannot substitute for this projection.
+  const evidence = adaptSkillSpectorReport({
+    ...value,
+    descriptor_request_hash: request.request_hash,
+    operation_hash: request.operation_hash,
+  });
+  return verifySkillSpectorAdmissionEvidence(evidence, {
+    requested_at: request.requested_at,
   });
 }
 
@@ -1288,21 +1271,19 @@ export function createRiskForkHostBoundary(input = {}) {
         }
         if (record.skillspectorAdmissionEnabled) {
           try {
-            const expectedBindings = normalizeSkillSpectorExpectedBindings(
+            const hostEvidence = normalizeSkillSpectorHostReport(
               await record.verifySkillSpectorBindings(deepFreeze({
-                schema: 'agoragentic.risk-fork.skillspector-admission-verification-request.v1',
+                schema: 'agoragentic.risk-fork.skillspector-admission-verification-request.v2',
                 descriptor_request_hash: frozenRequest.request_hash,
                 operation_hash: frozenRequest.operation_hash,
                 requested_at: frozenRequest.requested_at,
                 evidence: descriptor.skillspector_admission,
               })),
+              frozenRequest,
             );
-            verifySkillSpectorAdmissionEvidence(descriptor.skillspector_admission, {
-              ...expectedBindings,
-              descriptor_request_hash: frozenRequest.request_hash,
-              operation_hash: frozenRequest.operation_hash,
-              requested_at: frozenRequest.requested_at,
-            });
+            if (canonicalize(descriptor.skillspector_admission) !== canonicalize(hostEvidence)) {
+              throw new TypeError('SkillSpector evidence differs from the host-derived raw report');
+            }
           } catch {
             throw boundaryError(
               RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED,

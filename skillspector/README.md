@@ -88,8 +88,12 @@ hash-bound `coverage.missing_static_analyzer_ids` list. Disabled, unavailable,
 degraded, failed, or omitted static analysis remains incomplete. Reviewed score
 bands are LOW 0–20, MEDIUM 21–50, HIGH 51–80, and CRITICAL 81–100;
 recommendations may escalate but cannot be less restrictive than their band.
-Each analyzer is capped at 20,000 work items; aggregate static work is capped at
-320,000 rather than incorrectly applying one analyzer's cap to the total.
+Aggregate completed static work is capped at 10,000: the pinned scanner bounds
+the entire workflow inspection ledger, not each analyzer separately. This is
+distinct from its finding-output cap. Schema and verifier require zero completed
+work with zero applicable analyzers and at least one item per applicable analyzer.
+The authentic reducer replaces excess ledger entries with an `OUTPUT_LIMIT`
+marker and finalizes coverage as partial; overflow cannot clear admission.
 
 This source-only alpha tightens `skillspector-admission-evidence.v1` in place.
 Previously normalized evidence without the required missing-ID list is rejected.
@@ -132,13 +136,23 @@ No raw report text, source files, snippets, credentials, candidate baselines, or
 candidate suppressions belong in this packet.
 
 When Risk Fork admission is enabled, the clean host must construct a branded
-`createTrustedSkillSpectorAdmissionVerifier()` callback. That callback must
-independently hash the actual source package, reconstructed package, raw report,
-the canonical component manifest, canonical owner rules, scanner
-runtime/dependency closure, and deny-all network control receipt. Use
-`hashSkillSpectorComponentManifest()` for the closed report/host inventory
-projection. The callback returns those expected bindings to the host boundary;
-it must not copy values from the supplied evidence packet.
+`createTrustedSkillSpectorAdmissionVerifier()` v2 callback. It returns exact
+host-owned `report_bytes`, `report_ref`, `valid_until`, `package_ref`,
+`package_hash`, `prepared_artifact_hash`, `source_revision`, `rules_hash`,
+`runtime_closure_hash`, `component_manifest_hash`, `invocation`, and
+`network_enforcement`. Independently derive these bindings from the actual
+source/reconstructed package, component manifest, owner rules, scanner runtime
+and deny-all receipt. Do not copy the evidence packet or obtain raw bytes from
+the candidate. The boundary injects current request/operation hashes, re-adapts
+the raw bytes itself, checks freshness, and compares the entire canonical
+projection before controller preparation. Hash-only v1 callbacks fail closed.
+Use `hashSkillSpectorComponentManifest()` for the closed host inventory.
+
+Direct `verifySkillSpectorAdmissionEvidence()` is structural validation, not
+producer authentication. An independently re-adapted `normalized_report_hash`
+may also be supplied as an expected binding. Raw report bytes remain transient
+trusted-host inputs, not evidence fields or classifier context. No production
+activation or automatic persisted-evidence upgrade is implied by this repair.
 
 ## Safety boundary
 
