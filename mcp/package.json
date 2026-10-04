@@ -59,7 +59,7 @@
         "@modelcontextprotocol/client": "2.0.0",
         "@modelcontextprotocol/node": "2.0.0",
         "@modelcontextprotocol/sdk": "1.30.0",
-        "@modelcontextprotocol/server": "2.0.0",
+        "@modelcontextprotocol/server": "2.2.0",
         "esbuild": "0.28.2"
     },
     "overrides": {
