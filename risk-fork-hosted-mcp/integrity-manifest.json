@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 70,
-    "sha256": "sha256:7fc8c12608c081e747f60a1757ea5a9fdb99640f2d60c178670acf741b55737c"
+    "sha256": "sha256:c7a7dc423dc1f5de3fb7e8cec248e382894f3786c98dbc9d88105c6a0cf3cc27"
   },
   "reviewed_sources": [
     {
@@ -269,8 +269,8 @@
     },
     {
       "path": "risk-fork/src/skillspector-admission.mjs",
-      "bytes": 61920,
-      "sha256": "sha256:719f39b3341802186c48ce553ba7211f3df67ff9bb241d7bfe2c926a04baf828"
+      "bytes": 64042,
+      "sha256": "sha256:661ea52c4d14178ed80b9147a2c52c30bd2103dde4e92bf5500a85ec28d60f60"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -2407,8 +2407,8 @@
     {
       "path": "risk-fork/src/skillspector-admission.mjs",
       "source": "reviewed_source",
-      "bytes": 61920,
-      "sha256": "sha256:719f39b3341802186c48ce553ba7211f3df67ff9bb241d7bfe2c926a04baf828"
+      "bytes": 64042,
+      "sha256": "sha256:661ea52c4d14178ed80b9147a2c52c30bd2103dde4e92bf5500a85ec28d60f60"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -2680,8 +2680,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3223001,
-    "sha256": "sha256:1bbc14bc4b6a32fe9a0b9ef057f3b95baf58a4bf7e04c1d8bdfe49837cc2e697"
+    "bytes": 3224940,
+    "sha256": "sha256:047ce6f45fe8d842d2896aba64a4225c30ee34167583acf63b749a29a18e7f38"
   },
   "packaged_assets": [
     {

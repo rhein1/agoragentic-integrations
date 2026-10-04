@@ -177,6 +177,7 @@ const REASON_CODES = Object.freeze([
 ]);
 const MAX_REPORT_BYTES = 8 * 1024 * 1024;
 const MAX_REPORT_ITEMS = 20_000;
+const MAX_STATIC_COMPLETED_WORK = MAX_REPORT_ITEMS * REVIEWED_STATIC_ANALYZER_IDS.size;
 const SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT = 10_000;
 const MAX_VALIDITY_MS = 24 * 60 * 60 * 1000;
 const SEVERITIES = Object.freeze(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
@@ -706,11 +707,28 @@ function normalizeCoverage(value, { componentCount, findingCount, suppressedCoun
     limitation_count: limitations.length,
     analyzer_status_count: analyzerStatuses.length,
     analyzer_incomplete_count: analyzerIncompleteCount,
+    missing_static_analyzer_ids: [...REVIEWED_STATIC_ANALYZER_IDS]
+      .filter((analyzerId) => !analyzerIds.has(analyzerId)).sort(),
     applicable_static_analyzer_count: applicableStaticAnalyzerCount,
     static_completed_work: staticCompletedWork,
     findings_before_filtering: findingsBeforeFiltering,
     findings_after_filtering: findingsAfterFiltering,
   };
+}
+
+function validateRiskBand({ score, severity, recommendation }) {
+  const expectedSeverity = score >= 81 ? 'CRITICAL'
+    : score >= 51 ? 'HIGH' : score >= 21 ? 'MEDIUM' : 'LOW';
+  if (severity !== expectedSeverity) {
+    throw new TypeError('SkillSpector severity does not match the reviewed score band');
+  }
+  const minimumRecommendation = severity === 'LOW'
+    ? 'SAFE' : severity === 'MEDIUM' ? 'CAUTION' : 'DO_NOT_INSTALL';
+  // Incomplete/degraded upstream scans can legitimately escalate SAFE to
+  // CAUTION. Keep the recommendation floor while accepting conservative output.
+  if (RECOMMENDATIONS.indexOf(recommendation) < RECOMMENDATIONS.indexOf(minimumRecommendation)) {
+    throw new TypeError('SkillSpector recommendation is less restrictive than severity');
+  }
 }
 
 function normalizeRiskAssessment(value, issues) {
@@ -778,14 +796,7 @@ function normalizeRiskAssessment(value, issues) {
   if (derivedMax !== maxIssueSeverity) {
     throw new TypeError('SkillSpector max_issue_severity does not match issues');
   }
-  const minimumRecommendation = severity === 'LOW'
-    ? 'SAFE'
-    : severity === 'MEDIUM'
-      ? 'CAUTION'
-      : 'DO_NOT_INSTALL';
-  if (RECOMMENDATIONS.indexOf(recommendation) < RECOMMENDATIONS.indexOf(minimumRecommendation)) {
-    throw new TypeError('SkillSpector recommendation is less restrictive than severity');
-  }
+  validateRiskBand({ score, severity, recommendation });
   return {
     score,
     severity,
@@ -813,6 +824,7 @@ function deriveResult({
     && coverage.total_components > 0
     && coverage.analyzer_status_count > 0
     && coverage.analyzer_incomplete_count === 0
+    && coverage.missing_static_analyzer_ids.length === 0
     && coverage.applicable_static_analyzer_count > 0
     && coverage.static_completed_work > 0
     && !coverage.output_limit_reached
@@ -840,7 +852,7 @@ function deriveResult({
     || coverage.static_completed_work === 0) {
     reasons.add('skillspector_empty_scope');
   }
-  if (coverage.analyzer_incomplete_count > 0) {
+  if (coverage.analyzer_incomplete_count > 0 || coverage.missing_static_analyzer_ids.length > 0) {
     reasons.add('skillspector_analyzer_incomplete');
   }
   if (coverage.findings_before_filtering !== coverage.findings_after_filtering) {
@@ -1052,6 +1064,7 @@ function normalizeEvidence(value) {
     'limitation_count',
     'analyzer_status_count',
     'analyzer_incomplete_count',
+    'missing_static_analyzer_ids',
     'applicable_static_analyzer_count',
     'static_completed_work',
     'emitted_output_records',
@@ -1075,6 +1088,7 @@ function normalizeEvidence(value) {
     'limitation_count',
     'analyzer_status_count',
     'analyzer_incomplete_count',
+    'missing_static_analyzer_ids',
     'applicable_static_analyzer_count',
     'static_completed_work',
     'emitted_output_records',
@@ -1101,8 +1115,12 @@ function normalizeEvidence(value) {
     limitation_count: boundedInteger(value.coverage.limitation_count, 'coverage.limitation_count', { max: MAX_REPORT_ITEMS }),
     analyzer_status_count: boundedInteger(value.coverage.analyzer_status_count, 'coverage.analyzer_status_count', { max: MAX_REPORT_ITEMS }),
     analyzer_incomplete_count: boundedInteger(value.coverage.analyzer_incomplete_count, 'coverage.analyzer_incomplete_count', { max: MAX_REPORT_ITEMS }),
-    applicable_static_analyzer_count: boundedInteger(value.coverage.applicable_static_analyzer_count, 'coverage.applicable_static_analyzer_count', { max: MAX_REPORT_ITEMS }),
-    static_completed_work: boundedInteger(value.coverage.static_completed_work, 'coverage.static_completed_work', { max: MAX_REPORT_ITEMS }),
+    missing_static_analyzer_ids: requireArray(value.coverage.missing_static_analyzer_ids,
+      'coverage.missing_static_analyzer_ids', { maxItems: REVIEWED_STATIC_ANALYZER_IDS.size })
+      .map((analyzerId) => requireEnum(analyzerId, [...REVIEWED_STATIC_ANALYZER_IDS],
+        'coverage.missing_static_analyzer_ids')),
+    applicable_static_analyzer_count: boundedInteger(value.coverage.applicable_static_analyzer_count, 'coverage.applicable_static_analyzer_count', { max: REVIEWED_STATIC_ANALYZER_IDS.size }),
+    static_completed_work: boundedInteger(value.coverage.static_completed_work, 'coverage.static_completed_work', { max: MAX_STATIC_COMPLETED_WORK }),
     emitted_output_records: boundedInteger(value.coverage.emitted_output_records, 'coverage.emitted_output_records', { max: SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT }),
     output_limit_reached: requireBoolean(value.coverage.output_limit_reached, 'coverage.output_limit_reached'),
     component_manifest_hash: requireSha256Ref(
@@ -1118,8 +1136,17 @@ function normalizeEvidence(value) {
   if (coverage.total_components !== coverage.fully_inspected_files
       + coverage.partially_inspected_files + coverage.entirely_uninspected_files
     || coverage.scanned_components !== coverage.fully_inspected_files
-    || coverage.analyzer_incomplete_count > coverage.analyzer_status_count
-    || coverage.applicable_static_analyzer_count > coverage.analyzer_status_count
+    || new Set(coverage.missing_static_analyzer_ids).size !== coverage.missing_static_analyzer_ids.length
+    || canonicalize(coverage.missing_static_analyzer_ids)
+      !== canonicalize([...coverage.missing_static_analyzer_ids].sort())
+    || coverage.analyzer_status_count < REVIEWED_STATIC_ANALYZER_IDS.size
+      - coverage.missing_static_analyzer_ids.length
+    || coverage.analyzer_incomplete_count + coverage.applicable_static_analyzer_count
+      > coverage.analyzer_status_count
+    || coverage.applicable_static_analyzer_count > REVIEWED_STATIC_ANALYZER_IDS.size
+      - coverage.missing_static_analyzer_ids.length
+    || coverage.static_completed_work < coverage.applicable_static_analyzer_count
+    || coverage.static_completed_work > coverage.applicable_static_analyzer_count * MAX_REPORT_ITEMS
     || coverage.output_limit_reached !== (
       coverage.emitted_output_records === SKILLSPECTOR_FINDING_OUTPUT_RECORD_LIMIT
     )
@@ -1191,10 +1218,14 @@ function normalizeEvidence(value) {
     reason_codes: requireArray(value.result.reason_codes, 'SkillSpector result.reason_codes', { maxItems: REASON_CODES.length })
       .map((code, index) => requireEnum(code, REASON_CODES, `SkillSpector result.reason_codes[${index}]`)),
   };
+  validateRiskBand(result);
+  const derivedMaxIssueSeverity = [...SEVERITIES].reverse()
+    .find((severity) => severityCounts[severity] > 0) ?? 'NONE';
   if (new Set(result.reason_codes).size !== result.reason_codes.length
     || canonicalize(result.reason_codes) !== canonicalize([...result.reason_codes].sort())
     || Object.values(severityCounts).reduce((total, count) => total + count, 0)
-      !== result.finding_count) {
+      !== result.finding_count
+    || result.max_issue_severity !== derivedMaxIssueSeverity) {
     throw new TypeError('SkillSpector result accounting is inconsistent');
   }
   if (result.finding_count + result.suppressed_count > coverage.findings_after_filtering) {

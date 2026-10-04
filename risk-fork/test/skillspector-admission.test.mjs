@@ -37,6 +37,40 @@ const SCANNED_AT = '2026-09-22T15:00:00.000Z';
 const REQUESTED_AT = '2026-09-22T15:10:00.000Z';
 const VALID_UNTIL = '2026-09-22T16:00:00.000Z';
 
+// Reviewed v2.11.2 static analyzer inventory, independent of the adapter's set.
+const REVIEWED_ANALYZERS = [
+  'static_patterns_prompt_injection',
+  'static_patterns_data_exfiltration',
+  'static_patterns_privilege_escalation',
+  'static_patterns_supply_chain',
+  'static_patterns_harmful_content',
+  'static_patterns_excessive_agency',
+  'static_patterns_output_handling',
+  'static_patterns_system_prompt_leakage',
+  'static_patterns_memory_poisoning',
+  'static_patterns_tool_misuse',
+  'static_patterns_rogue_agent',
+  'static_patterns_agent_snooping',
+  'static_patterns_anti_refusal',
+  'static_patterns_ssrf',
+  'static_patterns_deserialization',
+  'static_yara',
+];
+
+function analyzerStatus(analyzerId, overrides = {}) {
+  return {
+    analyzer_id: analyzerId,
+    status: 'completed',
+    planned_work: 1,
+    completed: 1,
+    partial: 0,
+    skipped: 0,
+    failed: 0,
+    unaccounted: 0,
+    ...overrides,
+  };
+}
+
 function hash(label) {
   return sha256Ref(label);
 }
@@ -132,16 +166,7 @@ function completeReport(overrides = {}) {
       entirely_uninspected_files: 0,
       ledger_exceptions: [],
       scope_exclusions: [],
-      analyzer_statuses: [{
-        analyzer_id: 'static_yara',
-        status: 'completed',
-        planned_work: 1,
-        completed: 1,
-        partial: 0,
-        skipped: 0,
-        failed: 0,
-        unaccounted: 0,
-      }],
+      analyzer_statuses: REVIEWED_ANALYZERS.map((id) => analyzerStatus(id)),
       references: [],
       limitations: [],
       findings_before_filtering: 0,
@@ -232,6 +257,240 @@ function expectedBindings(overrides = {}) {
     ...overrides,
   };
 }
+
+const admissionSchema = JSON.parse(await readFile(
+  new URL('../schema/skillspector-admission-evidence.v1.json', import.meta.url), 'utf8',
+));
+const admissionAjv = new Ajv2020({ allErrors: true, strict: true });
+addFormats(admissionAjv);
+const validateAdmissionSchema = admissionAjv.compile(admissionSchema);
+
+function roundTrip(report) {
+  const input = adapterInput(report);
+  const evidence = adaptSkillSpectorReport(input);
+  assert.equal(validateAdmissionSchema(evidence), true,
+    admissionAjv.errorsText(validateAdmissionSchema.errors));
+  assert.deepEqual(verifySkillSpectorAdmissionEvidence(evidence, {
+    ...expectedBindings({
+      report_hash: rawHash(input.report_bytes),
+      component_manifest_hash: input.component_manifest_hash,
+    }),
+    descriptor_request_hash: input.descriptor_request_hash,
+    operation_hash: input.operation_hash,
+    requested_at: REQUESTED_AT,
+  }), evidence);
+  return evidence;
+}
+
+// Recompute both self-hashes to exercise semantic validation, rather than only
+// the existing tamper detector. A self-hash never supplies host authority.
+function rehashEvidence(evidence) {
+  const result = evidence.result;
+  evidence.report.normalized_hash = sha256Ref({
+    scanner_version: SKILLSPECTOR_REVIEWED_VERSION,
+    risk_assessment: {
+      score: result.score,
+      severity: result.severity,
+      recommendation: result.recommendation,
+      max_issue_severity: result.max_issue_severity,
+      severity_counts: result.severity_counts,
+    },
+    execution_successful: result.execution_successful,
+    coverage: evidence.coverage,
+    finding_count: result.finding_count,
+    suppressed_count: result.suppressed_count,
+  });
+  evidence.evidence_hash = sha256Ref({ ...evidence, evidence_hash: null });
+  return evidence;
+}
+
+test('every omitted reviewed analyzer stays hash-bound and prevents clear admission', () => {
+  for (const missing of REVIEWED_ANALYZERS) {
+    const report = completeReport();
+    report.analysis_completeness.analyzer_statuses = report.analysis_completeness
+      .analyzer_statuses.filter((status) => status.analyzer_id !== missing);
+    const evidence = roundTrip(report);
+    assert.equal(evidence.result.outcome, 'incomplete', missing);
+    assert.deepEqual(evidence.coverage.missing_static_analyzer_ids, [missing]);
+    assert.equal(evidence.coverage.analyzer_incomplete_count, 0);
+    assert.ok(evidence.result.reason_codes.includes('skillspector_analyzer_incomplete'));
+    const forged = structuredClone(evidence);
+    forged.result.outcome = 'clear';
+    forged.result.reason_codes = ['skillspector_clear'];
+    assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+      SkillSpectorAdmissionError);
+    forged.coverage.missing_static_analyzer_ids = [];
+    assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+      SkillSpectorAdmissionError);
+  }
+});
+
+test('absent inventory and static_yara alone remain verifiable incomplete evidence', () => {
+  for (const statuses of [[], [analyzerStatus('static_yara')]]) {
+    const evidence = roundTrip(completeReport({
+      analysis_completeness: { analyzer_statuses: statuses },
+    }));
+    assert.equal(evidence.result.outcome, 'incomplete');
+    assert.equal(evidence.coverage.analyzer_incomplete_count, 0);
+    assert.equal(evidence.coverage.missing_static_analyzer_ids.length, 16 - statuses.length);
+  }
+});
+
+test('reviewed analyzer statuses allow not_applicable and fail closed on incomplete work', () => {
+  for (const id of REVIEWED_ANALYZERS) {
+    for (const status of ['not_applicable', 'disabled', 'unavailable', 'degraded', 'failed']) {
+      const report = completeReport();
+      report.analysis_completeness.analyzer_statuses = REVIEWED_ANALYZERS.map((analyzerId) => (
+        analyzerStatus(analyzerId, analyzerId === id
+          ? { status, planned_work: 0, completed: 0 } : {})
+      ));
+      const evidence = roundTrip(report);
+      assert.deepEqual(evidence.coverage.missing_static_analyzer_ids, []);
+      assert.equal(evidence.result.outcome, status === 'not_applicable' ? 'clear' : 'incomplete');
+      assert.equal(evidence.coverage.applicable_static_analyzer_count, 15);
+      assert.equal(evidence.coverage.analyzer_incomplete_count, status === 'not_applicable' ? 0 : 1);
+    }
+  }
+  const report = completeReport();
+  report.analysis_completeness.analyzer_statuses = REVIEWED_ANALYZERS.map((id) => (
+    analyzerStatus(id, { status: 'not_applicable', planned_work: 0, completed: 0 })
+  ));
+  assert.equal(roundTrip(report).result.outcome, 'incomplete');
+  report.analysis_completeness.analyzer_statuses = [
+    ...REVIEWED_ANALYZERS.map((id) => analyzerStatus(id)),
+    ...['meta_analyzer', 'semantic_security_discovery', 'semantic_developer_intent',
+      'semantic_quality_policy'].map((id) => (
+      analyzerStatus(id, { status: 'disabled', planned_work: 0, completed: 0 })
+    )),
+  ];
+  assert.equal(roundTrip(report).result.outcome, 'clear');
+});
+
+test('raw and rehashed evidence enforce every score-band boundary and recommendation floor', () => {
+  const boundaries = [
+    [0, 'LOW', 'SAFE', 'clear'], [20, 'LOW', 'SAFE', 'clear'],
+    [21, 'MEDIUM', 'CAUTION', 'review'], [50, 'MEDIUM', 'CAUTION', 'review'],
+    [51, 'HIGH', 'DO_NOT_INSTALL', 'block'], [80, 'HIGH', 'DO_NOT_INSTALL', 'block'],
+    [81, 'CRITICAL', 'DO_NOT_INSTALL', 'block'], [100, 'CRITICAL', 'DO_NOT_INSTALL', 'block'],
+  ];
+  for (const [score, severity, recommendation, outcome] of boundaries) {
+    const evidence = roundTrip(completeReport({ risk_assessment: { score, severity, recommendation } }));
+    assert.equal(evidence.result.outcome, outcome);
+    for (const other of ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].filter((band) => band !== severity)) {
+      assert.throws(() => adaptSkillSpectorReport(adapterInput(completeReport({
+        risk_assessment: { score, severity: other, recommendation: 'DO_NOT_INSTALL' },
+      }))), SkillSpectorAdmissionError);
+      const forged = structuredClone(evidence);
+      forged.result.severity = other;
+      // Keep a result conservative under the forged severity, so band validation
+      // is the rejecting invariant even when the outcome itself still matches.
+      forged.result.recommendation = 'DO_NOT_INSTALL';
+      forged.result.outcome = 'block';
+      forged.result.reason_codes = ['skillspector_do_not_install'];
+      assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+        SkillSpectorAdmissionError);
+      assert.equal(validateAdmissionSchema(forged), false);
+    }
+    for (const lower of ['SAFE', 'CAUTION'].filter((rec) => (
+      ['SAFE', 'CAUTION', 'DO_NOT_INSTALL'].indexOf(rec)
+        < ['SAFE', 'CAUTION', 'DO_NOT_INSTALL'].indexOf(recommendation)
+    ))) {
+      assert.throws(() => adaptSkillSpectorReport(adapterInput(completeReport({
+        risk_assessment: { score, severity, recommendation: lower },
+      }))), SkillSpectorAdmissionError);
+      const forged = structuredClone(evidence);
+      forged.result.recommendation = lower;
+      forged.result.reason_codes = lower === 'CAUTION' ? ['skillspector_caution'] : ['skillspector_clear'];
+      assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+        SkillSpectorAdmissionError);
+      assert.equal(validateAdmissionSchema(forged), false);
+    }
+  }
+  for (const recommendation of ['CAUTION', 'DO_NOT_INSTALL']) {
+    assert.equal(roundTrip(completeReport({ risk_assessment: { recommendation } })).result.outcome,
+      recommendation === 'CAUTION' ? 'review' : 'block');
+  }
+  const degraded = completeReport({ risk_assessment: { recommendation: 'CAUTION' } });
+  degraded.analysis_completeness.analyzer_statuses[0] = analyzerStatus(REVIEWED_ANALYZERS[0], {
+    status: 'degraded', completed: 0, partial: 1,
+  });
+  assert.equal(roundTrip(degraded).result.outcome, 'incomplete');
+  assert.throws(() => adaptSkillSpectorReport(adapterInput(completeReport({
+    risk_assessment: { score: 100, severity: 'LOW', recommendation: 'SAFE' },
+  }))), SkillSpectorAdmissionError);
+});
+
+test('multi-analyzer aggregate work exceeds 20000 and stays bounded per analyzer', () => {
+  for (const work of [1250, 1251, 1500, 20000]) {
+    const report = completeReport();
+    report.analysis_completeness.analyzer_statuses = REVIEWED_ANALYZERS.map((id) => (
+      analyzerStatus(id, { planned_work: work, completed: work })
+    ));
+    // Reproduce the 1500-component real report shape as well as the aggregate
+    // boundaries. Larger component inventories retain canonical JSON limits.
+    if (work === 1500) {
+      report.components = Array.from({ length: work }, (_, index) => ({
+        ...report.components[0], path: `docs/part-${index}.md`,
+      }));
+      Object.assign(report.analysis_completeness, {
+        total_components: work, scanned_components: work, fully_inspected_files: work,
+      });
+    }
+    const evidence = roundTrip(report);
+    assert.equal(evidence.result.outcome, 'clear');
+    assert.equal(evidence.coverage.static_completed_work, 16 * work);
+    for (const invalid of [320001, -1, 1.5]) {
+      const forged = structuredClone(evidence);
+      forged.coverage.static_completed_work = invalid;
+      assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+        SkillSpectorAdmissionError);
+      assert.equal(validateAdmissionSchema(forged), false);
+    }
+  }
+  const tooMuchWork = completeReport();
+  tooMuchWork.analysis_completeness.analyzer_statuses[0] = analyzerStatus(REVIEWED_ANALYZERS[0], {
+    planned_work: 20001, completed: 20001,
+  });
+  assert.throws(() => adaptSkillSpectorReport(adapterInput(tooMuchWork)), SkillSpectorAdmissionError);
+  const evidence = roundTrip(completeReport());
+  for (const changes of [
+    { applicable_static_analyzer_count: 17 },
+    { static_completed_work: 15 },
+    { applicable_static_analyzer_count: 1, static_completed_work: 20001 },
+    { missing_static_analyzer_ids: [REVIEWED_ANALYZERS[0]] },
+    { missing_static_analyzer_ids: ['static_fake'] },
+    { missing_static_analyzer_ids: [REVIEWED_ANALYZERS[0], REVIEWED_ANALYZERS[0]] },
+  ]) {
+    const forged = structuredClone(evidence);
+    Object.assign(forged.coverage, changes);
+    assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+      SkillSpectorAdmissionError);
+  }
+});
+
+test('missing inventory cannot be removed or reordered in rehashed evidence', () => {
+  const report = completeReport();
+  report.analysis_completeness.analyzer_statuses = report.analysis_completeness
+    .analyzer_statuses.filter((status) => !REVIEWED_ANALYZERS.slice(0, 2).includes(status.analyzer_id));
+  const evidence = roundTrip(report);
+  assert.deepEqual(evidence.coverage.missing_static_analyzer_ids,
+    [...REVIEWED_ANALYZERS.slice(0, 2)].sort());
+  const forged = structuredClone(evidence);
+  forged.coverage.missing_static_analyzer_ids.reverse();
+  assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+    SkillSpectorAdmissionError);
+  delete forged.coverage.missing_static_analyzer_ids;
+  assert.throws(() => verifySkillSpectorAdmissionEvidence(rehashEvidence(forged)),
+    SkillSpectorAdmissionError);
+  assert.equal(validateAdmissionSchema(forged), false);
+});
+
+test('the checked-in example equals actual adapter output and verifies against source fixture', async () => {
+  const example = JSON.parse(await readFile(
+    new URL('../../skillspector/skillspector.admission.example.json', import.meta.url), 'utf8',
+  ));
+  assert.deepEqual(example, roundTrip(completeReport()));
+});
 
 function completeCapabilities(overrides = {}) {
   return {
@@ -745,7 +1004,7 @@ test('suppressed findings reconcile separately from active finding occurrences',
   };
   const report = completeReport({
     risk_assessment: {
-      score: 10,
+      score: 25,
       severity: 'MEDIUM',
       recommendation: 'CAUTION',
       max_issue_severity: 'MEDIUM',

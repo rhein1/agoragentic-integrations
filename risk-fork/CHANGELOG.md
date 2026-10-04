@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Require all 16 reviewed SkillSpector static analyzer IDs to be accounted for,
+  bind missing IDs into evidence, enforce score bands/recommendation floors, and
+  allow bounded aggregate work across analyzers. Earlier source-only alpha v1
+  packets without the required coverage field fail closed and must be regenerated
+  from actual pinned reports and independently verified bindings; no automatic
+  legacy acceptance or production migration is provided.
+
 - Add transactional PostgreSQL portable-handle storage and explicit per-request
   pre-effect authentication, with closed catalog/runtime-role attestation,
   column-scoped runtime updates, and separate owner/runtime fixtures. Registration,

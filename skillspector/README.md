@@ -81,6 +81,24 @@ provided by the candidate skill or accepted from the report as an admission
 override. The reviewed contract requires them to be disabled, rejects candidate
 baseline/suppression fields, and does not treat a suppressed result as clear.
 
+Clear admission requires explicit status coverage for all 16 reviewed static
+analyzers: completed work or zero-work `not_applicable`, plus positive completed
+work from at least one applicable analyzer. Missing IDs are retained as a sorted,
+hash-bound `coverage.missing_static_analyzer_ids` list. Disabled, unavailable,
+degraded, failed, or omitted static analysis remains incomplete. Reviewed score
+bands are LOW 0–20, MEDIUM 21–50, HIGH 51–80, and CRITICAL 81–100;
+recommendations may escalate but cannot be less restrictive than their band.
+Each analyzer is capped at 20,000 work items; aggregate static work is capped at
+320,000 rather than incorrectly applying one analyzer's cap to the total.
+
+This source-only alpha tightens `skillspector-admission-evidence.v1` in place.
+Previously normalized evidence without the required missing-ID list is rejected.
+Regenerate it through the current adapter from the exact pinned report and fresh
+host-verified bindings. If the raw report lacks complete analyzer status coverage,
+rerun the bounded, network-isolated scan; do not fabricate an empty missing-ID
+list or completed statuses. Rebuild core and hosted bundle together. There is no
+automatic upgrade, production migration, or legacy-packet acceptance path.
+
 ## Agoragentic mapping
 
 ```text
@@ -105,7 +123,7 @@ publish `verified` status from SkillSpector alone.
 | `invocation` | Closed reviewed static/no-LLM command settings, including baseline/suppression flags |
 | `network_enforcement` | Separate deny-all or explicitly unknown network-control evidence |
 | `report` | Opaque report reference, raw report hash, normalized projection hash, and validity window |
-| `coverage` | Completeness, exact host-matched component-manifest hash, component/inspection counts, and bounded limitations |
+| `coverage` | Completeness, exact host-matched component-manifest hash, component/inspection counts, sorted missing static analyzer IDs, bounded aggregate work, and limitations |
 | `result` | Normalized score, severity, recommendation, counts, outcome, and bounded reason codes |
 | `authority_flags` | Explicit advisory-only and no-trust/no-execution/no-commit/no-spend/no-settlement flags |
 | `evidence_hash` | Canonical hash of the complete evidence object, excluding the hash field itself |
