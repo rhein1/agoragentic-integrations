@@ -1288,12 +1288,21 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
     'RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA',
     'computeMcpCleanImportEvidenceHash',
     'connectRemoteClient',
-    'createMcpEnforcementBoundary',
     'createCleanupVerificationRequest',
+    'createDurableMcpPortableHandleRegistry',
+    'createMcpEnforcementBoundary',
+    'createMcpPortableHandlePreEffectBoundary',
+    'createMcpPortableHandleRegistry',
     'createRiskForkHostBoundary',
     'createRiskForkImportEnvelope',
     'createTrustedRiskDescriptor',
     'createTrustedRiskDescriptorSource',
+    'createTrustedSkillSpectorAdmissionVerifier',
+    'adaptSkillSpectorReport',
+    'hashSkillSpectorComponentManifest',
+    'hashSkillSpectorRulesManifest',
+    'hashSkillSpectorRuntimeClosure',
+    'verifySkillSpectorAdmissionEvidence',
     'runAcpAdapter',
     'runMcpRelay',
     'RiskForkController',
@@ -1341,6 +1350,95 @@ test('bundle exposes the reviewed relay and Risk Fork controller boundaries', as
   ]) {
     assert.ok(Object.hasOwn(api, name), `missing export ${name}`);
   }
+  const registryStore = {
+    binding: null,
+    consumed: false,
+    async register(scope, options, createBinding) {
+      assert.equal(scope.tenant_ref, 'tenant:bundle-test');
+      this.binding = createBinding('2026-08-20T12:00:00.000Z');
+      return this.binding;
+    },
+    async consume(scope, options, consumeBinding) {
+      assert.equal(scope.tenant_ref, 'tenant:bundle-test');
+      assert.equal(this.consumed, false);
+      this.consumed = true;
+      return consumeBinding(this.binding, '2026-08-20T12:00:00.000Z');
+    },
+    async revoke() {},
+  };
+  const portableRegistry = api.createDurableMcpPortableHandleRegistry({
+    store: registryStore,
+    tenant_ref: 'tenant:bundle-test',
+    key_id: 'key:bundle-test',
+    hash_key: Buffer.alloc(32, 7),
+  });
+  assert.equal(api.isMcpPortableHandleRegistry(portableRegistry), true);
+  assert.equal(api.isMcpPortableHandleRegistry({
+    schema: portableRegistry.schema,
+    durability: 'transactional',
+  }), false);
+  const hash = (value) => sha256(Buffer.from(value));
+  const portableIdentity = {
+    tenant_ref: 'tenant:bundle-test',
+    principal_ref: hash('principal'),
+    issuer: 'https://issuer.example/',
+    audience: 'https://mcp.example/audience',
+    mcp_server_origin: 'https://mcp.example',
+    expires_at: '2026-08-20T12:05:00.000Z',
+  };
+  const portableBoundary = api.createMcpPortableHandlePreEffectBoundary({
+    authenticate: async () => portableIdentity,
+    registry_for_context: async () => portableRegistry,
+    contracts: [{
+      phase: 'tools/call',
+      tool_name: 'use_portable_handle',
+      tool_descriptor_hash: hash('descriptor'),
+      mcp_server_origin: 'https://mcp.example',
+      handle_path: ['portable_handle'],
+      binding_path: ['portable_binding'],
+    }],
+    clock: () => new Date('2026-08-20T12:00:00.000Z'),
+  });
+  assert.equal(api.isMcpPortableHandlePreEffectBoundary(portableBoundary), true);
+  assert.equal(api.isMcpPortableHandlePreEffectBoundary({ authorize() {} }), false);
+  const binding = await portableRegistry.register({
+    handle_value: 'opaque-portable-handle',
+    principal_ref: portableIdentity.principal_ref,
+    issuer: portableIdentity.issuer,
+    audience: portableIdentity.audience,
+    mcp_server_origin: portableIdentity.mcp_server_origin,
+    originating_method: 'tools/call',
+    originating_request_hash: hash('originating-request'),
+    allowed_consuming_methods: ['tools/call'],
+    ttl_ms: 1000,
+    single_use: true,
+    max_consumptions: 1,
+  });
+  const authorization = await portableBoundary.authorize({
+    phase: 'tools/call',
+    tool_name: 'use_portable_handle',
+    tool_descriptor_hash: hash('descriptor'),
+    mcp_server_origin: 'https://mcp.example',
+    request_hash: hash('consuming-request'),
+    params: { portable_handle: 'opaque-portable-handle', portable_binding: binding },
+  }, {});
+  assert.equal(Object.isFrozen(authorization), true);
+  assert.equal(authorization.transferable, false);
+  assert.equal(authorization.raw_handle_exposed, false);
+  assert.equal(authorization.raw_principal_exposed, false);
+  assert.match(authorization.authorization_hash, /^sha256:[a-f0-9]{64}$/);
+  portableRegistry.close();
+  await assert.rejects(
+    portableBoundary.authorize({
+      phase: 'tools/call',
+      tool_name: 'use_portable_handle',
+      tool_descriptor_hash: hash('descriptor'),
+      mcp_server_origin: 'https://mcp.example',
+      request_hash: hash('closed-request'),
+      params: { portable_handle: 'opaque-portable-handle', portable_binding: binding },
+    }, {}),
+    (error) => error?.code === 'RISK_FORK_MCP_PORTABLE_HANDLE_REGISTRY_CLOSED',
+  );
   assert.equal(typeof api.PostgresDistributedCommitAuthority.prototype.getAuthorityStatus, 'function');
   assert.equal(api.isProductionPostgresDistributedCommitAuthority({}), false);
   const manifest = JSON.parse(await readFile(path.join(packageRoot, 'integrity-manifest.json'), 'utf8'));

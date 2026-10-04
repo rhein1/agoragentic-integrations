@@ -6,6 +6,7 @@ const sourceRoot = new URL('../src/', import.meta.url);
 const roots = [
   sourceRoot,
   new URL('../test/', import.meta.url),
+  new URL('../host/', import.meta.url),
 ];
 const sourceOnlyGuards = Object.freeze([
   Object.freeze({

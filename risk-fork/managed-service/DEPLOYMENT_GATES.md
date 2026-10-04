@@ -16,6 +16,22 @@ This checklist separates source completion from a real hosted protection service
 
 ## 2. Worker/enforcement bridge
 
+Source progress: [WORKER.md](./WORKER.md) now describes a `local_test` controller
+driver with immediate resource journaling, current-authority lease fences,
+partial-resource recovery, and verified cleanup. It deliberately does not retry
+provider effects. An optional host-keyed encrypted journal now durably retains
+claim/resource packets before sending them; explicit delivery-only recovery
+cannot resume the original operation or reconstruct process-local provenance. The
+[stateless host runbook](../STATELESS_HOST_RUNBOOK.md) describes the new
+transactional PostgreSQL handle store and explicit pre-effect authentication
+boundary. Neither source implementation completes this production gate.
+
+Local source also implements a PostgreSQL ciphertext delivery store with an
+independent migration ledger, bounded retained attempts, and exact lost-response
+replay; a non-overlapping scheduled control-plane reaper; purpose-specific worker
+claim/write scopes; separate public/worker handlers; and explicit bounded loopback
+host composition. These are tested source capabilities, not deployed enforcement.
+
 - implement a host-owned worker that generates and durably retains a fresh 32–512-byte URL-safe CSPRNG `lease_token` before each logical claim, retries that exact token only after an unknown delivery result, and renews the resulting lease;
 - make one token map to one local logical work attempt so concurrent, delayed, or `claim_replayed: true` responses cannot start duplicate execution, cleanup, recovery lookup, or provider effects;
 - prohibit worker logs, traces, metrics, crash reports, and audit submissions from containing raw bearer or lease tokens;
@@ -27,8 +43,9 @@ This checklist separates source completion from a real hosted protection service
 - prove result validation and clean commit happen only after verified destruction.
 - integrate explicit portable-handle registration and authorization into the
   pre-effect bridge using the currently authenticated principal; replace the
-  process-local reference registry with durable, transactional, tenant-scoped
-  state for multi-instance, restart, MRTR, or Task workflows;
+  process-local reference registry with the reviewed durable, transactional,
+  tenant-scoped source adapter for multi-instance/restart operation; qualify
+  the exact deployment before use. MRTR and Tasks remain disabled;
 - never infer a handle from arbitrary argument names, conversation content, or
   model output; each supported tool contract must identify its exact handle
   field and allowed consuming methods.
@@ -48,6 +65,15 @@ This checklist separates source completion from a real hosted protection service
 
 ## 4. Managed PostgreSQL qualification
 
+Portable-handle source now attests the exact reviewed relation/column/constraint/
+index/trigger/function catalog and least-privilege runtime ownership/grants in
+explicit production mode, which requires verified TLS. A reviewed role template
+and disposable separate-owner/runtime tests exist. The managed control plane and
+independent ciphertext delivery store still need equivalent deployed role/catalog
+qualification; their owner-role tests cannot substitute for it. Managed migration
+`002_journal_purpose` upgrades immutable `001` using each receipt's exact audit
+event and aborts ambiguous legacy evidence.
+
 - run migrations with a non-runtime owner identity and attest the exact migration hash;
 - create separate migrator, API, worker, and read-only observer roles with least privilege;
 - require CA-validated TLS and rotation-ready credentials from a secret manager;
@@ -56,6 +82,14 @@ This checklist separates source completion from a real hosted protection service
 - add exact catalog and privilege attestation equivalent to the existing distributed-authority gate.
 
 ## 5. Service and edge operations
+
+The explicit local host bounds body/header/connection sizes and deadlines,
+isolates public and worker routes on separate loopback listeners, and shuts
+ingress before capabilities. Worker permissions are split by execution, cleanup,
+and recovery. `createTrustedOAuthAuthenticator` delegates actual signature/JWKS
+and OAuth verification to a trusted host callback per request and binds its
+identity to the current credential record. None of this provisions a public
+TLS/JWKS gateway, production token broker, rate limiter, or hosted service.
 
 - build a real HTTP runtime around the handler with bounded headers, body streaming, deadlines, connection limits, structured redacted logs that cannot emit bearer or lease tokens, and graceful shutdown;
 - keep internal worker routes on a separate authenticated network surface;
@@ -94,7 +128,8 @@ local deterministic tests:       true when the checked tests pass
 published package:               false
 managed PostgreSQL qualified:    false
 provider qualified for service:  false
-host worker wired:               false
+local-test host composition:     true when explicitly constructed
+production host worker wired:    false
 deployed:                        false
 production activated:            false
 live agent traffic protected:    false

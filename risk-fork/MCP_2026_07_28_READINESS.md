@@ -143,11 +143,13 @@ MCP 2026-07-28 child HTTP contract:  source available
 client-facing stateless stdio:        source available with legacy compatibility
 typed-result JSON Schema dialect:     2020-12 default; explicit draft-07 compatibility
 x-mcp-header annotated types:         string, integer, boolean; number rejected
-stateless handle binding primitive:  source available; process-local only
+stateless handle binding primitive:  local and transactional PostgreSQL source available
+per-request handle/auth admission:   optional source boundary; host must install explicitly
 MCP Apps active-content posture:      source default deny at local relay import
 MRTR / Tasks / subscriptions:         disabled, fail closed; MRTR/task rejection is hash-only
 authenticated remote MCP:             disabled
-host worker wired:                    false
+local-test worker/controller bridge:  source available; not a production broker
+production host worker wired:         false
 provider qualified for service:       false
 managed PostgreSQL qualified:         false
 deployed:                             false
@@ -157,6 +159,10 @@ live agent traffic protected:         false
 
 The detailed service checklist remains in
 [`managed-service/DEPLOYMENT_GATES.md`](./managed-service/DEPLOYMENT_GATES.md).
+The new [stateless host runbook](./STATELESS_HOST_RUNBOOK.md) describes durable
+handle admission and its remaining operational gates. The
+[worker contract](./managed-service/WORKER.md) describes immediate journaling,
+lease fences, recovery, and why serialized prepared results are not authority.
 The host boundary is described in [`MCP_HOST_ADAPTER.md`](./MCP_HOST_ADAPTER.md),
 and client review packets are described in
 [`CLIENT_ADOPTION.md`](./CLIENT_ADOPTION.md).
