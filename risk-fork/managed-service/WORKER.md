@@ -65,12 +65,35 @@ and the existing exact-bound parent authorization gate.
 
 ## Ambiguity, restart, and shutdown
 
-The worker creates fresh 32-byte CSPRNG claim tokens and stores raw values only
-inside process-local attempt state. It never logs them. There is deliberately
-no automatic claim, journal, or provider retry. The control plane already has
-durable delivery receipts, but this reference driver does not yet durably retain
-its own secret-bearing delivery attempt across a restart. Lost acknowledgement
-therefore waits for lease expiry and reaping rather than guessing delivery.
+The worker creates fresh 32-byte CSPRNG claim tokens and never logs them. Without
+an optional delivery journal, its secret-bearing attempt state is process-local;
+lost acknowledgement waits for expiry/reaping rather than guessing delivery.
+There is no automatic claim, journal, or provider retry.
+
+For restart-safe delivery, construct `createManagedWorkerDeliveryJournal` with a
+host-owned 32-byte encryption key, key ID, namespace, worker ID, exact control
+plane/principals, and a durable ciphertext store. Supply the branded journal to
+the worker as `deliveryJournal`. It persists an AES-256-GCM sealed packet before
+each claim/resource delivery, binding key/namespace/worker identity as additional
+authenticated data. The journal does not persist cleartext operation data or
+lease tokens; the key and decrypted packet remain trusted-host secret state.
+
+After an unknown response, explicitly inspect `listPending` and call
+`resumeDelivery(attempt_ref)`. Only the exact original claim or resource-journal
+packet is resumable under current authority. Concurrent deliveries coalesce;
+failed transport may be explicitly redelivered, never automatically retried.
+Renewal, outcome settlement, cleanup completion, and recovery-absence completion
+are not resumable journal methods. An acknowledged record is a retained tombstone,
+not permission to start work again. Recovery never resumes a controller, invokes
+a provider, replays the original operation, or reconstructs prepared provenance.
+
+The optional `createPostgresWorkerDeliveryStore` is local-test-only and has its
+own explicit migrator/schema/ledger, immutable persisted capacity and write-once
+ciphertext records. All records, including acknowledged ones, count toward
+`maxAttempts`; capacity exhaustion fails closed. Unknown transaction outcomes or
+serialization conflicts are not implicit retry authority. Stable host key custody,
+reviewed retention, rotation, restore, and runtime roles require qualification.
+Closing the journal zeroes its key copy, not the caller's key or database rows.
 
 After the control plane reaps an unfinished lease, `recover(ref)` takes a fresh
 recovery claim and does provider lookup, not execution. Both-resource and partial
@@ -101,10 +124,14 @@ PostgreSQL worker-authority tests separately exercise the durable scope boundary
 Run `npm test` and `npm run check` in this directory; opt-in database tests require
 an isolated test database and are not managed deployment qualification.
 
-Distinct principal slots do not implement new least-privilege scopes: the existing
-`worker:claim`/`worker:write` routes remain. Durable worker token delivery recovery,
-qualified provider broker, absolute effect fencing, observational verifier
-deadlines, split routes/roles, scheduled reaping, managed PostgreSQL operations,
+Execution, cleanup, and recovery now require their distinct
+`worker:<purpose>:claim` / `worker:<purpose>:write` scopes on separate internal
+routes. Old generic worker credentials must be explicitly replaced, not widened.
+A bounded, default-off reaper schedules control-plane sweeps only: it does not
+destroy resources or manufacture provider absence proof. A default-off local host
+composes this worker, delivery journal, reaper, and separate loopback ingress with
+all dependencies supplied by the host. Qualified provider brokering, absolute
+effect fencing, verifier deadlines, deployed roles, managed PostgreSQL operations,
 redacted telemetry, and hosted conformance remain in
 [DEPLOYMENT_GATES.md](./DEPLOYMENT_GATES.md). All returned production/live flags
 remain false, regardless of source test success.

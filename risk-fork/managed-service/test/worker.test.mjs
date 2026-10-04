@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createManagedRiskForkWorker } from '../src/worker.mjs';
+import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
 import { createCleanupVerificationEvidence } from '../../src/provider.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { makeCapsule, closedResultSchema } from '../../test/helpers.mjs';
@@ -163,7 +164,7 @@ test('worker rechecks current scopes after host cost measurement', async () => {
   current.store.resolveCredential = async (keyHash) => {
     const credential = await resolve(keyHash);
     return withdrawn && credential?.key_id === 'key_alpha'
-      ? { ...credential, scopes: credential.scopes.filter((scope) => scope !== 'worker:write') }
+      ? { ...credential, scopes: credential.scopes.filter((scope) => scope !== 'worker:execution:write') }
       : credential;
   };
   const worker = createManagedRiskForkWorker({ ...current.options,
@@ -230,4 +231,45 @@ test('worker never returns prepared authority when managed cleanup attestation f
   const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
   assert.equal(state.state, 'cleanup_pending');
   assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint']);
+});
+
+test('worker delivery journal persists ciphertext and restart replays no original operation', async () => {
+  const current = await fixture();
+  const records = new Map();
+  const store = {
+    async insert(record, max) {
+      if (records.has(record.attempt_ref)) return false;
+      assert.ok(records.size < max);
+      records.set(record.attempt_ref, { record, acknowledged: false }); return true;
+    },
+    async get(_namespace, ref) { return records.get(ref); },
+    async acknowledge(_namespace, ref, hash) {
+      Object.assign(records.get(ref), { acknowledged: true, response_hash: hash }); return true;
+    },
+    async listPending(_namespace, limit) {
+      return [...records].filter(([, row]) => !row.acknowledged).slice(0, limit).map(([ref]) => ref);
+    },
+  };
+  const options = { store, encryptionKey: Buffer.alloc(32, 91), keyId: 'fixture:encryption',
+    namespace: 'fixture:deliveries', workerId: current.options.workerId, controlPlane: current.controlPlane,
+    executionPrincipal: current.principal, cleanupPrincipal: current.sameTenantPrincipal,
+    recoveryPrincipal: current.sameTenantPrincipal };
+  const journal = createManagedWorkerDeliveryJournal(options);
+  const worker = createManagedRiskForkWorker({ ...current.options, deliveryJournal: journal });
+  const result = await worker.execute(current.admitted.invocation_ref);
+  assert.equal(result.invocation.state, 'completed');
+  assert.equal(records.size, 4, 'two claims and two resource packets');
+  assert.deepEqual(await journal.listPending(), []);
+  assert.doesNotMatch(JSON.stringify([...records.values()]), /lease_token|lease_fixture|rf_local_fixture/);
+  const before = await current.controlPlane.listAuditEvents(current.principal, current.admitted.invocation_ref);
+  const methods = [...current.methods];
+  journal.close(); worker.close();
+  const restarted = createManagedWorkerDeliveryJournal(options);
+  for (const ref of records.keys()) {
+    const recovered = await restarted.resumeDelivery(ref);
+    assert.equal(recovered.original_operation_resumed, false);
+  }
+  assert.deepEqual(current.methods, methods);
+  assert.deepEqual(await current.controlPlane.listAuditEvents(current.principal, current.admitted.invocation_ref), before);
+  restarted.close();
 });

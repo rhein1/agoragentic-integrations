@@ -3,6 +3,7 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { RiskForkController } from '../../src/controller.mjs';
 import { REQUIRED_PROVIDER_METHODS } from '../../src/provider.mjs';
 import { verifyManagedCleanupPlan } from './control-plane.mjs';
+import { assertManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
 import {
   assertAllowedKeys, cloneJson, deepFreeze, managedError, requireInteger,
   requireInvocationRef, requireOpaqueRef,
@@ -18,6 +19,7 @@ export function createManagedRiskForkWorker(options = {}) {
     'controlPlane', 'providerRegistry', 'executionPrincipal', 'cleanupPrincipal',
     'recoveryPrincipal', 'workerId', 'leaseMs', 'maxAttempts', 'clock',
     'loadPrepareInput', 'invokeProvider', 'lookupResources', 'measureCostMicros',
+    'deliveryJournal',
   ], 'worker options');
   const control = options.controlPlane;
   if (control?.config?.environment !== 'local_test' || control.config.enabled !== true) {
@@ -40,6 +42,8 @@ export function createManagedRiskForkWorker(options = {}) {
     cleanup: options.cleanupPrincipal, recovery: options.recoveryPrincipal });
   if (Object.values(principals).some((principal) => !principal)) throw new TypeError('All worker principals are required');
   const workerId = requireOpaqueRef(options.workerId, 'workerId');
+  const delivery = options.deliveryJournal == null ? null
+    : assertManagedWorkerDeliveryJournal(options.deliveryJournal, control, workerId, principals);
   const leaseMs = requireInteger(options.leaseMs ?? 30_000, 'leaseMs',
     { min: control.config.limits.min_lease_ms, max: control.config.limits.max_lease_ms });
   const maxAttempts = requireInteger(options.maxAttempts ?? 1000, 'maxAttempts', { min: 1, max: 10_000 });
@@ -69,9 +73,11 @@ export function createManagedRiskForkWorker(options = {}) {
   async function claim(kind, ref) {
     const leaseToken = token();
     const method = { execution: 'claimExecution', cleanup: 'claimCleanup', recovery: 'claimRecovery' }[kind];
-    const response = await control[method](principals[kind], {
+    const input = {
       invocation_ref: ref, worker_id: workerId, lease_ms: leaseMs, lease_token: leaseToken,
-    });
+    };
+    const response = delivery ? await delivery.deliver(kind, method, input)
+      : await control[method](principals[kind], input);
     // No automatic delivery retry. A lost acknowledgement is terminal for this
     // local attempt and is resolved by lease expiry/reaping and recovery.
     if (response.lease_token !== leaseToken || response.claim_replayed !== false
@@ -120,9 +126,11 @@ export function createManagedRiskForkWorker(options = {}) {
 
   async function journal(attempt, references) {
     try {
-      attempt.invocation = await control.recordResources(principals[attempt.kind], {
+      const input = {
         invocation_ref: attempt.invocation.invocation_ref, lease_token: attempt.leaseToken, ...references,
-      });
+      };
+      attempt.invocation = delivery ? await delivery.deliver(attempt.kind, 'recordResources', input)
+        : await control.recordResources(principals[attempt.kind], input);
     } catch {
       attempt.uncertain = true;
       throw managedError('Resource journal acknowledgement is unavailable; no further effects allowed', 'WORKER_JOURNAL_AMBIGUOUS', 409);
