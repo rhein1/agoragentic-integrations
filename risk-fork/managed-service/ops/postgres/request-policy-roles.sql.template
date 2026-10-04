@@ -1,0 +1,27 @@
+-- Source-only trusted-host template. Dedicated disposable policy database only.
+-- Replace every placeholder with an independently validated quoted identifier.
+-- Provision distinct LOGIN NOINHERIT migrator/runtime roles separately; never
+-- share these identities with control-plane or ciphertext delivery schemas.
+-- Database owner BEFORE the independent policy migration:
+REVOKE ALL ON DATABASE __POLICY_DATABASE__ FROM PUBLIC;
+GRANT CONNECT, CREATE ON DATABASE __POLICY_DATABASE__ TO __POLICY_MIGRATOR__;
+GRANT CONNECT ON DATABASE __POLICY_DATABASE__ TO __POLICY_RUNTIME__;
+-- Dedicated migrator AFTER migratePostgresManagedRequestPolicy:
+REVOKE ALL ON SCHEMA __POLICY_SCHEMA__ FROM PUBLIC;
+GRANT USAGE ON SCHEMA __POLICY_SCHEMA__ TO __POLICY_RUNTIME__;
+REVOKE ALL ON ALL TABLES IN SCHEMA __POLICY_SCHEMA__ FROM PUBLIC, __POLICY_RUNTIME__;
+GRANT SELECT ON ALL TABLES IN SCHEMA __POLICY_SCHEMA__ TO __POLICY_RUNTIME__;
+GRANT UPDATE (last_seen_ms) ON __POLICY_SCHEMA__.request_policy_clock TO __POLICY_RUNTIME__;
+GRANT INSERT ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+GRANT UPDATE (bucket_start_ms, used) ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+GRANT DELETE ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+-- DELETE is restricted to the disposable quota table for expired-window
+-- reclamation by trusted source. No execution/delivery table is present here.
+-- No control UPDATE, configuration UPDATE, ledger mutation, TRUNCATE,
+-- DDL, grant option or direct trigger-function EXECUTE for the runtime.
+-- Runtime quota UPDATE is trusted-host authority, not protection from a stolen
+-- runtime DB credential. Exact catalog/ACL attestation remains unqualified.
+-- Owner-only disable/enable (use a prepared boolean parameter and expected epoch):
+-- UPDATE <schema>.request_policy_control SET enabled = $1, epoch = epoch + 1
+-- WHERE singleton = true AND epoch = $2 RETURNING enabled, epoch;
+-- An exact one-row result is required. No public control endpoint is supplied.

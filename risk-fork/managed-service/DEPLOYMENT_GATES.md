@@ -106,8 +106,13 @@ generic OAuth brokering. Optional host-owned `requestPolicy` checks
 rate/control before authenticated route access and local host worker starts;
 it rechecks control after rate await and keeps cleanup/recovery available when
 execution is disabled. Redacted policy telemetry is bounded and best-effort.
-No distributed rate/control backend, public TLS/JWKS gateway, production token
-broker, durable alerts or hosted service is provisioned. Effect-time fencing
+An optional [durable request-policy source backend](./REQUEST_POLICY.md) now
+implements shared atomic per-key/per-tenant fixed-window quotas, route-specific
+capacity, owner-only disable epochs, clock high-water checks and expired-window
+reclamation. Disposable two-instance/restart/role tests are local evidence;
+the backend remains `local_test` only, without exact catalog/ACL attestation or
+hosted qualification. No public TLS/JWKS gateway, production token broker,
+durable alerts or hosted service is provisioned. Effect-time fencing
 and in-flight cancellation are still separate host/broker requirements.
 
 - build a real HTTP runtime around the handler with bounded headers, body streaming, deadlines, connection limits, structured redacted logs that cannot emit bearer or lease tokens, and graceful shutdown;

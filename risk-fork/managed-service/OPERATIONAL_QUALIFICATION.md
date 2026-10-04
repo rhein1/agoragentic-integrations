@@ -59,7 +59,13 @@ scope, key revocation and cross-tenant identity. Require public TLS; keep worker
 routes on a distinct authenticated network surface.
 
 Back `consumeRateLimit` and `readControl` with an atomic durable service shared
-by every instance. Test combined per-key/per-tenant burst exhaustion across two
+by every instance. The optional [PostgreSQL backend](./REQUEST_POLICY.md) supplies
+source/local-test evidence only. Use a dedicated policy database and roles;
+never add its tables or grants to an already-attested control-plane or delivery
+database. Its exact catalog/ACL attestation, hosted TLS/rotation/HA, capacity,
+retention and load qualification remain open. Fixed windows permit up to two
+window quotas across a boundary; choose/review limits for that burst model.
+Test combined per-key/per-tenant burst exhaustion across two
 instances, fail-closed backend loss, bounded 429 retry, deadlines and retry
 storms. Reserve cleanup/recovery capacity. Test disable changes while requests
 wait; prove an effect-time broker fence rejects late execution and can stop
