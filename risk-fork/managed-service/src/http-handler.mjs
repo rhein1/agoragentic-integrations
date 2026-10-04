@@ -1,4 +1,5 @@
 import {
+  assertAllowedKeys,
   assertPlainRecord,
   cloneJson,
   managedError,
@@ -59,7 +60,7 @@ function safeError(error) {
   return response(status, { error: { code, message } });
 }
 
-export function createManagedServiceHttpHandler({ controlPlane, authenticator } = {}) {
+function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWorkerRoutes) {
   if (!controlPlane || typeof controlPlane.health !== 'function') {
     throw new TypeError('HTTP handler requires a managed control plane');
   }
@@ -73,6 +74,19 @@ export function createManagedServiceHttpHandler({ controlPlane, authenticator } 
       const method = requireString(request.method, 'HTTP request.method', { maxBytes: 16 }).toUpperCase();
       const path = requireString(request.path, 'HTTP request.path', { maxBytes: 512 });
       const headers = request.headers ?? {};
+      function checkDeadline() {
+        if (request.signal?.aborted) {
+          throw managedError('Request deadline expired', 'REQUEST_TIMEOUT', 408);
+        }
+      }
+      checkDeadline();
+      async function authenticate(scope) {
+        const principal = await authenticator.authenticate(
+          authorization, scope, Object.freeze({ method, path }),
+        );
+        checkDeadline();
+        return principal;
+      }
 
       if (method === 'GET' && path === '/healthz') {
         return response(200, {
@@ -107,35 +121,39 @@ export function createManagedServiceHttpHandler({ controlPlane, authenticator } 
         ? parseBody(request.body, MANAGED_SERVICE_PROTOCOL_LIMITS.max_request_bytes)
         : null;
 
-      if (method === 'POST' && path === '/v1/invocations') {
-        const principal = await authenticator.authenticate(authorization, 'invocations:write');
+      if (allowPublicRoutes && method === 'POST' && path === '/v1/invocations') {
+        const principal = await authenticate('invocations:write');
         const result = await controlPlane.admitInvocation(principal, body);
         return response(result.created ? 201 : 200, result);
       }
 
       const invocationMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})$/.exec(path);
-      if (method === 'GET' && invocationMatch) {
-        const principal = await authenticator.authenticate(authorization, 'invocations:read');
+      if (allowPublicRoutes && method === 'GET' && invocationMatch) {
+        const principal = await authenticate('invocations:read');
         return response(200, await controlPlane.getInvocation(principal, invocationMatch[1]));
       }
 
       const auditMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/audit$/.exec(path);
-      if (method === 'GET' && auditMatch) {
-        const principal = await authenticator.authenticate(authorization, 'audit:read');
+      if (allowPublicRoutes && method === 'GET' && auditMatch) {
+        const principal = await authenticate('audit:read');
         return response(200, {
           events: await controlPlane.listAuditEvents(principal, auditMatch[1]),
           evidence_class: 'control_plane_self_attested',
         });
       }
 
-      const workerMatch = /^\/internal\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/(claim-execution|claim-cleanup|claim-recovery|renew|resources|outcome|cleanup|recovery-absent)$/.exec(path);
-      if (method === 'POST' && workerMatch) {
+      const workerMatch = /^\/internal\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/(claim-execution|claim-cleanup|claim-recovery|renew|renew-execution|renew-cleanup|renew-recovery|resources|resources-execution|resources-recovery|outcome|cleanup|recovery-absent)$/.exec(path);
+      if (allowWorkerRoutes && method === 'POST' && workerMatch) {
         const [, ref, action] = workerMatch;
-        const principal = await authenticator.authenticate(
-          authorization,
-          action.startsWith('claim-') ? 'worker:claim' : 'worker:write',
-        );
-        if (Object.hasOwn(body, 'invocation_ref')) {
+        const purpose = action.includes('execution') || action === 'outcome'
+          || action === 'renew' || action === 'resources'
+          ? 'execution'
+          : action.includes('cleanup') || action === 'cleanup'
+            ? 'cleanup'
+            : 'recovery';
+        const claim = action.startsWith('claim-');
+        const principal = await authenticate(`worker:${purpose}:${claim ? 'claim' : 'write'}`);
+        if (Object.hasOwn(body, 'invocation_ref') || Object.hasOwn(body, 'expected_lease_kind')) {
           throw managedError(
             'Worker request target must be supplied only by the URL path',
             'AMBIGUOUS_INVOCATION_TARGET',
@@ -144,12 +162,18 @@ export function createManagedServiceHttpHandler({ controlPlane, authenticator } 
         }
         const input = cloneJson(body, 'worker request');
         input.invocation_ref = ref;
+        if (!claim) input.expected_lease_kind = purpose;
         const methods = {
           'claim-execution': 'claimExecution',
           'claim-cleanup': 'claimCleanup',
           'claim-recovery': 'claimRecovery',
+          'renew-execution': 'renewLease',
           renew: 'renewLease',
+          'renew-cleanup': 'renewLease',
+          'renew-recovery': 'renewLease',
+          'resources-execution': 'recordResources',
           resources: 'recordResources',
+          'resources-recovery': 'recordResources',
           outcome: 'recordExecutionOutcome',
           cleanup: 'completeCleanup',
           'recovery-absent': 'completeRecoveryAbsence',
@@ -162,4 +186,18 @@ export function createManagedServiceHttpHandler({ controlPlane, authenticator } 
       return safeError(error);
     }
   };
+}
+
+export function createManagedServiceHttpHandler(options = {}) {
+  assertPlainRecord(options, 'public handler options');
+  assertAllowedKeys(options, ['controlPlane', 'authenticator'], 'public handler options');
+  return createHandler(options.controlPlane, options.authenticator, true, false);
+}
+
+export function createManagedWorkerHttpHandler(options = {}) {
+  assertPlainRecord(options, 'worker handler options');
+  assertAllowedKeys(options, ['controlPlane', 'workerAuthenticator'], 'worker handler options');
+  const { controlPlane, workerAuthenticator } = options;
+  if (!workerAuthenticator) throw new TypeError('workerAuthenticator is required');
+  return createHandler(controlPlane, workerAuthenticator, false, true);
 }

@@ -22,7 +22,10 @@ try {
 } catch { /* Absence or an invalid URL must never select another database. */ }
 if (skip && process.env.RISK_FORK_MANAGED_REQUIRE_POSTGRES_TESTS === '1') throw new Error(skip);
 
-const scopes = ['audit:read', 'invocations:read', 'invocations:write', 'worker:claim', 'worker:write'];
+const scopes = ['audit:read', 'invocations:read', 'invocations:write',
+  'worker:execution:claim', 'worker:execution:write',
+  'worker:cleanup:claim', 'worker:cleanup:write',
+  'worker:recovery:claim', 'worker:recovery:write'];
 const denied = (error) => ['AUTHENTICATION_FAILED', 'AUTHORIZATION_DENIED'].includes(error.code);
 const leaseHash = (token) => `sha256:${createHash('sha256')
   .update('agoragentic-risk-fork-managed-lease-v1\0').update(token).digest('hex')}`;
@@ -87,7 +90,7 @@ test('PostgreSQL checks current scopes at the store boundary, including claim re
   let captured;
   f.store.claimLease = async (input) => {
     captured = input;
-    await f.setScopes(scopes.filter((scope) => scope !== 'worker:claim'));
+    await f.setScopes(scopes.filter((scope) => scope !== 'worker:execution:claim'));
     return originalClaim(input);
   };
   await assert.rejects(f.control.claimExecution(f.principal, f.claimRequest), denied);
@@ -95,7 +98,7 @@ test('PostgreSQL checks current scopes at the store boundary, including claim re
   f.store.claimLease = originalClaim;
   await f.setScopes(scopes);
   const first = await f.control.claimExecution(f.principal, f.claimRequest);
-  await f.setScopes(scopes.filter((scope) => scope !== 'worker:claim'));
+  await f.setScopes(scopes.filter((scope) => scope !== 'worker:execution:claim'));
   await assert.rejects(originalClaim(captured), denied);
   assert.equal((await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref)).events.length, 2);
   await f.setScopes(scopes);
@@ -108,7 +111,7 @@ test('PostgreSQL blocks a scope withdrawn during provider verification without j
   const f = await fixture(t);
   await f.control.claimExecution(f.principal, f.claimRequest);
   const before = await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref);
-  f.hooks.resource = () => f.setScopes(scopes.filter((scope) => scope !== 'worker:write'));
+  f.hooks.resource = () => f.setScopes(scopes.filter((scope) => scope !== 'worker:execution:write'));
   await assert.rejects(f.control.recordResources(f.principal, f.resources), denied);
   assert.deepEqual(await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref), before);
   const receipts = await f.pool.query(`SELECT count(*)::int AS count FROM ${f.schema}.managed_resource_journal_receipts`);
@@ -126,7 +129,7 @@ test('PostgreSQL rejects withdrawn write authority for renewal, preflight, settl
   f.store.transitionInvocation = async (input) => { journalInput = input; return transition(input); };
   const running = await f.control.recordResources(f.principal, f.resources);
   const before = await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref);
-  await f.setScopes(scopes.filter((scope) => scope !== 'worker:write'));
+  await f.setScopes(scopes.filter((scope) => scope !== 'worker:execution:write'));
   const { store } = f.restart();
   const base = { ...f.base, now: new Date().toISOString() };
   for (const operation of [
@@ -160,7 +163,7 @@ test('PostgreSQL keeps cleanup pending when authority is withdrawn during absenc
       observation_hash: sha256Ref({ absent: request.resource_ref }),
     })) };
   const before = await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref);
-  f.hooks.cleanup = () => f.setScopes(scopes.filter((scope) => scope !== 'worker:write'));
+  f.hooks.cleanup = () => f.setScopes(scopes.filter((scope) => scope !== 'worker:cleanup:write'));
   await assert.rejects(f.control.completeCleanup(f.principal, cleanup), denied);
   assert.deepEqual(await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref), before);
   f.hooks.cleanup = async () => {};
@@ -273,3 +276,39 @@ for (const expiry of ['lease', 'credential']) {
       assert.deepEqual(await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref), before);
     });
 }
+
+for (const corrupt of [false, true]) {
+  test(`versioned journal-purpose upgrade ${corrupt ? 'rejects ambiguous legacy evidence' : 'binds the original receipt audit event'}`,
+    { skip }, async (t) => {
+      const f = await fixture(t);
+      await f.control.claimExecution(f.principal, f.claimRequest);
+      await f.control.recordResources(f.principal, f.resources);
+      // Owner-only disposable fixture simulates the unchanged v1 layout.
+      await f.pool.query(`ALTER TABLE ${f.schema}.managed_resource_journal_receipts DROP COLUMN lease_kind`);
+      await f.pool.query(`DELETE FROM ${f.schema}.managed_schema_migrations WHERE version = 2`);
+      if (corrupt) await f.pool.query(
+        `UPDATE ${f.schema}.managed_resource_journal_receipts
+          SET response_json = jsonb_set(response_json, '{audit_head_hash}', to_jsonb($1::text))`,
+        [sha256Ref('missing audit')],
+      );
+      const migrate = () => migrateManagedServicePostgres({ pool: f.pool, schemaName: f.schemaName, requireTls: false });
+      if (corrupt) {
+        await assert.rejects(migrate(), (error) => error.code === '55000');
+        assert.equal((await f.pool.query(`SELECT count(*)::int AS n FROM ${f.schema}.managed_schema_migrations`)).rows[0].n, 1);
+      } else {
+        assert.equal((await migrate()).migration_version, 2);
+        assert.equal((await f.pool.query(`SELECT lease_kind FROM ${f.schema}.managed_resource_journal_receipts`)).rows[0].lease_kind, 'execution');
+        assert.equal((await f.store.health()).ready, true);
+        await migrate(); // exact rerun applies no DDL
+      }
+    });
+}
+
+test('PostgreSQL execution-only scope cannot acquire cleanup or recovery authority', { skip }, async (t) => {
+  const f = await fixture(t);
+  await f.setScopes(scopes.filter((scope) => !/^worker:(cleanup|recovery):/.test(scope)));
+  await f.control.claimExecution(f.principal, f.claimRequest);
+  await assert.rejects(f.control.claimCleanup(f.principal, { ...f.claimRequest, lease_token: testLeaseToken('otherpurpose') }), denied);
+  await assert.rejects(f.control.claimRecovery(f.principal, { ...f.claimRequest, lease_token: testLeaseToken('recoverypurpose') }), denied);
+  assert.equal((await f.store.getAuditSnapshot('tenant_alpha', f.invocation.invocation_ref)).events.length, 2);
+});

@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 68,
-    "sha256": "sha256:9ea6ebe999c52552fb64f884c3cfdf844151ce64136b9c5bcae166d30c6e8d95"
+    "files": 70,
+    "sha256": "sha256:7e1975276e0aa6437b90b81ec388a215ef15c0afc3a5733fc942768aea87fa27"
   },
   "reviewed_sources": [
     {
@@ -73,6 +73,11 @@
       "sha256": "sha256:6dabb296a6e58ed9ffc28c520cd24d8a7f5ce992e3f080828a87ec7ab071adf6"
     },
     {
+      "path": "risk-fork/ops/postgres/mcp-portable-handles-roles.sql.template",
+      "bytes": 2095,
+      "sha256": "sha256:0fc211623ba09d997cb7573c78637cbe59f0798aced8af54797d300dee2f2966"
+    },
+    {
       "path": "risk-fork/ops/postgres/owner-bootstrap.sql.template",
       "bytes": 1015,
       "sha256": "sha256:ee98f7132d805686a455c58dec64e950a199a57e91a574560b33eff4d75acdd1"
@@ -84,8 +89,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 5072,
-      "sha256": "sha256:ac9df2cd1ca573c015fae13d4c0089a5afd965f95f5ac98c7567594decd9e1c9"
+      "bytes": 5175,
+      "sha256": "sha256:65930cdfca480cfc847a31502a9659048c202e02d46f01356f4cbda0a302a7dc"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -134,8 +139,13 @@
     },
     {
       "path": "risk-fork/src/adapters/postgres-mcp-portable-handles.mjs",
-      "bytes": 13705,
-      "sha256": "sha256:589a7a7d4a05c74097d16dc8a3daf39e72ff9c6ea40eec8d5ebad434c100e0f3"
+      "bytes": 14465,
+      "sha256": "sha256:d43e524e63af0be5c46f011400ba31b0e9bbc416dbb8d94ecba30207b4024867"
+    },
+    {
+      "path": "risk-fork/src/adapters/postgres-portable-handle-attestation.mjs",
+      "bytes": 21016,
+      "sha256": "sha256:15d0828f3b037fbc345dfda5c54151a70858906e88f3ad2521dd8d0fe4cb23e2"
     },
     {
       "path": "risk-fork/src/authority-shape.mjs",
@@ -2671,7 +2681,7 @@
   "artifact": {
     "path": "dist/runtime/index.mjs",
     "bytes": 3222926,
-    "sha256": "sha256:7db0638dd60285bdb5568c6e796ed3d6c3007dfb9c2698761080d7adb48ab550"
+    "sha256": "sha256:f0460a820863b57aa5f36f48256b97736d51152fc77061fae789621fec0c795e"
   },
   "packaged_assets": [
     {

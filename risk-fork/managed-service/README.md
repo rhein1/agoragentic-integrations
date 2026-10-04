@@ -2,7 +2,7 @@
 
 This directory contains a **source-only, default-off control-plane scaffold** for a future managed Risk Fork service. It is locally testable. It is not published, hosted, deployed, provider-qualified, production-qualified, or authorized to protect live agent traffic.
 
-The package is deliberately marked `private: true`. No listener, deployment manifest, cloud account, database, provider credential, or production activation path is included. `MANAGED_SERVICE_PRODUCTION_QUALIFIED` is a hard-coded `false`; configuration cannot turn this source tranche into a production service.
+The package is deliberately marked `private: true`. An explicit, default-off local host can bind two loopback listeners; no public listener, deployment manifest, cloud account, provisioned database, provider credential, or production activation path is included. `MANAGED_SERVICE_PRODUCTION_QUALIFIED` is a hard-coded `false`; configuration cannot turn this source tranche into a production service.
 
 ## What this tranche implements
 
@@ -19,6 +19,8 @@ The package is deliberately marked `private: true`. No listener, deployment mani
 - a memory store for deterministic local tests and a PostgreSQL store/migration source path;
 - host-neutral JSON request handling for health, readiness, tenant, worker, and audit routes.
 - a host-owned local-test worker driver that wraps the actual controller, journals each created resource, rechecks leases before and after provider callbacks, and reconciles verified cleanup before returning the original process-local prepared receipt.
+- optional AES-256-GCM delivery retention with an independent PostgreSQL ciphertext store, exact claim/resource-packet redelivery, and no provider or original-operation retry;
+- purpose-specific execution, cleanup, and recovery claim/write scopes, separate public/worker handlers, a trusted OAuth verification seam, bounded loopback ingress, and scheduled local reaping.
 
 ## Architecture
 
@@ -53,9 +55,12 @@ only trusted host callbacks and constructs no SDK, listener, or credentials.
 The provider broker remains an explicit qualification boundary: it must enforce
 the absolute lease fence at the effect, attach `provider_recovery_key` at birth,
 and independently attest resource lookup and absence. This driver is restricted
-to enabled `local_test`; it cannot activate a production provider. Durable
-worker-side claim delivery retention/retry and operational qualification remain
-open. Existing prepared-object provenance is intentionally process-local.
+to enabled `local_test`; it cannot activate a production provider. Optional
+`createManagedWorkerDeliveryJournal` retains encrypted claim/resource packets
+before sending them. Explicit `resumeDelivery` resolves delivery only; it never
+resumes controller execution, provider effects, or prepared-object provenance.
+Operational qualification remains open. Prepared-object provenance is
+intentionally process-local.
 
 Each provider binding supplies exact adapter and qualification hashes plus three server-owned verifier callbacks: `verify_resource_binding`, `verify_cleanup_evidence`, and `verify_recovery_absence`. Registration descriptor-screens and snapshots the provider capability surface and method identities, exposes an immutable provider facade, and fails readiness or later use if the source adapter drifts from that binding. The callbacks receive the normalized tenant and must verify provider-authenticated evidence for the exact tenant, adapter binding, immutable recovery key, resource kinds, and resource references. They are invoked only after an active lease preflight and must fail closed. Verifiers are observational checks, not mutation hooks: they must be read-only, retry-safe, and free of provider effects because two genuinely simultaneous resource-journal deliveries can both reach verification before one serializable store transaction wins. Historical disabled bindings and their original tenant mapping remain cleanup/recovery-only and must stay registered until all exact-bound nonterminal invocations drain. Readiness requires an enabled exact binding for `admitted`, `execution_leased`, and `running` work, while `cleanup_pending` and `recovery_required` may drain through the disabled historical binding. The local fixtures use in-process allowlists only; they are not production proof.
 
@@ -102,23 +107,24 @@ An admitted item that is never claimed expires to `failed_closed` after the conf
 
 `createManagedAuthenticator()` looks up a domain-separated SHA-256 key hash. PostgreSQL stores `key_hash`, never a raw bearer token, and filters not-before, expiry, and revocation using its own clock before returning a record; the application check remains an additional fail-closed check. Each principal and verifier are bound to that exact authenticator/store instance; another authenticator's principal and caller-created verifier functions are rejected. Every control-plane call re-resolves the key record and rechecks its hash, expiry, revocation, tenant, key id, and requested scope. Every tenant-visible invocation and audit query includes both `tenant_id` and `invocation_ref`.
 
-The store repeats `worker:claim` authorization for every lease claim and claim replay, and `worker:write` authorization for lease preflight, renewal, resource journaling/replay, execution settlement, and cleanup/recovery completion. An authenticated principal or retained lease token cannot preserve a removed scope. PostgreSQL checks scope alongside credential identity, tenant, revocation, and database-clock validity; it holds a shared credential-row lock through the mutation transaction so credential edits serialize with the authority decision. Final write statements also recheck scope and expiry. Credential validity is evaluated after the row lock is acquired, and claim replays sample the database clock after that check so lock waits cannot extend credential or lease lifetime. Journal receipt lookup uses a transaction and current authority rather than treating a historical receipt as permission. Rejected writes leave invocation state, budget, receipts, and audit history unchanged.
+The store repeats `worker:<purpose>:claim` authorization for every lease claim and claim replay, and `worker:<purpose>:write` authorization for lease preflight, renewal, resource journaling/replay, execution settlement, and cleanup/recovery completion, where purpose is execution, cleanup, or recovery. An authenticated principal or retained lease token cannot preserve a removed scope. PostgreSQL checks scope alongside credential identity, tenant, revocation, and database-clock validity; it holds a shared credential-row lock through the mutation transaction so credential edits serialize with the authority decision. Final write statements also recheck scope and expiry. Credential validity is evaluated after the row lock is acquired, and claim replays sample the database clock after that check so lock waits cannot extend credential or lease lifetime. Journal receipts retain their original execution/recovery purpose; replay checks that purpose rather than a later mutable cleanup lease. Authentication precedes invocation/receipt reads. Rejected writes leave invocation state, budget, receipts, and audit history unchanged.
 
-These checks preserve the existing two worker scopes. Separate execution,
-cleanup, and recovery route scopes remain a Gate 5 requirement. The local-test
-worker accepts distinct principal slots but does not qualify those roles or a
-live provider broker.
+The legacy `worker:claim` and `worker:write` scopes are not accepted. Operators
+must explicitly reissue least-privilege credentials; there is no automatic
+expansion into all six new permissions. Distinct principal slots and route
+scopes do not qualify deployed roles or a live provider broker.
 
 The current source scopes separate tenant APIs, worker mutation, and audit reads:
 
 - `invocations:write`
 - `invocations:read`
-- `worker:claim`
-- `worker:write`
+- `worker:execution:claim`, `worker:execution:write`
+- `worker:cleanup:claim`, `worker:cleanup:write`
+- `worker:recovery:claim`, `worker:recovery:write`
 - `audit:read`
 
 Tenant and API-key provisioning are administrator operations and are not exposed as network routes in this tranche.
-Execution, cleanup, and recovery workers still share the two worker scopes in this scaffold. A hosted service must split those roles into distinct credentials/routes before qualification; payload minimization already ensures cleanup and recovery claims do not return the original operation arguments.
+Payload minimization ensures cleanup and recovery claims do not return the original operation arguments. `createTrustedOAuthAuthenticator` is an optional trusted-host seam: its injected verifier must perform actual token signature/JWKS, issuer, audience, and OAuth policy verification on every HTTP request. The returned closed identity is bound to the current persisted key, tenant, subject, scopes, and validity window. This seam performs no discovery, token exchange, JWKS fetch, or outbound token brokerage itself.
 
 The durable `lease_owner` is the authenticated API-key `key_id`, not the caller-supplied `worker_id`. Every lease preflight, renewal, resource journal, lifecycle transition, outcome settlement, cleanup completion, and recovery completion requires that exact API-key identity to remain active; another worker key from the same tenant cannot continue the lease even if it obtains the raw lease token. PostgreSQL repeats the owner and active-credential predicates in each decisive mutation. The caller-supplied `worker_id` is retained only in the hashed audit detail as `worker_instance_ref` and is explicitly self-asserted metadata; it cannot impersonate another credential in state or audit attribution.
 
@@ -146,7 +152,7 @@ npm test
 npm run check
 ```
 
-The default test run is provider-free and makes no live database or external network calls. It uses the in-memory store, no-I/O provider fixtures, and injected PostgreSQL contract doubles. It does not contact E2B, GitHub, Agoragentic, or any other remote service, and it does not spend money. The syntax check also rejects network/process runtime imports, provider SDK imports, browser-style outbound APIs, and listeners from the managed-service runtime source.
+The default test run is provider-free and makes no live database or external network calls. It uses the in-memory store, no-I/O provider fixtures, injected PostgreSQL contract doubles, and temporary loopback listeners. It does not contact E2B, GitHub, Agoragentic, or any other remote service, and it does not spend money. The syntax check rejects network/process runtime imports, provider SDK imports, browser-style outbound APIs, and listeners from `src/`; the separate `host/` entrypoints receive syntax checks and must be explicitly enabled.
 
 Opt-in PostgreSQL integration tests also exist. They run only when `RISK_FORK_MANAGED_TEST_POSTGRES_URL` points to the loopback database named exactly `risk_fork_managed_test` **and** `RISK_FORK_MANAGED_TEST_CONFIRM_DISPOSABLE=YES_DELETE_DATA` is set. Each run creates a unique validated schema and drops that exact schema in `finally`. The normal test command skips them; CI uses an ephemeral PostgreSQL service, and an operator must never point it at a shared or production database. The `managed-service` job in `.github/workflows/risk-fork.yml` is selected whenever `risk-fork/**` or that workflow changes, installs both package roots from their committed lockfiles, and runs the syntax and full disposable-PostgreSQL test suite on Node.js 20, 22, and 24. CI also sets `RISK_FORK_MANAGED_REQUIRE_POSTGRES_TESTS=1`, so missing or malformed database configuration fails instead of silently turning the integration test into a skip.
 
@@ -169,9 +175,25 @@ The PostgreSQL layer includes:
 
 `migrateManagedServicePostgres()` is a source API only. It has not been run against a managed database in this tranche. It does not provision tenants, keys, roles, backup policy, monitoring, or high availability. See [DEPLOYMENT_GATES.md](DEPLOYMENT_GATES.md).
 
+Migration `001` is preserved. Explicit versioned migration `002_journal_purpose`
+backfills receipt purpose from its exact recorded audit-head event and aborts
+the transaction if any legacy receipt cannot be attested. Never infer purpose
+from an invocation's current lease or patch the frozen initial migration.
+
+`migratePostgresWorkerDelivery` and `createPostgresWorkerDeliveryStore` use a
+different schema (default `risk_fork_worker_delivery`) and independent version-1
+ledger. They store ciphertext plus bounded metadata, not cleartext packets or
+tokens. Capacity policy and attempt records are immutable except acknowledgement;
+tombstones count toward capacity. This local-test store is not a replacement for
+the managed control-plane or portable-handle ledger. Supply host-owned key custody,
+retention and cleanup policy; managed-role/HA/restore qualification remains open.
+
 ## HTTP adapter surface
 
-`createManagedServiceHttpHandler()` returns a function; it does not open a socket.
+Both handler factories return functions; neither opens a socket.
+`createManagedServiceHttpHandler` exposes public routes only and cannot be
+configured to enable worker routes. `createManagedWorkerHttpHandler` requires
+a separately supplied worker authenticator and exposes internal routes only.
 
 | Method | Path | Scope | Purpose |
 |---|---|---|---|
@@ -180,16 +202,33 @@ The PostgreSQL layer includes:
 | `POST` | `/v1/invocations` | `invocations:write` | tenant-bound admission |
 | `GET` | `/v1/invocations/:ref` | `invocations:read` | same-tenant state |
 | `GET` | `/v1/invocations/:ref/audit` | `audit:read` | same-tenant self-attested audit chain |
-| `POST` | `/internal/v1/invocations/:ref/claim-execution` | `worker:claim` | claim execution lease using a fresh caller-held `lease_token` |
-| `POST` | `/internal/v1/invocations/:ref/resources` | `worker:write` | bind newly created or recovery-discovered savepoint/fork refs |
-| `POST` | `/internal/v1/invocations/:ref/outcome` | `worker:write` | record bounded outcome and cost |
-| `POST` | `/internal/v1/invocations/:ref/claim-cleanup` | `worker:claim` | claim cleanup lease using a fresh caller-held `lease_token` |
-| `POST` | `/internal/v1/invocations/:ref/cleanup` | `worker:write` | verify cleanup and enter a terminal state |
-| `POST` | `/internal/v1/invocations/:ref/claim-recovery` | `worker:claim` | claim untracked-resource recovery lease using a fresh caller-held `lease_token` |
-| `POST` | `/internal/v1/invocations/:ref/recovery-absent` | `worker:write` | submit exact-bound provider absence attestation |
-| `POST` | `/internal/v1/invocations/:ref/renew` | `worker:write` | renew the current lease |
+| `POST` | `/internal/v1/invocations/:ref/claim-execution` | `worker:execution:claim` | claim execution lease |
+| `POST` | `/internal/v1/invocations/:ref/resources-execution` | `worker:execution:write` | journal created resources |
+| `POST` | `/internal/v1/invocations/:ref/outcome` | `worker:execution:write` | record bounded outcome and cost |
+| `POST` | `/internal/v1/invocations/:ref/claim-cleanup` | `worker:cleanup:claim` | claim cleanup lease |
+| `POST` | `/internal/v1/invocations/:ref/cleanup` | `worker:cleanup:write` | verify cleanup and enter a terminal state |
+| `POST` | `/internal/v1/invocations/:ref/claim-recovery` | `worker:recovery:claim` | claim resource recovery lease |
+| `POST` | `/internal/v1/invocations/:ref/resources-recovery` | `worker:recovery:write` | journal attested recovery resources |
+| `POST` | `/internal/v1/invocations/:ref/recovery-absent` | `worker:recovery:write` | submit provider absence attestation |
+| `POST` | `/internal/v1/invocations/:ref/renew-execution` | `worker:execution:write` | renew execution lease |
+| `POST` | `/internal/v1/invocations/:ref/renew-cleanup` | `worker:cleanup:write` | renew cleanup lease |
+| `POST` | `/internal/v1/invocations/:ref/renew-recovery` | `worker:recovery:write` | renew recovery lease |
 
-Internal routes must be isolated from the public edge in any future deployment. Scope checks are defense in depth, not a reason to expose worker routes publicly. The invocation target on every internal route comes only from the URL path; a body-owned `invocation_ref`, even if equal, is rejected rather than silently overwritten.
+Legacy `renew` and `resources` path aliases are execution-only, never inferred
+from a mutable lease. Internal routes must be isolated from the public edge in
+any future deployment. Scope checks are defense in depth, not a reason to expose
+worker routes publicly. The invocation target and expected purpose come from
+the URL; body-owned `invocation_ref` or `expected_lease_kind` is rejected.
+
+`createManagedRiskForkLocalHost` in `host/local-host.mjs` is explicit local-test
+composition, default-off, with all credentials, provider callbacks, stores, and
+encryption keys supplied by the host. It binds separate public/worker listeners
+to `127.0.0.1` only, bounds headers/body/connections/deadlines, serves JSON with
+`no-store`, and starts a bounded non-overlapping reaper. Shutdown closes ingress
+before worker/journal capabilities. Request deadlines reject late authentication
+and responses; they do not cancel an already committed mutation or prove provider
+cleanup. `execute`, `cleanup`, `recover`, and delivery recovery remain clean-host
+capabilities, never HTTP routes. No public demo or hosted protection is activated.
 
 ## Evidence truth
 

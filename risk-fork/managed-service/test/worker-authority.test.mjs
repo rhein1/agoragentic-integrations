@@ -30,8 +30,8 @@ function storeClaim(invocation, token, overrides = {}) {
 
 const authorityDenied = (error) => error.code === 'AUTHENTICATION_FAILED';
 
-for (const scopes of [['invocations:write'], ['invocations:write', 'worker:write']]) {
-  test(`memory store rejects claim without worker:claim: ${scopes.join(',')}`, async () => {
+for (const scopes of [['invocations:write'], ['invocations:write', 'worker:execution:write']]) {
+  test(`memory store rejects claim without execution claim scope: ${scopes.join(',')}`, async () => {
     const f = await createFixture({ credentialScopes: scopes });
     const { invocation } = await f.controlPlane.admitInvocation(f.principal, invocationRequest());
     await assert.rejects(f.store.claimLease(storeClaim(invocation, f.nextLeaseToken())), authorityDenied);
@@ -40,8 +40,8 @@ for (const scopes of [['invocations:write'], ['invocations:write', 'worker:write
   });
 }
 
-test('a claim-only credential cannot preflight, renew, journal, settle, or retrieve a journal receipt', async () => {
-  const f = await createFixture({ credentialScopes: ['invocations:write', 'worker:claim'] });
+test('an execution-claim-only credential cannot preflight, renew, journal, settle, or retrieve a journal receipt', async () => {
+  const f = await createFixture({ credentialScopes: ['invocations:write', 'worker:execution:claim'] });
   const { invocation } = await f.controlPlane.admitInvocation(f.principal, invocationRequest());
   const claim = storeClaim(invocation, f.nextLeaseToken());
   const acquired = await f.store.claimLease(claim);
@@ -54,6 +54,7 @@ test('a claim-only credential cannot preflight, renew, journal, settle, or retri
     invocation_ref: claim.invocation_ref,
     claimant_key_id: claim.claimant_key_id,
     lease_token_hash: claim.lease_token_hash,
+    lease_kind: 'execution',
     now: claim.now,
   };
   for (const operation of [

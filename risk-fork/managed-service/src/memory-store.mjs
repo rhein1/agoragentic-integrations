@@ -9,6 +9,8 @@ import {
   MANAGED_INVOCATION_SCHEMA,
   MANAGED_SERVICE_PROTOCOL_LIMITS,
   TERMINAL_INVOCATION_STATES,
+  workerClaimScope,
+  workerWriteScope,
 } from './constants.mjs';
 import { normalizeApiKeyRecord } from './auth.mjs';
 import {
@@ -261,19 +263,28 @@ export class MemoryManagedServiceStore {
         'request_hash',
         'claimant_key_id',
         'lease_token_hash',
+        'lease_kind',
         'now',
       ], 'resource journal receipt lookup');
       const tenantId = requireTenantId(input.tenant_id);
       const claimantKeyId = requireOpaqueRef(input.claimant_key_id, 'claimant_key_id');
       const now = requireIso(input.now, 'resource journal receipt lookup time');
-      this.#requireActiveClaimant(tenantId, claimantKeyId, now, 'worker:write');
-      return this.#matchingResourceJournalReceipt({
+      const receipt = this.#matchingResourceJournalReceipt({
         tenantId,
         invocationRef: requireInvocationRef(input.invocation_ref, 'invocation_ref'),
         requestHash: requireSha256(input.request_hash, 'resource journal request_hash'),
         claimantKeyId,
         leaseTokenHash: requireSha256(input.lease_token_hash, 'lease_token_hash'),
       });
+      if (receipt !== null || input.lease_kind != null) {
+        this.#requireActiveClaimant(
+          tenantId,
+          claimantKeyId,
+          now,
+          workerWriteScope(receipt?.lease_kind ?? input.lease_kind),
+        );
+      }
+      return receipt;
     });
   }
 
@@ -508,7 +519,7 @@ export class MemoryManagedServiceStore {
         tenantId,
         input.claimant_key_id,
         now,
-        'worker:claim',
+        workerClaimScope(purpose),
       );
       const workerInstanceRef = requireOpaqueRef(input.worker_id, 'worker_id');
       const tokenHash = requireSha256(input.lease_token_hash, 'lease_token_hash');
@@ -672,8 +683,8 @@ export class MemoryManagedServiceStore {
   }
 
   #requireActiveClaimant(tenantIdValue, claimantKeyIdValue, nowValue, requiredScope) {
-    if (!['worker:claim', 'worker:write'].includes(requiredScope)) {
-      throw new TypeError('claimant scope must be worker:claim or worker:write');
+    if (!/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
+      throw new TypeError('claimant scope must be purpose-specific');
     }
     const tenantId = requireTenantId(tenantIdValue);
     const claimantKeyId = requireOpaqueRef(claimantKeyIdValue, 'claimant_key_id');
@@ -697,7 +708,12 @@ export class MemoryManagedServiceStore {
     if (record.lease_owner !== claimantKeyId) {
       throw managedError('Lease belongs to a different credential', 'LEASE_OWNER_MISMATCH', 403);
     }
-    this.#requireActiveClaimant(record.tenant_id, claimantKeyId, nowValue, 'worker:write');
+    this.#requireActiveClaimant(
+      record.tenant_id,
+      claimantKeyId,
+      nowValue,
+      workerWriteScope(record.lease_kind),
+    );
   }
 
   #matchingResourceJournalReceipt({
@@ -751,7 +767,7 @@ export class MemoryManagedServiceStore {
         const claimantKeyId = requireOpaqueRef(input.claimant_key_id, 'claimant_key_id');
         const leaseTokenHash = requireSha256(input.lease_token_hash, 'lease_token_hash');
         const receiptNow = requireIso(input.now, 'resource journal receipt time');
-        this.#requireActiveClaimant(tenantId, claimantKeyId, receiptNow, 'worker:write');
+        const recordForReceipt = this.#invocations.get(invocationKey(tenantId, invocationRef));
         const priorReceipt = this.#matchingResourceJournalReceipt({
           tenantId,
           invocationRef,
@@ -759,6 +775,12 @@ export class MemoryManagedServiceStore {
           claimantKeyId,
           leaseTokenHash,
         });
+        this.#requireActiveClaimant(
+          tenantId,
+          claimantKeyId,
+          receiptNow,
+          workerWriteScope(priorReceipt?.lease_kind ?? recordForReceipt?.lease_kind ?? input.lease_kind),
+        );
         if (priorReceipt !== null) return priorReceipt.response;
       }
       const record = this.#requireLeasedRecord(input);
@@ -840,6 +862,7 @@ export class MemoryManagedServiceStore {
           requestHash: resourceJournalRequestHash,
           claimantKeyId: input.claimant_key_id,
           leaseTokenHash: input.lease_token_hash,
+          leaseKind: record.lease_kind,
           response: prepared.public_record,
           createdAt: now,
         });

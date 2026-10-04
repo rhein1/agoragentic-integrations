@@ -49,10 +49,26 @@ export const TERMINAL_INVOCATION_STATES = Object.freeze([
 export const MANAGED_SCOPES = Object.freeze([
   'invocations:write',
   'invocations:read',
-  'worker:claim',
-  'worker:write',
+  'worker:execution:claim',
+  'worker:execution:write',
+  'worker:cleanup:claim',
+  'worker:cleanup:write',
+  'worker:recovery:claim',
+  'worker:recovery:write',
   'audit:read',
 ]);
+
+export const WORKER_PURPOSES = Object.freeze(['execution', 'cleanup', 'recovery']);
+
+export function workerClaimScope(purpose) {
+  if (!WORKER_PURPOSES.includes(purpose)) throw new TypeError('worker purpose is invalid');
+  return `worker:${purpose}:claim`;
+}
+
+export function workerWriteScope(purpose) {
+  if (!WORKER_PURPOSES.includes(purpose)) throw new TypeError('worker purpose is invalid');
+  return `worker:${purpose}:write`;
+}
 
 export const DEFAULT_LIMITS = Object.freeze({
   max_request_bytes: 1_048_576,

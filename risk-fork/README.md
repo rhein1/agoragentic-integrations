@@ -171,6 +171,15 @@ Install `createMcpPortableHandlePreEffectBoundary` as the host adapter's
 [stateless host runbook](./STATELESS_HOST_RUNBOOK.md) and the
 [local-test worker contract](./managed-service/WORKER.md).
 
+The managed source also includes encrypted, restart-safe claim/resource delivery,
+purpose-specific worker scopes, separate public/worker handlers, a trusted OAuth
+verification callback seam, a bounded default-off loopback host, and scheduled
+control-plane reaping. Portable-handle runtime initialization attests the closed
+PostgreSQL catalog; explicit production mode additionally requires verified TLS
+and a separate-owner least-privilege role. These are source/local-test capabilities,
+not a deployed service, E2B qualification, or live traffic protection. Follow the
+runbooks for key custody, explicit migrations, restart limits, and remaining gates.
+
 A standalone Apache-2.0 repository is proposed in the
 [repository split plan](./REPOSITORY_SPLIT_PLAN.md). No repository relocation,
 package publication, or deployment is established by that plan.
