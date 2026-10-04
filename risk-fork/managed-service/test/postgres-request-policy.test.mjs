@@ -368,8 +368,14 @@ test('dedicated policy runtime attests exact grants and rejects privilege/owners
     }
     await store.close();
   } finally {
-    if (runtimePool) await runtimePool.end(); if (ownerPool) await ownerPool.end(); await admin.end();
-    if (created) {
+    const cleanupErrors = [];
+    const attempt = async (label, run) => {
+      try { await run(); } catch (cause) { cleanupErrors.push(new Error(label, { cause })); }
+    };
+    await attempt('close policy runtime pool', async () => { if (runtimePool) await runtimePool.end(); });
+    await attempt('close policy owner pool', async () => { if (ownerPool) await ownerPool.end(); });
+    await attempt('close policy admin pool', () => admin.end());
+    if (created) await attempt('drain and remove disposable policy database', async () => {
       // pool.end() can resolve before PostgreSQL finishes processing a clean
       // disconnect. Do not race those sockets with an administrator SIGTERM.
       let drained = false;
@@ -381,10 +387,16 @@ test('dedicated policy runtime attests exact grants and rejects privilege/owners
       }
       assert.equal(drained, true, 'disposable policy database sessions must close before deletion');
       await root.query(`DROP DATABASE ${qid(db)}`);
-    }
-    await root.query(`DROP ROLE IF EXISTS ${qid(runtime)}`); await root.query(`DROP ROLE IF EXISTS ${qid(owner)}`);
-    assert.equal((await root.query('SELECT 1 FROM pg_database WHERE datname=$1', [db])).rowCount, 0);
-    assert.equal((await root.query('SELECT 1 FROM pg_roles WHERE rolname=ANY($1::text[])', [[owner, runtime]])).rowCount, 0);
-    await root.end();
+    });
+    await attempt('remove disposable policy runtime role', () => root.query(`DROP ROLE IF EXISTS ${qid(runtime)}`));
+    await attempt('remove disposable policy owner role', () => root.query(`DROP ROLE IF EXISTS ${qid(owner)}`));
+    await attempt('verify policy database absent', async () => {
+      assert.equal((await root.query('SELECT 1 FROM pg_database WHERE datname=$1', [db])).rowCount, 0);
+    });
+    await attempt('verify policy roles absent', async () => {
+      assert.equal((await root.query('SELECT 1 FROM pg_roles WHERE rolname=ANY($1::text[])', [[owner, runtime]])).rowCount, 0);
+    });
+    await attempt('close policy root pool', () => root.end());
+    if (cleanupErrors.length) throw new AggregateError(cleanupErrors, 'Disposable policy cleanup failed');
   }
 });
