@@ -46,6 +46,16 @@ The lower-level `MCP_ENFORCEMENT_SCHEMAS` and clean-import helpers remain export
 for contract verification. A custom host adapter using them is responsible for
 the same opaque-session, exact-binding, cleanup, and no-bypass invariants.
 
+The bundle also exports the local/durable portable-handle registry factories
+and `createMcpPortableHandlePreEffectBoundary`. Construct that boundary from
+this same bundle when installing it as `portable_handle_boundary`: mixing
+factory objects from a separate core module instance loses the identity brand
+and fails closed. The PostgreSQL handle store and its separate migration are
+supplied by the core package, not this artifact's operational asset list; pass
+the host-owned store to the bundled durable registry factory. See the core
+[stateless host runbook](../risk-fork/STATELESS_HOST_RUNBOOK.md). No listener,
+OAuth credential broker, migration execution, or live activation is implied.
+
 The bundled validator implements the following targeted MCP `2026-07-28` Tools
 schema rules.
 `x-mcp-header` may annotate only `string`, `integer`, or `boolean` parameters;

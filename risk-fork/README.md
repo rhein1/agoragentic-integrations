@@ -32,7 +32,7 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQ
 | E2B adapter | Reviewed clean-template/runtime source; live allocation source-disabled | The package includes reviewed template, boot-guard, bootstrap, runner, runtime-contract, and default-off credential-free `mcp_http_phase` transport artifacts; an independent exact-byte clean-side source verifier; and default-off owner-gated build/live qualification harnesses. The child transport is source-tested with injected DNS/HTTPS boundaries but has not been used against E2B or a live MCP endpoint. The live harness consumes approval/run authority through durable exclusive claims before SDK loading, bounds controller waits, revalidates lease observations, requires explicit kill acknowledgement, and uses freshness-spaced exact-bound absence observations. Same-UID boot claims are retained only as diagnostic hashes: all seven inherited-state/fresh-entropy controls remain `unknown` until a pinned signed external receipt supplies a closed, privilege-separated observer boundary and per-control evidence. Canonical evidence can become qualification-eligible only after that derivation and a separate qualification-trust signature verifies the exact template/runtime/SDK bindings. The captured watcher is not an independent authority boundary, so even eligible evidence remains `evidence_present_activation_blocked`: live adapter allocation, leases, and production capability flags stay disabled in source. Windows evidence-producing entrypoints fail before claims, SDK loading, or provider I/O until exact DACL validation exists. One owner-authorized no-retry provider canary returned `unknown`; no successful live qualification, containment, lifecycle, latency, or finalized per-sandbox cost proof is checked in |
 | Daytona and AWS/Firecracker | Research only | No adapter and no production-readiness claim |
 | Hosted/MCP/Harness integration | Public enforcement source merged; private host-control release state unknown | The public bundle has source/loopback ordering evidence before `server/discover`. No immutable public-safe evidence ref/hash in this repository establishes a private control-plane merge, its interface inventory, or any current deployment/runtime state |
-| MCP 2026-07-28 stateless security | Source boundary implemented; production integration blocked | The child HTTP phase requires per-request version/client metadata and method/name headers, rejects session state, restricts `x-mcp-header` to `string`/`integer`/`boolean`, validates typed results with JSON Schema 2020-12 by default while retaining explicit draft-07 compatibility, validates complete/cache metadata, and records hash-only wire metadata evidence. An MCP `structuredContent` member may use any JSON type inside the closed, bounded, taint-scanned result envelope. The local relay rejects MCP Apps/active HTML by default, and an explicit process-local portable-handle registry binds recognized handles to a hashed principal, issuer, audience/origin, allowed methods, request hashes, expiry, and replay limits. Authenticated remote MCP, durable/distributed handle state, MRTR, Tasks, subscriptions, hosted wiring, and live qualification remain disabled or absent |
+| MCP 2026-07-28 stateless security | Source boundary and durable handle adapter implemented; production integration blocked | The child HTTP phase requires per-request metadata and exact method/name headers, rejects session state, restricts `x-mcp-header` types, and validates closed typed results with JSON Schema 2020-12 by default. The local relay rejects MCP Apps/active HTML. Explicit handle registries bind principal, issuer, audience/origin, methods, request hashes, expiry, and replay limits. A separate PostgreSQL registry now provides transactional tenant-scoped consumption across instances, and an optional host-adapter boundary authenticates each request before provider allocation. A local-test managed worker journals resources and reconciles cleanup. Authenticated remote transport, production OAuth/provider wiring, managed database qualification, MRTR, Tasks, subscriptions, and live protection remain disabled or unqualified |
 | Production readiness | **Blocked** | The public local-reference adapter is not an approved production isolation boundary, the public source merge grants no hosted execution/interception authority, the PostgreSQL authority is not managed-service qualified, and no current public evidence establishes live-traffic protection |
 | Performance and provider cost | Local reference benchmark plus one diagnostic provider sample | The live canary observed 1,641 ms to allocation and 2,303 ms for cleanup, but one failed-closed sample is not a benchmark or SLO; live MCP latency, containment, and exact provider cost remain unqualified |
 
@@ -145,16 +145,25 @@ import { createRiskForkFrameworkToolAdapter } from '@agoragentic/risk-fork/frame
 import { createOpenAIAgentsRiskForkTool } from '@agoragentic/risk-fork/frameworks/openai-agents';
 import { createLangChainRiskForkTool } from '@agoragentic/risk-fork/frameworks/langchain';
 import { createLangGraphRiskForkNode } from '@agoragentic/risk-fork/frameworks/langgraph';
-import { createMcpPortableHandleRegistry } from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
+import { createMcpPortableHandleRegistry, createDurableMcpPortableHandleRegistry,
+  createMcpPortableHandlePreEffectBoundary } from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
 ```
 
 The portable-handle registry is an explicit clean-host primitive, not automatic
-field discovery or durable production authority. A host must authenticate the
+field discovery or production qualification. A host must authenticate the
 current principal, derive its SHA-256 reference outside model-controlled input,
 identify the exact application handle, and invoke the registry at the mandatory
-pre-effect boundary. Its current state is process-local and disappears on
-restart; multi-instance or resumable workflows require a separately reviewed
-durable implementation before adoption.
+pre-effect boundary. `createMcpPortableHandleRegistry` remains process-local;
+`createDurableMcpPortableHandleRegistry` uses the explicit PostgreSQL adapter
+for locked consumption, replay rejection, revocation, and restart persistence.
+Install `createMcpPortableHandlePreEffectBoundary` as the host adapter's
+`portable_handle_boundary`; it is not installed automatically. See the
+[stateless host runbook](./STATELESS_HOST_RUNBOOK.md) and the
+[local-test worker contract](./managed-service/WORKER.md).
+
+A standalone Apache-2.0 repository is proposed in the
+[repository split plan](./REPOSITORY_SPLIT_PLAN.md). No repository relocation,
+package publication, or deployment is established by that plan.
 
 ### Framework-neutral host onboarding
 

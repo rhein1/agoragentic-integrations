@@ -121,7 +121,7 @@ export async function createFixture(options = {}) {
     credentials,
     eventRef: options.eventRef ?? (() => `evt_${String(++eventCounter).padStart(4, '0')}`),
   });
-  const provider = new TestProvider();
+  const provider = options.provider ?? new TestProvider();
   const attestedResourceBindings = new Set();
   const attestedCleanupEvidence = new Set();
   const attestedRecoveryAbsence = new Set();

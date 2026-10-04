@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 66,
-    "sha256": "sha256:7cf5b428998d43726f192359130d6c5d250507ab0cace2cc63fff273955b6739"
+    "files": 67,
+    "sha256": "sha256:6d5f9ae4aca5af085e13cc2682ee8f7d9c7a757197d7990d0988299f55656ec4"
   },
   "reviewed_sources": [
     {
@@ -84,8 +84,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 4677,
-      "sha256": "sha256:162af5f164145d6f8876d372a79e76b2fd15d5c73c5b25c2e294c15ca8c45960"
+      "bytes": 5004,
+      "sha256": "sha256:9806639012f2333c81a942ce25dd8695eab7bfe803faf5b6e689b23cab431185"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -131,6 +131,11 @@
       "path": "risk-fork/src/adapters/postgres-authority.mjs",
       "bytes": 95665,
       "sha256": "sha256:357aac98781b6dc8deacb350648ca206a2d5025d8260c10f672d25dcddcc8388"
+    },
+    {
+      "path": "risk-fork/src/adapters/postgres-mcp-portable-handles.mjs",
+      "bytes": 13705,
+      "sha256": "sha256:589a7a7d4a05c74097d16dc8a3daf39e72ff9c6ea40eec8d5ebad434c100e0f3"
     },
     {
       "path": "risk-fork/src/authority-shape.mjs",
@@ -209,8 +214,8 @@
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 5302,
-      "sha256": "sha256:574d648276e0b70c2df7e1c07efa2394248e720323b014b5021e1123a966b6e4"
+      "bytes": 5605,
+      "sha256": "sha256:8eebc1d0a56ae392d5fcbe0f790b8d4b915c6857a1f37d140b695b8c6951b1f6"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -224,13 +229,13 @@
     },
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
-      "bytes": 48209,
-      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
+      "bytes": 48880,
+      "sha256": "sha256:5659ab02de500f6a863746a15fb81df9908359aad5486769158cc749019ef791"
     },
     {
       "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
-      "bytes": 21109,
-      "sha256": "sha256:619826af7cb6716307ecee95f5e30f2ccba88705e20ad7a2f5faa6c4bccfbd3b"
+      "bytes": 36914,
+      "sha256": "sha256:5732815c02b58c759b09b18cffc602e03240a0c7f147185ce7c386727f18e75b"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
@@ -449,6 +454,7 @@
     "computeMcpCleanImportEvidenceHash",
     "connectRemoteClient",
     "createCleanupVerificationRequest",
+    "createDurableMcpPortableHandleRegistry",
     "createE2BAuthorityFreeSourceVerifier",
     "createE2BExternalQualificationObservationVerifier",
     "createE2BQualificationEvidence",
@@ -457,6 +463,8 @@
     "createForkIdentity",
     "createMcpEnforcementBoundary",
     "createMcpInterceptionPlan",
+    "createMcpPortableHandlePreEffectBoundary",
+    "createMcpPortableHandleRegistry",
     "createPostgresAuthorityPool",
     "createRemoteToolDirectory",
     "createRiskForkHostBoundary",
@@ -474,6 +482,8 @@
     "importRiskForkProviderResult",
     "isE2BQualificationEvidenceCanonical",
     "isE2BRuntimeSdkIntegrityVerifier",
+    "isMcpPortableHandlePreEffectBoundary",
+    "isMcpPortableHandleRegistry",
     "isPostgresDistributedCommitAuthority",
     "isProductionPostgresDistributedCommitAuthority",
     "isRiskForkHostBoundary",
@@ -2145,8 +2155,8 @@
     {
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
-      "bytes": 4918,
-      "sha256": "sha256:116296d1e2ba2258ab4df8cb707085d4c0d2c8ffe6459359bb2cc1d403acc331"
+      "bytes": 5182,
+      "sha256": "sha256:f4c522bdff0f87987a12c8f7eb6b2341d8865d67b93c4a4ccaadd7e193fcf8b2"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
@@ -2337,8 +2347,14 @@
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
       "source": "reviewed_source",
-      "bytes": 48209,
-      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
+      "bytes": 48880,
+      "sha256": "sha256:5659ab02de500f6a863746a15fb81df9908359aad5486769158cc749019ef791"
+    },
+    {
+      "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
+      "source": "reviewed_source",
+      "bytes": 36914,
+      "sha256": "sha256:5732815c02b58c759b09b18cffc602e03240a0c7f147185ce7c386727f18e75b"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
@@ -2628,8 +2644,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3111138,
-    "sha256": "sha256:db99484dfa89944be8edaf8e5e52c0b0ce6ca620fc5455c509d245ae2ffd3a09"
+    "bytes": 3152409,
+    "sha256": "sha256:a82773ac0734a1f394267f167085a76df58948b7ba55253877058ce7d8b8b7e9"
   },
   "packaged_assets": [
     {
