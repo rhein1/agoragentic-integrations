@@ -69137,7 +69137,7 @@ function throwIfAborted(context) {
     );
   }
 }
-async function executePhase(record, request, context) {
+async function executePhase(record, request, context, authentication) {
   throwIfAborted(context);
   if (request.risk_profile.minimum_level === "IRREVERSIBLE" || request.risk_profile.prepare_only === true) {
     throw adapterError(
@@ -69165,7 +69165,7 @@ async function executePhase(record, request, context) {
   );
   let preparedResult;
   if (record.portableHandleBoundary) {
-    await record.portableHandleBoundary.authorize(request, context);
+    await record.portableHandleBoundary.authorize(request, Object.freeze({ ...context, authentication }));
     throwIfAborted(context);
   }
   try {
@@ -69219,10 +69219,10 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     signal: controller.signal,
     timeout_ms: timeoutMs,
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
-    operation: context?.operation ?? request.phase,
-    authentication: context?.authentication
+    operation: context?.operation ?? request.phase
   });
-  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
+  const authentication = context?.authentication;
+  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext, authentication));
   const cleanup = () => {
     settled = true;
     clearTimeout(timer);
@@ -77158,7 +77158,7 @@ function createE2BAuthorityFreeSourceVerifier(options = {}) {
 }
 
 // risk-fork-hosted-mcp/src/index.mjs
-var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:9ea6ebe999c52552fb64f884c3cfdf844151ce64136b9c5bcae166d30c6e8d95" : null;
+var REVIEWED_SOURCE_INTEGRITY = true ? "sha256:6ef84e3739000ae55b5511ee5c16af05c4b75f26764876eb78742dff6c1d00c7" : null;
 var HOSTED_MCP_BUNDLE_METADATA = Object.freeze({
   package_name: "@agoragentic/risk-fork-hosted-mcp",
   package_version: "0.1.0-alpha.0",

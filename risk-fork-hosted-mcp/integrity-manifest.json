@@ -9,7 +9,7 @@
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
     "files": 68,
-    "sha256": "sha256:9ea6ebe999c52552fb64f884c3cfdf844151ce64136b9c5bcae166d30c6e8d95"
+    "sha256": "sha256:6ef84e3739000ae55b5511ee5c16af05c4b75f26764876eb78742dff6c1d00c7"
   },
   "reviewed_sources": [
     {
@@ -229,8 +229,8 @@
     },
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
-      "bytes": 48880,
-      "sha256": "sha256:5659ab02de500f6a863746a15fb81df9908359aad5486769158cc749019ef791"
+      "bytes": 49042,
+      "sha256": "sha256:d3315126a2cdfdda68fd4c3e5138d91b2803d2836a2c65af6e71b2349707d7d9"
     },
     {
       "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
@@ -2367,8 +2367,8 @@
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
       "source": "reviewed_source",
-      "bytes": 48880,
-      "sha256": "sha256:5659ab02de500f6a863746a15fb81df9908359aad5486769158cc749019ef791"
+      "bytes": 49042,
+      "sha256": "sha256:d3315126a2cdfdda68fd4c3e5138d91b2803d2836a2c65af6e71b2349707d7d9"
     },
     {
       "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
@@ -2670,8 +2670,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3222926,
-    "sha256": "sha256:7db0638dd60285bdb5568c6e796ed3d6c3007dfb9c2698761080d7adb48ab550"
+    "bytes": 3223001,
+    "sha256": "sha256:5fc6c555cf392f74fd6094b96e55520a3ac3dedfbab9b214cecd6789a8080719"
   },
   "packaged_assets": [
     {
