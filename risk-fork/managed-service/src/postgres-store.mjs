@@ -17,6 +17,8 @@ import {
   MANAGED_RESOURCE_JOURNAL_RECEIPT_SCHEMA,
   MANAGED_SERVICE_PROTOCOL_LIMITS,
   TERMINAL_INVOCATION_STATES,
+  workerClaimScope,
+  workerWriteScope,
 } from './constants.mjs';
 import {
   assertAllowedKeys,
@@ -64,14 +66,15 @@ const RESOURCE_JOURNAL_EVENT_TYPES = new Set([
   'provider_resources_recorded',
   'provider_resources_recovered',
 ]);
-let expectedMigrationHashPromise;
+const expectedMigrationHashPromises = new Map();
 
-function expectedMigrationHash() {
-  expectedMigrationHashPromise ??= readFile(
-    new URL('../migrations/001_managed_control_plane.pg.sql', import.meta.url),
-    'utf8',
-  ).then((source) => sha256Ref(source.replace(/\r\n?/g, '\n')));
-  return expectedMigrationHashPromise;
+function expectedMigrationHash(version) {
+  if (!expectedMigrationHashPromises.has(version)) {
+    const file = version === 1 ? '001_managed_control_plane.pg.sql' : '002_journal_purpose.pg.sql';
+    expectedMigrationHashPromises.set(version, readFile(new URL(`../migrations/${file}`, import.meta.url),
+      'utf8').then((source) => sha256Ref(source.replace(/\r\n?/g, '\n'))));
+  }
+  return expectedMigrationHashPromises.get(version);
 }
 
 function pgInteger(value, label) {
@@ -224,6 +227,7 @@ function normalizeResourceJournalReceiptRow(row) {
     request_hash: row.request_hash,
     claimant_key_id: row.claimant_key_id,
     lease_token_hash: row.lease_token_hash,
+    lease_kind: row.lease_kind,
     response: row.response_json,
     response_hash: row.response_hash,
     created_at: pgIso(row.created_at, 'resource journal receipt created_at'),
@@ -361,7 +365,7 @@ export class PostgresManagedServiceStore {
   async #selectResourceJournalReceipt(client, tenantId, invocationRef, requestHash) {
     const result = await client.query(
       `SELECT tenant_id, invocation_ref, request_hash, claimant_key_id,
-              lease_token_hash, response_json, response_hash, created_at
+              lease_token_hash, lease_kind, response_json, response_hash, created_at
          FROM ${this.#schema}.managed_resource_journal_receipts
         WHERE tenant_id = $1 AND invocation_ref = $2 AND request_hash = $3`,
       [tenantId, invocationRef, requestHash],
@@ -409,7 +413,20 @@ export class PostgresManagedServiceStore {
     }
   }
 
-  async #isClaimantCredentialActive(client, tenantId, claimantKeyId) {
+  async #isClaimantCredentialActive(client, tenantId, claimantKeyId, requiredScope) {
+    if (!/^worker:(execution|cleanup|recovery):(claim|write)$/.test(requiredScope)) {
+      throw new TypeError('claimant scope must be purpose-specific');
+    }
+    // Hold the credential row through the enclosing mutation transaction.
+    // Revocation/scope edits must serialize with the final authority decision.
+    // Lock by identity first: WHERE predicates can run before a row-lock wait,
+    // so validity must be checked again with the clock after acquiring the lock.
+    const locked = await client.query(
+      `SELECT 1 FROM ${this.#schema}.managed_api_keys
+        WHERE key_id = $2 AND tenant_id = $1 FOR SHARE`,
+      [tenantId, claimantKeyId],
+    );
+    if (locked.rowCount !== 1) return false;
     const result = await client.query(
       `SELECT EXISTS (
          SELECT 1 FROM ${this.#schema}.managed_api_keys AS claimant
@@ -417,14 +434,15 @@ export class PostgresManagedServiceStore {
             AND claimant.revoked_at IS NULL
             AND claimant.not_before <= clock_timestamp()
             AND claimant.expires_at > clock_timestamp()
+            AND claimant.scopes ? $3
        ) AS active`,
-      [tenantId, claimantKeyId],
+      [tenantId, claimantKeyId, requiredScope],
     );
     return result.rowCount === 1 && result.rows[0]?.active === true;
   }
 
-  async #assertClaimantCredentialActive(client, tenantId, claimantKeyId) {
-    if (!await this.#isClaimantCredentialActive(client, tenantId, claimantKeyId)) {
+  async #assertClaimantCredentialActive(client, tenantId, claimantKeyId, requiredScope) {
+    if (!await this.#isClaimantCredentialActive(client, tenantId, claimantKeyId, requiredScope)) {
       throw managedError('Claimant credential is not active', 'AUTHENTICATION_FAILED', 401);
     }
   }
@@ -561,6 +579,7 @@ export class PostgresManagedServiceStore {
       'request_hash',
       'claimant_key_id',
       'lease_token_hash',
+      'lease_kind',
       'now',
     ], 'resource journal receipt lookup');
     const tenantId = requireTenantId(input.tenant_id);
@@ -568,10 +587,8 @@ export class PostgresManagedServiceStore {
     const requestHash = requireSha256(input.request_hash, 'resource journal request_hash');
     const claimantKeyId = requireOpaqueRef(input.claimant_key_id, 'claimant_key_id');
     const leaseTokenHash = requireSha256(input.lease_token_hash, 'lease_token_hash');
-    return this.#withClient(async (client) => {
-      await this.#databaseNow(client, input.now);
-      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
-      return requireMatchingResourceJournalReceipt(
+    return this.#withTransaction(async (client) => {
+      const receipt = requireMatchingResourceJournalReceipt(
         await this.#selectResourceJournalReceipt(
           client,
           tenantId,
@@ -580,7 +597,16 @@ export class PostgresManagedServiceStore {
         ),
         { tenantId, invocationRef, requestHash, claimantKeyId, leaseTokenHash },
       );
-    });
+      if (receipt !== null || input.lease_kind != null) {
+        await this.#assertClaimantCredentialActive(
+          client,
+          tenantId,
+          claimantKeyId,
+          workerWriteScope(receipt?.lease_kind ?? input.lease_kind),
+        );
+      }
+      return receipt;
+    }, input.now);
   }
 
   async admitInvocation(input) {
@@ -794,12 +820,13 @@ export class PostgresManagedServiceStore {
                      AND claimant.revoked_at IS NULL
                      AND claimant.not_before <= clock_timestamp()
                      AND claimant.expires_at > clock_timestamp()
+                     AND claimant.scopes ? $4
                 ) AS claimant_active
            FROM ${this.#schema}.managed_invocations invocation_row
            JOIN ${this.#schema}.managed_tenants tenant_row
              ON tenant_row.tenant_id = invocation_row.tenant_id
           WHERE invocation_row.tenant_id = $1 AND invocation_row.invocation_ref = $2`,
-        [tenantId, invocationRef, claimantKeyId],
+        [tenantId, invocationRef, claimantKeyId, workerWriteScope(leaseKind)],
       );
       if (result.rowCount !== 1) {
         throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
@@ -849,8 +876,10 @@ export class PostgresManagedServiceStore {
         : purpose === 'cleanup'
           ? 'cleanup_pending'
           : 'recovery_required';
+      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerClaimScope(purpose));
+      // A credential lock may have waited past the lease expiry. Replays need
+      // the same fresh database clock as new claims before returning authority.
       const now = await this.#databaseNow(client);
-      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
       const leaseMs = requireInteger(input.lease_ms, 'lease_ms', {
         min: MANAGED_SERVICE_PROTOCOL_LIMITS.min_lease_ms,
         max: MANAGED_SERVICE_PROTOCOL_LIMITS.max_lease_ms,
@@ -984,6 +1013,7 @@ export class PostgresManagedServiceStore {
                  AND claimant.revoked_at IS NULL
                  AND claimant.not_before <= lease_clock.now
                  AND claimant.expires_at > lease_clock.now
+                 AND claimant.scopes ? $10
             )
             AND ($4 <> 'execution' OR (
               target.admitted_at > lease_clock.now - ($9::bigint * interval '1 millisecond')
@@ -998,7 +1028,7 @@ export class PostgresManagedServiceStore {
             ))
           RETURNING *`,
         [tenantId, invocationRef, state, purpose, claimantKeyId,
-          tokenHash, leaseMs, expected, maxInvocationAge],
+          tokenHash, leaseMs, expected, maxInvocationAge, workerClaimScope(purpose)],
       );
       if (updated.rowCount !== 1) {
         const failureNow = await this.#databaseNow(client);
@@ -1103,7 +1133,7 @@ export class PostgresManagedServiceStore {
         throw managedError('Lease token is invalid', 'LEASE_TOKEN_INVALID', 403);
       }
       this.#assertLeaseOwner(row, claimantKeyId);
-      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
       this.#assertExecutionAllowed(tenantStatus, row.lease_kind);
       const now = await this.#databaseNow(client);
       if (!row.lease_expires_at || Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(now)) {
@@ -1133,16 +1163,17 @@ export class PostgresManagedServiceStore {
                  AND claimant.revoked_at IS NULL
                  AND claimant.not_before <= lease_clock.now
                  AND claimant.expires_at > lease_clock.now
+                 AND claimant.scopes ? $6
             )
           RETURNING *`,
-        [tenantId, invocationRef, leaseMs, tokenHash, claimantKeyId],
+        [tenantId, invocationRef, leaseMs, tokenHash, claimantKeyId, workerWriteScope(row.lease_kind)],
       );
       if (updated.rowCount !== 1) {
         const failureNow = await this.#databaseNow(client);
         if (Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(failureNow)) {
           throw managedError('Lease has expired', 'LEASE_EXPIRED', 409);
         }
-        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
         throw managedError('Lease authority changed', 'LEASE_AUTHORITY_LOST', 409);
       }
       const updatedRow = updated.rows[0];
@@ -1198,7 +1229,12 @@ export class PostgresManagedServiceStore {
           },
         );
         if (priorReceipt !== null) {
-          await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+          await this.#assertClaimantCredentialActive(
+            client,
+            tenantId,
+            claimantKeyId,
+            workerWriteScope(priorReceipt.lease_kind),
+          );
           return priorReceipt.response;
         }
       }
@@ -1206,7 +1242,7 @@ export class PostgresManagedServiceStore {
         throw managedError('Lease token is invalid', 'LEASE_TOKEN_INVALID', 403);
       }
       this.#assertLeaseOwner(row, claimantKeyId);
-      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
       this.#assertExecutionAllowed(tenantStatus, row.lease_kind);
       const now = await this.#databaseNow(client);
       if (!row.lease_expires_at || Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(now)) {
@@ -1290,19 +1326,20 @@ export class PostgresManagedServiceStore {
                  AND claimant.revoked_at IS NULL
                  AND claimant.not_before <= transition_clock.now
                  AND claimant.expires_at > transition_clock.now
+                 AND claimant.scopes ? $15
             )
           RETURNING *`,
         [tenantId, invocationRef, input.next_state, fields.savepoint_ref, fields.fork_ref,
           JSON.stringify(fields.cleanup_requests), fields.execution_outcome,
           fields.execution_evidence_hash, fields.result_hash, terminal, releasesLease,
-          verificationNotAfter, claimantKeyId, tokenHash],
+          verificationNotAfter, claimantKeyId, tokenHash, workerWriteScope(row.lease_kind)],
       );
       if (updated.rowCount !== 1) {
         const failureNow = await this.#databaseNow(client);
         if (Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(failureNow)) {
           throw managedError('Lease has expired', 'LEASE_EXPIRED', 409);
         }
-        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
         throw managedError(
           'Provider verification expired before the terminal transition',
           'VERIFICATION_DEADLINE_EXCEEDED',
@@ -1329,20 +1366,22 @@ export class PostgresManagedServiceStore {
           requestHash: resourceJournalRequestHash,
           claimantKeyId,
           leaseTokenHash: tokenHash,
+          leaseKind: row.lease_kind,
           response,
           createdAt: pgIso(updatedRow.updated_at, 'resource journal receipt time'),
         });
         const receiptInsert = await client.query(
           `INSERT INTO ${this.#schema}.managed_resource_journal_receipts (
              tenant_id, invocation_ref, request_hash, claimant_key_id,
-             lease_token_hash, response_json, response_hash, created_at
-           ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8::timestamptz)`,
+             lease_token_hash, lease_kind, response_json, response_hash, created_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::timestamptz)`,
           [
             receipt.tenant_id,
             receipt.invocation_ref,
             receipt.request_hash,
             receipt.claimant_key_id,
             receipt.lease_token_hash,
+            receipt.lease_kind,
             JSON.stringify(receipt.response),
             receipt.response_hash,
             receipt.created_at,
@@ -1374,7 +1413,7 @@ export class PostgresManagedServiceStore {
         throw managedError('Lease token is invalid', 'LEASE_TOKEN_INVALID', 403);
       }
       this.#assertLeaseOwner(row, claimantKeyId);
-      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+      await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
       this.#assertExecutionAllowed(tenantStatus, row.lease_kind);
       const now = await this.#databaseNow(client);
       if (!row.lease_expires_at || Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(now)) {
@@ -1428,17 +1467,18 @@ export class PostgresManagedServiceStore {
                  AND claimant.revoked_at IS NULL
                  AND claimant.not_before <= outcome_clock.now
                  AND claimant.expires_at > outcome_clock.now
+                 AND claimant.scopes ? $9
             )
           RETURNING *`,
         [tenantId, invocationRef, actual, input.execution_outcome,
-          executionEvidenceHash, resultHash, claimantKeyId, tokenHash],
+          executionEvidenceHash, resultHash, claimantKeyId, tokenHash, workerWriteScope(row.lease_kind)],
       );
       if (updated.rowCount !== 1) {
         const failureNow = await this.#databaseNow(client);
         if (Date.parse(pgIso(row.lease_expires_at, 'lease expiry')) <= Date.parse(failureNow)) {
           throw managedError('Lease has expired', 'LEASE_EXPIRED', 409);
         }
-        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId);
+        await this.#assertClaimantCredentialActive(client, tenantId, claimantKeyId, workerWriteScope(row.lease_kind));
         throw managedError('Lease authority changed', 'LEASE_AUTHORITY_LOST', 409);
       }
       const updatedRow = updated.rows[0];
@@ -1700,6 +1740,9 @@ export class PostgresManagedServiceStore {
              (SELECT migration_hash
                 FROM ${this.#schema}.managed_schema_migrations
                WHERE version = 1) AS migration_hash,
+             (SELECT migration_hash
+                FROM ${this.#schema}.managed_schema_migrations
+               WHERE version = 2) AS purpose_migration_hash,
              (SELECT count(*)::integer
                 FROM ${this.#schema}.managed_schema_migrations) AS migration_count,
              (SELECT count(*)::integer
@@ -1712,8 +1755,9 @@ export class PostgresManagedServiceStore {
         );
         const stateRow = state.rows[0] ?? {};
         migrationCount = Number(stateRow.migration_count);
-        migrationVerified = migrationCount === 1
-          && stateRow.migration_hash === await expectedMigrationHash();
+        migrationVerified = migrationCount === 2
+          && stateRow.migration_hash === await expectedMigrationHash(1)
+          && stateRow.purpose_migration_hash === await expectedMigrationHash(2);
         recoveryRequiredCount = Number(stateRow.recovery_required_count);
         expiredExecutionLeaseCount = Number(stateRow.expired_execution_lease_count);
       }

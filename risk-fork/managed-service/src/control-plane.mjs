@@ -15,6 +15,8 @@ import {
 } from './config.mjs';
 import {
   MANAGED_SERVICE_PROTOCOL_LIMITS,
+  workerClaimScope,
+  workerWriteScope,
 } from './constants.mjs';
 import {
   assertAllowedKeys,
@@ -219,6 +221,25 @@ export function createManagedRiskForkControlPlane(options = {}) {
     assertManagedServiceEnabled(config);
   }
 
+  // Authenticate before any invocation/receipt lookup. Once the stored purpose
+  // is known, revalidate that exact scope before the store mutation.
+  async function workerWriter(value) {
+    for (const purpose of ['execution', 'cleanup', 'recovery']) {
+      try {
+        return await normalizePrincipal(value, workerWriteScope(purpose), requirePrincipal);
+      } catch (error) {
+        if (error.code !== 'AUTHORIZATION_DENIED') throw error;
+      }
+    }
+    throw managedError('Worker write scope is required', 'AUTHORIZATION_DENIED', 403);
+  }
+
+  function requireRoutePurpose(input, purpose) {
+    if (input.expected_lease_kind != null && input.expected_lease_kind !== purpose) {
+      throw managedError('Lease purpose route does not match stored lease', 'LEASE_PREFLIGHT_FAILED', 409);
+    }
+  }
+
   async function ownedInvocation(principal, invocationRefValue, includeOperation = false) {
     const ref = requireInvocationRef(invocationRefValue, 'invocation_ref');
     return assertManagedRecoveryKeyIntegrity(requireInvocationOwner(
@@ -229,7 +250,7 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
   async function claim(principalValue, input, purpose) {
     enabled();
-    const principal = await normalizePrincipal(principalValue, 'worker:claim', requirePrincipal);
+    const principal = await normalizePrincipal(principalValue, workerClaimScope(purpose), requirePrincipal);
     assertPlainRecord(input, `${purpose} lease request`);
     assertAllowedKeys(
       input,
@@ -406,9 +427,9 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
     async renewLease(principalValue, input = {}) {
       enabled();
-      const principal = await normalizePrincipal(principalValue, 'worker:write', requirePrincipal);
+      let principal = await workerWriter(principalValue);
       assertPlainRecord(input, 'lease renewal');
-      assertAllowedKeys(input, ['invocation_ref', 'lease_token', 'lease_ms'], 'lease renewal');
+      assertAllowedKeys(input, ['invocation_ref', 'lease_token', 'lease_ms', 'expected_lease_kind'], 'lease renewal');
       const requestedInvocationRef = requireInvocationRef(input.invocation_ref, 'invocation_ref');
       const token = requireLeaseToken(input.lease_token);
       const requestedLeaseMs = requireInteger(input.lease_ms, 'lease_ms', {
@@ -416,6 +437,10 @@ export function createManagedRiskForkControlPlane(options = {}) {
         max: config.limits.max_lease_ms,
       });
       const invocation = await ownedInvocation(principal, requestedInvocationRef, false);
+      requireRoutePurpose(input, invocation.lease_kind);
+      if (invocation.lease_kind !== null) {
+        principal = await normalizePrincipal(principalValue, workerWriteScope(invocation.lease_kind), requirePrincipal);
+      }
       providerRegistry.requireBound(
         invocation.provider_id,
         principal.tenant_id,
@@ -437,7 +462,7 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
     async recordResources(principalValue, input = {}) {
       enabled();
-      const principal = await normalizePrincipal(principalValue, 'worker:write', requirePrincipal);
+      let principal = await workerWriter(principalValue);
       assertPlainRecord(input, 'resource record');
       assertAllowedKeys(input, [
         'invocation_ref',
@@ -445,6 +470,7 @@ export function createManagedRiskForkControlPlane(options = {}) {
         'savepoint_ref',
         'fork_ref',
         'absent_resource_kinds',
+        'expected_lease_kind',
       ], 'resource record');
       const invocationRefValue = requireInvocationRef(input.invocation_ref, 'invocation_ref');
       const suppliedSavepointRef = input.savepoint_ref == null
@@ -486,6 +512,12 @@ export function createManagedRiskForkControlPlane(options = {}) {
       };
       const priorReceipt = await store.findResourceJournalReceipt(receiptLookup);
       if (priorReceipt !== null) {
+        requireRoutePurpose(input, priorReceipt.lease_kind);
+        principal = await normalizePrincipal(
+          principalValue,
+          workerWriteScope(priorReceipt.lease_kind),
+          requirePrincipal,
+        );
         return requireResourceJournalReceipt(principal, priorReceipt, {
           invocation_ref: invocationRefValue,
           request_hash: requestHash,
@@ -493,6 +525,16 @@ export function createManagedRiskForkControlPlane(options = {}) {
         });
       }
       let invocation = await ownedInvocation(principal, invocationRefValue, false);
+      requireRoutePurpose(input, invocation.lease_kind);
+      if (!['execution', 'recovery'].includes(invocation.lease_kind)) {
+        throw managedError('Execution or recovery lease is required', 'RESOURCE_LEASE_REQUIRED', 409);
+      }
+      principal = await normalizePrincipal(
+        principalValue,
+        workerWriteScope(invocation.lease_kind),
+        requirePrincipal,
+      );
+      invocation = await ownedInvocation(principal, invocationRefValue, false);
       const recovery = invocation.state === 'recovery_required' && invocation.lease_kind === 'recovery';
       if (!recovery
         && (invocation.state !== 'execution_leased' || invocation.lease_kind !== 'execution')) {
@@ -646,7 +688,7 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
     async recordExecutionOutcome(principalValue, input = {}) {
       enabled();
-      const principal = await normalizePrincipal(principalValue, 'worker:write', requirePrincipal);
+      const principal = await normalizePrincipal(principalValue, workerWriteScope('execution'), requirePrincipal);
       assertPlainRecord(input, 'execution outcome');
       assertAllowedKeys(input, [
         'invocation_ref',
@@ -655,8 +697,15 @@ export function createManagedRiskForkControlPlane(options = {}) {
         'actual_cost_micros',
         'execution_evidence_hash',
         'result_hash',
+        'expected_lease_kind',
       ], 'execution outcome');
       const invocation = await ownedInvocation(principal, input.invocation_ref, false);
+      if (input.expected_lease_kind != null && input.expected_lease_kind !== invocation.lease_kind) {
+        throw managedError('Lease purpose route does not match stored lease', 'LEASE_PREFLIGHT_FAILED', 409);
+      }
+      if (invocation.lease_kind !== 'execution') {
+        throw managedError('Execution lease is required', 'EXECUTION_LEASE_REQUIRED', 409);
+      }
       providerRegistry.requireBound(
         invocation.provider_id,
         principal.tenant_id,
@@ -697,14 +746,18 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
     async completeCleanup(principalValue, input = {}) {
       enabled();
-      const principal = await normalizePrincipal(principalValue, 'worker:write', requirePrincipal);
+      const principal = await normalizePrincipal(principalValue, workerWriteScope('cleanup'), requirePrincipal);
       assertPlainRecord(input, 'cleanup completion');
       assertAllowedKeys(input, [
         'invocation_ref',
         'lease_token',
         'cleanup_evidence',
+        'expected_lease_kind',
       ], 'cleanup completion');
       let invocation = await ownedInvocation(principal, input.invocation_ref, false);
+      if (input.expected_lease_kind != null && input.expected_lease_kind !== invocation.lease_kind) {
+        throw managedError('Lease purpose route does not match stored lease', 'LEASE_PREFLIGHT_FAILED', 409);
+      }
       providerRegistry.requireBound(
         invocation.provider_id,
         principal.tenant_id,
@@ -807,14 +860,18 @@ export function createManagedRiskForkControlPlane(options = {}) {
 
     async completeRecoveryAbsence(principalValue, input = {}) {
       enabled();
-      const principal = await normalizePrincipal(principalValue, 'worker:write', requirePrincipal);
+      const principal = await normalizePrincipal(principalValue, workerWriteScope('recovery'), requirePrincipal);
       assertPlainRecord(input, 'recovery absence completion');
       assertAllowedKeys(input, [
         'invocation_ref',
         'lease_token',
         'recovery_evidence',
+        'expected_lease_kind',
       ], 'recovery absence completion');
       let invocation = await ownedInvocation(principal, input.invocation_ref, false);
+      if (input.expected_lease_kind != null && input.expected_lease_kind !== invocation.lease_kind) {
+        throw managedError('Lease purpose route does not match stored lease', 'LEASE_PREFLIGHT_FAILED', 409);
+      }
       if (invocation.state !== 'recovery_required' || invocation.lease_kind !== 'recovery') {
         throw managedError('Recovery lease is required', 'RECOVERY_LEASE_REQUIRED', 409);
       }

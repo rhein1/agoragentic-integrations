@@ -29,6 +29,7 @@ export {
 } from './audit.mjs';
 export {
   createManagedAuthenticator,
+  createTrustedOAuthAuthenticator,
   hashManagedApiKey,
   normalizeApiKeyRecord,
   parseBearerAuthorization,
@@ -41,4 +42,9 @@ export {
 } from './postgres-store.mjs';
 export { migrateManagedServicePostgres } from './postgres-migrator.mjs';
 export { createManagedRiskForkControlPlane } from './control-plane.mjs';
-export { createManagedServiceHttpHandler } from './http-handler.mjs';
+export { createManagedServiceHttpHandler, createManagedWorkerHttpHandler } from './http-handler.mjs';
+export { createManagedRiskForkWorker } from './worker.mjs';
+export { createManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
+export { createManagedRiskForkReaper } from './reaper.mjs';
+export { createPostgresWorkerDeliveryStore, PostgresWorkerDeliveryStore } from './postgres-worker-delivery-store.mjs';
+export { migratePostgresWorkerDelivery } from './postgres-worker-delivery-migrator.mjs';

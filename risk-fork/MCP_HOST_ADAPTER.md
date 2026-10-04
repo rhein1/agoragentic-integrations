@@ -15,13 +15,20 @@ traffic protection are separate gates; this source file establishes none of them
 
 ## What it enforces
 
-`createRiskForkMcpHostAdapter()` accepts only two factory-created opaque
+`createRiskForkMcpHostAdapter()` requires two factory-created opaque
 capabilities:
 
 1. a `createRiskForkHostBoundary()` result, which owns the controller and trusted
    risk-descriptor source; and
 2. a `createTrustedRiskForkMcpPhasePlanSource()` result, which resolves a bounded,
    request-bound phase plan on the clean host.
+
+It also accepts an optional factory-created `portable_handle_boundary` from
+`createMcpPortableHandlePreEffectBoundary`. A stateless authenticated host must
+explicitly install this boundary with its current-authentication callback,
+tenant registry resolver, and descriptor-bound field contracts. Omitting it
+preserves the legacy source behavior; omission is not authenticated stateless
+protection. See [STATELESS_HOST_RUNBOOK.md](./STATELESS_HOST_RUNBOOK.md).
 
 The returned object exposes exactly `openSession`, `executeFallback`, and
 `timeouts`. Controller, provider, descriptor source, phase-plan callback, session
@@ -34,6 +41,7 @@ MCP enforcement request
   -> canonical request/hash/target/tool-metadata validation
   -> opaque clean-host phase-plan capability
   -> exact request-bound Savepoint Capsule + closed child operation
+  -> configured per-request authentication + durable handle consumption/recheck
   -> RiskForkHostBoundary.preEffect()
   -> RiskForkController.prepare()
   -> provider savepoint/fork/execute/taint validation/destruction verification
@@ -140,7 +148,8 @@ controller decision before import.
 MCP application handles (for example a remote browser or task reference) are not
 credentials, but a server may treat possession as authority. The opt-in
 `@agoragentic/risk-fork/mcp-portable-handle-boundary` module provides a host-owned,
-in-memory registry for those values. The host must explicitly register each handle;
+local reference registry and a separate transactional PostgreSQL registry for
+those values. The host must explicitly register each handle;
 the module never guesses handle fields from names or model output. A registration is
 bound to a keyed hash of the principal reference, exact issuer, exact audience and
 MCP server origin, originating method and salient request hash, a maximum five-minute
@@ -152,13 +161,16 @@ handle, and reusable-handle replay tracking cannot grow without a configured bou
 
 The registry stores only keyed handle/principal hashes and returns only hash-bound
 receipts. It never stores or returns the raw handle or principal reference and
-rejects recognized serialized credential material. Call `close()` to clear records
-and overwrite the process-local HMAC key. A receipt is audit evidence, not a
-transferable capability; only a successful call against the same opaque registry is
-authorization. This source is not wired into MCP admission automatically and does
-not make the current source-only transport live or authenticated. Registry state and
-its HMAC key are process-local, in-memory, and non-durable; a restart invalidates all
-bindings.
+rejects recognized serialized credential material. Closing the local reference
+registry clears its records; closing a durable registry overwrites only its own
+key copy and preserves database records and replay tombstones. Durable instances
+need the same host-managed key, key ID, tenant namespace, and capacity policy.
+A receipt is audit evidence, not a transferable capability. Neither registry
+is installed automatically or enables live transport. The optional
+`portable_handle_boundary` authenticates and consumes exact contracted fields
+before `preEffect`, then rechecks current identity after storage waits. See
+[STATELESS_HOST_RUNBOOK.md](./STATELESS_HOST_RUNBOOK.md) for migration, restart,
+key rotation, and fail-closed operational limits.
 
 The `mcp_http_phase` object returned by `createRiskForkMcpChildOperation()` is a
 closed, authority-free provider contract. It carries the exact request binding,
@@ -278,7 +290,8 @@ outer-host deadline, while this adapter's `close()` waits for terminal cleanup.
   The Local provider remains restricted to `bounded_file_batch`, and the E2B
   adapter's live allocation/execution gate remains hard-disabled. No provider was
   contacted and no hosted template was rebuilt by adding this source.
-- A phase-plan callback **must not fetch remote MCP content**. Doing so would put
+- A phase-plan callback must be side-effect-free and **must not fetch remote MCP
+  content**. Doing so would put
   the risky network interaction on the clean host, outside the disposable fork.
 - Predeclared `bounded_file_batch.commit_candidate` plans are rejected unless the
   host explicitly selects `synthetic_demo_mode:true`. That option exists only for

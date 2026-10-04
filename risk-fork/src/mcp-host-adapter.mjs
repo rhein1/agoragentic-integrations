@@ -4,6 +4,7 @@ import { canonicalize, sha256Ref } from './canonical.mjs';
 import { networkPolicy } from './contracts.mjs';
 import { assertPreparedForCleanCommit } from './controller.mjs';
 import { isRiskForkHostBoundary } from './host-boundary.mjs';
+import { isMcpPortableHandlePreEffectBoundary } from './mcp-portable-handle-boundary.mjs';
 import {
   RISK_FORK_MCP_CHILD_OPERATION_SCHEMA,
   RISK_FORK_MCP_DESTINATION_POLICY_SCHEMA,
@@ -921,7 +922,7 @@ function throwIfAborted(context) {
   }
 }
 
-async function executePhase(record, request, context) {
+async function executePhase(record, request, context, authentication) {
   throwIfAborted(context);
   if (request.risk_profile.minimum_level === 'IRREVERSIBLE'
     || request.risk_profile.prepare_only === true) {
@@ -949,6 +950,10 @@ async function executePhase(record, request, context) {
     record.syntheticDemoMode,
   );
   let preparedResult;
+  if (record.portableHandleBoundary) {
+    await record.portableHandleBoundary.authorize(request, Object.freeze({ ...context, authentication }));
+    throwIfAborted(context);
+  }
   try {
     preparedResult = await record.preEffect({
       descriptor_ref: validatedPlan.plan.descriptor_ref,
@@ -1001,7 +1006,9 @@ function startBoundedPhase(record, request, context, configuredTimeoutMs) {
     deadline_at: new Date(Date.now() + timeoutMs).toISOString(),
     operation: context?.operation ?? request.phase,
   });
-  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext));
+  // Only admission receives the host capability; planning uses bounded context alone.
+  const authentication = context?.authentication;
+  const terminal = Promise.resolve().then(() => executePhase(record, request, phaseContext, authentication));
   const cleanup = () => {
     settled = true;
     clearTimeout(timer);
@@ -1037,6 +1044,7 @@ export function createRiskForkMcpHostAdapter(input = {}) {
     'max_requests_per_session',
     'max_request_bytes',
     'synthetic_demo_mode',
+    'portable_handle_boundary',
   ], 'Risk Fork MCP host adapter input');
   if (!isRiskForkHostBoundary(input.host_boundary)) {
     throw adapterError(
@@ -1070,6 +1078,11 @@ export function createRiskForkMcpHostAdapter(input = {}) {
     throw new TypeError('synthetic_demo_mode must be a boolean');
   }
   const syntheticDemoMode = input.synthetic_demo_mode === true;
+  if (input.portable_handle_boundary != null
+    && !isMcpPortableHandlePreEffectBoundary(input.portable_handle_boundary)) {
+    throw adapterError(RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.INVALID_CONFIGURATION,
+      'Portable-handle admission requires a factory-created clean host boundary');
+  }
   const sessions = new Set();
   const runtime = { pendingOpens: 0 };
   const preEffect = input.host_boundary.preEffect.bind(input.host_boundary);
@@ -1260,6 +1273,7 @@ export function createRiskForkMcpHostAdapter(input = {}) {
     preEffect,
     resolvePlan,
     syntheticDemoMode,
+    portableHandleBoundary: input.portable_handle_boundary ?? null,
   }));
   return adapter;
 }
