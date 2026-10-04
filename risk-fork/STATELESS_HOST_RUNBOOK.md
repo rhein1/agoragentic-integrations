@@ -10,8 +10,10 @@ authorize migrations, credentials, provider calls, spend, or activation.
 The new async `createDurableMcpPortableHandleRegistry` uses a transactional store.
 `createPostgresMcpPortableHandleStore` provides a separate schema with namespace,
 binding, consumption, and migration records. Runtime initialization verifies the
-reviewed migration hash and required enabled integrity triggers; it never runs
-DDL. `migrateMcpPortableHandlesPostgres` is the explicit migration-owner operation.
+reviewed migration hash, exact relation/column/constraint/index/trigger/function
+catalog, and enabled integrity triggers; it never runs DDL. Production mode also
+requires a separate expected owner and exact runtime privilege negatives with
+CA-validated TLS. `migrateMcpPortableHandlesPostgres` is the explicit migration-owner operation.
 It is independent of the distributed clean-commit authority and managed-service
 schemas. Do not substitute one migration ledger for another.
 
@@ -50,6 +52,8 @@ import { createDurableMcpPortableHandleRegistry,
 const store = await createPostgresMcpPortableHandleStore({
   connectionString: runtimeDatabaseUrl,
   schemaName: 'risk_fork_mcp_handles',
+  deploymentMode: 'production',
+  expectedOwner: reviewedMigrationOwnerRole,
   requireTls: true,
   tls: { ca: reviewedDatabaseCa },
 });
@@ -150,11 +154,35 @@ drops only that schema afterward. It tests restart-equivalent separate instances
 cross-context denial, races, replay, expiry after lock waits, revocation, capacity,
 integrity triggers, exact receipts, and contracted pre-effect consumption.
 
-Runtime-role ownership/grant attestation is not yet equivalent to the existing
-distributed-authority gate. Managed CA TLS, HA/failover, PITR/restore, rotation,
+Portable-handle source includes read-only catalog and runtime-role attestation:
+closed relation/function sets, exact function bodies/attributes, validated
+constraints/indices/triggers, separate ownership, no role memberships, no schema
+or database creation/temp privilege, append-only history and migration ACLs, and
+no direct trigger-function execution. Runtime updates are column-scoped to handle
+consumption/revocation; namespace locking needs `UPDATE(max_entries)` but its
+immutable trigger still rejects edits. The reviewed template is
+`ops/postgres/mcp-portable-handles-roles.sql.template`; its PUBLIC database
+revocations are for a dedicated database only, never a shared database. Explicit
+`deploymentMode: 'production'` requires `expectedOwner` and verified TLS, but the
+store still reports `production_qualified: false`: configuration and attestation
+are not deployment qualification. Local-test mode checks catalog without claiming
+deployed least privilege.
+
+Separate owner/runtime disposable tests exercise actual registration/consumption
+and reject broader grants, extra relations/functions, and function-body privilege
+drift. Managed-service and ciphertext-delivery roles remain a separate gate.
+Managed CA TLS, HA/failover, PITR/restore, rotation,
 retention, authenticated edge/broker, live provider fencing, and multi-node
 deployment conformance remain open in [deployment gates](./managed-service/DEPLOYMENT_GATES.md).
 Local owner-role PostgreSQL tests are not those operational proofs.
+
+The managed local host additionally supports an encrypted claim/resource delivery
+journal, purpose-specific worker routes, trusted per-request OAuth verification
+seam, bounded separate loopback ingress, and a scheduled control-plane reaper.
+See [worker contract](./managed-service/WORKER.md) and
+[managed source README](./managed-service/README.md) for explicit construction and
+restart limits. Delivery replay never replays a provider effect or recreates a
+prepared object, and reaping never asserts cloud resource deletion.
 
 The source checkout keeps E2B pinned at `2.39.0` while repairing its development
 dependency closure: compatible `brace-expansion`/Undici 7 patches and an explicit

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add transactional PostgreSQL portable-handle storage and explicit per-request
+  pre-effect authentication, with closed catalog/runtime-role attestation,
+  column-scoped runtime updates, and separate owner/runtime fixtures. Registration,
+  expiry, context binding, replay rejection and consumption survive restart.
+- Add local-test managed worker delivery retention using host-keyed AES-256-GCM
+  and an independent PostgreSQL ciphertext ledger. Explicit claim/resource packet
+  redelivery never replays provider effects or restores prepared provenance.
+- Split execution/cleanup/recovery claim/write scopes and public/worker handlers;
+  bind historical journal receipts to their original purpose through a versioned
+  audit-attested upgrade, preserving migration 001. Add a trusted per-request OAuth
+  verification seam, bounded default-off loopback host, scheduled reaper and
+  shutdown-race tests. These source changes do not deploy or activate protection.
+
 - Add a default-off SkillSpector `2.11.2` admission adapter and closed evidence
   schema. Pinned scanner wheel and runtime closure, source and reconstructed
   package, operation, owner rule/configuration, coverage, network-control, and
@@ -35,7 +48,8 @@
 - Add an explicit process-local portable-handle registry that binds recognized
   handles to a host-derived principal hash, issuer, audience/origin, allowed
   consuming methods, originating and consuming request hashes, expiry, and
-  replay limits. It is not wired into hosted admission and is not durable.
+  replay limits. The synchronous reference remains process-local; the separate
+  async PostgreSQL implementation above is durable, not deployed or auto-wired.
 - Reject MCP Apps declarations, UI resources, and active HTML at the local
   relay import boundary by default. A separately qualified renderer, CSP,
   domain policy, and message bridge remain required before enabling Apps.
