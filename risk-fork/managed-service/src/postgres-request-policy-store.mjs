@@ -45,6 +45,10 @@ export class PostgresManagedRequestPolicyStore {
         await client.query(`SET LOCAL lock_timeout = ${this.#config.statementTimeoutMs}`);
         await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${this.#config.statementTimeoutMs}`);
         const s = this.#config.quotedSchema;
+        // Verify before touching any policy relation: a drifted clock view
+        // must not get a chance to execute an unreviewed function. Repeat after
+        // the shared lock wait so preflight cannot replace the final check.
+        await verifyPostgresRequestPolicyAttestation(client, { schemaName: this.#config.schemaName, expectedOwner: this.#config.expectedOwner });
         // Shared clock lock is always first, including control reads. Never
         // roll a quota window backward on a different route or after restart.
         const lockedClock = await client.query(`SELECT last_seen_ms FROM ${s}.request_policy_clock WHERE singleton = true FOR UPDATE`);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { verifyPostgresRequestPolicyAttestation } from '../src/postgres-request-policy-attestation.mjs';
+import { PostgresManagedRequestPolicyStore } from '../src/postgres-request-policy-store.mjs';
 import { policyCatalogQuery, policyManifest } from './helpers/request-policy-catalog-fixture.mjs';
 
 function fixture(catalog = policyManifest.catalog) {
@@ -38,5 +39,31 @@ test('policy attestation closes options, rejects unsafe settings and redacts que
     client.query = (sql, values) => sql.includes("current_setting('server_version_num')")
       ? { rowCount: 1, rows: [{ version: 160015, fsync: 'on', sync: 'on', triggers: 'origin', ...settings }] } : query(sql, values);
     await assert.rejects(verifyPostgresRequestPolicyAttestation(client), { code: 'POLICY_POSTGRES_ATTESTATION_FAILED' });
+  }
+});
+test('catalog drift before or during clock acquisition rolls back before policy reads/writes', async () => {
+  for (const point of ['before_clock', 'after_clock']) {
+    const catalog = structuredClone(policyManifest.catalog);
+    if (point === 'before_clock') catalog.relations[0].kind = 'v';
+    const reader = fixture(catalog), events = [];
+    const client = { release() { events.push('release'); }, async query(sql, values) {
+      events.push(sql);
+      if (sql === 'BEGIN' || sql === 'ROLLBACK' || sql.startsWith('SET LOCAL')) return { rows: [], rowCount: 0 };
+      if (sql.startsWith('SELECT last_seen_ms')) {
+        // Simulate a catalog change during the clock wait. The repeated check,
+        // not just preflight, must reject it before configuration or writes.
+        catalog.relations[0].kind = 'v';
+        return { rows: [{ last_seen_ms: '0' }], rowCount: 1 };
+      }
+      return reader.query(sql, values);
+    } };
+    const quotas = Object.fromEntries(['admission', 'execution', 'cleanup', 'recovery', 'read'].map((route) => [route,
+      { windowMs: 60000, perKey: 3, perTenant: 5, maxSubjects: 20 }]));
+    const store = new PostgresManagedRequestPolicyStore({ pool: { connect: async () => client }, quotas, requireTls: false, disposableDb: true });
+    await assert.rejects(store.readControl(), { code: 'POLICY_UNAVAILABLE' });
+    assert.equal(events.filter((sql) => sql.startsWith('SELECT last_seen_ms')).length, point === 'before_clock' ? 0 : 1);
+    assert.equal(events.some((sql) => sql.startsWith('SELECT enabled') || sql.startsWith('UPDATE') || sql.startsWith('INSERT')), false);
+    assert.deepEqual(events.slice(-2), ['ROLLBACK', 'release']);
+    await store.close();
   }
 });

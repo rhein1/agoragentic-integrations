@@ -369,7 +369,19 @@ test('dedicated policy runtime attests exact grants and rejects privilege/owners
     await store.close();
   } finally {
     if (runtimePool) await runtimePool.end(); if (ownerPool) await ownerPool.end(); await admin.end();
-    if (created) { await root.query('SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1', [db]); await root.query(`DROP DATABASE ${qid(db)}`); }
+    if (created) {
+      // pool.end() can resolve before PostgreSQL finishes processing a clean
+      // disconnect. Do not race those sockets with an administrator SIGTERM.
+      let drained = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((await root.query('SELECT count(*)::integer AS n FROM pg_stat_activity WHERE datname=$1', [db])).rows[0].n === 0) {
+          drained = true; break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      assert.equal(drained, true, 'disposable policy database sessions must close before deletion');
+      await root.query(`DROP DATABASE ${qid(db)}`);
+    }
     await root.query(`DROP ROLE IF EXISTS ${qid(runtime)}`); await root.query(`DROP ROLE IF EXISTS ${qid(owner)}`);
     assert.equal((await root.query('SELECT 1 FROM pg_database WHERE datname=$1', [db])).rowCount, 0);
     assert.equal((await root.query('SELECT 1 FROM pg_roles WHERE rolname=ANY($1::text[])', [[owner, runtime]])).rowCount, 0);
