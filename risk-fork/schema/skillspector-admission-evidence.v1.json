@@ -112,7 +112,7 @@
     "coverage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "is_complete", "execution_successful", "total_components", "scanned_components", "coverage_percent", "fully_inspected_files", "partially_inspected_files", "entirely_uninspected_files", "ledger_exception_count", "scope_exclusion_count", "limitation_count", "analyzer_status_count", "analyzer_incomplete_count", "applicable_static_analyzer_count", "static_completed_work", "emitted_output_records", "output_limit_reached", "component_manifest_hash", "findings_before_filtering", "findings_after_filtering"],
+      "required": ["status", "is_complete", "execution_successful", "total_components", "scanned_components", "coverage_percent", "fully_inspected_files", "partially_inspected_files", "entirely_uninspected_files", "ledger_exception_count", "scope_exclusion_count", "limitation_count", "analyzer_status_count", "analyzer_incomplete_count", "missing_static_analyzer_ids", "applicable_static_analyzer_count", "static_completed_work", "emitted_output_records", "output_limit_reached", "component_manifest_hash", "findings_before_filtering", "findings_after_filtering"],
       "properties": {
         "status": { "enum": ["complete", "partial", "failed"] },
         "is_complete": { "type": "boolean" },
@@ -128,8 +128,14 @@
         "limitation_count": { "$ref": "#/$defs/count" },
         "analyzer_status_count": { "$ref": "#/$defs/count" },
         "analyzer_incomplete_count": { "$ref": "#/$defs/count" },
-        "applicable_static_analyzer_count": { "$ref": "#/$defs/count" },
-        "static_completed_work": { "$ref": "#/$defs/count" },
+        "missing_static_analyzer_ids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/reviewedStaticAnalyzerId" }
+        },
+        "applicable_static_analyzer_count": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "static_completed_work": { "type": "integer", "minimum": 0, "maximum": 320000 },
         "emitted_output_records": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "output_limit_reached": { "type": "boolean" },
         "component_manifest_hash": { "$ref": "#/$defs/sha256" },
@@ -141,6 +147,24 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["execution_successful", "score", "severity", "recommendation", "max_issue_severity", "severity_counts", "finding_count", "suppressed_count", "outcome", "reason_codes"],
+      "allOf": [
+        {
+          "if": { "properties": { "score": { "type": "integer", "maximum": 20 } } },
+          "then": { "properties": { "severity": { "const": "LOW" } } }
+        },
+        {
+          "if": { "properties": { "score": { "type": "integer", "minimum": 21, "maximum": 50 } } },
+          "then": { "properties": { "severity": { "const": "MEDIUM" }, "recommendation": { "enum": ["CAUTION", "DO_NOT_INSTALL"] } } }
+        },
+        {
+          "if": { "properties": { "score": { "type": "integer", "minimum": 51, "maximum": 80 } } },
+          "then": { "properties": { "severity": { "const": "HIGH" }, "recommendation": { "const": "DO_NOT_INSTALL" } } }
+        },
+        {
+          "if": { "properties": { "score": { "type": "integer", "minimum": 81 } } },
+          "then": { "properties": { "severity": { "const": "CRITICAL" }, "recommendation": { "const": "DO_NOT_INSTALL" } } }
+        }
+      ],
       "properties": {
         "execution_successful": { "type": "boolean" },
         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
@@ -206,6 +230,26 @@
     "evidence_hash": { "$ref": "#/$defs/sha256" }
   },
   "$defs": {
+    "reviewedStaticAnalyzerId": {
+      "enum": [
+        "static_patterns_prompt_injection",
+        "static_patterns_data_exfiltration",
+        "static_patterns_privilege_escalation",
+        "static_patterns_supply_chain",
+        "static_patterns_harmful_content",
+        "static_patterns_excessive_agency",
+        "static_patterns_output_handling",
+        "static_patterns_system_prompt_leakage",
+        "static_patterns_memory_poisoning",
+        "static_patterns_tool_misuse",
+        "static_patterns_rogue_agent",
+        "static_patterns_agent_snooping",
+        "static_patterns_anti_refusal",
+        "static_patterns_ssrf",
+        "static_patterns_deserialization",
+        "static_yara"
+      ]
+    },
     "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "count": { "type": "integer", "minimum": 0, "maximum": 20000 },
     "date": { "type": "string", "format": "date-time", "maxLength": 64 },

@@ -14,9 +14,11 @@
   },
   "coverage": {
     "analyzer_incomplete_count": 0,
-    "analyzer_status_count": 1,
+    "analyzer_status_count": 16,
+    "applicable_static_analyzer_count": 16,
     "component_manifest_hash": "sha256:38855bbf38d652f7769629716cc11f8d6da9c6981806b0cf64a9349ab27fc7f5",
     "coverage_percent": 100,
+    "emitted_output_records": 0,
     "entirely_uninspected_files": 0,
     "execution_successful": true,
     "findings_after_filtering": 0,
@@ -25,17 +27,16 @@
     "is_complete": true,
     "ledger_exception_count": 0,
     "limitation_count": 0,
+    "missing_static_analyzer_ids": [],
+    "output_limit_reached": false,
     "partially_inspected_files": 0,
     "scanned_components": 1,
     "scope_exclusion_count": 0,
+    "static_completed_work": 16,
     "status": "complete",
-    "total_components": 1,
-    "applicable_static_analyzer_count": 1,
-    "static_completed_work": 1,
-    "emitted_output_records": 0,
-    "output_limit_reached": false
+    "total_components": 1
   },
-  "evidence_hash": "sha256:5fdf4d8461a7cce23064aeee5ec0ad20a7f9d88519c422abda736c0bbe5ce346",
+  "evidence_hash": "sha256:0a41b123632a6ae1f61c6d7eb169600b75675931f69bb181bc7e1cd8ea7fd6c5",
   "invocation": {
     "baseline": false,
     "custom_rules": false,
@@ -55,8 +56,8 @@
     "osv_mode": "bundled_fallback_only"
   },
   "report": {
-    "normalized_hash": "sha256:cbd67cdffa1ac75b7f393d0fced5ec130420840b252fc27ba0b54c92ff339f72",
-    "raw_hash": "sha256:508df573222e5f18d29ec7767e26f9a3e72f5f5c4208d730e74f003c3aeaae43",
+    "normalized_hash": "sha256:7028bc5238abace0783feec1e0b93f6b93719762a94523c983ecd90967f8ab35",
+    "raw_hash": "sha256:5c22fd5dae25a860c47324632a2753dfcba5ee34a1e045c6ca31e10574fd02ba",
     "ref": "evidence:skillspector-report:example",
     "scanned_at": "2026-09-22T15:00:00.000Z",
     "valid_until": "2026-09-22T16:00:00.000Z"
