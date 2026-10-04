@@ -160,6 +160,12 @@ The disposable PostgreSQL tests use the migration owner. `FOR SHARE` requires an
 
 ## PostgreSQL source path
 
+The worker-delivery role test additionally creates a uniquely named disposable
+child database and roles, then removes those exact objects. It requires the
+explicit disposable administrator to have database/role creation authority.
+Database ACL mutations stay inside that child database, not the shared test
+database. This is local separate-role evidence, not managed hosting proof.
+
 The PostgreSQL layer includes:
 
 - composite tenant/invocation keys and tenant-scoped idempotency;
@@ -187,6 +193,36 @@ tokens. Capacity policy and attempt records are immutable except acknowledgement
 tombstones count toward capacity. This local-test store is not a replacement for
 the managed control-plane or portable-handle ledger. Supply host-owned key custody,
 retention and cleanup policy; managed-role/HA/restore qualification remains open.
+
+The delivery factory now verifies the exact reviewed catalog and version-1
+migration hash before returning a store; every operation repeats that check
+inside its transaction. Constraints, indexes, trigger definitions and function
+bodies are checked, not only names. `initialize()` exposes the same check for a
+directly constructed store. Catalog or migration drift fails closed without DDL
+or automatic repair.
+
+Supply `expectedOwner` to additionally require a distinct LOGIN/NOINHERIT runtime
+identity, no role memberships, exact schema/object ownership, database CONNECT
+and schema USAGE without creation or grant authority, ledger SELECT only,
+namespace SELECT/INSERT only, and attempts SELECT/INSERT plus column-only
+UPDATE of `acknowledged`, `response_hash`, and `acknowledged_at`. Destructive
+privileges and direct trigger-function execution are denied. Omitting
+`expectedOwner` is catalog-only local testing, not runtime-role qualification.
+
+[Owner bootstrap](./ops/postgres/owner-bootstrap.sql.template) and
+[post-migration grants](./ops/postgres/worker-delivery-roles.sql.template) are
+reviewable templates for a dedicated disposable database with separately
+provisioned roles. Run only worker-delivery migration `002_worker_delivery.pg.sql`
+in this independent schema, not control-plane migration `001`. No template
+contains credentials or provisions a hosted database. The role templates
+require a dedicated migrator: removing PostgreSQL's global
+PUBLIC function-EXECUTE default affects that migrator's future functions across
+this database, not just this schema. A schema-scoped revoke cannot override the
+global default; do not apply this template using a shared migrator identity.
+Both the store and
+attestor remain source-only; even a successful strict attestation reports
+`production_qualified: false`. Production TLS/key custody, broader control-plane
+roles, HA/failover/PITR/restore, rotation, retention and monitoring remain Gate 4.
 
 ## HTTP adapter surface
 

@@ -69,8 +69,13 @@ Portable-handle source now attests the exact reviewed relation/column/constraint
 index/trigger/function catalog and least-privilege runtime ownership/grants in
 explicit production mode, which requires verified TLS. A reviewed role template
 and disposable separate-owner/runtime tests exist. The managed control plane and
-independent ciphertext delivery store still need equivalent deployed role/catalog
-qualification; their owner-role tests cannot substitute for it. Managed migration
+independent ciphertext delivery store still need deployed role/catalog
+qualification; local tests cannot substitute for it. The delivery source now
+verifies its exact catalog and migration hash before factory return and every
+transaction, with opt-in `expectedOwner` least-privilege runtime attestation,
+separate-role templates and disposable role/drift tests. Catalog-only mode does
+not verify privileges, and neither mode enables production. The broader managed
+control-plane role/credential-locking boundary remains open. Managed migration
 `002_journal_purpose` upgrades immutable `001` using each receipt's exact audit
 event and aborts ambiguous legacy evidence.
 

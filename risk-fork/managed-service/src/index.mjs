@@ -48,3 +48,4 @@ export { createManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
 export { createManagedRiskForkReaper } from './reaper.mjs';
 export { createPostgresWorkerDeliveryStore, PostgresWorkerDeliveryStore } from './postgres-worker-delivery-store.mjs';
 export { migratePostgresWorkerDelivery } from './postgres-worker-delivery-migrator.mjs';
+export { verifyPostgresWorkerDeliveryAttestation } from './postgres-worker-delivery-attestation.mjs';
