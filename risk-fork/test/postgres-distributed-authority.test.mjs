@@ -356,7 +356,7 @@ test('a process crash after the durable effect claim never auto-invokes again an
   const harness = await createHarness(t, fixture);
   const crashed = await startWorker(harness, fixture, 'crash_after_effect_claim').done;
 
-  assert.equal(crashed.code, 72, crashed.stderr);
+  assert.equal(crashed.code, 72, JSON.stringify(crashed.events.map(({ type, ok, code }) => ({ type, ok, code }))));
   assert.equal(crashed.events.filter((event) => event.type === 'effect_invoked').length, 1);
   const unresolved = await harness.authority.listUnresolved();
   assert.equal(unresolved.operations.length, 1);
@@ -527,7 +527,7 @@ test('exact proven effect success may finalize an unresolved durable claim', {
   const fixture = createFixture('reconciled-success', { consequential: true });
   const harness = await createHarness(t, fixture);
   const crashed = await startWorker(harness, fixture, 'crash_after_effect_claim').done;
-  assert.equal(crashed.code, 72, crashed.stderr);
+  assert.equal(crashed.code, 72, JSON.stringify(crashed.events.map(({ type, ok, code }) => ({ type, ok, code }))));
   const unresolved = (await harness.authority.listUnresolved()).operations[0];
   const result = { outcome: 'externally-proven-success' };
   const reconciled = await harness.authority.reconcileOperation({

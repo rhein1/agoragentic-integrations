@@ -114,7 +114,15 @@ The store repeats `worker:<purpose>:claim` authorization for every lease claim a
 The legacy `worker:claim` and `worker:write` scopes are not accepted. Operators
 must explicitly reissue least-privilege credentials; there is no automatic
 expansion into all six new permissions. Distinct principal slots and route
-scopes do not qualify deployed roles or a live provider broker.
+scopes do not qualify deployed roles or a live provider broker. Worker, delivery
+journal and enabled local-host construction now require immutable original
+principals with pairwise distinct stable key IDs, one tenant and the appropriate
+claim/write scopes. Re-authenticating a shared key cannot satisfy separation;
+caller clones still fail the existing control-plane authenticator brand checks.
+The local host retains the validated assignments rather than reading mutable
+options at dispatch. This is composition enforcement, not global least-privilege
+credential provisioning: broad credentials and separately configured processes
+still need a qualified deployment policy.
 
 The current source scopes separate tenant APIs, worker mutation, and audit reads:
 

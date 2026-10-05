@@ -1,5 +1,6 @@
 import {
   assertAllowedKeys,
+  assertManagedWorkerPrincipals,
   assertPlainRecord,
   managedError,
   requireInteger,
@@ -61,6 +62,8 @@ export function createManagedRiskForkLocalHost(options = {}) {
   const workerId = requireOpaqueRef(options.workerId, 'workerId');
   requireInteger(options.publicPort ?? 0, 'publicPort', { min: 0, max: 65535 });
   requireInteger(options.workerPort ?? 0, 'workerPort', { min: 0, max: 65535 });
+  const principals = assertManagedWorkerPrincipals({ execution: options.executionPrincipal,
+    cleanup: options.cleanupPrincipal, recovery: options.recoveryPrincipal });
 
   let delivery;
   let worker;
@@ -74,18 +77,18 @@ export function createManagedRiskForkLocalHost(options = {}) {
       namespace: options.deliveryNamespace,
       workerId,
       controlPlane: options.controlPlane,
-      executionPrincipal: options.executionPrincipal,
-      cleanupPrincipal: options.cleanupPrincipal,
-      recoveryPrincipal: options.recoveryPrincipal,
+      executionPrincipal: principals.execution,
+      cleanupPrincipal: principals.cleanup,
+      recoveryPrincipal: principals.recovery,
       maxAttempts: options.workerOptions?.maxAttempts,
     });
     worker = createManagedRiskForkWorker({
       ...(options.workerOptions ?? {}),
       controlPlane: options.controlPlane,
       providerRegistry: options.providerRegistry,
-      executionPrincipal: options.executionPrincipal,
-      cleanupPrincipal: options.cleanupPrincipal,
-      recoveryPrincipal: options.recoveryPrincipal,
+      executionPrincipal: principals.execution,
+      cleanupPrincipal: principals.cleanup,
+      recoveryPrincipal: principals.recovery,
       workerId,
       deliveryJournal: delivery,
       requestPolicy: options.requestPolicy,
@@ -200,9 +203,9 @@ export function createManagedRiskForkLocalHost(options = {}) {
     },
     close,
     // Clean-host capabilities only; never added to either HTTP surface.
-    execute(ref) { active(); return runWorker(options.executionPrincipal, 'execution', (decision) => worker.execute(ref, decision)); },
-    cleanup(ref) { active(); return runWorker(options.cleanupPrincipal, 'cleanup', () => worker.cleanup(ref)); },
-    recover(ref) { active(); return runWorker(options.recoveryPrincipal, 'recovery', () => worker.recover(ref)); },
+    execute(ref) { active(); return runWorker(principals.execution, 'execution', (decision) => worker.execute(ref, decision)); },
+    cleanup(ref) { active(); return runWorker(principals.cleanup, 'cleanup', () => worker.cleanup(ref)); },
+    recover(ref) { active(); return runWorker(principals.recovery, 'recovery', () => worker.recover(ref)); },
     listPendingDeliveries(limit) { active(); return delivery.listPending(limit); },
     resumeDelivery(ref) { active(); return delivery.resumeDelivery(ref); },
     health() {

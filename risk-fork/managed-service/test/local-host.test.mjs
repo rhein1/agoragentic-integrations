@@ -62,7 +62,7 @@ function hostOptions(fixture) {
     providerRegistry: fixture.providerRegistry,
     executionPrincipal: fixture.principal,
     cleanupPrincipal: fixture.sameTenantPrincipal,
-    recoveryPrincipal: fixture.sameTenantPrincipal,
+    recoveryPrincipal: fixture.recoveryPrincipal,
     workerId: 'worker:local-host',
     deliveryStore: deliveryStore(),
     deliveryEncryptionKey: Buffer.alloc(32, 0x51),

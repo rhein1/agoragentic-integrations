@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { isProxy } from 'node:util/types';
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import {
-  assertAllowedKeys, assertDataArray, assertPlainRecord, cloneJson, deepFreeze, managedError,
+  assertAllowedKeys, assertDataArray, assertManagedWorkerPrincipals, assertPlainRecord, cloneJson, deepFreeze, managedError,
   requireEnum, requireInteger, requireInvocationRef, requireOpaqueRef,
 } from './validation.mjs';
 
@@ -45,12 +45,8 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
   const namespace = requireOpaqueRef(options.namespace, 'namespace');
   const workerId = requireOpaqueRef(options.workerId, 'workerId');
   const maxAttempts = requireInteger(options.maxAttempts ?? 1000, 'maxAttempts', { min: 1, max: 10_000 });
-  const principals = Object.freeze({ execution: options.executionPrincipal,
+  const principals = assertManagedWorkerPrincipals({ execution: options.executionPrincipal,
     cleanup: options.cleanupPrincipal, recovery: options.recoveryPrincipal });
-  for (const principal of Object.values(principals)) {
-    requireOpaqueRef(principal?.key_id, 'principal.key_id');
-    requireOpaqueRef(principal?.tenant_id, 'principal.tenant_id');
-  }
   // Snapshot host key custody only after validating the complete construction.
   // Retired keys decrypt exact retained v1 records; they never seal new packets.
   const decryptionKeys = new Map([...keyInputs].map(([id, value]) => [id, Buffer.from(value)]));

@@ -80,7 +80,7 @@ test('worker delivery survives restart, fences capacity, and protects tombstones
     const journalOptions = { store: restarted, encryptionKey: Buffer.alloc(32, 93),
       keyId: 'fixture:encrypted', namespace: 'fixture:encrypted', workerId: 'fixture:worker',
       controlPlane: control, executionPrincipal: f.principal,
-      cleanupPrincipal: f.sameTenantPrincipal, recoveryPrincipal: f.sameTenantPrincipal };
+      cleanupPrincipal: f.sameTenantPrincipal, recoveryPrincipal: f.recoveryPrincipal };
     const journal = createManagedWorkerDeliveryJournal(journalOptions);
     const token = f.nextLeaseToken('persisted_secret');
     await assert.rejects(journal.deliver('execution', 'claimExecution', {

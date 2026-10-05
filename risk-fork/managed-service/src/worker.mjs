@@ -6,7 +6,7 @@ import { verifyManagedCleanupPlan } from './control-plane.mjs';
 import { assertManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
 import { assertManagedRequestPolicy } from './request-policy.mjs';
 import {
-  assertAllowedKeys, cloneJson, deepFreeze, managedError, requireInteger,
+  assertAllowedKeys, assertManagedWorkerPrincipals, cloneJson, deepFreeze, managedError, requireInteger,
   requireInvocationRef, requireOpaqueRef,
 } from './validation.mjs';
 
@@ -41,9 +41,8 @@ export function createManagedRiskForkWorker(options = {}) {
   const measureCost = options.measureCostMicros;
   const requestPolicy = options.requestPolicy === undefined ? null : assertManagedRequestPolicy(options.requestPolicy);
   const policyTimeoutMs = requireInteger(options.requestPolicyTimeoutMs ?? 30_000, 'requestPolicyTimeoutMs', { min: 100, max: 30_000 });
-  const principals = Object.freeze({ execution: options.executionPrincipal,
+  const principals = assertManagedWorkerPrincipals({ execution: options.executionPrincipal,
     cleanup: options.cleanupPrincipal, recovery: options.recoveryPrincipal });
-  if (Object.values(principals).some((principal) => !principal)) throw new TypeError('All worker principals are required');
   const workerId = requireOpaqueRef(options.workerId, 'workerId');
   const delivery = options.deliveryJournal == null ? null
     : assertManagedWorkerDeliveryJournal(options.deliveryJournal, control, workerId, principals);
