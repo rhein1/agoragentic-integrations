@@ -12,10 +12,20 @@ Only then may a trusted operator run the separate signing process against a dedi
 
 - Owner-reviewed PR head; ordinary and new hosted tests pass. Record the exact run URL/head after actually checking the logs. The runner's local CI fields are an **operator attestation**, not a GitHub API verifier.
 - Linux x64/arm64 or supported macOS Node runtime. Native Windows/edge environments are not the documented Dynamic server-wallet target. Windows owners should use an appropriately secured Linux environment/WSL, not assume native SDK compatibility.
-- Install the exact pins in `live/package.json` on a clean workstation. Generate and review `package-lock.json`, package provenance, native-addon behavior, and a credential-free import test. Commit the reviewed lock in a follow-up before qualifying that exact head. No lockfile or install result is fabricated here.
+- Use the exact reviewed `live/package.json` and `live/package-lock.json`, not a regenerated or floating dependency tree. The October 5 source repair removes the nested parent override that broke npm 11 tree validation and pins axios to 1.20.0. Fresh Linux x64 Node 24.20.0 installs with npm 10.9.4 and 11.6.2 passed full installed-tree validation and reported zero audit advisories; credential-free imports passed with networking disabled. See [VALIDATION.md](VALIDATION.md) for the narrow scope and remaining gaps. This is dependency/import evidence, not wallet or provider qualification. Review package provenance and qualify any different OS/runtime and native cryptographic initialization before using credentials.
 - Dedicated Dynamic Server Wallet and a separately approved seller EOA on Base Sepolia. Creating/funding accounts is a separate owner step. Test ETH and gas are required; there is no faucet/auto-funding command.
 - Secret bundle from the owner's vault, outside the checkout, with owner-only file permissions. The 0.0.225 example API uses `environment_id`, `api_token`, `account_address`, `external_server_key_shares`, and optional `password`. Never use an existing production key. Do not rename this model `provider_managed`.
 - A private state directory outside the checkout, mode 0700. Preserve it across retries and restarts. Do not delete a claim merely to make a command run again.
+
+Credential-free dependency checks, from the repository root on the selected supported runtime:
+
+```sh
+npm --prefix risk-fork/examples/runtime-dynamic/live ci --ignore-scripts --no-audit --no-fund
+npm --prefix risk-fork/examples/runtime-dynamic/live ls --all --ignore-scripts
+npm --prefix risk-fork/examples/runtime-dynamic/live audit --ignore-scripts
+```
+
+These commands contact the package registry, not Dynamic or a blockchain RPC. Run them in a clean environment without credentials; do not pass lifecycle-script approval or launch `live/run.mjs` as an installation check. Audit results are time-specific. A credential-free SDK import must use its ESM import condition, as `dynamic-action.mjs` does, with network access disabled. Passing these checks does not grant the live-attempt approval below.
 
 ## 1. Prepare without credentials
 

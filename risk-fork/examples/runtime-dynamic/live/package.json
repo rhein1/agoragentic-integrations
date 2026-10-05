@@ -4,10 +4,17 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Owner-operated Base Sepolia demo only; not a published signer",
-  "engines": {"node": ">=22"},
-  "dependencies": {"@dynamic-labs-wallet/node-evm": "0.0.225", "viem": "2.38.2"},
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@dynamic-labs-wallet/node-evm": "0.0.225",
+    "@walletconnect/utils": "2.21.10",
+    "viem": "2.38.2"
+  },
   "overrides": {
-    "axios@^1.0.0": "1.18.0",
+    "@walletconnect/utils": "$@walletconnect/utils",
+    "axios@^1.0.0": "1.20.0",
     "ws@^8.0.0": "8.21.3",
     "decode-uri-component@^0.2.2": "0.5.0",
     "uuid@^11.0.0": "11.1.1",

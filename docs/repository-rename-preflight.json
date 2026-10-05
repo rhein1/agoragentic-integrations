@@ -7,7 +7,7 @@
   "target_repository": null,
   "summary": {
     "file_count": 185,
-    "occurrence_count": 369,
+    "occurrence_count": 370,
     "category_file_counts": {
       "installer_or_clone": 31,
       "machine_discovery": 61,
@@ -1619,10 +1619,11 @@
     },
     {
       "path": "risk-fork/examples/runtime-dynamic/docs/VALIDATION.md",
-      "occurrences": 2,
+      "occurrences": 3,
       "line_numbers": [
         7,
-        9
+        9,
+        17
       ],
       "categories": [
         "public_documentation"
