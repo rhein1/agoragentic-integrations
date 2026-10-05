@@ -19,7 +19,7 @@ async function hostWithPolicy(policy, fixture, invokeProvider = async () => {}) 
     enabled: true, controlPlane: fixture.controlPlane, publicAuthenticator: fixture.authenticator,
     workerAuthenticator: fixture.authenticator, providerRegistry: fixture.providerRegistry,
     executionPrincipal: fixture.principal, cleanupPrincipal: fixture.sameTenantPrincipal,
-    recoveryPrincipal: fixture.sameTenantPrincipal, workerId: 'worker:policy-test', deliveryStore: deliveryStore(),
+    recoveryPrincipal: fixture.recoveryPrincipal, workerId: 'worker:policy-test', deliveryStore: deliveryStore(),
     deliveryEncryptionKey: Buffer.alloc(32, 0x61), deliveryKeyId: 'key:policy-test', deliveryNamespace: 'ns:policy-test',
     deadlineMs: 100, requestPolicy: policy,
     workerOptions: {

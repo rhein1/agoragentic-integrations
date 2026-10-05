@@ -266,7 +266,8 @@ test('a failed demonstration PostgreSQL effect maps to COMMIT_AMBIGUOUS and is n
     (error) => error,
   );
 
-  assert.equal(first?.code, 'RISK_FORK_COMMIT_AMBIGUOUS');
+  assert.equal(first?.code, 'RISK_FORK_COMMIT_AMBIGUOUS',
+    `clean commit failed before the expected effect boundary: ${first?.cause_code ?? 'none'}`);
   assert.equal(first?.lifecycle.state, 'COMMIT_AMBIGUOUS');
   assert.equal(second?.code, 'RISK_FORK_PREPARED_ALREADY_CONSUMED');
   assert.equal(effects, 1);

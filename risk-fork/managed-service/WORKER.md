@@ -9,7 +9,21 @@ credential, or provider account. The package remains private and unpublished.
 
 Supply `controlPlane`, `providerRegistry`, distinct `executionPrincipal`,
 `cleanupPrincipal`, and `recoveryPrincipal` slots, `workerId`, bounded `leaseMs`
-and `maxAttempts`, and these trusted callbacks:
+and `maxAttempts`.
+
+The worker, delivery journal and enabled local host reject overlapping stable
+`key_id` values and mixed tenants before retaining delivery keys or opening any
+listener. All three original principal objects and their scope arrays must be
+immutable data and include their purpose's claim/write scopes. Authenticating
+the same key twice does not create two identities. Principals are retained by
+reference, not cloned: the control plane still rejects forged/serialized objects
+and rechecks current persisted credentials for each operation. The local host
+captures the validated assignments; changing its options later cannot substitute
+a policy identity. This enforces one composition, not global credential
+exclusivity or deployed least privilege. Broad credentials remain possible;
+separate provisioning, runtime custody and rotation still require qualification.
+
+Supply these trusted callbacks:
 
 - `loadPrepareInput(invocation)`: reconstruct the actual controller preparation
   input from clean-host policy. Its operation must hash to the admitted exact

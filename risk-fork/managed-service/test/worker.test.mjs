@@ -43,7 +43,7 @@ async function fixture(overrides = {}) {
   const options = {
     controlPlane: current.controlPlane, providerRegistry: current.providerRegistry,
     executionPrincipal: current.principal, cleanupPrincipal: current.sameTenantPrincipal,
-    recoveryPrincipal: current.sameTenantPrincipal, workerId: 'worker:test', leaseMs: 10_000,
+    recoveryPrincipal: current.recoveryPrincipal, workerId: 'worker:test', leaseMs: 10_000,
     clock: () => new Date(provider.observedAt),
     loadPrepareInput: (invocation) => ({
       risk_input: { mcp_phase: 'tools/call', mcp_server_ref: capsule.proposed_interaction.mcp_server_ref,
@@ -93,7 +93,7 @@ function policyHost(current, requestPolicy, workerOverrides = {}) {
     enabled: true, controlPlane: current.controlPlane, publicAuthenticator: current.authenticator,
     workerAuthenticator: current.authenticator, providerRegistry: current.providerRegistry,
     executionPrincipal: current.principal, cleanupPrincipal: current.sameTenantPrincipal,
-    recoveryPrincipal: current.sameTenantPrincipal, workerId: 'worker:policy',
+    recoveryPrincipal: current.recoveryPrincipal, workerId: 'worker:policy',
     deliveryStore: store, deliveryEncryptionKey: Buffer.alloc(32, 71),
     deliveryKeyId: 'key:policy', deliveryNamespace: 'namespace:policy', requestPolicy,
     deadlineMs: 1000,
@@ -555,7 +555,7 @@ test('worker delivery journal persists ciphertext and restart replays no origina
   const options = { store, encryptionKey: Buffer.alloc(32, 91), keyId: 'fixture:encryption',
     namespace: 'fixture:deliveries', workerId: current.options.workerId, controlPlane: current.controlPlane,
     executionPrincipal: current.principal, cleanupPrincipal: current.sameTenantPrincipal,
-    recoveryPrincipal: current.sameTenantPrincipal };
+    recoveryPrincipal: current.recoveryPrincipal };
   const journal = createManagedWorkerDeliveryJournal(options);
   const worker = createManagedRiskForkWorker({ ...current.options, deliveryJournal: journal });
   const result = await worker.execute(current.admitted.invocation_ref);

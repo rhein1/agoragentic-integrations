@@ -29,7 +29,7 @@ async function fixture(fixtureOptions = {}) {
   const encryptionKey = Buffer.alloc(32, 0x42);
   const options = { store, encryptionKey, keyId: 'fixture:key1', namespace: 'fixture:delivery', workerId: 'worker:delivery',
     controlPlane: current.controlPlane, executionPrincipal: current.principal,
-    cleanupPrincipal: current.sameTenantPrincipal, recoveryPrincipal: current.sameTenantPrincipal };
+    cleanupPrincipal: current.sameTenantPrincipal, recoveryPrincipal: current.recoveryPrincipal };
   const input = { invocation_ref: invocation.invocation_ref, worker_id: options.workerId,
     lease_ms: 10_000, lease_token: testLeaseToken('encrypted') };
   return { ...current, invocation, store, options, input };
@@ -223,7 +223,9 @@ test('retired keys cannot bypass key ID AAD, identity or current credential expi
   await rejected({ retiredDecryptionKeys: [{ keyId: f.options.keyId, encryptionKey: Buffer.alloc(32, 0x44) }] });
   await rejected({ workerId: 'worker:other' });
   await rejected({ namespace: 'namespace:other' });
-  await rejected({ executionPrincipal: f.sameTenantPrincipal });
+  // Preserve a valid separated composition while substituting the ciphertext's
+  // execution identity. Reusing the cleanup identity is now rejected at build.
+  await rejected({ executionPrincipal: f.sameTenantPrincipal, cleanupPrincipal: f.principal });
   const row = f.store.rows.values().next().value;
   row.record.key_id = 'fixture:key2';
   // Even equal key bytes cannot authorize an ID substitution: AAD pins the ID.
