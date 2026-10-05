@@ -147,6 +147,8 @@ durable obligations before using this as an operational service.
 
 `close()` rejects new work and aborts the signal passed to provider/lookup
 callbacks. Late responses fail the next fence; they cannot report completion.
+The driver checks shutdown again after an awaited lease renewal and before each
+provider/lookup callback, so closing during that wait cannot dispatch new work.
 Cancellation does not prove a provider resource stopped or was destroyed.
 Recovery is still mandatory for unfinished durable invocations, and a callback
 that never settles requires broker/operator recovery.

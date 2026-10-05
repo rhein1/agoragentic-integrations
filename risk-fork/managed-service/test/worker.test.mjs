@@ -157,6 +157,87 @@ test('worker shutdown aborts the broker signal and rejects a delayed creation re
   assert.equal(current.provider.destroyCalls.length, 0, 'unknown late creation is recovery-owned');
 });
 
+test('shutdown during lease renewal cannot dispatch a new provider operation', { timeout: 5000 }, async () => {
+  const current = await fixture();
+  let entered;
+  let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const delay = new Promise((resolve) => { release = resolve; });
+  let renewals = 0;
+  const control = { ...current.controlPlane, async renewLease(...args) {
+    const result = await current.controlPlane.renewLease(...args);
+    // The first renewal constructs the controller; the second is the actual
+    // createSavepoint dispatch fence. Hold that database response across close.
+    if (++renewals === 2) { entered(); await delay; }
+    return result;
+  } };
+  const worker = createManagedRiskForkWorker({ ...current.options, controlPlane: control });
+  const attempt = worker.execute(current.admitted.invocation_ref);
+  const rejected = assert.rejects(attempt, { code: 'WORKER_PREPARATION_FAILED' });
+  try {
+    await ready;
+    worker.close();
+    release();
+    await rejected;
+    assert.deepEqual(current.methods, [], 'closed worker must not enter the broker callback');
+    assert.deepEqual(current.provider.created, [], 'no allocation after shutdown');
+    const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.notEqual(state.state, 'completed');
+    assert.equal(state.savepoint_ref, null);
+    assert.equal(state.fork_ref, null);
+    assert.throws(() => worker.execute(current.admitted.invocation_ref), { code: 'WORKER_CLOSED' });
+  } finally { release(); worker.close(); current.worker.close(); }
+});
+
+test('shutdown during recovery lease renewal never starts resource lookup', { timeout: 5000 }, async () => {
+  const current = await fixture({ worker: {
+    invokeProvider: () => { throw new Error('synthetic unknown creation'); },
+  } });
+  await assert.rejects(current.worker.execute(current.admitted.invocation_ref));
+  current.setNow('2026-09-05T12:00:11.000Z');
+  await current.controlPlane.sweepExpiredLeases();
+  let entered;
+  let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const delay = new Promise((resolve) => { release = resolve; });
+  const control = { ...current.controlPlane, async renewLease(...args) {
+    const result = await current.controlPlane.renewLease(...args);
+    entered(); await delay; return result;
+  } };
+  let lookups = 0;
+  const worker = createManagedRiskForkWorker({ ...current.options, controlPlane: control,
+    lookupResources: () => { lookups += 1; return {}; },
+  });
+  const rejected = assert.rejects(worker.recover(current.admitted.invocation_ref), { code: 'WORKER_FENCE_FAILED' });
+  try {
+    await ready;
+    worker.close(); release();
+    await rejected;
+    assert.equal(lookups, 0, 'closed worker must not start observational provider I/O');
+    assert.deepEqual(current.provider.created, []);
+    const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.notEqual(state.state, 'completed', 'shutdown does not prove absence or settle recovery');
+  } finally { release(); worker.close(); current.worker.close(); }
+});
+
+test('shutdown between a successful fence and dispatch never enters the broker', async () => {
+  const current = await fixture();
+  let worker;
+  let bindings = 0;
+  const registry = { ...current.providerRegistry, requireBound(...args) {
+    const provider = current.providerRegistry.requireBound(...args);
+    if (++bindings === 2) queueMicrotask(() => worker.close());
+    return provider;
+  } };
+  worker = createManagedRiskForkWorker({ ...current.options, providerRegistry: registry });
+  try {
+    await assert.rejects(worker.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    assert.equal(bindings, 2, 'shutdown is queued by the successful dispatch fence');
+    assert.deepEqual(current.methods, [], 'no callback after the awaited fence continuation closes');
+    assert.deepEqual(current.provider.created, []);
+  } finally { worker.close(); current.worker.close(); }
+});
+
 test('worker rechecks current scopes after host cost measurement', async () => {
   const current = await fixture();
   const resolve = current.store.resolveCredential.bind(current.store);

@@ -94,6 +94,7 @@ export function createManagedRiskForkWorker(options = {}) {
       const invocation = await control.renewLease(principals[attempt.kind], {
         invocation_ref: attempt.invocation.invocation_ref, lease_token: attempt.leaseToken, lease_ms: leaseMs,
       });
+      assertOpen(); // Shutdown while renewal waited must not authorize dispatch.
       if (invocation.invocation_ref !== attempt.invocation.invocation_ref
         || invocation.provider_binding_hash !== attempt.invocation.provider_binding_hash
         || invocation.provider_recovery_key !== attempt.invocation.provider_recovery_key) {
@@ -117,6 +118,7 @@ export function createManagedRiskForkWorker(options = {}) {
 
   async function invoke(attempt, method, input) {
     const { provider, context } = await fence(attempt);
+    assertOpen(); // The await continuation is a separate shutdown checkpoint.
     const result = await invokeProvider({ provider, method, input, context, signal: shutdown.signal });
     // A delayed response does not preserve the lease or authority it started
     // with. The broker must still fence the effect itself at the provider edge.
@@ -215,6 +217,7 @@ export function createManagedRiskForkWorker(options = {}) {
   async function recover(ref) {
     const attempt = await claim('recovery', ref);
     const { provider, context } = await fence(attempt);
+    assertOpen();
     const found = cloneJson(await lookupResources({ provider, context,
       invocation: attempt.invocation, signal: shutdown.signal }), 'recovery lookup');
     assertAllowedKeys(found, ['savepoint_ref', 'fork_ref', 'absent_resource_kinds', 'absence_evidence'], 'recovery lookup');
