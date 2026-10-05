@@ -144,8 +144,5 @@ test('dispatch policy failures and hanging reads are bounded and redacted', asyn
   const hung = policy({ readControl: async () => ++reads <= 2 ? { enabled: true, epoch: 1 } : new Promise(() => {}) });
   const bounded = hung.value.createDispatchFence(await hung.value.beforeMutation({ principal: p, routeClass: 'execution' }),
     { principal: p, invocationRef: 'invocation_1', timeoutMs: 100 });
-  // AbortSignal.timeout is unref'ed: retain a test-only timer while observing it.
-  const keepAlive = setTimeout(() => {}, 1000);
-  try { await assert.rejects(bounded({ invocationRef: 'invocation_1' }), { code: 'REQUEST_TIMEOUT' }); }
-  finally { clearTimeout(keepAlive); }
+  await assert.rejects(bounded({ invocationRef: 'invocation_1' }), { code: 'REQUEST_TIMEOUT' });
 });

@@ -149,6 +149,12 @@ or reused ticket grants no dispatch authority. The returned callback takes
 drift without consuming rate quota. This is an internal capability over the
 existing decision, not a new portable receipt or durable authorization ledger.
 
+Dispatch reads and direct local-host policy waits own referenced deadline timers,
+disposed when the bounded wait settles. They can therefore time out even after
+the local listeners close and Node has no other active handles. Deadline expiry
+grants no decision and does not prove backend or provider termination. Caller
+abort reasons are preserved internally; public errors remain redacted.
+
 The local host passes the decision to its exact worker policy. The worker checks
 before creation/execution and supplies a method/attempt-bound `effectFence()`
 that the trusted broker must await after its own waits, immediately before the

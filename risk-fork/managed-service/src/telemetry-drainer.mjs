@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { assertAllowedKeys, assertPlainRecord, requireInteger } from './validation.mjs';
 import { normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
+import { createManagedDeadline } from './deadline.mjs';
 
 const branded = new WeakSet();
 const MAX_COUNTER = 2_147_483_647;
@@ -11,12 +12,6 @@ function acknowledge(value, ref) {
   if (!Object.hasOwn(value,'event_ref') || !Object.hasOwn(value,'delivered') || value.event_ref !== ref || value.delivered !== true) throw new TypeError('Invalid telemetry sink acknowledgement');
   return Object.freeze({ event_ref: ref, delivered: true });
 }
-function deadline(signal, timeout) { return signal ? AbortSignal.any([signal,AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout); }
-function stopped(signal) {
-  if (signal.aborted) return Promise.resolve(null);
-  return new Promise((resolve) => signal.addEventListener('abort',() => resolve(null),{ once: true }));
-}
-
 // Explicit local observer composition only. No provider/network SDK, endpoint,
 // credential provisioning, automatic startup or production qualification.
 // A sink must deduplicate event_ref. A callback timeout is not termination proof.
@@ -44,7 +39,8 @@ export function createManagedTelemetryDrainer(options) {
       let event;
       try { event = normalizeManagedTelemetryEvent(claimed.event); requireInteger(claimed.generation,'generation',{ min: 1 }); }
       catch { failed = bump(failed); break; }
-      const signal = deadline(stopController.signal,timeout);
+      const deadline = createManagedDeadline(timeout,{ signal: stopController.signal });
+      const signal = deadline.signal;
       let errorCode = 'SINK_UNAVAILABLE';
       const work = Promise.resolve().then(() => {
         if (signal.aborted) return null;
@@ -55,7 +51,9 @@ export function createManagedTelemetryDrainer(options) {
       }).catch(() => null);
       deliveryPending = work;
       void work.finally(() => { if (deliveryPending === work) deliveryPending = undefined; });
-      const result = await Promise.race([work,stopped(signal)]);
+      let result;
+      try { result = await Promise.race([work,deadline.aborted]); }
+      finally { deadline.dispose(); }
       if (signal.aborted) {
         if (stopController.signal.aborted) shutdownInterrupted = bump(shutdownInterrupted);
         else { timedOut = bump(timedOut); failed = bump(failed); }
@@ -96,9 +94,10 @@ export function createManagedTelemetryDrainer(options) {
       assertPlainRecord(options,'telemetry close options'); assertAllowedKeys(options,['timeoutMs'],'telemetry close options');
       const timeoutMs = requireInteger(options.timeoutMs ?? timeout,'timeoutMs',{ min: 50, max: 30_000 });
       closed = true; if (timer !== undefined) clearInterval(timer); timer = undefined; stopController.abort();
-      const signal = AbortSignal.timeout(timeoutMs);
+      const deadline = createManagedDeadline(timeoutMs);
       const pending = [current,deliveryPending].filter(Boolean);
-      if (pending.length) await Promise.race([Promise.allSettled(pending),stopped(signal)]);
+      try { if (pending.length) await Promise.race([Promise.allSettled(pending),deadline.aborted]); }
+      finally { deadline.dispose(); }
       return Object.freeze({ settled: current === undefined && deliveryPending === undefined,...health() });
     },
   });
