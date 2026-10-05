@@ -78,7 +78,15 @@ uncertain and require the existing recovery path.
 
 With a configured policy, every successful broker response must have awaited
 its effect fence. A missing fence fails closed as an unknown broker outcome;
-it does not prove no API call occurred. This capability is for a trusted broker,
+the same applies to a rejected callback that never completed its required fence.
+If a broker starts a fence, it must finish successfully before its response is
+accepted even on the optional legacy local-test path. Failed or unfinished
+fences and propagated driver-issued invalid-fence errors retain private
+uncertainty and stop further callbacks. Classification does not trust provider
+error codes. A correctly completed first fence remains valid when a duplicate
+call is rejected and handled by the broker; a retained/late call is only a denied
+capability, not retroactive cancellation. None of this proves the broker used
+the fresh context at the actual effect or that no API call occurred. This capability is for a trusted broker,
 not isolation from a compromised host that already owns the provider object.
 Separate policy/control-plane reads are **not atomic with a provider effect**.
 Their order is lease/credential/binding renewal, then a policy read; credential
@@ -113,6 +121,27 @@ preparation already destroyed them, so managed cleanup obtains fresh evidence
 bound to its own cleanup plan. A failed observation does not import the result.
 Public `cleanup(ref)` and restart recovery still destroy uncertain resources;
 their broker/provider contract must safely reconcile already absent resources.
+
+Cleanup attempts known plan entries sequentially and independently. If one
+resource's destroy or verification callback fails without private driver
+uncertainty, the next resource still receives its own fresh lease, current
+credential and provider-binding checks. Lease loss/expiry/takeover, credential
+withdrawal, shutdown, binding loss or broker-fence uncertainty stops further
+callbacks. A failed resource contributes no accepted absence evidence, and any
+callback failure prevents `completeCleanup`: return only the generic redacted
+`WORKER_CLEANUP_FAILED` and retain `cleanup_pending`. Shutdown preserves the
+existing redacted `WORKER_CLOSED` error instead; it also stops further callbacks
+and cannot complete cleanup. Without configured policy, a callback that fails
+before starting its optional fence remains a resource-local legacy local-test
+failure; with policy, the same missing required fence makes the attempt uncertain.
+Neither case grants production broker authority. The verify-only settlement
+path also attempts the other observation but never imports a partially verified
+result. Full success gets a final current-authority fence before the control
+plane independently verifies all evidence and authorizes terminal completion.
+There is no same-attempt provider retry or persisted partial evidence. Expiry,
+reaping and a fresh worker reconcile the retained obligation using the existing
+already-absent broker/provider contract; this does not replay creation/execution
+or establish real provider destruction/termination.
 
 Returned `controller` and `prepared` are clean-host process-local capabilities,
 never agent/HTTP payloads. The core still rejects clones, serialized prepared
@@ -216,7 +245,11 @@ that never settles requires broker/operator recovery.
 immediate journaling, duplicate callers, no double destroy, lost journal
 acknowledgement, both-found/partial/total-absence recovery without execution,
 cleanup-attestation denial, operation substitution, expiry after a response,
-shutdown, and scope withdrawal after metering. Existing
+shutdown, and scope withdrawal after metering.
+Cleanup regressions include destroy/observation failure, deceptive provider
+error codes, fresh-worker convergence, scope/expiry/binding/shutdown/takeover
+loss, missing/failed/unfinished fences and handled duplicate-fence rejection.
+Existing
 PostgreSQL worker-authority tests separately exercise the durable scope boundary.
 Run `npm test` and `npm run check` in this directory; opt-in database tests require
 an isolated test database and are not managed deployment qualification.
