@@ -7,6 +7,7 @@ import {
 } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
+import { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
 import {
   ACTIVE_INVOCATION_STATES,
@@ -70,7 +71,8 @@ const expectedMigrationHashPromises = new Map();
 
 function expectedMigrationHash(version) {
   if (!expectedMigrationHashPromises.has(version)) {
-    const file = version === 1 ? '001_managed_control_plane.pg.sql' : '002_journal_purpose.pg.sql';
+    const file = ['001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql',
+      '003_control_plane_lock_helpers.pg.sql'][version - 1];
     expectedMigrationHashPromises.set(version, readFile(new URL(`../migrations/${file}`, import.meta.url),
       'utf8').then((source) => sha256Ref(source.replace(/\r\n?/g, '\n'))));
   }
@@ -258,6 +260,7 @@ export class PostgresManagedServiceStore {
   #verifiedClients = new WeakSet();
   #eventRef;
   #schemaName;
+  #expectedOwner;
   #maxClockSkewMs;
   #closed = false;
 
@@ -267,6 +270,7 @@ export class PostgresManagedServiceStore {
     requireTls = true,
     maxClockSkewMs = 5_000,
     eventRef = () => `evt_${randomUUID()}`,
+    expectedOwner,
   } = {}) {
     if (!pool || typeof pool.connect !== 'function') {
       throw new TypeError('PostgreSQL managed store requires pool.connect()');
@@ -290,6 +294,8 @@ export class PostgresManagedServiceStore {
       'managed PostgreSQL schema name',
     );
     this.#schemaName = schemaName;
+    if (expectedOwner !== undefined) quotePostgresAuthorityIdentifier(expectedOwner, 'expectedOwner');
+    this.#expectedOwner = expectedOwner;
     this.#requireTls = requireTls;
     this.#eventRef = eventRef;
   }
@@ -301,6 +307,11 @@ export class PostgresManagedServiceStore {
       verifiedClients: this.#verifiedClients,
     });
     try {
+      if (this.#expectedOwner !== undefined) {
+        await verifyPostgresControlPlaneAttestation(client, {
+          schemaName: this.#schemaName, expectedOwner: this.#expectedOwner,
+        });
+      }
       return await callback(client);
     } finally {
       client.release();
@@ -314,6 +325,11 @@ export class PostgresManagedServiceStore {
           await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
           try {
             await client.query('SET LOCAL synchronous_commit = on');
+            if (this.#expectedOwner !== undefined) {
+              await verifyPostgresControlPlaneAttestation(client, {
+                schemaName: this.#schemaName, expectedOwner: this.#expectedOwner,
+              });
+            }
             if (assertedNowValue !== undefined && attempt === 1) {
               await this.#databaseNow(client, assertedNowValue);
             }
@@ -392,7 +408,7 @@ export class PostgresManagedServiceStore {
 
   async #lockTenantStatus(client, tenantId) {
     const result = await client.query(
-      `SELECT status FROM ${this.#schema}.managed_tenants WHERE tenant_id = $1 FOR SHARE`,
+      `SELECT ${this.#schema}.lock_managed_tenant_share($1) AS status`,
       [tenantId],
     );
     return result.rowCount === 1 ? result.rows[0].status : null;
@@ -422,11 +438,10 @@ export class PostgresManagedServiceStore {
     // Lock by identity first: WHERE predicates can run before a row-lock wait,
     // so validity must be checked again with the clock after acquiring the lock.
     const locked = await client.query(
-      `SELECT 1 FROM ${this.#schema}.managed_api_keys
-        WHERE key_id = $2 AND tenant_id = $1 FOR SHARE`,
+      `SELECT ${this.#schema}.lock_managed_api_key_share($1,$2) AS locked`,
       [tenantId, claimantKeyId],
     );
-    if (locked.rowCount !== 1) return false;
+    if (locked.rowCount !== 1 || locked.rows[0]?.locked !== true) return false;
     const result = await client.query(
       `SELECT EXISTS (
          SELECT 1 FROM ${this.#schema}.managed_api_keys AS claimant
@@ -632,8 +647,7 @@ export class PostgresManagedServiceStore {
         return deepFreeze({ created: false, invocation: normalizeInvocationRow(existing) });
       }
       const tenantResult = await client.query(
-        `SELECT * FROM ${this.#schema}.managed_tenants
-          WHERE tenant_id = $1 FOR UPDATE`,
+        `SELECT * FROM ${this.#schema}.lock_managed_tenant_update($1)`,
         [tenantId],
       );
       const tenant = tenantResult.rowCount === 1 ? tenantResult.rows[0] : null;
@@ -1706,6 +1720,12 @@ export class PostgresManagedServiceStore {
     });
   }
 
+  async initialize() {
+    return this.#withClient((client) => verifyPostgresControlPlaneAttestation(client, {
+      schemaName: this.#schemaName, expectedOwner: this.#expectedOwner,
+    }));
+  }
+
   async health() {
     return this.#withClient(async (client) => {
       const catalog = await client.query(
@@ -1743,6 +1763,9 @@ export class PostgresManagedServiceStore {
              (SELECT migration_hash
                 FROM ${this.#schema}.managed_schema_migrations
                WHERE version = 2) AS purpose_migration_hash,
+             (SELECT migration_hash
+                FROM ${this.#schema}.managed_schema_migrations
+               WHERE version = 3) AS lock_migration_hash,
              (SELECT count(*)::integer
                 FROM ${this.#schema}.managed_schema_migrations) AS migration_count,
              (SELECT count(*)::integer
@@ -1755,9 +1778,10 @@ export class PostgresManagedServiceStore {
         );
         const stateRow = state.rows[0] ?? {};
         migrationCount = Number(stateRow.migration_count);
-        migrationVerified = migrationCount === 2
+        migrationVerified = migrationCount === 3
           && stateRow.migration_hash === await expectedMigrationHash(1)
-          && stateRow.purpose_migration_hash === await expectedMigrationHash(2);
+          && stateRow.purpose_migration_hash === await expectedMigrationHash(2)
+          && stateRow.lock_migration_hash === await expectedMigrationHash(3);
         recoveryRequiredCount = Number(stateRow.recovery_required_count);
         expiredExecutionLeaseCount = Number(stateRow.expired_execution_lease_count);
       }
@@ -1776,6 +1800,10 @@ export class PostgresManagedServiceStore {
         tls_required: this.#requireTls,
         tls_ca_validated: this.#requireTls,
         catalog_verified: catalogVerified,
+        catalog_verification_scope: this.#expectedOwner === undefined
+          ? 'table_trigger_inventory' : 'source_manifest_and_runtime_role',
+        exact_catalog_verified: this.#expectedOwner !== undefined,
+        runtime_privileges_verified: this.#expectedOwner !== undefined,
         migration_verified: migrationVerified,
         migration_count: migrationCount,
         recovery_required_count: recoveryRequiredCount,
@@ -1803,6 +1831,7 @@ export async function createPostgresManagedServiceStore(options = {}) {
     'statementTimeoutMs',
     'maxClockSkewMs',
     'eventRef',
+    'expectedOwner',
   ], 'managed PostgreSQL store options');
   const pool = await createPostgresAuthorityPool({
     connectionString: options.connectionString,
@@ -1816,13 +1845,16 @@ export async function createPostgresManagedServiceStore(options = {}) {
   trustedCaPinnedPools.add(pool);
   managedOwnedPools.add(pool);
   try {
-    return new PostgresManagedServiceStore({
+    const store = new PostgresManagedServiceStore({
       pool,
       schemaName: options.schemaName,
       requireTls: true,
       maxClockSkewMs: options.maxClockSkewMs,
       eventRef: options.eventRef,
+      expectedOwner: options.expectedOwner,
     });
+    await store.initialize();
+    return store;
   } catch (error) {
     await pool.end().catch(() => {});
     throw error;

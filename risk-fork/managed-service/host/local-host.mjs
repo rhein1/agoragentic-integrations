@@ -44,7 +44,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
     'providerRegistry', 'executionPrincipal', 'cleanupPrincipal', 'recoveryPrincipal',
     'workerId', 'deliveryStore', 'deliveryEncryptionKey', 'deliveryKeyId',
     'deliveryNamespace', 'workerOptions', 'reaperOptions', 'publicPort', 'workerPort',
-    'maxBodyBytes', 'maxConnections', 'deadlineMs',
+    'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy',
   ], 'local host options');
   if (options.enabled !== undefined && typeof options.enabled !== 'boolean') {
     throw new TypeError('enabled must be boolean');
@@ -111,6 +111,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
       handler: createManagedServiceHttpHandler({
         controlPlane: options.controlPlane,
         authenticator: options.publicAuthenticator,
+        requestPolicy: options.requestPolicy,
       }),
     });
     workerServer = createManagedLoopbackServer({
@@ -122,6 +123,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
       handler: createManagedWorkerHttpHandler({
         controlPlane: options.controlPlane,
         workerAuthenticator: options.workerAuthenticator,
+        requestPolicy: options.requestPolicy,
       }),
     });
   } catch (error) {
@@ -139,6 +141,16 @@ export function createManagedRiskForkLocalHost(options = {}) {
   let closePromise = null;
   function active() {
     if (!started || closed) throw managedError('Local host is not active', 'HOST_DISABLED', 503);
+  }
+  function runWorker(principal, routeClass, operation) {
+    active();
+    if (options.requestPolicy === undefined) return operation();
+    return (async () => {
+      await options.requestPolicy.beforeMutation({ principal, routeClass,
+        signal: AbortSignal.timeout(options.deadlineMs ?? 30_000) });
+      active();
+      return operation();
+    })();
   }
   function close() {
     if (closePromise) return closePromise;
@@ -185,9 +197,9 @@ export function createManagedRiskForkLocalHost(options = {}) {
     },
     close,
     // Clean-host capabilities only; never added to either HTTP surface.
-    execute(ref) { active(); return worker.execute(ref); },
-    cleanup(ref) { active(); return worker.cleanup(ref); },
-    recover(ref) { active(); return worker.recover(ref); },
+    execute(ref) { active(); return runWorker(options.executionPrincipal, 'execution', () => worker.execute(ref)); },
+    cleanup(ref) { active(); return runWorker(options.cleanupPrincipal, 'cleanup', () => worker.cleanup(ref)); },
+    recover(ref) { active(); return runWorker(options.recoveryPrincipal, 'recovery', () => worker.recover(ref)); },
     listPendingDeliveries(limit) { active(); return delivery.listPending(limit); },
     resumeDelivery(ref) { active(); return delivery.resumeDelivery(ref); },
     health() {

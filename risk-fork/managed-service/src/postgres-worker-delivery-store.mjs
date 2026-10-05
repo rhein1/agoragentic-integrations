@@ -1,11 +1,9 @@
-import { readFile } from 'node:fs/promises';
-
 import {
   acquirePostgresAuthorityClient,
   createPostgresAuthorityPool,
   quotePostgresAuthorityIdentifier,
 } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { sha256Ref } from '../../src/canonical.mjs';
+import { verifyPostgresWorkerDeliveryAttestation } from './postgres-worker-delivery-attestation.mjs';
 import {
   assertAllowedKeys,
   assertPlainRecord,
@@ -20,29 +18,6 @@ import {
 const SCHEMA = 'agoragentic.risk-fork.worker-delivery.v1';
 const trustedPools = new WeakSet();
 const MAX_RECORD_BYTES = 65_536;
-const EXPECTED_COLUMNS = Object.freeze({
-  managed_worker_delivery_schema_migrations: [
-    ['version', 'integer', true], ['migration_hash', 'text', true], ['applied_at', 'timestamp with time zone', true],
-  ],
-  managed_worker_delivery_namespaces: [
-    ['namespace', 'text', true], ['max_attempts', 'integer', true], ['created_at', 'timestamp with time zone', true],
-  ],
-  managed_worker_delivery_attempts: [
-    ['namespace', 'text', true], ['attempt_ref', 'text', true], ['key_id', 'text', true],
-    ['iv', 'text', true], ['ciphertext', 'text', true], ['tag', 'text', true],
-    ['acknowledged', 'boolean', true], ['response_hash', 'text', false],
-    ['created_at', 'timestamp with time zone', true], ['acknowledged_at', 'timestamp with time zone', false],
-  ],
-});
-let migrationHashPromise;
-
-function migrationHash() {
-  migrationHashPromise ??= readFile(
-    new URL('../migrations/002_worker_delivery.pg.sql', import.meta.url),
-    'utf8',
-  ).then((source) => sha256Ref(source.replace(/\r\n?/g, '\n')));
-  return migrationHashPromise;
-}
 
 function invalid(message = 'Worker delivery store is unavailable') {
   throw managedError(message, 'WORKER_DELIVERY_STORE_INVALID', 503);
@@ -74,6 +49,7 @@ export class PostgresWorkerDeliveryStore {
   #pool;
   #schema;
   #schemaName;
+  #expectedOwner;
   #verifiedClients = new WeakSet();
   #ownsPool;
   #requireTls;
@@ -81,7 +57,7 @@ export class PostgresWorkerDeliveryStore {
   #closed = false;
 
   constructor({ pool, schemaName = 'risk_fork_worker_delivery', ownsPool = false,
-    requireTls = true, disposableDb = false, controlPlane, statementTimeoutMs = 30_000 } = {}) {
+    requireTls = true, disposableDb = false, controlPlane, expectedOwner, statementTimeoutMs = 30_000 } = {}) {
     if (!pool || typeof pool.connect !== 'function') throw new TypeError('Worker delivery store requires pool.connect()');
     if (controlPlane?.config?.environment !== 'local_test' || controlPlane.config.enabled !== true) {
       throw managedError('Worker delivery store is local_test only', 'WORKER_NOT_QUALIFIED', 503);
@@ -92,6 +68,8 @@ export class PostgresWorkerDeliveryStore {
     this.#pool = pool;
     this.#schemaName = schemaName;
     this.#schema = quotePostgresAuthorityIdentifier(schemaName, 'managed PostgreSQL schema name');
+    if (expectedOwner !== undefined) quotePostgresAuthorityIdentifier(expectedOwner, 'worker delivery expected owner');
+    this.#expectedOwner = expectedOwner;
     this.#ownsPool = ownsPool;
     this.#requireTls = requireTls;
     this.#statementTimeoutMs = requireInteger(statementTimeoutMs, 'statementTimeoutMs', { min: 100, max: 300_000 });
@@ -107,49 +85,13 @@ export class PostgresWorkerDeliveryStore {
   }
 
   async #assertSchema(client) {
-    const expected = await migrationHash();
-    const migration = await client.query(
-      `SELECT version, migration_hash FROM ${this.#schema}.managed_worker_delivery_schema_migrations ORDER BY version`,
-    );
-    const relations = await client.query(
-      `SELECT c.relkind, c.relpersistence
-         FROM pg_catalog.pg_class c
-         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = $1 AND c.relname = ANY($2::text[]) ORDER BY c.relname`,
-      [this.#schemaName, Object.keys(EXPECTED_COLUMNS)],
-    );
-    const columns = await client.query(
-      `SELECT c.relname AS relation, a.attname AS name,
-              pg_catalog.format_type(a.atttypid, a.atttypmod) AS type_name,
-              a.attnotnull AS not_null
-         FROM pg_catalog.pg_class c
-         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-         JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
-        WHERE n.nspname = $1 AND c.relname = ANY($2::text[])
-        ORDER BY c.relname, a.attnum`,
-      [this.#schemaName, Object.keys(EXPECTED_COLUMNS)],
-    );
-    const triggers = await client.query(
-      `SELECT t.tgname, t.tgenabled
-         FROM pg_catalog.pg_trigger t
-         JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
-         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = $1 AND c.relname = ANY($2::text[])
-          AND NOT t.tgisinternal ORDER BY t.tgname`,
-      [this.#schemaName, ['managed_worker_delivery_attempts', 'managed_worker_delivery_namespaces']],
-    );
-    if (migration.rowCount !== 1 || migration.rows[0].version !== 1 || migration.rows[0].migration_hash !== expected
-      || relations.rowCount !== Object.keys(EXPECTED_COLUMNS).length
-      || relations.rows.some((row) => row.relkind !== 'r' || row.relpersistence !== 'p')
-      || JSON.stringify(columns.rows.map((row) => [row.relation, row.name, row.type_name, row.not_null]))
-        !== JSON.stringify(Object.entries(EXPECTED_COLUMNS).sort(([left], [right]) => left.localeCompare(right))
-          .flatMap(([relation, entries]) => entries.map(([name, type, notNull]) => [relation, name, type, notNull])))
-      || triggers.rowCount !== 6
-      || triggers.rows.some((row) => row.tgenabled !== 'O')
-      || JSON.stringify(triggers.rows.map((row) => row.tgname))
-        !== JSON.stringify(['managed_worker_delivery_namespace_no_delete', 'managed_worker_delivery_namespace_no_truncate', 'managed_worker_delivery_no_delete', 'managed_worker_delivery_no_truncate', 'managed_worker_delivery_protect_namespace', 'managed_worker_delivery_protect_record'])) {
-      invalid('Worker delivery migration, table, or immutable triggers are not verified');
-    }
+    return verifyPostgresWorkerDeliveryAttestation(client, {
+      schemaName: this.#schemaName, expectedOwner: this.#expectedOwner,
+    });
+  }
+
+  async initialize() {
+    return this.#transaction(async (client, attestation) => attestation);
   }
 
   async #transaction(callback) {
@@ -161,8 +103,8 @@ export class PostgresWorkerDeliveryStore {
         await client.query(`SET LOCAL statement_timeout = ${this.#statementTimeoutMs}`);
         await client.query(`SET LOCAL lock_timeout = ${this.#statementTimeoutMs}`);
         await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${this.#statementTimeoutMs}`);
-        await this.#assertSchema(client);
-        const result = await callback(client);
+        const attestation = await this.#assertSchema(client);
+        const result = await callback(client, attestation);
         await client.query('COMMIT');
         return result;
       } catch (error) {
@@ -297,7 +239,7 @@ export class PostgresWorkerDeliveryStore {
 
 export async function createPostgresWorkerDeliveryStore(options = {}) {
   assertPlainRecord(options, 'worker delivery PostgreSQL store options');
-  assertAllowedKeys(options, ['pool', 'connectionString', 'schemaName', 'tls', 'maxConnections', 'connectionTimeoutMs', 'statementTimeoutMs', 'controlPlane', 'requireTls', 'disposableDb'], 'worker delivery PostgreSQL store options');
+  assertAllowedKeys(options, ['pool', 'connectionString', 'schemaName', 'tls', 'maxConnections', 'connectionTimeoutMs', 'statementTimeoutMs', 'controlPlane', 'requireTls', 'disposableDb', 'expectedOwner'], 'worker delivery PostgreSQL store options');
   if (options.controlPlane?.config?.environment !== 'local_test' || options.controlPlane.config.enabled !== true) {
     throw managedError('Worker delivery store is local_test only', 'WORKER_NOT_QUALIFIED', 503);
   }
@@ -314,8 +256,10 @@ export async function createPostgresWorkerDeliveryStore(options = {}) {
     applicationName: 'agoragentic-risk-fork-worker-delivery',
   });
   if (ownsPool) trustedPools.add(pool);
-  try { return new PostgresWorkerDeliveryStore({ pool, schemaName: options.schemaName, ownsPool,
+  try { const store = new PostgresWorkerDeliveryStore({ pool, schemaName: options.schemaName, ownsPool,
     requireTls, disposableDb: options.disposableDb, controlPlane: options.controlPlane,
-    statementTimeoutMs: options.statementTimeoutMs ?? 30_000 }); }
+    expectedOwner: options.expectedOwner, statementTimeoutMs: options.statementTimeoutMs ?? 30_000 });
+    await store.initialize();
+    return store; }
   catch (error) { if (ownsPool) await pool.end().catch(() => {}); throw error; }
 }

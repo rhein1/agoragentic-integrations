@@ -13,7 +13,8 @@ import {
   requireInteger,
 } from './validation.mjs';
 
-const MIGRATION_FILES = ['001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql'];
+const MIGRATION_FILES = ['001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql',
+  '003_control_plane_lock_helpers.pg.sql'];
 const REQUIRED_TABLES = Object.freeze([
   'managed_schema_migrations',
   'managed_tenants',

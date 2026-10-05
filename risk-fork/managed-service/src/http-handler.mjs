@@ -57,15 +57,21 @@ function safeError(error) {
       ? 'INTERNAL_ERROR'
       : 'INVALID_REQUEST';
   const message = status === 500 ? 'Request failed closed' : String(error.message);
-  return response(status, { error: { code, message } });
+  const retry = code === 'RATE_LIMITED' && Number.isInteger(error?.retry_after_seconds)
+    && error.retry_after_seconds >= 0 && error.retry_after_seconds <= 3600
+    ? { 'retry-after': String(error.retry_after_seconds) } : {};
+  return response(status, { error: { code, message } }, retry);
 }
 
-function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWorkerRoutes) {
+function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWorkerRoutes, requestPolicy) {
   if (!controlPlane || typeof controlPlane.health !== 'function') {
     throw new TypeError('HTTP handler requires a managed control plane');
   }
   if (!authenticator || typeof authenticator.authenticate !== 'function') {
     throw new TypeError('HTTP handler requires a managed authenticator');
+  }
+  if (requestPolicy !== undefined && (!requestPolicy || typeof requestPolicy.beforeMutation !== 'function')) {
+    throw new TypeError('requestPolicy must be a host-owned managed request policy');
   }
 
   return async function handleManagedServiceRequest(request = {}) {
@@ -80,11 +86,15 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
         }
       }
       checkDeadline();
-      async function authenticate(scope) {
+      async function authenticate(scope, routeClass) {
         const principal = await authenticator.authenticate(
           authorization, scope, Object.freeze({ method, path }),
         );
         checkDeadline();
+        if (requestPolicy !== undefined) {
+          await requestPolicy.beforeMutation({ principal, routeClass, signal: request.signal });
+          checkDeadline();
+        }
         return principal;
       }
 
@@ -122,20 +132,20 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
         : null;
 
       if (allowPublicRoutes && method === 'POST' && path === '/v1/invocations') {
-        const principal = await authenticate('invocations:write');
+        const principal = await authenticate('invocations:write', 'admission');
         const result = await controlPlane.admitInvocation(principal, body);
         return response(result.created ? 201 : 200, result);
       }
 
       const invocationMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})$/.exec(path);
       if (allowPublicRoutes && method === 'GET' && invocationMatch) {
-        const principal = await authenticate('invocations:read');
+        const principal = await authenticate('invocations:read', 'read');
         return response(200, await controlPlane.getInvocation(principal, invocationMatch[1]));
       }
 
       const auditMatch = /^\/v1\/invocations\/([A-Za-z0-9][A-Za-z0-9._:@-]{0,199})\/audit$/.exec(path);
       if (allowPublicRoutes && method === 'GET' && auditMatch) {
-        const principal = await authenticate('audit:read');
+        const principal = await authenticate('audit:read', 'read');
         return response(200, {
           events: await controlPlane.listAuditEvents(principal, auditMatch[1]),
           evidence_class: 'control_plane_self_attested',
@@ -152,7 +162,7 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
             ? 'cleanup'
             : 'recovery';
         const claim = action.startsWith('claim-');
-        const principal = await authenticate(`worker:${purpose}:${claim ? 'claim' : 'write'}`);
+        const principal = await authenticate(`worker:${purpose}:${claim ? 'claim' : 'write'}`, purpose);
         if (Object.hasOwn(body, 'invocation_ref') || Object.hasOwn(body, 'expected_lease_kind')) {
           throw managedError(
             'Worker request target must be supplied only by the URL path',
@@ -190,14 +200,14 @@ function createHandler(controlPlane, authenticator, allowPublicRoutes, allowWork
 
 export function createManagedServiceHttpHandler(options = {}) {
   assertPlainRecord(options, 'public handler options');
-  assertAllowedKeys(options, ['controlPlane', 'authenticator'], 'public handler options');
-  return createHandler(options.controlPlane, options.authenticator, true, false);
+  assertAllowedKeys(options, ['controlPlane', 'authenticator', 'requestPolicy'], 'public handler options');
+  return createHandler(options.controlPlane, options.authenticator, true, false, options.requestPolicy);
 }
 
 export function createManagedWorkerHttpHandler(options = {}) {
   assertPlainRecord(options, 'worker handler options');
-  assertAllowedKeys(options, ['controlPlane', 'workerAuthenticator'], 'worker handler options');
+  assertAllowedKeys(options, ['controlPlane', 'workerAuthenticator', 'requestPolicy'], 'worker handler options');
   const { controlPlane, workerAuthenticator } = options;
   if (!workerAuthenticator) throw new TypeError('workerAuthenticator is required');
-  return createHandler(controlPlane, workerAuthenticator, false, true);
+  return createHandler(controlPlane, workerAuthenticator, false, true, options.requestPolicy);
 }

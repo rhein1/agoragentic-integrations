@@ -34,6 +34,8 @@ export {
   normalizeApiKeyRecord,
   parseBearerAuthorization,
 } from './auth.mjs';
+export { createOfflineOAuthVerifier } from './oauth-verifier.mjs';
+export { createManagedRequestPolicy } from './request-policy.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';
 export {
@@ -48,3 +50,5 @@ export { createManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
 export { createManagedRiskForkReaper } from './reaper.mjs';
 export { createPostgresWorkerDeliveryStore, PostgresWorkerDeliveryStore } from './postgres-worker-delivery-store.mjs';
 export { migratePostgresWorkerDelivery } from './postgres-worker-delivery-migrator.mjs';
+export { verifyPostgresWorkerDeliveryAttestation } from './postgres-worker-delivery-attestation.mjs';
+export { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';
