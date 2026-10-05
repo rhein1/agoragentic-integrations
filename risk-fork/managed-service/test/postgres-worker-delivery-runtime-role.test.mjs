@@ -8,6 +8,7 @@ import { verifyPostgresWorkerDeliveryAttestation } from '../src/postgres-worker-
 import { createPostgresWorkerDeliveryStore } from '../src/postgres-worker-delivery-store.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
+import { waitForDisposableDatabaseDrain } from './disposable-database-drain.mjs';
 
 const connectionString = process.env.RISK_FORK_MANAGED_TEST_POSTGRES_URL;
 let skip = 'An explicit disposable loopback risk_fork_managed_test database is required';
@@ -47,8 +48,10 @@ test('worker delivery runtime role is attested, operational, and least privilege
     if (schemaCreated) await attempt(() => admin?.query(`DROP SCHEMA ${schema} CASCADE`));
     await attempt(() => admin?.end());
     if (childCreated) {
-      await attempt(() => rootAdmin.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`, [childDatabase]));
-      await attempt(() => rootAdmin.query(`DROP DATABASE ${qid(childDatabase)}`));
+      await attempt(async () => {
+        await waitForDisposableDatabaseDrain(rootAdmin, childDatabase);
+        await rootAdmin.query(`DROP DATABASE ${qid(childDatabase)}`);
+      });
     }
     if (membershipCreated) await attempt(() => rootAdmin.query(`DROP ROLE ${qid(membership)}`));
     if (runtimeCreated) await attempt(() => rootAdmin.query(`DROP ROLE ${qid(runtime)}`));
