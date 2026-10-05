@@ -1,0 +1,747 @@
+{
+  "schema": "agoragentic.risk-fork.request-policy-postgres-catalog.v1",
+  "postgres_major": 16,
+  "migration_hash": "sha256:74f84ebf45b7989b9b66ff343b16562d54bebf3869bac6ffc1dd0acd11b5e0ba",
+  "catalog": {
+    "relations": [
+      {
+        "name": "request_policy_clock",
+        "kind": "r",
+        "persistence": "p",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false,
+        "relispartition": false,
+        "relpartbound": null,
+        "reloptions": null
+      },
+      {
+        "name": "request_policy_control",
+        "kind": "r",
+        "persistence": "p",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false,
+        "relispartition": false,
+        "relpartbound": null,
+        "reloptions": null
+      },
+      {
+        "name": "request_policy_routes",
+        "kind": "r",
+        "persistence": "p",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false,
+        "relispartition": false,
+        "relpartbound": null,
+        "reloptions": null
+      },
+      {
+        "name": "request_policy_schema_migrations",
+        "kind": "r",
+        "persistence": "p",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false,
+        "relispartition": false,
+        "relpartbound": null,
+        "reloptions": null
+      },
+      {
+        "name": "request_policy_subjects",
+        "kind": "r",
+        "persistence": "p",
+        "relrowsecurity": false,
+        "relforcerowsecurity": false,
+        "relispartition": false,
+        "relpartbound": null,
+        "reloptions": null
+      }
+    ],
+    "columns": [
+      {
+        "relation": "request_policy_clock",
+        "name": "singleton",
+        "attnum": 1,
+        "type_name": "boolean",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_clock",
+        "name": "last_seen_ms",
+        "attnum": 2,
+        "type_name": "bigint",
+        "attnotnull": true,
+        "default_expr": "0",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_control",
+        "name": "singleton",
+        "attnum": 1,
+        "type_name": "boolean",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_control",
+        "name": "enabled",
+        "attnum": 2,
+        "type_name": "boolean",
+        "attnotnull": true,
+        "default_expr": "false",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_control",
+        "name": "epoch",
+        "attnum": 3,
+        "type_name": "bigint",
+        "attnotnull": true,
+        "default_expr": "0",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_control",
+        "name": "policy_hash",
+        "attnum": 4,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_routes",
+        "name": "route_class",
+        "attnum": 1,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_routes",
+        "name": "window_ms",
+        "attnum": 2,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_routes",
+        "name": "per_key",
+        "attnum": 3,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_routes",
+        "name": "per_tenant",
+        "attnum": 4,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_routes",
+        "name": "max_subjects",
+        "attnum": 5,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_schema_migrations",
+        "name": "version",
+        "attnum": 1,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_schema_migrations",
+        "name": "migration_hash",
+        "attnum": 2,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_subjects",
+        "name": "route_class",
+        "attnum": 1,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_subjects",
+        "name": "subject_kind",
+        "attnum": 2,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_subjects",
+        "name": "subject_hash",
+        "attnum": 3,
+        "type_name": "text",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_subjects",
+        "name": "bucket_start_ms",
+        "attnum": 4,
+        "type_name": "bigint",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      },
+      {
+        "relation": "request_policy_subjects",
+        "name": "used",
+        "attnum": 5,
+        "type_name": "integer",
+        "attnotnull": true,
+        "default_expr": "",
+        "attidentity": "",
+        "attgenerated": "",
+        "attisdropped": false,
+        "default_collation": true
+      }
+    ],
+    "constraints": [
+      {
+        "relation": "request_policy_clock",
+        "conname": "request_policy_clock_last_seen_ms_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (last_seen_ms >= 0 AND last_seen_ms <= '9007199254740991'::bigint)"
+      },
+      {
+        "relation": "request_policy_clock",
+        "conname": "request_policy_clock_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "PRIMARY KEY (singleton)"
+      },
+      {
+        "relation": "request_policy_clock",
+        "conname": "request_policy_clock_singleton_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (singleton)"
+      },
+      {
+        "relation": "request_policy_control",
+        "conname": "request_policy_control_epoch_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (epoch >= 0 AND epoch <= '9007199254740991'::bigint)"
+      },
+      {
+        "relation": "request_policy_control",
+        "conname": "request_policy_control_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "PRIMARY KEY (singleton)"
+      },
+      {
+        "relation": "request_policy_control",
+        "conname": "request_policy_control_policy_hash_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (policy_hash ~ '^sha256:[a-f0-9]{64}$'::text)"
+      },
+      {
+        "relation": "request_policy_control",
+        "conname": "request_policy_control_singleton_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (singleton)"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_max_subjects_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (max_subjects >= 2 AND max_subjects <= 1000000)"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_per_key_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (per_key >= 1 AND per_key <= 1000000)"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_per_tenant_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (per_tenant >= 1 AND per_tenant <= 1000000)"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "PRIMARY KEY (route_class)"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_route_class_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (route_class = ANY (ARRAY['admission'::text, 'execution'::text, 'cleanup'::text, 'recovery'::text, 'read'::text]))"
+      },
+      {
+        "relation": "request_policy_routes",
+        "conname": "request_policy_routes_window_ms_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (window_ms >= 1000 AND window_ms <= 3600000)"
+      },
+      {
+        "relation": "request_policy_schema_migrations",
+        "conname": "request_policy_schema_migrations_migration_hash_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (migration_hash ~ '^sha256:[a-f0-9]{64}$'::text)"
+      },
+      {
+        "relation": "request_policy_schema_migrations",
+        "conname": "request_policy_schema_migrations_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "PRIMARY KEY (version)"
+      },
+      {
+        "relation": "request_policy_schema_migrations",
+        "conname": "request_policy_schema_migrations_version_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (version = 1)"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_bucket_start_ms_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (bucket_start_ms >= 0 AND bucket_start_ms <= '9007199254740991'::bigint)"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_pkey",
+        "contype": "p",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "PRIMARY KEY (route_class, subject_kind, subject_hash)"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_route_class_fkey",
+        "contype": "f",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": true,
+        "definition": "FOREIGN KEY (route_class) REFERENCES __schema__.request_policy_routes(route_class)"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_subject_hash_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (subject_hash ~ '^sha256:[a-f0-9]{64}$'::text)"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_subject_kind_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (subject_kind = ANY (ARRAY['key'::text, 'tenant'::text]))"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "conname": "request_policy_subjects_used_check",
+        "contype": "c",
+        "convalidated": true,
+        "condeferrable": false,
+        "condeferred": false,
+        "connoinherit": false,
+        "definition": "CHECK (used >= 1 AND used <= 1000000)"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "request_policy_clock_pkey",
+        "relkind": "i",
+        "reloptions": null,
+        "indisunique": true,
+        "indisprimary": true,
+        "indisvalid": true,
+        "indisready": true,
+        "indislive": true,
+        "indisreplident": false,
+        "indnatts": 1,
+        "indnkeyatts": 1,
+        "definition": "CREATE UNIQUE INDEX request_policy_clock_pkey ON __schema__.request_policy_clock USING btree (singleton)"
+      },
+      {
+        "name": "request_policy_control_pkey",
+        "relkind": "i",
+        "reloptions": null,
+        "indisunique": true,
+        "indisprimary": true,
+        "indisvalid": true,
+        "indisready": true,
+        "indislive": true,
+        "indisreplident": false,
+        "indnatts": 1,
+        "indnkeyatts": 1,
+        "definition": "CREATE UNIQUE INDEX request_policy_control_pkey ON __schema__.request_policy_control USING btree (singleton)"
+      },
+      {
+        "name": "request_policy_routes_pkey",
+        "relkind": "i",
+        "reloptions": null,
+        "indisunique": true,
+        "indisprimary": true,
+        "indisvalid": true,
+        "indisready": true,
+        "indislive": true,
+        "indisreplident": false,
+        "indnatts": 1,
+        "indnkeyatts": 1,
+        "definition": "CREATE UNIQUE INDEX request_policy_routes_pkey ON __schema__.request_policy_routes USING btree (route_class)"
+      },
+      {
+        "name": "request_policy_schema_migrations_pkey",
+        "relkind": "i",
+        "reloptions": null,
+        "indisunique": true,
+        "indisprimary": true,
+        "indisvalid": true,
+        "indisready": true,
+        "indislive": true,
+        "indisreplident": false,
+        "indnatts": 1,
+        "indnkeyatts": 1,
+        "definition": "CREATE UNIQUE INDEX request_policy_schema_migrations_pkey ON __schema__.request_policy_schema_migrations USING btree (version)"
+      },
+      {
+        "name": "request_policy_subjects_pkey",
+        "relkind": "i",
+        "reloptions": null,
+        "indisunique": true,
+        "indisprimary": true,
+        "indisvalid": true,
+        "indisready": true,
+        "indislive": true,
+        "indisreplident": false,
+        "indnatts": 3,
+        "indnkeyatts": 3,
+        "definition": "CREATE UNIQUE INDEX request_policy_subjects_pkey ON __schema__.request_policy_subjects USING btree (route_class, subject_kind, subject_hash)"
+      }
+    ],
+    "triggers": [
+      {
+        "relation": "request_policy_control",
+        "tgname": "request_policy_control_epoch",
+        "tgenabled": "O",
+        "definition": "CREATE TRIGGER request_policy_control_epoch BEFORE UPDATE ON __schema__.request_policy_control FOR EACH ROW EXECUTE FUNCTION __schema__.guard_request_policy_control()"
+      }
+    ],
+    "functions": [
+      {
+        "name": "guard_request_policy_control",
+        "prosecdef": false,
+        "proconfig": [
+          "search_path=pg_catalog"
+        ],
+        "provolatile": "v",
+        "proparallel": "u",
+        "proleakproof": false,
+        "proisstrict": false,
+        "prokind": "f",
+        "proretset": false,
+        "language": "plpgsql",
+        "args": "",
+        "definition": "CREATE OR REPLACE FUNCTION __schema__.guard_request_policy_control()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog'\nAS $function$\nBEGIN\n  IF NEW.singleton IS DISTINCT FROM OLD.singleton\n     OR NEW.policy_hash IS DISTINCT FROM OLD.policy_hash\n     OR NEW.epoch <> OLD.epoch + 1 THEN\n    RAISE EXCEPTION 'request policy control update must advance the epoch exactly once';\n  END IF;\n  RETURN NEW;\nEND;\n$function$\n"
+      }
+    ],
+    "types": [
+      {
+        "typname": "_request_policy_clock",
+        "typtype": "b",
+        "typcategory": "A",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "_request_policy_control",
+        "typtype": "b",
+        "typcategory": "A",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "_request_policy_routes",
+        "typtype": "b",
+        "typcategory": "A",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "_request_policy_schema_migrations",
+        "typtype": "b",
+        "typcategory": "A",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "_request_policy_subjects",
+        "typtype": "b",
+        "typcategory": "A",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "request_policy_clock",
+        "typtype": "c",
+        "typcategory": "C",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "request_policy_control",
+        "typtype": "c",
+        "typcategory": "C",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "request_policy_routes",
+        "typtype": "c",
+        "typcategory": "C",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "request_policy_schema_migrations",
+        "typtype": "c",
+        "typcategory": "C",
+        "typnotnull": false,
+        "base_type": "-"
+      },
+      {
+        "typname": "request_policy_subjects",
+        "typtype": "c",
+        "typcategory": "C",
+        "typnotnull": false,
+        "base_type": "-"
+      }
+    ],
+    "policies": [],
+    "rewrites": [],
+    "inheritance": [],
+    "internal_triggers": [
+      {
+        "relation": "request_policy_routes",
+        "tgenabled": "O",
+        "tgtype": 9,
+        "tgdeferrable": false,
+        "tginitdeferred": false,
+        "tgnargs": 0,
+        "columns": "",
+        "args": "",
+        "tgoldtable": null,
+        "tgnewtable": null,
+        "condition": null,
+        "function_schema": "pg_catalog",
+        "function_name": "RI_FKey_noaction_del",
+        "constraint_name": "request_policy_subjects_route_class_fkey",
+        "reference_schema": "__schema__",
+        "reference_relation": "request_policy_subjects"
+      },
+      {
+        "relation": "request_policy_routes",
+        "tgenabled": "O",
+        "tgtype": 17,
+        "tgdeferrable": false,
+        "tginitdeferred": false,
+        "tgnargs": 0,
+        "columns": "",
+        "args": "",
+        "tgoldtable": null,
+        "tgnewtable": null,
+        "condition": null,
+        "function_schema": "pg_catalog",
+        "function_name": "RI_FKey_noaction_upd",
+        "constraint_name": "request_policy_subjects_route_class_fkey",
+        "reference_schema": "__schema__",
+        "reference_relation": "request_policy_subjects"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "tgenabled": "O",
+        "tgtype": 5,
+        "tgdeferrable": false,
+        "tginitdeferred": false,
+        "tgnargs": 0,
+        "columns": "",
+        "args": "",
+        "tgoldtable": null,
+        "tgnewtable": null,
+        "condition": null,
+        "function_schema": "pg_catalog",
+        "function_name": "RI_FKey_check_ins",
+        "constraint_name": "request_policy_subjects_route_class_fkey",
+        "reference_schema": "__schema__",
+        "reference_relation": "request_policy_routes"
+      },
+      {
+        "relation": "request_policy_subjects",
+        "tgenabled": "O",
+        "tgtype": 17,
+        "tgdeferrable": false,
+        "tginitdeferred": false,
+        "tgnargs": 0,
+        "columns": "",
+        "args": "",
+        "tgoldtable": null,
+        "tgnewtable": null,
+        "condition": null,
+        "function_schema": "pg_catalog",
+        "function_name": "RI_FKey_check_upd",
+        "constraint_name": "request_policy_subjects_route_class_fkey",
+        "reference_schema": "__schema__",
+        "reference_relation": "request_policy_routes"
+      }
+    ],
+    "auxiliary_objects": []
+  }
+}

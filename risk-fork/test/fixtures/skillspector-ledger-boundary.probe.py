@@ -4,6 +4,11 @@ Explicit read-only network probe, separate from the offline Node test suite.
 Downloads two immutable public source files, checks their exact bytes, then runs
 the upstream stdlib-only ledger and the isolated reducer against synthetic events.
 Writes JSON to stdout only. No skills, scanner SDK, provider or credentials used.
+
+Run from the repository root with Python 3.11+:
+    python risk-fork/test/fixtures/skillspector-ledger-boundary.probe.py
+The execution regression compares this output with the checked-in fixture:
+    python risk-fork/test/test_skillspector_ledger_probe.py
 """
 
 import ast
@@ -41,7 +46,13 @@ selected = [
 ]
 if len(selected) != 1:
     raise RuntimeError("Pinned reducer declaration mismatch")
-reducer_module = ast.Module(body=selected, type_ignores=[])
+# Preserve the upstream annotation context when isolating the reducer. Without
+# its future import, Python 3.11-3.13 evaluates unavailable type names at exec.
+future_imports = [
+    node for node in state_tree.body
+    if isinstance(node, ast.ImportFrom) and node.module == "__future__"
+]
+reducer_module = ast.Module(body=[*future_imports, *selected], type_ignores=[])
 ast.fix_missing_locations(reducer_module)
 reducer = {
     name: ledger[name] for name in (
