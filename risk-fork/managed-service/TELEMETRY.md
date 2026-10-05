@@ -50,7 +50,7 @@ const requestPolicy = createManagedRequestPolicy({
 });
 const telemetryDrainer = createManagedTelemetryDrainer({
   store: telemetry, deliver: hostReviewedRedactedSink,
-  deliveryTimeoutMs: 1000, intervalMs: 1000, maxBatch: 16,
+  deliveryTimeoutMs: 1000, storeTimeoutMs: 1000, intervalMs: 1000, maxBatch: 16,
 });
 // Supply requestPolicy and telemetryDrainer to the explicitly enabled local
 // host. It starts polling only after startup, closes ingress/effect capabilities
@@ -103,15 +103,31 @@ Delivery is **at least once**: the sink must deduplicate `event_ref`. Its only
 accepted reply is `{ event_ref, delivered: true }`. Lost sink/ack responses can
 cause later same-event redelivery; no exactly-once delivery claim is made.
 
-One drainer bounds actual sink overlap. Timeout/close preserves the claim and
-does not acknowledge or immediately release/retry it. A hung callback ignoring
-abort remains visible and blocks further local sends; another instance may
-recover after lease expiry. Cancellation is not remote termination. Rejected
-replies/errors persist only a closed redacted retry code and DB-time backoff.
-Health counts intentional shutdown as `shutdown_interrupted`, separately from
-delivery-deadline `timed_out`; neither counter proves callback termination.
+One drainer bounds actual sink and store overlap. Each `claim`, `acknowledge`
+and `retry` wait has its own `storeTimeoutMs` (50–5,000 ms, defaulting to
+`deliveryTimeoutMs`), with an owned abort signal and referenced timer. This is
+a per-operation bound, not a total batch-duration or database termination bound.
+The drainer captures the original store methods with their receiver; later
+mutation of composition options or methods cannot replace them.
 
-Awaited candidate recording, delivery, flush and close deadlines own referenced
+Timeout/close preserves unknown claims/commits and does not acknowledge or
+immediately release/retry them. A callback ignoring abort remains visible and
+blocks new local work until its actual settlement; another instance may recover
+after lease expiry. Late store responses only clear their pending slot: a late
+claim cannot deliver, a late acknowledgement cannot increment `delivered`, and
+a late retry cannot trigger another attempt. Store cancellation does not prove
+query cancellation, non-commit or remote termination. Rejected replies/errors
+persist only a closed redacted retry code and DB-time backoff.
+
+Health preserves sink-specific `in_flight`, delivery-deadline `timed_out` and
+intentional sink shutdown `shutdown_interrupted`. Store waits separately expose
+`store_in_flight`, `store_timed_out` and `store_shutdown_interrupted`; an actual
+store rejection or deadline increments `failed` once, while shutdown does not.
+These are saturating process-local counters, not durable unique-event metrics.
+`close().settled` includes both actual store and sink work; neither a bounded
+result nor these counters prove termination or a successful durable commit.
+
+Awaited candidate recording, store operations, delivery, flush and close deadlines own referenced
 timers until their wait settles or expires. They work even when Node has no
 other active handles, and dispose timers/parent-abort listeners on settlement.
 Idle polling and nonblocking cleanup/recovery/denial recording do not retain the

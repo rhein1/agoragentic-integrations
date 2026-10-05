@@ -101,3 +101,141 @@ test('actual late sink settlement restores the slot for another event without ac
     assert.deepEqual(acknowledged, [second.event_ref]); assert.equal(sends, 2);
   } finally { release?.(); await d.close(); }
 });
+
+function dependencyFixture(phase) {
+  const first = event(), second = event(), rows = [first,second];
+  const calls = { claim: 0,acknowledge: 0,retry: 0,deliver: 0 };
+  let entered, release, signal;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const gate = new Promise((resolve) => { release = resolve; });
+  async function wait(method, options) {
+    if (phase !== method || calls[method] !== 1) return;
+    signal = options.signal; entered(); await gate;
+  }
+  return { calls,ready,release,signal: () => signal,
+    store: {
+      async claim(options) { const row = rows[calls.claim++]; await wait('claim',options); return row ? { event: row,generation: 1 } : null; },
+      async acknowledge(options) { calls.acknowledge += 1; await wait('acknowledge',options); },
+      async retry(options) { calls.retry += 1; await wait('retry',options); },
+    },
+    async deliver(value) {
+      calls.deliver += 1;
+      if (phase === 'retry' && value.event_ref === first.event_ref) throw new Error('SECRET-SINK-ERROR');
+      return { event_ref: value.event_ref,delivered: true };
+    },
+  };
+}
+
+for (const phase of ['claim','acknowledge','retry']) {
+  test(`store ${phase} deadline retains its slot; only actual settlement permits another event`, async () => {
+    const f = dependencyFixture(phase);
+    const d = createManagedTelemetryDrainer({ store: f.store,deliver: f.deliver,storeTimeoutMs: 50,deliveryTimeoutMs: 5000,maxBatch: 1 });
+    try {
+      const pending = d.runOnce(); await f.ready;
+      assert.equal(d.runOnce(),pending); // Active store callers coalesce, not duplicate.
+      const result = await pending;
+      assert.equal(result.store_timed_out,1); assert.equal(result.store_in_flight,true);
+      assert.equal(result.timed_out,0); assert.equal(result.shutdown_interrupted,0);
+      assert.equal(result.store_shutdown_interrupted,0); assert.equal(result.delivered,0); assert.equal(result.failed,1);
+      assert.equal(f.signal().aborted,true); assert.equal(result.processed,phase === 'claim' ? 0 : 1);
+      const before = { ...f.calls };
+      for (let attempt = 0; attempt < 3; attempt += 1) assert.equal((await d.runOnce()).processed,0);
+      assert.deepEqual(f.calls,before);
+      f.release(); await turn();
+      assert.equal(d.health().store_in_flight,false); assert.equal(d.health().delivered,0);
+      assert.equal(f.signal().aborted,true); assert.deepEqual(f.calls,before);
+      const next = await d.runOnce();
+      assert.equal(next.delivered,1); assert.equal(next.store_timed_out,1); assert.equal(next.failed,1);
+      assert.equal(f.calls.claim,2); assert.equal(f.calls.retry,phase === 'retry' ? 1 : 0);
+      assert.equal(f.calls.acknowledge,phase === 'acknowledge' ? 2 : 1);
+      assert.equal(f.calls.deliver,phase === 'claim' ? 1 : 2);
+      assert.equal(Object.isFrozen(next),true); assert.equal(JSON.stringify(next).includes('SECRET'),false);
+    } finally { f.release(); await d.close(); }
+  });
+
+  for (const settleBeforeClose of [false,true]) {
+    test(`shutdown during store ${phase} preserves unknown work${settleBeforeClose ? ' racing same-turn settlement' : ''}`, async () => {
+      const f = dependencyFixture(phase);
+      const d = createManagedTelemetryDrainer({ store: f.store,deliver: f.deliver,storeTimeoutMs: 5000,deliveryTimeoutMs: 5000,maxBatch: 1 });
+      try {
+        const pending = d.runOnce(); await f.ready;
+        const before = { ...f.calls };
+        if (settleBeforeClose) f.release();
+        const closed = await d.close({ timeoutMs: 50 });
+        const result = await pending;
+        assert.equal(closed.closed,true); assert.equal(result.store_shutdown_interrupted,1);
+        assert.equal(result.store_timed_out,0); assert.equal(result.timed_out,0); assert.equal(result.shutdown_interrupted,0);
+        assert.equal(result.failed,0); assert.equal(result.delivered,0); assert.equal(f.signal().aborted,true);
+        assert.equal(closed.settled,settleBeforeClose);
+        assert.equal(closed.store_in_flight,!settleBeforeClose);
+        assert.deepEqual(f.calls,before); assert.equal((await d.runOnce()).processed,0);
+        f.release(); await turn();
+        assert.equal(d.health().store_in_flight,false); assert.equal(d.health().delivered,0);
+        assert.deepEqual(f.calls,before); assert.equal((await d.close()).settled,true);
+      } finally { f.release(); await d.close(); }
+    });
+  }
+}
+
+test('drainer captures original store methods with private-field receiver and mutable option references', async () => {
+  const first = event(), second = event(), calls = { claim: 0,acknowledge: 0,retry: 0 };
+  class Store {
+    #rows = [first,second];
+    #tokens = new Map();
+    claim(options) {
+      const row = this.#rows.shift(); calls.claim += 1;
+      if (!row) return null;
+      this.#tokens.set(row.event_ref,options.claimToken);
+      return { event: row,generation: 1 };
+    }
+    acknowledge(options) { assert.equal(this.#tokens.get(options.event_ref),options.claimToken); calls.acknowledge += 1; }
+    retry(options) { assert.equal(this.#tokens.get(options.event_ref),options.claimToken); calls.retry += 1; }
+  }
+  const store = new Store();
+  const options = { store,maxBatch: 1,storeTimeoutMs: 5000,deliver: async (value) => {
+    if (value.event_ref === first.event_ref) throw new Error('SECRET-FIRST-SINK');
+    return { event_ref: value.event_ref,delivered: true };
+  } };
+  const d = createManagedTelemetryDrainer(options);
+  const forbidden = () => { throw new Error('must not reread mutable methods/options'); };
+  for (const method of ['claim','acknowledge','retry']) store[method] = forbidden;
+  options.store = { claim: forbidden,acknowledge: forbidden,retry: forbidden }; options.deliver = forbidden; options.storeTimeoutMs = 0;
+  try {
+    assert.equal((await d.runOnce()).failed,1); assert.equal((await d.runOnce()).delivered,1);
+    assert.deepEqual(calls,{ claim: 2,acknowledge: 1,retry: 1 });
+    assert.equal(d.health().store_in_flight,false); assert.equal(d.health().store_timed_out,0);
+  } finally { assert.equal((await d.close()).settled,true); }
+});
+
+test('synchronous store failures are redacted, free settled slots and never cause compensating retries', async () => {
+  for (const phase of ['claim','acknowledge','retry']) {
+    const value = event(), calls = { claim: 0,acknowledge: 0,retry: 0,deliver: 0 };
+    const store = {
+      claim() { calls.claim += 1; if (phase === 'claim') throw new Error('SECRET-CLAIM-DSN'); return { event: value,generation: 1 }; },
+      acknowledge() { calls.acknowledge += 1; if (phase === 'acknowledge') throw new Error('SECRET-ACK-DSN'); },
+      retry() { calls.retry += 1; if (phase === 'retry') throw new Error('SECRET-RETRY-DSN'); },
+    };
+    const d = createManagedTelemetryDrainer({ store,maxBatch: 1,deliver: (packet) => {
+      calls.deliver += 1; if (phase === 'retry') throw new Error('SECRET-SINK');
+      return { event_ref: packet.event_ref,delivered: true };
+    } });
+    try {
+      const result = await d.runOnce();
+      assert.equal(result.failed,1); assert.equal(result.delivered,0); assert.equal(result.store_in_flight,false);
+      assert.equal(result.store_timed_out,0); assert.equal(result.store_shutdown_interrupted,0);
+      assert.equal(calls.claim,1); assert.equal(calls.retry,phase === 'retry' ? 1 : 0);
+      assert.equal(calls.acknowledge,phase === 'acknowledge' ? 1 : 0);
+      assert.equal(calls.deliver,phase === 'claim' ? 0 : 1); assert.equal(JSON.stringify(result).includes('SECRET'),false);
+    } finally { assert.equal((await d.close()).settled,true); }
+  }
+});
+
+test('trusted store deadlines are finite bounded integers independent of sink deadlines', () => {
+  for (const storeTimeoutMs of [0,49,5001,1.5,Infinity,NaN,'50']) {
+    assert.throws(() => createManagedTelemetryDrainer({ store: fixture().store,deliver: async () => {},storeTimeoutMs }),TypeError);
+  }
+  for (const storeTimeoutMs of [50,5000]) {
+    const d = createManagedTelemetryDrainer({ store: fixture().store,deliver: async () => {},storeTimeoutMs });
+    assert.equal(d.health().production_qualified,false);
+  }
+});

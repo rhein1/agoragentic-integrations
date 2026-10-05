@@ -18,27 +18,59 @@ function acknowledge(value, ref) {
 // A sink must deduplicate event_ref. A callback timeout is not termination proof.
 export function createManagedTelemetryDrainer(options) {
   assertPlainRecord(options,'telemetry drainer options');
-  assertAllowedKeys(options,['store','deliver','deliveryTimeoutMs','intervalMs','maxBatch','eventKind'],'telemetry drainer options');
+  assertAllowedKeys(options,['store','deliver','deliveryTimeoutMs','storeTimeoutMs','intervalMs','maxBatch','eventKind'],'telemetry drainer options');
   const kind = options.eventKind ?? 'policy';
   if (!['policy','lifecycle'].includes(kind)) throw new TypeError('Invalid telemetry eventKind');
   const normalize = kind === 'lifecycle' ? normalizeManagedLifecycleEvent : normalizeManagedTelemetryEvent;
   const store = options.store;
-  if (!store || !['claim','acknowledge','retry'].every((method) => typeof store[method] === 'function') || typeof options.deliver !== 'function') throw new TypeError('Telemetry drainer requires trusted store and sink');
+  if (!store || typeof options.deliver !== 'function') throw new TypeError('Telemetry drainer requires trusted store and sink');
+  const storeMethods = {};
+  for (const method of ['claim','acknowledge','retry']) {
+    const original = store[method];
+    if (typeof original !== 'function') throw new TypeError('Telemetry drainer requires trusted store and sink');
+    storeMethods[method] = original.bind(store);
+  }
+  Object.freeze(storeMethods);
   const deliver = options.deliver;
   const timeout = requireInteger(options.deliveryTimeoutMs ?? 1000,'deliveryTimeoutMs',{ min: 50, max: 5000 });
+  const storeTimeout = requireInteger(options.storeTimeoutMs ?? timeout,'storeTimeoutMs',{ min: 50, max: 5000 });
   const interval = requireInteger(options.intervalMs ?? 1000,'intervalMs',{ min: 100, max: 30_000 });
   const batch = requireInteger(options.maxBatch ?? 16,'maxBatch',{ min: 1, max: 64 });
-  let closed = false, timer, current, deliveryPending, stopController = new AbortController();
-  let delivered = 0, failed = 0, timedOut = 0, shutdownInterrupted = 0;
+  let closed = false, timer, current, deliveryPending, storePending;
+  const stopController = new AbortController();
+  let delivered = 0, failed = 0, timedOut = 0, shutdownInterrupted = 0, storeTimedOut = 0, storeShutdownInterrupted = 0;
   const health = () => Object.freeze({ delivered,failed,timed_out: timedOut,shutdown_interrupted: shutdownInterrupted,in_flight: deliveryPending !== undefined,
+    store_timed_out: storeTimedOut,store_shutdown_interrupted: storeShutdownInterrupted,store_in_flight: storePending !== undefined,
     running: timer !== undefined,closed,production_qualified: false });
+  async function callStore(method, request) {
+    const deadline = createManagedDeadline(storeTimeout,{ signal: stopController.signal });
+    const signal = deadline.signal;
+    const work = Promise.resolve().then(() => {
+      if (signal.aborted) return undefined;
+      return storeMethods[method]({ ...request,signal });
+    }).then((value) => ({ ok: true,value }),() => ({ ok: false }));
+    storePending = work;
+    void work.finally(() => { if (storePending === work) storePending = undefined; });
+    let result;
+    try { result = await Promise.race([work,deadline.aborted]); }
+    finally { deadline.dispose(); }
+    if (signal.aborted) {
+      if (stopController.signal.aborted) storeShutdownInterrupted = bump(storeShutdownInterrupted);
+      else { storeTimedOut = bump(storeTimedOut); failed = bump(failed); }
+      // Unknown claims/commits remain recoverable. Only actual settlement clears
+      // the slot; late responses cannot dispatch, acknowledge or retry anything.
+      return null;
+    }
+    if (!result.ok) { failed = bump(failed); return null; }
+    return result;
+  }
   async function run() {
     let processed = 0;
-    while (!closed && !stopController.signal.aborted && !deliveryPending && processed < batch) {
+    while (!closed && !stopController.signal.aborted && !deliveryPending && !storePending && processed < batch) {
       const claimToken = randomBytes(32).toString('base64url');
-      let claimed;
-      try { claimed = await store.claim({ claimToken,signal: stopController.signal }); }
-      catch { failed = bump(failed); break; }
+      const claimResult = await callStore('claim',{ claimToken });
+      if (!claimResult) break;
+      const claimed = claimResult.value;
       if (claimed == null || closed || stopController.signal.aborted) break;
       let event;
       try { event = normalize(claimed.event); requireInteger(claimed.generation,'generation',{ min: 1 }); }
@@ -66,17 +98,16 @@ export function createManagedTelemetryDrainer(options) {
         break;
       }
       processed += 1;
-      try {
-        if (result) {
-          await store.acknowledge({ event_ref: event.event_ref,generation: claimed.generation,claimToken,
-            acknowledgement: result,signal: stopController.signal });
-          delivered = bump(delivered);
-        } else {
-          await store.retry({ event_ref: event.event_ref,generation: claimed.generation,claimToken,errorCode,
-            signal: stopController.signal }); failed = bump(failed);
-          break; // Backoff is durable, not a busy-loop retry.
-        }
-      } catch { failed = bump(failed); break; } // Lost ack remains recoverable.
+      if (result) {
+        const stored = await callStore('acknowledge',{ event_ref: event.event_ref,generation: claimed.generation,claimToken,
+          acknowledgement: result });
+        if (!stored || closed || stopController.signal.aborted) break;
+        delivered = bump(delivered);
+      } else {
+        const stored = await callStore('retry',{ event_ref: event.event_ref,generation: claimed.generation,claimToken,errorCode });
+        if (stored && !closed && !stopController.signal.aborted) failed = bump(failed);
+        break; // Backoff is durable, not a busy-loop retry.
+      }
     }
     return Object.freeze({ processed,...health() });
   }
@@ -84,6 +115,7 @@ export function createManagedTelemetryDrainer(options) {
     runOnce() {
       if (closed || deliveryPending) return Promise.resolve(Object.freeze({ processed: 0,...health() }));
       if (current) return current;
+      if (storePending) return Promise.resolve(Object.freeze({ processed: 0,...health() }));
       const work = run(); current = work;
       void work.finally(() => { if (current === work) current = undefined; }).catch(() => {});
       return work;
@@ -99,10 +131,10 @@ export function createManagedTelemetryDrainer(options) {
       const timeoutMs = requireInteger(options.timeoutMs ?? timeout,'timeoutMs',{ min: 50, max: 30_000 });
       closed = true; if (timer !== undefined) clearInterval(timer); timer = undefined; stopController.abort();
       const deadline = createManagedDeadline(timeoutMs);
-      const pending = [current,deliveryPending].filter(Boolean);
+      const pending = [current,deliveryPending,storePending].filter(Boolean);
       try { if (pending.length) await Promise.race([Promise.allSettled(pending),deadline.aborted]); }
       finally { deadline.dispose(); }
-      return Object.freeze({ settled: current === undefined && deliveryPending === undefined,...health() });
+      return Object.freeze({ settled: current === undefined && deliveryPending === undefined && storePending === undefined,...health() });
     },
   });
   branded.add(api); return api;
