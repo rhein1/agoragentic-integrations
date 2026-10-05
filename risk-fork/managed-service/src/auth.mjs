@@ -153,10 +153,127 @@ export function createManagedAuthenticator({ store, clock = () => new Date() } =
   });
 }
 
+// The host owns OAuth/JWT/JWKS verification. This callback is intentionally a
+// trusted boundary: this authenticator delegates token parsing and signature
+// crypto and performs no network calls. The optional offline verifier is a
+// separate pinned-key implementation. The persisted API-key record remains the
+// source of key/tenant/scope/expiry/revocation truth; subject must equal key_id.
+export function createTrustedOAuthAuthenticator({
+  store, verify, issuer, audience, clock = () => new Date(),
+} = {}) {
+  if (!store || typeof store.resolveCredential !== 'function') {
+    throw new TypeError('OAuth authenticator requires a credential store');
+  }
+  if (typeof verify !== 'function') throw new TypeError('OAuth verifier callback is required');
+  const expectedIssuer = requireString(issuer, 'OAuth issuer', { minBytes: 1, maxBytes: 512 });
+  const expectedAudience = requireString(audience, 'OAuth audience', { minBytes: 1, maxBytes: 512 });
+  if (typeof clock !== 'function') throw new TypeError('clock must be a function');
+  const issuedPrincipals = new WeakMap();
+
+  async function authenticate(authorization, requiredScope, request = {}) {
+    if (!MANAGED_SCOPES.includes(requiredScope)) throw new TypeError('requiredScope is unknown');
+    if (typeof authorization !== 'string'
+      || !/^Bearer [A-Za-z0-9._~-]{32,8192}$/.test(authorization)) {
+      throw managedError('Bearer authentication is required', 'AUTHENTICATION_REQUIRED', 401);
+    }
+    assertPlainRecord(request, 'OAuth request context');
+    assertAllowedKeys(request, ['method', 'path'], 'OAuth request context');
+    let identity;
+    try {
+      identity = await verify(Object.freeze({
+      authorization,
+      request: deepFreeze({ ...request }),
+      issuer: expectedIssuer,
+      audience: expectedAudience,
+      requiredScope,
+      }));
+      assertPlainRecord(identity, 'trusted OAuth identity');
+      assertAllowedKeys(identity, [
+        'key_hash', 'key_id', 'tenant_id', 'issuer', 'audience', 'subject',
+        'scopes', 'not_before', 'expires_at',
+      ], 'trusted OAuth identity');
+      identity = deepFreeze({
+        ...identity,
+        scopes: normalizeScopes(identity.scopes),
+        not_before: requireIso(identity.not_before, 'OAuth identity.not_before'),
+        expires_at: requireIso(identity.expires_at, 'OAuth identity.expires_at'),
+      });
+    } catch {
+      throw managedError('OAuth verification failed', 'AUTHENTICATION_FAILED', 401);
+    }
+    const keyHash = requireString(identity.key_hash, 'OAuth identity.key_hash', { maxBytes: 71 });
+    const keyId = requireOpaqueRef(identity.key_id, 'OAuth identity.key_id');
+    const tenantId = requireTenantId(identity.tenant_id);
+    if (!/^sha256:[a-f0-9]{64}$/.test(keyHash)
+      || identity.issuer !== expectedIssuer || identity.audience !== expectedAudience
+      || identity.subject !== keyId) {
+      throw managedError('OAuth identity binding is invalid', 'AUTHENTICATION_FAILED', 401);
+    }
+    const recordValue = await store.resolveCredential(keyHash);
+    if (!recordValue) throw managedError('Authentication failed', 'AUTHENTICATION_FAILED', 401);
+    const record = normalizeApiKeyRecord(recordValue);
+    const nowIso = requireIso(clock(), 'clock result');
+    if (record.key_hash !== keyHash || record.key_id !== keyId || record.tenant_id !== tenantId
+      || record.revoked_at !== null || Date.parse(nowIso) < Date.parse(record.not_before)
+      || Date.parse(nowIso) >= Date.parse(record.expires_at)
+      || Date.parse(identity.not_before) < Date.parse(record.not_before)
+      || Date.parse(identity.expires_at) > Date.parse(record.expires_at)
+      || Date.parse(nowIso) < Date.parse(identity.not_before)
+      || Date.parse(nowIso) >= Date.parse(identity.expires_at)
+      || identity.scopes.some((scope) => !record.scopes.includes(scope))) {
+      throw managedError('OAuth credential is not active', 'AUTHENTICATION_FAILED', 401);
+    }
+    if (!identity.scopes.includes(requiredScope)) {
+      throw managedError('OAuth scope is insufficient', 'AUTHORIZATION_DENIED', 403);
+    }
+    const principal = deepFreeze({
+      key_id: keyId,
+      tenant_id: tenantId,
+      scopes: [...identity.scopes],
+      subject: identity.subject,
+      issuer: identity.issuer,
+      audience: identity.audience,
+      not_before: identity.not_before,
+      expires_at: identity.expires_at,
+    });
+    issuedPrincipals.set(principal, keyHash);
+    return principal;
+  }
+
+  // Control-plane revalidation is deliberately persisted-record based. HTTP
+  // ingress calls authenticate (and therefore the trusted verifier) each time;
+  // this branded callback rechecks revocation/expiry/scope before mutations.
+  const verifier = async (value, requiredScope) => {
+    if (!MANAGED_SCOPES.includes(requiredScope)) throw new TypeError('requiredScope is unknown');
+    if (!value || typeof value !== 'object') {
+      throw managedError('Authenticated principal is required', 'AUTHENTICATION_REQUIRED', 401);
+    }
+    const keyHash = issuedPrincipals.get(value);
+    if (!keyHash) throw managedError('Authenticated principal is required', 'AUTHENTICATION_REQUIRED', 401);
+    const recordValue = await store.resolveCredential(keyHash);
+    const record = recordValue && normalizeApiKeyRecord(recordValue);
+    const now = Date.parse(requireIso(clock(), 'clock result'));
+    if (!record || value.subject !== value.key_id || value.issuer !== expectedIssuer
+      || value.audience !== expectedAudience || record.key_id !== value.key_id
+      || record.key_hash !== keyHash || record.tenant_id !== value.tenant_id
+      || record.revoked_at !== null || now < Date.parse(record.not_before)
+      || now >= Date.parse(record.expires_at)
+      || now < Date.parse(value.not_before) || now >= Date.parse(value.expires_at)) {
+      throw managedError('Authentication failed', 'AUTHENTICATION_FAILED', 401);
+    }
+    if (!value.scopes.includes(requiredScope) || !record.scopes.includes(requiredScope)) {
+      throw managedError('OAuth scope is insufficient', 'AUTHORIZATION_DENIED', 403);
+    }
+    return value;
+  };
+  managedPrincipalVerifiers.set(verifier, store);
+  return Object.freeze({ authenticate, requirePrincipal: verifier });
+}
+
 export function assertManagedPrincipalVerifier(value, expectedStore) {
   if (typeof value !== 'function' || managedPrincipalVerifiers.get(value) !== expectedStore) {
     throw new TypeError(
-      'requirePrincipal must come from createManagedAuthenticator for the same store',
+      'requirePrincipal must come from createManagedAuthenticator or createTrustedOAuthAuthenticator for the same store',
     );
   }
   return value;

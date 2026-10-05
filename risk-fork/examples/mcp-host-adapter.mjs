@@ -183,9 +183,11 @@ function capsuleFor(planRequest, workspaceDigest, resultSchema) {
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-example-'));
 const sourceWorkspace = path.join(temporaryRoot, 'source');
 await mkdir(sourceWorkspace);
+const providerState = path.join(temporaryRoot, 'provider');
+await mkdir(providerState, { mode: 0o700 });
 const inspected = await inspectLocalWorkspace({ source_workspace: sourceWorkspace });
 const provider = new LocalReferenceRiskForkAdapter({
-  baseDirectory: path.join(temporaryRoot, 'provider'),
+  baseDirectory: providerState,
   clock,
 });
 

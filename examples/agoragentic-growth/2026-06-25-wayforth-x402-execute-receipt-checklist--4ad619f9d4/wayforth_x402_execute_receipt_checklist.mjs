@@ -153,7 +153,7 @@ async function localX402Fetch(url, options = {}) {
 
       sawPaymentChallenge = true;
       if (cachedPayment) {
-        throw createHttpError("Paid retry was rejected with HTTP 402; refusing to reuse a rejected authorization", {
+        throw createHttpError("Paid request was rejected with another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: true,
@@ -174,7 +174,8 @@ async function localX402Fetch(url, options = {}) {
           paymentRequired,
         });
       }
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         cachedPayment = normalizePayResult(await pay(paymentRequired, {
           url,
           method,
@@ -577,7 +578,7 @@ async function demo() {
         return { authorizationHeader: "X402 rejected demo authorization" };
       },
     }),
-    /Paid retry was rejected/
+    /Paid request was rejected with another HTTP 402/
   );
   assert.equal(rejectedPayCalls, 1, "rejected paid 402 must not call pay again");
   assert.equal(rejectedAttempts, 2, "rejected paid 402 must stop after one paid retry");

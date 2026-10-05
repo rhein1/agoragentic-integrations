@@ -122,7 +122,22 @@ assert.match(contextHubDoc, /explicit.*approval.*cost ceiling/is);
 assert.doesNotMatch(contextHubDoc, /amk_[a-z0-9]{8,}/i);
 assert.doesNotMatch(contextHubDoc, /\b\d{2,}\+? (verified )?listings\b/i);
 assert.doesNotMatch(contextHubDoc, /Full ECF/i);
-assert.doesNotMatch(contextHubDoc, /https:\/\/agoragentic\.com\/api\/mcp/i);
+const hostedMcpLinks = contextHubDoc.matchAll(/https?:\/\/[^\s<>"'`)]+/gi);
+for (const match of hostedMcpLinks) {
+  const candidate = match[0].replace(/[.,;\]]+$/, '');
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    continue;
+  }
+  assert.equal(
+    parsed.origin === 'https://agoragentic.com'
+      && (parsed.pathname === '/api/mcp' || parsed.pathname.startsWith('/api/mcp/')),
+    false,
+    'Context Hub must not advertise the hosted MCP endpoint',
+  );
+}
 assert.match(contextHubDoc, /fail-closed protocol\/reference surface/i);
 assert.match(contextHubDoc, /qualified host.*network access.*credentials.*clean-import/is);
 

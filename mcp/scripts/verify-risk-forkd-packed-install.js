@@ -10,27 +10,14 @@ const packageRoot = path.resolve(__dirname, '..');
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agoragentic-risk-forkd-pack-'));
 const packRoot = path.join(temporaryRoot, 'pack');
 const consumerRoot = path.join(temporaryRoot, 'consumer');
-const npmCli = process.env.npm_execpath;
-function resolveNpmCommand() {
-    if (npmCli) return process.execPath;
-    if (process.platform !== 'win32') return 'npm';
-    const comSpec = process.env.ComSpec || 'cmd.exe';
-    // Allowlist: the interpreter must be the Windows command processor itself,
-    // never an attacker-influenced executable from the environment.
-    if (!/(?:^|\\)cmd\.exe$/i.test(comSpec)) {
-        throw new Error(`Refusing to run npm with unexpected ComSpec: ${comSpec}`);
-    }
-    return comSpec;
-}
-const npmCommand = resolveNpmCommand();
+// Use the npm CLI bundled with this Node installation rather than trusting
+// npm_execpath or ComSpec from the caller's environment.
+const npmCli = process.platform === 'win32'
+    ? path.resolve(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js')
+    : path.resolve(path.dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js');
 
 function runNpm(args, cwd) {
-    const commandArgs = npmCli
-        ? [npmCli, ...args]
-        : process.platform === 'win32'
-            ? ['/d', '/s', '/c', 'npm.cmd', ...args]
-            : args;
-    return execFileSync(npmCommand, commandArgs, {
+    return execFileSync(process.execPath, [npmCli, ...args], {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],

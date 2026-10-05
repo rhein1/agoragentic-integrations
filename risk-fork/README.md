@@ -21,6 +21,7 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQ
 | Surface | Status | Honest boundary |
 | --- | --- | --- |
 | Deterministic risk classifier | Experimental source implementation | No LLM decision path; incomplete capability metadata is treated as unknown/`HIGH`, and owner policy can only raise the minimum or deny |
+| SkillSpector admission evidence | Source implementation; default-off | A strict adapter accepts only the reviewed SkillSpector `2.11.2` JSON contract, binds the report to exact source and reconstructed package bytes, source revision, operation, scanner wheel and runtime closure, owner rules/configuration, network control, and time evidence, and discards raw finding text. A clear scan never lowers the existing Risk Fork result; review, block, incomplete, filtered, or unverified-network evidence raises it to at least `HIGH`. Enabled use requires a branded host verifier that independently recomputes every binding before controller preparation. No scanner invocation, hosted integration, or production activation is included |
 | Framework-neutral host boundary | Experimental source implementation | A host-owned wrapper resolves exact trusted descriptors, derives the classifier input, and rejects caller/model risk labels before controller preparation. It is mandatory only when a host routes every effect path through it; this package cannot prevent a framework from bypassing the wrapper |
 | OpenAI Agents JS, LangChain JS, and LangGraph JS adapters | Experimental source implementation; default-off | Thin wrappers require exact branded host-boundary, plan-source, and executor capabilities. LOW may enter the hidden direct executor; ELEVATED without a prepared fork is blocked; an actually prepared ELEVATED/HIGH/IRREVERSIBLE call returns a retained clean-commit receipt. No SDK, provider, hosted activation, Python adapter, or live-protection evidence is bundled |
 | Savepoint Capsule, fork identity, execution binding | Experimental source implementation | The public v1 capsule permits no runtime snapshot or a verified filesystem-only snapshot; process-memory/runtime snapshots are invalid, and hashes/references are evidence rather than grants |
@@ -28,11 +29,11 @@ See [SECURITY_MODEL.md](./SECURITY_MODEL.md) before using any adapter. PostgreSQ
 | Taint gate | Experimental source implementation | Imports only a typed result, bounded workspace diff, or consequential-action proposal; child-asserted test evidence cannot satisfy current required-test policy without clean re-execution or a trusted external attestation |
 | Clean commit | Experimental source implementation | Demonstration mode can use the concrete file reference transactions; both production controller construction and the public clean-commit boundary require the exact branded PostgreSQL authority configured for production, verify-only migration mode, and verified CA-authenticated TLS |
 | PostgreSQL distributed authority | Implemented with disposable local TLS/role evidence | Server time, serializable row locks, exact approval/authorization reservation and consumption, durable ambiguity, success-only finalizing reconciliation, and an append-only global audit chain are implemented. A separate migrator, exact migration/catalog/trigger/privilege attestation, and executable owner/migrator/runtime role templates are locally tested against a fresh TLS PostgreSQL database; no managed HA, failover, multi-region, backup/restore, retention, monitoring, or deployment qualification is claimed |
-| Local reference adapter | Implemented protocol simulator | A non-empty source is attested authority-free before copy, then run through a constrained child process; **not an isolation boundary or kernel network control** |
+| Local reference adapter | Implemented protocol simulator | A non-empty source is attested authority-free before copy, then run through a constrained child process; **not an isolation boundary or kernel network control**. Native Windows storage is unavailable until exact private ACL/reparse validation exists; POSIX private roots require pre-existing validated ancestors, and restart orphan recovery is disabled. |
 | E2B adapter | Reviewed clean-template/runtime source; live allocation source-disabled | The package includes reviewed template, boot-guard, bootstrap, runner, runtime-contract, and default-off credential-free `mcp_http_phase` transport artifacts; an independent exact-byte clean-side source verifier; and default-off owner-gated build/live qualification harnesses. The child transport is source-tested with injected DNS/HTTPS boundaries but has not been used against E2B or a live MCP endpoint. The live harness consumes approval/run authority through durable exclusive claims before SDK loading, bounds controller waits, revalidates lease observations, requires explicit kill acknowledgement, and uses freshness-spaced exact-bound absence observations. Same-UID boot claims are retained only as diagnostic hashes: all seven inherited-state/fresh-entropy controls remain `unknown` until a pinned signed external receipt supplies a closed, privilege-separated observer boundary and per-control evidence. Canonical evidence can become qualification-eligible only after that derivation and a separate qualification-trust signature verifies the exact template/runtime/SDK bindings. The captured watcher is not an independent authority boundary, so even eligible evidence remains `evidence_present_activation_blocked`: live adapter allocation, leases, and production capability flags stay disabled in source. Windows evidence-producing entrypoints fail before claims, SDK loading, or provider I/O until exact DACL validation exists. One owner-authorized no-retry provider canary returned `unknown`; no successful live qualification, containment, lifecycle, latency, or finalized per-sandbox cost proof is checked in |
 | Daytona and AWS/Firecracker | Research only | No adapter and no production-readiness claim |
 | Hosted/MCP/Harness integration | Public enforcement source merged; private host-control release state unknown | The public bundle has source/loopback ordering evidence before `server/discover`. No immutable public-safe evidence ref/hash in this repository establishes a private control-plane merge, its interface inventory, or any current deployment/runtime state |
-| MCP 2026-07-28 stateless security | Source boundary implemented; production integration blocked | The child HTTP phase requires per-request version/client metadata and method/name headers, rejects session state, restricts `x-mcp-header` to `string`/`integer`/`boolean`, validates typed results with JSON Schema 2020-12 by default while retaining explicit draft-07 compatibility, validates complete/cache metadata, and records hash-only wire metadata evidence. An MCP `structuredContent` member may use any JSON type inside the closed, bounded, taint-scanned result envelope. The local relay rejects MCP Apps/active HTML by default, and an explicit process-local portable-handle registry binds recognized handles to a hashed principal, issuer, audience/origin, allowed methods, request hashes, expiry, and replay limits. Authenticated remote MCP, durable/distributed handle state, MRTR, Tasks, subscriptions, hosted wiring, and live qualification remain disabled or absent |
+| MCP 2026-07-28 stateless security | Source boundary and durable handle adapter implemented; production integration blocked | The child HTTP phase requires per-request metadata and exact method/name headers, rejects session state, restricts `x-mcp-header` types, and validates closed typed results with JSON Schema 2020-12 by default. The local relay rejects MCP Apps/active HTML. Explicit handle registries bind principal, issuer, audience/origin, methods, request hashes, expiry, and replay limits. A separate PostgreSQL registry now provides transactional tenant-scoped consumption across instances, and an optional host-adapter boundary authenticates each request before provider allocation. A local-test managed worker journals resources and reconciles cleanup. Authenticated remote transport, production OAuth/provider wiring, managed database qualification, MRTR, Tasks, subscriptions, and live protection remain disabled or unqualified |
 | Production readiness | **Blocked** | The public local-reference adapter is not an approved production isolation boundary, the public source merge grants no hosted execution/interception authority, the PostgreSQL authority is not managed-service qualified, and no current public evidence establishes live-traffic protection |
 | Performance and provider cost | Local reference benchmark plus one diagnostic provider sample | The live canary observed 1,641 ms to allocation and 2,303 ms for cleanup, but one failed-closed sample is not a benchmark or SLO; live MCP latency, containment, and exact provider cost remain unqualified |
 
@@ -99,9 +100,13 @@ The deterministic classifier returns one of four levels:
 
 Unknown, failed, or untrusted MCP servers classify at least `HIGH`. A raw `verified` label cannot lower trust: the classifier also requires an exact, fresh attestation whose server ref/origin, trust-registry version, attestor, hash, and integrity fields match owner-trusted policy. An absent or partially enumerated capability manifest is also unknown and therefore `HIGH`; callers must explicitly supply every capability boolean to establish a lower result. Instruction-bearing phases such as `server/discover`, `initialize`, `tools/list`, `resources/read`, and `prompts/get` are classified before their content may enter the clean context. An unrecognized method uses `UNKNOWN`, preserves a bounded raw method for evidence, and classifies `HIGH`. Money movement, deployment, publication, external communication, database mutation, and trust/reputation mutation classify as `IRREVERSIBLE`. MCP annotations are inputs, not authority, and cannot lower a decision.
 
+When a host enables `skillspector_admission_enabled`, every descriptor must carry exact, current SkillSpector admission evidence and the host must supply a branded `createTrustedSkillSpectorAdmissionVerifier()` capability. The evidence is advisory and can only retain or raise the independently derived risk level. It cannot grant trust, execution, commit, spend, or settlement authority. Missing, expired, tampered, byte-mismatched, empty, analyzer-incomplete, filtered, output-truncated, suppressed, or network-unverified evidence fails closed. Component totals must equal the bound package manifest. A clear result requires all 16 reviewed v2.11.2 static analyzer IDs to be explicitly accounted for as completed or zero-work `not_applicable`, with positive completed work from at least one applicable static analyzer. Missing IDs are sorted and hash-bound in `coverage.missing_static_analyzer_ids`; disabled or unavailable static analysis cannot clear admission. Score bands and recommendation floors must reconcile. Aggregate completed static work cannot exceed the pinned scanner's workflow-wide 10,000-event inspection-ledger limit; schema and verifier also require at least one completed item per applicable analyzer, and zero when none applies. The separate emitted finding-record count is conservatively incomplete at its 10,000-record ceiling because v2.11.2 has no distinct occurrence-truncation marker. Candidate-controlled reports, baselines, suppressions, waivers, and scanner settings are rejected before descriptor resolution. `--no-llm` disables LLM analysis but does not establish network isolation, so a separate host-owned deny-all control and evidence hash are required for a clear outcome.
+
+The source-only alpha retains the `skillspector-admission-evidence.v1` label while tightening its closed contract. Earlier normalized packets without `coverage.missing_static_analyzer_ids` fail closed; they are not automatically upgraded or accepted. Regenerate evidence with the current adapter from the exact pinned raw report and independently verified host bindings. If that report omitted analyzer statuses, rerun the bounded, network-isolated scan with the complete reviewed inventory; never insert an empty missing-ID list or invent completed statuses. Rebuild the core and hosted bundle together before consumption. No persisted production-evidence migration or backward-compatible acceptance is provided.
+
 ## Protocol
 
-1. A clean controller classifies the effective interaction before remote instruction-bearing content is accepted.
+1. A clean controller classifies the effective interaction before remote instruction-bearing content is accepted. If SkillSpector admission is enabled, the host scans an exact local package snapshot using the pinned scanner and owner-controlled rules, converts the untrusted JSON report into the closed evidence schema, and binds it to the descriptor request and operation. The branded v2 verifier supplies exact host-owned raw report bytes plus independently derived package, owner-rule, runtime/dependency, component-manifest and network-control bindings. The boundary re-adapts those bytes itself, checks freshness, and compares the complete canonical projection before `RiskForkController.prepare()`. Raw report text never enters the clean classifier context.
 2. It creates a Savepoint Capsule capped at 64 KiB containing hashes and opaque references—including allowed commit types and, when already applicable, an authorization reference/hash pair—not raw prompts, conversations, memories, workspace contents, secrets, tokens, grants, or private local paths. Its public v1 `runtime_snapshot.mode` is restricted to `none` or independently attested `filesystem`; a memory/process/runtime snapshot is invalid even if labeled verified.
 3. It creates a child with a fresh agent ID, session ID, runtime identity, nonce namespace, and entropy reference.
 4. Any production provider must establish network and lifecycle restrictions before the child starts and import only a demonstrably sanitized filesystem payload. An entirely absent E2B clean-template profile constructs an unavailable adapter whose execution entrypoints fail closed; a partially supplied profile is rejected during construction before an adapter exists. When configured, it stages an immutable exact-byte filesystem export with a hash-bound manifest; a clean-side second pass reopens the staged bytes, rechecks them, verifies reviewed runtime artifact hashes, and requires a detached signature from a pinned independent verifier before upload. Child birth uses a pinned reviewed template with empty environment, IAM-token, and mount requests plus deny-all SDK network settings. A captured network-silent watcher accepts one canonical nonce-bound request only after the controller exact-binds `Sandbox.getInfo`, then emits a request-bound boot attestation before any bootstrap command, identity, or workspace upload. These are source/offline/mock-qualified controls, not live proof that E2B blocks first-instruction or IPv6 egress or excludes inherited provider state.
@@ -139,22 +144,47 @@ The package export map exposes the main module plus focused subpaths:
 
 ```js
 import { classifyRisk } from '@agoragentic/risk-fork/classifier';
+import {
+  adaptSkillSpectorReport,
+  hashSkillSpectorComponentManifest,
+  hashSkillSpectorRulesManifest,
+  hashSkillSpectorRuntimeClosure,
+  verifySkillSpectorAdmissionEvidence,
+} from '@agoragentic/risk-fork/skillspector-admission';
 import { LocalReferenceRiskForkAdapter } from '@agoragentic/risk-fork/adapters/local-reference';
 import { PostgresDistributedCommitAuthority } from '@agoragentic/risk-fork/adapters/postgres-authority';
 import { createRiskForkFrameworkToolAdapter } from '@agoragentic/risk-fork/framework-tool-adapter';
 import { createOpenAIAgentsRiskForkTool } from '@agoragentic/risk-fork/frameworks/openai-agents';
 import { createLangChainRiskForkTool } from '@agoragentic/risk-fork/frameworks/langchain';
 import { createLangGraphRiskForkNode } from '@agoragentic/risk-fork/frameworks/langgraph';
-import { createMcpPortableHandleRegistry } from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
+import { createMcpPortableHandleRegistry, createDurableMcpPortableHandleRegistry,
+  createMcpPortableHandlePreEffectBoundary } from '@agoragentic/risk-fork/mcp-portable-handle-boundary';
 ```
 
 The portable-handle registry is an explicit clean-host primitive, not automatic
-field discovery or durable production authority. A host must authenticate the
+field discovery or production qualification. A host must authenticate the
 current principal, derive its SHA-256 reference outside model-controlled input,
 identify the exact application handle, and invoke the registry at the mandatory
-pre-effect boundary. Its current state is process-local and disappears on
-restart; multi-instance or resumable workflows require a separately reviewed
-durable implementation before adoption.
+pre-effect boundary. `createMcpPortableHandleRegistry` remains process-local;
+`createDurableMcpPortableHandleRegistry` uses the explicit PostgreSQL adapter
+for locked consumption, replay rejection, revocation, and restart persistence.
+Install `createMcpPortableHandlePreEffectBoundary` as the host adapter's
+`portable_handle_boundary`; it is not installed automatically. See the
+[stateless host runbook](./STATELESS_HOST_RUNBOOK.md) and the
+[local-test worker contract](./managed-service/WORKER.md).
+
+The managed source also includes encrypted, restart-safe claim/resource delivery,
+purpose-specific worker scopes, separate public/worker handlers, a trusted OAuth
+verification callback seam, a bounded default-off loopback host, and scheduled
+control-plane reaping. Portable-handle runtime initialization attests the closed
+PostgreSQL catalog; explicit production mode additionally requires verified TLS
+and a separate-owner least-privilege role. These are source/local-test capabilities,
+not a deployed service, E2B qualification, or live traffic protection. Follow the
+runbooks for key custody, explicit migrations, restart limits, and remaining gates.
+
+A standalone Apache-2.0 repository is proposed in the
+[repository split plan](./REPOSITORY_SPLIT_PLAN.md). No repository relocation,
+package publication, or deployment is established by that plan.
 
 ### Framework-neutral host onboarding
 
@@ -165,6 +195,7 @@ import {
   createRiskForkHostBoundary,
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
+  createTrustedSkillSpectorAdmissionVerifier,
 } from '@agoragentic/risk-fork/host-boundary';
 
 const trustedDescriptorSource = createTrustedRiskDescriptorSource(async (request) => {
@@ -175,6 +206,7 @@ const trustedDescriptorSource = createTrustedRiskDescriptorSource(async (request
 const riskForkBoundary = createRiskForkHostBoundary({
   controller,
   trusted_descriptor_source: trustedDescriptorSource,
+  skillspector_admission_enabled: false,
 });
 
 // The host invokes this before the proposed effect. The agent/model does not
@@ -187,6 +219,29 @@ const prepared = await riskForkBoundary.preEffect({
 
 The descriptor callback is an opaque host-owned capability held by identity in process memory. Each resolution request is hash-bound to the exact descriptor reference and canonical operation input. A returned descriptor must echo that request, self-bind its closed contents, provide all four MCP annotations, all twelve capability booleans, and every owner-policy field, and identify a known MCP phase. `UNKNOWN`, incomplete metadata, `unknown_or_unclassified: true`, descriptor substitution, and descriptor-hash drift fail closed before `RiskForkController.prepare()`. The wrapper derives `risk_input`; risk labels, scores, classifications, directives, and fork decisions supplied in the operation payload are rejected.
 
+SkillSpector admission remains disabled unless the clean host sets `skillspector_admission_enabled: true`. In enabled mode, the trusted descriptor source must attach a closed `skillspector_admission` object created by `adaptSkillSpectorReport()`, and the boundary requires the exact branded verifier capability:
+
+```js
+const trustedSkillSpectorVerifier = createTrustedSkillSpectorAdmissionVerifier(
+  async (verificationRequest) => resolveHostOwnedSkillReport({
+    descriptorRequestHash: verificationRequest.descriptor_request_hash,
+    operationHash: verificationRequest.operation_hash,
+    requestedAt: verificationRequest.requested_at,
+  }),
+);
+
+const riskForkBoundary = createRiskForkHostBoundary({
+  controller,
+  trusted_descriptor_source: trustedDescriptorSource,
+  trusted_skillspector_admission_verifier: trustedSkillSpectorVerifier,
+  skillspector_admission_enabled: true,
+});
+```
+
+`resolveHostOwnedSkillReport()` returns exactly the adapter input fields `report_bytes`, `report_ref`, `valid_until`, `package_ref`, `package_hash`, `prepared_artifact_hash`, `source_revision`, `rules_hash`, `runtime_closure_hash`, `component_manifest_hash`, `invocation`, and `network_enforcement`. It resolves the actual raw report from trusted host storage and independently derives the package and control bindings from host-owned bytes and receipts; it must not copy values from `verificationRequest.evidence` or obtain raw bytes from the candidate. The boundary supplies the current descriptor-request and operation hashes, runs `adaptSkillSpectorReport()` itself, checks the validity window, and compares the entire canonical evidence object. A coordinated forged coverage/result projection cannot pass merely by preserving the original raw hash and recomputing ordinary SHA-256 fields.
+
+Use `hashSkillSpectorComponentManifest()`, `hashSkillSpectorRulesManifest()`, and `hashSkillSpectorRuntimeClosure()` for the closed canonical projections. Runtime distribution names are PEP 503-normalized before sorting and duplicate rejection. `RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA` now labels the process-local opaque **v2** callback contract, not a serializable JSON Schema artifact. Copied/unbranded verifier objects and legacy hash-only callbacks fail closed. The evidence packet remains source-only alpha v1; regenerate it from the exact report rather than auto-upgrading legacy packets. Raw bytes are transient trusted-host inputs and are not retained in the evidence packet, returned to the agent, or passed to the classifier. The adapter never executes SkillSpector or interprets report prose. Direct `verifySkillSpectorAdmissionEvidence()` calls are structural validation, not producer authentication; callers binding independently re-adapted evidence may additionally supply `normalized_report_hash`.
+
 `preEffect()` returns only closed canonical JSON with `authority_granted: false` and `provider_handle_exposed: false`. The boundary object itself exposes exactly `schema`, `mode`, `preEffect`, `commitPrepared`, and `validateImport`; it does not return or expose the controller/provider capability. `commitPrepared()` accepts only the exact in-memory result object produced by this boundary and rejects clones, JSON round-trips, fabrications, and results from another boundary. This WeakMap provenance is intentionally process-local and is not a durable-workflow resume mechanism. This is a host enforcement seam, not an autonomous agent opt-in. A framework must route every instruction-bearing and effectful operation through it before accepting remote content or performing an effect. A direct framework call around the wrapper remains a bypass that this source package cannot detect or prevent.
 
 Provider output also crosses a mandatory closed import boundary inside `RiskForkController.prepare()`. The only accepted candidate types are `TYPED_RESULT`, `WORKSPACE_DIFF`, and `CONSEQUENTIAL_ACTION_PROPOSAL`. The import envelope is capped at 1 MiB, 20,000 JSON nodes, depth 32, and 256 KiB per string; workspace diffs are additionally capped at 500 files and 100 closed test-evidence records. Proxies, accessors, symbols, sparse/extended arrays, cycles/shared object identities, non-plain objects, non-canonical numbers, extra keys, type substitution, obvious authority/capability-shaped keys or text, and live object/callback handles are rejected. Accepted content remains tainted and non-dereferenced until the normal clean taint gate completes. Pattern scans do not prove semantic authority absence or detect every encoded secret, so the host must minimize provider output and must never treat accepted JSON as a capability.
@@ -197,8 +252,9 @@ Compatibility and acquisition are pinned as follows:
 | --- | --- |
 | Package | `@agoragentic/risk-fork@0.1.0-alpha.1`; ESM; Node.js `>=20`; experimental release candidate |
 | Host subpath | `@agoragentic/risk-fork/host-boundary`; package-local source with no registry dependency required for this focused subpath |
+| SkillSpector subpath | `@agoragentic/risk-fork/skillspector-admission`; reviewed upstream `2.11.2`, source revision `69dcdfb74487d361ba4c811d088cfdea2ff3a9dc`, release wheel SHA-256 `9e0eb261d63e7ae92f94177a44aeb8fef5e0ceeaa4d09135780baf94cbc420ec`; source-only and default-off |
 | Framework subpaths | `@agoragentic/risk-fork/framework-tool-adapter` plus `frameworks/openai-agents`, `frameworks/langchain`, and `frameworks/langgraph`; JavaScript-only source shims with no bundled framework SDK |
-| Schemas | `agoragentic.risk-fork.host-pre-effect-boundary.v1`, `trusted-descriptor-request.v1`, `trusted-descriptor.v1`, and `import-envelope.v1` |
+| Schemas | `agoragentic.risk-fork.host-pre-effect-boundary.v1`, `trusted-descriptor-request.v1`, `trusted-descriptor.v1`, `skillspector-admission-evidence.v1`, and `import-envelope.v1` |
 | Acquisition | Source/workspace or locally packed tarball; `private: false` and public alpha publication metadata prepare the candidate for release. Check the official release for registry publication evidence |
 | Root package | `npm run test:package` packs and installs the actual tarball offline in a fresh consumer, imports exports, and exercises the installed local lifecycle, MCP host example, and provider-free framework demo. This proves local artifact consumption, not registry publication or live containment |
 | Provider/live state | Local adapter remains a protocol simulator; live E2B/provider allocation and lease capability remain hard-disabled and production readiness remains false |
@@ -209,12 +265,18 @@ Stable host-boundary diagnostic codes for this alpha contract are:
 | --- | --- |
 | `RISK_FORK_HOST_BOUNDARY_INVALID_INPUT` | Wrapper request or prepared response was not closed canonical JSON |
 | `RISK_FORK_CALLER_RISK_LABEL_REJECTED` | Caller/model supplied a risk label, score, classification, directive, or fork decision |
+| `RISK_FORK_CALLER_ADMISSION_EVIDENCE_REJECTED` | Enabled admission received caller/model scanner evidence, a baseline, suppression, or waiver field |
 | `RISK_FORK_HOST_OPERATION_TOO_LARGE` | Host operation exceeded its JSON size/complexity bound |
 | `RISK_FORK_HOST_DESCRIPTOR_SOURCE_UNTRUSTED` | Descriptor-source capability was missing or fabricated |
 | `RISK_FORK_HOST_DESCRIPTOR_RESOLUTION_FAILED` | Host descriptor callback failed without a closed Risk Fork diagnostic |
 | `RISK_FORK_HOST_DESCRIPTOR_INVALID` | Descriptor shape or value was invalid |
 | `RISK_FORK_HOST_DESCRIPTOR_REQUEST_MISMATCH` | Descriptor did not bind the exact request/reference |
 | `RISK_FORK_HOST_DESCRIPTOR_HASH_MISMATCH` | Descriptor contents did not match its hash |
+| `RISK_FORK_SKILLSPECTOR_EVIDENCE_DISABLED` | A descriptor supplied SkillSpector evidence while the host integration was default-off |
+| `RISK_FORK_SKILLSPECTOR_EVIDENCE_REQUIRED` | Enabled admission received a descriptor without SkillSpector evidence |
+| `RISK_FORK_SKILLSPECTOR_EVIDENCE_INVALID` | Descriptor evidence failed the closed schema, report, hash, or outcome contract |
+| `RISK_FORK_SKILLSPECTOR_VERIFIER_UNTRUSTED` | Enabled admission did not receive the exact factory-branded host verifier capability |
+| `RISK_FORK_SKILLSPECTOR_VERIFICATION_FAILED` | Independently recomputed package, report, rules, runtime, network, operation, or time binding did not match |
 | `RISK_FORK_HOST_METADATA_UNKNOWN` | MCP phase/effect metadata was unknown or incomplete |
 | `RISK_FORK_HOST_PRE_EFFECT_REJECTED` | Bound controller rejected the prepared pre-effect request |
 | `RISK_FORK_IMPORT_ENVELOPE_INVALID` | Import/provider result violated the closed schema or canonical JSON contract |

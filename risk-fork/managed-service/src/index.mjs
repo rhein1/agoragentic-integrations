@@ -29,10 +29,16 @@ export {
 } from './audit.mjs';
 export {
   createManagedAuthenticator,
+  createTrustedOAuthAuthenticator,
   hashManagedApiKey,
   normalizeApiKeyRecord,
   parseBearerAuthorization,
 } from './auth.mjs';
+export { createOfflineOAuthVerifier } from './oauth-verifier.mjs';
+export { createManagedRequestPolicy } from './request-policy.mjs';
+export { createPostgresManagedRequestPolicyStore, PostgresManagedRequestPolicyStore } from './postgres-request-policy-store.mjs';
+export { migratePostgresManagedRequestPolicy } from './postgres-request-policy-migrator.mjs';
+export { verifyPostgresRequestPolicyAttestation } from './postgres-request-policy-attestation.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';
 export {
@@ -41,4 +47,11 @@ export {
 } from './postgres-store.mjs';
 export { migrateManagedServicePostgres } from './postgres-migrator.mjs';
 export { createManagedRiskForkControlPlane } from './control-plane.mjs';
-export { createManagedServiceHttpHandler } from './http-handler.mjs';
+export { createManagedServiceHttpHandler, createManagedWorkerHttpHandler } from './http-handler.mjs';
+export { createManagedRiskForkWorker } from './worker.mjs';
+export { createManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
+export { createManagedRiskForkReaper } from './reaper.mjs';
+export { createPostgresWorkerDeliveryStore, PostgresWorkerDeliveryStore } from './postgres-worker-delivery-store.mjs';
+export { migratePostgresWorkerDelivery } from './postgres-worker-delivery-migrator.mjs';
+export { verifyPostgresWorkerDeliveryAttestation } from './postgres-worker-delivery-attestation.mjs';
+export { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';

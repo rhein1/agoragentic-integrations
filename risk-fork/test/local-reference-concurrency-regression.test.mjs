@@ -1,13 +1,32 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { chmodSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
+import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 import { sha256Ref } from '../src/canonical.mjs';
 import {
+  __testReleaseCapturedContent,
+  __testScavengeCaptureDirectories,
+  __testEnumerateWorkspace,
   inspectLocalWorkspace,
   LocalReferenceRiskForkAdapter,
 } from '../src/adapters/local-reference.mjs';
@@ -112,8 +131,9 @@ async function makeFixture(prefix, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));
   const source = path.join(root, 'source');
   await mkdir(source);
+  if (process.platform !== 'win32') await mkdir(path.join(root, 'adapter'), { mode: 0o700 });
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(root, 'adapter'),
+    ...(process.platform === 'win32' ? {} : { baseDirectory: path.join(root, 'adapter') }),
     clock: options.clock ?? (() => new Date(NOW)),
     ...(options.runnerControl ? { operationRunner: options.runnerControl.operationRunner } : {}),
   });
@@ -151,6 +171,9 @@ async function disposeFixture(fixture, { allowAdapterFailure = false } = {}) {
       retryDelay: 25,
     });
   }
+  if (process.platform === 'win32' && fixture.adapter.baseDirectory) {
+    await rm(fixture.adapter.baseDirectory, { recursive: true, force: true });
+  }
   if (disposeError && !allowAdapterFailure) throw disposeError;
 }
 
@@ -177,6 +200,620 @@ function assertEvidenceHash(evidence) {
 const WINDOWS_LOCK_READY = 'RISK_FORK_TEST_LOCK_READY';
 const WINDOWS_LOCK_START_TIMEOUT_MS = 45_000;
 const WINDOWS_LOCK_CLOSE_TIMEOUT_MS = 15_000;
+const execFileAsync = promisify(execFile);
+
+test('capture spool cleanup migrates only aged legacy markers and scavenges stale dead-owner directories', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+  timeout: 30_000,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const staleDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(staleDirectory, '.agoragentic-risk-fork-capture-v1');
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await writeFile(path.join(staleDirectory, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
+  await chmod(staleDirectory, 0o700);
+  const old = new Date(Date.now() - (26 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  await utimes(staleDirectory, old, old);
+
+  const protectedDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  t.after(() => Promise.all([
+    rm(staleDirectory, { recursive: true, force: true }),
+    rm(protectedDirectory, { recursive: true, force: true }),
+  ]));
+  await writeFile(path.join(protectedDirectory, 'unrelated.txt'), 'must remain', { mode: 0o600 });
+  await writeFile(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await chmod(protectedDirectory, 0o700);
+  await utimes(path.join(protectedDirectory, '.agoragentic-risk-fork-capture-v1'), old, old);
+
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 1);
+  await assert.rejects(access(staleDirectory), (error) => error?.code === 'ENOENT');
+  assert.equal(await access(path.join(protectedDirectory, 'unrelated.txt')).then(() => true), true);
+
+  const source = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-'));
+  t.after(() => rm(source, { recursive: true, force: true }));
+  for (let index = 0; index < 5_000; index += 1) {
+    await writeFile(path.join(source, `${index}.txt`), 'x');
+  }
+  const snapshot = await __testEnumerateWorkspace(source, {
+    maxFiles: 10_000,
+    maxBytes: 10_000,
+    retain: true,
+  });
+  let timerTicks = 0;
+  const timer = setInterval(() => { timerTicks += 1; }, 0);
+  try {
+    await __testReleaseCapturedContent(snapshot.records);
+  } finally {
+    clearInterval(timer);
+  }
+  assert.ok(timerTicks > 0, 'spool cleanup must yield between filesystem operations');
+});
+
+test('capture scavenger ignores unrelated temporary-directory lookalikes', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  const unrelated = await mkdtemp(path.join(os.tmpdir(), 'agoragentic-risk-fork-capture-'));
+  t.after(() => Promise.all([
+    rm(captureRoot, { recursive: true, force: true }),
+    rm(unrelated, { recursive: true, force: true }),
+  ]));
+  const marker = path.join(unrelated, '.agoragentic-risk-fork-capture-v1');
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+  }), { mode: 0o600 });
+  await chmod(unrelated, 0o700);
+  const old = new Date(Date.now() - (26 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
+  assert.equal(await access(unrelated).then(() => true), true);
+});
+
+test('adapter instances receive distinct private capture roots', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-one-'));
+  const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-adapter-two-'));
+  t.after(() => Promise.all([
+    rm(firstRoot, { recursive: true, force: true }),
+    rm(secondRoot, { recursive: true, force: true }),
+  ]));
+  await mkdir(path.join(firstRoot, 'adapter'), { mode: 0o700 });
+  await mkdir(path.join(secondRoot, 'adapter'), { mode: 0o700 });
+  const first = new LocalReferenceRiskForkAdapter(
+    process.platform === 'win32' ? {} : { baseDirectory: path.join(firstRoot, 'adapter') },
+  );
+  const second = new LocalReferenceRiskForkAdapter(
+    process.platform === 'win32' ? {} : { baseDirectory: path.join(secondRoot, 'adapter') },
+  );
+  await first.initialize();
+  await second.initialize();
+  assert.notEqual(first.captureRoot, second.captureRoot);
+  assert.equal(await access(first.captureRoot).then(() => true), true);
+  assert.equal(await access(second.captureRoot).then(() => true), true);
+  t.after(() => Promise.all([
+    process.platform === 'win32' ? rm(first.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
+    process.platform === 'win32' ? rm(second.baseDirectory, { recursive: true, force: true }) : Promise.resolve(),
+  ]));
+});
+
+test('standalone capture storage provisions private descendants under an existing state root', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-standalone-state-root-'));
+  t.after(() => {
+    return rm(stateRoot, { recursive: true, force: true });
+  });
+
+  const sourceModule = pathToFileURL(path.resolve('src/adapters/local-reference.mjs')).href;
+  const child = await execFileAsync(process.execPath, ['--input-type=module', '--eval', `
+    import { lstat } from 'node:fs/promises';
+    import { __testScavengeCaptureDirectories } from ${JSON.stringify(sourceModule)};
+    await __testScavengeCaptureDirectories();
+    const root = process.env.XDG_STATE_HOME;
+    const paths = ['agoragentic-risk-fork', 'agoragentic-risk-fork/standalone', 'agoragentic-risk-fork/standalone/capture-spools'];
+    const records = [];
+    for (const relativePath of paths) {
+      const info = await lstat(new URL(relativePath, 'file://' + root.replaceAll('\\\\', '/') + '/'), { bigint: true });
+      records.push({ relativePath, directory: info.isDirectory(), mode: Number(info.mode & 0o777n) });
+    }
+    process.stdout.write(JSON.stringify(records));
+  `], {
+    cwd: path.resolve('.'),
+    env: { ...process.env, XDG_STATE_HOME: stateRoot, NODE_OPTIONS: '' },
+    encoding: 'utf8',
+  });
+  const records = JSON.parse(child.stdout);
+  assert.deepEqual(records, [
+    { relativePath: 'agoragentic-risk-fork', directory: true, mode: 0o700 },
+    { relativePath: 'agoragentic-risk-fork/standalone', directory: true, mode: 0o700 },
+    { relativePath: 'agoragentic-risk-fork/standalone/capture-spools', directory: true, mode: 0o700 },
+  ]);
+});
+
+test('default adapter initialization never performs cross-process orphan recovery', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe adapter recovery' : false,
+}, async (t) => {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-state-root-'));
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.XDG_STATE_HOME = stateRoot;
+  t.after(() => {
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    return rm(stateRoot, { recursive: true, force: true });
+  });
+  const parent = path.join(stateRoot, 'agoragentic-risk-fork');
+  await mkdir(parent, { mode: 0o700 });
+  const abandoned = path.join(parent, 'adapter-abandoned');
+  const captureRoot = path.join(abandoned, 'capture-spools');
+  const orphan = path.join(captureRoot, 'agoragentic-risk-fork-capture-old');
+  await mkdir(orphan, { recursive: true, mode: 0o700 });
+  await mkdir(path.join(abandoned, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(abandoned, 'forks'), { mode: 0o700 });
+  await writeFile(path.join(abandoned, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'dead-boot', start_time: 'dead-start' },
+  }), { mode: 0o600 });
+  await writeFile(path.join(orphan, '.agoragentic-risk-fork-capture-v2'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'dead-boot', start_time: 'dead-start' },
+  }), { mode: 0o600 });
+  await writeFile(path.join(orphan, '0-00000000-0000-4000-8000-000000000000.bin'), 'orphan', { mode: 0o600 });
+  await chmod(abandoned, 0o700);
+  await chmod(captureRoot, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(path.join(abandoned, '.adapter-owner-v1'), old, old);
+  await utimes(path.join(orphan, '.agoragentic-risk-fork-capture-v2'), old, old);
+
+  const liveMismatch = path.join(parent, 'adapter-live-mismatch');
+  await mkdir(path.join(liveMismatch, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(liveMismatch, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(liveMismatch, 'forks'), { mode: 0o700 });
+  await writeFile(path.join(liveMismatch, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000001',
+    pid: process.pid,
+    process_instance: process.platform === 'linux'
+      ? { boot_id: 'wrong-live-boot', start_time: 'wrong-live-start' }
+      : { start_time: 'wrong-live-start' },
+  }), { mode: 0o600 });
+  await chmod(liveMismatch, 0o700);
+  await utimes(path.join(liveMismatch, '.adapter-owner-v1'), old, old);
+
+  const unknown = path.join(parent, 'adapter-unknown');
+  await mkdir(path.join(unknown, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(unknown, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(unknown, 'forks'), { mode: 0o700 });
+  await writeFile(path.join(unknown, '.adapter-owner-v1'), '{"schema":"not-a-real-marker"}', { mode: 0o600 });
+  await chmod(unknown, 0o700);
+
+  const preservedLive = path.join(parent, 'adapter-preserved-live');
+  await mkdir(path.join(preservedLive, 'capture-spools'), { recursive: true, mode: 0o700 });
+  await mkdir(path.join(preservedLive, 'savepoints'), { mode: 0o700 });
+  await mkdir(path.join(preservedLive, 'forks'), { mode: 0o700 });
+  const currentInstance = process.platform === 'linux'
+    ? await (async () => {
+      const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+      const stat = (await readFile(`/proc/${process.pid}/stat`, 'utf8')).trim();
+      const close = stat.lastIndexOf(')');
+      const fields = stat.slice(close + 2).split(' ');
+      return { boot_id: bootId, start_time: fields[19] };
+    })()
+    : { start_time: 'preserved-live-start' };
+  await writeFile(path.join(preservedLive, '.adapter-owner-v1'), JSON.stringify({
+    schema: 'agoragentic.risk-fork.adapter-owner.v1',
+    token: '00000000-0000-4000-8000-000000000002',
+    pid: process.pid,
+    process_instance: currentInstance,
+  }), { mode: 0o600 });
+  await chmod(preservedLive, 0o700);
+
+  const adapter = new LocalReferenceRiskForkAdapter();
+  await adapter.initialize();
+  assert.equal(await access(adapter.captureRoot).then(() => true), true);
+  assert.equal(await access(orphan).then(() => true), true);
+  assert.equal(await access(abandoned).then(() => true), true);
+  assert.equal(await access(liveMismatch).then(() => true), true);
+  assert.equal(await access(unknown).then(() => true), true);
+  assert.equal(await access(preservedLive).then(() => true), true);
+});
+
+test('fork copy remains tracked when source spool release fails', {
+  skip: process.platform === 'win32' ? 'POSIX spool permission boundary' : false,
+}, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-copy-cleanup-'));
+  const source = path.join(root, 'source');
+  await mkdir(source);
+  await mkdir(path.join(root, 'adapter'), { mode: 0o700 });
+  await writeFile(path.join(source, 'input.txt'), 'captured source');
+  let cleanupCalls = 0;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    ...(process.platform === 'win32' ? {} : { baseDirectory: path.join(root, 'adapter') }),
+    clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request) => ({
+      schema: 'agoragentic.risk-fork.local-authority-free-attestation.v1',
+      status: 'verified',
+      request_hash: request.request_hash,
+      capsule_hash: request.capsule_hash,
+      workspace_digest: request.workspace_digest,
+      evidence_ref: `test-authority-free:${request.request_hash.slice(7, 23)}`,
+      evidence_hash: sha256Ref({
+        request_hash: request.request_hash,
+        capsule_hash: request.capsule_hash,
+        workspace_digest: request.workspace_digest,
+      }),
+      claims: {
+        authority_free: true,
+        credentials_absent: true,
+        wallet_material_absent: true,
+        execution_authority_absent: true,
+      },
+    }),
+    removeDirectory: async () => {
+      cleanupCalls += 1;
+      throw new Error('synthetic cleanup failure');
+    },
+  });
+  t.after(() => {
+    chmodSync(adapter.captureRoot, 0o700);
+    return rm(root, { recursive: true, force: true });
+  });
+  await adapter.initialize();
+  const inspected = await inspectLocalWorkspace({ source_workspace: source });
+  const capsule = makeCapsule({
+    workspace: { snapshot_ref: 'workspace:fork-cleanup', digest: inspected.workspace_digest },
+  });
+  const savepoint = await adapter.createSavepoint({ capsule, source_workspace: source });
+  adapter.clock = () => {
+    for (const entry of readdirSync(adapter.captureRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const captureDirectory = path.join(adapter.captureRoot, entry.name);
+      for (const child of readdirSync(captureDirectory)) {
+        if (!child.endsWith('.bin')) continue;
+        const capturePath = path.join(captureDirectory, child);
+        rmSync(capturePath, { force: true });
+        mkdirSync(capturePath);
+      }
+    }
+    return new Date(NOW);
+  };
+  await assert.rejects(
+    adapter.createFork({
+      savepoint_ref: savepoint.savepoint_ref,
+      fork_identity: makeForkIdentity(capsule),
+      network_policy: { mode: 'blocked' },
+    }),
+    /EACCES|EISDIR|EPERM|permission|synthetic cleanup failure/i,
+  );
+  assert.equal(cleanupCalls > 0, true);
+  const pending = [...adapter.forks.values()].find((record) => record.cleanup_pending);
+  assert.ok(pending, 'copied fork must remain tracked when cleanup cannot be confirmed');
+});
+
+test('adapter rejects unsafe explicit private roots', async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-root-'));
+  const target = path.join(temporary, 'target');
+  const linked = path.join(temporary, 'linked');
+  const linkedParent = path.join(temporary, 'linked-parent');
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  if (process.platform === 'win32') {
+    assert.throws(
+      () => new LocalReferenceRiskForkAdapter({ baseDirectory: target }),
+      /Explicit baseDirectory is unavailable on Windows/,
+    );
+    return;
+  }
+  await mkdir(target, { mode: 0o700 });
+  await chmod(target, 0o755);
+  await symlink(target, linked);
+  await symlink(target, linkedParent);
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: target }).initialize(),
+    /ownership or mode is unsafe/i,
+  );
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: linked }).initialize(),
+    /not a real directory/i,
+  );
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: path.join(linkedParent, 'adapter') }).initialize(),
+    /ancestor is not trusted/i,
+  );
+});
+
+test('adapter rejects a current-user-owned group/world-writable private ancestor', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-private-ancestor-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const unsafeAncestor = path.join(temporary, 'unsafe-ancestor');
+  const target = path.join(unsafeAncestor, 'target');
+  await mkdir(unsafeAncestor, { mode: 0o700 });
+  await chmod(unsafeAncestor, 0o770);
+  await mkdir(target, { mode: 0o700 });
+
+  await assert.rejects(
+    new LocalReferenceRiskForkAdapter({ baseDirectory: target }).initialize(),
+    /ancestor is unsafe/i,
+  );
+});
+
+test('capture scavenger rescans a young orphan after the in-flight pass completes', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const orphanDirectory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(orphanDirectory, '.agoragentic-risk-fork-capture-v2');
+  const payload = path.join(orphanDirectory, '0-00000000-0000-4000-8000-000000000000.bin');
+  t.after(() => rm(orphanDirectory, { recursive: true, force: true }));
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await writeFile(payload, 'orphan', { mode: 0o600 });
+  await chmod(orphanDirectory, 0o700);
+  const source = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-rescan-'));
+  t.after(() => rm(source, { recursive: true, force: true }));
+  await __testEnumerateWorkspace(source, { captureRoot });
+  assert.equal(await access(orphanDirectory).then(() => true), true);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  await utimes(orphanDirectory, old, old);
+  await __testEnumerateWorkspace(source, { captureRoot });
+  await assert.rejects(access(orphanDirectory), (error) => error?.code === 'ENOENT');
+});
+
+test('capture scavenger reclaims a live PID whose process instance does not match', {
+  skip: process.platform === 'win32' ? 'POSIX owner-safe orphan scavenger' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: process.pid,
+    process_instance: process.platform === 'linux'
+      ? { boot_id: 'wrong-boot', start_time: 'wrong-start' }
+      : { start_time: 'wrong-start' },
+  }), { mode: 0o600 });
+  await chmod(directory, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 1);
+  await assert.rejects(access(directory), (error) => error?.code === 'ENOENT');
+});
+
+test('capture scavenger lstat-falls back for unknown directory entries', {
+  skip: process.platform === 'win32' ? 'POSIX special filesystem entries' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const unknownTopLevel = path.join(captureRoot, `agoragentic-risk-fork-capture-unknown-${randomUUID()}`);
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
+  t.after(() => Promise.all([
+    rm(unknownTopLevel, { force: true }),
+    rm(directory, { recursive: true, force: true }),
+  ]));
+  await execFileAsync('mkfifo', [unknownTopLevel]);
+  await writeFile(marker, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await execFileAsync('mkfifo', [path.join(directory, '1-00000000-0000-4000-8000-000000000000.bin')]);
+  await chmod(directory, 0o700);
+  const old = new Date(Date.now() - (2 * 60 * 60 * 1000));
+  await utimes(marker, old, old);
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
+  assert.equal(await access(unknownTopLevel).then(() => true), true);
+  assert.equal(await access(directory).then(() => true), true);
+});
+
+test('capture scavenger never follows a replacement marker symlink', {
+  skip: process.platform === 'win32' ? 'POSIX no-follow marker boundary' : false,
+}, async (t) => {
+  const captureRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-capture-root-'));
+  t.after(() => rm(captureRoot, { recursive: true, force: true }));
+  const directory = await mkdtemp(path.join(captureRoot, 'agoragentic-risk-fork-capture-'));
+  const target = path.join(os.tmpdir(), `risk-fork-marker-target-${randomUUID()}`);
+  const marker = path.join(directory, '.agoragentic-risk-fork-capture-v2');
+  t.after(() => Promise.all([
+    rm(directory, { recursive: true, force: true }),
+    rm(target, { force: true }),
+  ]));
+  await writeFile(target, JSON.stringify({
+    schema: 'agoragentic.risk-fork.capture-directory.v2',
+    token: '00000000-0000-4000-8000-000000000000',
+    pid: 99_999_999,
+    process_instance: { boot_id: 'test-boot', start_time: 'test-start' },
+  }), { mode: 0o600 });
+  await symlink(target, marker);
+  await chmod(directory, 0o700);
+
+  assert.equal(await __testScavengeCaptureDirectories(captureRoot), 0);
+  assert.equal(await access(directory).then(() => true), true);
+  assert.equal(await access(target).then(() => true), true);
+});
+
+test('first-entry snapshot rejection removes its capture spool directory', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-first-entry-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, '.git'), 'not a repository directory');
+  const before = new Set((await readdir(os.tmpdir(), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('agoragentic-risk-fork-capture-'))
+    .map((entry) => entry.name));
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /exclude \.git metadata/i,
+  );
+  const after = (await readdir(os.tmpdir(), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('agoragentic-risk-fork-capture-'))
+    .map((entry) => entry.name);
+  assert.deepEqual(after.filter((name) => !before.has(name)), []);
+});
+
+test('local workspace rejects a FIFO without opening or blocking on it', {
+  skip: process.platform === 'win32' ? 'POSIX FIFO boundary' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-fifo-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await execFileAsync('mkfifo', [path.join(source, 'blocking.pipe')]);
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /special filesystem entry/i,
+  );
+});
+
+test('local workspace falls back to lstat for unknown directory entry types', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-unknown-dirent-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'regular.txt'), 'portable\n');
+  const [sample] = await readdir(source, { withFileTypes: true });
+  const direntPrototype = Object.getPrototypeOf(sample);
+  const originalMethods = {
+    isDirectory: direntPrototype.isDirectory,
+    isFile: direntPrototype.isFile,
+    isSymbolicLink: direntPrototype.isSymbolicLink,
+  };
+  direntPrototype.isDirectory = () => false;
+  direntPrototype.isFile = () => false;
+  direntPrototype.isSymbolicLink = () => false;
+  try {
+    const snapshot = await __testEnumerateWorkspace(source);
+    assert.deepEqual(snapshot.public_records.map((record) => record.path), ['regular.txt']);
+  } finally {
+    Object.assign(direntPrototype, originalMethods);
+  }
+});
+
+test('large local snapshots use bounded spooling and diff output has an explicit cap', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-spool-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  const payload = Buffer.alloc(2 * 1024 * 1024 + 17, 0x61);
+  await writeFile(path.join(source, 'large.txt'), payload);
+  const inspected = await inspectLocalWorkspace({ source_workspace: source });
+  assert.equal(inspected.total_bytes, payload.byteLength);
+  assert.equal(inspected.files[0].bytes, payload.byteLength);
+  const snapshot = await __testEnumerateWorkspace(source, { maxBytes: payload.byteLength + 1 });
+  assert.deepEqual(snapshot.public_records, inspected.files);
+
+  const fixture = await makeFixture('risk-fork-local-diff-bound-');
+  t.after(() => disposeFixture(fixture));
+  const forkDirectory = fixture.adapter.forks.get(fixture.fork.fork_ref).directory;
+  await writeFile(path.join(forkDirectory, 'oversized.txt'), Buffer.alloc(16 * 1024 * 1024 + 1, 0x62));
+  await assert.rejects(
+    fixture.adapter.collectDiff({ fork_ref: fixture.fork.fork_ref }),
+    /Local reference diff content exceeds 16777216 bytes/,
+  );
+
+  const aggregateFixture = await makeFixture('risk-fork-local-diff-aggregate-');
+  t.after(() => disposeFixture(aggregateFixture));
+  const aggregateDirectory = aggregateFixture.adapter.forks.get(aggregateFixture.fork.fork_ref).directory;
+  await writeFile(path.join(aggregateDirectory, 'first.txt'), Buffer.alloc(9 * 1024 * 1024, 0x63));
+  await writeFile(path.join(aggregateDirectory, 'second.txt'), Buffer.alloc(9 * 1024 * 1024, 0x64));
+  await assert.rejects(
+    aggregateFixture.adapter.collectDiff({ fork_ref: aggregateFixture.fork.fork_ref }),
+    /Local reference diff materialization exceeds 16777216 bytes/,
+  );
+});
+
+test('local workspace rejects a nested directory symlink before traversing outside', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-link-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  const outside = path.join(temporary, 'outside');
+  await mkdir(source);
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'sentinel.txt'), 'must remain outside\n');
+  try {
+    await symlink(
+      outside,
+      path.join(source, 'linked-directory'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+  } catch (error) {
+    if (process.platform === 'win32' && ['EPERM', 'EACCES', 'UNKNOWN'].includes(error?.code)) {
+      t.skip(`directory link creation unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  await assert.rejects(
+    inspectLocalWorkspace({ source_workspace: source }),
+    /symlinks are forbidden/i,
+  );
+  assert.equal(await access(path.join(outside, 'sentinel.txt')).then(() => true), true);
+});
+
+test('local workspace rejects a nested directory replacement after parent enumeration', {
+  skip: process.platform === 'win32' ? 'Windows local workspace enumeration fails closed' : false,
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-directory-swap-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, 'source');
+  const nested = path.join(source, 'nested');
+  const replacement = path.join(source, 'replacement');
+  await mkdir(nested, { recursive: true });
+  await mkdir(replacement, { recursive: true });
+  await writeFile(path.join(nested, 'trusted.txt'), 'trusted\n');
+  await writeFile(path.join(replacement, 'unexpected.txt'), 'unexpected\n');
+
+  let swapped = false;
+  await assert.rejects(
+    __testEnumerateWorkspace(source, {
+      afterRead: async ({ directory, prefix }) => {
+        if (swapped || prefix !== '') return;
+        swapped = true;
+        await rename(path.join(directory, 'nested'), path.join(directory, 'nested-original'));
+        await rename(path.join(directory, 'replacement'), path.join(directory, 'nested'));
+      },
+    }),
+    /Filesystem identity changed while it was being captured: nested/,
+  );
+  assert.equal(swapped, true);
+  assert.equal(await access(path.join(source, 'nested-original', 'trusted.txt')).then(() => true), true);
+  assert.equal(await access(path.join(source, 'nested', 'unexpected.txt')).then(() => true), true);
+});
 
 function waitForExactStdoutLine(child, expectedLine, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -331,7 +968,9 @@ async function startWindowsExclusiveLock(lockPath) {
   };
 }
 
-test('local reference admission starts exactly one runner and suspend never changes state', async () => {
+test('local reference admission starts exactly one runner and suspend never changes state', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-concurrency-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -401,7 +1040,9 @@ test('local reference admission starts exactly one runner and suspend never chan
   }
 });
 
-test('trusted test-runner output is canonicalized once before hashing and return', async () => {
+test('trusted test-runner output is canonicalized once before hashing and return', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   let rawParsed = null;
   let expectedHash = null;
   const runnerControl = {
@@ -433,7 +1074,9 @@ test('trusted test-runner output is canonicalized once before hashing and return
   }
 });
 
-test('trusted test-runner output rejects accessors before evidence hashing', async () => {
+test('trusted test-runner output rejects accessors before evidence hashing', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = {
     starts: [],
     operationRunner(input) {
@@ -472,7 +1115,9 @@ test('trusted test-runner output rejects accessors before evidence hashing', asy
   }
 });
 
-test('explicit destruction cancels one lease, serializes callers, and prevents late mutation', async () => {
+test('explicit destruction cancels one lease, serializes callers, and prevents late mutation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-destroy-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -529,7 +1174,9 @@ test('explicit destruction cancels one lease, serializes callers, and prevents l
   }
 });
 
-test('execution admission destroys a fork at its exact wall-clock expiry without starting a runner', async () => {
+test('execution admission destroys a fork at its exact wall-clock expiry without starting a runner', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   let now = new Date(NOW);
   const fixture = await makeFixture('risk-fork-local-expiry-boundary-', {
@@ -556,7 +1203,9 @@ test('execution admission destroys a fork at its exact wall-clock expiry without
   }
 });
 
-test('atomic admission rejects when the wall clock advances during operation validation', async () => {
+test('atomic admission rejects when the wall clock advances during operation validation', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   let now = new Date(NOW);
   const fixture = await makeFixture('risk-fork-local-expiry-validation-race-', {
@@ -591,6 +1240,7 @@ test('atomic admission rejects when the wall clock advances during operation val
 });
 
 test('event-loop starvation cannot open an execution window after the hard TTL', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -618,6 +1268,7 @@ test('event-loop starvation cannot open an execution window after the hard TTL',
 });
 
 test('a ready result after event-loop starvation past TTL is destroyed before rejection', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -653,6 +1304,7 @@ test('a ready result after event-loop starvation past TTL is destroyed before re
 });
 
 test('hard TTL cancels and closes an active runner before deleting its workspace', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
   timeout: 4_000,
 }, async () => {
   const runnerControl = createControlledRunner();
@@ -668,18 +1320,18 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
       timeout_ms: 3_000,
       operation: operation('ttl-race.txt', 'ttl-race'),
     });
+    // Attach the rejection observer immediately. Node 22 reports an unhandled
+    // rejection if hard-TTL cleanup wins before the later assertion attaches.
+    const observedExecution = execution.catch((error) => error);
     const entry = runnerControl.starts[0];
     await Promise.race([
       entry.termination_started,
       delay(2_000).then(() => { throw new Error('hard TTL did not request termination'); }),
     ]);
-    assert.equal((await adapter.collectEvidence({ fork_ref: fork.fork_ref })).status, 'destroying');
+    await waitForStatus(adapter, fork.fork_ref, 'destroying', 1_000);
     assert.equal(entry.terminate_calls, 1);
     entry.close();
-    await assert.rejects(
-      execution,
-      (error) => error?.code === 'LOCAL_REFERENCE_FORK_EXPIRED',
-    );
+    assert.equal((await observedExecution)?.code, 'LOCAL_REFERENCE_FORK_EXPIRED');
     const evidence = await waitForStatus(adapter, fork.fork_ref, 'destroyed');
     assert.equal(evidence.last_execution, null);
     assertEvidenceHash(evidence);
@@ -690,7 +1342,9 @@ test('hard TTL cancels and closes an active runner before deleting its workspace
   }
 });
 
-test('execution timeout waits for child closure before returning a terminal failure', async () => {
+test('execution timeout waits for child closure before returning a terminal failure', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-timeout-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -728,7 +1382,9 @@ test('execution timeout waits for child closure before returning a terminal fail
   }
 });
 
-test('a late completion cannot win against an absolute execution deadline', async () => {
+test('a late completion cannot win against an absolute execution deadline', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-timeout-race-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -756,7 +1412,9 @@ test('a late completion cannot win against an absolute execution deadline', asyn
   }
 });
 
-test('destroy failure blocks replay but an explicit retry can finish cleanup', async () => {
+test('destroy failure blocks replay but an explicit retry can finish cleanup', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const runnerControl = createControlledRunner();
   const fixture = await makeFixture('risk-fork-local-destroy-failure-', { runnerControl });
   const { adapter, fork } = fixture;
@@ -806,7 +1464,7 @@ test('destroy failure blocks replay but an explicit retry can finish cleanup', a
 });
 
 test('Windows retries destruction after a transient workspace lock is released', {
-  skip: process.platform !== 'win32',
+  skip: 'Windows local storage is fail-closed until ACL proof exists',
   timeout: 90_000,
 }, async () => {
   const fixture = await makeFixture('risk-fork-local-windows-destroy-retry-');
@@ -840,7 +1498,43 @@ test('Windows retries destruction after a transient workspace lock is released',
   }
 });
 
-test('failed and destroyed production-runner forks reject replay without changing evidence', async () => {
+test('Windows default local-reference storage fails closed without ACL proof', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const adapter = new LocalReferenceRiskForkAdapter();
+  await assert.rejects(
+    adapter.initialize(),
+    (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+  );
+});
+
+test('Windows exported workspace inspection fails closed before enumerating entries', {
+  skip: process.platform !== 'win32',
+}, async (t) => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-windows-inspect-'));
+  t.after(() => rm(temporary, { recursive: true, force: true }));
+  const previousLocalAppData = process.env.LOCALAPPDATA;
+  const untouchedStateRoot = path.join(temporary, 'local-app-data-not-created');
+  process.env.LOCALAPPDATA = untouchedStateRoot;
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'must-not-open.txt'), 'inspection must fail closed\n');
+
+  try {
+    await assert.rejects(
+      inspectLocalWorkspace({ source_workspace: source }),
+      (error) => error?.code === 'LOCAL_REFERENCE_WINDOWS_ACL_UNVERIFIED',
+    );
+    await assert.rejects(access(untouchedStateRoot), (error) => error?.code === 'ENOENT');
+  } finally {
+    if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = previousLocalAppData;
+  }
+});
+
+test('failed and destroyed production-runner forks reject replay without changing evidence', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const fixture = await makeFixture('risk-fork-local-terminal-');
   const { adapter, fork } = fixture;
   try {

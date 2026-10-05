@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -600,13 +600,14 @@ test('authoritative parent transaction allows exactly one concurrent typed-resul
   }
 });
 
-test('local reference adapter is an explicitly non-isolating disposable-copy simulator', async () => {
+test('local reference adapter is an explicitly non-isolating disposable-copy simulator', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-test-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });
@@ -657,13 +658,112 @@ test('local reference adapter is an explicitly non-isolating disposable-copy sim
   }
 });
 
-test('local reference adapter lazily initializes an explicit base directory', async () => {
+test('local authority-free verification reads the captured snapshot, not mutable source bytes', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-captured-verifier-'));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'secret.txt'), 'captured-secret', 'utf8');
+  let verifierSawCapturedSecret = false;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    clock: () => new Date(NOW),
+    verifyAuthorityFreeSource: async (request, context) => {
+      await writeFile(path.join(source, 'secret.txt'), 'benign-source', 'utf8');
+      const capturedName = (await readdir(context.snapshot_directory))
+        .find((name) => name.endsWith('.bin'));
+      const captured = await readFile(path.join(context.snapshot_directory, capturedName), 'utf8');
+      verifierSawCapturedSecret = captured === 'captured-secret';
+      if (verifierSawCapturedSecret) throw new Error('captured secret rejected');
+      return verifyLocalAuthorityFreeSource(request);
+    },
+  });
+  try {
+    const inspected = await inspectLocalWorkspace({ source_workspace: source });
+    const capsule = makeCapsule({
+      workspace: { snapshot_ref: 'workspace:local', digest: inspected.workspace_digest },
+    });
+    await assert.rejects(
+      adapter.createSavepoint({ capsule, source_workspace: source }),
+      /captured secret rejected/,
+    );
+    assert.equal(verifierSawCapturedSecret, true);
+    assert.equal(await readFile(path.join(source, 'secret.txt'), 'utf8'), 'benign-source');
+  } finally {
+    await adapter.dispose();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('final capture cleanup failure retains an owned savepoint for removal retry', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-cleanup-rollback-'));
+  const source = path.join(temporary, 'source');
+  await mkdir(source);
+  await writeFile(path.join(source, 'safe.txt'), 'safe', 'utf8');
+  let captureDirectory;
+  let removalAttempts = 0;
+  const adapter = new LocalReferenceRiskForkAdapter({
+    clock: () => new Date(NOW),
+    removeDirectory: async (target) => {
+      removalAttempts += 1;
+      if (removalAttempts === 1) throw new Error('injected destination removal failure');
+      await rm(target, { recursive: true, force: true });
+    },
+    verifyAuthorityFreeSource: async (request, context) => {
+      captureDirectory = context.snapshot_directory;
+      const marker = path.join(captureDirectory, '.agoragentic-risk-fork-capture-v2');
+      await rm(marker, { force: true });
+      await mkdir(marker);
+      return verifyLocalAuthorityFreeSource(request);
+    },
+  });
+  try {
+    const inspected = await inspectLocalWorkspace({ source_workspace: source });
+    const capsule = makeCapsule({
+      workspace: { snapshot_ref: 'workspace:local', digest: inspected.workspace_digest },
+    });
+    await assert.rejects(
+      adapter.createSavepoint({ capsule, source_workspace: source }),
+    );
+    assert.equal(typeof captureDirectory, 'string');
+    assert.equal(adapter.savepoints.size, 1);
+    const savepointRef = [...adapter.savepoints.keys()][0];
+    const record = adapter.savepoints.get(savepointRef);
+    assert.equal(record.cleanup_pending, true);
+    const savepoints = await readdir(path.join(adapter.baseDirectory, 'savepoints'));
+    assert.deepEqual(savepoints, [path.basename(record.directory)]);
+    await assert.rejects(
+      adapter.createFork({
+        savepoint_ref: savepointRef,
+        fork_identity: makeForkIdentity(capsule),
+        network_policy: { mode: 'blocked' },
+        ttl_ms: 60_000,
+      }),
+      /unresolved cleanup/,
+    );
+    await adapter.destroySavepoint({ savepoint_ref: savepointRef });
+    assert.equal(record.destroyed, true);
+    assert.equal(record.cleanup_pending, false);
+    assert.equal(
+      (await adapter.verifySavepointDestroyed({ savepoint_ref: savepointRef })).status,
+      'verified',
+    );
+  } finally {
+    await adapter.dispose();
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('local reference adapter lazily initializes its private default directory', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-lazy-test-'));
   const source = path.join(temporary, 'source');
   await mkdir(source);
   await writeFile(path.join(source, 'safe.txt'), 'parent-original', 'utf8');
   const adapter = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(temporary, 'adapter'),
     clock: () => new Date(NOW),
     verifyAuthorityFreeSource: verifyLocalAuthorityFreeSource,
   });
@@ -677,6 +777,59 @@ test('local reference adapter lazily initializes an explicit base directory', as
   } finally {
     await adapter.dispose();
     await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('default state bootstrap creates missing ~/.local/state without creating configured roots', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-missing-home-state-'));
+  const source = path.join(temporaryHome, 'source');
+  const previousHome = process.env.HOME;
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.HOME = temporaryHome;
+  delete process.env.XDG_STATE_HOME;
+  await mkdir(source);
+  try {
+    const adapter = new LocalReferenceRiskForkAdapter();
+    await adapter.initialize();
+    const localRoot = path.join(temporaryHome, '.local');
+    const stateRoot = path.join(localRoot, 'state');
+    assert.equal(Number((await lstat(localRoot, { bigint: true })).mode & 0o777n), 0o700);
+    assert.equal(Number((await lstat(stateRoot, { bigint: true })).mode & 0o777n), 0o700);
+    await adapter.dispose();
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    await rm(temporaryHome, { recursive: true, force: true });
+  }
+});
+
+test('default state bootstrap preserves a safe pre-existing ~/.local mode', {
+  skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false,
+}, async () => {
+  const temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-existing-home-state-'));
+  const localRoot = path.join(temporaryHome, '.local');
+  const previousHome = process.env.HOME;
+  const previousStateRoot = process.env.XDG_STATE_HOME;
+  process.env.HOME = temporaryHome;
+  delete process.env.XDG_STATE_HOME;
+  await mkdir(localRoot, { mode: 0o755 });
+  await chmod(localRoot, 0o755);
+  try {
+    const adapter = new LocalReferenceRiskForkAdapter();
+    await adapter.initialize();
+    assert.equal(Number((await lstat(localRoot, { bigint: true })).mode & 0o777n), 0o755);
+    assert.equal(Number((await lstat(path.join(localRoot, 'state'), { bigint: true })).mode & 0o777n), 0o700);
+    await adapter.dispose();
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousStateRoot === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = previousStateRoot;
+    await rm(temporaryHome, { recursive: true, force: true });
   }
 });
 

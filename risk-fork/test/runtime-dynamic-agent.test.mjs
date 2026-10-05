@@ -54,22 +54,24 @@ test('live Dynamic dependency lock excludes the known vulnerable transitive rang
  const manifest=liveJson('package.json'),lock=liveJson('package-lock.json');
  assert.equal(manifest.dependencies['@walletconnect/utils'],'2.21.10');
  assert.equal(manifest.overrides['@walletconnect/utils'],'$@walletconnect/utils');
- assert.equal(manifest.overrides.axios,'1.18.0');
- assert.equal(manifest.overrides.uuid,'11.1.1');
- assert.equal(manifest.overrides.viem.ws,'8.21.3');
- assert.equal(manifest.overrides['ethjs-unit']['bn.js'],'4.12.3');
- assert.equal(manifest.overrides['number-to-bn']['bn.js'],'4.12.3');
+ assert.deepEqual(manifest.overrides,{
+  '@walletconnect/utils':'$@walletconnect/utils','axios@^1.0.0':'1.20.0',
+  'ws@^8.0.0':'8.21.3','decode-uri-component@^0.2.2':'0.5.0',
+  'uuid@^11.0.0':'11.1.1','bn.js@^4.0.0':'4.12.3'
+ });
+ assert.deepEqual(lock.packages[''].dependencies,manifest.dependencies);
+ assert.equal(Object.hasOwn(manifest.overrides,'viem'),false,'nested parent override breaks npm 11 tree validation');
  assert.equal(Object.hasOwn(manifest.overrides,'query-string'),false);
  assert.equal(Object.hasOwn(manifest.overrides,'ws'),false);
  assert.equal(Object.hasOwn(manifest.overrides,'bn.js'),false);
- for(const [name,floor] of [['@walletconnect/utils','2.21.10'],['axios','1.18.0'],['uuid','11.1.1']]){
+ for(const [name,floor] of [['@walletconnect/utils','2.21.10'],['axios','1.20.0'],['uuid','11.1.1']]){
   const versions=lockedVersions(lock,name);assert.ok(versions.length>0,name);
   for(const version of versions)assert.equal(atLeast(version,floor),true,`${name}@${version}`);
  }
  assert.deepEqual(lockedVersions(lock,'query-string'),[]);
  assert.deepEqual(lockedVersions(lock,'decode-uri-component'),[]);
  const ws8=lockedVersions(lock,'ws').filter(version=>version.startsWith('8.'));
- assert.ok(ws8.length>0);for(const version of ws8)assert.equal(atLeast(version,'8.21.0'),true,`ws@${version}`);
+ assert.ok(ws8.length>0);for(const version of ws8)assert.equal(atLeast(version,'8.21.3'),true,`ws@${version}`);
  const bn4=lockedVersions(lock,'bn.js').filter(version=>version.startsWith('4.'));
  assert.ok(bn4.length>0);for(const version of bn4)assert.equal(atLeast(version,'4.12.3'),true,`bn.js@${version}`);
 });

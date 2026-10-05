@@ -10,6 +10,12 @@ import { createManagedProviderRegistry } from '../src/provider-registry.mjs';
 export const TEST_TOKEN = `rf_local_fixture_${'a'.repeat(32)}`;
 export const OTHER_TOKEN = `rf_local_fixture_${'b'.repeat(32)}`;
 export const SAME_TENANT_TOKEN = `rf_local_fixture_${'c'.repeat(32)}`;
+export const RECOVERY_TOKEN = `rf_local_fixture_${'d'.repeat(32)}`;
+export const WORKER_SCOPES = [
+  'worker:execution:claim', 'worker:execution:write',
+  'worker:cleanup:claim', 'worker:cleanup:write',
+  'worker:recovery:claim', 'worker:recovery:write',
+];
 
 export function testLeaseToken(label = 'lease') {
   if (typeof label !== 'string' || !/^[A-Za-z0-9._~-]{1,64}$/.test(label)) {
@@ -75,8 +81,7 @@ export async function createFixture(options = {}) {
         'audit:read',
         'invocations:read',
         'invocations:write',
-        'worker:claim',
-        'worker:write',
+        ...WORKER_SCOPES,
       ],
       not_before: '2026-09-05T00:00:00.000Z',
       expires_at: options.credentialExpiresAt ?? '2026-09-06T00:00:00.000Z',
@@ -91,8 +96,7 @@ export async function createFixture(options = {}) {
         'audit:read',
         'invocations:read',
         'invocations:write',
-        'worker:claim',
-        'worker:write',
+        ...WORKER_SCOPES,
       ],
       not_before: '2026-09-05T00:00:00.000Z',
       expires_at: options.credentialExpiresAt ?? '2026-09-06T00:00:00.000Z',
@@ -107,20 +111,26 @@ export async function createFixture(options = {}) {
         'audit:read',
         'invocations:read',
         'invocations:write',
-        'worker:claim',
-        'worker:write',
+        ...WORKER_SCOPES,
       ],
       not_before: '2026-09-05T00:00:00.000Z',
       expires_at: options.credentialExpiresAt ?? '2026-09-06T00:00:00.000Z',
       revoked_at: null,
     },
   ];
+  credentials.push({
+    ...credentials[2],
+    key_id: 'key_alpha_recovery',
+    key_hash: hashManagedApiKey(RECOVERY_TOKEN),
+    scopes: ['worker:recovery:claim', 'worker:recovery:write'],
+  });
+  if (options.credentialScopes) credentials[0].scopes = [...options.credentialScopes];
   const store = new MemoryManagedServiceStore({
     tenants: [tenant, otherTenant],
     credentials,
     eventRef: options.eventRef ?? (() => `evt_${String(++eventCounter).padStart(4, '0')}`),
   });
-  const provider = new TestProvider();
+  const provider = options.provider ?? new TestProvider();
   const attestedResourceBindings = new Set();
   const attestedCleanupEvidence = new Set();
   const attestedRecoveryAbsence = new Set();
@@ -177,6 +187,10 @@ export async function createFixture(options = {}) {
     `Bearer ${SAME_TENANT_TOKEN}`,
     'invocations:write',
   );
+  const recoveryPrincipal = await authenticator.authenticate(
+    `Bearer ${RECOVERY_TOKEN}`,
+    'worker:recovery:claim',
+  );
   return {
     authenticator,
     attestResourceBinding(invocation, {
@@ -203,6 +217,7 @@ export async function createFixture(options = {}) {
     otherPrincipal,
     principal,
     sameTenantPrincipal,
+    recoveryPrincipal,
     provider,
     providerRegistry,
     nextLeaseToken(label = 'fixture') {

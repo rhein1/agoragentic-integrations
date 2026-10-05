@@ -13,7 +13,8 @@ import {
   requireInteger,
 } from './validation.mjs';
 
-const MIGRATION_VERSION = 1;
+const MIGRATION_FILES = ['001_managed_control_plane.pg.sql', '002_journal_purpose.pg.sql',
+  '003_control_plane_lock_helpers.pg.sql'];
 const REQUIRED_TABLES = Object.freeze([
   'managed_schema_migrations',
   'managed_tenants',
@@ -25,19 +26,13 @@ const REQUIRED_TABLES = Object.freeze([
   'managed_audit_events',
 ]);
 
-async function loadMigration(schemaName) {
-  const source = (await readFile(
-    new URL('../migrations/001_managed_control_plane.pg.sql', import.meta.url),
-    'utf8',
-  )).replace(/\r\n?/g, '\n');
-  return {
-    version: MIGRATION_VERSION,
-    migration_hash: sha256Ref(source),
-    sql: source.replaceAll(
-      '__RISK_FORK_MANAGED_SCHEMA__',
-      quotePostgresAuthorityIdentifier(schemaName),
-    ),
-  };
+async function loadMigrations(schemaName) {
+  return Promise.all(MIGRATION_FILES.map(async (file, index) => {
+    const source = (await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'))
+      .replace(/\r\n?/g, '\n');
+    return { version: index + 1, migration_hash: sha256Ref(source),
+      sql: source.replaceAll('__RISK_FORK_MANAGED_SCHEMA__', quotePostgresAuthorityIdentifier(schemaName)) };
+  }));
 }
 
 async function verifyTables(client, schemaName) {
@@ -102,7 +97,8 @@ export async function migrateManagedServicePostgres(options = {}) {
     statementTimeoutMs,
     applicationName: 'agoragentic-risk-fork-managed-migrator',
   });
-  const migration = await loadMigration(schemaName);
+  const migrations = await loadMigrations(schemaName);
+  const migration = migrations.at(-1);
   const verifiedClients = new WeakSet();
   try {
     const client = await acquirePostgresAuthorityClient(pool, { requireTls, verifiedClients });
@@ -126,21 +122,19 @@ export async function migrateManagedServicePostgres(options = {}) {
              FROM ${quotedSchema}.managed_schema_migrations
             ORDER BY version`,
         );
-        if (applied.rowCount === 0) {
-          await client.query(migration.sql);
+        if (applied.rowCount > migrations.length || applied.rows.some((row, index) =>
+          Number(row.version) !== migrations[index].version
+          || row.migration_hash !== migrations[index].migration_hash)) {
+          throw managedError('Managed PostgreSQL migration set differs from reviewed source',
+            'MANAGED_MIGRATION_SET_MISMATCH', 503);
+        }
+        for (const next of migrations.slice(applied.rowCount)) {
+          await client.query(next.sql);
           await client.query(
             `INSERT INTO ${quotedSchema}.managed_schema_migrations
                (version, migration_hash, applied_at)
              VALUES ($1, $2, clock_timestamp())`,
-            [migration.version, migration.migration_hash],
-          );
-        } else if (applied.rowCount !== 1
-          || Number.parseInt(applied.rows[0].version, 10) !== migration.version
-          || applied.rows[0].migration_hash !== migration.migration_hash) {
-          throw managedError(
-            'Managed PostgreSQL migration set differs from reviewed source',
-            'MANAGED_MIGRATION_SET_MISMATCH',
-            503,
+            [next.version, next.migration_hash],
           );
         }
         await verifyTables(client, schemaName);

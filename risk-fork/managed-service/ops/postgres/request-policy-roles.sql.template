@@ -1,0 +1,53 @@
+-- Source-only trusted-host template. Dedicated disposable policy database only.
+-- Replace every placeholder with an independently validated quoted identifier.
+-- Provision distinct LOGIN NOINHERIT migrator/runtime roles separately; never
+-- share these identities with control-plane or ciphertext delivery schemas.
+-- Database owner BEFORE the independent policy migration:
+REVOKE ALL ON DATABASE __POLICY_DATABASE__ FROM PUBLIC;
+GRANT CONNECT, CREATE ON DATABASE __POLICY_DATABASE__ TO __POLICY_MIGRATOR__;
+GRANT CONNECT ON DATABASE __POLICY_DATABASE__ TO __POLICY_RUNTIME__;
+-- Dedicated migrator AFTER migratePostgresManagedRequestPolicy:
+BEGIN;
+REVOKE ALL ON SCHEMA __POLICY_SCHEMA__ FROM PUBLIC;
+GRANT USAGE ON SCHEMA __POLICY_SCHEMA__ TO __POLICY_RUNTIME__;
+REVOKE ALL ON ALL TABLES IN SCHEMA __POLICY_SCHEMA__ FROM PUBLIC, __POLICY_RUNTIME__;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA __POLICY_SCHEMA__ FROM PUBLIC, __POLICY_RUNTIME__;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA __POLICY_SCHEMA__ FROM PUBLIC, __POLICY_RUNTIME__;
+-- Table REVOKE does not remove separate column grants. The validated quoted
+-- placeholders also work as regnamespace/regrole text (no raw interpolation).
+DO $policy_column_acl$
+DECLARE target record;
+BEGIN
+  FOR target IN
+    SELECT c.relname, string_agg(format('%I', a.attname), ', ' ORDER BY a.attnum) AS columns
+    FROM pg_catalog.pg_class c JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid
+    WHERE c.relnamespace='__POLICY_SCHEMA__'::regnamespace AND c.relkind='r'
+      AND a.attnum>0 AND NOT a.attisdropped GROUP BY c.relname
+  LOOP
+    EXECUTE format('REVOKE ALL PRIVILEGES (%s) ON TABLE %s.%I FROM PUBLIC, %s',
+      target.columns, '__POLICY_SCHEMA__', target.relname, '__POLICY_RUNTIME__');
+  END LOOP;
+END
+$policy_column_acl$;
+GRANT SELECT ON ALL TABLES IN SCHEMA __POLICY_SCHEMA__ TO __POLICY_RUNTIME__;
+GRANT UPDATE (last_seen_ms) ON __POLICY_SCHEMA__.request_policy_clock TO __POLICY_RUNTIME__;
+GRANT INSERT ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+GRANT UPDATE (bucket_start_ms, used) ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+GRANT DELETE ON __POLICY_SCHEMA__.request_policy_subjects TO __POLICY_RUNTIME__;
+-- DELETE is restricted to the disposable quota table for expired-window
+-- reclamation by trusted source. No execution/delivery table is present here.
+-- No control UPDATE, configuration UPDATE, ledger mutation, TRUNCATE,
+-- DDL, grant option or direct trigger-function EXECUTE for the runtime.
+-- Runtime quota UPDATE is trusted-host authority, not protection from a stolen
+-- runtime DB credential. Use expectedOwner for source catalog/ACL attestation.
+ALTER DEFAULT PRIVILEGES IN SCHEMA __POLICY_SCHEMA__ REVOKE ALL ON TABLES FROM PUBLIC, __POLICY_RUNTIME__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __POLICY_SCHEMA__ REVOKE ALL ON SEQUENCES FROM PUBLIC, __POLICY_RUNTIME__;
+ALTER DEFAULT PRIVILEGES IN SCHEMA __POLICY_SCHEMA__ REVOKE ALL ON FUNCTIONS FROM PUBLIC, __POLICY_RUNTIME__;
+-- Schema defaults add to global defaults; only a global revoke removes PG's
+-- built-in PUBLIC function EXECUTE. This role must be dedicated to this DB.
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+COMMIT;
+-- Owner-only disable/enable (use a prepared boolean parameter and expected epoch):
+-- UPDATE <schema>.request_policy_control SET enabled = $1, epoch = epoch + 1
+-- WHERE singleton = true AND epoch = $2 RETURNING enabled, epoch;
+-- An exact one-row result is required. No public control endpoint is supplied.

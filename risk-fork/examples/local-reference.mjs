@@ -20,8 +20,10 @@ const demoRoot = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-local-example-'
 const sourceWorkspace = path.join(demoRoot, 'source');
 const providerState = path.join(demoRoot, 'provider-state');
 await mkdir(sourceWorkspace, { recursive: false });
+await mkdir(providerState, { recursive: false, mode: 0o700 });
 
 let adapter = null;
+let adapterRoot = null;
 try {
   const workspaceInspection = await inspectLocalWorkspace({
     source_workspace: sourceWorkspace,
@@ -86,8 +88,11 @@ try {
     parent_session_id: capsule.parent.session_id,
   });
 
-  adapter = new LocalReferenceRiskForkAdapter({ baseDirectory: providerState });
+  adapter = new LocalReferenceRiskForkAdapter(
+    process.platform === 'win32' ? {} : { baseDirectory: providerState },
+  );
   await adapter.initialize();
+  adapterRoot = adapter.baseDirectory;
   const savepoint = await adapter.createSavepoint({
     capsule,
     source_workspace: sourceWorkspace,
@@ -147,6 +152,7 @@ try {
   try {
     if (adapter) await adapter.dispose();
   } finally {
+    if (adapterRoot) await rm(adapterRoot, { recursive: true, force: true });
     await rm(demoRoot, { recursive: true, force: true });
   }
 }

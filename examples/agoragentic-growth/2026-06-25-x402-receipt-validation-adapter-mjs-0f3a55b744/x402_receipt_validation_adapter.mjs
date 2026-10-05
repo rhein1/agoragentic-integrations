@@ -263,7 +263,7 @@ async function localX402Fetch(url, options = {}) {
       sawPaymentChallenge = true;
       const paymentRequiredHeader = readHeader(response, "payment-required");
       if (cachedPayment) {
-        throw createHttpError("Paid retry received a second HTTP 402; refusing to reuse or replace payment authorization", {
+        throw createHttpError("Paid request received another HTTP 402 challenge; refusing to re-authorize payment", {
           status: 402,
           idempotencyKey,
           paymentAttempted: sawPaymentChallenge,
@@ -277,7 +277,8 @@ async function localX402Fetch(url, options = {}) {
         throw createHttpError("Paid call requires a caller-supplied pay callback", { status: 402, idempotencyKey });
       }
 
-      if (!cachedPayment) {
+      // The prior guard rejects a second 402 after payment; this is the first authorization.
+      {
         const payRequest = {
           url,
           method,

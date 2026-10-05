@@ -1,4 +1,5 @@
 import { isProxy } from 'node:util/types';
+import { MANAGED_SCOPES, WORKER_PURPOSES, workerClaimScope, workerWriteScope } from './constants.mjs';
 
 const MAX_TEXT_BYTES = 8_192;
 const MAX_JSON_DEPTH = 64;
@@ -65,6 +66,47 @@ export function assertDataArray(value, label, { maxLength = 100_000 } = {}) {
     }
   }
   return value;
+}
+
+// Composition validation only, never authentication. Preserve original branded
+// principals: copying their fields would discard the authenticator's identity.
+// Immutable identity/scope data prevents an accepted role assignment changing
+// after construction. Persisted credential checks still run on every mutation.
+export function assertManagedWorkerPrincipals(value, label = 'worker principals') {
+  assertPlainRecord(value, label);
+  assertAllowedKeys(value, WORKER_PURPOSES, label);
+  const principals = {};
+  const keyIds = new Set();
+  let tenantId;
+  for (const purpose of WORKER_PURPOSES) {
+    if (!Object.hasOwn(value, purpose)) {
+      throw new TypeError(`${label} must contain every purpose as own data`);
+    }
+    const principal = assertPlainRecord(value[purpose], `${label}.${purpose}`);
+    if (['key_id', 'tenant_id', 'scopes'].some((field) => !Object.hasOwn(principal, field))) {
+      throw new TypeError(`${label}.${purpose} must contain own key_id, tenant_id and scopes`);
+    }
+    const keyId = requireOpaqueRef(principal.key_id, `${label}.${purpose}.key_id`);
+    const currentTenant = requireTenantId(principal.tenant_id, `${label}.${purpose}.tenant_id`);
+    const scopes = assertDataArray(principal.scopes, `${label}.${purpose}.scopes`, { maxLength: MANAGED_SCOPES.length });
+    if (!Object.isFrozen(principal) || !Object.isFrozen(scopes)) {
+      throw new TypeError(`${label} require immutable principal identity and scopes`);
+    }
+    if (new Set(scopes).size !== scopes.length || scopes.some((scope) => !MANAGED_SCOPES.includes(scope))
+      || !scopes.includes(workerClaimScope(purpose)) || !scopes.includes(workerWriteScope(purpose))) {
+      throw new TypeError(`${label}.${purpose} requires its claim and write scopes`);
+    }
+    if (tenantId !== undefined && currentTenant !== tenantId) {
+      throw new TypeError(`${label} must belong to the same tenant`);
+    }
+    if (keyIds.has(keyId)) {
+      throw new TypeError(`${label} must have distinct key_id identities`);
+    }
+    tenantId = currentTenant;
+    keyIds.add(keyId);
+    principals[purpose] = principal;
+  }
+  return Object.freeze(principals);
 }
 
 export function requireString(value, label, options = {}) {

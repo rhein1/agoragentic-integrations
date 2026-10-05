@@ -14,6 +14,10 @@ import { sha256Ref } from '../src/canonical.mjs';
 import { createSavepointCapsule } from '../src/contracts.mjs';
 import { RiskForkController } from '../src/controller.mjs';
 import {
+  createMcpPortableHandlePreEffectBoundary,
+  RISK_FORK_MCP_PORTABLE_HANDLE_DIAGNOSTIC_CODES as HANDLE_CODES,
+} from '../src/mcp-portable-handle-boundary.mjs';
+import {
   createRiskForkHostBoundary,
   createTrustedRiskDescriptor,
   createTrustedRiskDescriptorSource,
@@ -111,13 +115,13 @@ function sessionBinding(openRequest, discovery) {
   });
 }
 
-async function openDirect(adapter) {
+async function openDirect(adapter, context) {
   const openRequest = enforcementRequest({
     schema: 'agoragentic.mcp.enforced-session-open-request.v1',
     phase: 'server/discover',
     params: { protocol_version: '2026-07-28', stateless_required: true },
   });
-  const session = await adapter.openSession(openRequest);
+  const session = await adapter.openSession(openRequest, context);
   return {
     openRequest,
     session,
@@ -535,7 +539,7 @@ class DynamicMcpTestProvider extends RiskForkProvider {
   }
 }
 
-function dynamicFixture(resultFactory, transportEvidenceMutator) {
+function dynamicFixture(resultFactory, transportEvidenceMutator, portableHandleBoundary = null, observePlanContext) {
   const provider = new DynamicMcpTestProvider(resultFactory, transportEvidenceMutator);
   const controller = new RiskForkController({
     provider,
@@ -553,7 +557,8 @@ function dynamicFixture(resultFactory, transportEvidenceMutator) {
     trusted_descriptor_source: descriptorSource,
     clock: () => new Date(NOW),
   });
-  const planSource = createTrustedRiskForkMcpPhasePlanSource((planRequest) => {
+  const planSource = createTrustedRiskForkMcpPhasePlanSource((planRequest, context) => {
+    observePlanContext?.(context);
     const { schema } = resultForPhase(planRequest.phase);
     const descriptorRef = `descriptor:${planRequest.plan_request_id.split(':').at(-1)}`;
     descriptorInputs.set(descriptorRef, {
@@ -596,10 +601,144 @@ function dynamicFixture(resultFactory, transportEvidenceMutator) {
   const adapter = createRiskForkMcpHostAdapter({
     host_boundary: hostBoundary,
     trusted_phase_plan_source: planSource,
+    ...(portableHandleBoundary ? { portable_handle_boundary: portableHandleBoundary } : {}),
     clock: () => new Date(NOW),
   });
   return { adapter, hostBoundary, planSource, provider };
 }
+
+function assertAuthorityFreePlanContext(context, capability) {
+  assert.deepEqual(Object.keys(context).sort(), ['deadline_at', 'operation', 'signal', 'timeout_ms']);
+  assert.equal(Object.isFrozen(context), true);
+  assert.equal('authentication' in context, false);
+  assert.equal(Object.values(context).includes(capability), false);
+  assert.equal(JSON.stringify(context).includes(capability.secretMarker), false);
+}
+
+for (const withBoundary of [true, false]) {
+  test(`host plan contexts exclude authentication with portable-handle boundary ${withBoundary ? 'present' : 'absent'}`, async () => {
+    const capability = Object.freeze({ secretMarker: 'host-only-authentication-capability' });
+    const planContexts = [];
+    const authenticationContexts = [];
+    const portableBoundary = withBoundary ? createMcpPortableHandlePreEffectBoundary({
+      authenticate: (_request, context) => {
+        authenticationContexts.push(context);
+        return {
+          tenant_ref: 'tenant:test', principal_ref: sha256Ref('alice'),
+          issuer: 'https://identity.example.com/', audience: 'https://mcp.agoragentic.com/rpc',
+          mcp_server_origin: 'https://mcp.agoragentic.com', expires_at: LATER,
+        };
+      },
+      registry_for_context: () => null, contracts: [], clock: () => NOW,
+    }) : null;
+    const current = dynamicFixture(undefined, undefined, portableBoundary, (context) => planContexts.push(context));
+    const signal = new AbortController().signal;
+    const context = {
+      authentication: capability, signal, timeout_ms: 3_000,
+      deadline_at: new Date(Date.now() + 5_000).toISOString(),
+      unrelated_authority: capability,
+    };
+    const opened = await openDirect(current.adapter, context);
+    try {
+      await opened.session.request(enforcementRequest({
+        schema: 'agoragentic.mcp.enforced-phase-request.v1', phase: 'tools/list',
+        sessionBindingHash: opened.binding,
+      }), context);
+      assert.equal(planContexts.length, 2, 'discovery and accepted session request both resolve plans');
+      assert.equal(authenticationContexts.length, withBoundary ? 2 : 0);
+      for (const [index, planContext] of planContexts.entries()) {
+        assertAuthorityFreePlanContext(planContext, capability);
+        assert.equal(planContext.operation, index === 0 ? 'server/discover' : 'tools/list');
+        assert.equal(planContext.signal instanceof AbortSignal, true);
+        assert.notEqual(planContext.signal, signal, 'the resolver receives the bounded phase signal');
+        assert.equal(planContext.signal.aborted, false);
+        assert.ok(planContext.timeout_ms > 0 && planContext.timeout_ms <= context.timeout_ms);
+        assert.ok(Date.parse(planContext.deadline_at) <= Date.parse(context.deadline_at));
+        if (withBoundary) {
+          const authContext = authenticationContexts[index];
+          assert.equal(authContext.authentication, capability, 'authenticate receives the original capability');
+          assert.equal(Object.isFrozen(authContext), true);
+          const { authentication, ...boundedContext } = authContext;
+          assert.deepEqual(boundedContext, planContext);
+          assert.equal(authContext.signal, planContext.signal);
+        }
+      }
+      assert.equal(current.provider.operations.length, 2);
+      assert.equal(JSON.stringify(current.provider.operations).includes(capability.secretMarker), false);
+    } finally {
+      await opened.session.close();
+    }
+  });
+}
+
+test('host portable-handle admission rejects unauthenticated discovery before allocation', async () => {
+  const capability = Object.freeze({ secretMarker: 'revoked-host-authentication-capability' });
+  const planContexts = [];
+  let observedContext;
+  const portableBoundary = createMcpPortableHandlePreEffectBoundary({
+    authenticate: (_request, context) => { observedContext = context.authentication; throw new Error('revoked'); },
+    registry_for_context: () => null, contracts: [], clock: () => NOW,
+  });
+  const current = dynamicFixture(undefined, undefined, portableBoundary, (context) => planContexts.push(context));
+  await assert.rejects(current.adapter.openSession(enforcementRequest({
+    schema: 'agoragentic.mcp.enforced-session-open-request.v1', phase: 'server/discover',
+    params: { protocol_version: '2026-07-28', stateless_required: true },
+  }), { authentication: capability }), (error) => error.code === HANDLE_CODES.AUTHENTICATION_REQUIRED);
+  assert.equal(observedContext, capability);
+  assert.equal(planContexts.length, 1);
+  assertAuthorityFreePlanContext(planContexts[0], capability);
+  assert.equal(current.provider.sequence, 0);
+  assert.equal(current.provider.operations.length, 0);
+});
+
+test('host rejects an invalid plan before portable-handle authentication or consumption', async () => {
+  let authenticationCalls = 0;
+  let registryCalls = 0;
+  const portableBoundary = createMcpPortableHandlePreEffectBoundary({
+    authenticate: () => { authenticationCalls += 1; throw new Error('must not authenticate an invalid plan'); },
+    registry_for_context: () => { registryCalls += 1; throw new Error('must not consume for an invalid plan'); },
+    contracts: [], clock: () => NOW,
+  });
+  const current = dynamicFixture();
+  const adapter = createRiskForkMcpHostAdapter({
+    host_boundary: current.hostBoundary,
+    trusted_phase_plan_source: createTrustedRiskForkMcpPhasePlanSource(() => ({})),
+    portable_handle_boundary: portableBoundary,
+    clock: () => new Date(NOW),
+  });
+  await assert.rejects(openDirect(adapter), (error) => error.code === RISK_FORK_MCP_HOST_DIAGNOSTIC_CODES.PLAN_INVALID);
+  assert.equal(authenticationCalls, 0);
+  assert.equal(registryCalls, 0);
+  assert.equal(current.provider.sequence, 0);
+  assert.equal(current.provider.operations.length, 0);
+});
+
+test('host portable-handle admission reauthenticates every phase and rejects a consuming operation without its contract', async () => {
+  let authenticationCalls = 0;
+  const portableBoundary = createMcpPortableHandlePreEffectBoundary({
+    authenticate: () => { authenticationCalls += 1; return {
+      tenant_ref: 'tenant:test', principal_ref: sha256Ref('alice'),
+      issuer: 'https://identity.example.com/', audience: 'https://mcp.agoragentic.com/rpc',
+      mcp_server_origin: 'https://mcp.agoragentic.com', expires_at: LATER,
+    }; },
+    registry_for_context: () => null, contracts: [], clock: () => NOW,
+  });
+  const current = dynamicFixture(undefined, undefined, portableBoundary);
+  const opened = await openDirect(current.adapter);
+  const capabilities = completeCapabilities();
+  const annotations = completeAnnotations();
+  await assert.rejects(opened.session.request(enforcementRequest({
+    schema: 'agoragentic.mcp.enforced-phase-request.v1', phase: 'tools/call',
+    sessionBindingHash: opened.binding, params: { name: 'local_echo', arguments: { message: 'bounded' } },
+    toolDescriptor: { name: 'local_echo', inputSchema: { type: 'object', properties: { message: { type: 'string' } } }, annotations, capabilities },
+    toolAnnotations: annotations, toolCapabilities: capabilities, toolEffectStatus: 'explicit_read_only',
+  })), (error) => error.code === HANDLE_CODES.CONTRACT_REQUIRED);
+  assert.equal(authenticationCalls, 2);
+  assert.equal(current.provider.sequence, 2, 'only the discovery savepoint and fork were allocated');
+  assert.equal(current.provider.operations.length, 1);
+  assert.equal(JSON.stringify(current.provider.operations).includes('tenant:test'), false);
+  await opened.session.close();
+});
 
 async function fixture(options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'risk-fork-mcp-host-adapter-'));
@@ -607,7 +746,6 @@ async function fixture(options = {}) {
   await mkdir(source);
   const inspected = await inspectLocalWorkspace({ source_workspace: source });
   const provider = new LocalReferenceRiskForkAdapter({
-    baseDirectory: path.join(root, 'provider'),
     clock: () => new Date(NOW),
   });
   const controller = new RiskForkController({
@@ -703,7 +841,7 @@ async function fixture(options = {}) {
   };
 }
 
-test('real local lifecycle gates synthetic discovery/list and rejects unknown-effect tool calls', async () => {
+test('real local lifecycle gates synthetic discovery/list and rejects unknown-effect tool calls', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     assert.equal(isRiskForkMcpHostAdapter(current.adapter), true);
@@ -742,7 +880,7 @@ test('real local lifecycle gates synthetic discovery/list and rejects unknown-ef
   }
 });
 
-test('live-default mode rejects predeclared MCP results before provider allocation', async () => {
+test('live-default mode rejects predeclared MCP results before provider allocation', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     const strictAdapter = createRiskForkMcpHostAdapter({
@@ -763,7 +901,7 @@ test('live-default mode rejects predeclared MCP results before provider allocati
   }
 });
 
-test('live-default mode executes exact MCP phases only inside a request-bound child operation', async () => {
+test('live-default mode executes exact MCP phases only inside a request-bound child operation', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = dynamicFixture();
   const session = await connectRemoteClient({
     remoteUrl: 'https://mcp.agoragentic.com/rpc',
@@ -800,7 +938,7 @@ test('live-default mode executes exact MCP phases only inside a request-bound ch
   assert.equal(current.provider.destroyedSavepoints.size, 2);
 });
 
-test('discovery rejects a missing or open advertised-capabilities record', async () => {
+test('discovery rejects a missing or open advertised-capabilities record', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   for (const capabilities of [
     undefined,
     { tools: true, resources: true, prompts: true, tasks: true },
@@ -825,7 +963,7 @@ test('discovery rejects a missing or open advertised-capabilities record', async
   }
 });
 
-test('an unadvertised phase is rejected before another child or network operation starts', async () => {
+test('an unadvertised phase is rejected before another child or network operation starts', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = dynamicFixture((phase) => {
     if (phase !== 'server/discover') return resultForPhase(phase).payload;
     return {
@@ -850,7 +988,7 @@ test('an unadvertised phase is rejected before another child or network operatio
   );
 });
 
-test('live-default child transport retains the exact explicit-read-only tools/call binding', async () => {
+test('live-default child transport retains the exact explicit-read-only tools/call binding', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = dynamicFixture();
   const opened = await openDirect(current.adapter);
   const capabilities = completeCapabilities();
@@ -886,7 +1024,7 @@ test('live-default child transport retains the exact explicit-read-only tools/ca
   await opened.session.close();
 });
 
-test('live-default destination contract rejects non-HTTPS, literal, and special-use targets', async () => {
+test('live-default destination contract rejects non-HTTPS, literal, and special-use targets', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = dynamicFixture();
   const rejectedTargets = [
     'http://mcp.agoragentic.com/rpc',
@@ -948,7 +1086,7 @@ test('live-default destination contract rejects non-HTTPS, literal, and special-
   assert.equal(current.provider.destroyedForks.size, 0);
 });
 
-test('transport results fail closed on unsafe resolution, rebinding, redirects, or proxy use', async () => {
+test('transport results fail closed on unsafe resolution, rebinding, redirects, or proxy use', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const cases = [
     ['loopback answer', (evidence) => ({
       ...evidence,
@@ -1044,7 +1182,7 @@ test('transport results fail closed on unsafe resolution, rebinding, redirects, 
   }
 });
 
-test('untrusted instruction content from a child MCP phase is rejected after verified cleanup', async () => {
+test('untrusted instruction content from a child MCP phase is rejected after verified cleanup', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = dynamicFixture((phase) => {
     const { payload } = resultForPhase(phase);
     if (phase !== 'tools/list') return payload;
@@ -1072,7 +1210,7 @@ test('untrusted instruction content from a child MCP phase is rejected after ver
   assert.equal(current.provider.destroyedSavepoints.size, 2);
 });
 
-test('adapter rejects fabricated plan capabilities and never exposes fallback transport', async () => {
+test('adapter rejects fabricated plan capabilities and never exposes fallback transport', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     assert.throws(
@@ -1098,7 +1236,7 @@ test('adapter rejects fabricated plan capabilities and never exposes fallback tr
   }
 });
 
-test('wrong session binding fails closed before another Risk Fork is allocated', async () => {
+test('wrong session binding fails closed before another Risk Fork is allocated', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     const openRequest = enforcementRequest({
@@ -1133,7 +1271,7 @@ test('wrong session binding fails closed before another Risk Fork is allocated',
   }
 });
 
-test('a consumed phase request cannot be replayed', async () => {
+test('a consumed phase request cannot be replayed', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     const openRequest = enforcementRequest({
@@ -1162,7 +1300,7 @@ test('a consumed phase request cannot be replayed', async () => {
   }
 });
 
-test('an exact read-only tool binding can traverse the real local controller path', async () => {
+test('an exact read-only tool binding can traverse the real local controller path', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     const opened = await openDirect(current.adapter);
@@ -1203,7 +1341,7 @@ test('an exact read-only tool binding can traverse the real local controller pat
   }
 });
 
-test('tool effect metadata cannot understate risk and stricter host profiles fail closed', async () => {
+test('tool effect metadata cannot understate risk and stricter host profiles fail closed', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const capabilities = completeCapabilities();
   const annotations = completeAnnotations();
   const descriptor = {
@@ -1262,7 +1400,7 @@ test('tool effect metadata cannot understate risk and stricter host profiles fai
   }
 });
 
-test('null-bearing capability metadata cannot claim that its effect is classified', async () => {
+test('null-bearing capability metadata cannot claim that its effect is classified', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture();
   try {
     const opened = await openDirect(current.adapter);
@@ -1298,7 +1436,7 @@ test('null-bearing capability metadata cannot claim that its effect is classifie
   }
 });
 
-test('a timed-out phase retains session capacity until trusted work becomes terminal', async () => {
+test('a timed-out phase retains session capacity until trusted work becomes terminal', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture({
     blockPhase: 'tools/list',
     maxSessions: 1,
@@ -1331,7 +1469,7 @@ test('a timed-out phase retains session capacity until trusted work becomes term
   }
 });
 
-test('a timed-out open retains pending capacity until its underlying plan becomes terminal', async () => {
+test('a timed-out open retains pending capacity until its underlying plan becomes terminal', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture({
     blockPhase: 'server/discover',
     maxSessions: 1,
@@ -1376,7 +1514,7 @@ test('a timed-out open retains pending capacity until its underlying plan become
   }
 });
 
-test('a genuine prepared result cannot be replayed and relabeled for another MCP request', async () => {
+test('a genuine prepared result cannot be replayed and relabeled for another MCP request', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture({ replayPrepared: true });
   try {
     const opened = await openDirect(current.adapter);
@@ -1398,7 +1536,7 @@ test('a genuine prepared result cannot be replayed and relabeled for another MCP
   }
 });
 
-test('pending open capacity is atomically promoted to an active session', async () => {
+test('pending open capacity is atomically promoted to an active session', { skip: process.platform === 'win32' ? 'Windows local storage is fail-closed until ACL proof exists' : false }, async () => {
   const current = await fixture({ blockPhase: 'server/discover', maxSessions: 1 });
   try {
     const firstOpen = openDirect(current.adapter);

@@ -66,7 +66,7 @@ test('PostgreSQL migration and tenant admission work against an explicit disposa
       requireTls: false,
       schemaName,
     });
-    assert.equal(migration.migration_version, 1);
+    assert.equal(migration.migration_version, 3);
     assert.equal(migration.production_qualified, false);
     const credentialNow = Date.now();
 
@@ -89,8 +89,9 @@ test('PostgreSQL migration and tenant admission work against an explicit disposa
           'audit:read',
           'invocations:read',
           'invocations:write',
-          'worker:claim',
-          'worker:write',
+          'worker:execution:claim', 'worker:execution:write',
+          'worker:cleanup:claim', 'worker:cleanup:write',
+          'worker:recovery:claim', 'worker:recovery:write',
         ]),
         new Date(credentialNow - 60_000).toISOString(),
         new Date(credentialNow + 3_600_000).toISOString(),
@@ -108,8 +109,9 @@ test('PostgreSQL migration and tenant admission work against an explicit disposa
           'audit:read',
           'invocations:read',
           'invocations:write',
-          'worker:claim',
-          'worker:write',
+          'worker:execution:claim', 'worker:execution:write',
+          'worker:cleanup:claim', 'worker:cleanup:write',
+          'worker:recovery:claim', 'worker:recovery:write',
         ]),
         new Date(credentialNow - 60_000).toISOString(),
         new Date(credentialNow + 3_600_000).toISOString(),
@@ -416,15 +418,15 @@ test('PostgreSQL migration and tenant admission work against an explicit disposa
     assert.equal(controlPlaneHealth.unavailable_provider_binding_count, 0);
     await pool.query(
       `INSERT INTO ${quotedSchema}.managed_schema_migrations
-         (version, migration_hash) VALUES (2, $1)`,
+         (version, migration_hash) VALUES (4, $1)`,
       [sha256Ref({ intentionally_unreviewed_test_migration: true })],
     );
     const driftedHealth = await store.health();
     assert.equal(driftedHealth.ready, false);
     assert.equal(driftedHealth.migration_verified, false);
-    assert.equal(driftedHealth.migration_count, 2);
+    assert.equal(driftedHealth.migration_count, 4);
     assert.equal((await controlPlane.health()).ready, false);
-    await pool.query(`DELETE FROM ${quotedSchema}.managed_schema_migrations WHERE version = 2`);
+    await pool.query(`DELETE FROM ${quotedSchema}.managed_schema_migrations WHERE version = 4`);
     assert.equal((await store.health()).ready, true);
     assert.equal((await controlPlane.health()).ready, true);
     await pool.query(`DROP TABLE ${quotedSchema}.managed_resource_journal_receipts`);

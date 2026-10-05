@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { sha256Ref } from '../../src/canonical.mjs';
-import { createManagedServiceHttpHandler } from '../src/http-handler.mjs';
+import {
+  createManagedServiceHttpHandler,
+  createManagedWorkerHttpHandler,
+} from '../src/http-handler.mjs';
 import {
   createManagedResourceJournalReceipt,
   managedClientRequestHash,
@@ -67,9 +70,47 @@ function postgresInvocationRow(overrides = {}) {
   return row;
 }
 
+// Test-only dispatcher exercises two distinct construction-boundary handlers.
+function createTestHandlerPair({ controlPlane, authenticator }) {
+  const publicHandler = createManagedServiceHttpHandler({ controlPlane, authenticator });
+  const workerHandler = createManagedWorkerHttpHandler({ controlPlane, workerAuthenticator: authenticator });
+  return (request) => request.path.startsWith('/internal/')
+    ? workerHandler(request) : publicHandler(request);
+}
+
+test('public and worker handlers are separated by default', async () => {
+  const fixture = await createFixture();
+  const publicHandle = createManagedServiceHttpHandler({
+    controlPlane: fixture.controlPlane,
+    authenticator: fixture.authenticator,
+  });
+  const workerHandle = createManagedWorkerHttpHandler({
+    controlPlane: fixture.controlPlane,
+    workerAuthenticator: fixture.authenticator,
+  });
+  const headers = {
+    Authorization: `Bearer ${TEST_TOKEN}`,
+    'Content-Type': 'application/json',
+  };
+  const publicRejectsWorker = await publicHandle({
+    method: 'POST',
+    path: '/internal/v1/invocations/rfi_missing/claim-execution',
+    headers,
+    body: JSON.stringify({}),
+  });
+  assert.equal(publicRejectsWorker.status, 404);
+  const workerRejectsPublic = await workerHandle({
+    method: 'POST',
+    path: '/v1/invocations',
+    headers,
+    body: JSON.stringify(invocationRequest()),
+  });
+  assert.equal(workerRejectsPublic.status, 404);
+});
+
 test('HTTP adapter reports bounded truth and enforces auth before tenant routes', async () => {
   const fixture = await createFixture();
-  const handle = createManagedServiceHttpHandler({
+  const handle = createTestHandlerPair({
     controlPlane: fixture.controlPlane,
     authenticator: fixture.authenticator,
   });
@@ -139,7 +180,7 @@ test('HTTP adapter reports bounded truth and enforces auth before tenant routes'
 
 test('HTTP claim retries recover a lost response once without extending authority', async () => {
   const fixture = await createFixture();
-  const handle = createManagedServiceHttpHandler({
+  const handle = createTestHandlerPair({
     controlPlane: fixture.controlPlane,
     authenticator: fixture.authenticator,
   });
@@ -219,7 +260,7 @@ test('HTTP claim retries recover a lost response once without extending authorit
 
 test('HTTP rejects tenant-wide lease-token reuse across invocation routes', async () => {
   const fixture = await createFixture();
-  const handle = createManagedServiceHttpHandler({
+  const handle = createTestHandlerPair({
     controlPlane: fixture.controlPlane,
     authenticator: fixture.authenticator,
   });
@@ -268,7 +309,7 @@ test('HTTP resource journal retries converge on one durable response and audit m
       return true;
     },
   });
-  const handle = createManagedServiceHttpHandler({
+  const handle = createTestHandlerPair({
     controlPlane: fixture.controlPlane,
     authenticator: fixture.authenticator,
   });
@@ -346,7 +387,7 @@ test('HTTP resource journal retries converge on one durable response and audit m
 
 test('HTTP claim tokens are required, bounded, URL-safe, and never reflected on errors', async () => {
   const fixture = await createFixture();
-  const handle = createManagedServiceHttpHandler({
+  const handle = createTestHandlerPair({
     controlPlane: fixture.controlPlane,
     authenticator: fixture.authenticator,
   });
@@ -448,10 +489,16 @@ test('PostgreSQL source schema binds tenant state, hashes credentials, and makes
 
 test('PostgreSQL health probe is local-pool injectable and reports durability truth', async () => {
   let released = false;
-  let migrationCount = 1;
+  let migrationCount = 3;
   const migrationHash = sha256Ref((await readFile(
     new URL('../migrations/001_managed_control_plane.pg.sql', import.meta.url),
     'utf8',
+  )).replace(/\r\n?/g, '\n'));
+  const purposeMigrationHash = sha256Ref((await readFile(
+    new URL('../migrations/002_journal_purpose.pg.sql', import.meta.url), 'utf8',
+  )).replace(/\r\n?/g, '\n'));
+  const lockMigrationHash = sha256Ref((await readFile(
+    new URL('../migrations/003_control_plane_lock_helpers.pg.sql', import.meta.url), 'utf8',
   )).replace(/\r\n?/g, '\n'));
   const pool = {
     async connect() {
@@ -474,6 +521,8 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
             rowCount: 1,
             rows: [{
               migration_hash: migrationHash,
+              purpose_migration_hash: purposeMigrationHash,
+              lock_migration_hash: lockMigrationHash,
               migration_count: migrationCount,
               recovery_required_count: 0,
               expired_execution_lease_count: 0,
@@ -496,17 +545,20 @@ test('PostgreSQL health probe is local-pool injectable and reports durability tr
     tls_required: false,
     tls_ca_validated: false,
     catalog_verified: true,
+    catalog_verification_scope: 'table_trigger_inventory',
+    exact_catalog_verified: false,
+    runtime_privileges_verified: false,
     migration_verified: true,
-    migration_count: 1,
+    migration_count: 3,
     recovery_required_count: 0,
     expired_execution_lease_count: 0,
   });
   assert.equal(released, true);
-  migrationCount = 2;
+  migrationCount = 4;
   const unreviewedMigration = await store.health();
   assert.equal(unreviewedMigration.ready, false);
   assert.equal(unreviewedMigration.migration_verified, false);
-  assert.equal(unreviewedMigration.migration_count, 2);
+  assert.equal(unreviewedMigration.migration_count, 4);
   assert.throws(
     () => new PostgresManagedServiceStore({ pool, requireTls: true }),
     (error) => error.code === 'MANAGED_POSTGRES_TLS_POOL_UNTRUSTED',
@@ -604,13 +656,17 @@ test('PostgreSQL validates caller clock before locks and refreshes DB time after
               rows: [{ managed_now: clockCalls === 1 ? initialNow : afterLockNow }],
             };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             order.push('tenant-lock');
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             order.push('invocation-lock');
             return { rowCount: 1, rows: [initialRow] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            order.push('credential-lock');
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -660,7 +716,7 @@ test('PostgreSQL validates caller clock before locks and refreshes DB time after
   assert.equal(claimed.claim_replayed, false);
   assert.equal(claimed.invocation.state, 'execution_leased');
   assert.equal(claimed.invocation.lease_owner, 'key_alpha');
-  assert.deepEqual(order, ['clock:1', 'tenant-lock', 'invocation-lock', 'clock:2']);
+  assert.deepEqual(order, ['clock:1', 'tenant-lock', 'invocation-lock', 'credential-lock', 'clock:2']);
   assert.match(auditInsertSql, /prior\.sequence = \$3 - 1/);
   assert.match(auditInsertSql, /prior\.event_hash = \$8/);
   assert.match(auditInsertSql, /prior\.occurred_at <= \$6::timestamptz/);
@@ -694,11 +750,14 @@ test('PostgreSQL exact claim retry returns stored work without any mutation', as
           if (sql === 'SELECT clock_timestamp() AS managed_now') {
             return { rowCount: 1, rows: [{ managed_now: now }] };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [activeRow] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -753,11 +812,14 @@ test('PostgreSQL rejects a tenant-wide historical lease token before lease mutat
           if (sql === 'SELECT clock_timestamp() AS managed_now') {
             return { rowCount: 1, rows: [{ managed_now: now }] };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -822,6 +884,7 @@ test('PostgreSQL resource journal transition recheck returns its exact durable r
     invocationRef: response.invocation_ref,
     claimantKeyId: fixture.principal.key_id,
     leaseTokenHash: tokenHash,
+    leaseKind: 'execution',
     savepointRef: response.savepoint_ref,
     forkRef: response.fork_ref,
   });
@@ -832,6 +895,7 @@ test('PostgreSQL resource journal transition recheck returns its exact durable r
     claimantKeyId: fixture.principal.key_id,
     leaseTokenHash: tokenHash,
     response,
+    leaseKind: 'execution',
     createdAt: now,
   });
   const queries = [];
@@ -847,7 +911,7 @@ test('PostgreSQL resource journal transition recheck returns its exact durable r
           if (sql === 'SELECT clock_timestamp() AS managed_now') {
             return { rowCount: 1, rows: [{ managed_now: now }] };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
@@ -868,11 +932,15 @@ test('PostgreSQL resource journal transition recheck returns its exact durable r
                 request_hash: receipt.request_hash,
                 claimant_key_id: receipt.claimant_key_id,
                 lease_token_hash: receipt.lease_token_hash,
+                lease_kind: 'execution',
                 response_json: receipt.response,
                 response_hash: receipt.response_hash,
                 created_at: receipt.created_at,
               }],
             };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -945,11 +1013,14 @@ test('PostgreSQL rolls back a mutation when audit time regresses at append', asy
               rows: [{ managed_now: clockCalls === 1 ? initialNow : regressedNow }],
             };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [initialRow] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -1021,11 +1092,14 @@ test('PostgreSQL renewal fails when the lease expires at its decisive update', a
             clockCalls += 1;
             return { rowCount: 1, rows: [{ managed_now: clockCalls < 3 ? now : expiredNow }] };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS .*managed_api_keys AS claimant/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };
@@ -1078,11 +1152,14 @@ test('PostgreSQL execution claim rechecks admission age at its decisive update',
               rows: [{ managed_now: clockCalls < 3 ? initialNow : gateNow }],
             };
           }
-          if (/managed_tenants.*FOR SHARE/s.test(sql)) {
+          if (/lock_managed_tenant_share/.test(sql)) {
             return { rowCount: 1, rows: [{ status: 'active' }] };
           }
           if (/SELECT \* .*managed_invocations.*FOR UPDATE/s.test(sql)) {
             return { rowCount: 1, rows: [row] };
+          }
+          if (/lock_managed_api_key_share/.test(sql)) {
+            return { rowCount: 1, rows: [{ locked: true }] };
           }
           if (/SELECT EXISTS[\s\S]*managed_api_keys/s.test(sql)) {
             return { rowCount: 1, rows: [{ active: true }] };

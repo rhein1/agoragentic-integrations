@@ -11,6 +11,11 @@ import {
 } from './authority-shape.mjs';
 import { COMMIT_TYPES, MCP_PHASES } from './constants.mjs';
 import {
+  SkillSpectorAdmissionError,
+  adaptSkillSpectorReport,
+  verifySkillSpectorAdmissionEvidence,
+} from './skillspector-admission.mjs';
+import {
   assertAllowedKeys,
   assertPlainObject,
   containsSecretShapedText,
@@ -36,16 +41,24 @@ export const RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA =
   'agoragentic.risk-fork.trusted-descriptor.v1';
 export const RISK_FORK_IMPORT_ENVELOPE_SCHEMA =
   'agoragentic.risk-fork.import-envelope.v1';
+export const RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA =
+  'agoragentic.risk-fork.skillspector-admission-verifier.v2';
 
 export const RISK_FORK_HOST_DIAGNOSTIC_CODES = Object.freeze({
   INVALID_BOUNDARY_INPUT: 'RISK_FORK_HOST_BOUNDARY_INVALID_INPUT',
   CALLER_RISK_LABEL_REJECTED: 'RISK_FORK_CALLER_RISK_LABEL_REJECTED',
+  CALLER_ADMISSION_EVIDENCE_REJECTED: 'RISK_FORK_CALLER_ADMISSION_EVIDENCE_REJECTED',
   OPERATION_TOO_LARGE: 'RISK_FORK_HOST_OPERATION_TOO_LARGE',
   DESCRIPTOR_SOURCE_UNTRUSTED: 'RISK_FORK_HOST_DESCRIPTOR_SOURCE_UNTRUSTED',
   DESCRIPTOR_RESOLUTION_FAILED: 'RISK_FORK_HOST_DESCRIPTOR_RESOLUTION_FAILED',
   DESCRIPTOR_INVALID: 'RISK_FORK_HOST_DESCRIPTOR_INVALID',
   DESCRIPTOR_REQUEST_MISMATCH: 'RISK_FORK_HOST_DESCRIPTOR_REQUEST_MISMATCH',
   DESCRIPTOR_HASH_MISMATCH: 'RISK_FORK_HOST_DESCRIPTOR_HASH_MISMATCH',
+  SKILLSPECTOR_EVIDENCE_DISABLED: 'RISK_FORK_SKILLSPECTOR_EVIDENCE_DISABLED',
+  SKILLSPECTOR_EVIDENCE_REQUIRED: 'RISK_FORK_SKILLSPECTOR_EVIDENCE_REQUIRED',
+  SKILLSPECTOR_EVIDENCE_INVALID: 'RISK_FORK_SKILLSPECTOR_EVIDENCE_INVALID',
+  SKILLSPECTOR_VERIFIER_UNTRUSTED: 'RISK_FORK_SKILLSPECTOR_VERIFIER_UNTRUSTED',
+  SKILLSPECTOR_VERIFICATION_FAILED: 'RISK_FORK_SKILLSPECTOR_VERIFICATION_FAILED',
   UNKNOWN_METADATA: 'RISK_FORK_HOST_METADATA_UNKNOWN',
   PRE_EFFECT_REJECTED: 'RISK_FORK_HOST_PRE_EFFECT_REJECTED',
   IMPORT_INVALID: 'RISK_FORK_IMPORT_ENVELOPE_INVALID',
@@ -118,6 +131,7 @@ const TEST_EVIDENCE_KEYS = Object.freeze([
 ]);
 
 const trustedDescriptorSourceCallbacks = new WeakMap();
+const trustedSkillSpectorVerifierCallbacks = new WeakMap();
 const hostBoundaryRecords = new WeakMap();
 const hostPreparedRecords = new WeakMap();
 
@@ -177,6 +191,36 @@ const CALLER_RISK_LABEL_FINGERPRINTS = new Set([
   'requiresfork',
   'forceoptionalfork',
 ]);
+const CALLER_ADMISSION_EVIDENCE_FINGERPRINTS = new Set([
+  'skillspector',
+  'skillspectorevidence',
+  'skillspectoradmission',
+  'admissionevidence',
+  'scannerreport',
+  'scanreport',
+  'scanevidence',
+  'baseline',
+  'baselines',
+  'suppression',
+  'suppressions',
+  'suppressed',
+  'waive',
+  'waiver',
+]);
+const SKILLSPECTOR_HOST_REPORT_KEYS = Object.freeze([
+  'report_bytes',
+  'package_ref',
+  'package_hash',
+  'prepared_artifact_hash',
+  'source_revision',
+  'rules_hash',
+  'runtime_closure_hash',
+  'component_manifest_hash',
+  'report_ref',
+  'invocation',
+  'network_enforcement',
+  'valid_until',
+]);
 const SENSITIVE_IMPORT_KEY_PATTERN = /(?:^|_)(?:api_?key|access_?token|refresh_?token|id_?token|session_?token|token|auth|authorization|authorisation|bearer|credential|credentials|password|passwd|passphrase|secret|client_?secret|private_?key|signing_?key|seed_?phrase|mnemonic|wallet_?(?:key|secret)|capability_?(?:grant|token))(?:$|_)/i;
 const SENSITIVE_IMPORT_VALUE_PATTERNS = Object.freeze([
   /-----BEGIN (?:RSA |EC |OPENSSH |PGP |ENCRYPTED )?[A-Z ]*PRIVATE KEY-----/i,
@@ -213,7 +257,11 @@ function keyFingerprints(value) {
   return normalizedKeys(value).map((normalized) => normalized.replaceAll('_', ''));
 }
 
-function assertNoCallerRiskLabels(value, field = 'operation') {
+function assertNoCallerRiskLabels(
+  value,
+  field = 'operation',
+  { rejectAdmissionEvidence = false } = {},
+) {
   function walk(current) {
     if (!current || typeof current !== 'object') return;
     if (utilTypes.isProxy(current)) {
@@ -229,6 +277,14 @@ function assertNoCallerRiskLabels(value, field = 'operation') {
         throw boundaryError(
           RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_RISK_LABEL_REJECTED,
           'Caller/model risk labels are not accepted by the host boundary',
+        );
+      }
+      if (rejectAdmissionEvidence && fingerprints.some(
+        (fingerprint) => CALLER_ADMISSION_EVIDENCE_FINGERPRINTS.has(fingerprint),
+      )) {
+        throw boundaryError(
+          RISK_FORK_HOST_DIAGNOSTIC_CODES.CALLER_ADMISSION_EVIDENCE_REJECTED,
+          'Caller/model scanner evidence, baselines, suppressions, and waivers are not accepted',
         );
       }
       walk(child);
@@ -748,6 +804,7 @@ function normalizeTrustedDescriptor(value, request) {
     'tool_annotations',
     'capabilities',
     'prompt_injection_indicators',
+    'skillspector_admission',
     'owner_policy',
     'descriptor_hash',
   ], 'trusted descriptor');
@@ -837,6 +894,18 @@ function normalizeTrustedDescriptor(value, request) {
       'trusted descriptor.prompt_injection_indicators',
       { maxItems: 50, maxLength: 500 },
     ),
+    ...(clone.skillspector_admission === undefined
+      ? {}
+      : {
+        skillspector_admission: verifySkillSpectorAdmissionEvidence(
+          clone.skillspector_admission,
+          {
+            descriptor_request_hash: request.request_hash,
+            operation_hash: request.operation_hash,
+            requested_at: request.requested_at,
+          },
+        ),
+      }),
     owner_policy: clone.owner_policy,
     descriptor_hash: requireSha256Ref(clone.descriptor_hash, 'trusted descriptor.descriptor_hash'),
   };
@@ -867,6 +936,7 @@ export function createTrustedRiskDescriptor(requestValue, input = {}) {
       'tool_annotations',
       'capabilities',
       'prompt_injection_indicators',
+      'skillspector_admission',
       'owner_policy',
     ], 'trusted descriptor input');
     const phase = requireEnum(input.mcp_phase, MCP_PHASES, 'trusted descriptor.mcp_phase');
@@ -926,6 +996,13 @@ export function createTrustedRiskDescriptor(requestValue, input = {}) {
     if (attestation !== null) {
       assertPlainObject(attestation, 'trusted descriptor.mcp_server_attestation');
     }
+    const skillspectorAdmission = input.skillspector_admission === undefined
+      ? null
+      : verifySkillSpectorAdmissionEvidence(input.skillspector_admission, {
+        descriptor_request_hash: request.request_hash,
+        operation_hash: request.operation_hash,
+        requested_at: request.requested_at,
+      });
     const descriptor = {
       schema: RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA,
       request_hash: request.request_hash,
@@ -954,6 +1031,9 @@ export function createTrustedRiskDescriptor(requestValue, input = {}) {
         'trusted descriptor.prompt_injection_indicators',
         { maxItems: 50, maxLength: 500 },
       ),
+      ...(skillspectorAdmission === null
+        ? {}
+        : { skillspector_admission: skillspectorAdmission }),
       owner_policy: ownerPolicy,
       descriptor_hash: null,
     };
@@ -980,13 +1060,52 @@ export function createTrustedRiskDescriptorSource(resolveDescriptor) {
   return source;
 }
 
-function normalizePrepareInput(value) {
+export function createTrustedSkillSpectorAdmissionVerifier(resolveHostReport) {
+  if (typeof resolveHostReport !== 'function') {
+    throw new TypeError('Trusted SkillSpector admission verifier requires a host callback');
+  }
+  const verifier = Object.freeze({
+    schema: RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA,
+    trust_mode: 'host_callback_identity',
+  });
+  trustedSkillSpectorVerifierCallbacks.set(verifier, resolveHostReport);
+  return verifier;
+}
+
+function normalizeSkillSpectorHostReport(value, request) {
+  assertCanonicalJson(value);
+  assertPlainObject(value, 'trusted SkillSpector host report');
+  assertAllowedKeys(
+    value,
+    SKILLSPECTOR_HOST_REPORT_KEYS,
+    'trusted SkillSpector host report',
+  );
+  for (const key of SKILLSPECTOR_HOST_REPORT_KEYS) {
+    if (!Object.hasOwn(value, key)) {
+      throw new TypeError('Trusted SkillSpector host report is incomplete');
+    }
+  }
+  // Re-derive coverage and both report hashes from host-owned exact raw bytes.
+  // A producer's recomputed self-hashes cannot substitute for this projection.
+  const evidence = adaptSkillSpectorReport({
+    ...value,
+    descriptor_request_hash: request.request_hash,
+    operation_hash: request.operation_hash,
+  });
+  return verifySkillSpectorAdmissionEvidence(evidence, {
+    requested_at: request.requested_at,
+  });
+}
+
+function normalizePrepareInput(value, { skillspectorAdmissionEnabled = false } = {}) {
   const clone = assertBoundedCanonicalJson(value, {
     field: 'Risk Fork host operation input',
     maxBytes: MAX_OPERATION_BYTES,
   });
   assertAllowedKeys(clone, PREPARE_INPUT_KEYS, 'Risk Fork host operation input');
-  assertNoCallerRiskLabels(clone.operation, 'Risk Fork child operation');
+  assertNoCallerRiskLabels(clone.operation, 'Risk Fork child operation', {
+    rejectAdmissionEvidence: skillspectorAdmissionEnabled,
+  });
   clone.operation = validateChildOperation(clone.operation, 'Risk Fork child operation');
   clone.expected_commit_type = requireEnum(
     clone.expected_commit_type,
@@ -1011,6 +1130,9 @@ function riskInputFromDescriptor(descriptor, requestId) {
     tool_annotations: descriptor.tool_annotations,
     capabilities: descriptor.capabilities,
     prompt_injection_indicators: descriptor.prompt_injection_indicators,
+    ...(descriptor.skillspector_admission === undefined
+      ? {}
+      : { skillspector_admission: descriptor.skillspector_admission }),
     owner_policy: descriptor.owner_policy,
   });
 }
@@ -1021,6 +1143,8 @@ export function createRiskForkHostBoundary(input = {}) {
     'trusted_descriptor_source',
     'create_execution_binding',
     'fork_elevated',
+    'skillspector_admission_enabled',
+    'trusted_skillspector_admission_verifier',
     'trusted_limits',
     'clock',
   ], 'Risk Fork host boundary factory input');
@@ -1040,6 +1164,20 @@ export function createRiskForkHostBoundary(input = {}) {
   }
   if (input.fork_elevated !== undefined && typeof input.fork_elevated !== 'boolean') {
     throw new TypeError('fork_elevated must be a boolean');
+  }
+  if (input.skillspector_admission_enabled !== undefined
+    && typeof input.skillspector_admission_enabled !== 'boolean') {
+    throw new TypeError('skillspector_admission_enabled must be a boolean');
+  }
+  const skillspectorAdmissionEnabled = input.skillspector_admission_enabled === true;
+  const verifySkillSpectorBindings = trustedSkillSpectorVerifierCallbacks.get(
+    input.trusted_skillspector_admission_verifier,
+  );
+  if (skillspectorAdmissionEnabled && !verifySkillSpectorBindings) {
+    throw boundaryError(
+      RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFIER_UNTRUSTED,
+      'Enabled SkillSpector admission requires the exact host-owned verifier capability',
+    );
   }
   const clock = input.clock ?? (() => new Date());
   if (typeof clock !== 'function') throw new TypeError('Risk Fork host boundary clock is invalid');
@@ -1078,7 +1216,9 @@ export function createRiskForkHostBoundary(input = {}) {
           request.descriptor_ref,
           'Risk Fork host descriptor_ref',
         );
-        const operationInput = normalizePrepareInput(request.operation_input);
+        const operationInput = normalizePrepareInput(request.operation_input, {
+          skillspectorAdmissionEnabled: record.skillspectorAdmissionEnabled,
+        });
         const requestedAt = requireIsoDate(record.clock(), 'Risk Fork host boundary clock result');
         const descriptorRequest = {
           schema: RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA,
@@ -1105,10 +1245,51 @@ export function createRiskForkHostBoundary(input = {}) {
           descriptor = normalizeTrustedDescriptor(resolved, frozenRequest);
         } catch (error) {
           if (error instanceof RiskForkHostBoundaryError) throw error;
+          if (error instanceof SkillSpectorAdmissionError) {
+            throw boundaryError(
+              RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_INVALID,
+              'Trusted descriptor contains invalid SkillSpector admission evidence',
+            );
+          }
           throw boundaryError(
             RISK_FORK_HOST_DIAGNOSTIC_CODES.DESCRIPTOR_INVALID,
             'Trusted descriptor source returned an invalid descriptor',
           );
+        }
+        const hasSkillSpectorEvidence = descriptor.skillspector_admission !== undefined;
+        if (!record.skillspectorAdmissionEnabled && hasSkillSpectorEvidence) {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_DISABLED,
+            'SkillSpector admission evidence is present while the host integration is disabled',
+          );
+        }
+        if (record.skillspectorAdmissionEnabled && !hasSkillSpectorEvidence) {
+          throw boundaryError(
+            RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_EVIDENCE_REQUIRED,
+            'The enabled SkillSpector admission boundary requires exact scan evidence',
+          );
+        }
+        if (record.skillspectorAdmissionEnabled) {
+          try {
+            const hostEvidence = normalizeSkillSpectorHostReport(
+              await record.verifySkillSpectorBindings(deepFreeze({
+                schema: 'agoragentic.risk-fork.skillspector-admission-verification-request.v2',
+                descriptor_request_hash: frozenRequest.request_hash,
+                operation_hash: frozenRequest.operation_hash,
+                requested_at: frozenRequest.requested_at,
+                evidence: descriptor.skillspector_admission,
+              })),
+              frozenRequest,
+            );
+            if (canonicalize(descriptor.skillspector_admission) !== canonicalize(hostEvidence)) {
+              throw new TypeError('SkillSpector evidence differs from the host-derived raw report');
+            }
+          } catch {
+            throw boundaryError(
+              RISK_FORK_HOST_DIAGNOSTIC_CODES.SKILLSPECTOR_VERIFICATION_FAILED,
+              'Host-owned SkillSpector package, report, configuration, or network binding failed',
+            );
+          }
         }
         const riskInput = riskInputFromDescriptor(descriptor, frozenRequest.request_id);
         let prepared;
@@ -1170,6 +1351,8 @@ export function createRiskForkHostBoundary(input = {}) {
     resolveDescriptor,
     createExecutionBinding: input.create_execution_binding ?? null,
     forkElevated: input.fork_elevated !== false,
+    skillspectorAdmissionEnabled,
+    verifySkillSpectorBindings: verifySkillSpectorBindings ?? null,
     clock,
     trustedLimits: deepFreeze({ ...trustedLimits }),
   }));

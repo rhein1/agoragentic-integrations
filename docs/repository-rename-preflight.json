@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0.0",
-  "source_manifest_version": "2.56.0",
-  "as_of": "2026-09-14",
+  "source_manifest_version": "2.56.1",
+  "as_of": "2026-09-22",
   "source_repository": "rhein1/agoragentic-integrations",
   "safe_to_rename": false,
   "target_repository": null,
   "summary": {
     "file_count": 185,
-    "occurrence_count": 369,
+    "occurrence_count": 370,
     "category_file_counts": {
       "installer_or_clone": 31,
       "machine_discovery": 61,
@@ -1619,10 +1619,11 @@
     },
     {
       "path": "risk-fork/examples/runtime-dynamic/docs/VALIDATION.md",
-      "occurrences": 2,
+      "occurrences": 3,
       "line_numbers": [
         7,
-        9
+        9,
+        17
       ],
       "categories": [
         "public_documentation"
@@ -1737,8 +1738,8 @@
       "occurrences": 3,
       "line_numbers": [
         12,
-        125,
-        129
+        140,
+        144
       ],
       "categories": [
         "installer_or_clone",
@@ -1762,7 +1763,7 @@
       "occurrences": 4,
       "line_numbers": [
         11,
-        73
+        74
       ],
       "categories": [
         "public_documentation"

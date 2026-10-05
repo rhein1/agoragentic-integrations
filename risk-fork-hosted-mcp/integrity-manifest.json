@@ -8,8 +8,8 @@
   "source_attestation": {
     "schema": "agoragentic.risk-fork-hosted-mcp.reviewed-sources.v2",
     "normalization": "utf8_crlf_to_lf_lone_cr_preserved",
-    "files": 66,
-    "sha256": "sha256:de230473ee659a9df4e509335e28062b2cfa77ce95bebc9a9f3bd90c6ebba9db"
+    "files": 70,
+    "sha256": "sha256:3d2d11840ca6ac654d92cfe25f67c9dd0f4ad8768a5d3473bcb50a2b016dc48a"
   },
   "reviewed_sources": [
     {
@@ -25,7 +25,7 @@
     {
       "path": "mcp/package.json",
       "bytes": 3195,
-      "sha256": "sha256:bb551da95f41912a91b331e809f6195652b4d8bccd5881e94843d84b9f73c8d0"
+      "sha256": "sha256:f1810726d850cee5c84d2902e2ce108596e780d1cba573845f294d2cd59c85a1"
     },
     {
       "path": "risk-fork/LICENSE",
@@ -73,6 +73,11 @@
       "sha256": "sha256:6dabb296a6e58ed9ffc28c520cd24d8a7f5ce992e3f080828a87ec7ab071adf6"
     },
     {
+      "path": "risk-fork/ops/postgres/mcp-portable-handles-roles.sql.template",
+      "bytes": 2095,
+      "sha256": "sha256:0fc211623ba09d997cb7573c78637cbe59f0798aced8af54797d300dee2f2966"
+    },
+    {
       "path": "risk-fork/ops/postgres/owner-bootstrap.sql.template",
       "bytes": 1015,
       "sha256": "sha256:ee98f7132d805686a455c58dec64e950a199a57e91a574560b33eff4d75acdd1"
@@ -84,8 +89,8 @@
     },
     {
       "path": "risk-fork/package.json",
-      "bytes": 4677,
-      "sha256": "sha256:162af5f164145d6f8876d372a79e76b2fd15d5c73c5b25c2e294c15ca8c45960"
+      "bytes": 5511,
+      "sha256": "sha256:4426cd3d145347603e2963c1a7fabcb2dc8fd18853415e1aff48e220a6989df9"
     },
     {
       "path": "risk-fork/schema/e2b-qualification-evidence.v1.json",
@@ -114,8 +119,8 @@
     },
     {
       "path": "risk-fork/src/adapters/local-reference.mjs",
-      "bytes": 36391,
-      "sha256": "sha256:19335cae09f070540aadfed2a5b53aa6b15564a4c05a4a27f8b431f12e0c927c"
+      "bytes": 68386,
+      "sha256": "sha256:70f4d7d74f6e2595baea6ea7f407d1e480fe33ed31665c72ca94f8e27a9f5336"
     },
     {
       "path": "risk-fork/src/adapters/local-runner.mjs",
@@ -131,6 +136,16 @@
       "path": "risk-fork/src/adapters/postgres-authority.mjs",
       "bytes": 95665,
       "sha256": "sha256:357aac98781b6dc8deacb350648ca206a2d5025d8260c10f672d25dcddcc8388"
+    },
+    {
+      "path": "risk-fork/src/adapters/postgres-mcp-portable-handles.mjs",
+      "bytes": 14465,
+      "sha256": "sha256:d43e524e63af0be5c46f011400ba31b0e9bbc416dbb8d94ecba30207b4024867"
+    },
+    {
+      "path": "risk-fork/src/adapters/postgres-portable-handle-attestation.mjs",
+      "bytes": 21016,
+      "sha256": "sha256:15d0828f3b037fbc345dfda5c54151a70858906e88f3ad2521dd8d0fe4cb23e2"
     },
     {
       "path": "risk-fork/src/authority-shape.mjs",
@@ -204,13 +219,13 @@
     },
     {
       "path": "risk-fork/src/host-boundary.mjs",
-      "bytes": 42928,
-      "sha256": "sha256:eb56b12bfcdfaecba3906c6fb114c0831b01f82aac54ef4de233275161b13b3d"
+      "bytes": 50268,
+      "sha256": "sha256:940c28d2ceea8431a0618a031a4ebd53da4851c9a988e87c01febd299a659cca"
     },
     {
       "path": "risk-fork/src/index.mjs",
-      "bytes": 5302,
-      "sha256": "sha256:574d648276e0b70c2df7e1c07efa2394248e720323b014b5021e1123a966b6e4"
+      "bytes": 6216,
+      "sha256": "sha256:0a11577f533e4990410a286b6772575b5f0c2ef5a1be56aac6fdd87bb7293ff5"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -224,13 +239,13 @@
     },
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
-      "bytes": 48209,
-      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
+      "bytes": 49042,
+      "sha256": "sha256:d3315126a2cdfdda68fd4c3e5138d91b2803d2836a2c65af6e71b2349707d7d9"
     },
     {
       "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
-      "bytes": 21109,
-      "sha256": "sha256:619826af7cb6716307ecee95f5e30f2ccba88705e20ad7a2f5faa6c4bccfbd3b"
+      "bytes": 36914,
+      "sha256": "sha256:5732815c02b58c759b09b18cffc602e03240a0c7f147185ce7c386727f18e75b"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
@@ -249,8 +264,13 @@
     },
     {
       "path": "risk-fork/src/risk-classifier.mjs",
-      "bytes": 23785,
-      "sha256": "sha256:8a4aa23de66584afc2a334f3b52401042dec1f2b458281a9a2b4859bb5941969"
+      "bytes": 24939,
+      "sha256": "sha256:9599d97708ef7bb52fdc8640d6098edf07d2ed0395213983eca30e6ac68ebb71"
+    },
+    {
+      "path": "risk-fork/src/skillspector-admission.mjs",
+      "bytes": 64269,
+      "sha256": "sha256:9cae23b3b5c2e7bd7488ffdaa2061d451b63240d35c3aa9a4384873b73234def"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -426,6 +446,7 @@
     "RISK_FORK_MCP_PHASE_PLAN_REQUEST_SCHEMA",
     "RISK_FORK_MCP_PHASE_PLAN_SCHEMA",
     "RISK_FORK_MCP_TRANSPORT_RESULT_SCHEMA",
+    "RISK_FORK_SKILLSPECTOR_VERIFIER_SCHEMA",
     "RISK_FORK_TRUSTED_DESCRIPTOR_REQUEST_SCHEMA",
     "RISK_FORK_TRUSTED_DESCRIPTOR_SCHEMA",
     "RiskForkCommitError",
@@ -435,7 +456,16 @@
     "RiskForkMcpHostAdapterError",
     "RiskForkPreparationError",
     "RiskForkProvider",
+    "SKILLSPECTOR_ADMISSION_DIAGNOSTIC_CODES",
+    "SKILLSPECTOR_ADMISSION_EVIDENCE_SCHEMA",
+    "SKILLSPECTOR_REVIEWED_ARTIFACT_HASH",
+    "SKILLSPECTOR_REVIEWED_SOURCE_REVISION",
+    "SKILLSPECTOR_REVIEWED_VERSION",
+    "SKILLSPECTOR_RULES_MANIFEST_SCHEMA",
+    "SKILLSPECTOR_RUNTIME_CLOSURE_SCHEMA",
+    "SkillSpectorAdmissionError",
     "acquirePostgresAuthorityClient",
+    "adaptSkillSpectorReport",
     "applyE2BExternalQualificationObservation",
     "assertHostCanEnforce",
     "assertPreparedForCleanCommit",
@@ -449,6 +479,7 @@
     "computeMcpCleanImportEvidenceHash",
     "connectRemoteClient",
     "createCleanupVerificationRequest",
+    "createDurableMcpPortableHandleRegistry",
     "createE2BAuthorityFreeSourceVerifier",
     "createE2BExternalQualificationObservationVerifier",
     "createE2BQualificationEvidence",
@@ -457,6 +488,8 @@
     "createForkIdentity",
     "createMcpEnforcementBoundary",
     "createMcpInterceptionPlan",
+    "createMcpPortableHandlePreEffectBoundary",
+    "createMcpPortableHandleRegistry",
     "createPostgresAuthorityPool",
     "createRemoteToolDirectory",
     "createRiskForkHostBoundary",
@@ -469,11 +502,17 @@
     "createTrustedRiskDescriptor",
     "createTrustedRiskDescriptorSource",
     "createTrustedRiskForkMcpPhasePlanSource",
+    "createTrustedSkillSpectorAdmissionVerifier",
     "deriveParentAuthorityRef",
     "executeFallbackTool",
+    "hashSkillSpectorComponentManifest",
+    "hashSkillSpectorRulesManifest",
+    "hashSkillSpectorRuntimeClosure",
     "importRiskForkProviderResult",
     "isE2BQualificationEvidenceCanonical",
     "isE2BRuntimeSdkIntegrityVerifier",
+    "isMcpPortableHandlePreEffectBoundary",
+    "isMcpPortableHandleRegistry",
     "isPostgresDistributedCommitAuthority",
     "isProductionPostgresDistributedCommitAuthority",
     "isRiskForkHostBoundary",
@@ -501,7 +540,8 @@
     "verifyPostgresDistributedAuthoritySchema",
     "verifyRiskDecision",
     "verifyRiskForkImportEnvelope",
-    "verifySavepointCapsule"
+    "verifySavepointCapsule",
+    "verifySkillSpectorAdmissionEvidence"
   ],
   "inputs": [
     {
@@ -520,7 +560,7 @@
       "path": "mcp/package.json",
       "source": "reviewed_source",
       "bytes": 3195,
-      "sha256": "sha256:bb551da95f41912a91b331e809f6195652b4d8bccd5881e94843d84b9f73c8d0"
+      "sha256": "sha256:f1810726d850cee5c84d2902e2ce108596e780d1cba573845f294d2cd59c85a1"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/@modelcontextprotocol/core/LICENSE",
@@ -1191,8 +1231,8 @@
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/index.js",
       "source": "workspace_dependency",
-      "bytes": 22061,
-      "sha256": "sha256:e82d3e55d954483e4927f9740bc3113a24d19ef5a73c7962d8a93c499fc982ff"
+      "bytes": 22264,
+      "sha256": "sha256:62876e5094b43ba2ba90374613dab4576fd337063dad20b4b07cc5e3a7e2303b"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/lib/schemes.js",
@@ -1210,7 +1250,7 @@
       "path": "risk-fork-hosted-mcp/node_modules/fast-uri/package.json",
       "source": "workspace_dependency",
       "bytes": 1983,
-      "sha256": "sha256:e634f3848a2c6c7e1cdc28b119b16e072e10dada8a3ca3f175a2372d0dd83360"
+      "sha256": "sha256:30cad05aad3d3596513706451dbfc7e0422f9c1d00f2903ecc34580327d54bc7"
     },
     {
       "path": "risk-fork-hosted-mcp/node_modules/json-schema-traverse/LICENSE",
@@ -2145,8 +2185,8 @@
     {
       "path": "risk-fork-hosted-mcp/src/index.mjs",
       "source": "package_source",
-      "bytes": 4918,
-      "sha256": "sha256:116296d1e2ba2258ab4df8cb707085d4c0d2c8ffe6459359bb2cc1d403acc331"
+      "bytes": 5811,
+      "sha256": "sha256:a9d866df15a7e140494977c47397047585a22927c4e1112ee5b8aae6f019957b"
     },
     {
       "path": "risk-fork-hosted-mcp/src/pg-native-disabled.js",
@@ -2319,8 +2359,8 @@
     {
       "path": "risk-fork/src/host-boundary.mjs",
       "source": "reviewed_source",
-      "bytes": 42928,
-      "sha256": "sha256:eb56b12bfcdfaecba3906c6fb114c0831b01f82aac54ef4de233275161b13b3d"
+      "bytes": 50268,
+      "sha256": "sha256:940c28d2ceea8431a0618a031a4ebd53da4851c9a988e87c01febd299a659cca"
     },
     {
       "path": "risk-fork/src/interception.mjs",
@@ -2337,8 +2377,14 @@
     {
       "path": "risk-fork/src/mcp-host-adapter.mjs",
       "source": "reviewed_source",
-      "bytes": 48209,
-      "sha256": "sha256:6a14b9b6467e6ee1c9b64e1aec042ff21c39861bd31ee1215673a57cbe81e42a"
+      "bytes": 49042,
+      "sha256": "sha256:d3315126a2cdfdda68fd4c3e5138d91b2803d2836a2c65af6e71b2349707d7d9"
+    },
+    {
+      "path": "risk-fork/src/mcp-portable-handle-boundary.mjs",
+      "source": "reviewed_source",
+      "bytes": 36914,
+      "sha256": "sha256:5732815c02b58c759b09b18cffc602e03240a0c7f147185ce7c386727f18e75b"
     },
     {
       "path": "risk-fork/src/mcp-transport-contract.mjs",
@@ -2355,8 +2401,14 @@
     {
       "path": "risk-fork/src/risk-classifier.mjs",
       "source": "reviewed_source",
-      "bytes": 23785,
-      "sha256": "sha256:8a4aa23de66584afc2a334f3b52401042dec1f2b458281a9a2b4859bb5941969"
+      "bytes": 24939,
+      "sha256": "sha256:9599d97708ef7bb52fdc8640d6098edf07d2ed0395213983eca30e6ac68ebb71"
+    },
+    {
+      "path": "risk-fork/src/skillspector-admission.mjs",
+      "source": "reviewed_source",
+      "bytes": 64269,
+      "sha256": "sha256:9cae23b3b5c2e7bd7488ffdaa2061d451b63240d35c3aa9a4384873b73234def"
     },
     {
       "path": "risk-fork/src/taint-gate.mjs",
@@ -2380,7 +2432,7 @@
   "third_party_notices": {
     "path": "THIRD_PARTY_NOTICES.txt",
     "bytes": 56885,
-    "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd",
+    "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855",
     "sources": [
       {
         "package": "@modelcontextprotocol/core",
@@ -2439,7 +2491,7 @@
       },
       {
         "package": "fast-uri",
-        "version": "3.1.7",
+        "version": "3.1.8",
         "declared_license": "BSD-3-Clause",
         "method": "standalone_license_file",
         "path": "risk-fork-hosted-mcp/node_modules/fast-uri/LICENSE",
@@ -2628,8 +2680,8 @@
   },
   "artifact": {
     "path": "dist/runtime/index.mjs",
-    "bytes": 3111081,
-    "sha256": "sha256:0cf10848110d7855d45065517720b286cf712080716534154d54ea059eab55ff"
+    "bytes": 3223942,
+    "sha256": "sha256:d9334af3035098a403a63c83f249e72c919d755cf2f3af82899f07e8ebcff031"
   },
   "packaged_assets": [
     {
@@ -2653,7 +2705,7 @@
     {
       "path": "THIRD_PARTY_NOTICES.txt",
       "bytes": 56885,
-      "sha256": "sha256:88c6a3301b747237128435917d181c66aa2568234f40947531a0b0de0d3477fd"
+      "sha256": "sha256:84761a19dbe9d442127b5dd3d83f35831a756f888589ae6fc5132b31af733855"
     },
     {
       "path": "e2b-context/risk-fork/e2b-template/bin/boot-guard.mjs",
