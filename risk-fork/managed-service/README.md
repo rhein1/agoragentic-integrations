@@ -172,10 +172,18 @@ one pending sink and drops overlap; it is not a durable audit or alert service.
 AbortSignal rejects waiting policy checks; it does not cancel committed work.
 Direct local-host policy waits use the host's `deadlineMs` (default 30 seconds).
 
-There is **no built-in distributed limiter or control backend**. Hosts must
-atomically enforce both per-key and per-tenant quotas across instances and
-reserve cleanup/recovery capacity. Omitting the optional policy preserves
-local-test behavior, not production qualification. A policy decision is not
+An optional [PostgreSQL request-policy backend](./REQUEST_POLICY.md) now supplies
+these two callbacks with shared transactional per-key/per-tenant fixed-window
+quotas, independent route capacity, a durable disable epoch and database-clock
+rollback rejection. It uses its own migration ledger and dedicated database,
+not the execution or worker-delivery schemas. The source is restricted to
+`local_test`; configuration/migration hashes and the exact source-owned PG16
+catalog are checked every transaction. Optional `expectedOwner` also verifies
+distinct runtime identity, ownership, exact ACLs and privilege defaults. These
+are local source checks, not hosted-role qualification. Hosts still own authenticated
+identity, edge protection, durable alerts and deployed qualification.
+Omitting the optional policy preserves local-test behavior, not production
+qualification. A policy decision is not
 atomic with database writes or provider effects: an immediate effect-time
 fence and cancellation of in-flight provider work remain broker/host duties.
 

@@ -36,6 +36,9 @@ export {
 } from './auth.mjs';
 export { createOfflineOAuthVerifier } from './oauth-verifier.mjs';
 export { createManagedRequestPolicy } from './request-policy.mjs';
+export { createPostgresManagedRequestPolicyStore, PostgresManagedRequestPolicyStore } from './postgres-request-policy-store.mjs';
+export { migratePostgresManagedRequestPolicy } from './postgres-request-policy-migrator.mjs';
+export { verifyPostgresRequestPolicyAttestation } from './postgres-request-policy-attestation.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';
 export {
