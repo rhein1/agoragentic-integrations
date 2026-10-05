@@ -87,9 +87,27 @@ test('worker delivery survives restart, fences capacity, and protects tombstones
       invocation_ref: invocation.invocation_ref, lease_token: token, worker_id: 'fixture:worker', lease_ms: 10_000,
     }), /lost response/);
     const [pending] = await journal.listPending();
+    const originalCiphertext = (await restarted.get(journalOptions.namespace, pending)).record;
     journal.close();
-    const resumed = createManagedWorkerDeliveryJournal(journalOptions);
+    const rotatedOptions = { ...journalOptions, encryptionKey: Buffer.alloc(32, 94),
+      keyId: 'fixture:encrypted-new',
+      retiredDecryptionKeys: [{ keyId: journalOptions.keyId, encryptionKey: journalOptions.encryptionKey }] };
+    const missingOldKey = createManagedWorkerDeliveryJournal({ ...rotatedOptions, retiredDecryptionKeys: [] });
+    try { await assert.rejects(missingOldKey.resumeDelivery(pending), { code: 'WORKER_DELIVERY_INVALID' }); }
+    finally { missingOldKey.close(); }
+    const resumed = createManagedWorkerDeliveryJournal(rotatedOptions);
     assert.equal((await resumed.resumeDelivery(pending)).original_operation_resumed, false);
+    assert.deepEqual((await restarted.get(journalOptions.namespace, pending)).record, originalCiphertext,
+      'rotation must not rewrite immutable ciphertext');
+    const { invocation: nextInvocation } = await f.controlPlane.admitInvocation(f.principal,
+      invocationRequest({ idempotency_key: 'idempotency-key-pg-rotated-0002' }));
+    await resumed.deliver('execution', 'claimExecution', {
+      invocation_ref: nextInvocation.invocation_ref, lease_token: f.nextLeaseToken('rotated'),
+      worker_id: journalOptions.workerId, lease_ms: 10_000,
+    });
+    const keyRows = await pool.query(`SELECT key_id FROM ${quoted}.managed_worker_delivery_attempts WHERE namespace = $1 ORDER BY created_at`,
+      [journalOptions.namespace]);
+    assert.deepEqual(keyRows.rows.map((row) => row.key_id), [journalOptions.keyId, rotatedOptions.keyId]);
     const stored = await pool.query(`SELECT row_to_json(d) AS data FROM ${quoted}.managed_worker_delivery_attempts d`);
     assert.equal(JSON.stringify(stored.rows).includes(token), false);
     assert.equal((await f.controlPlane.listAuditEvents(f.principal, invocation.invocation_ref))

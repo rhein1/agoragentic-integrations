@@ -1,7 +1,8 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { isProxy } from 'node:util/types';
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import {
-  assertAllowedKeys, assertPlainRecord, cloneJson, deepFreeze, managedError,
+  assertAllowedKeys, assertDataArray, assertPlainRecord, cloneJson, deepFreeze, managedError,
   requireEnum, requireInteger, requireInvocationRef, requireOpaqueRef,
 } from './validation.mjs';
 
@@ -15,7 +16,7 @@ const failure = () => managedError('Worker delivery evidence is unavailable or i
 // prepared-object authority. Store acknowledgements are not provider evidence.
 export function createManagedWorkerDeliveryJournal(options = {}) {
   assertPlainRecord(options, 'delivery options');
-  assertAllowedKeys(options, ['store', 'encryptionKey', 'keyId', 'namespace', 'workerId',
+  assertAllowedKeys(options, ['store', 'encryptionKey', 'keyId', 'retiredDecryptionKeys', 'namespace', 'workerId',
     'controlPlane', 'executionPrincipal', 'cleanupPrincipal', 'recoveryPrincipal', 'maxAttempts'], 'delivery options');
   const { store, controlPlane: control } = options;
   for (const method of ['insert', 'get', 'acknowledge', 'listPending']) {
@@ -24,11 +25,23 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
   if (control?.config?.environment !== 'local_test' || control.config.enabled !== true) {
     throw managedError('Delivery source is local_test only', 'WORKER_NOT_QUALIFIED', 503);
   }
-  if (!Buffer.isBuffer(options.encryptionKey) || options.encryptionKey.length !== 32) {
-    throw new TypeError('A host-owned 32-byte encryption key is required');
-  }
-  const key = Buffer.from(options.encryptionKey);
   const keyId = requireOpaqueRef(options.keyId, 'keyId');
+  const requireKey = (value) => {
+    if (isProxy(value) || !Buffer.isBuffer(value) || value.length !== 32) {
+      throw new TypeError('A host-owned 32-byte encryption key is required');
+    }
+    return value;
+  };
+  const keyInputs = new Map([[keyId, requireKey(options.encryptionKey)]]);
+  const retired = options.retiredDecryptionKeys === undefined ? [] : options.retiredDecryptionKeys;
+  assertDataArray(retired, 'retiredDecryptionKeys', { maxLength: 8 });
+  for (const entry of retired) {
+    assertPlainRecord(entry, 'retired decryption key');
+    assertAllowedKeys(entry, ['keyId', 'encryptionKey'], 'retired decryption key');
+    const retiredId = requireOpaqueRef(entry.keyId, 'retired keyId');
+    if (keyInputs.has(retiredId)) throw new TypeError('Delivery key IDs must be unique');
+    keyInputs.set(retiredId, requireKey(entry.encryptionKey));
+  }
   const namespace = requireOpaqueRef(options.namespace, 'namespace');
   const workerId = requireOpaqueRef(options.workerId, 'workerId');
   const maxAttempts = requireInteger(options.maxAttempts ?? 1000, 'maxAttempts', { min: 1, max: 10_000 });
@@ -38,10 +51,15 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
     requireOpaqueRef(principal?.key_id, 'principal.key_id');
     requireOpaqueRef(principal?.tenant_id, 'principal.tenant_id');
   }
+  // Snapshot host key custody only after validating the complete construction.
+  // Retired keys decrypt exact retained v1 records; they never seal new packets.
+  const decryptionKeys = new Map([...keyInputs].map(([id, value]) => [id, Buffer.from(value)]));
+  keyInputs.clear();
+  const key = decryptionKeys.get(keyId);
   let closed = false;
   const running = new Map();
   const assertOpen = () => { if (closed) throw failure(); };
-  const aad = (ref) => Buffer.from(canonicalize({ schema: SCHEMA, namespace, worker_id: workerId, key_id: keyId, attempt_ref: ref }));
+  const aad = (ref, recordKeyId = keyId) => Buffer.from(canonicalize({ schema: SCHEMA, namespace, worker_id: workerId, key_id: recordKeyId, attempt_ref: ref }));
 
   function validatePacket(value) {
     const packet = cloneJson(value, 'delivery packet');
@@ -82,7 +100,9 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
       const record = cloneJson(value, 'delivery record');
       assertPlainRecord(record, 'delivery record');
       assertAllowedKeys(record, ['schema', 'namespace', 'attempt_ref', 'key_id', 'iv', 'ciphertext', 'tag'], 'delivery record');
-      if (record.schema !== SCHEMA || record.namespace !== namespace || record.attempt_ref !== ref || record.key_id !== keyId) throw failure();
+      if (record.schema !== SCHEMA || record.namespace !== namespace || record.attempt_ref !== ref) throw failure();
+      const recordKey = decryptionKeys.get(record.key_id);
+      if (!recordKey) throw failure(); // no trial-decrypt, external key fetch, or fallback
       const decode = (text, max) => {
         if (typeof text !== 'string' || text.length > max || !/^[A-Za-z0-9_-]+$/.test(text)) throw failure();
         const bytes = Buffer.from(text, 'base64url');
@@ -91,8 +111,8 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
       };
       const iv = decode(record.iv, 16), tag = decode(record.tag, 22), ciphertext = decode(record.ciphertext, 87_384);
       if (iv.length !== 12 || tag.length !== 16 || ciphertext.length > 65_536) throw failure();
-      const decipher = createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAAD(aad(ref)); decipher.setAuthTag(tag);
+      const decipher = createDecipheriv('aes-256-gcm', recordKey, iv);
+      decipher.setAAD(aad(ref, record.key_id)); decipher.setAuthTag(tag);
       const bytes = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       try { return validatePacket(JSON.parse(bytes.toString('utf8'))); }
       finally { bytes.fill(0); }
@@ -152,7 +172,7 @@ export function createManagedWorkerDeliveryJournal(options = {}) {
         || refs.some((ref) => typeof ref !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(ref))) throw failure();
       return deepFreeze(refs);
     },
-    close() { closed = true; key.fill(0); },
+    close() { closed = true; for (const value of decryptionKeys.values()) value.fill(0); decryptionKeys.clear(); },
     production_qualified: false,
   });
   journals.set(journal, { control, workerId, principals });

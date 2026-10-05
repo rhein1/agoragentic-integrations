@@ -93,7 +93,36 @@ ciphertext records. All records, including acknowledged ones, count toward
 `maxAttempts`; capacity exhaustion fails closed. Unknown transaction outcomes or
 serialization conflicts are not implicit retry authority. Stable host key custody,
 reviewed retention, rotation, restore, and runtime roles require qualification.
-Closing the journal zeroes its key copy, not the caller's key or database rows.
+Closing the journal zeroes all of its key copies, not caller keys or database rows.
+
+### Delivery encryption-key rotation (source/local-test only)
+
+`encryptionKey` and `keyId` identify the one active sealing key. On a clean-host
+restart, the optional `retiredDecryptionKeys` is a dense array of at most eight
+closed `{ keyId, encryptionKey }` records with unique IDs (including the active
+ID) and host-owned 32-byte Buffers. The journal snapshots these keys. The local
+host exposes the same array as `deliveryRetiredDecryptionKeys`. Neither interface
+loads keys from a request, environment fallback, remote key service or ciphertext.
+
+New deliveries use only the active key. Retained v1 ciphertext is decrypted with
+the exact configured key matching its `key_id`; that ID, namespace, worker and
+attempt remain authenticated as AAD. Missing/wrong keys and ID substitution fail
+closed before delivery. There is no trial-decrypt fallback, re-encryption, row
+rewrite, schema change, tombstone removal or original-operation/provider retry.
+All current principal, tenant, lease and scope checks still apply to an
+unacknowledged packet; a retired encryption key does not retain worker authority.
+
+Retain old decryption keys in approved host secret custody for as long as the
+reviewed recovery/restore policy requires the corresponding immutable records.
+Do not retire a key merely because `listPending` is empty: acknowledged rows and
+backups still use that key, and this journal does not enumerate a complete
+retention inventory or prove that retirement is safe. A revoked worker credential
+cannot be replaced inside its old claim packet; use the existing expiry/reaper
+and fresh cleanup/recovery path rather than impersonating the old identity.
+Configuration is restart-owned, not an in-place rotation API. Local tests prove
+lost claim/resource-response recovery across key rotation; secret-manager rotation,
+database credential rotation, backup restore/PITR and hosted qualification remain
+open. This is not a production cryptographic key-management service.
 
 The PostgreSQL delivery factory now attests the exact catalog/migration before
 returning; operations reattest inside each transaction. An explicit

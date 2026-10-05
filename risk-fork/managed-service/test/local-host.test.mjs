@@ -3,7 +3,8 @@ import { request } from 'node:http';
 import { createServer } from 'node:net';
 import test from 'node:test';
 import { createManagedRiskForkLocalHost } from '../host/local-host.mjs';
-import { createFixture, TEST_TOKEN } from './helpers.mjs';
+import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
+import { createFixture, invocationRequest, testLeaseToken, TEST_TOKEN } from './helpers.mjs';
 
 function deliveryStore() {
   const rows = new Map();
@@ -144,4 +145,43 @@ test('startup failure closes the sibling listener and concurrent close shares co
     probe.listen(port, '127.0.0.1', resolve);
   });
   await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
+});
+
+test('local host resumes retained delivery after key rotation without invoking the provider', async () => {
+  const fixture = await createFixture();
+  const { invocation } = await fixture.controlPlane.admitInvocation(fixture.principal, invocationRequest());
+  const options = hostOptions(fixture);
+  let calls = 0;
+  const control = { ...fixture.controlPlane, async claimExecution(...args) {
+    const result = await fixture.controlPlane.claimExecution(...args);
+    if (++calls === 1) throw new Error('lost acknowledgement');
+    return result;
+  } };
+  const old = createManagedWorkerDeliveryJournal({
+    store: options.deliveryStore, encryptionKey: options.deliveryEncryptionKey,
+    keyId: options.deliveryKeyId, namespace: options.deliveryNamespace,
+    workerId: options.workerId, controlPlane: control, executionPrincipal: options.executionPrincipal,
+    cleanupPrincipal: options.cleanupPrincipal, recoveryPrincipal: options.recoveryPrincipal,
+  });
+  await assert.rejects(old.deliver('execution', 'claimExecution', {
+    invocation_ref: invocation.invocation_ref, worker_id: options.workerId,
+    lease_token: testLeaseToken('host_rotation'), lease_ms: 10_000,
+  }), /lost acknowledgement/);
+  const [ref] = await old.listPending(); old.close();
+  let providerCalls = 0;
+  const host = createManagedRiskForkLocalHost({ ...options, controlPlane: control,
+    deliveryEncryptionKey: Buffer.alloc(32, 0x52), deliveryKeyId: 'key:local-host-new',
+    deliveryRetiredDecryptionKeys: [{ keyId: options.deliveryKeyId, encryptionKey: options.deliveryEncryptionKey }],
+    workerOptions: { ...options.workerOptions, invokeProvider: async () => { providerCalls += 1; throw new Error('unexpected provider call'); } },
+  });
+  await host.start();
+  try {
+    assert.equal((await host.resumeDelivery(ref)).original_operation_resumed, false);
+    assert.deepEqual(await host.listPendingDeliveries(), []);
+    assert.equal(calls, 2); assert.equal(providerCalls, 0);
+    assert.equal(host.health().production_qualified, false);
+    assert.equal(host.health().live_traffic_protected, false);
+  } finally { await host.close(); }
+  assert.throws(() => host.resumeDelivery(ref), { code: 'HOST_DISABLED' });
+  assert.equal(options.deliveryEncryptionKey[0], 0x51, 'host still owns its original key');
 });
