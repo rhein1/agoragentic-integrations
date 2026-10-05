@@ -4,6 +4,10 @@ import { createServer } from 'node:net';
 import test from 'node:test';
 import { createManagedRiskForkLocalHost } from '../host/local-host.mjs';
 import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
+import { createManagedLifecycleObserver } from '../src/lifecycle-observer.mjs';
+import { createManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
+import { projectManagedLifecycleEvent } from '../src/lifecycle-event.mjs';
+import { createManagedAuditEvent } from '../src/audit.mjs';
 import { createFixture, invocationRequest, testLeaseToken, TEST_TOKEN } from './helpers.mjs';
 
 function deliveryStore() {
@@ -184,4 +188,50 @@ test('local host resumes retained delivery after key rotation without invoking t
   } finally { await host.close(); }
   assert.throws(() => host.resumeDelivery(ref), { code: 'HOST_DISABLED' });
   assert.equal(options.deliveryEncryptionKey[0], 0x51, 'host still owns its original key');
+});
+
+test('host captures original lifecycle components and closes recording before delivery without claiming termination', async () => {
+  const fixture = await createFixture();
+  let releaseSource, releaseSink, sourceStarted, sinkStarted, appended = 0, acknowledged = 0, retried = 0;
+  const sourceGate = new Promise((resolve) => { sourceStarted = resolve; });
+  const sinkGate = new Promise((resolve) => { sinkStarted = resolve; });
+  const source = { ...fixture.controlPlane,async listAuditInvocations(principal,request) {
+    sourceStarted(); await new Promise((resolve) => { releaseSource = resolve; });
+    return fixture.controlPlane.listAuditInvocations(principal,request);
+  } };
+  const store = { async readLifecycleSweep() { return null; },async readLifecycleCheckpoint() { return null; },
+    async appendLifecycleWindow() { appended += 1; return { persisted: true,projected: 0 }; } };
+  const observer = createManagedLifecycleObserver({ controlPlane: source,store,auditPrincipals: [fixture.principal],
+    observerId: 'host_observer',timeoutMs: 30_000,intervalMs: 30_000 });
+  const event = projectManagedLifecycleEvent(createManagedAuditEvent({ event_ref: 'host_event',tenant_id: fixture.principal.tenant_id,
+    invocation_ref: 'rfi_host',sequence: 1,event_type: 'invocation_admitted',occurred_at: '2026-09-05T12:00:00.000Z' }));
+  let claimed = false, observerClosedAtSinkAbort = false;
+  const drainer = createManagedTelemetryDrainer({ eventKind: 'lifecycle',intervalMs: 30_000,deliveryTimeoutMs: 5000,
+    store: { async claim() { if (claimed) return null; claimed = true; return { event,generation: 1 }; },
+      async acknowledge() { acknowledged += 1; },async retry() { retried += 1; } },
+    async deliver(packet,{ signal }) {
+      signal.addEventListener('abort',() => { observerClosedAtSinkAbort = observer.health().closed; },{ once: true });
+      sinkStarted(); await new Promise((resolve) => { releaseSink = resolve; });
+      return { event_ref: packet.event_ref,delivered: true };
+    } });
+  const options = { ...hostOptions(fixture),lifecycleObserver: observer,lifecycleDrainer: drainer };
+  const host = createManagedRiskForkLocalHost(options);
+  options.lifecycleObserver = {}; options.lifecycleDrainer = {};
+  try {
+    await host.start();
+    assert.equal(observer.health().running,true); assert.equal(drainer.health().running,true);
+    const recording = observer.runOnce(), delivery = drainer.runOnce();
+    await Promise.all([sourceGate,sinkGate]);
+    await host.close();
+    assert.equal(observerClosedAtSinkAbort,true,'recording closes before delivery is interrupted');
+    assert.equal(host.health().telemetry_close.lifecycle.settled,false);
+    assert.equal(host.health().telemetry_close.lifecycle_delivery.settled,false);
+    assert.equal(host.health().lifecycle_observer.closed,true); assert.equal(host.health().lifecycle_delivery.closed,true);
+    releaseSource(); releaseSink(); await Promise.all([recording,delivery]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(appended,0); assert.equal(acknowledged,0); assert.equal(retried,0);
+    assert.equal(observer.health().in_flight,0); assert.equal(drainer.health().in_flight,false);
+    assert.equal(host.health().telemetry_close.lifecycle.settled,false,'retained close outcome is not rewritten after late settlement');
+    assert.equal(host.health().production_qualified,false); assert.equal(host.health().live_traffic_protected,false);
+  } finally { releaseSource?.(); releaseSink?.(); await host.close(); }
 });

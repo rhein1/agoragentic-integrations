@@ -22,7 +22,8 @@ The package is deliberately marked `private: true`. An explicit, default-off loc
 - optional AES-256-GCM delivery retention with an independent PostgreSQL ciphertext store, exact claim/resource-packet redelivery, and no provider or original-operation retry;
 - purpose-specific execution, cleanup, and recovery claim/write scopes, separate public/worker handlers, a trusted OAuth verification seam, bounded loopback ingress, and scheduled local reaping.
 - an offline pinned-key JWT verifier and optional host-owned rate/disable policy with bounded redacted policy telemetry;
-- exact PostgreSQL 16 control-plane catalog attestation and a separate-runtime locking interface that grants no tenant/API-key table UPDATE.
+- exact PostgreSQL 16 control-plane catalog attestation and a separate-runtime locking interface that grants no tenant/API-key table UPDATE;
+- an opt-in asynchronous lifecycle observer with deterministic redacted events, permanent per-invocation prefix checkpoints and finite cyclic tenant sweeps in the separate telemetry schema; see [TELEMETRY.md](./TELEMETRY.md).
 
 ## Architecture
 
@@ -407,9 +408,10 @@ There is no signed cursor or server-side sweep state in this reader dependency.
 `complete` covers only the interval supplied in that request, not proof that a
 prior sweep was completed. Changing either cursor field can skip source rows.
 Never accept cursor fields from a model or untrusted request, or advance a
-durable observer checkpoint based on a caller-altered interval. Future observer
-work must enforce cursor/checkpoint custody and compare the returned bound with
-its independently retained original bound. Query validation alone does not do
+durable observer checkpoint based on a caller-altered interval. The opt-in
+[lifecycle observer](./TELEMETRY.md#opt-in-lifecycle-observer) enforces separate
+durable sweep/prefix custody and compares the returned bound with its retained
+original bound. Query validation alone does not do
 that, just as audit-prefix validation does not prove historical delivery.
 
 Audit windows read the invocation anchor, checkpoint row and at most 64 following
@@ -429,9 +431,11 @@ Each bounded PostgreSQL read sets a transaction-local five-second statement
 timeout; it changes no server/pool-wide policy. Result size is bounded, but
 collated scan cost, connection acquisition, sweep cadence and historical audit
 retention still require host capacity/deadline policy and operational testing.
-No automatic projector, durable checkpoint, sink, alert or lifecycle metrics
-producer is enabled by these reader APIs. The observer must append deterministic
-events before advancing a durable checkpoint, rescan all configured tenants
-fairly, and never make cleanup/recovery wait for observer success.
+These reader APIs alone enable no projector, checkpoint or sink. Explicit
+`createManagedLifecycleObserver` composition adds bounded asynchronous source
+observation with atomic append-before-checkpoint persistence and fair cyclic
+coverage. Cleanup/recovery never await it. It is source/local-test only, not a
+hosted alert service or independent provider evidence; full historical metrics
+and deployed alert/response qualification remain open.
 
 The audit reader takes the invocation anchor and event list from one atomic store snapshot, then rejects empty/truncated chains by comparing the count and tail hash. Every mutation also rejects an audit timestamp earlier than the prior event before committing; PostgreSQL performs the predecessor/hash/time predicate in the decisive insert so a failed append rolls back the surrounding state change. The chain still proves only that one control-plane store produced a consistent sequence of hashes. It is `control_plane_self_attested`; it is not an independent signature, isolation proof, deployment receipt, or live-traffic proof. Every invocation read recomputes the tenant/idempotency/provider-binding recovery key. Before execution, the control plane also recomputes the stored operation and client-request hashes. Before cleanup, it requires the cleanup plan to be an exact bijection with the recorded resources. Terminal cleanup additionally requires an immutable normalized snapshot of the existing Risk Fork cleanup-evidence contract and the exact provider binding's verifier callback. Its absolute freshness deadline is enforced again inside the store transaction against the authoritative store clock, including after PostgreSQL lock waits. In this source tranche those callbacks are demonstrated only by local fixtures, so they are not qualified external provider observations.

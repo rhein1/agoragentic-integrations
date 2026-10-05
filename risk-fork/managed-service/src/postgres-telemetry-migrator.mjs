@@ -1,5 +1,5 @@
 import { acquirePostgresAuthorityClient, createPostgresAuthorityPool } from '../../src/adapters/postgres-authority-migrator.mjs';
-import { normalizeTelemetryOptions, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
+import { lifecycleMigration, normalizeTelemetryOptions, telemetryMigration, verifyTelemetrySettings } from './postgres-telemetry-config.mjs';
 import { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
 import { managedError } from './validation.mjs';
 
@@ -31,11 +31,23 @@ export async function migratePostgresManagedTelemetry(options = {}) {
           await client.query(`INSERT INTO ${s}.telemetry_settings VALUES (true,$1,$2,$3,$4,$5,$6)`,
             [config.settingsHash,l.maxEvents,l.maxEventsPerTenant,l.leaseMs,l.retryMs,l.retentionMs]);
         } else if (existing.rowCount !== 1) throw new TypeError('Ambiguous telemetry schema');
-        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName });
+        if (config.lifecycle) {
+          const ledger = await client.query(`SELECT version FROM ${s}.telemetry_schema_migrations ORDER BY version`);
+          if (ledger.rowCount === 1) {
+            // Attest the complete old catalog/ledger/settings BEFORE upgrade.
+            // Neither frozen source nor drifted fixtures are repaired in place.
+            await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName });
+            await verifyTelemetrySettings(client,{ ...config,lifecycle: false },migration.hash);
+            const extension = await lifecycleMigration(config.schemaName);
+            await client.query(extension.sql);
+            await client.query(`INSERT INTO ${s}.telemetry_schema_migrations VALUES (2,$1)`,[extension.hash]);
+          }
+        }
+        await verifyPostgresManagedTelemetryAttestation(client, { schemaName: config.schemaName,lifecycle: config.lifecycle });
         await verifyTelemetrySettings(client, config, migration.hash);
         await client.query('COMMIT');
       } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; }
-      return Object.freeze({ schema_name: config.schemaName, migration_version: 1, migration_hash: migration.hash,
+      return Object.freeze({ schema_name: config.schemaName, migration_version: config.lifecycle ? 2 : 1, migration_hash: migration.hash,
         settings_hash: config.settingsHash, runtime_privileges_verified: false, production_qualified: false });
     } finally { client.release(); }
   } catch { throw managedError('Telemetry migration unavailable or drifted', 'TELEMETRY_MIGRATION_FAILED', 503); }

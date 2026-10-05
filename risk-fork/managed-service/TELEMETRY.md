@@ -1,4 +1,4 @@
-# Durable policy telemetry (source/local-test only)
+# Durable policy and lifecycle telemetry (source/local-test only)
 
 This is a bounded observer outbox, not an execution receipt, authority ledger,
 hosted monitoring system or production alert service. No endpoint, provider,
@@ -126,25 +126,96 @@ No automatic deletion of unresolved events occurs. Explicit owner-only
 rows are retained. Retention is 1 second–7 days; capacity is at most 1,000,000 rows,
 not a measured byte, throughput or managed-storage cost guarantee.
 
-## Evidence and remaining Gate 5 work
+## Opt-in lifecycle observer
 
-The control plane now provides tenant-authenticated bounded invocation pages
-and verified audit windows for a future lifecycle producer; see
-[bounded observer audit reads](./README.md#bounded-observer-audit-reads).
-Windows preserve the existing self-attested audit schema and expose only its
-hash-bearing metadata, not discarded historical details. Sweep cursors must
-reset after each pinned finite cycle so behind-cursor commits are rediscovered.
-The trusted observer must retain the original sweep bound separately: reader
-`complete` is query-relative, not an authenticated original-sweep completion
-proof. Cursor/checkpoint custody and validation remain producer obligations;
-this dependency has no signed continuation or durable server-side sweep state.
-This read path adds no checkpoint migration, automatic producer, sink or alert
-and never runs inside authoritative mutations or provider/cleanup callbacks.
-The existing policy outbox remains policy-only. Lifecycle integration requires
-its own reviewed observer-schema migration, deterministic event identities,
-checkpoint-last persistence, fair bounded scheduling and outage/retention tests;
-mapping an audit transition to `policy_allowed` or `provider_succeeded` is not
-permitted evidence.
+`createManagedLifecycleObserver` reads the existing tenant-authenticated
+bounded invocation pages and audit windows, without calling any worker or
+provider method. This is checkout-only source composition, not hosted access.
+Each read uses the original immutable `audit:read` principal and repeats current
+credential authorization. The host supplies 1–64 distinct-tenant principals,
+a stable `observerId`, cadence, deadline and 1–64 tenants per tick.
+
+Enable `lifecycle:true` explicitly for migration and every store using the v2
+schema, including a policy store with `eventKind:'policy'`. Default v1 stores
+continue rejecting an unreviewed v2 catalog; there is no silent upgrade. Drain
+old stores first. The owner migrator attests the complete frozen v1 catalog,
+ledger and settings before applying additive migration `006_managed_lifecycle`.
+It preserves `005`, policy rows and labels. Apply the existing
+[role template](./ops/postgres/telemetry-roles.sql.template) after migration,
+then [lifecycle grants](./ops/postgres/lifecycle-grants.sql.template).
+Both versioned hashes and the complete v2 catalog are checked on every operation;
+`expectedOwner` remains required for distinct runtime-role assurance.
+
+```js
+// All values and prior migration/role setup are trusted host configuration.
+const lifecycleStore = await createPostgresManagedTelemetryStore({
+  ...hostTelemetryOptions, lifecycle: true, eventKind: 'lifecycle',
+});
+const lifecycleObserver = createManagedLifecycleObserver({
+  controlPlane, store: lifecycleStore, auditPrincipals: hostAuditPrincipals,
+  observerId: 'host-lifecycle-v1', timeoutMs: 2000,
+  intervalMs: 1000, maxTenantsPerTick: 4,
+});
+const lifecycleDrainer = createManagedTelemetryDrainer({
+  store: lifecycleStore, eventKind: 'lifecycle', deliver: hostReviewedRedactedSink,
+});
+// Supply these original objects to the enabled local host alongside any policy
+// recorder/drainer. The host closes ingress/effect capabilities, stops/flushes
+// the lifecycle observer, then closes drainers. Close stores afterward.
+```
+
+Store/drainer/source pairing is the trusted host's responsibility. Observer
+options, IDs, principals, source/checkpoint cursors and sink callbacks are never
+request/model-controlled. The host retains original branded observer/drainer
+objects and does not reread mutable composition options.
+
+One tenant step visits one invocation and at most 64 next source events. The
+transaction verifies the original finite sweep bound and per-invocation source
+prefix, inserts deterministic redacted observations **before** advancing the
+prefix and sweep in the same commit. All observer transactions serialize through
+the existing telemetry clock lock; they acquire no authoritative writer lock.
+Unknown commits return no success. Exact retained batch replay confirms the
+single advancement even after acknowledged rows were pruned. Stale/conflicting
+writers fail closed and reread on a later tick; no original operation is retried.
+
+A finite sweep resets its cursor and upper bound. New references above or below
+the old cursor, and later audit appends, are discovered in subsequent cycles.
+A busy invocation's backlog drains over later cycles, allowing other invocations
+to progress. Cycle completion means each invocation in that pinned interval was
+visited once, **not** that all historical source events were delivered.
+Different tenants rotate fairly. A callback ignoring abort keeps its tenant's
+slot until actual settlement; other tenants can continue. Every await checks
+closure/abort before a later source read or append. Close reports `settled:false`
+when work remains; timeout is not callback/DB termination proof.
+
+Lifecycle observations use the fixed `control_plane_audit_observed` envelope,
+`control_plane_self_attested` evidence, known current source labels, canonical
+time, sequence and domain-separated tenant/invocation/source hashes. Unknown
+future labels stop projection pending review. No raw details, tokens, operations,
+provider/resource IDs or raw invocation references are exported. A source
+`execution_outcome_recorded` or `cleanup_verified` label is not independent
+effect, cleanup or provider-success evidence. Audit details are unavailable, so
+this producer does not reconstruct historical costs, budget pressure, actual
+lease deadlines, provider error details or isolation guarantees.
+
+Per-invocation prefix rows are permanent. Owner retention removes acknowledged
+lifecycle events only, never checkpoints/sweeps or unresolved delivery rows.
+A retained per-sweep prefix count detects checkpoint deletion after pruning;
+scope-bound state hashes detect row corruption. This is trusted-host custody,
+not tamper-proof evidence against a schema owner rewriting all observer state.
+Use one stable configured observer identity across instances/restarts. Changing
+it is owner-managed reprojection and can redeliver old deterministic IDs after
+retention; the sink still must deduplicate IDs. It is not a reset/repair procedure.
+
+Policy and lifecycle outboxes each have the configured `maxEvents` and
+`maxEventsPerTenant` caps; enabling both can retain their sum. Permanent prefix
+rows have the same global/per-tenant lifetime caps across observer identities,
+and sweep rows have the global cap. Exhaustion fails closed rather than pruning
+history or silently restarting at genesis. The owner must monitor capacity and
+plan a separately reviewed custody migration. These are row-count ceilings,
+not measured byte, throughput or storage-cost guarantees.
+
+## Evidence and remaining Gate 5 work
 
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
 replay/restart, unknown/late commits, stale claims, roles, retention, drift, abort,
@@ -153,6 +224,7 @@ and CA TLS on Node 20/22/24. Standalone subprocess tests exercise hung deadlines
 without test-only keep-alive timers, late settlement/no acknowledgement, idle
 process exit and listener disposal. Local tests cannot establish hosted sink custody,
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
-operator response drill. Budget/lease/provider/cleanup/audit/DB event wiring and
-threshold/alert rules remain separate work. No provider or live agent traffic is
+operator response drill. Accurate historical budget/cost/lease measurements,
+dependency-failure alerts, threshold rules, hosted sink custody and an observed
+alert/response drill remain separate work. No provider or live agent traffic is
 protected by this tranche. See [OPERATIONAL_QUALIFICATION.md](./OPERATIONAL_QUALIFICATION.md).

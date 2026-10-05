@@ -1,0 +1,21 @@
+-- Opt-in lifecycle v2 additions AFTER the existing telemetry role template.
+-- Dedicated migrator only; no execution, cleanup, recovery or delivery keys.
+BEGIN;
+GRANT SELECT ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_events,
+  __TELEMETRY_SCHEMA__.telemetry_lifecycle_checkpoints,
+  __TELEMETRY_SCHEMA__.telemetry_lifecycle_sweeps TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (event_ref,event_hash,tenant_hash,invocation_hash,source_sequence,payload,created_ms)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_events TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (state,generation,attempts,claim_hash,lease_expires_ms,next_attempt_ms,acknowledged_ms,acknowledgement_hash,last_error_code)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_events TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (observer_hash,tenant_hash,invocation_hash,sequence,event_hash,checkpoint_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_checkpoints TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (sequence,event_hash,checkpoint_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_checkpoints TO __TELEMETRY_RUNTIME__;
+GRANT INSERT (observer_hash,tenant_hash,payload,state_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_sweeps TO __TELEMETRY_RUNTIME__;
+GRANT UPDATE (payload,state_hash)
+  ON __TELEMETRY_SCHEMA__.telemetry_lifecycle_sweeps TO __TELEMETRY_RUNTIME__;
+COMMIT;
+-- Runtime cannot delete permanent checkpoints or sweeps, mutate delivered
+-- payloads, prune events, modify settings/ledger, or self-repair drift.

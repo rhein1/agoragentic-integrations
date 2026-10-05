@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { readRequestPolicyPostgresCatalog } from './postgres-request-policy-attestation.mjs';
-import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS } from './postgres-telemetry-config.mjs';
+import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS, LIFECYCLE_TABLES, LIFECYCLE_INSERT_COLUMNS, lifecycleMigration } from './postgres-telemetry-config.mjs';
 import { assertAllowedKeys, assertPlainRecord } from './validation.mjs';
 
 const TABLES = TELEMETRY_TABLES;
@@ -23,7 +23,7 @@ function identifier(value) { quotePostgresAuthorityIdentifier(value); return val
 // The shared reader captures catalog structure, not policy state or authority.
 export const readManagedTelemetryPostgresCatalog = readRequestPolicyPostgresCatalog;
 
-async function verifyCatalog(client, schema) {
+async function verifyCatalog(client, schema, lifecycle) {
   const settings = await client.query(`SELECT pg_catalog.current_setting('server_version_num')::integer AS version,
     pg_catalog.current_setting('fsync') AS fsync,pg_catalog.current_setting('synchronous_commit') AS sync,
     pg_catalog.current_setting('session_replication_role') AS triggers`);
@@ -32,14 +32,23 @@ async function verifyCatalog(client, schema) {
     && row.fsync === 'on' && row.sync === 'on' && row.triggers === 'origin', 'settings');
   const source = (await readFile(new URL('../migrations/005_managed_telemetry.pg.sql', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
   const hash = sha256Ref(source);
-  const manifest = JSON.parse(await readFile(new URL('./postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
-  expect(manifest.schema === MANIFEST_SCHEMA && manifest.postgres_major === 16 && manifest.migration_hash === hash, 'manifest_source');
+  const extension = lifecycle ? await lifecycleMigration(schema) : null;
+  const manifest = JSON.parse(await readFile(new URL(lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
+  expect(manifest.schema === (lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
+    && manifest.postgres_major === 16 && manifest.migration_hash === hash
+    && (!extension || manifest.lifecycle_migration_hash === extension.hash), 'manifest_source');
   same(await readManagedTelemetryPostgresCatalog(client, schema), manifest.catalog, 'catalog');
   const ledger = await client.query(`SELECT version,migration_hash FROM "${schema}".telemetry_schema_migrations ORDER BY version`);
-  same(ledger.rows, [{ version: 1, migration_hash: hash }], 'migration_ledger');
+  same(ledger.rows, [{ version: 1, migration_hash: hash },...(extension ? [{ version: 2,migration_hash: extension.hash }] : [])], 'migration_ledger');
 }
 
-async function verifyPrivileges(client, schema, owner) {
+async function verifyPrivileges(client, schema, owner, lifecycle) {
+  const tablesExpected = [...TABLES,...(lifecycle ? LIFECYCLE_TABLES : [])].sort();
+  const grants = { ...GRANTS,...(lifecycle ? {
+    telemetry_lifecycle_events: { INSERT: LIFECYCLE_INSERT_COLUMNS,UPDATE: TELEMETRY_UPDATE_COLUMNS },
+    telemetry_lifecycle_checkpoints: { INSERT: ['observer_hash','tenant_hash','invocation_hash','sequence','event_hash','checkpoint_hash'],UPDATE: ['sequence','event_hash','checkpoint_hash'] },
+    telemetry_lifecycle_sweeps: { INSERT: ['observer_hash','tenant_hash','payload','state_hash'],UPDATE: ['payload','state_hash'] },
+  } : {}) };
   const roles = await client.query(`SELECT current_user AS runtime,session_user AS session,
     r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls
     FROM pg_catalog.pg_roles r WHERE r.rolname=current_user`);
@@ -62,14 +71,14 @@ async function verifyPrivileges(client, schema, owner) {
     CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(c.relacl,pg_catalog.acldefault('r',c.relowner))) x
     LEFT JOIN pg_catalog.pg_roles r ON r.oid=x.grantee
     WHERE n.nspname=$1 AND x.grantee<>c.relowner ORDER BY c.relname,x.privilege_type,r.rolname`, [schema]);
-  same(tables.rows, TABLES.flatMap((name) => ['SELECT']
+  same(tables.rows, tablesExpected.flatMap((name) => ['SELECT']
     .map((privilege_type) => ({ name, grantee: role.runtime, privilege_type, is_grantable: false }))), 'table_acls');
   const columns = await client.query(`SELECT c.relname AS relation,a.attname AS name,r.rolname AS grantee,
     x.privilege_type,x.is_grantable FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
     JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
     CROSS JOIN LATERAL pg_catalog.aclexplode(a.attacl) x LEFT JOIN pg_catalog.pg_roles r ON r.oid=x.grantee
     WHERE n.nspname=$1 ORDER BY c.relname,a.attname,x.privilege_type,r.rolname`, [schema]);
-  const expectedColumns = Object.entries(GRANTS).flatMap(([relation, operations]) =>
+  const expectedColumns = Object.entries(grants).flatMap(([relation, operations]) =>
     Object.entries(operations).flatMap(([privilege_type, names]) => names.map((name) => ({
       relation, name, grantee: role.runtime, privilege_type, is_grantable: false,
     })))).sort((a,b) => a.relation.localeCompare(b.relation) || a.name.localeCompare(b.name) || a.privilege_type.localeCompare(b.privilege_type));
@@ -81,7 +90,7 @@ async function verifyPrivileges(client, schema, owner) {
       FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
       JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
       WHERE n.nspname=$1 ORDER BY c.relname,a.attnum`, [schema,privilege,privilege+' WITH GRANT OPTION']);
-    expect(effectiveColumns.rows.every((r) => r.allowed === (GRANTS[r.relation]?.[privilege] ?? []).includes(r.name) && !r.grantable), 'effective_columns');
+    expect(effectiveColumns.rows.every((r) => r.allowed === (grants[r.relation]?.[privilege] ?? []).includes(r.name) && !r.grantable), 'effective_columns');
   }
   for (const [scope, sql, params] of [
     ['function_acls', `SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
@@ -137,12 +146,14 @@ async function verifyPrivileges(client, schema, owner) {
 export async function verifyPostgresManagedTelemetryAttestation(client, options = {}) {
   try {
     assertPlainRecord(options, 'managed telemetry attestation options');
-    assertAllowedKeys(options, ['schemaName', 'expectedOwner'], 'managed telemetry attestation options');
+    assertAllowedKeys(options, ['schemaName', 'expectedOwner','lifecycle'], 'managed telemetry attestation options');
+    const lifecycle = options.lifecycle ?? false;
+    expect(typeof lifecycle === 'boolean','lifecycle');
     expect(client && typeof client.query === 'function', 'client');
     const schema = identifier(options.schemaName ?? 'risk_fork_telemetry');
     const owner = options.expectedOwner === undefined ? undefined : identifier(options.expectedOwner);
-    await verifyCatalog(client, schema);
-    if (owner !== undefined) await verifyPrivileges(client, schema, owner);
+    await verifyCatalog(client, schema, lifecycle);
+    if (owner !== undefined) await verifyPrivileges(client, schema, owner, lifecycle);
     return Object.freeze({ schema_name: schema, catalog_verified: true,
       runtime_privileges_verified: owner !== undefined, production_qualified: false });
   } catch (error) {
