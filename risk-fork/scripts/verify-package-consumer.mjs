@@ -71,6 +71,7 @@ try {
     'managed-service/ops/postgres/request-policy-roles.sql.template',
     'managed-service/ops/postgres/telemetry-roles.sql.template',
     'managed-service/ops/postgres/lifecycle-grants.sql.template',
+    'managed-service/ops/postgres/metrics-grants.sql.template',
     'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/skillspector-admission.mjs',

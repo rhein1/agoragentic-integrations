@@ -6,6 +6,8 @@ import { createManagedRiskForkLocalHost } from '../host/local-host.mjs';
 import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
 import { createManagedLifecycleObserver } from '../src/lifecycle-observer.mjs';
 import { createManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
+import { createManagedMetricAlert } from '../src/metric-event.mjs';
+import { sha256Ref } from '../../src/canonical.mjs';
 import { projectManagedLifecycleEvent } from '../src/lifecycle-event.mjs';
 import { createManagedAuditEvent } from '../src/audit.mjs';
 import { createFixture, invocationRequest, testLeaseToken, TEST_TOKEN } from './helpers.mjs';
@@ -234,4 +236,44 @@ test('host captures original lifecycle components and closes recording before de
     assert.equal(host.health().telemetry_close.lifecycle.settled,false,'retained close outcome is not rewritten after late settlement');
     assert.equal(host.health().production_qualified,false); assert.equal(host.health().live_traffic_protected,false);
   } finally { releaseSource?.(); releaseSink?.(); await host.close(); }
+});
+
+test('host captures explicit alert drainer and revokes effects before bounded shutdown of a hung alert sink', async () => {
+  const fixture = await createFixture();
+  const event = createManagedMetricAlert({ tenant_hash: sha256Ref('host alert tenant'),rule_id: 'rate_denied',
+    window_start_ms: 1000,window_ms: 1000,threshold: 2,rules_hash: sha256Ref('host alert rules') });
+  let claimed = false, acknowledged = 0, retried = 0, providerCalls = 0, releaseSink, sinkStarted, closedAtAbort = false;
+  const sinkGate = new Promise((resolve) => { sinkStarted = resolve; });
+  const drainer = createManagedTelemetryDrainer({ eventKind: 'alert',intervalMs: 30_000,deliveryTimeoutMs: 5000,
+    store: { async claim() { if (claimed) return null; claimed = true; return { event,generation: 1 }; },
+      async acknowledge() { acknowledged += 1; },async retry() { retried += 1; } },
+    async deliver(packet,{ signal }) {
+      signal.addEventListener('abort',() => { closedAtAbort = host.health().closed; },{ once: true });
+      sinkStarted(); await new Promise((resolve) => { releaseSink = resolve; });
+      return { event_ref: packet.event_ref,delivered: true };
+    } });
+  const options = { ...hostOptions(fixture),alertDrainer: drainer };
+  options.workerOptions.invokeProvider = async () => { providerCalls += 1; throw new Error('unexpected provider dispatch'); };
+  const host = createManagedRiskForkLocalHost(options);
+  options.alertDrainer = { start() { throw new Error('substituted alert drainer'); },close() { throw new Error('substituted alert drainer'); } };
+  try {
+    assert.equal(drainer.health().running,false,'construction does not schedule alerts');
+    await host.start(); assert.equal(host.health().alert_delivery.running,true);
+    const work = drainer.runOnce(); await sinkGate;
+    await host.close(); assert.equal(closedAtAbort,true); assert.equal(host.health().alert_delivery.closed,true);
+    assert.equal(host.health().telemetry_close.alert_delivery.settled,false,'hung callback is not called terminated');
+    assert.throws(() => host.execute('rfi_missing'),{ code: 'HOST_DISABLED' });
+    releaseSink(); await work; await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(acknowledged,0); assert.equal(retried,0); assert.equal(providerCalls,0);
+    assert.equal(host.health().telemetry_close.alert_delivery.settled,false,'retained close evidence is not rewritten');
+    assert.equal(host.health().production_qualified,false); assert.equal(host.health().live_traffic_protected,false);
+  } finally { releaseSink?.(); await host.close(); }
+});
+
+test('enabled host rejects an unbranded alert drainer while disabled host cannot auto-start one', async () => {
+  const fixture = await createFixture();
+  assert.throws(() => createManagedRiskForkLocalHost({ ...hostOptions(fixture),alertDrainer: {} }),/original managed alert drainer/);
+  let calls = 0;
+  const disabled = createManagedRiskForkLocalHost({ alertDrainer: { start() { calls += 1; } } });
+  await assert.rejects(disabled.start(),{ code: 'HOST_DISABLED' }); assert.equal(calls,0);
 });

@@ -24,6 +24,7 @@ The package is deliberately marked `private: true`. An explicit, default-off loc
 - an offline pinned-key JWT verifier and optional host-owned rate/disable policy with bounded redacted policy telemetry;
 - exact PostgreSQL 16 control-plane catalog attestation and a separate-runtime locking interface that grants no tenant/API-key table UPDATE;
 - an opt-in asynchronous lifecycle observer with deterministic redacted events, permanent per-invocation prefix checkpoints and finite cyclic tenant sweeps in the separate telemetry schema; see [TELEMETRY.md](./TELEMETRY.md).
+- opt-in v3 committed-observation metric counts, permanent exact-source/alert-ACK custody and a bounded threshold alert outbox, using the existing telemetry drainer and explicit `alertDrainer` local-host composition. Lifetime caps, legacy uncounted upgrade, partial coverage and missing operational qualification are explicit in [TELEMETRY.md](./TELEMETRY.md#opt-in-metric-counts-and-threshold-alert-outbox).
 
 ## Architecture
 

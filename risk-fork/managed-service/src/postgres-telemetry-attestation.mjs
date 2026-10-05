@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { canonicalize, sha256Ref } from '../../src/canonical.mjs';
 import { quotePostgresAuthorityIdentifier } from '../../src/adapters/postgres-authority-migrator.mjs';
 import { readRequestPolicyPostgresCatalog } from './postgres-request-policy-attestation.mjs';
-import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS, LIFECYCLE_TABLES, LIFECYCLE_INSERT_COLUMNS, lifecycleMigration } from './postgres-telemetry-config.mjs';
+import { TELEMETRY_TABLES, TELEMETRY_INSERT_COLUMNS, TELEMETRY_UPDATE_COLUMNS, LIFECYCLE_TABLES, LIFECYCLE_INSERT_COLUMNS, lifecycleMigration,
+  METRIC_TABLES, METRIC_ALERT_INSERT_COLUMNS, METRIC_SOURCE_INSERT_COLUMNS, METRIC_WINDOW_INSERT_COLUMNS, metricsMigration } from './postgres-telemetry-config.mjs';
 import { assertAllowedKeys, assertPlainRecord } from './validation.mjs';
 
 const TABLES = TELEMETRY_TABLES;
@@ -23,7 +24,7 @@ function identifier(value) { quotePostgresAuthorityIdentifier(value); return val
 // The shared reader captures catalog structure, not policy state or authority.
 export const readManagedTelemetryPostgresCatalog = readRequestPolicyPostgresCatalog;
 
-async function verifyCatalog(client, schema, lifecycle) {
+async function verifyCatalog(client, schema, lifecycle, metrics) {
   const settings = await client.query(`SELECT pg_catalog.current_setting('server_version_num')::integer AS version,
     pg_catalog.current_setting('fsync') AS fsync,pg_catalog.current_setting('synchronous_commit') AS sync,
     pg_catalog.current_setting('session_replication_role') AS triggers`);
@@ -33,21 +34,29 @@ async function verifyCatalog(client, schema, lifecycle) {
   const source = (await readFile(new URL('../migrations/005_managed_telemetry.pg.sql', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
   const hash = sha256Ref(source);
   const extension = lifecycle ? await lifecycleMigration(schema) : null;
-  const manifest = JSON.parse(await readFile(new URL(lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
-  expect(manifest.schema === (lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
+  const metricExtension = metrics ? await metricsMigration(schema) : null;
+  const manifest = JSON.parse(await readFile(new URL(metrics ? './postgres-metrics-catalog.json' : lifecycle ? './postgres-lifecycle-catalog.json' : './postgres-telemetry-catalog.json', import.meta.url), 'utf8'));
+  expect(manifest.schema === (metrics ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v3' : lifecycle ? 'agoragentic.risk-fork.telemetry-postgres-catalog.v2' : MANIFEST_SCHEMA)
     && manifest.postgres_major === 16 && manifest.migration_hash === hash
-    && (!extension || manifest.lifecycle_migration_hash === extension.hash), 'manifest_source');
+    && (!extension || manifest.lifecycle_migration_hash === extension.hash)
+    && (!metricExtension || manifest.metrics_migration_hash === metricExtension.hash), 'manifest_source');
   same(await readManagedTelemetryPostgresCatalog(client, schema), manifest.catalog, 'catalog');
   const ledger = await client.query(`SELECT version,migration_hash FROM "${schema}".telemetry_schema_migrations ORDER BY version`);
-  same(ledger.rows, [{ version: 1, migration_hash: hash },...(extension ? [{ version: 2,migration_hash: extension.hash }] : [])], 'migration_ledger');
+  same(ledger.rows, [{ version: 1, migration_hash: hash },...(extension ? [{ version: 2,migration_hash: extension.hash }] : []),
+    ...(metricExtension ? [{ version: 3,migration_hash: metricExtension.hash }] : [])], 'migration_ledger');
 }
 
-async function verifyPrivileges(client, schema, owner, lifecycle) {
-  const tablesExpected = [...TABLES,...(lifecycle ? LIFECYCLE_TABLES : [])].sort();
+async function verifyPrivileges(client, schema, owner, lifecycle, metrics) {
+  const tablesExpected = [...TABLES,...(lifecycle ? LIFECYCLE_TABLES : []),...(metrics ? METRIC_TABLES : [])].sort();
   const grants = { ...GRANTS,...(lifecycle ? {
     telemetry_lifecycle_events: { INSERT: LIFECYCLE_INSERT_COLUMNS,UPDATE: TELEMETRY_UPDATE_COLUMNS },
     telemetry_lifecycle_checkpoints: { INSERT: ['observer_hash','tenant_hash','invocation_hash','sequence','event_hash','checkpoint_hash'],UPDATE: ['sequence','event_hash','checkpoint_hash'] },
     telemetry_lifecycle_sweeps: { INSERT: ['observer_hash','tenant_hash','payload','state_hash'],UPDATE: ['payload','state_hash'] },
+  } : {}),...(metrics ? {
+    telemetry_metric_alerts: { INSERT: METRIC_ALERT_INSERT_COLUMNS,UPDATE: TELEMETRY_UPDATE_COLUMNS },
+    telemetry_metric_sources: { INSERT: METRIC_SOURCE_INSERT_COLUMNS },
+    telemetry_metric_totals: { UPDATE: ['source_count','window_count','state_hash'] },
+    telemetry_metric_windows: { INSERT: METRIC_WINDOW_INSERT_COLUMNS,UPDATE: ['payload','state_hash'] },
   } : {}) };
   const roles = await client.query(`SELECT current_user AS runtime,session_user AS session,
     r.rolcanlogin,r.rolinherit,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls
@@ -146,14 +155,14 @@ async function verifyPrivileges(client, schema, owner, lifecycle) {
 export async function verifyPostgresManagedTelemetryAttestation(client, options = {}) {
   try {
     assertPlainRecord(options, 'managed telemetry attestation options');
-    assertAllowedKeys(options, ['schemaName', 'expectedOwner','lifecycle'], 'managed telemetry attestation options');
-    const lifecycle = options.lifecycle ?? false;
-    expect(typeof lifecycle === 'boolean','lifecycle');
+    assertAllowedKeys(options, ['schemaName', 'expectedOwner','lifecycle','metrics'], 'managed telemetry attestation options');
+    const lifecycle = options.lifecycle ?? false, metrics = options.metrics ?? false;
+    expect(typeof lifecycle === 'boolean' && typeof metrics === 'boolean' && (!metrics || lifecycle),'version');
     expect(client && typeof client.query === 'function', 'client');
     const schema = identifier(options.schemaName ?? 'risk_fork_telemetry');
     const owner = options.expectedOwner === undefined ? undefined : identifier(options.expectedOwner);
-    await verifyCatalog(client, schema, lifecycle);
-    if (owner !== undefined) await verifyPrivileges(client, schema, owner, lifecycle);
+    await verifyCatalog(client, schema, lifecycle, metrics);
+    if (owner !== undefined) await verifyPrivileges(client, schema, owner, lifecycle, metrics);
     return Object.freeze({ schema_name: schema, catalog_verified: true,
       runtime_privileges_verified: owner !== undefined, production_qualified: false });
   } catch (error) {
