@@ -10,6 +10,8 @@ export const TELEMETRY_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash',
   'duration_ms','tenant_hash','key_hash','created_ms']);
 export const TELEMETRY_UPDATE_COLUMNS = Object.freeze(['state','generation','attempts','claim_hash','lease_expires_ms',
   'next_attempt_ms','acknowledged_ms','acknowledgement_hash','last_error_code']);
+export const LIFECYCLE_TABLES = Object.freeze(['telemetry_lifecycle_checkpoints','telemetry_lifecycle_events','telemetry_lifecycle_sweeps']);
+export const LIFECYCLE_INSERT_COLUMNS = Object.freeze(['event_ref','event_hash','tenant_hash','invocation_hash','source_sequence','payload','created_ms']);
 
 export function normalizeTelemetryLimits(value) {
   assertPlainRecord(value, 'telemetry limits');
@@ -25,7 +27,10 @@ export function normalizeTelemetryLimits(value) {
 export function normalizeTelemetryOptions(options, extraKeys = []) {
   assertPlainRecord(options, 'PostgreSQL telemetry options');
   assertAllowedKeys(options, ['pool','connectionString','schemaName','requireTls','tls','maxConnections',
-    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner', ...extraKeys], 'PostgreSQL telemetry options');
+    'connectionTimeoutMs','statementTimeoutMs','deploymentMode','disposableDb','limits','expectedOwner','lifecycle','eventKind', ...extraKeys], 'PostgreSQL telemetry options');
+  const lifecycle = options.lifecycle ?? false, eventKind = options.eventKind ?? 'policy';
+  if (typeof lifecycle !== 'boolean' || !['policy','lifecycle'].includes(eventKind)
+    || (eventKind === 'lifecycle' && !lifecycle)) throw new TypeError('Invalid telemetry lifecycle selection');
   if ((options.deploymentMode ?? 'local_test') !== 'local_test') {
     throw managedError('Telemetry is source-only local_test', 'TELEMETRY_NOT_QUALIFIED', 503);
   }
@@ -38,7 +43,7 @@ export function normalizeTelemetryOptions(options, extraKeys = []) {
   const quotedSchema = quotePostgresAuthorityIdentifier(schemaName);
   if (options.expectedOwner !== undefined) quotePostgresAuthorityIdentifier(options.expectedOwner);
   const limits = normalizeTelemetryLimits(options.limits);
-  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,
+  return Object.freeze({ schemaName, quotedSchema, limits, settingsHash: sha256Ref(limits), requireTls,lifecycle,eventKind,
     expectedOwner: options.expectedOwner,
     statementTimeoutMs: requireInteger(options.statementTimeoutMs ?? 2000, 'statementTimeoutMs', { min: 100, max: 30_000 }) });
 }
@@ -47,10 +52,16 @@ export async function telemetryMigration(schemaName) {
   const source = (await readFile(new URL('../migrations/005_managed_telemetry.pg.sql', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
   return Object.freeze({ hash: sha256Ref(source), sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__', quotePostgresAuthorityIdentifier(schemaName)) });
 }
+export async function lifecycleMigration(schemaName) {
+  const source = (await readFile(new URL('../migrations/006_managed_lifecycle.pg.sql', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n');
+  return Object.freeze({ hash: sha256Ref(source),sql: source.replaceAll('__RISK_FORK_TELEMETRY_SCHEMA__',quotePostgresAuthorityIdentifier(schemaName)) });
+}
 
 export async function verifyTelemetrySettings(client, config, hash) {
   const settings = await client.query(`SELECT version,migration_hash FROM ${config.quotedSchema}.telemetry_schema_migrations ORDER BY version`);
-  if (settings.rowCount !== 1 || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash) throw new TypeError('Telemetry migration drift');
+  const extension = config.lifecycle ? await lifecycleMigration(config.schemaName) : null;
+  if (settings.rowCount !== (extension ? 2 : 1) || settings.rows[0].version !== 1 || settings.rows[0].migration_hash !== hash
+    || (extension && (settings.rows[1].version !== 2 || settings.rows[1].migration_hash !== extension.hash))) throw new TypeError('Telemetry migration drift');
   const result = await client.query(`SELECT settings_hash,max_events,max_events_per_tenant,lease_ms,retry_ms,retention_ms
     FROM ${config.quotedSchema}.telemetry_settings WHERE singleton=true`);
   const row = result.rows[0], l = config.limits;

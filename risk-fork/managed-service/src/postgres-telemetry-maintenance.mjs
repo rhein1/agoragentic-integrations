@@ -31,19 +31,20 @@ export async function prunePostgresManagedTelemetry(options) {
           SELECT 1 FROM pg_catalog.pg_class c WHERE c.relnamespace=n.oid AND c.relowner<>n.nspowner) AS allowed
           FROM pg_catalog.pg_namespace n WHERE n.nspname=$1`,[config.schemaName,config.expectedOwner]);
         if (ownership.rowCount !== 1 || ownership.rows[0].allowed !== true) throw new TypeError('Retention owner mismatch');
-        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName });
+        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle });
         const s = config.quotedSchema;
         const clock = await client.query(`SELECT last_seen_ms FROM ${s}.telemetry_clock WHERE singleton=true FOR UPDATE`);
         if (clock.rowCount !== 1) throw new TypeError('Missing telemetry clock');
-        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName });
+        await verifyPostgresManagedTelemetryAttestation(client,{ schemaName: config.schemaName,lifecycle: config.lifecycle });
         await verifyTelemetrySettings(client,config,migration.hash);
         const sample = await client.query('SELECT floor(extract(epoch FROM clock_timestamp()) * 1000)::bigint AS now_ms');
         const now = telemetryDbInteger(sample.rows[0]?.now_ms), prior = telemetryDbInteger(clock.rows[0].last_seen_ms);
         if (sample.rowCount !== 1 || now < prior) throw new TypeError('Telemetry clock regressed');
         checkTelemetrySignal(signal);
         await client.query(`UPDATE ${s}.telemetry_clock SET last_seen_ms=$1 WHERE singleton=true`,[now]);
-        const removed = await client.query(`DELETE FROM ${s}.telemetry_events WHERE event_ref IN (
-          SELECT event_ref FROM ${s}.telemetry_events WHERE state='acked' AND acknowledged_ms <= $1
+        const table = config.eventKind === 'lifecycle' ? 'telemetry_lifecycle_events' : 'telemetry_events';
+        const removed = await client.query(`DELETE FROM ${s}.${table} WHERE event_ref IN (
+          SELECT event_ref FROM ${s}.${table} WHERE state='acked' AND acknowledged_ms <= $1
           ORDER BY acknowledged_ms,event_ref LIMIT $2 FOR UPDATE) RETURNING event_ref`,[now-config.limits.retentionMs,maxDelete]);
         checkTelemetrySignal(signal); await client.query('COMMIT'); checkTelemetrySignal(signal);
         return Object.freeze({ removed: removed.rowCount,production_qualified: false });

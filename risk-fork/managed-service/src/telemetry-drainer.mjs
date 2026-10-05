@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { assertAllowedKeys, assertPlainRecord, requireInteger } from './validation.mjs';
 import { normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
+import { normalizeManagedLifecycleEvent } from './lifecycle-event.mjs';
 import { createManagedDeadline } from './deadline.mjs';
 
 const branded = new WeakSet();
@@ -17,7 +18,10 @@ function acknowledge(value, ref) {
 // A sink must deduplicate event_ref. A callback timeout is not termination proof.
 export function createManagedTelemetryDrainer(options) {
   assertPlainRecord(options,'telemetry drainer options');
-  assertAllowedKeys(options,['store','deliver','deliveryTimeoutMs','intervalMs','maxBatch'],'telemetry drainer options');
+  assertAllowedKeys(options,['store','deliver','deliveryTimeoutMs','intervalMs','maxBatch','eventKind'],'telemetry drainer options');
+  const kind = options.eventKind ?? 'policy';
+  if (!['policy','lifecycle'].includes(kind)) throw new TypeError('Invalid telemetry eventKind');
+  const normalize = kind === 'lifecycle' ? normalizeManagedLifecycleEvent : normalizeManagedTelemetryEvent;
   const store = options.store;
   if (!store || !['claim','acknowledge','retry'].every((method) => typeof store[method] === 'function') || typeof options.deliver !== 'function') throw new TypeError('Telemetry drainer requires trusted store and sink');
   const deliver = options.deliver;
@@ -37,7 +41,7 @@ export function createManagedTelemetryDrainer(options) {
       catch { failed = bump(failed); break; }
       if (claimed == null || closed || stopController.signal.aborted) break;
       let event;
-      try { event = normalizeManagedTelemetryEvent(claimed.event); requireInteger(claimed.generation,'generation',{ min: 1 }); }
+      try { event = normalize(claimed.event); requireInteger(claimed.generation,'generation',{ min: 1 }); }
       catch { failed = bump(failed); break; }
       const deadline = createManagedDeadline(timeout,{ signal: stopController.signal });
       const signal = deadline.signal;
