@@ -5,6 +5,7 @@ import {
 } from './validation.mjs';
 import { MANAGED_SCOPES } from './constants.mjs';
 import { assertManagedTelemetryAppend, createManagedTelemetryEvent } from './telemetry-event.mjs';
+import { createManagedDeadline } from './deadline.mjs';
 
 const ROUTES = Object.freeze(['admission', 'execution', 'cleanup', 'recovery', 'read']);
 const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed', 'policy_candidate']);
@@ -120,11 +121,11 @@ export function createManagedRequestPolicy(options = {}) {
     if (!recordTelemetry) { queue.push(data); drain(); return false; }
     // Keep actual callback work bounded even if it ignores cancellation. Never
     // free a slot merely because the caller stopped waiting for its commit.
-    const boundedSignal = signal === undefined ? AbortSignal.timeout(telemetryTimeoutMs)
-      : AbortSignal.any([signal, AbortSignal.timeout(telemetryTimeoutMs)]);
+    const deadline = createManagedDeadline(telemetryTimeoutMs, { signal, referenced: required });
+    const boundedSignal = deadline.signal;
     const work = Promise.resolve().then(() => recordTelemetry(data, Object.freeze({ signal: boundedSignal }))).then((result) => {
       assertManagedTelemetryAppend(result, data); recorded = increment(recorded); return true;
-    }).catch(() => { failed = increment(failed); return false; }).finally(() => { pending.delete(work); });
+    }).catch(() => { failed = increment(failed); return false; }).finally(() => { deadline.dispose(); pending.delete(work); });
     pending.add(work);
     if (!required) return false; // Cleanup, recovery and denials never await telemetry.
     try {
@@ -132,7 +133,7 @@ export function createManagedRequestPolicy(options = {}) {
       checkSignal(signal); return true;
     } catch {
       checkSignal(signal); throw unavailable();
-    }
+    } finally { deadline.dispose(); }
   };
   const policy = Object.freeze({
     async beforeMutation({ principal: supplied, routeClass, signal } = {}) {
@@ -210,9 +211,11 @@ export function createManagedRequestPolicy(options = {}) {
     async flushTelemetry(options = {}) {
       assertPlainRecord(options, 'telemetry flush options'); assertAllowedKeys(options, ['timeoutMs'], 'telemetry flush options');
       const timeoutMs = requireInteger(options.timeoutMs ?? telemetryTimeoutMs, 'timeoutMs', { min: 100, max: 30_000 });
-      const signal = AbortSignal.timeout(timeoutMs);
+      const deadline = createManagedDeadline(timeoutMs);
+      const signal = deadline.signal;
       try { while (pending.size || queue.length) await awaitWithSignal(Promise.all([...pending]), signal); }
       catch { /* A bounded flush is not proof that callbacks stopped or rows committed. */ }
+      finally { deadline.dispose(); }
       return Object.freeze({ settled: pending.size === 0 && queue.length === 0, pending: pending.size + queue.length });
     },
     createDispatchFence(decision, options = {}) {
@@ -234,8 +237,8 @@ export function createManagedRequestPolicy(options = {}) {
           throw managedError('Dispatch invocation binding changed', 'POLICY_DECISION_INVALID', 403);
         }
         checkSignal(signal);
-        const boundedSignal = signal === undefined ? AbortSignal.timeout(timeoutMs)
-          : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+        const deadline = createManagedDeadline(timeoutMs, { signal });
+        const boundedSignal = deadline.signal;
         let current;
         try {
           current = closedControl(await awaitWithSignal(readControl(boundedSignal), boundedSignal));
@@ -245,7 +248,7 @@ export function createManagedRequestPolicy(options = {}) {
             throw managedError('Request deadline expired', 'REQUEST_TIMEOUT', 408);
           }
           throw managedError('Policy control unavailable', 'POLICY_UNAVAILABLE', 503);
-        }
+        } finally { deadline.dispose(); }
         if (!current.enabled) throw managedError('Managed service is disabled', 'MANAGED_SERVICE_DISABLED', 503);
         if (current.epoch !== decision.epoch) {
           throw managedError('Policy control changed before dispatch', 'POLICY_EPOCH_CHANGED', 503);

@@ -36,9 +36,7 @@ test('uncertain, mismatched and throwing append acknowledgements fail critical r
 
 test('hung append is bounded; cleanup/recovery/read do not await telemetry or inherit its outage', async () => {
   const value = policy(async () => new Promise(() => {}), { telemetryTimeoutMs: 100 });
-  const keepAlive = setTimeout(() => {}, 1000);
-  try { await assert.rejects(value.beforeMutation({ principal, routeClass: 'admission' }), { code: 'POLICY_TELEMETRY_UNAVAILABLE' }); }
-  finally { clearTimeout(keepAlive); }
+  await assert.rejects(value.beforeMutation({ principal, routeClass: 'admission' }), { code: 'POLICY_TELEMETRY_UNAVAILABLE' });
   for (const routeClass of ['cleanup', 'recovery', 'read']) await value.beforeMutation({ principal, routeClass });
   assert.equal(value.telemetryHealth().in_flight, 4);
 });

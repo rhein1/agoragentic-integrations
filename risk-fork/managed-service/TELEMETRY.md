@@ -111,6 +111,13 @@ replies/errors persist only a closed redacted retry code and DB-time backoff.
 Health counts intentional shutdown as `shutdown_interrupted`, separately from
 delivery-deadline `timed_out`; neither counter proves callback termination.
 
+Awaited candidate recording, delivery, flush and close deadlines own referenced
+timers until their wait settles or expires. They work even when Node has no
+other active handles, and dispose timers/parent-abort listeners on settlement.
+Idle polling and nonblocking cleanup/recovery/denial recording do not retain the
+process. Underlying callback slots remain occupied until actual settlement:
+expiry never manufactures delivery, callback termination or an immediate retry.
+
 Attempt/generation exhaustion leaves unresolved rows visible via `stats().exhausted`,
 consuming capacity for owner intervention but not blocking other claimable events.
 No automatic deletion of unresolved events occurs. Explicit owner-only
@@ -124,7 +131,9 @@ not a measured byte, throughput or managed-storage cost guarantee.
 Focused deterministic tests and guarded real PostgreSQL tests cover capacity,
 replay/restart, unknown/late commits, stale claims, roles, retention, drift, abort,
 backoff and factory TLS positive/wrong-CA rejection. CI supplies disposable PG16
-and CA TLS on Node 20/22/24. Local tests cannot establish hosted sink custody,
+and CA TLS on Node 20/22/24. Standalone subprocess tests exercise hung deadlines
+without test-only keep-alive timers, late settlement/no acknowledgement, idle
+process exit and listener disposal. Local tests cannot establish hosted sink custody,
 monitoring SLOs, HA/restore/rotation, WAF, real alert delivery or an observed
 operator response drill. Budget/lease/provider/cleanup/audit/DB event wiring and
 threshold/alert rules remain separate work. No provider or live agent traffic is

@@ -15,6 +15,7 @@ import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
 import { createManagedRiskForkReaper } from '../src/reaper.mjs';
 import { createManagedRiskForkWorker } from '../src/worker.mjs';
 import { isManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
+import { createManagedDeadline } from '../src/deadline.mjs';
 
 const WORKER_OPTIONS = [
   'leaseMs', 'maxAttempts', 'clock', 'loadPrepareInput', 'invokeProvider',
@@ -159,8 +160,10 @@ export function createManagedRiskForkLocalHost(options = {}) {
     active();
     if (requestPolicy === undefined) return operation();
     return (async () => {
-      const decision = await requestPolicy.beforeMutation({ principal, routeClass,
-        signal: AbortSignal.timeout(requestPolicyTimeoutMs ?? 30_000) });
+      const deadline = createManagedDeadline(requestPolicyTimeoutMs ?? 30_000);
+      let decision;
+      try { decision = await requestPolicy.beforeMutation({ principal, routeClass, signal: deadline.signal }); }
+      finally { deadline.dispose(); }
       active();
       return operation(decision);
     })();

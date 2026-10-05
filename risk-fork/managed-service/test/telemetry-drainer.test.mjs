@@ -45,7 +45,7 @@ test('invalid and throwing sink replies persist one redacted retry and do not sp
 });
 
 test('hung sink and bounded close preserve claim; late completion never acknowledges', async () => {
-  const keepAlive = setInterval(() => {},1000); const f = fixture(); let release;
+  const f = fixture(); let release;
   const d = createManagedTelemetryDrainer({ store: f.store,deliveryTimeoutMs: 50,deliver: async (e) => {
     await new Promise((resolve) => { release = resolve; }); return { event_ref: e.event_ref,delivered: true };
   } });
@@ -54,7 +54,7 @@ test('hung sink and bounded close preserve claim; late completion never acknowle
     assert.equal((await d.runOnce()).processed,0); assert.equal(f.calls.claim,1);
     assert.equal((await d.close({ timeoutMs: 50 })).settled,false); assert.equal(f.calls.ack,0); assert.equal(f.calls.retry,0);
     release(); await turn(); assert.equal(d.health().in_flight,false); assert.equal(f.calls.ack,0); assert.equal(f.calls.retry,0);
-  } finally { release?.(); clearInterval(keepAlive); }
+  } finally { release?.(); }
 });
 
 test('lost acknowledgement is retained, never translated into immediate retry', async () => {
@@ -65,7 +65,7 @@ test('lost acknowledgement is retained, never translated into immediate retry', 
 });
 
 test('shutdown before the delivery deadline preserves unfinished work without claiming a timeout', async () => {
-  const keepAlive = setInterval(() => {},1000), f = fixture(); let release;
+  const f = fixture(); let release;
   const d = createManagedTelemetryDrainer({ store: f.store,deliveryTimeoutMs: 5000,deliver: async (e) => {
     await new Promise((resolve) => { release = resolve; }); return { event_ref: e.event_ref,delivered: true };
   } });
@@ -78,5 +78,26 @@ test('shutdown before the delivery deadline preserves unfinished work without cl
     release(); await turn();
     assert.equal(d.health().in_flight,false); assert.equal(d.health().timed_out,0);
     assert.equal(f.calls.ack,0); assert.equal(f.calls.retry,0); assert.equal((await d.close()).settled,true);
-  } finally { release?.(); clearInterval(keepAlive); }
+  } finally { release?.(); }
+});
+
+test('actual late sink settlement restores the slot for another event without acknowledging the timed-out event', async () => {
+  const first = event(), second = event(), rows = [first, second], acknowledged = [];
+  let release, claims = 0, sends = 0;
+  const d = createManagedTelemetryDrainer({ deliveryTimeoutMs: 50, maxBatch: 1, store: {
+    async claim() { const value = rows[claims++]; return value ? { event: value, generation: 1 } : null; },
+    async acknowledge(value) { acknowledged.push(value.event_ref); },
+    async retry() { throw new Error('must not retry a timed-out callback'); },
+  }, deliver: async (value) => {
+    sends += 1;
+    if (value.event_ref === first.event_ref) await new Promise((resolve) => { release = resolve; });
+    return { event_ref: value.event_ref, delivered: true };
+  } });
+  try {
+    assert.equal((await d.runOnce()).timed_out, 1);
+    assert.equal((await d.runOnce()).processed, 0); assert.equal(claims, 1);
+    release(); await turn(); assert.equal(d.health().in_flight, false);
+    assert.equal((await d.runOnce()).delivered, 1);
+    assert.deepEqual(acknowledged, [second.event_ref]); assert.equal(sends, 2);
+  } finally { release?.(); await d.close(); }
 });
