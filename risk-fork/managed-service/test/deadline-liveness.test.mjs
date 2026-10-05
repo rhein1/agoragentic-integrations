@@ -72,6 +72,42 @@ console.log('completed');
 `);
 });
 
+for (const phase of ['claim', 'acknowledge', 'retry']) {
+  test(`standalone drainer bounds a hung store ${phase} without late follow-up`, () => {
+    standalone(`
+const phase = ${JSON.stringify(phase)};
+let release, operationSignal;
+const calls = { claim: 0, acknowledge: 0, retry: 0, deliver: 0 };
+async function gate(options) {
+  operationSignal = options.signal;
+  await new Promise((resolve) => { release = resolve; });
+}
+const d = createManagedTelemetryDrainer({ deliveryTimeoutMs: 50, maxBatch: 1, store: {
+  async claim(options) { calls.claim += 1; if (phase === 'claim') await gate(options); return { event, generation: 1 }; },
+  async acknowledge(options) { calls.acknowledge += 1; if (phase === 'acknowledge') await gate(options); },
+  async retry(options) { calls.retry += 1; if (phase === 'retry') await gate(options); },
+}, deliver: async (packet) => {
+  calls.deliver += 1;
+  if (phase === 'retry') throw new Error('SECRET-SINK-ERROR');
+  return { event_ref: packet.event_ref, delivered: true };
+} });
+const result = await d.runOnce();
+assert.equal(result.store_timed_out, 1); assert.equal(result.store_in_flight, true);
+assert.equal(result.timed_out, 0); assert.equal(result.delivered, 0); assert.equal(result.failed, 1);
+assert.equal(operationSignal.aborted, true);
+assert.equal(result.processed, phase === 'claim' ? 0 : 1);
+const before = { ...calls };
+assert.equal((await d.runOnce()).processed, 0); assert.deepEqual(calls, before);
+assert.equal((await d.close({ timeoutMs: 50 })).settled, false);
+release(); await tick();
+assert.equal(d.health().store_in_flight, false); assert.equal(d.health().delivered, 0);
+assert.deepEqual(calls, before); assert.equal(JSON.stringify(d.health()).includes('SECRET'), false);
+assert.equal((await d.close()).settled, true);
+console.log('completed');
+`);
+  });
+}
+
 test('standalone durable admission timeout grants no decision and retains actual recording work', () => {
   standalone(`
 let release;

@@ -155,6 +155,78 @@ test('DB-time lease expiry permits one new generation and fences the old sink ac
   },{ leaseMs: 3000 });
 });
 
+for (const phase of ['claim','acknowledge','retry']) {
+  test(`bounded drainer preserves an unknown PostgreSQL ${phase} commit for independent recovery`, { skip,timeout: 60_000 }, async () => {
+    await fixture(async ({ a,b,pool,s,options,stores }) => {
+      const packet = event(), seen = new Set(), calls = { claim: 0,acknowledge: 0,retry: 0,deliver: 0 };
+      let armed = false, entered, release, phaseWork, originalToken, originalRequest;
+      const ready = new Promise((resolve) => { entered = resolve; });
+      const gate = new Promise((resolve) => { release = resolve; });
+      const delayed = wrapper(pool,async (client,sql,params) => {
+        const result = await client.query(sql,params);
+        if (armed && sql === 'COMMIT') { armed = false; entered(); await gate; }
+        return result;
+      });
+      const store = await createPostgresManagedTelemetryStore({ ...options,pool: delayed }); stores.push(store);
+      await a.append(packet);
+      const methods = Object.fromEntries(['claim','acknowledge','retry'].map((method) => [method,(request) => {
+        calls[method] += 1;
+        if (method === 'claim') originalToken = request.claimToken;
+        if (method === phase) { armed = true; originalRequest = request; }
+        const work = store[method](request);
+        if (method === phase) phaseWork = work;
+        return work;
+      }]));
+      const deliver = async (value) => {
+        calls.deliver += 1;
+        if (phase === 'retry' && calls.deliver === 1) throw new Error('SECRET-SINK');
+        seen.add(value.event_ref); return { event_ref: value.event_ref,delivered: true };
+      };
+      const first = createManagedTelemetryDrainer({ store: methods,deliver,storeTimeoutMs: 1000,maxBatch: 1 });
+      let next;
+      try {
+        const pending = first.runOnce();
+        await Promise.race([ready,pending.then(() => { throw new Error('Store failed before the synthetic lost commit response'); })]);
+        const result = await pending;
+        assert.equal(result.store_timed_out,1); assert.equal(result.store_in_flight,true);
+        assert.equal(result.failed,1); assert.equal(result.delivered,0); assert.equal(result.timed_out,0);
+        assert.equal(originalRequest.signal.aborted,true);
+        const before = { ...calls };
+        assert.equal((await first.runOnce()).processed,0); assert.deepEqual(calls,before);
+        assert.equal((await first.close({ timeoutMs: 50 })).settled,false);
+        const committed = (await pool.query(`SELECT state,generation,attempts,lease_expires_ms,next_attempt_ms FROM ${s}.telemetry_events WHERE event_ref=$1`,[packet.event_ref])).rows[0];
+        assert.equal(committed.state,phase === 'claim' ? 'claimed' : phase === 'acknowledge' ? 'acked' : 'pending');
+        assert.equal(Number(committed.generation),1); assert.equal(committed.attempts,1);
+        release(); await Promise.allSettled([phaseWork]); await pause(0);
+        assert.equal(first.health().store_in_flight,false); assert.equal(first.health().delivered,0);
+        assert.deepEqual(calls,before); assert.equal((await first.close()).settled,true);
+        next = createManagedTelemetryDrainer({ store: b,deliver,maxBatch: 1 });
+        if (phase === 'acknowledge') {
+          assert.equal((await next.runOnce()).processed,0); assert.equal(calls.deliver,1);
+          const { signal,...exactAck } = originalRequest;
+          assert.deepEqual(await b.acknowledge(exactAck),{ event_ref: packet.event_ref,acknowledged: true });
+        } else {
+          const due = phase === 'claim' ? 'lease_expires_ms' : 'next_attempt_ms';
+          const remaining = Number((await pool.query(`SELECT ${due}-floor(extract(epoch FROM clock_timestamp())*1000)::bigint AS remaining FROM ${s}.telemetry_events WHERE event_ref=$1`,[packet.event_ref])).rows[0].remaining);
+          if (remaining > 0) await pause(remaining+25);
+          assert.equal((await next.runOnce()).delivered,1);
+          const after = (await pool.query(`SELECT state,generation,attempts FROM ${s}.telemetry_events WHERE event_ref=$1`,[packet.event_ref])).rows[0];
+          assert.equal(after.state,'acked'); assert.equal(Number(after.generation),2); assert.equal(after.attempts,2);
+          const stale = { event_ref: packet.event_ref,generation: 1,claimToken: originalToken };
+          await assert.rejects(a.acknowledge({ ...stale,acknowledgement: { event_ref: packet.event_ref,delivered: true } }),{ code: 'TELEMETRY_STALE_CLAIM' });
+          await assert.rejects(a.retry({ ...stale,errorCode: 'SINK_UNAVAILABLE' }),{ code: 'TELEMETRY_STALE_CLAIM' });
+          assert.equal(calls.deliver,phase === 'claim' ? 1 : 2);
+        }
+        assert.deepEqual([...seen],[packet.event_ref]); assert.equal((await a.stats()).acked,1);
+        assert.equal(JSON.stringify(result).includes('SECRET'),false);
+      } finally {
+        release(); if (phaseWork) await Promise.allSettled([phaseWork]);
+        await first.close(); await next?.close();
+      }
+    },{ leaseMs: 3000 });
+  });
+}
+
 test('corrupt payload hash fails duplicate replay and drainer claim without self-repair', { skip,timeout: 60_000 }, async () => {
   await fixture(async ({ a,b,pool,s }) => {
     const packet = event(); await a.append(packet);
