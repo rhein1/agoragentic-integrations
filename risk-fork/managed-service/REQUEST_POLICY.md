@@ -139,6 +139,25 @@ Disable
 blocks admission/execution through the wrapper but leaves bounded cleanup,
 recovery and reads available. It does **not** terminate in-flight provider work.
 
+The wrapper now also retains original execution decisions in process-local
+host-owned identity state. `createDispatchFence(decision, { principal,
+invocationRef, timeoutMs })` accepts only that policy instance's original,
+single-use execution decision, matching its key/tenant and binding one
+invocation. A serialized decision, foreign instance/principal, changed invocation
+or reused ticket grants no dispatch authority. The returned callback takes
+`{ invocationRef, signal }`, bounds each read and rejects disablement or epoch
+drift without consuming rate quota. This is an internal capability over the
+existing decision, not a new portable receipt or durable authorization ledger.
+
+The local host passes the decision to its exact worker policy. The worker checks
+before creation/execution and supplies a method/attempt-bound `effectFence()`
+that the trusted broker must await after its own waits, immediately before the
+provider API. Missing broker fencing fails closed with unknown outcome retained.
+Cleanup/verification and resource journaling are not blocked by execution epoch
+changes; a policy decision never substitutes for their current authenticated
+lease/binding checks. This does not make separate databases/provider effects
+atomic or establish in-flight cancellation. See [WORKER.md](./WORKER.md).
+
 `initialize()` explicitly reports `configuration_verified: true`,
 `exact_catalog_verified: true`, `runtime_privileges_verified: true` only when
 `expectedOwner` is supplied and passes (otherwise false), `production_qualified:

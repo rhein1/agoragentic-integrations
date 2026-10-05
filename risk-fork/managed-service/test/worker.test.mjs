@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createManagedRiskForkWorker } from '../src/worker.mjs';
 import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
+import { createManagedRequestPolicy } from '../src/request-policy.mjs';
+import { createManagedRiskForkLocalHost } from '../host/local-host.mjs';
 import { createCleanupVerificationEvidence } from '../../src/provider.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { makeCapsule, closedResultSchema } from '../../test/helpers.mjs';
@@ -9,8 +11,8 @@ import { createFixture, invocationRequest, TestProvider } from './helpers.mjs';
 
 const NOW = '2026-09-05T12:00:00.000Z';
 class WorkerTestProvider extends TestProvider {
-  constructor() { super(); this.created = []; this.destroyed = new Set(); this.destroyCalls = []; this.observedAt = NOW; }
-  async createSavepoint() { this.created.push('savepoint'); return { savepoint_ref: 'savepoint:test', savepoint_hash: sha256Ref('savepoint') }; }
+  constructor() { super(); this.created = []; this.destroyed = new Set(); this.destroyCalls = []; this.observedAt = NOW; this.savepointContext = null; }
+  async createSavepoint(_input, context) { this.savepointContext = context; this.created.push('savepoint'); return { savepoint_ref: 'savepoint:test', savepoint_hash: sha256Ref('savepoint') }; }
   async createFork() { this.created.push('fork'); return { fork_ref: 'fork:test', fork_hash: sha256Ref('fork') }; }
   async getForkStatus() { return { status: 'ready' }; }
   async executeInFork() { return { status: 'completed', taint_status: 'TAINTED', authority_granted: false,
@@ -51,7 +53,7 @@ async function fixture(overrides = {}) {
       expected_commit_type: 'TYPED_RESULT', commit_policy: { typed_result_schema_hash: capsule.authorized_result_schema_hash },
       network_policy: { mode: 'blocked' }, max_execution_ms: 1_000,
     }),
-    invokeProvider: async ({ provider: bound, method, input, context }) => {
+    invokeProvider: async ({ provider: bound, method, input, context, effectFence }) => {
       methods.push(method);
       assert.equal(context.provider_recovery_key, admitted.provider_recovery_key);
       assert.equal(Object.hasOwn(context, 'lease_token'), false);
@@ -60,7 +62,8 @@ async function fixture(overrides = {}) {
       const state = await current.controlPlane.getInvocation(current.principal, admitted.invocation_ref);
       if (method === 'createFork') assert.equal(state.savepoint_ref, 'savepoint:test');
       if (method === 'executeInFork') assert.equal(state.state, 'running');
-      return bound[method](input);
+      const freshContext = effectFence ? await effectFence() : context;
+      return bound[method](input, freshContext);
     },
     lookupResources: () => ({ savepoint_ref: 'savepoint:test', fork_ref: null, absent_resource_kinds: ['fork'] }),
     measureCostMicros: () => 0,
@@ -69,6 +72,224 @@ async function fixture(overrides = {}) {
   return { ...current, admitted, methods, options, worker: createManagedRiskForkWorker(options),
     setNow(value) { current.setNow(value); provider.observedAt = value; } };
 }
+
+function policyHost(current, requestPolicy, workerOverrides = {}) {
+  const rows = new Map();
+  const store = {
+    async insert(record) {
+      if (rows.has(record.attempt_ref)) return false;
+      rows.set(record.attempt_ref, { record, acknowledged: false }); return true;
+    },
+    async get(_namespace, ref) { return rows.get(ref); },
+    async acknowledge(_namespace, ref, hash) {
+      Object.assign(rows.get(ref), { acknowledged: true, response_hash: hash }); return true;
+    },
+    async listPending(_namespace, limit) {
+      return [...rows].filter(([, row]) => !row.acknowledged).slice(0, limit).map(([ref]) => ref);
+    },
+  };
+  const { leaseMs, clock, loadPrepareInput, invokeProvider, lookupResources, measureCostMicros } = current.options;
+  return createManagedRiskForkLocalHost({
+    enabled: true, controlPlane: current.controlPlane, publicAuthenticator: current.authenticator,
+    workerAuthenticator: current.authenticator, providerRegistry: current.providerRegistry,
+    executionPrincipal: current.principal, cleanupPrincipal: current.sameTenantPrincipal,
+    recoveryPrincipal: current.sameTenantPrincipal, workerId: 'worker:policy',
+    deliveryStore: store, deliveryEncryptionKey: Buffer.alloc(32, 71),
+    deliveryKeyId: 'key:policy', deliveryNamespace: 'namespace:policy', requestPolicy,
+    deadlineMs: 1000,
+    workerOptions: { leaseMs, clock, loadPrepareInput, invokeProvider, lookupResources, measureCostMicros,
+      ...workerOverrides },
+  });
+}
+
+test('host policy disable after preparation wait prevents allocation without charging quota again', { timeout: 5000 }, async () => {
+  const current = await fixture();
+  let enabled = true; let epoch = 1; let rateCalls = 0; let entered; let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const policy = createManagedRequestPolicy({
+    readControl: async () => ({ enabled, epoch }),
+    consumeRateLimit: async () => { rateCalls += 1; return { allowed: true, retry_after_seconds: 0 }; },
+    emitTelemetry: async () => {},
+  });
+  const host = policyHost(current, policy, {
+    loadPrepareInput: async (invocation) => { entered(); await wait; return current.options.loadPrepareInput(invocation); },
+  });
+  await host.start();
+  try {
+    const rejected = assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    await ready; enabled = false; epoch += 1; release(); await rejected;
+    assert.deepEqual(current.provider.created, []);
+    assert.deepEqual(current.methods, [], 'stale work must not enter the provider broker');
+    assert.equal(rateCalls, 1, 'dispatch checks do not consume execution quota');
+    const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.equal(state.savepoint_ref, null); assert.equal(state.fork_ref, null);
+    assert.notEqual(state.state, 'completed', 'denied dispatch is not proof of resource absence');
+  } finally { release(); await host.close(); current.worker.close(); }
+});
+
+test('disable/re-enable during lease renewal cannot revive the admitted policy epoch', { timeout: 5000 }, async () => {
+  const current = await fixture(); let epoch = 1; let renewals = 0; let entered; let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const controlPlane = { ...current.controlPlane, async renewLease(...args) {
+    const result = await current.controlPlane.renewLease(...args);
+    if (++renewals === 2) { entered(); await wait; }
+    return result;
+  } };
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost({ ...current, controlPlane }, policy);
+  await host.start();
+  try {
+    const rejected = assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    await ready; epoch += 2; release(); await rejected;
+    assert.deepEqual(current.provider.created, []); assert.deepEqual(current.methods, []);
+  } finally { release(); await host.close(); current.worker.close(); }
+});
+
+for (const disable of [true, false]) {
+  test(`broker wait rechecks ${disable ? 'disablement' : 'epoch drift'} immediately before allocation`, { timeout: 5000 }, async () => {
+    const current = await fixture(); let enabled = true; let epoch = 1; let entered; let release; let effects = 0;
+    const ready = new Promise((resolve) => { entered = resolve; });
+    const wait = new Promise((resolve) => { release = resolve; });
+    const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled, epoch }),
+      consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+    const host = policyHost(current, policy, { invokeProvider: async ({ provider, method, input, effectFence }) => {
+      entered(); await wait; await effectFence(); effects += 1; return provider[method](input);
+    } });
+    await host.start();
+    try {
+      const rejected = assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+      await ready; enabled = !disable; epoch += 1; release(); await rejected;
+      assert.equal(effects, 0); assert.deepEqual(current.provider.created, []);
+    } finally { release(); await host.close(); current.worker.close(); }
+  });
+}
+
+for (const resource of ['savepoint_ref', 'fork_ref']) {
+  test(`disable after journaling ${resource} blocks the next effect but preserves controller destruction`, async () => {
+    const current = await fixture(); let enabled = true; let epoch = 1;
+    const controlPlane = { ...current.controlPlane, async recordResources(...args) {
+      const result = await current.controlPlane.recordResources(...args);
+      if (args[1][resource]) { enabled = false; epoch += 1; }
+      return result;
+    } };
+    const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled, epoch }),
+      consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+    const host = policyHost({ ...current, controlPlane }, policy);
+    await host.start();
+    try {
+      await assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+      assert.deepEqual(current.provider.created, resource === 'savepoint_ref' ? ['savepoint'] : ['savepoint', 'fork']);
+      assert.deepEqual(current.provider.destroyCalls, resource === 'savepoint_ref' ? ['savepoint'] : ['fork', 'savepoint']);
+      assert.equal(current.methods.includes('executeInFork'), false);
+      const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+      assert.notEqual(state.state, 'completed', 'controller destruction is not managed terminal absence evidence');
+    } finally { await host.close(); current.worker.close(); }
+  });
+}
+
+test('disable after a provider response does not suppress journaling or successful cleanup', async () => {
+  const current = await fixture(); let enabled = true; let epoch = 1;
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled, epoch }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost(current, policy, { invokeProvider: async (packet) => {
+    const result = await current.options.invokeProvider(packet);
+    if (packet.method === 'executeInFork') { enabled = false; epoch += 1; }
+    return result;
+  } });
+  await host.start();
+  try {
+    const result = await host.execute(current.admitted.invocation_ref);
+    assert.equal(result.invocation.state, 'completed');
+    assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint']);
+    assert.equal(result.prepared.authority_granted, false);
+  } finally { await host.close(); current.worker.close(); }
+});
+
+test('disable after unknown journal acknowledgement preserves recovery without re-execution', async () => {
+  const current = await fixture(); let enabled = true; let epoch = 1; let lost = false;
+  const controlPlane = { ...current.controlPlane, async recordResources(...args) {
+    const result = await current.controlPlane.recordResources(...args);
+    if (!lost && args[1].savepoint_ref) { lost = true; enabled = false; epoch += 1; throw new Error('unknown journal delivery'); }
+    return result;
+  } };
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled, epoch }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost({ ...current, controlPlane }, policy);
+  await host.start();
+  try {
+    await assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    assert.deepEqual(current.provider.created, ['savepoint']); assert.deepEqual(current.provider.destroyCalls, []);
+    current.setNow('2026-09-05T12:00:11.000Z'); await current.controlPlane.sweepExpiredLeases();
+    const recovered = await host.recover(current.admitted.invocation_ref);
+    assert.equal(recovered.state, 'failed_closed');
+    assert.deepEqual(current.provider.destroyCalls, ['savepoint']);
+    assert.equal(current.methods.includes('executeInFork'), false);
+  } finally { await host.close(); current.worker.close(); }
+});
+
+test('policy-enabled broker cannot return an importable result without awaiting its effect fence', async () => {
+  const current = await fixture();
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost(current, policy, { invokeProvider: ({ provider, method, input }) => provider[method](input) });
+  await host.start();
+  try {
+    await assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    assert.deepEqual(current.provider.created, ['savepoint']);
+    const state = await current.controlPlane.getInvocation(current.principal, current.admitted.invocation_ref);
+    assert.equal(state.savepoint_ref, null, 'unfenced broker response requires resource recovery, not trusted journaling');
+    assert.notEqual(state.state, 'completed');
+  } finally { await host.close(); current.worker.close(); }
+});
+
+test('broker passes the renewed effect-time context after its queue wait', { timeout: 5000 }, async () => {
+  const current = await fixture(); let entered; let release; let originalContext; let freshContext;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost(current, policy, { invokeProvider: async (packet) => {
+    if (packet.method !== 'createSavepoint') return current.options.invokeProvider(packet);
+    originalContext = packet.context; entered(); await wait;
+    freshContext = await packet.effectFence();
+    await assert.rejects(packet.effectFence(), { code: 'WORKER_BROKER_FENCE_INVALID' });
+    return packet.provider[packet.method](packet.input, freshContext);
+  } });
+  await host.start();
+  try {
+    const pending = host.execute(current.admitted.invocation_ref);
+    await ready; current.setNow('2026-09-05T12:00:01.000Z'); release();
+    const result = await pending;
+    assert.equal(result.invocation.state, 'completed');
+    assert.notEqual(freshContext.lease_expires_at, originalContext.lease_expires_at);
+    assert.equal(freshContext.invocation_ref, originalContext.invocation_ref);
+    assert.equal(freshContext.provider_binding_hash, originalContext.provider_binding_hash);
+    assert.equal(freshContext.provider_recovery_key, originalContext.provider_recovery_key);
+    assert.equal(current.provider.savepointContext, freshContext);
+    assert.ok(Object.isFrozen(freshContext));
+    assert.equal('lease_token' in freshContext, false); assert.equal('principal' in freshContext, false);
+  } finally { release(); await host.close(); current.worker.close(); }
+});
+
+test('a retained broker fence is unusable after the callback returns', async () => {
+  const current = await fixture(); let retained;
+  const policy = createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+    consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+  const host = policyHost(current, policy, { invokeProvider: async ({ effectFence }) => {
+    retained = effectFence; return { savepoint_ref: 'unverified', savepoint_hash: sha256Ref('unverified') };
+  } });
+  await host.start();
+  try {
+    await assert.rejects(host.execute(current.admitted.invocation_ref), { code: 'WORKER_PREPARATION_FAILED' });
+    const before = await current.controlPlane.listAuditEvents(current.principal, current.admitted.invocation_ref);
+    await assert.rejects(retained(), { code: 'WORKER_BROKER_FENCE_INVALID' });
+    assert.deepEqual(await current.controlPlane.listAuditEvents(current.principal, current.admitted.invocation_ref), before);
+    assert.deepEqual(current.provider.created, []);
+  } finally { await host.close(); current.worker.close(); }
+});
 
 test('worker journals before execution and returns original prepared authority only after managed cleanup', async () => {
   const current = await fixture();

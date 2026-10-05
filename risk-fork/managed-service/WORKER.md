@@ -14,9 +14,14 @@ and `maxAttempts`, and these trusted callbacks:
 - `loadPrepareInput(invocation)`: reconstruct the actual controller preparation
   input from clean-host policy. Its operation must hash to the admitted exact
   operation. It must not perform the risky operation itself.
-- `invokeProvider({ provider, method, input, context, signal })`: the privileged
+- `invokeProvider({ provider, method, input, context, effectFence, signal })`: the privileged
   broker, not an agent callback. Enforce the absolute lease deadline/generation
-  at the effect and tag creates with `provider_recovery_key` at birth. Never
+  at the effect and tag creates with `provider_recovery_key` at birth. After any
+  queue, limiter or database wait, **await `effectFence()` immediately before the
+  actual provider API call** and use its fresh context, not the earlier context.
+  The callback is method/attempt-bound, one-use and invalid after the broker
+  returns. It rechecks the lease, current credential/provider binding and, for
+  new creation/execution, the original request-policy epoch. Never
   forward principals, lease/bearer tokens, provider credentials, or this host
   callback capability to the child. An in-process fixture is not such proof.
 - `lookupResources({ provider, context, invocation, signal })`: observational,
@@ -34,6 +39,44 @@ renews/rechecks authority before and after provider calls and after lookup/cost
 waits. This rejects delayed responses; it cannot retroactively stop an effect
 inside a broker that ignores the deadline. Broker fencing, cancellation, and
 independent provider observation still require qualification.
+
+## Optional host-owned dispatch policy
+
+Supply the original `createManagedRequestPolicy()` object as `requestPolicy`.
+For a direct worker call, obtain the original execution decision from
+`requestPolicy.beforeMutation({ principal: executionPrincipal, routeClass:
+'execution' })`, then call `worker.execute(invocation_ref, decision)`. The local
+host performs this admission automatically. Serialized/forged, foreign-policy,
+wrong-principal and non-execution decisions are rejected. A decision is consumed
+once and its fence binds one invocation; it cannot fund another attempt. The
+worker retains only this clean-host capability, never model-supplied policy data.
+`requestPolicyTimeoutMs` bounds each policy recheck (100–30,000 ms; default
+30,000); the local host uses its configured `deadlineMs`.
+
+Creation and execution re-read durable disable control after preparation/lease
+waits and again through the broker's effect fence after broker-owned waits.
+Disabling or disabling/re-enabling at a newer epoch rejects stale execution.
+Rechecks consume no additional quota. Destruction, absence verification,
+journaling and outcome/recovery bookkeeping do not inherit this execution-only
+disable fence. Known pre-effect policy denial therefore permits controller
+cleanup of already journaled resources; unknown create/journal outcomes remain
+uncertain and require the existing recovery path.
+
+With a configured policy, every successful broker response must have awaited
+its effect fence. A missing fence fails closed as an unknown broker outcome;
+it does not prove no API call occurred. This capability is for a trusted broker,
+not isolation from a compromised host that already owns the provider object.
+Separate policy/control-plane reads are **not atomic with a provider effect**.
+Their order is lease/credential/binding renewal, then a policy read; credential
+revocation can race that policy read. These are ordered pre-effect checks, not
+a simultaneous principal/lease/policy snapshot. The worker also cannot prove
+whether a trusted callback actually fenced before its API call or honored the
+fresh context; arbitrary host callbacks are not qualified broker implementations.
+A disable after the final check can still race a dispatched effect; it does not
+retroactively erase an effect or skip resource journaling/cleanup. Qualified
+effect-edge fencing, in-flight cancellation and independent observation remain
+required before production. Omitting policy preserves only the old local-test
+path, never production authority.
 
 ## Execution ordering
 

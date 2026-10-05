@@ -88,6 +88,8 @@ export function createManagedRiskForkLocalHost(options = {}) {
       recoveryPrincipal: options.recoveryPrincipal,
       workerId,
       deliveryJournal: delivery,
+      requestPolicy: options.requestPolicy,
+      requestPolicyTimeoutMs: options.deadlineMs,
     });
     reaper = createManagedRiskForkReaper({
       controlPlane: options.controlPlane,
@@ -147,10 +149,10 @@ export function createManagedRiskForkLocalHost(options = {}) {
     active();
     if (options.requestPolicy === undefined) return operation();
     return (async () => {
-      await options.requestPolicy.beforeMutation({ principal, routeClass,
+      const decision = await options.requestPolicy.beforeMutation({ principal, routeClass,
         signal: AbortSignal.timeout(options.deadlineMs ?? 30_000) });
       active();
-      return operation();
+      return operation(decision);
     })();
   }
   function close() {
@@ -198,7 +200,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
     },
     close,
     // Clean-host capabilities only; never added to either HTTP surface.
-    execute(ref) { active(); return runWorker(options.executionPrincipal, 'execution', () => worker.execute(ref)); },
+    execute(ref) { active(); return runWorker(options.executionPrincipal, 'execution', (decision) => worker.execute(ref, decision)); },
     cleanup(ref) { active(); return runWorker(options.cleanupPrincipal, 'cleanup', () => worker.cleanup(ref)); },
     recover(ref) { active(); return runWorker(options.recoveryPrincipal, 'recovery', () => worker.recover(ref)); },
     listPendingDeliveries(limit) { active(); return delivery.listPending(limit); },

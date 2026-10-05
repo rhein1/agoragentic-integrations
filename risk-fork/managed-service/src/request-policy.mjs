@@ -1,13 +1,21 @@
 import { createHash } from 'node:crypto';
 import {
   assertAllowedKeys, assertPlainRecord, managedError, requireEnum,
-  assertDataArray, requireOpaqueRef, requireTenantId,
+  assertDataArray, requireOpaqueRef, requireTenantId, requireInvocationRef, requireInteger,
 } from './validation.mjs';
 import { MANAGED_SCOPES } from './constants.mjs';
 
 const ROUTES = Object.freeze(['admission', 'execution', 'cleanup', 'recovery', 'read']);
 const EVENTS = Object.freeze(['control_denied', 'rate_denied', 'policy_error', 'policy_allowed']);
 const OUTCOMES = Object.freeze(['allowed', 'disabled', 'rate_limited', 'failed_closed', 'timeout']);
+const POLICIES = new WeakSet();
+
+// Clean-host capability identity only. Serialized decisions and lookalike
+// callbacks must never supply worker dispatch authority.
+export function assertManagedRequestPolicy(value) {
+  if (!POLICIES.has(value)) throw new TypeError('An original managed request policy is required');
+  return value;
+}
 
 function hashRef(domain, value) {
   return `sha256:${createHash('sha256').update(`agoragentic-risk-fork-policy-v1:${domain}\0`, 'utf8').update(value, 'utf8').digest('hex')}`;
@@ -73,6 +81,7 @@ export function createManagedRequestPolicy(options = {}) {
   }
   if (typeof clock !== 'function') throw new TypeError('clock must be a function');
   let telemetryPending = false;
+  const decisions = new WeakMap();
   const readClock = () => {
     const value = Number(clock());
     if (!Number.isSafeInteger(value) || value < 0) throw new TypeError('clock must return a non-negative integer');
@@ -88,7 +97,7 @@ export function createManagedRequestPolicy(options = {}) {
     Promise.resolve().then(() => emitTelemetry(Object.freeze({ event, route_class: routeClass, status, outcome, duration_ms: durationMs,
       tenant_hash: hashRef('tenant', p.tenant_id), key_hash: hashRef('key', p.key_id) }))).catch(() => {}).finally(() => { telemetryPending = false; });
   };
-  return Object.freeze({
+  const policy = Object.freeze({
     async beforeMutation({ principal: supplied, routeClass, signal } = {}) {
       const started = readClock();
       requireEnum(routeClass, ROUTES, 'routeClass');
@@ -135,7 +144,48 @@ export function createManagedRequestPolicy(options = {}) {
         throw managedError('Managed service is disabled', 'MANAGED_SERVICE_DISABLED', 503);
       }
       telemetry('policy_allowed', p, routeClass, 200, 'allowed', started);
-      return Object.freeze({ tenant_id: p.tenant_id, key_id: p.key_id, epoch: current.epoch, route_class: routeClass });
+      const decision = Object.freeze({ tenant_id: p.tenant_id, key_id: p.key_id, epoch: current.epoch, route_class: routeClass });
+      decisions.set(decision, p);
+      return decision;
+    },
+    createDispatchFence(decision, options = {}) {
+      assertPlainRecord(options, 'dispatch fence options');
+      assertAllowedKeys(options, ['principal', 'invocationRef', 'timeoutMs'], 'dispatch fence options');
+      const p = principal(options.principal);
+      const admitted = decisions.get(decision);
+      const invocationRef = requireInvocationRef(options.invocationRef, 'invocationRef');
+      const timeoutMs = requireInteger(options.timeoutMs ?? 30_000, 'timeoutMs', { min: 100, max: 30_000 });
+      if (!admitted || decision.route_class !== 'execution'
+        || admitted.tenant_id !== p.tenant_id || admitted.key_id !== p.key_id) {
+        throw managedError('An original execution policy decision is required', 'POLICY_DECISION_INVALID', 403);
+      }
+      // One rate decision binds one host-owned invocation attempt. Reusing a
+      // ticket for another invocation/worker is not a free quota bypass.
+      decisions.delete(decision);
+      return async ({ invocationRef: suppliedRef, signal } = {}) => {
+        if (suppliedRef !== invocationRef) {
+          throw managedError('Dispatch invocation binding changed', 'POLICY_DECISION_INVALID', 403);
+        }
+        checkSignal(signal);
+        const boundedSignal = signal === undefined ? AbortSignal.timeout(timeoutMs)
+          : AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+        let current;
+        try {
+          current = closedControl(await awaitWithSignal(readControl(boundedSignal), boundedSignal));
+          checkSignal(boundedSignal);
+        } catch (error) {
+          if (error?.code === 'REQUEST_TIMEOUT' || boundedSignal.aborted) {
+            throw managedError('Request deadline expired', 'REQUEST_TIMEOUT', 408);
+          }
+          throw managedError('Policy control unavailable', 'POLICY_UNAVAILABLE', 503);
+        }
+        if (!current.enabled) throw managedError('Managed service is disabled', 'MANAGED_SERVICE_DISABLED', 503);
+        if (current.epoch !== decision.epoch) {
+          throw managedError('Policy control changed before dispatch', 'POLICY_EPOCH_CHANGED', 503);
+        }
+      };
     },
   });
+  POLICIES.add(policy);
+  return policy;
 }
