@@ -172,6 +172,17 @@ one pending sink and drops overlap; it is not a durable audit or alert service.
 AbortSignal rejects waiting policy checks; it does not cancel committed work.
 Direct local-host policy waits use the host's `deadlineMs` (default 30 seconds).
 
+The local host retains the original execution policy decision and binds it to
+the worker's invocation. New savepoint/fork creation and execution recheck the
+durable enabled/epoch state after preparation and lease waits without consuming
+quota again. The trusted provider broker must also await its one-use
+`effectFence()` immediately before the API call after any broker-owned wait.
+Policy-enabled workers reject a response that omitted that fence as an unknown
+outcome, not proof of no effect. Destruction/verification and durable recovery
+bookkeeping remain available when execution is disabled. These separate reads
+are not atomic with external effects or termination proof; see
+[WORKER.md](./WORKER.md) for the exact capability and ambiguity contract.
+
 An optional [PostgreSQL request-policy backend](./REQUEST_POLICY.md) now supplies
 these two callbacks with shared transactional per-key/per-tenant fixed-window
 quotas, independent route capacity, a durable disable epoch and database-clock

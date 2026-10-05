@@ -4,6 +4,7 @@ import { RiskForkController } from '../../src/controller.mjs';
 import { REQUIRED_PROVIDER_METHODS } from '../../src/provider.mjs';
 import { verifyManagedCleanupPlan } from './control-plane.mjs';
 import { assertManagedWorkerDeliveryJournal } from './worker-delivery.mjs';
+import { assertManagedRequestPolicy } from './request-policy.mjs';
 import {
   assertAllowedKeys, cloneJson, deepFreeze, managedError, requireInteger,
   requireInvocationRef, requireOpaqueRef,
@@ -19,7 +20,7 @@ export function createManagedRiskForkWorker(options = {}) {
     'controlPlane', 'providerRegistry', 'executionPrincipal', 'cleanupPrincipal',
     'recoveryPrincipal', 'workerId', 'leaseMs', 'maxAttempts', 'clock',
     'loadPrepareInput', 'invokeProvider', 'lookupResources', 'measureCostMicros',
-    'deliveryJournal',
+    'deliveryJournal', 'requestPolicy', 'requestPolicyTimeoutMs',
   ], 'worker options');
   const control = options.controlPlane;
   if (control?.config?.environment !== 'local_test' || control.config.enabled !== true) {
@@ -38,6 +39,8 @@ export function createManagedRiskForkWorker(options = {}) {
   const invokeProvider = options.invokeProvider;
   const lookupResources = options.lookupResources;
   const measureCost = options.measureCostMicros;
+  const requestPolicy = options.requestPolicy === undefined ? null : assertManagedRequestPolicy(options.requestPolicy);
+  const policyTimeoutMs = requireInteger(options.requestPolicyTimeoutMs ?? 30_000, 'requestPolicyTimeoutMs', { min: 100, max: 30_000 });
   const principals = Object.freeze({ execution: options.executionPrincipal,
     cleanup: options.cleanupPrincipal, recovery: options.recoveryPrincipal });
   if (Object.values(principals).some((principal) => !principal)) throw new TypeError('All worker principals are required');
@@ -50,6 +53,7 @@ export function createManagedRiskForkWorker(options = {}) {
   const clock = options.clock ?? (() => new Date());
   if (typeof clock !== 'function') throw new TypeError('clock is required');
   const attempts = new Map();
+  const preEffectDenials = new WeakSet();
   const shutdown = new AbortController();
   let closed = false;
   const assertOpen = () => {
@@ -116,10 +120,42 @@ export function createManagedRiskForkWorker(options = {}) {
     }
   }
 
-  async function invoke(attempt, method, input) {
+  async function effectPreflight(attempt, method) {
     const { provider, context } = await fence(attempt);
+    if (attempt.policyFence && ['createSavepoint', 'createFork', 'executeInFork'].includes(method)) {
+      try {
+        await attempt.policyFence({ invocationRef: context.invocation_ref, signal: shutdown.signal });
+      } catch (error) {
+        // This host-owned check rejected before the provider effect. Unlike an
+        // unknown create acknowledgement, it must not disable known-resource cleanup.
+        preEffectDenials.add(error);
+        throw error;
+      }
+    }
     assertOpen(); // The await continuation is a separate shutdown checkpoint.
-    const result = await invokeProvider({ provider, method, input, context, signal: shutdown.signal });
+    return { provider, context };
+  }
+
+  async function invoke(attempt, method, input) {
+    const { provider, context } = await effectPreflight(attempt, method);
+    assertOpen();
+    let used = false; let authorized = false; let finished = false;
+    const effectFence = async () => {
+      if (used || finished) throw managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
+      used = true;
+      const fresh = await effectPreflight(attempt, method);
+      if (finished) throw managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
+      assertOpen();
+      authorized = true;
+      return fresh.context;
+    };
+    let result;
+    try {
+      result = await invokeProvider({ provider, method, input, context, effectFence, signal: shutdown.signal });
+      if (requestPolicy && !authorized) {
+        throw managedError('Broker did not await its effect fence; recovery is required', 'WORKER_BROKER_FENCE_REQUIRED', 409);
+      }
+    } finally { finished = true; }
     // A delayed response does not preserve the lease or authority it started
     // with. The broker must still fence the effect itself at the provider edge.
     await fence(attempt);
@@ -156,8 +192,9 @@ export function createManagedRiskForkWorker(options = {}) {
     });
   }
 
-  async function execute(ref) {
+  async function execute(ref, policyFence) {
     const attempt = await claim('execution', ref);
+    attempt.policyFence = policyFence;
     const admission = attempt.invocation;
     const input = await loadPrepareInput(admission);
     if (!input || sha256Ref(input.operation) !== admission.operation_hash) {
@@ -173,7 +210,7 @@ export function createManagedRiskForkWorker(options = {}) {
         let result;
         try { result = await invoke(attempt, method, providerInput); }
         catch (error) {
-          if (['createSavepoint', 'createFork'].includes(method)) attempt.uncertain = true;
+          if (['createSavepoint', 'createFork'].includes(method) && !preEffectDenials.has(error)) attempt.uncertain = true;
           throw error;
         }
         if (method === 'createSavepoint' || method === 'createFork') {
@@ -233,7 +270,15 @@ export function createManagedRiskForkWorker(options = {}) {
   }
 
   return Object.freeze({
-    execute: (ref) => once('execution', ref, execute),
+    execute(ref, decision) {
+      assertOpen();
+      const invocationRef = requireInvocationRef(ref, 'invocation_ref');
+      const policyFence = requestPolicy ? requestPolicy.createDispatchFence(decision, {
+        principal: principals.execution, invocationRef, timeoutMs: policyTimeoutMs,
+      }) : undefined;
+      if (!requestPolicy && decision !== undefined) throw new TypeError('A policy decision requires its original worker policy');
+      return once('execution', invocationRef, (value) => execute(value, policyFence));
+    },
     cleanup: (ref) => once('cleanup', ref, cleanup),
     recover: (ref) => once('recovery', ref, recover),
     close() { closed = true; shutdown.abort(); },

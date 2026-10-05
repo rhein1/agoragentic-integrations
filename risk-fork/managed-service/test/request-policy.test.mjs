@@ -98,3 +98,53 @@ test('synchronous abort plus callback rejection is observed for control and rate
     assert.deepEqual(unhandled, []);
   } finally { process.off('unhandledRejection', onUnhandled); }
 });
+
+test('dispatch decisions are original, instance/principal/route bound and single-use', async () => {
+  const f = policy();
+  const options = { principal: p, invocationRef: 'invocation_1' };
+  const ticket = await f.value.beforeMutation({ principal: p, routeClass: 'execution' });
+  for (const forged of [{ ...ticket }, JSON.parse(JSON.stringify(ticket)), undefined]) {
+    assert.throws(() => f.value.createDispatchFence(forged, options), { code: 'POLICY_DECISION_INVALID' });
+  }
+  assert.throws(() => policy().value.createDispatchFence(ticket, options), { code: 'POLICY_DECISION_INVALID' });
+  for (const other of [{ ...p, key_id: 'key_2' }, { ...p, tenant_id: 'tenant_2' }]) {
+    assert.throws(() => f.value.createDispatchFence(ticket, { ...options, principal: other }), { code: 'POLICY_DECISION_INVALID' });
+  }
+  const read = await f.value.beforeMutation({ principal: p, routeClass: 'read' });
+  assert.throws(() => f.value.createDispatchFence(read, options), { code: 'POLICY_DECISION_INVALID' });
+  const fence = f.value.createDispatchFence(ticket, options);
+  assert.throws(() => f.value.createDispatchFence(ticket, { ...options, invocationRef: 'invocation_2' }), { code: 'POLICY_DECISION_INVALID' });
+  await assert.rejects(fence({ invocationRef: 'invocation_2' }), { code: 'POLICY_DECISION_INVALID' });
+  await fence({ invocationRef: 'invocation_1' });
+});
+
+test('dispatch fences detect disable/re-enable epoch drift and do not charge quota', async () => {
+  let enabled = true; let epoch = 1; let rateCalls = 0;
+  const f = policy({ readControl: async () => ({ enabled, epoch }),
+    consumeRateLimit: async () => { rateCalls += 1; return { allowed: true, retry_after_seconds: 0 }; } });
+  const ticket = await f.value.beforeMutation({ principal: p, routeClass: 'execution' });
+  const fence = f.value.createDispatchFence(ticket, { principal: p, invocationRef: 'invocation_1' });
+  await fence({ invocationRef: 'invocation_1' });
+  enabled = false; epoch = 2;
+  await assert.rejects(fence({ invocationRef: 'invocation_1' }), { code: 'MANAGED_SERVICE_DISABLED' });
+  enabled = true; epoch = 3;
+  await assert.rejects(fence({ invocationRef: 'invocation_1' }), { code: 'POLICY_EPOCH_CHANGED' });
+  assert.equal(rateCalls, 1);
+});
+
+test('dispatch policy failures and hanging reads are bounded and redacted', async () => {
+  let fail = false;
+  const f = policy({ readControl: async () => { if (fail) throw new Error('private policy detail'); return { enabled: true, epoch: 1 }; } });
+  const fence = f.value.createDispatchFence(await f.value.beforeMutation({ principal: p, routeClass: 'execution' }),
+    { principal: p, invocationRef: 'invocation_1', timeoutMs: 100 });
+  fail = true;
+  await assert.rejects(fence({ invocationRef: 'invocation_1' }), (error) => error.code === 'POLICY_UNAVAILABLE' && !error.message.includes('private'));
+  let reads = 0;
+  const hung = policy({ readControl: async () => ++reads <= 2 ? { enabled: true, epoch: 1 } : new Promise(() => {}) });
+  const bounded = hung.value.createDispatchFence(await hung.value.beforeMutation({ principal: p, routeClass: 'execution' }),
+    { principal: p, invocationRef: 'invocation_1', timeoutMs: 100 });
+  // AbortSignal.timeout is unref'ed: retain a test-only timer while observing it.
+  const keepAlive = setTimeout(() => {}, 1000);
+  try { await assert.rejects(bounded({ invocationRef: 'invocation_1' }), { code: 'REQUEST_TIMEOUT' }); }
+  finally { clearTimeout(keepAlive); }
+});
