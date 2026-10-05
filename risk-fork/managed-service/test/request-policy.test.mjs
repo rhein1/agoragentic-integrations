@@ -56,13 +56,14 @@ test('invalid callback results and deadlines fail closed', async () => {
   await assert.rejects(policy().value.beforeMutation({ principal: p, routeClass: 'read', signal: abort.signal }), { code: 'REQUEST_TIMEOUT' });
 });
 
-test('hung or throwing telemetry never blocks policy and remains one pending sink', async () => {
+test('overlapping best-effort events queue behind one sink; rejection does not lose the next event', async () => {
   let calls = 0; let release;
   const pending = new Promise((resolve) => { release = resolve; });
   const f = policy({ emitTelemetry: async () => { calls += 1; await pending; throw new Error('observer secret'); } });
   await f.value.beforeMutation({ principal: p, routeClass: 'read' });
   await f.value.beforeMutation({ principal: p, routeClass: 'read' });
-  assert.equal(calls, 1); release();
+  assert.equal(calls, 1); assert.equal(f.value.telemetryHealth().queued, 1); release();
+  assert.equal((await f.value.flushTelemetry()).settled, true); assert.equal(calls, 2);
   const throwing = policy({ emitTelemetry: async () => { throw new Error('observer secret'); } });
   await throwing.value.beforeMutation({ principal: p, routeClass: 'read' });
 });

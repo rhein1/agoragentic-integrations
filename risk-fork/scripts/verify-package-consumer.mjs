@@ -63,10 +63,13 @@ try {
     'LICENSE', 'NOTICE', 'CITATION.cff', 'AUTHORS.md', 'GETTING_STARTED.md',
     'CLIENT_ADOPTION.md', 'MCP_2026_07_28_READINESS.md',
     'managed-service/DEPLOYMENT_GATES.md', 'managed-service/OPERATIONAL_QUALIFICATION.md',
+    'managed-service/TELEMETRY.md', 'managed-service/REQUEST_POLICY.md',
     'managed-service/ops/postgres/owner-bootstrap.sql.template',
     'managed-service/ops/postgres/control-plane-owner-bootstrap.sql.template',
     'managed-service/ops/postgres/control-plane-roles.sql.template',
     'managed-service/ops/postgres/worker-delivery-roles.sql.template',
+    'managed-service/ops/postgres/request-policy-roles.sql.template',
+    'managed-service/ops/postgres/telemetry-roles.sql.template',
     'clients/one-tool-stdio-gate.mjs',
     'assets/risk-fork-social-preview.svg', 'src/host-boundary.mjs',
     'src/skillspector-admission.mjs',
@@ -81,6 +84,8 @@ try {
     'examples/local-reference.mjs', 'examples/framework-adapters.mjs',
     'FRAMEWORK_ADAPTERS.md', 'src/client-adoption.mjs',
   ]) assert.ok(included.has(expected), `Packed file missing: ${expected}`);
+  assert.equal(included.has('managed-service/src/index.mjs'), false,
+    'Source-only managed-service runtime must not become a public SDK export');
   for (const file of included) {
     assert.ok(!/(?:^|\/)(?:node_modules|\.git|\.env|test|hackathon)(?:\/|$)/.test(file), `Unexpected package path: ${file}`);
     assert.ok(!file.endsWith('.tgz') && !file.endsWith('.zip'), 'Nested release artifact');
@@ -93,6 +98,8 @@ try {
     'MCP_2026_07_28_READINESS.md',
     'FRAMEWORK_ADAPTERS.md',
     'CLIENT_ADOPTION.md',
+    'managed-service/TELEMETRY.md',
+    'managed-service/REQUEST_POLICY.md',
   ]) {
     const markdown = await readFile(path.join(packageRoot, document), 'utf8');
     for (const match of markdown.matchAll(/\]\((\.\.?\/[^)#]+)(?:#[^)]*)?\)/g)) {

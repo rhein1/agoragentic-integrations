@@ -105,7 +105,10 @@ with RSA exponent 65537 and strict token/credential validity windows, not
 generic OAuth brokering. Optional host-owned `requestPolicy` checks
 rate/control before authenticated route access and local host worker starts;
 it rechecks control after rate await and keeps cleanup/recovery available when
-execution is disabled. Redacted policy telemetry is bounded and best-effort.
+execution is disabled. Redacted policy telemetry supports bounded best-effort
+FIFO emission or optional durable candidate recording through the separate
+[observer outbox](./TELEMETRY.md), with post-append epoch checks and lease-fenced
+at-least-once delivery. Local retention/role/TLS tests are not hosted monitoring.
 An optional [durable request-policy source backend](./REQUEST_POLICY.md) now
 implements shared atomic per-key/per-tenant fixed-window quotas, route-specific
 capacity, owner-only disable epochs, clock high-water checks and expired-window

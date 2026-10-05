@@ -39,6 +39,12 @@ export { createManagedRequestPolicy } from './request-policy.mjs';
 export { createPostgresManagedRequestPolicyStore, PostgresManagedRequestPolicyStore } from './postgres-request-policy-store.mjs';
 export { migratePostgresManagedRequestPolicy } from './postgres-request-policy-migrator.mjs';
 export { verifyPostgresRequestPolicyAttestation } from './postgres-request-policy-attestation.mjs';
+export { createPostgresManagedTelemetryStore, PostgresManagedTelemetryStore } from './postgres-telemetry-store.mjs';
+export { migratePostgresManagedTelemetry } from './postgres-telemetry-migrator.mjs';
+export { prunePostgresManagedTelemetry } from './postgres-telemetry-maintenance.mjs';
+export { verifyPostgresManagedTelemetryAttestation } from './postgres-telemetry-attestation.mjs';
+export { createManagedTelemetryDrainer } from './telemetry-drainer.mjs';
+export { createManagedTelemetryEvent, normalizeManagedTelemetryEvent } from './telemetry-event.mjs';
 export { createManagedProviderRegistry } from './provider-registry.mjs';
 export { MemoryManagedServiceStore } from './memory-store.mjs';
 export {

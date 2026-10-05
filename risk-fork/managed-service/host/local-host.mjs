@@ -14,6 +14,7 @@ import { createManagedLoopbackServer } from './loopback-server.mjs';
 import { createManagedWorkerDeliveryJournal } from '../src/worker-delivery.mjs';
 import { createManagedRiskForkReaper } from '../src/reaper.mjs';
 import { createManagedRiskForkWorker } from '../src/worker.mjs';
+import { isManagedTelemetryDrainer } from '../src/telemetry-drainer.mjs';
 
 const WORKER_OPTIONS = [
   'leaseMs', 'maxAttempts', 'clock', 'loadPrepareInput', 'invokeProvider',
@@ -45,12 +46,17 @@ export function createManagedRiskForkLocalHost(options = {}) {
     'providerRegistry', 'executionPrincipal', 'cleanupPrincipal', 'recoveryPrincipal',
     'workerId', 'deliveryStore', 'deliveryEncryptionKey', 'deliveryKeyId', 'deliveryRetiredDecryptionKeys',
     'deliveryNamespace', 'workerOptions', 'reaperOptions', 'publicPort', 'workerPort',
-    'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy',
+    'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy', 'telemetryDrainer',
   ], 'local host options');
   if (options.enabled !== undefined && typeof options.enabled !== 'boolean') {
     throw new TypeError('enabled must be boolean');
   }
   if (options.enabled !== true) return disabledHost();
+  const requestPolicy = options.requestPolicy, telemetryDrainer = options.telemetryDrainer;
+  const requestPolicyTimeoutMs = options.deadlineMs;
+  if (telemetryDrainer !== undefined && !isManagedTelemetryDrainer(telemetryDrainer)) {
+    throw new TypeError('An original managed telemetry drainer is required');
+  }
   if (!options.controlPlane || !options.publicAuthenticator || !options.workerAuthenticator
     || !options.providerRegistry || !options.deliveryStore) {
     throw new TypeError('local host dependencies are required');
@@ -91,8 +97,8 @@ export function createManagedRiskForkLocalHost(options = {}) {
       recoveryPrincipal: principals.recovery,
       workerId,
       deliveryJournal: delivery,
-      requestPolicy: options.requestPolicy,
-      requestPolicyTimeoutMs: options.deadlineMs,
+      requestPolicy,
+      requestPolicyTimeoutMs,
     });
     reaper = createManagedRiskForkReaper({
       controlPlane: options.controlPlane,
@@ -117,7 +123,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
       handler: createManagedServiceHttpHandler({
         controlPlane: options.controlPlane,
         authenticator: options.publicAuthenticator,
-        requestPolicy: options.requestPolicy,
+        requestPolicy,
       }),
     });
     workerServer = createManagedLoopbackServer({
@@ -129,7 +135,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
       handler: createManagedWorkerHttpHandler({
         controlPlane: options.controlPlane,
         workerAuthenticator: options.workerAuthenticator,
-        requestPolicy: options.requestPolicy,
+        requestPolicy,
       }),
     });
   } catch (error) {
@@ -145,15 +151,16 @@ export function createManagedRiskForkLocalHost(options = {}) {
   let starting = false;
   let closed = false;
   let closePromise = null;
+  let telemetryClose;
   function active() {
     if (!started || closed) throw managedError('Local host is not active', 'HOST_DISABLED', 503);
   }
   function runWorker(principal, routeClass, operation) {
     active();
-    if (options.requestPolicy === undefined) return operation();
+    if (requestPolicy === undefined) return operation();
     return (async () => {
-      const decision = await options.requestPolicy.beforeMutation({ principal, routeClass,
-        signal: AbortSignal.timeout(options.deadlineMs ?? 30_000) });
+      const decision = await requestPolicy.beforeMutation({ principal, routeClass,
+        signal: AbortSignal.timeout(requestPolicyTimeoutMs ?? 30_000) });
       active();
       return operation(decision);
     })();
@@ -170,6 +177,13 @@ export function createManagedRiskForkLocalHost(options = {}) {
       reaper.stop();
       worker.close();
       delivery.close();
+      // Revoke effect capabilities before waiting on observational callbacks.
+      // Store lifetime remains owned by the caller. Settled:false is preserved,
+      // never reported as callback termination or durable delivery proof.
+      let recording, observer;
+      try { recording = await requestPolicy?.flushTelemetry({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
+      try { observer = await telemetryDrainer?.close({ timeoutMs: 1000 }); } catch (error) { errors.push(error); }
+      telemetryClose = Object.freeze({ recording,observer });
       if (errors.length) throw errors[0];
     })();
     return closePromise;
@@ -189,6 +203,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
           throw managedError('Local host closed during startup', 'HOST_CLOSED', 503);
         }
         reaper.start();
+        telemetryDrainer?.start();
         started = true;
         return Object.freeze({
           public: publicListener,
@@ -214,6 +229,9 @@ export function createManagedRiskForkLocalHost(options = {}) {
         started,
         closed,
         reaper: reaper.health(),
+        telemetry: requestPolicy?.telemetryHealth(),
+        telemetry_delivery: telemetryDrainer?.health(),
+        telemetry_close: telemetryClose,
         production_qualified: false,
         live_traffic_protected: false,
       });
