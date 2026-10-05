@@ -9,6 +9,7 @@ import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
 import { verifyPostgresControlPlaneAttestation } from './postgres-control-plane-attestation.mjs';
 import { createManagedAuditEvent } from './audit.mjs';
+import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import {
   ACTIVE_INVOCATION_STATES,
   INVOCATION_STATES,
@@ -1663,6 +1664,64 @@ export class PostgresManagedServiceStore {
         [tenantId, invocationRef],
       );
       return deepFreeze(normalizeAuditRows(result.rows));
+    });
+  }
+
+  async listAuditInvocations(tenantIdValue, requestValue = {}) {
+    const tenantId = requireTenantId(tenantIdValue);
+    const request = normalizeAuditPageRequest(requestValue);
+    return this.#withReadSnapshot(async (client) => {
+      await client.query("SET LOCAL statement_timeout = '5000ms'");
+      let upper = request.upper_ref;
+      if (upper === null) {
+        const result = await client.query(`SELECT invocation_ref FROM ${this.#schema}.managed_invocations
+          WHERE tenant_id = $1 ORDER BY invocation_ref COLLATE "C" DESC LIMIT 1`, [tenantId]);
+        upper = result.rows[0]?.invocation_ref ?? null;
+      }
+      const result = await client.query(`SELECT invocation_ref, audit_event_count, audit_head_hash
+        FROM ${this.#schema}.managed_invocations WHERE tenant_id = $1
+          AND ($2::text IS NULL OR invocation_ref COLLATE "C" > $2::text COLLATE "C")
+          AND invocation_ref COLLATE "C" <= $3::text COLLATE "C"
+        ORDER BY invocation_ref COLLATE "C" LIMIT $4`,
+      [tenantId, request.after_ref, upper, request.limit + 1]);
+      const invocations = result.rows.slice(0, request.limit).map((row) => ({
+        invocation_ref: row.invocation_ref, audit_event_count: pgInteger(row.audit_event_count, 'audit_event_count'),
+        audit_head_hash: row.audit_head_hash,
+      }));
+      return verifyAuditInvocationPage({ tenant_id: tenantId, upper_ref: upper,
+        invocations, complete: result.rows.length <= request.limit,
+        next_after_ref: invocations.at(-1)?.invocation_ref ?? request.after_ref }, tenantId, request);
+    });
+  }
+
+  async getAuditWindow(tenantIdValue, invocationRefValue, requestValue = {}) {
+    const tenantId = requireTenantId(tenantIdValue);
+    const invocationRef = requireInvocationRef(invocationRefValue, 'invocation_ref');
+    const request = normalizeAuditWindowRequest(requestValue);
+    return this.#withReadSnapshot(async (client) => {
+      await client.query("SET LOCAL statement_timeout = '5000ms'");
+      const anchor = await client.query(`SELECT audit_event_count, audit_head_hash
+        FROM ${this.#schema}.managed_invocations WHERE tenant_id = $1 AND invocation_ref = $2`,
+      [tenantId, invocationRef]);
+      if (anchor.rows.length === 0) return null;
+      const prior = request.after_sequence === 0 ? [] : normalizeAuditRows((await client.query(
+        `SELECT event_ref, tenant_id, invocation_ref, sequence, event_type,
+          occurred_at, details_hash, prior_event_hash, event_hash, evidence_class
+          FROM ${this.#schema}.managed_audit_events
+          WHERE tenant_id = $1 AND invocation_ref = $2 AND sequence = $3`,
+        [tenantId, invocationRef, request.after_sequence],
+      )).rows);
+      const events = normalizeAuditRows((await client.query(
+        `SELECT event_ref, tenant_id, invocation_ref, sequence, event_type,
+          occurred_at, details_hash, prior_event_hash, event_hash, evidence_class
+          FROM ${this.#schema}.managed_audit_events
+          WHERE tenant_id = $1 AND invocation_ref = $2 AND sequence > $3
+          ORDER BY sequence LIMIT $4`, [tenantId, invocationRef, request.after_sequence, request.limit],
+      )).rows);
+      return deepFreeze({ tenant_id: tenantId, invocation_ref: invocationRef,
+        audit_event_count: pgInteger(anchor.rows[0].audit_event_count, 'audit_event_count'),
+        audit_head_hash: requireSha256(anchor.rows[0].audit_head_hash, 'audit_head_hash'),
+        prior_event: prior[0] ?? null, events });
     });
   }
 

@@ -6,7 +6,8 @@ import {
   verifyCleanupVerificationEvidence,
   verifyCleanupVerificationRequest,
 } from '../../src/provider.mjs';
-import { verifyManagedAuditChain } from './audit.mjs';
+import { verifyManagedAuditChain, verifyManagedAuditWindow } from './audit.mjs';
+import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import { assertManagedPrincipalVerifier } from './auth.mjs';
 import {
   assertManagedServiceConfig,
@@ -977,6 +978,31 @@ export function createManagedRiskForkControlPlane(options = {}) {
         now: transitionNow,
         verification_not_after: verificationNotAfter,
       });
+    },
+
+    async listAuditInvocations(principalValue, requestValue = {}) {
+      enabled();
+      const principal = await normalizePrincipal(principalValue, 'audit:read', requirePrincipal);
+      const request = normalizeAuditPageRequest(requestValue);
+      if (typeof store.listAuditInvocations !== 'function') {
+        throw managedError('Bounded audit discovery is unsupported', 'AUDIT_PROJECTION_UNSUPPORTED', 503);
+      }
+      return verifyAuditInvocationPage(
+        await store.listAuditInvocations(principal.tenant_id, request), principal.tenant_id, request,
+      );
+    },
+
+    async readAuditWindow(principalValue, invocationRefValue, requestValue = {}) {
+      enabled();
+      const principal = await normalizePrincipal(principalValue, 'audit:read', requirePrincipal);
+      const invocationRef = requireInvocationRef(invocationRefValue, 'invocation_ref');
+      const request = normalizeAuditWindowRequest(requestValue);
+      if (typeof store.getAuditWindow !== 'function') {
+        throw managedError('Bounded audit windows are unsupported', 'AUDIT_PROJECTION_UNSUPPORTED', 503);
+      }
+      const window = await store.getAuditWindow(principal.tenant_id, invocationRef, request);
+      if (window === null) throw managedError('Invocation was not found', 'INVOCATION_NOT_FOUND', 404);
+      return verifyManagedAuditWindow(window, { tenant_id: principal.tenant_id, invocation_ref: invocationRef, ...request });
     },
 
     async listAuditEvents(principalValue, invocationRefValue) {

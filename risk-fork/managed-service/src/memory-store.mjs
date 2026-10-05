@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createManagedAuditEvent } from './audit.mjs';
+import { normalizeAuditPageRequest, normalizeAuditWindowRequest, verifyAuditInvocationPage } from './audit-read.mjs';
 import { sha256Ref } from '../../src/canonical.mjs';
 import { validateChildOperation } from '../../src/child-operation.mjs';
 import {
@@ -1055,6 +1056,43 @@ export class MemoryManagedServiceStore {
       });
       this.#usage.set(usageKey(record.tenant_id, record.budget_day_utc), nextUsage);
       return this.#commitAuditedRecord(prepared);
+    });
+  }
+
+  async listAuditInvocations(tenantIdValue, requestValue = {}) {
+    const tenantId = requireTenantId(tenantIdValue);
+    const request = normalizeAuditPageRequest(requestValue);
+    return this.#exclusive(async () => {
+      // The memory fixture is finite; the PostgreSQL path returns bounded query results.
+      const candidates = [...this.#invocations.values()].filter((row) => row.tenant_id === tenantId)
+        .sort((left, right) => left.invocation_ref < right.invocation_ref ? -1
+          : left.invocation_ref > right.invocation_ref ? 1 : 0);
+      const upper = request.upper_ref ?? candidates.at(-1)?.invocation_ref ?? null;
+      const rows = candidates.filter((row) => (request.after_ref === null || row.invocation_ref > request.after_ref)
+        && upper !== null && row.invocation_ref <= upper).slice(0, request.limit + 1);
+      const invocations = rows.slice(0, request.limit).map((row) => ({
+        invocation_ref: row.invocation_ref, audit_event_count: row.audit_event_count, audit_head_hash: row.audit_head_hash,
+      }));
+      return verifyAuditInvocationPage({ tenant_id: tenantId, upper_ref: upper,
+        invocations, complete: rows.length <= request.limit,
+        next_after_ref: invocations.at(-1)?.invocation_ref ?? request.after_ref }, tenantId, request);
+    });
+  }
+
+  async getAuditWindow(tenantIdValue, invocationRefValue, requestValue = {}) {
+    const tenantId = requireTenantId(tenantIdValue);
+    const invocationRef = requireInvocationRef(invocationRefValue, 'invocation_ref');
+    const request = normalizeAuditWindowRequest(requestValue);
+    return this.#exclusive(async () => {
+      const key = invocationKey(tenantId, invocationRef);
+      const invocation = this.#invocations.get(key);
+      if (!invocation) return null;
+      const events = this.#audit.get(key) ?? [];
+      return deepFreeze(cloneJson({ tenant_id: tenantId, invocation_ref: invocationRef,
+        audit_event_count: invocation.audit_event_count, audit_head_hash: invocation.audit_head_hash,
+        prior_event: events[request.after_sequence - 1] ?? null,
+        events: events.slice(request.after_sequence, request.after_sequence + request.limit),
+      }, 'audit window'));
     });
   }
 
