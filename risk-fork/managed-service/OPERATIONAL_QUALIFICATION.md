@@ -93,6 +93,14 @@ policy. Retain timestamps, RPO/RTO, monitoring observations and verified cleanup
 of disposable restore resources. Local Docker restart tests do not establish
 managed high availability or point-in-time recovery.
 
+Delivery source now supports one active encryption key plus at most eight
+explicit retired decrypt-only keys, preserving immutable v1 ciphertext and
+current worker authorization across restart. See [WORKER.md](./WORKER.md).
+Retain keys for the full approved recovery/backup retention horizon; an empty
+pending list is not a safe-retirement proof. Local in-memory and disposable
+PostgreSQL rotation tests are not secret-manager, database credential rotation,
+backup/PITR, or managed-service qualification evidence.
+
 E2B: before the first paid allocation, establish the authorized total ceiling
 and a hard enforceable bound including sandbox lifetime, concurrent allocation,
 retries, teardown and delayed/finalized charges. Credit-card setup or a budget

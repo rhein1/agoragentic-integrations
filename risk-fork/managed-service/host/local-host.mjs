@@ -42,7 +42,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
   assertAllowedKeys(options, [
     'enabled', 'controlPlane', 'publicAuthenticator', 'workerAuthenticator',
     'providerRegistry', 'executionPrincipal', 'cleanupPrincipal', 'recoveryPrincipal',
-    'workerId', 'deliveryStore', 'deliveryEncryptionKey', 'deliveryKeyId',
+    'workerId', 'deliveryStore', 'deliveryEncryptionKey', 'deliveryKeyId', 'deliveryRetiredDecryptionKeys',
     'deliveryNamespace', 'workerOptions', 'reaperOptions', 'publicPort', 'workerPort',
     'maxBodyBytes', 'maxConnections', 'deadlineMs', 'requestPolicy',
   ], 'local host options');
@@ -70,6 +70,7 @@ export function createManagedRiskForkLocalHost(options = {}) {
       store: options.deliveryStore,
       encryptionKey: options.deliveryEncryptionKey,
       keyId: options.deliveryKeyId,
+      retiredDecryptionKeys: options.deliveryRetiredDecryptionKeys,
       namespace: options.deliveryNamespace,
       workerId,
       controlPlane: options.controlPlane,
