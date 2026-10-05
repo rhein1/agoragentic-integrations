@@ -53,6 +53,7 @@ export function createManagedRiskForkWorker(options = {}) {
   if (typeof clock !== 'function') throw new TypeError('clock is required');
   const attempts = new Map();
   const preEffectDenials = new WeakSet();
+  const brokerFenceErrors = new WeakSet();
   const shutdown = new AbortController();
   let closed = false;
   const assertOpen = () => {
@@ -139,11 +140,16 @@ export function createManagedRiskForkWorker(options = {}) {
     const { provider, context } = await effectPreflight(attempt, method);
     assertOpen();
     let used = false; let authorized = false; let finished = false;
+    const invalidFence = () => {
+      const error = managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
+      brokerFenceErrors.add(error);
+      return error;
+    };
     const effectFence = async () => {
-      if (used || finished) throw managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
+      if (used || finished) throw invalidFence();
       used = true;
       const fresh = await effectPreflight(attempt, method);
-      if (finished) throw managedError('Broker effect fence is no longer usable', 'WORKER_BROKER_FENCE_INVALID', 409);
+      if (finished) throw invalidFence();
       assertOpen();
       authorized = true;
       return fresh.context;
@@ -151,9 +157,15 @@ export function createManagedRiskForkWorker(options = {}) {
     let result;
     try {
       result = await invokeProvider({ provider, method, input, context, effectFence, signal: shutdown.signal });
-      if (requestPolicy && !authorized) {
+      if ((requestPolicy || used) && !authorized) {
         throw managedError('Broker did not await its effect fence; recovery is required', 'WORKER_BROKER_FENCE_REQUIRED', 409);
       }
+    } catch (error) {
+      // Only driver-private state/identity classifies a broker violation. An
+      // arbitrary provider error.code is not authority, nor does a caught
+      // duplicate-capability denial invalidate the first successful fence.
+      if (((requestPolicy || used) && !authorized) || brokerFenceErrors.has(error)) attempt.uncertain = true;
+      throw error;
     } finally { finished = true; }
     // A delayed response does not preserve the lease or authority it started
     // with. The broker must still fence the effect itself at the provider edge.
@@ -177,15 +189,28 @@ export function createManagedRiskForkWorker(options = {}) {
   async function cleanup(ref, { verifyOnly = false } = {}) {
     const attempt = await claim('cleanup', ref);
     const evidence = [];
+    let failed = false;
+    const incomplete = () => managedError('Cleanup is incomplete; retained work requires recovery', 'WORKER_CLEANUP_FAILED', 409);
     for (const request of verifyManagedCleanupPlan(attempt.invocation)) {
       const fork = request.resource_kind === 'fork';
       const input = { [fork ? 'fork_ref' : 'savepoint_ref']: request.resource_ref, cleanup_request: request };
       // prepare already destroyed these resources. Collect fresh managed-plan
       // evidence without silently requiring a second destroy to be idempotent.
       // Recovery/public cleanup still owns destruction of uncertain resources.
-      if (!verifyOnly) await invoke(attempt, fork ? 'destroyFork' : 'destroySavepoint', input);
-      evidence.push(await invoke(attempt, fork ? 'verifyDestroyed' : 'verifySavepointDestroyed', input));
+      try {
+        if (!verifyOnly) await invoke(attempt, fork ? 'destroyFork' : 'destroySavepoint', input);
+        evidence.push(await invoke(attempt, fork ? 'verifyDestroyed' : 'verifySavepointDestroyed', input));
+      } catch {
+        assertOpen();
+        if (attempt.uncertain) throw incomplete();
+        // A resource-local failure does not authorize absence or a replay. The
+        // next independent resource gets its own current-authority preflight;
+        // a lease/credential/binding/broker failure stops further callbacks.
+        failed = true;
+      }
     }
+    if (failed) throw incomplete();
+    await fence(attempt);
     return control.completeCleanup(principals.cleanup, {
       invocation_ref: ref, lease_token: attempt.leaseToken, cleanup_evidence: evidence,
     });

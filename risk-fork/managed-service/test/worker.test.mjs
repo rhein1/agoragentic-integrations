@@ -535,6 +535,266 @@ test('worker never returns prepared authority when managed cleanup attestation f
   assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint']);
 });
 
+async function cleanupPendingFixture() {
+  let acceptEvidence = false;
+  const current = await fixture({ fixture: { verifyCleanupEvidence: () => acceptEvidence } });
+  await assert.rejects(current.worker.execute(current.admitted.invocation_ref));
+  assert.equal((await current.controlPlane.getInvocation(current.principal,
+    current.admitted.invocation_ref)).state, 'cleanup_pending');
+  current.worker.close();
+  acceptEvidence = true;
+  current.setNow('2026-09-05T12:00:11.000Z');
+  await current.controlPlane.sweepExpiredLeases();
+  // Controller destruction already happened; managed absence attestation did
+  // not. Fresh cleanup must reconcile the same already-absent resources safely.
+  current.provider.destroyCalls.length = 0;
+  current.methods.length = 0;
+  return current;
+}
+
+for (const failedMethod of ['destroyFork', 'verifyDestroyed']) {
+  for (const deceptiveCode of ['WORKER_FENCE_FAILED', 'WORKER_BROKER_FENCE_INVALID']) {
+    test(`cleanup independently attempts the second resource after ${failedMethod} throws ${deceptiveCode}`, async () => {
+      const current = await cleanupPendingFixture();
+      const calls = [];
+      let failure;
+      let completionCalls = 0;
+      const controlPlane = { ...current.controlPlane, completeCleanup(...args) {
+        completionCalls += 1; return current.controlPlane.completeCleanup(...args);
+      } };
+      const worker = createManagedRiskForkWorker({ ...current.options, controlPlane,
+        invokeProvider: async (packet) => {
+          calls.push(packet.method);
+          if (packet.method === failedMethod) {
+            await packet.effectFence();
+            throw Object.assign(new Error('synthetic-provider-private-detail'), { code: deceptiveCode });
+          }
+          return current.options.invokeProvider(packet);
+        },
+      });
+      try {
+        await assert.rejects(worker.cleanup(current.admitted.invocation_ref), (error) => {
+          failure = error; return true;
+        });
+        assert.ok(calls.includes('destroySavepoint'), 'independent known resource must still be attempted');
+        assert.ok(calls.includes('verifySavepointDestroyed'), 'second resource must obtain fresh absence evidence');
+        assert.equal(completionCalls, 0, 'partial cleanup cannot authorize terminal completion');
+        assert.equal(failure.code, 'WORKER_CLEANUP_FAILED');
+        assert.doesNotMatch(failure.message, /synthetic-provider-private-detail/);
+        assert.equal((await current.controlPlane.getInvocation(current.principal,
+          current.admitted.invocation_ref)).state, 'cleanup_pending');
+        assert.equal(current.methods.includes('executeInFork'), false);
+        assert.deepEqual(current.provider.created, ['savepoint', 'fork']);
+        assert.equal((await current.controlPlane.listAuditEvents(current.principal,
+          current.admitted.invocation_ref)).filter((event) => event.event_type === 'cleanup_verified').length, 0);
+        worker.close();
+        current.setNow('2026-09-05T12:00:22.000Z');
+        await current.controlPlane.sweepExpiredLeases();
+        const retryCalls = [];
+        const retry = createManagedRiskForkWorker({ ...current.options,
+          invokeProvider: async (packet) => { retryCalls.push(packet.method); return current.options.invokeProvider(packet); },
+        });
+        try {
+          const terminal = await retry.cleanup(current.admitted.invocation_ref);
+          assert.equal(terminal.state, 'completed');
+          assert.deepEqual(retryCalls, ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']);
+          assert.equal((await current.controlPlane.listAuditEvents(current.principal,
+            current.admitted.invocation_ref)).filter((event) => event.event_type === 'cleanup_verified').length, 1);
+        } finally { retry.close(); }
+      } finally { worker.close(); }
+    });
+  }
+}
+
+for (const loss of ['scope', 'expiry', 'binding', 'shutdown', 'takeover']) {
+  test(`cleanup stops before the second resource after ${loss} during a failed callback`, async () => {
+    const current = await cleanupPendingFixture();
+    const calls = [];
+    let unavailable = false;
+    let revoked = false;
+    const resolve = current.store.resolveCredential.bind(current.store);
+    current.store.resolveCredential = async (hash) => {
+      const credential = await resolve(hash);
+      return revoked && credential?.key_id === current.sameTenantPrincipal.key_id
+        ? { ...credential, scopes: credential.scopes.filter((scope) => scope !== 'worker:cleanup:write') }
+        : credential;
+    };
+    const registry = { ...current.providerRegistry, requireBound(...args) {
+      if (unavailable) throw new Error('synthetic-private-binding-detail');
+      return current.providerRegistry.requireBound(...args);
+    } };
+    let worker;
+    worker = createManagedRiskForkWorker({ ...current.options, providerRegistry: registry,
+      invokeProvider: async (packet) => {
+        calls.push(packet.method);
+        await packet.effectFence();
+        if (loss === 'scope') revoked = true;
+        if (loss === 'expiry') current.setNow('2026-09-05T12:00:22.000Z');
+        if (loss === 'binding') unavailable = true;
+        if (loss === 'shutdown') worker.close();
+        if (loss === 'takeover') {
+          current.setNow('2026-09-05T12:00:22.000Z');
+          await current.controlPlane.sweepExpiredLeases();
+          await current.controlPlane.claimCleanup(current.sameTenantPrincipal, {
+            invocation_ref: current.admitted.invocation_ref, worker_id: 'worker:takeover',
+            lease_ms: 10_000, lease_token: current.nextLeaseToken('takeover'),
+          });
+        }
+        throw new Error('synthetic-provider-private-detail');
+      },
+    });
+    try {
+      const pending = worker.cleanup(current.admitted.invocation_ref);
+      await assert.rejects(pending, (error) => {
+        assert.equal(error.code, loss === 'shutdown' ? 'WORKER_CLOSED' : 'WORKER_CLEANUP_FAILED');
+        assert.doesNotMatch(error.message, /synthetic-.*-detail/); return true;
+      });
+      assert.deepEqual(calls, ['destroyFork'], 'lost current authority forbids every later callback');
+      assert.equal((await current.controlPlane.getInvocation(current.principal,
+        current.admitted.invocation_ref)).state, 'cleanup_pending');
+      if (loss !== 'shutdown') assert.equal(worker.cleanup(current.admitted.invocation_ref), pending);
+    } finally { worker.close(); }
+  });
+}
+
+test('cleanup shutdown during awaited renewal dispatches no provider callback', { timeout: 5000 }, async () => {
+  const current = await cleanupPendingFixture();
+  let entered; let release;
+  const ready = new Promise((resolve) => { entered = resolve; });
+  const wait = new Promise((resolve) => { release = resolve; });
+  const controlPlane = { ...current.controlPlane, async renewLease(...args) {
+    const result = await current.controlPlane.renewLease(...args); entered(); await wait; return result;
+  } };
+  let callbacks = 0;
+  const worker = createManagedRiskForkWorker({ ...current.options, controlPlane,
+    invokeProvider: () => { callbacks += 1; },
+  });
+  const rejected = assert.rejects(worker.cleanup(current.admitted.invocation_ref), { code: 'WORKER_CLOSED' });
+  try {
+    await ready; worker.close(); release(); await rejected;
+    assert.equal(callbacks, 0);
+    assert.equal((await current.controlPlane.getInvocation(current.principal,
+      current.admitted.invocation_ref)).state, 'cleanup_pending');
+  } finally { release(); worker.close(); }
+});
+
+for (const protocol of ['missing', 'caught-failed', 'propagated-duplicate', 'caught-duplicate']) {
+  test(`cleanup ${protocol} broker fence cannot be classified by provider error codes`, async () => {
+    const current = await cleanupPendingFixture();
+    const calls = [];
+    let renewals = 0;
+    const controlPlane = { ...current.controlPlane, renewLease(...args) {
+      if (protocol === 'caught-failed' && ++renewals === 2) throw new Error('synthetic-private-lease-detail');
+      return current.controlPlane.renewLease(...args);
+    } };
+    const requestPolicy = createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+      consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} });
+    const worker = createManagedRiskForkWorker({ ...current.options, controlPlane, requestPolicy,
+      invokeProvider: async (packet) => {
+        calls.push(packet.method);
+        if (protocol === 'missing') return undefined;
+        if (protocol === 'caught-failed') {
+          await assert.rejects(packet.effectFence(), { code: 'WORKER_FENCE_FAILED' });
+          return undefined;
+        }
+        const context = await packet.effectFence();
+        if (protocol === 'propagated-duplicate') await packet.effectFence();
+        else await assert.rejects(packet.effectFence(), { code: 'WORKER_BROKER_FENCE_INVALID' });
+        return packet.provider[packet.method](packet.input, context);
+      },
+    });
+    try {
+      if (protocol === 'caught-duplicate') {
+        const terminal = await worker.cleanup(current.admitted.invocation_ref);
+        assert.equal(terminal.state, 'completed');
+        assert.deepEqual(calls, ['destroyFork', 'verifyDestroyed', 'destroySavepoint', 'verifySavepointDestroyed']);
+      } else {
+        await assert.rejects(worker.cleanup(current.admitted.invocation_ref), { code: 'WORKER_CLEANUP_FAILED' });
+        assert.deepEqual(calls, ['destroyFork']);
+        assert.equal((await current.controlPlane.getInvocation(current.principal,
+          current.admitted.invocation_ref)).state, 'cleanup_pending');
+      }
+    } finally { worker.close(); }
+  });
+}
+
+for (const withPolicy of [true, false]) {
+  test(`cleanup rejects an unfinished broker fence with policy ${withPolicy}`, { timeout: 5000 }, async () => {
+    const current = await cleanupPendingFixture();
+    let release; let pendingFence;
+    const wait = new Promise((resolve) => { release = resolve; });
+    let renewals = 0;
+    const controlPlane = { ...current.controlPlane, async renewLease(...args) {
+      const result = await current.controlPlane.renewLease(...args);
+      if (++renewals === 2) await wait;
+      return result;
+    } };
+    let callbacks = 0;
+    const requestPolicy = withPolicy ? createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+      consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} }) : undefined;
+    const worker = createManagedRiskForkWorker({ ...current.options, controlPlane, requestPolicy,
+      invokeProvider: (packet) => {
+        callbacks += 1; pendingFence = packet.effectFence();
+        pendingFence.catch(() => {}); // Deliberately unfinished broker operation, observed below.
+        return undefined;
+      },
+    });
+    try {
+      await assert.rejects(worker.cleanup(current.admitted.invocation_ref), { code: 'WORKER_CLEANUP_FAILED' });
+      assert.equal(callbacks, 1, 'no second resource may inherit an unfinished fence');
+      release();
+      await assert.rejects(pendingFence, { code: 'WORKER_BROKER_FENCE_INVALID' });
+      assert.equal((await current.controlPlane.getInvocation(current.principal,
+        current.admitted.invocation_ref)).state, 'cleanup_pending');
+    } finally { release(); worker.close(); }
+  });
+}
+
+for (const withPolicy of [true, false]) {
+  test(`cleanup pre-fence callback failure preserves the policy ${withPolicy} boundary`, async () => {
+    const current = await cleanupPendingFixture();
+    const calls = [];
+    const requestPolicy = withPolicy ? createManagedRequestPolicy({ readControl: async () => ({ enabled: true, epoch: 1 }),
+      consumeRateLimit: async () => ({ allowed: true, retry_after_seconds: 0 }), emitTelemetry: async () => {} }) : undefined;
+    const worker = createManagedRiskForkWorker({ ...current.options, requestPolicy, invokeProvider: (packet) => {
+      calls.push(packet.method);
+      if (packet.method === 'destroyFork') throw new Error('synthetic-private-preflight-detail');
+      return current.options.invokeProvider(packet);
+    } });
+    try {
+      await assert.rejects(worker.cleanup(current.admitted.invocation_ref), (error) => {
+        assert.equal(error.code, 'WORKER_CLEANUP_FAILED');
+        assert.doesNotMatch(error.message, /synthetic-private-preflight-detail/); return true;
+      });
+      assert.deepEqual(calls, withPolicy ? ['destroyFork']
+        : ['destroyFork', 'destroySavepoint', 'verifySavepointDestroyed']);
+      assert.equal((await current.controlPlane.getInvocation(current.principal,
+        current.admitted.invocation_ref)).state, 'cleanup_pending');
+    } finally { worker.close(); }
+  });
+}
+
+test('verify-only cleanup still checks the second resource but never imports a partially verified result', async () => {
+  const current = await fixture();
+  const calls = [];
+  const worker = createManagedRiskForkWorker({ ...current.options, invokeProvider: async (packet) => {
+    if (packet.context.lease_kind === 'cleanup') {
+      calls.push(packet.method);
+      if (packet.method === 'verifyDestroyed') {
+        await packet.effectFence(); throw new Error('synthetic-private-observation-detail');
+      }
+    }
+    return current.options.invokeProvider(packet);
+  } });
+  try {
+    await assert.rejects(worker.execute(current.admitted.invocation_ref), { code: 'WORKER_CLEANUP_FAILED' });
+    assert.deepEqual(calls, ['verifyDestroyed', 'verifySavepointDestroyed']);
+    assert.deepEqual(current.provider.destroyCalls, ['fork', 'savepoint'], 'verify-only settlement never destroys twice');
+    assert.equal((await current.controlPlane.getInvocation(current.principal,
+      current.admitted.invocation_ref)).state, 'cleanup_pending');
+  } finally { worker.close(); current.worker.close(); }
+});
+
 test('worker delivery journal persists ciphertext and restart replays no original operation', async () => {
   const current = await fixture();
   const records = new Map();
