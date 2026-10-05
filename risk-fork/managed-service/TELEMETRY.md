@@ -134,6 +134,10 @@ and verified audit windows for a future lifecycle producer; see
 Windows preserve the existing self-attested audit schema and expose only its
 hash-bearing metadata, not discarded historical details. Sweep cursors must
 reset after each pinned finite cycle so behind-cursor commits are rediscovered.
+The trusted observer must retain the original sweep bound separately: reader
+`complete` is query-relative, not an authenticated original-sweep completion
+proof. Cursor/checkpoint custody and validation remain producer obligations;
+this dependency has no signed continuation or durable server-side sweep state.
 This read path adds no checkpoint migration, automatic producer, sink or alert
 and never runs inside authoritative mutations or provider/cleanup callbacks.
 The existing policy outbox remains policy-only. Lifecycle integration requires

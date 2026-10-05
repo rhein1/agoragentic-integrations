@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { sha256Ref } from '../../src/canonical.mjs';
 import * as audit from '../src/audit.mjs';
+import { normalizeAuditWindowRequest } from '../src/audit-read.mjs';
 import { createFixture, invocationRequest } from './helpers.mjs';
 
 async function admit(fixture, index, principal = fixture.principal) {
@@ -94,6 +95,42 @@ test('audit windows expose only a bounded verified prefix and rediscover later t
   assert.deepEqual(empty.events, []);
   assert.equal(empty.complete, true);
   assert.equal(empty.next_prior_event_hash, second.next_prior_event_hash);
+});
+
+test('audit cursor range matches PostgreSQL int4 and rejects overflow before a store read', async () => {
+  const maximum = 2_147_483_647;
+  const prior = sha256Ref('known prefix');
+  assert.equal(normalizeAuditWindowRequest({ after_sequence: maximum,
+    prior_event_hash: prior }).after_sequence, maximum);
+  assert.throws(() => normalizeAuditWindowRequest({ after_sequence: maximum + 1,
+    prior_event_hash: prior }), TypeError);
+  const fixture = await createFixture();
+  let reads = 0;
+  fixture.store.getAuditWindow = async () => { reads += 1; throw new Error('must not read'); };
+  await assert.rejects(fixture.controlPlane.readAuditWindow(fixture.principal, 'rfi_any', {
+    after_sequence: maximum + 1, prior_event_hash: prior,
+  }), TypeError);
+  assert.equal(reads, 0);
+});
+
+test('caller-altered page bounds never establish completion of the original sweep', async () => {
+  const refs = ['rfi_a', 'rfi_b', 'rfi_z'];
+  const fixture = await createFixture({ concurrency: 16, invocationRef: () => refs.shift() });
+  for (let index = 1; index <= 3; index += 1) await admit(fixture, index);
+  const first = await fixture.controlPlane.listAuditInvocations(fixture.principal, { limit: 1 });
+  const altered = await fixture.controlPlane.listAuditInvocations(fixture.principal, {
+    after_ref: first.next_after_ref, upper_ref: 'rfi_b', limit: 1,
+  });
+  assert.equal(first.upper_ref, 'rfi_z');
+  assert.equal(altered.complete, true); // Only the supplied interval is complete.
+  assert.notEqual(altered.upper_ref, first.upper_ref);
+  assert.equal(Object.hasOwn(altered, 'original_sweep_complete'), false);
+  assert.equal(Object.hasOwn(altered, 'checkpoint_advanced'), false);
+  const retained = await fixture.controlPlane.listAuditInvocations(fixture.principal, {
+    after_ref: first.next_after_ref, upper_ref: first.upper_ref, limit: 1,
+  });
+  assert.equal(retained.complete, false);
+  assert.deepEqual(retained.invocations.map((row) => row.invocation_ref), ['rfi_b']);
 });
 
 test('audit projection requires current audit scope and exact tenant before reading', async () => {

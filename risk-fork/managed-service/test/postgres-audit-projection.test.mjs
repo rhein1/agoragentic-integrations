@@ -231,6 +231,21 @@ test('PostgreSQL audit window snapshot is repeatable while a later append commit
     assert.equal(current.events.length, 2);
   });
 
+test('PostgreSQL audit cursors reject int4 overflow and retain the bounded ahead-checkpoint error',
+  { skip: skipReason }, async (t) => {
+    const f = await fixture(t);
+    const admitted = await admit(f, 'audit-pg-int4-boundary');
+    const ref = admitted.invocation.invocation_ref;
+    const prior = sha256Ref('known prefix');
+    await assert.rejects(f.controlPlane.readAuditWindow(f.principal, ref, {
+      after_sequence: 2_147_483_647, prior_event_hash: prior,
+    }), (error) => /checkpoint is ahead of the source/.test(error.message)
+      && error.code !== '22003');
+    await assert.rejects(f.controlPlane.readAuditWindow(f.principal, ref, {
+      after_sequence: 2_147_483_648, prior_event_hash: prior,
+    }), TypeError);
+  });
+
 test('PostgreSQL audit projection is tenant-scoped and revocation takes effect before reads',
   { skip: skipReason }, async (t) => {
     const f = await fixture(t);

@@ -4,6 +4,9 @@ import {
 } from './validation.mjs';
 
 export const MAX_MANAGED_AUDIT_READ = 64;
+// The frozen PostgreSQL audit sequence column is int4. Reject cursor overflow
+// before either backend reads, rather than exposing a PostgreSQL 22003 error.
+export const MAX_MANAGED_AUDIT_SEQUENCE = 2_147_483_647;
 
 export function normalizeAuditPageRequest(value = {}) {
   assertPlainRecord(value, 'audit page request');
@@ -14,8 +17,10 @@ export function normalizeAuditPageRequest(value = {}) {
     throw new TypeError('initial audit page must pin its upper_ref from the store');
   }
   if (after !== null && (upper === null || after > upper)) {
-    throw new TypeError('audit page continuation requires its pinned upper_ref');
+    throw new TypeError('audit page continuation requires upper_ref not before after_ref');
   }
+  // These host-owned query fields are not an integrity-protected sweep token.
+  // The observer must retain/check its original upper bound independently.
   return deepFreeze({ after_ref: after, upper_ref: upper,
     limit: requireInteger(Object.hasOwn(value, 'limit') ? value.limit : MAX_MANAGED_AUDIT_READ,
       'audit page limit', { min: 1, max: MAX_MANAGED_AUDIT_READ }) });
@@ -25,7 +30,7 @@ export function normalizeAuditWindowRequest(value = {}) {
   assertPlainRecord(value, 'audit window request');
   assertAllowedKeys(value, ['after_sequence', 'prior_event_hash', 'limit'], 'audit window request');
   const sequence = requireInteger(Object.hasOwn(value, 'after_sequence') ? value.after_sequence : 0,
-    'after_sequence', { max: Number.MAX_SAFE_INTEGER - MAX_MANAGED_AUDIT_READ });
+    'after_sequence', { max: MAX_MANAGED_AUDIT_SEQUENCE });
   const prior = value.prior_event_hash == null ? null
     : requireSha256(value.prior_event_hash, 'prior_event_hash');
   if ((sequence === 0) !== (prior === null)) {

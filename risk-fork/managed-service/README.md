@@ -395,18 +395,29 @@ Stores without the new methods remain constructible; attempting these reads
 fails with `AUDIT_PROJECTION_UNSUPPORTED`, never an unbounded fallback.
 
 An initial invocation page pins the tenant's current highest ASCII invocation
-reference and rejects a caller-supplied `upper_ref`. Continuations must retain
-that returned `upper_ref`; SQL explicitly uses
+reference and rejects a caller-supplied `upper_ref`. The trusted observer must
+retain that returned `upper_ref` independently across continuations; SQL uses
 `COLLATE "C"`, matching the memory fixture's byte order. Pages return only
 invocation references and audit count/head anchors, not operations, resource
 references, credentials or payloads. A cursor is **sweep-local**, not a permanent
 watermark. After a finite sweep completes, start again with no cursor: a new
 invocation or append behind the previous cursor is found on a later sweep.
 These are tenant-authenticated reads; there is no cross-tenant discovery API.
+There is no signed cursor or server-side sweep state in this reader dependency.
+`complete` covers only the interval supplied in that request, not proof that a
+prior sweep was completed. Changing either cursor field can skip source rows.
+Never accept cursor fields from a model or untrusted request, or advance a
+durable observer checkpoint based on a caller-altered interval. Future observer
+work must enforce cursor/checkpoint custody and compare the returned bound with
+its independently retained original bound. Query validation alone does not do
+that, just as audit-prefix validation does not prove historical delivery.
 
 Audit windows read the invocation anchor, checkpoint row and at most 64 following
 events in one read-only repeatable-read snapshot. Genesis requires sequence zero
-and a null hash. A continuation requires the exact previously verified event
+and a null hash. Cursor sequences are limited to 2,147,483,647, matching the
+frozen PostgreSQL `integer` column; larger values fail before store access on
+both backends. An in-range checkpoint ahead of the source fails verification.
+A continuation requires the exact previously verified event
 hash; gaps, crossing, altered hashes, time regression, ahead checkpoints and
 truncated windows fail. `complete` is relative to that snapshot only, and its
 tail must equal the invocation count/head. A later append remains discoverable.
