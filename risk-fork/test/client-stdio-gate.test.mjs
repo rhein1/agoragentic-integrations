@@ -89,6 +89,43 @@ async function isProcessExecutable(pid) {
   }
 }
 
+async function waitForFixturePid(pidFile, { readPid = readFile, attempts = 500 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const raw = await readPid(pidFile, 'utf8');
+      if (/^[1-9][0-9]*$/.test(raw)) {
+        const pid = Number(raw);
+        if (Number.isSafeInteger(pid) && pid <= 2_147_483_647) return pid;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    if (attempt + 1 < attempts) await delay(10);
+  }
+  throw new Error('Fixture PID was not canonically published within the readiness bound');
+}
+
+test('fixture PID readiness does not accept empty, malformed or unsafe successful reads', async () => {
+  const values = ['', 'undefined', '123x', '0', '9007199254740992', '2147483648', '12345'];
+  let reads = 0;
+  const pid = await waitForFixturePid('synthetic.pid', {
+    readPid: async () => values[reads++],
+  });
+  assert.equal(pid, 12345); assert.equal(reads, values.length);
+});
+
+test('fixture PID readiness remains bounded and propagates non-missing-file errors', async () => {
+  let reads = 0;
+  await assert.rejects(waitForFixturePid('synthetic.pid', {
+    attempts: 3, readPid: async () => { reads += 1; throw Object.assign(new Error('missing'), { code: 'ENOENT' }); },
+  }), /readiness bound/);
+  assert.equal(reads, 3);
+  const unavailable = Object.assign(new Error('unreadable'), { code: 'EACCES' });
+  await assert.rejects(waitForFixturePid('synthetic.pid', {
+    readPid: async () => { throw unavailable; },
+  }), (error) => error === unavailable);
+});
+
 async function startGate(fixtureName, { consumeOutput = true, ready = true } = {}) {
   const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'risk-fork-client-gate-'));
   const gateway = path.join(temporaryRoot, 'risk-forkd.js');
@@ -1494,14 +1531,7 @@ serveTest('stdio client gate cleans stubborn descendants after hostile gateway c
   let descendantPid = null;
   try {
     const pidFile = path.join(session.temporaryRoot, 'compile-descendant.pid');
-    for (let attempt = 0; attempt < 200; attempt += 1) {
-      try {
-        descendantPid = Number.parseInt(await readFile(pidFile, 'utf8'), 10);
-        break;
-      } catch {
-        await delay(10);
-      }
-    }
+    descendantPid = await waitForFixturePid(pidFile);
     assert.equal(Number.isSafeInteger(descendantPid), true, 'compile descendant pid must be recorded');
     const outcome = await withTimeout(session.exit, 2_500);
     assert.notEqual(outcome, null, 'hostile compile failure cleanup must remain bounded');
